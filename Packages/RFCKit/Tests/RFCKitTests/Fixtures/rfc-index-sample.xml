@@ -1,0 +1,417 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rfc-index xmlns="https://www.rfc-editor.org/rfc-index" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.rfc-editor.org/rfc-index https://www.rfc-editor.org/rfc-index.xsd">
+    <bcp-entry>
+    <doc-id>BCP14</doc-id>
+    <is-also>
+      <doc-id>RFC2119</doc-id>
+      <doc-id>RFC8174</doc-id>
+    </is-also>
+  </bcp-entry>
+  <rfc-not-issued-entry>
+    <doc-id>RFC14</doc-id>
+  </rfc-not-issued-entry>
+  <rfc-entry>
+    <doc-id>RFC1149</doc-id>
+    <title>Standard for the transmission of IP datagrams on avian carriers</title>
+    <author>
+      <name>D. Waitzman</name>
+    </author>
+    <date>
+      <month>April</month>
+      <day>1</day>
+      <year>1990</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>2</page-count>
+    <keywords>
+      <kw>avian</kw>
+      <kw>carrier</kw>
+      <kw>april</kw>
+      <kw>fools</kw>
+    </keywords>
+    <abstract>
+      <p>This memo describes an experimental method for the encapsulation of IP datagrams in avian carriers.  This specification is primarily useful in Metropolitan Area Networks.  This is an experimental, not recommended standard.</p>
+    </abstract>
+    <updated-by>
+      <doc-id>RFC2549</doc-id>
+      <doc-id>RFC6214</doc-id>
+    </updated-by>
+    <current-status>EXPERIMENTAL</current-status>
+    <publication-status>EXPERIMENTAL</publication-status>
+    <stream>INDEPENDENT</stream>
+    <doi>10.17487/RFC1149</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC2119</doc-id>
+    <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+    <author>
+      <name>S. Bradner</name>
+    </author>
+    <date>
+      <month>March</month>
+      <year>1997</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>3</page-count>
+    <keywords>
+      <kw>Standards</kw>
+      <kw>Track</kw>
+      <kw>Documents</kw>
+    </keywords>
+    <abstract>
+      <p>In many standards track documents several words are used to signify the requirements in the specification.  These words are often capitalized.  This document defines these words as they should be interpreted in IETF documents.  This document specifies an Internet Best Current Practices for the Internet Community, and requests discussion and suggestions for improvements.</p>
+    </abstract>
+    <draft>draft-bradner-key-words-02</draft>
+    <is-also>
+      <doc-id>BCP14</doc-id>
+    </is-also>
+    <updated-by>
+      <doc-id>RFC8174</doc-id>
+    </updated-by>
+    <current-status>BEST CURRENT PRACTICE</current-status>
+    <publication-status>BEST CURRENT PRACTICE</publication-status>
+    <stream>IETF</stream>
+    <wg_acronym>NON WORKING GROUP</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc2119</errata-url>
+    <doi>10.17487/RFC2119</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC2818</doc-id>
+    <title>HTTP Over TLS</title>
+    <author>
+      <name>E. Rescorla</name>
+    </author>
+    <date>
+      <month>May</month>
+      <year>2000</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>7</page-count>
+    <keywords>
+      <kw>hypertext</kw>
+      <kw>transfer</kw>
+      <kw>protocol</kw>
+      <kw>transport</kw>
+      <kw>layer</kw>
+      <kw>security</kw>
+    </keywords>
+    <abstract>
+      <p>This memo describes how to use Transport Layer Security (TLS) to secure Hypertext Transfer Protocol (HTTP) connections over the Internet.  This memo provides information for the Internet community.</p>
+    </abstract>
+    <draft>draft-ietf-tls-https-03</draft>
+    <obsoleted-by>
+      <doc-id>RFC9110</doc-id>
+    </obsoleted-by>
+    <updated-by>
+      <doc-id>RFC5785</doc-id>
+      <doc-id>RFC7230</doc-id>
+    </updated-by>
+    <current-status>INFORMATIONAL</current-status>
+    <publication-status>INFORMATIONAL</publication-status>
+    <stream>IETF</stream>
+    <area>sec</area>
+    <wg_acronym>tls</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc2818</errata-url>
+    <doi>10.17487/RFC2818</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC5234</doc-id>
+    <title>Augmented BNF for Syntax Specifications: ABNF</title>
+    <author>
+      <name>D. Crocker</name>
+      <title>Editor</title>
+    </author>
+    <author>
+      <name>P. Overell</name>
+    </author>
+    <date>
+      <month>January</month>
+      <year>2008</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>16</page-count>
+    <keywords>
+      <kw>ABNF</kw>
+      <kw>backus-naur form</kw>
+      <kw>augmented backus-naur form</kw>
+      <kw>rule definitions</kw>
+      <kw>encoding</kw>
+      <kw>core lexical analyzer</kw>
+    </keywords>
+    <abstract>
+      <p>Internet technical specifications often need to define a formal syntax.  Over the years, a modified version of Backus-Naur Form (BNF), called Augmented BNF (ABNF), has been popular among many Internet specifications.  The current specification documents ABNF.  It balances compactness and simplicity with reasonable representational power.  The differences between standard BNF and ABNF involve naming rules, repetition, alternatives, order-independence, and value ranges.  This specification also supplies additional rule definitions and encoding for a core lexical analyzer of the type common to several Internet specifications. [STANDARDS-TRACK]</p>
+    </abstract>
+    <draft>draft-crocker-rfc4234bis-01</draft>
+    <is-also>
+      <doc-id>STD68</doc-id>
+    </is-also>
+    <obsoletes>
+      <doc-id>RFC4234</doc-id>
+    </obsoletes>
+    <updated-by>
+      <doc-id>RFC7405</doc-id>
+    </updated-by>
+    <current-status>INTERNET STANDARD</current-status>
+    <publication-status>INTERNET STANDARD</publication-status>
+    <stream>IETF</stream>
+    <wg_acronym>NON WORKING GROUP</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc5234</errata-url>
+    <doi>10.17487/RFC5234</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC7231</doc-id>
+    <title>Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content</title>
+    <author>
+      <name>R. Fielding</name>
+      <title>Editor</title>
+    </author>
+    <author>
+      <name>J. Reschke</name>
+      <title>Editor</title>
+    </author>
+    <date>
+      <month>June</month>
+      <year>2014</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>101</page-count>
+    <keywords>
+      <kw>Hypertext Transfer Protocol</kw>
+      <kw>HTTP</kw>
+      <kw>HTTP semantics</kw>
+      <kw>HTTP payload</kw>
+      <kw>HTTP content</kw>
+      <kw>HTTP method</kw>
+      <kw>HTTP status code</kw>
+    </keywords>
+    <abstract>
+      <p>The Hypertext Transfer Protocol (HTTP) is a stateless \%application- level protocol for distributed, collaborative, hypertext information systems.  This document defines the semantics of HTTP/1.1 messages, as expressed by request methods, request header fields, response status codes, and response header fields, along with the payload of messages (metadata and body content) and mechanisms for content negotiation.</p>
+    </abstract>
+    <draft>draft-ietf-httpbis-p2-semantics-26</draft>
+    <obsoletes>
+      <doc-id>RFC2616</doc-id>
+    </obsoletes>
+    <obsoleted-by>
+      <doc-id>RFC9110</doc-id>
+    </obsoleted-by>
+    <updates>
+      <doc-id>RFC2817</doc-id>
+    </updates>
+    <current-status>PROPOSED STANDARD</current-status>
+    <publication-status>PROPOSED STANDARD</publication-status>
+    <stream>IETF</stream>
+    <area>wit</area>
+    <wg_acronym>httpbis</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc7231</errata-url>
+    <doi>10.17487/RFC7231</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC8174</doc-id>
+    <title>Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words</title>
+    <author>
+      <name>B. Leiba</name>
+    </author>
+    <date>
+      <month>May</month>
+      <year>2017</year>
+    </date>
+    <format>
+      <file-format>TXT</file-format>
+      <file-format>HTML</file-format>
+    </format>
+    <page-count>4</page-count>
+    <abstract>
+      <p>RFC 2119 specifies common key words that may be used in protocol specifications.  This document aims to reduce the ambiguity by clarifying that only UPPERCASE usage of the key words have the defined special meanings.</p>
+    </abstract>
+    <draft>draft-leiba-rfc2119-update-02</draft>
+    <is-also>
+      <doc-id>BCP14</doc-id>
+    </is-also>
+    <updates>
+      <doc-id>RFC2119</doc-id>
+    </updates>
+    <current-status>BEST CURRENT PRACTICE</current-status>
+    <publication-status>BEST CURRENT PRACTICE</publication-status>
+    <stream>IETF</stream>
+    <wg_acronym>NON WORKING GROUP</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc8174</errata-url>
+    <doi>10.17487/RFC8174</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC8999</doc-id>
+    <title>Version-Independent Properties of QUIC</title>
+    <author>
+      <name>M. Thomson</name>
+    </author>
+    <date>
+      <month>May</month>
+      <year>2021</year>
+    </date>
+    <format>
+      <file-format>HTML</file-format>
+      <file-format>TXT</file-format>
+      <file-format>PDF</file-format>
+      <file-format>XML</file-format>
+    </format>
+    <page-count>9</page-count>
+    <keywords>
+      <kw>crypto</kw>
+      <kw>next generation</kw>
+      <kw>protocol</kw>
+      <kw>secure</kw>
+      <kw>transport</kw>
+      <kw>UDP</kw>
+      <kw>invariants</kw>
+    </keywords>
+    <abstract>
+      <p>This document defines the properties of the QUIC transport protocol that are common to all versions of the protocol.</p>
+    </abstract>
+    <draft>draft-ietf-quic-invariants-13</draft>
+    <updated-by>
+      <doc-id>RFC9368</doc-id>
+    </updated-by>
+    <current-status>PROPOSED STANDARD</current-status>
+    <publication-status>PROPOSED STANDARD</publication-status>
+    <stream>IETF</stream>
+    <area>wit</area>
+    <wg_acronym>quic</wg_acronym>
+    <doi>10.17487/RFC8999</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC9000</doc-id>
+    <title>QUIC: A UDP-Based Multiplexed and Secure Transport</title>
+    <author>
+      <name>J. Iyengar</name>
+      <title>Editor</title>
+    </author>
+    <author>
+      <name>M. Thomson</name>
+      <title>Editor</title>
+    </author>
+    <date>
+      <month>May</month>
+      <year>2021</year>
+    </date>
+    <format>
+      <file-format>HTML</file-format>
+      <file-format>TXT</file-format>
+      <file-format>PDF</file-format>
+      <file-format>XML</file-format>
+    </format>
+    <page-count>151</page-count>
+    <keywords>
+      <kw>multipath</kw>
+      <kw>next generations</kw>
+      <kw>protocol</kw>
+      <kw>sctp++</kw>
+      <kw>secure</kw>
+      <kw>smart</kw>
+      <kw>tcp/2</kw>
+      <kw>tcpng</kw>
+      <kw>transport</kw>
+      <kw>transport-ng</kw>
+    </keywords>
+    <abstract>
+      <p>This document defines the core of the QUIC transport protocol.  QUIC provides applications with flow-controlled streams for structured communication, low-latency connection establishment, and network path migration.  QUIC includes security measures that ensure confidentiality, integrity, and availability in a range of deployment circumstances.  Accompanying documents describe the integration of TLS for key negotiation, loss detection, and an exemplary congestion control algorithm.</p>
+    </abstract>
+    <draft>draft-ietf-quic-transport-34</draft>
+    <current-status>PROPOSED STANDARD</current-status>
+    <publication-status>PROPOSED STANDARD</publication-status>
+    <stream>IETF</stream>
+    <area>wit</area>
+    <wg_acronym>quic</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc9000</errata-url>
+    <doi>10.17487/RFC9000</doi>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC9110</doc-id>
+    <title>HTTP Semantics</title>
+    <author>
+      <name>R. Fielding</name>
+      <title>Editor</title>
+    </author>
+    <author>
+      <name>M. Nottingham</name>
+      <title>Editor</title>
+    </author>
+    <author>
+      <name>J. Reschke</name>
+      <title>Editor</title>
+    </author>
+    <date>
+      <month>June</month>
+      <year>2022</year>
+    </date>
+    <format>
+      <file-format>HTML</file-format>
+      <file-format>TXT</file-format>
+      <file-format>PDF</file-format>
+      <file-format>XML</file-format>
+    </format>
+    <page-count>194</page-count>
+    <keywords>
+      <kw>Hypertext Transfer Protocol</kw>
+      <kw>HTTP</kw>
+      <kw>HTTP semantics</kw>
+      <kw>HTTP content</kw>
+      <kw>HTTP method</kw>
+      <kw>HTTP status code</kw>
+    </keywords>
+    <abstract>
+      <p>The Hypertext Transfer Protocol (HTTP) is a stateless application-level protocol for distributed, collaborative, hypertext information systems. This document describes the overall architecture of HTTP, establishes common terminology, and defines aspects of the protocol that are shared by all versions. In this definition are core protocol elements, extensibility mechanisms, and the "http" and "https" Uniform Resource Identifier (URI) schemes.</p>
+      <p>This document updates RFC 3864 and obsoletes RFCs 2818, 7231, 7232, 7233, 7235, 7538, 7615, 7694, and portions of 7230.</p>
+    </abstract>
+    <draft>draft-ietf-httpbis-semantics-19</draft>
+    <is-also>
+      <doc-id>STD97</doc-id>
+    </is-also>
+    <obsoletes>
+      <doc-id>RFC2818</doc-id>
+      <doc-id>RFC7230</doc-id>
+      <doc-id>RFC7231</doc-id>
+      <doc-id>RFC7232</doc-id>
+      <doc-id>RFC7233</doc-id>
+      <doc-id>RFC7235</doc-id>
+      <doc-id>RFC7538</doc-id>
+      <doc-id>RFC7615</doc-id>
+      <doc-id>RFC7694</doc-id>
+    </obsoletes>
+    <updates>
+      <doc-id>RFC3864</doc-id>
+    </updates>
+    <current-status>INTERNET STANDARD</current-status>
+    <publication-status>INTERNET STANDARD</publication-status>
+    <stream>IETF</stream>
+    <area>wit</area>
+    <wg_acronym>httpbis</wg_acronym>
+    <errata-url>https://www.rfc-editor.org/errata/rfc9110</errata-url>
+    <doi>10.17487/RFC9110</doi>
+  </rfc-entry>
+  <std-entry>
+    <doc-id>STD68</doc-id>
+    <is-also>
+      <doc-id>RFC5234</doc-id>
+    </is-also>
+  </std-entry>
+  <std-entry>
+    <doc-id>STD97</doc-id>
+    <is-also>
+      <doc-id>RFC9110</doc-id>
+    </is-also>
+  </std-entry>
+</rfc-index>
