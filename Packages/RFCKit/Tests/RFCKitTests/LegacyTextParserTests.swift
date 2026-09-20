@@ -190,3 +190,58 @@ struct LegacyTextParserTests {
         #expect(paragraph.plainText.contains("Nothing in Section 9 exists."))
     }
 }
+
+@Suite("Legacy text parser: corpus findings")
+struct LegacyTextCorpusFindingsTests {
+    /// Shapes found in the first full corpus run (September 2026).
+    @Test func columnZeroTitleAndAnchorOnlyReferences() {
+        let text = """
+        Network Working Group                                       P. Jayaraman
+        Request for Comments: 5193                                       Net.Com
+        Category: Informational                                         R. Lopez
+                                                                 Univ. of Murcia
+                                                                        May 2008
+
+        Protocol for Carrying Authentication for Network Access (PANA) Framework
+
+        Status of This Memo
+
+           This memo provides information for the Internet community.
+
+        1.  Introduction
+
+           See [RFC-822] for details.
+
+        6.  References
+
+           [RFC-822]
+                Crocker, D., "Standard for the Format of ARPA Internet
+                Text Messages", STD 11, RFC 822, UDEL, August 1982.
+
+           [RFC-1521]
+                Borenstein, N. and N. Freed, "MIME", RFC 1521, September, 1993.
+        """
+        let document = LegacyTextParser.parse(text)
+        #expect(document.header.id == .rfc(5193))
+        #expect(document.header.title == "Protocol for Carrying Authentication for Network Access (PANA) Framework")
+        #expect(document.header.date == PublicationDate(year: 2008, month: 5))
+        #expect(document.sections.map(\.number) == ["1", "6"])
+        guard case .references(let list)? = document.section(number: "6")?.blocks.first else {
+            Issue.record("expected references")
+            return
+        }
+        #expect(list.entries.map(\.anchor) == ["RFC-822", "RFC-1521"])
+        #expect(list.entries[0].documentID == .rfc(822))
+        #expect(list.entries[0].title == "Standard for the Format of ARPA Internet Text Messages")
+        #expect(document.referencedDocuments == [.rfc(822), .rfc(1521)])
+    }
+
+    @Test func overstrikesAndControlBytesAreRemoved() {
+        let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
+        let underlined = "_\u{08}R_\u{08}F_\u{08}C"
+        #expect(LegacyTextParser.removingControlCharacters(bold) == "Table")
+        #expect(LegacyTextParser.removingControlCharacters(underlined) == "RFC")
+        #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
+        #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
+    }
+}

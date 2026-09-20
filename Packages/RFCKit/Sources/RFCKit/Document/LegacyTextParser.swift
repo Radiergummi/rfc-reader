@@ -54,7 +54,7 @@ public struct LegacyTextParser: Sendable {
     }
 
     private static func depaginate(_ text: String) -> [Line] {
-        let rawLines = text.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
+        let rawLines = removingControlCharacters(text).replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
         var lines: [Line] = []
         var expectingHeader = false
         var firstContentSeen = false
@@ -87,6 +87,30 @@ public struct LegacyTextParser: Sendable {
             lines.append(.text(line.trimmingTrailingWhitespace()))
         }
         return lines
+    }
+
+    /// Resolves nroff overstrikes (`T\bT` for bold, `_\bT` for underline) and drops the
+    /// NUL padding and escape bytes found in a few dozen 1970s and 1980s RFCs.
+    static func removingControlCharacters(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { $0.value < 0x20 && $0 != "\n" && $0 != "\t" && $0 != "\r" && $0 != "\u{0C}" }) else {
+            return text
+        }
+        var result: [Unicode.Scalar] = []
+        result.reserveCapacity(text.unicodeScalars.count)
+        var iterator = text.unicodeScalars.makeIterator()
+        while let scalar = iterator.next() {
+            if scalar == "\u{08}" {
+                guard let previous = result.popLast(), let next = iterator.next() else { continue }
+                result.append(next == "_" ? previous : next)
+            } else if scalar.value < 0x20, scalar != "\n", scalar != "\t", scalar != "\r", scalar != "\u{0C}" {
+                continue
+            } else {
+                result.append(scalar)
+            }
+        }
+        var output = ""
+        output.unicodeScalars.append(contentsOf: result)
+        return output
     }
 
     // MARK: - Parsing
@@ -218,22 +242,25 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: Front matter
 
-    /// Front matter runs from the top of the file to the first column-0 heading.
+    /// Front matter is the header block (first run of lines), the title (second run, which
+    /// may start at column 0 when it fills the line), and anything up to the next heading.
     private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
-        var seenTitleCandidate = false
+        var run = 0
+        var previousWasBlank = true
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
             let trimmed = string.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty {
                 front.append("")
+                previousWasBlank = true
                 continue
             }
-            let isHeaderBlockLine = !seenTitleCandidate && string.first != " "
-            if string.first != " ", !isHeaderBlockLine, heading(from: string) != nil {
+            if previousWasBlank { run += 1 }
+            previousWasBlank = false
+            if run > 2, string.first != " ", heading(from: string) != nil {
                 return (front, offset)
             }
-            if string.first == " " { seenTitleCandidate = true }
             front.append(string)
         }
         return (front, lines.count)
@@ -274,16 +301,14 @@ public struct LegacyTextParser: Sendable {
             }
         }
 
-        // Title: the next non-blank, indented lines.
+        // Title: the next run of non-blank lines, whatever their indentation.
         var titleLines: [String] = []
         while index < lines.count {
             let line = lines[index]
             if line.isEmpty {
                 if !titleLines.isEmpty { break }
-            } else if line.first == " " {
-                titleLines.append(line.trimmingCharacters(in: .whitespaces))
             } else {
-                break
+                titleLines.append(line.trimmingCharacters(in: .whitespaces))
             }
             index += 1
         }
@@ -498,7 +523,7 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: References
 
-    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s]+)\]\s+(?<text>\S.*)$/#
+    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s]+)\]\s*(?<text>.*)$/#
 
     private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
         var references: [Reference] = []
@@ -518,7 +543,7 @@ public struct LegacyTextParser: Sendable {
                 if let match = line.firstMatch(of: referenceStartPattern) {
                     flush()
                     currentAnchor = String(match.anchor)
-                    currentLines = [String(match.text)]
+                    currentLines = match.text.isEmpty ? [] : [String(match.text)]
                 } else if currentAnchor != nil {
                     currentLines.append(line.trimmingCharacters(in: .whitespaces))
                 }

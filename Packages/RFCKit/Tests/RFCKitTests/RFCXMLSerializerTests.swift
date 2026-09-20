@@ -98,3 +98,41 @@ struct RFCXMLSerializerTests {
         #expect(back.text == art)
     }
 }
+
+@Suite("RFCXML serializer: corpus findings")
+struct RFCXMLSerializerCorpusFindingsTests {
+    @Test func referencesSubsectionUnderMixedParentSurvives() throws {
+        // "10. References" whose 10.1 parsed to plain prose (no entries) and 10.2 to entries.
+        let document = RFCDocument(
+            header: DocumentHeader(id: .rfc(7019), title: "T"),
+            sections: [Section(anchor: "section-10", number: "10", title: "References", subsections: [
+                Section(anchor: "section-10.1", number: "10.1", title: "Normative References", blocks: [.paragraph(Paragraph(text: "None."))]),
+                Section(anchor: "section-10.2", number: "10.2", title: "Informative References", blocks: [
+                    .references(ReferenceList(title: "Informative References", entries: [
+                        Reference(anchor: "RFC2119", title: "Key words", seriesInfo: [(name: "RFC", value: "2119")]),
+                    ])),
+                ]),
+            ])],
+            source: .text
+        )
+        let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
+        #expect(reparsed.allSections.map(\.number) == ["10", "10.1", "10.2"])
+        #expect(reparsed.referencedDocuments == [.rfc(2119)])
+    }
+
+    @Test func controlCharactersNeverReachTheXML() throws {
+        let document = RFCDocument(
+            header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
+            sections: [Section(anchor: "s", number: "1", title: "S", blocks: [.paragraph(Paragraph(text: "a\u{01}b\tc"))])],
+            source: .text
+        )
+        let xml = RFCXMLSerializer().serialize(document)
+        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+        #expect(reparsed.header.title == "Title")
+        guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
+            Issue.record("expected paragraph")
+            return
+        }
+        #expect(paragraph.plainText == "ab c", "tab survives escaping and is collapsed like other whitespace")
+    }
+}

@@ -47,7 +47,8 @@ enum Fetch {
             index = try RFCIndexParser.parse(data)
         }
 
-        var wanted = index.rfcs.filter { !$0.hasXMLSource }.map(\.id)
+        // A few early RFCs exist only as PDF scans; there is nothing to fetch for them.
+        var wanted = index.rfcs.filter { !$0.hasXMLSource && $0.formats.contains(.text) }.map(\.id)
         if let limit = arguments["limit"].flatMap(Int.init) { wanted = Array(wanted.prefix(limit)) }
         let missing = wanted.filter { !FileManager.default.fileExists(atPath: textDirectory.appending(path: "\($0.fileStem).txt").path) }
         log("\(wanted.count) legacy RFCs, \(missing.count) to fetch")
@@ -131,7 +132,11 @@ enum Convert {
                 continue
             }
 
-            let text = try String(contentsOf: inDirectory.appending(path: file), encoding: .utf8)
+            // 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather than UTF-8 (accented names, curly quotes).
+            let bytes = try Data(contentsOf: inDirectory.appending(path: file))
+            let text = String(data: bytes, encoding: .utf8)
+                ?? String(data: bytes, encoding: .windowsCP1252)
+                ?? String(decoding: bytes, as: UTF8.self)
             let document = LegacyTextParser.parse(text)
             let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
             let serializer = RFCXMLSerializer(options: .init(
