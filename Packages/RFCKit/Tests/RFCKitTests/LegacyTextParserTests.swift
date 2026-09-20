@@ -383,6 +383,75 @@ struct LegacyTextCorpusFindingsTests {
         })
     }
 
+    /// RFC 817, 813, 888 and about twenty others are typeset double spaced. A blank line
+    /// between every pair of lines means no paragraph ever forms and every line stands
+    /// alone, so RFC 817 produced 577 sections for 658 lines of text.
+    /// RFC 817, 813, 888 and about twenty others are typeset double spaced: a single blank
+    /// line is a wrapped line and two or more are the real break. No paragraph ever formed
+    /// and every line stood alone, so RFC 817 produced 577 sections for 658 lines of text.
+    @Test func doubleSpacedDocumentsAreCollapsed() throws {
+        let text = """
+        Network Working Group                                          A. Person
+        Request for Comments: 99994                                  Example Org
+        Category: Informational                                     January 2030
+
+
+                                 A Synthetic Test Document
+
+
+        1.  Introduction
+
+
+             Experience suggests that one of the most important factors in
+
+        determining the performance of an implementation is the manner in
+
+        which that implementation is modularized.
+
+
+             The protocol is not the only thing that matters here.  In fact,
+
+        this document will argue that modularity is one of the chief villains
+
+        in attempting to obtain good performance.
+
+
+        2.  Efficiency Considerations
+
+
+             There are many aspects to efficiency.  One aspect is sending
+
+        data at minimum transmission cost, which is a critical aspect of
+
+        common carrier communications, if not in local area networks.
+
+
+             Another aspect is sending data at a high rate, which may not be
+
+        possible at all if the network is very slow, but which may be the one
+
+        central design constraint.
+
+
+             A third aspect is the cost of the implementation itself, which
+
+        is paid once by the implementor and then over and over again by
+
+        everyone who has to maintain the result.
+        """
+        let document = LegacyTextParser.parse(text)
+        #expect(document.sections.map(\.number) == ["1", "2"])
+
+        let intro = try #require(document.section(number: "1"))
+        let paragraphs = intro.blocks.compactMap { block -> String? in
+            if case .paragraph(let paragraph) = block { return paragraph.plainText }
+            return nil
+        }
+        #expect(paragraphs.count == 2)
+        #expect(paragraphs.first == "Experience suggests that one of the most important factors in determining the performance of an implementation is the manner in which that implementation is modularized.")
+        #expect(intro.blocks.count == 2, "no line survives as its own block")
+    }
+
     @Test func overstrikesAndControlBytesAreRemoved() {
         let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
         let underlined = "_\u{08}R_\u{08}F_\u{08}C"

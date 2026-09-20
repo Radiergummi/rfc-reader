@@ -140,7 +140,7 @@ public struct LegacyTextParser: Sendable {
     nonisolated(unsafe) private static let appendixHeadingPattern = #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
 
     public func parse(_ text: String) -> RFCDocument {
-        let lines = Self.depaginate(text)
+        let lines = Self.collapsingDoubleSpacing(Self.depaginate(text))
         let (frontLines, bodyStart) = Self.splitFrontMatter(lines)
         var header = Self.parseFrontMatter(frontLines)
 
@@ -356,13 +356,39 @@ public struct LegacyTextParser: Sendable {
     }
 
     private static func isBlankOrEnd(_ body: [Line], at index: Int) -> Bool {
-        guard index < body.count else { return true }
+        guard body.indices.contains(index) else { return true }
         switch body[index] {
         case .pageBreak:
             return true
         case .text(let string):
             return string.trimmingCharacters(in: .whitespaces).isEmpty
         }
+    }
+
+    /// A couple of dozen documents (RFC 817, 813, 888, 827) are typeset double spaced: a
+    /// blank line sits between every pair of lines, so no paragraph ever forms and every
+    /// line stands alone. Drop those single blanks and keep the wider gaps, which are the
+    /// real paragraph breaks. The "as published" view goes through `stripPagination(_:)`
+    /// and is not touched.
+    private static func collapsingDoubleSpacing(_ lines: [Line]) -> [Line] {
+        var content = 0
+        var isolated = 0
+        for (index, line) in lines.enumerated() {
+            guard case .text(let string) = line, !string.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            content += 1
+            if isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1) { isolated += 1 }
+        }
+        guard content > 20, isolated * 5 >= content * 3 else { return lines }
+
+        var result: [Line] = []
+        for (index, line) in lines.enumerated() {
+            if case .text(let string) = line, string.trimmingCharacters(in: .whitespaces).isEmpty,
+               !isBlankOrEnd(lines, at: index - 1), !isBlankOrEnd(lines, at: index + 1) {
+                continue
+            }
+            result.append(line)
+        }
+        return result
     }
 
     private static func heading(from line: String) -> HeadingInfo? {
