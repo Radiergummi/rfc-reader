@@ -10,11 +10,13 @@ Every RFC, beautifully readable, instantly searchable, and one tap from any refe
 
 | Path | What |
 |---|---|
-| `Packages/RFCKit` | Swift package with the index parser, RFCXML and legacy-text document parsers, RFC Editor client, link handling, citations and search. No UI, builds on Linux and macOS, 44 tests. |
+| `Packages/RFCKit` | Swift package with the index parser, RFCXML and legacy-text document parsers, RFC Editor client, link handling, citations and search. No UI, builds on Linux and macOS, 48 tests. |
 | `App/RFCReader` | SwiftUI multiplatform app: three-column navigation, native document renderer, table of contents, cite menu, bookmarks, reading positions, `rfc://` URL scheme, App Intent. |
+| `Tools/corpus-build` | Offline pipeline: fetches legacy text RFCs, converts them to RFCXML v3, writes pack manifests. |
 | `project.yml` | XcodeGen spec for the app project. |
 | `docs/VISION.md` | Why, for whom, the feature brainstorm in tiers, data sources, risks, roadmap. |
 | `docs/ARCHITECTURE.md` | The document model, how each format is parsed, data flow in the app, known gaps. |
+| `docs/DATA_PIPELINE.md` | What is precomputed offline (legacy XML, search indexes, graph), pack sizes, delivery via Background Assets. |
 
 ## Quick start
 
@@ -25,7 +27,7 @@ brew install xcodegen && xcodegen generate  # then open RFCReader.xcodeproj
 
 ## Data
 
-Everything comes from the RFC Editor's public endpoints (`rfc-index.xml`, `rfc/rfcNNNN.xml|txt|json`, `rfcrss.xml`, `errata.json`) and the IETF Datatracker API. No accounts, no server of our own.
+Everything comes from the RFC Editor's public endpoints (`rfc-index.xml`, `rfc/rfcNNNN.xml|txt|json`, `rfcrss.xml`, `errata.json`) and the IETF Datatracker API. No accounts, no server of our own. The 8,464 legacy text-only RFCs are converted to RFCXML once, offline, and shipped as an optional data pack; see [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md).
 
 ## License
 

@@ -1,0 +1,73 @@
+name: Corpus packs
+
+# Builds the data packs described in docs/DATA_PIPELINE.md. Manual for now: the first
+# full run should be reviewed (corpus/report.json) before anything is published.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Pack version, e.g. 2026.09
+        required: true
+      limit:
+        description: Only process the first N legacy RFCs (smoke test); leave empty for all
+        required: false
+        default: ""
+      publish:
+        description: Attach packs to a GitHub release
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore fetched text
+        uses: actions/cache@v4
+        with:
+          path: corpus/text
+          key: corpus-text-${{ github.run_id }}
+          restore-keys: corpus-text-
+
+      - name: Build corpus-build
+        run: swift build -c release --package-path Tools/corpus-build
+
+      - name: Fetch legacy RFCs
+        run: |
+          LIMIT="${{ inputs.limit }}"
+          Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit $LIMIT}
+
+      - name: Convert to RFCXML
+        run: |
+          Tools/corpus-build/.build/release/corpus-build convert \
+            --in corpus/text --out corpus/xml --overrides corpus/overrides --report corpus/report.json
+
+      - name: Manifest
+        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml --out corpus/manifest.json --version "${{ inputs.version }}"
+
+      - name: Pack
+        run: |
+          apt-get update -qq && apt-get install -y -qq zstd >/dev/null
+          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus xml manifest.json
+          ls -la *.tar.zst
+
+      - name: Upload report and packs as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-${{ inputs.version }}
+          path: |
+            corpus/report.json
+            corpus/manifest.json
+            legacy-xml-*.tar.zst
+
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apt-get install -y -qq gh >/dev/null || true
+          gh release create "corpus-${{ inputs.version }}" legacy-xml-*.tar.zst corpus/manifest.json \
+            --title "Corpus packs ${{ inputs.version }}" \
+            --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

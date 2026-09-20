@@ -8,11 +8,12 @@ rfc-reader/
 │   ├── Sources/RFCKit/
 │   │   ├── Models/           DocumentID, RFCMetadata, RFCIndex, enums for status/stream/format
 │   │   ├── Index/            RFCIndexParser (streaming SAX), XMLTree (small DOM used by the document parser)
-│   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text)
+│   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text), RFCXMLSerializer
 │   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient (actor), RFCLink (URL scheme + web URLs), feed parser
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
 │   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar)
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
+├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest); see DATA_PIPELINE.md
 ├── App/RFCReader/            SwiftUI multiplatform app (iOS, iPadOS, macOS)
 │   ├── Model/                LibraryModel (@Observable app state), DocumentStore (actor, disk cache), SwiftData models
 │   ├── Views/                Navigation, list, reader, table of contents
@@ -66,6 +67,8 @@ Design choices worth knowing:
 5. *References*: `[Anchor] text…` entries with hanging indents; RFC/BCP/STD numbers, quoted title, date and URL are pulled from the text.
 6. *Boilerplate* ("Status of This Memo", "Table of Contents", copyright) is dropped from the model but stays in the "original text" view, which is `stripPagination(_:)` over the same file.
 
+**Serializing back** (`RFCXMLSerializer`): the document model can be written out as RFCXML v3 using the RFC Editor's conventions (`pn` part numbers, anchors). This is how the corpus pipeline turns legacy text into XML once, offline, so the app needs only the XML path at runtime. Cross references to documents without a bibliography entry become `<eref>`s to rfc-editor.org, which the parser resolves back into document references; the round trip is tested on both a text-derived and a native XML document.
+
 The index (`RFCIndexParser`) is different: 14 MB and flat, so it is a streaming SAX state machine rather than a DOM. About one second for ~9,850 entries.
 
 Both XML parsers ignore a parser error reported *after* the root element has closed. swift-corelibs-foundation emits one on large inputs even for valid XML (verified with `xmllint`); a truncated file still fails because its root never closes, and there is a test for that.
@@ -84,6 +87,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
                        SwiftData ── Bookmark, ReadingPosition (user data only; iCloud later)
 ```
 
+- Legacy RFCs arrive pre-converted to XML through data packs (DATA_PIPELINE.md); on-device text parsing is the fallback when no pack is installed.
 - Raw files are cached exactly as served. Re-parsing after a parser fix is free, and the "original text" mode needs no second download.
 - The index is cached to disk and re-fetched in the background when older than a day; a bundled snapshot (drop `rfc-index.xml` into the app's resources) makes first launch work offline.
 - Navigation is data: `LibraryModel.open(RFCLink)` sets `selection` and `pendingSection`; `DocumentView` scrolls once the document has loaded. The URL scheme handler, the App Intent, cross-reference taps and the status banner all go through the same call.
@@ -91,7 +95,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
 
 ## Testing
 
-`swift test --package-path Packages/RFCKit` runs 44 Swift Testing cases in about 0.1 s on real fixtures: the full RFC 8999 XML, RFCs 1149, 2119 and 5234 as text, a trimmed index, the RSS feed and a per-RFC JSON record. Each parser has a truncated-input test. The app target is not unit-tested yet; the plan is snapshot tests for `BlockView` once the rendering settles.
+`swift test --package-path Packages/RFCKit` runs 48 Swift Testing cases in about 0.1 s on real fixtures: the full RFC 8999 XML, RFCs 1149, 2119 and 5234 as text, a trimmed index, the RSS feed and a per-RFC JSON record. Each parser has a truncated-input test. The app target is not unit-tested yet; the plan is snapshot tests for `BlockView` once the rendering settles.
 
 CI (`.github/workflows/ci.yml`) runs the package tests on macOS and in a Linux Swift container.
 

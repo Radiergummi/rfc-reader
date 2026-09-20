@@ -175,7 +175,8 @@ public struct RFCXMLParser: Sendable {
                 title: title,
                 blocks: blocks,
                 subsections: subsections,
-                isAppendix: appendix || numbering.isAppendix
+                // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
+                isAppendix: isNumbered && (appendix || numbering.isAppendix)
             )
         }
 
@@ -455,6 +456,11 @@ public struct RFCXMLParser: Sendable {
             case "eref":
                 let inner = parseInlines(element.children)
                 guard let target = element["target"], let url = URL(string: target) else { return inner }
+                // Links into the RFC series are document references, whichever site they point at.
+                if let link = RFCLink(url: url), link.id.series == .rfc {
+                    let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
+                    return [.crossReference(CrossReference(target: .document(link.id, section: link.section), text: text))]
+                }
                 return [.link(url, inner.isEmpty ? [.text(target)] : inner)]
             case "em":
                 return [.emphasis(parseInlines(element.children))]

@@ -58,6 +58,17 @@ Add the file to the target's resources. `DocumentStore` picks it up when no down
 4. Spotlight indexing of the index in `LibraryModel.apply`.
 5. iCloud sync: add the iCloud capability and a CloudKit container; SwiftData does the rest.
 
+## Running the corpus pipeline
+
+```sh
+swift build -c release --package-path Tools/corpus-build
+Tools/corpus-build/.build/release/corpus-build fetch --out corpus --limit 20
+Tools/corpus-build/.build/release/corpus-build convert --in corpus/text --out corpus/xml --report corpus/report.json
+Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml --out corpus/manifest.json --version dev
+```
+
+Drop `--limit` for the full 8,464 legacy RFCs (about 450 MB, twenty minutes at the default concurrency). `docs/DATA_PIPELINE.md` explains the packs this produces.
+
 ## Working on RFCKit from Linux or CI
 
 The package has no Apple dependencies. `Foundation`, `FoundationXML` and `FoundationNetworking` are imported conditionally, and the tests run in a `swift:6.1` container (see `.github/workflows/ci.yml`).
