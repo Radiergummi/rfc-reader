@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Recent RFCs</title>
+        <link>https://www.rfc-editor.org</link>
+        <description>Recently published RFCs</description>
+        <lastBuildDate>Sat, 19 Sep 2026 17:37:42 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://www.npmjs.com/package/feed</generator>
+        <language>en-us</language>
+        <item>
+            <title><![CDATA[RFC 10050: Protocol-Specific Profiles for JSContact]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10050/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10050/</guid>
+            <pubDate>Sat, 19 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[This document defines the "JSContact Profiles" registry, an IANA registry for named subsets of JSContact elements. The document aims to facilitate using JSContact in the context of contact data exchange protocols or other use cases in which supporting all JSContact semantics might be inappropriate.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10041: Advertising Unreachable Links in OSPF]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10041/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10041/</guid>
+            <pubDate>Fri, 18 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>OSPF Router Link State Advertisements (LSAs) use fixed-format encodings that always include advertised links in the default Shortest Path First (SPF) computation. For non-default SPF computations, e.g., Flexible Algorithms as described in RFC 9350, advertised OSPF links are used in the default SPF computation even if this is not intended. In order to advertise these links and not use them in the base SPF calculation, the metric LSLinkInfinity (0xffff) is used to specify that the link is unreachable. If all OSPF routers in an OSPF area support this functionality and have advertised the capability via an area-scoped OSPF Router Information LSA, then links advertised with a metric of LSLinkInfinity are considered unreachable.</p><p>MaxReachableLinkMetric (0xfffe) is defined to provide backward compatible reachability in specifications that previously specified advertisement of MaxLinkMetric (0xffff). This document updates RFC 5443, RFC 6987, RFC 8379, and RFC 8770 with respect to the advertisement of MaxReachableLinkMetric (0xfffe) rather than MaxLinkMetric (0xffff).</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10032: The AEGIS Authenticated Encryption Algorithms]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10032/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10032/</guid>
+            <pubDate>Fri, 18 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>This document describes the AEGIS-128L, AEGIS-256, AEGIS-128X, and AEGIS-256X AES-based authenticated encryption with associated data (AEAD) algorithms designed for high-performance applications. It also specifies their use as stream ciphers and message authentication codes (MACs).</p><p>The document is a product of the Crypto Forum Research Group (CFRG).</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10016: System-Defined Configuration]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10016/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10016/</guid>
+            <pubDate>Wed, 16 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>The Network Management Datastore Architecture (NMDA) in RFC 8342 defines several configuration datastores holding configuration. The contents of these configuration datastores are controlled by clients. This document introduces the concept of a system configuration datastore holding configuration controlled by the system on which a server is running. The system configuration can be referenced (e.g., leafref) by configuration explicitly created by clients.</p><p>This document updates RFC 8342.</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10040: Locator/ID Separation Protocol (LISP) Geo-Coordinates]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10040/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10040/</guid>
+            <pubDate>Tue, 15 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>This document describes how Geo-Coordinates can be used in the Locator/ID Separation Protocol (LISP) and defines a new LISP Canonical Address Format (LCAF) encoding for such Geo-Coordinates.</p><p>This document updates RFC 8060.</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10033: Hash-Based Signatures: State and Backup Management]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10033/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10033/</guid>
+            <pubDate>Tue, 15 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>Stateful Hash-Based Signature Schemes (Stateful HBS) such as Leighton-Micali Signature (LMS), Hierarchical Signature System (HSS), eXtended Merkle Signature Scheme (XMSS), and XMSS^MT combine Merkle trees with One-Time Signatures (OTSs) to provide signatures that are resistant against attacks using large-scale quantum computers. Unlike conventional stateless digital signature schemes, Stateful HBS have a state to keep track of which OTS keys have been used, as double-signing with the same OTS key allows forgeries.</p><p>This document provides guidance and catalogs security considerations for the operational and technical aspects of deploying systems that rely on Stateful HBS. Management of the state of the Stateful HBS, including any handling of redundant key material, is a sensitive topic. This document describes some approaches to handle the associated challenges. It also describes the challenges that need to be resolved before certain approaches should be considered.</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10039: Interconnecting EVPN and IPVPN Domains]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10039/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10039/</guid>
+            <pubDate>Tue, 08 Sep 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>Ethernet Virtual Private Network (EVPN) provides a unified BGP control plane for both intra- and inter-subnet forwarding within tenant networks. When a tenant network spans multiple domains, including any combination of EVPN and IPVPN domains, it becomes necessary to define the interworking mechanisms among these BGP domains (EVPN and IPVPN) to ensure seamless end-to-end tenant connectivity. This document defines these interworking procedures.</p><p>In addition, this document defines a new BGP Path Attribute, referred to as Domain Path (D-PATH), which provides loop prevention for gateway nodes by protecting against control plane loops. The introduction of D-PATH modifies the BGP best-path selection process for Multiprotocol BGP inter-subnet forwarding (ISF) routes of Subsequent Address Family Identifiers (SAFIs) 128 (IPVPN) and 70 (EVPN).</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10042: Post-Quantum/Traditional Hybrid Key Exchange with the Module-Lattice-Based Key-Encapsulation Mechanism for Use in SSH]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10042/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10042/</guid>
+            <pubDate>Mon, 31 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[This document defines Post-Quantum Traditional (PQ/T) Hybrid key exchange methods based on the quantum-resistant Module-Lattice-Based Key-Encapsulation Mechanism (ML-KEM) standard and traditional Elliptic-Curve Diffie-Hellman (ECDH) key exchange schemes. These methods are defined for use in the Secure Shell (SSH) transport layer protocol.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10038: Distributing the Segment Routing over IPv6 (SRv6) Locator Using DHCPv6]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10038/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10038/</guid>
+            <pubDate>Fri, 28 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[In an SRv6 network, each SRv6 Segment Endpoint Node must be assigned an SRv6 Locator, and segment identifiers (SIDs) are generated within the address space of this SRv6 Locator. This document describes a method for assigning SRv6 Locators to SRv6 Segment Endpoint Nodes through the Dynamic Host Configuration Protocol for IPv6 (DHCPv6).]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10037: Registration Data Access Protocol (RDAP) Extension for DNS Time-to-Live (TTL) Values]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10037/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10037/</guid>
+            <pubDate>Fri, 28 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[This document specifies an extension to the Registration Data Access Protocol (RDAP), which allows the Time-to-Live (TTL) values for relevant DNS record types to be included in RDAP responses.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10034: RTP Payload Format for Visual Volumetric Video-Based Coding (V3C)]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10034/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10034/</guid>
+            <pubDate>Fri, 28 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[A visual volumetric video-based coding (V3C) ISO/IEC 23090-5 bitstream is composed of V3C units that contain V3C atlas sub-bitstreams, V3C video sub-bitstreams, and a V3C parameter set. This document describes an RTP payload format for V3C atlas sub-bitstreams. The RTP payload format for V3C video sub-bitstreams is defined by relevant IETF RFCs for the applicable video codec. The V3C RTP payload format allows for the packetization of one or more V3C atlas Network Abstraction Layer (NAL) units in an RTP packet payload as well as the fragmentation of a V3C atlas NAL unit into multiple RTP packets. The document also describes the mechanisms for grouping RTP streams of V3C component sub-bitstreams, providing a complete solution for streaming V3C-encoded content.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10035: YANG Library: Addition of the augmented-by List]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10035/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10035/</guid>
+            <pubDate>Wed, 26 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>"YANG Library" (RFC 8525) specifies the "ietf-yang-library" YANG module that provides information about the YANG modules, datastores, and datastore schemas used by a network management server.</p><p>This document augments the "ietf-yang-library" module to provide the augmented-by list. It facilitates the process of obtaining all dependencies between YANG modules by querying the network management server's YANG library. This document updates RFC 8525 to also include the augmented-by list.</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10036: Incremental Forwarding of HTTP Messages]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10036/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10036/</guid>
+            <pubDate>Fri, 21 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[<p>This document specifies the "Incremental" HTTP header field, which</p><p>instructs HTTP intermediaries to forward the HTTP message</p><p>incrementally.</p>]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10017: OAuth 2.0 for Browser-Based Applications]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10017/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10017/</guid>
+            <pubDate>Fri, 21 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[This specification details the threats, attack consequences, security considerations, and best practices that must be taken into account when developing browser-based applications that use OAuth 2.0.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[RFC 10030: Network Time Protocol (NTP) over the Precision Time Protocol (PTP)]]></title>
+            <link>https://www.rfc-editor.org/info/rfc10030/</link>
+            <guid isPermaLink="true">https://www.rfc-editor.org/info/rfc10030/</guid>
+            <pubDate>Fri, 14 Aug 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[This document specifies a transport for the client-server and symmetric modes of the Network Time Protocol (NTP) that encapsulates NTP messages in messages of the Precision Time Protocol (PTP). This transport enables hardware timestamping in network interface controllers (NICs) that can timestamp only PTP messages and delay corrections in PTP transparent clocks.]]></description>
+        </item>
+    </channel>
+</rss>
