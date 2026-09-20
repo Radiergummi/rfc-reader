@@ -143,6 +143,7 @@ public struct LegacyTextParser: Sendable {
         let lines = Self.collapsingDoubleSpacing(Self.depaginate(text))
         let (frontLines, bodyStart) = Self.splitFrontMatter(lines)
         var header = Self.parseFrontMatter(frontLines)
+        let bodyIsIndented = Self.bodyIsIndented(lines[bodyStart...])
 
         // Split the body into raw sections at column-0 headings.
         var sections: [RawSection] = [RawSection(heading: nil)]
@@ -157,11 +158,8 @@ public struct LegacyTextParser: Sendable {
             pendingBreak = false
         }
 
-        let body = Array(lines[bodyStart...])
-        let bodyIsIndented = Self.bodyIsIndented(body)
-
-        for (offset, line) in body.enumerated() {
-            switch line {
+        for index in lines.indices[bodyStart...] {
+            switch lines[index] {
             case .pageBreak:
                 if current.isEmpty, var last = sections[sections.count - 1].blocks.popLast() {
                     last.followedByPageBreak = true
@@ -171,11 +169,9 @@ public struct LegacyTextParser: Sendable {
                     flushBlock()
                 }
             case .text(let string):
-                if string.trimmingCharacters(in: .whitespaces).isEmpty {
+                if string.isBlank {
                     flushBlock()
-                } else if string.first?.isWhitespace == false,
-                          bodyIsIndented || (current.isEmpty && Self.isBlankOrEnd(body, at: offset + 1)),
-                          let heading = Self.heading(from: string) {
+                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, startsBlock: current.isEmpty) {
                     flushBlock()
                     sections.append(RawSection(heading: heading))
                 } else {
@@ -253,11 +249,13 @@ public struct LegacyTextParser: Sendable {
         var front: [String] = []
         var run = 0
         var previousWasBlank = true
-        var afterTitle: (frontCount: Int, offset: Int)?
+        // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
+        // RFC 1144), so no heading ever arrives. Ending the front matter after the title
+        // keeps the prose; swallowing the whole file would leave an empty document.
+        var afterTitle: (front: [String], bodyStart: Int)?
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
-            let trimmed = string.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
+            if string.isBlank {
                 front.append("")
                 previousWasBlank = true
                 continue
@@ -265,20 +263,18 @@ public struct LegacyTextParser: Sendable {
             if previousWasBlank { run += 1 }
             previousWasBlank = false
             if run > 2 {
-                if afterTitle == nil { afterTitle = (front.count, offset) }
-                if string.first?.isWhitespace == false, heading(from: string) != nil {
+                if afterTitle == nil { afterTitle = (front, offset) }
+                // Deliberately laxer than the body's rule: the stand-alone test needs the
+                // body's indent, which is not known until this scan has finished. Stopping
+                // early only leaves a line in the body that turns out not to be a heading;
+                // stopping late would swallow it into the front matter and lose it.
+                if string.startsAtColumnZero, heading(from: string) != nil {
                     return (front, offset)
                 }
             }
             front.append(string)
         }
-        // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
-        // RFC 1144), so no column-0 heading ever arrives. Ending the front matter after the
-        // title keeps the prose; swallowing the whole file would leave an empty document.
-        if let afterTitle {
-            return (Array(front.prefix(afterTitle.frontCount)), afterTitle.offset)
-        }
-        return (front, lines.count)
+        return afterTitle ?? (front, lines.count)
     }
 
     nonisolated(unsafe) private static let monthYearPattern = #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
@@ -343,25 +339,36 @@ public struct LegacyTextParser: Sendable {
     /// the layout `heading(from:)` assumes. A few hundred legacy RFCs (1142, 1305, 1247,
     /// 1034 and others) set their prose at column 0 as well; there the indent says nothing
     /// and every line would otherwise become an unnumbered heading.
-    private static func bodyIsIndented(_ body: [Line]) -> Bool {
+    private static func bodyIsIndented(_ body: ArraySlice<Line>) -> Bool {
         var counts: [Int: Int] = [:]
-        for case .text(let string) in body where !string.trimmingCharacters(in: .whitespaces).isEmpty {
+        for case .text(let string) in body where !string.isBlank {
+            // Spaces only: the handful of tab-indented documents set their body at column 0
+            // anyway, and counting a tab as an indent would classify them the other way.
             counts[string.leadingSpaceCount, default: 0] += 1
         }
         // A tie keeps the classic layout, which is what the rest of the parser assumes.
-        guard let mode = counts.max(by: { $0.value == $1.value ? $0.key < $1.key : $0.value < $1.value })?.key else {
+        guard let mode = counts.max(by: { ($0.value, $0.key) < ($1.value, $1.key) })?.key else {
             return true
         }
         return mode > 0
     }
 
-    private static func isBlankOrEnd(_ body: [Line], at index: Int) -> Bool {
-        guard body.indices.contains(index) else { return true }
-        switch body[index] {
+    /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
+    /// body starts there too — so that the indent says nothing — it also has to stand alone
+    /// between blank lines. `heading(from:)` judges the text; this judges the position.
+    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, startsBlock: Bool) -> HeadingInfo? {
+        guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
+        guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
+        return heading(from: string)
+    }
+
+    private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
+        guard lines.indices.contains(index) else { return true }
+        switch lines[index] {
         case .pageBreak:
             return true
         case .text(let string):
-            return string.trimmingCharacters(in: .whitespaces).isEmpty
+            return string.isBlank
         }
     }
 
@@ -374,7 +381,7 @@ public struct LegacyTextParser: Sendable {
         var content = 0
         var isolated = 0
         for (index, line) in lines.enumerated() {
-            guard case .text(let string) = line, !string.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            guard case .text(let string) = line, !string.isBlank else { continue }
             content += 1
             if isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1) { isolated += 1 }
         }
@@ -382,7 +389,7 @@ public struct LegacyTextParser: Sendable {
 
         var result: [Line] = []
         for (index, line) in lines.enumerated() {
-            if case .text(let string) = line, string.trimmingCharacters(in: .whitespaces).isEmpty,
+            if case .text(let string) = line, string.isBlank,
                !isBlankOrEnd(lines, at: index - 1), !isBlankOrEnd(lines, at: index + 1) {
                 continue
             }
@@ -728,6 +735,12 @@ struct InlineLinker: Sendable {
 // MARK: - String helpers
 
 extension String {
+    var isBlank: Bool { allSatisfy(\.isWhitespace) }
+
+    /// A tab indents as surely as a space does: RFC 1142's contents listing is tab-indented
+    /// and every entry otherwise matched the numbered-heading pattern.
+    var startsAtColumnZero: Bool { first?.isWhitespace == false }
+
     var leadingSpaceCount: Int {
         var count = 0
         for character in self {
