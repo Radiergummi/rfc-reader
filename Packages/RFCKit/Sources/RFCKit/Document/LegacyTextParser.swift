@@ -157,7 +157,10 @@ public struct LegacyTextParser: Sendable {
             pendingBreak = false
         }
 
-        for line in lines[bodyStart...] {
+        let body = Array(lines[bodyStart...])
+        let bodyIsIndented = Self.bodyIsIndented(body)
+
+        for (offset, line) in body.enumerated() {
             switch line {
             case .pageBreak:
                 if current.isEmpty, var last = sections[sections.count - 1].blocks.popLast() {
@@ -170,7 +173,9 @@ public struct LegacyTextParser: Sendable {
             case .text(let string):
                 if string.trimmingCharacters(in: .whitespaces).isEmpty {
                     flushBlock()
-                } else if string.first != " ", let heading = Self.heading(from: string) {
+                } else if string.first?.isWhitespace == false,
+                          bodyIsIndented || (current.isEmpty && Self.isBlankOrEnd(body, at: offset + 1)),
+                          let heading = Self.heading(from: string) {
                     flushBlock()
                     sections.append(RawSection(heading: heading))
                 } else {
@@ -248,6 +253,7 @@ public struct LegacyTextParser: Sendable {
         var front: [String] = []
         var run = 0
         var previousWasBlank = true
+        var afterTitle: (frontCount: Int, offset: Int)?
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
             let trimmed = string.trimmingCharacters(in: .whitespaces)
@@ -258,10 +264,19 @@ public struct LegacyTextParser: Sendable {
             }
             if previousWasBlank { run += 1 }
             previousWasBlank = false
-            if run > 2, string.first != " ", heading(from: string) != nil {
-                return (front, offset)
+            if run > 2 {
+                if afterTitle == nil { afterTitle = (front.count, offset) }
+                if string.first?.isWhitespace == false, heading(from: string) != nil {
+                    return (front, offset)
+                }
             }
             front.append(string)
+        }
+        // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
+        // RFC 1144), so no column-0 heading ever arrives. Ending the front matter after the
+        // title keeps the prose; swallowing the whole file would leave an empty document.
+        if let afterTitle {
+            return (Array(front.prefix(afterTitle.frontCount)), afterTitle.offset)
         }
         return (front, lines.count)
     }
@@ -323,6 +338,32 @@ public struct LegacyTextParser: Sendable {
     // MARK: Headings
 
     private static let nonHeadingWords: Set<String> = ["rfc", "request", "network", "internet", "obsoletes", "updates", "category", "issn"]
+
+    /// True when the body sits at an indent and headings stand out at column 0, which is
+    /// the layout `heading(from:)` assumes. A few hundred legacy RFCs (1142, 1305, 1247,
+    /// 1034 and others) set their prose at column 0 as well; there the indent says nothing
+    /// and every line would otherwise become an unnumbered heading.
+    private static func bodyIsIndented(_ body: [Line]) -> Bool {
+        var counts: [Int: Int] = [:]
+        for case .text(let string) in body where !string.trimmingCharacters(in: .whitespaces).isEmpty {
+            counts[string.leadingSpaceCount, default: 0] += 1
+        }
+        // A tie keeps the classic layout, which is what the rest of the parser assumes.
+        guard let mode = counts.max(by: { $0.value == $1.value ? $0.key < $1.key : $0.value < $1.value })?.key else {
+            return true
+        }
+        return mode > 0
+    }
+
+    private static func isBlankOrEnd(_ body: [Line], at index: Int) -> Bool {
+        guard index < body.count else { return true }
+        switch body[index] {
+        case .pageBreak:
+            return true
+        case .text(let string):
+            return string.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+    }
 
     private static func heading(from line: String) -> HeadingInfo? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
