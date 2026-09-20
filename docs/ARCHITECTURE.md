@@ -99,11 +99,13 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
 
 CI (`.github/workflows/ci.yml`) runs the package tests on macOS and in a Linux Swift container.
 
-## Decision pending: TextKit 2 for the reader body
+## Decision: TextKit 2 for the reader body
 
-The wishlist includes link previews on hard press, hover popovers on Mac and find-in-document. SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. `UITextView` / `NSTextView` with TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
+*Decided September 2026.* The reader's prose is rendered by `UITextView` / `NSTextView` with TextKit 2, not by SwiftUI `Text`. The wishlist needs link previews on hard press, hover popovers on Mac and find-in-document; SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
 
-Recommended shape: keep `RFCDocument` as the source, render each section's prose blocks into one TextKit-backed view (paragraphs, lists and definition lists as attributed text with paragraph styles), and keep artwork, tables and figures as native SwiftUI views between them. `InlineText.attributedString(_:)` already produces the attributed text, so the change is confined to the paragraph renderer and the link handler. Make this call before adding features to the SwiftUI renderer.
+Shape: keep `RFCDocument` as the source, render each section's prose blocks into one TextKit-backed view (paragraphs, lists and definition lists as attributed text with paragraph styles), and keep artwork, tables and figures as native SwiftUI views between them. `InlineText.attributedString(_:)` already produces the attributed text, so the change is confined to the paragraph renderer and the link handler. The current SwiftUI `InlineText` is a placeholder until then; do not add features to it.
+
+This is the first app task after the Xcode project builds.
 
 ## Planned engines
 

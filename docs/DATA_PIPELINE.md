@@ -34,9 +34,23 @@ Why RFCXML rather than our own JSON:
 
 The serializer marks every generated file: a leading comment naming the source file and stating that the structure is heuristic and the text unchanged, plus `<link rel="alternate">` to the original `.txt`. `RFCXMLParser` round-trips the output into an identical section tree (tested on RFC 5234 and on the RFC Editor's own RFC 8999 XML).
 
-### Licensing check before shipping
+### Licensing: what we know, and the fallback if the answer is no
 
-The IETF Trust Legal Provisions allow anyone to reproduce and distribute RFC text. For RFCs published before 10 November 2008 the Trust does not grant rights to create derivative works outside the IETF standards process. Adding markup around unchanged text is a format conversion rather than a modification of content, and the generated files say so, but read the current TLP (https://trustee.ietf.org/documents/trust-legal-provisions/) and, if in doubt, ask the Trust before the first public release of the pack. Until then the pack can be built and used privately.
+The app is going to be public and possibly sold, so this is not a formality. Status of the question, to be resolved before the first public release of a legacy pack; private use meanwhile needs nothing.
+
+What the licences say, as far as we know today (verify against the current text):
+
+- **RFCs from November 2008 onward** are under the IETF Trust Legal Provisions (TLP). Everyone may reproduce and distribute them verbatim. Modifying them outside the IETF process is not granted, except for translations and for extracting Code Components under the BSD licence. These RFCs all have XML from the RFC Editor anyway (from 8650), or are covered by the same question as below (8650 is late 2019, so RFCs 5378–8649 are TLP-licensed text without official XML).
+- **RFCs from roughly 1996 to 2008** carry the RFC 2026 Section 10 boilerplate: the document "may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed ... without restriction of any kind, provided that the above copyright notice and this paragraph are included", but "this document itself may not be modified in any way".
+- **RFCs before 1996** mostly have no licence statement at all; the Trust's position is that it cannot grant more than the original authors did.
+
+Marking up unchanged text is a format conversion, and arguably a "derivative work that assists in implementation", but "may not be modified in any way" is exactly the kind of clause a cautious reading trips over. Three routes, in order of preference:
+
+1. **Ask.** The IETF Trust (trustees@ietf.org) has granted permissions for tooling before, and a reader app that helps people use RFCs is squarely in the spirit of the licences. A written permission for "publishing the text of legacy RFCs, unchanged, with added RFCXML structure markup" settles it. Reach out with the generated file for a well-known RFC attached so they can see exactly what is being distributed.
+2. **Ship structure, not text.** If publishing marked-up text is not permitted, the pack can carry only *structure sidecars*: for each legacy RFC, the byte ranges of the original `.txt` and the role of each range (section heading with number, paragraph, list item, artwork, reference entry, cross-reference target). The app fetches or caches the verbatim `.txt` from the RFC Editor, verifies its hash against the sidecar, and applies the structure at runtime. No RFC text ever leaves the RFC Editor's servers through us, the pack is metadata about a document rather than a copy of it, and the runtime cost is trivial (applying offsets, no heuristics). `LegacyTextParser` would gain a mode that emits ranges instead of a document, and the pipeline would emit sidecars instead of XML. This is a modest change to the pipeline and none to the reader.
+3. **Keep the on-device renderer forever.** If even sidecars felt too close to the line, the app fetches the `.txt` and runs `LegacyTextParser` on device, as it does today. Unfortunate, because heuristic fixes then ship with app updates rather than data updates, but entirely workable; the parser already exists and handles RFC 2616 in under a second.
+
+Note that route 2 preserves almost everything route 1 gives: one-time offline heuristics, reviewable overrides, and verified data packs. The difference is only where the bytes of the text come from. Design the pack format so the XML pack and the sidecar pack share the manifest and delivery mechanism, and the decision can be made late.
 
 ## Pipeline stages
 
@@ -129,4 +143,4 @@ Overrides are the only part that must be under version control; everything else 
 3. Add the `fts` builder (GRDB or the sqlite3 C library, FTS5, section rows) and the app-side reader.
 4. Pick and convert the embedding model; add the `embeddings` builders; hybrid rerank in the app.
 5. Background Assets integration and the Offline settings screen.
-6. Resolve the licensing question for public distribution of `legacy-xml`.
+6. Resolve the licensing question for public distribution of `legacy-xml` (ask the Trust; fall back to structure sidecars).
