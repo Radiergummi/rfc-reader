@@ -95,6 +95,19 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
 
 CI (`.github/workflows/ci.yml`) runs the package tests on macOS and in a Linux Swift container.
 
+## Decision pending: TextKit 2 for the reader body
+
+The wishlist includes link previews on hard press, hover popovers on Mac and find-in-document. SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. `UITextView` / `NSTextView` with TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
+
+Recommended shape: keep `RFCDocument` as the source, render each section's prose blocks into one TextKit-backed view (paragraphs, lists and definition lists as attributed text with paragraph styles), and keep artwork, tables and figures as native SwiftUI views between them. `InlineText.attributedString(_:)` already produces the attributed text, so the change is confined to the paragraph renderer and the link handler. Make this call before adding features to the SwiftUI renderer.
+
+## Planned engines
+
+- **Search.** SQLite FTS5 (via GRDB) with BM25 ranking, one row per section, over all abstracts plus every downloaded document; snippets from `snippet()`. Later, a hybrid reranker with `NLContextualEmbedding` vectors: per abstract for the whole index (precomputed pack, ~20 MB), per section for downloaded documents. Metadata search moves into the same database.
+- **Highlighting.** A tokenizer per language (ABNF, JSON, HTTP messages, YANG, ASN.1, C-like) in RFCKit producing `[Token]` with kinds; the renderer maps kinds to colours. Heuristic language detection for legacy text (`rulename = ` lines → ABNF).
+- **Diff.** Section alignment by title similarity and position, LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
+- **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.
+
 ## Known gaps and the next technical steps
 
 - Legacy text: definition lists with hanging indents (e.g. the cache directives in RFC 2616 §14.9.1) render as preformatted blocks; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.

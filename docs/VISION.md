@@ -83,6 +83,22 @@ Reference
 - Being a mailing-list or Datatracker client.
 - Server-side anything. No accounts, no analytics beyond opt-in crash reports.
 
+## Wishlist, mapped to the plan
+
+Ideas from the first brainstorm session and where each one lands.
+
+| Idea | Where it lands | Notes |
+|---|---|---|
+| Prose reflowed to the viewport with adjustable typography (Safari Reader, Apple Books) | Tier 0, already the core design | The block model separates prose from artwork, so reflow is free. Add a `ReadingSettings` object: font family, size, line height, measure, margins, theme incl. sepia. Pagination is a possible later mode; scrolling stays the default. |
+| Full semantic search, BM25 and/or vectors | Tier 1 (BM25), Tier 1–2 (hybrid) | SQLite FTS5 has BM25 built in: section-level hits with snippets over everything downloaded plus every abstract. Vectors come second as a reranker: `NLContextualEmbedding` on device, one vector per abstract (~10k, ~20 MB, shipped precomputed via a GitHub release) and per section only for downloaded documents. |
+| ASCII flowcharts and diagrams rendered well | Tier 1 | Per-block, reversible upgrade of `+-|` art to Unicode box drawing. Packet diagrams (`0 1 2 3 … +-+-+`) follow a strict format and can be parsed into a native bit-field table, which no reader does today. SVG alternatives in newer RFCs need a small dependency or a web view for that one block. |
+| ABNF and other grammars, syntax highlighting for code | Tier 1 | RFCXML labels `<sourcecode type="abnf">`, `json`, `http-message`, `yang`, `asn.1`, `c`; legacy text ABNF is detectable from `rulename =` lines. A small regex tokenizer per language in RFCKit produces tokens the renderer colours. No JavaScript-based highlighters. |
+| Working inter-spec links | Tier 0, done in the model | Cross references resolve to document and section at parse time. Still to add: Internet-Draft references (`[I-D.ietf-quic-http]`) and IANA registry URLs. |
+| Drafts, and a pleasing delta between versions | Tier 2 | Every draft revision is served as text (and XML for recent ones) from the IETF archive, so both sides parse into the same model. Diff at three levels: align sections by title and position, LCS over paragraphs, word-level diff inside changed paragraphs. The same engine gives "what changed from RFC 7231 to RFC 9110", probably the more valuable view for implementers. Fuzzy alignment after restructurings is the hard part. Drafts also enable "notify me when this draft has a new version". |
+| Links with a preview on hard press | Tier 1, **changes the renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. A TextKit 2 backed text view can, and also brings hover popovers on Mac, find-in-document and better selection. Decide this before the SwiftUI renderer grows; see ARCHITECTURE.md. |
+| Handoff between iPhone, iPad and Mac | Tier 1 | `NSUserActivity` carrying the `rfc://` link of the current section. |
+| ⌘-click a reference to open it in a new window (Mac) | Tier 1 | Falls out of navigation being a link. |
+
 ## What the experience should feel like
 
 **iPhone.** Tab-less: a stack. Search field at the top of the list, reader full screen with a translucent bottom bar (contents, type size, cite, share). Pull the table of contents up as a sheet. Cross-reference taps push the other document; swipe back returns to where you were.
