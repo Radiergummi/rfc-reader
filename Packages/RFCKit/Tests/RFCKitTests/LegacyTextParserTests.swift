@@ -346,6 +346,43 @@ struct LegacyTextCorpusFindingsTests {
         #expect(paragraphs[1] == "We have added four commands to our server.")
     }
 
+    /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+    /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
+    /// every one of those paragraphs artwork.
+    @Test func paragraphsWithAFirstLineIndentAreProse() {
+        let text = """
+        Network Working Group                                          A. Person
+        Request for Comments: 99995                                  Example Org
+        Category: Informational                                     January 2030
+
+
+                                 A Synthetic Test Document
+
+        1.  Introduction
+
+             A model is developed of interactions between programs.
+        Salient features of this model which promote and simplify
+        the construction of reliable, responsive services are
+        identified.
+
+             Using this model as a template, the general
+        architecture of one possible interaction protocol is
+        presented.
+        """
+        let document = LegacyTextParser.parse(text)
+        let intro = try? #require(document.section(number: "1"))
+        let paragraphs = (intro?.blocks ?? []).compactMap { block -> String? in
+            if case .paragraph(let paragraph) = block { return paragraph.plainText }
+            return nil
+        }
+        #expect(paragraphs.count == 2)
+        #expect(paragraphs.first == "A model is developed of interactions between programs. Salient features of this model which promote and simplify the construction of reliable, responsive services are identified.")
+        #expect(!(intro?.blocks ?? []).contains { block in
+            if case .preformatted = block { return true }
+            return false
+        })
+    }
+
     @Test func overstrikesAndControlBytesAreRemoved() {
         let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
         let underlined = "_\u{08}R_\u{08}F_\u{08}C"

@@ -463,10 +463,13 @@ public struct LegacyTextParser: Sendable {
 
     private static func looksLikeProse(_ lines: [String]) -> Bool {
         guard let first = lines.first else { return false }
-        let indent = first.leadingSpaceCount
-        guard indent <= 6 else { return false }
-        for line in lines {
-            if line.leadingSpaceCount != indent { return false }
+        // Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+        // margin (RFC 722, 891, 904), so the block's indent comes from the second line.
+        let indent = (lines.count > 1 ? lines[1] : first).leadingSpaceCount
+        let firstLineIndent = first.leadingSpaceCount - indent
+        guard indent <= 6, (0...8).contains(firstLineIndent) else { return false }
+        for (offset, line) in lines.enumerated() {
+            if offset > 0, line.leadingSpaceCount != indent { return false }
             let content = line.trimmingCharacters(in: .whitespaces)
             if content.contains(artworkPattern) { return false }
             if content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
