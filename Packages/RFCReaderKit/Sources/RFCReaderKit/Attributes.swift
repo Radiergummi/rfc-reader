@@ -1,0 +1,33 @@
+import Foundation
+import RFCKit
+
+extension NSAttributedString.Key {
+    /// The cross reference a run stands for: hit testing, preview, chip drawing.
+    public static let rfcReference = NSAttributedString.Key("rfcReference")
+    /// Set on heading runs, so the VoiceOver headings rotor can find them.
+    public static let rfcAnchor = NSAttributedString.Key("rfcAnchor")
+    /// What the layout fragment should draw behind or beside this run.
+    public static let rfcDecoration = NSAttributedString.Key("rfcDecoration")
+    /// The verbatim block a run came from: the "Copy Figure" item and the
+    /// accessibility element both need the original text, not the laid-out lines.
+    public static let rfcVerbatim = NSAttributedString.Key("rfcVerbatim")
+}
+
+public enum RFCDecoration: String, Sendable {
+    case blockQuote
+    case aside
+    case artwork
+    case table
+}
+
+/// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute.
+public final class VerbatimBox: Sendable {
+    public let content: Preformatted
+    public init(_ content: Preformatted) { self.content = content }
+}
+
+/// Boxes a `CrossReference` for the same reason.
+public final class ReferenceBox: Sendable {
+    public let reference: CrossReference
+    public init(_ reference: CrossReference) { self.reference = reference }
+}
