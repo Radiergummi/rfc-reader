@@ -45,15 +45,14 @@ test-app:
 	swift test --package-path $(RFCREADERKIT)
 
 ## Generate the Xcode project from project.yml
-# Not phony: project.yml is the source of truth and the project it produces is
-# gitignored, so the generate only reruns when the spec is newer than the
-# project. `touch` because xcodegen leaves the directory's own mtime alone when
-# nothing inside it changed.
-$(PROJECT): project.yml
+# Phony: XcodeGen's `sources:` entries are folder-based, so a source file added
+# or removed under App/RFCReader has to be picked up even when project.yml
+# itself is unchanged. A timestamp rule on project.yml alone missed that and
+# left build-app failing with a confusing "cannot find X in scope". xcodegen
+# runs in about a second, so regenerating unconditionally costs nothing next
+# to the xcodebuild it precedes.
+xcodeproj:
 	xcodegen generate
-	@touch $@
-
-xcodeproj: $(PROJECT)
 
 # project.yml ships without a DEVELOPMENT_TEAM, and xcodebuild refuses to sign
 # without one. Compiling is what the two app targets are for, so signing is off
@@ -65,12 +64,12 @@ DEVELOPMENT_TEAM ?=
 SIGNING := $(if $(DEVELOPMENT_TEAM),DEVELOPMENT_TEAM=$(DEVELOPMENT_TEAM),CODE_SIGNING_ALLOWED=NO)
 
 ## Build the app for macOS
-build-app: $(PROJECT)
+build-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination 'platform=macOS' -quiet $(SIGNING)
 
 ## Build the app for the iOS Simulator
-build-ios: $(PROJECT)
+build-ios: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination 'generic/platform=iOS Simulator' -quiet $(SIGNING)
 

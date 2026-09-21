@@ -274,8 +274,12 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
 }
 #endif
 
-extension RFCTextViewCoordinator: @MainActor NSTextLayoutManagerDelegate {
-    func textLayoutManager(
+extension RFCTextViewCoordinator: NSTextLayoutManagerDelegate {
+    // TextKit 2's background-layout design permits this delegate to be called off
+    // the main thread; `nonisolated` keeps the conformance honest about that rather
+    // than binding it to the main actor. The body only reads its parameters and
+    // allocates, so it needs no isolation.
+    nonisolated func textLayoutManager(
         _ textLayoutManager: NSTextLayoutManager,
         textLayoutFragmentFor location: any NSTextLocation,
         in textElement: NSTextElement
