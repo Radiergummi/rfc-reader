@@ -39,7 +39,7 @@ enum LibraryFilter: Hashable, Identifiable {
         case .standards: "checkmark.seal"
         case .bestCurrentPractice: "hand.thumbsup"
         case .stream: "tray"
-        case .workingGroup: "person.3"
+        case .workingGroup: "person.2"
         case .series: "square.stack"
         }
     }

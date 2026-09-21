@@ -43,6 +43,7 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("RFCs")
+        .labelStyle(SidebarLabelStyle())
         .safeAreaInset(edge: .bottom) {
             IndexStatusView()
         }
@@ -59,6 +60,35 @@ struct SidebarView: View {
 
     private func row(_ filter: LibraryFilter) -> some View {
         Label(filter.title, systemImage: filter.systemImage).tag(filter)
+    }
+}
+
+/// Gives every sidebar row's icon a column of its own, so the titles line up however
+/// wide the glyph is.
+///
+/// `Label` sizes the icon to the symbol and leaves it at that. Most of the sidebar's
+/// symbols carry enough of their own whitespace to look spaced anyway; the wide ones
+/// do not, and `person.3` — 28 pt against `bookmark`'s 14 — ran straight into its
+/// title. Spacing alone would fix that row and leave the titles on a ragged edge, so
+/// the icon gets a fixed column instead and the two problems go away together.
+private struct SidebarLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Row(icon: configuration.icon, title: configuration.title)
+    }
+
+    private struct Row: View {
+        let icon: LabelStyleConfiguration.Icon
+        let title: LabelStyleConfiguration.Title
+        /// Wide enough for the widest symbol the sidebar uses, and scaled with the
+        /// text so the column still holds at larger accessibility sizes.
+        @ScaledMetric(relativeTo: .body) private var column: CGFloat = 22
+
+        var body: some View {
+            HStack(spacing: 6) {
+                icon.frame(width: column)
+                title
+            }
+        }
     }
 }
 
