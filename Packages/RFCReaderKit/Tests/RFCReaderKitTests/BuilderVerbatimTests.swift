@@ -27,6 +27,7 @@ struct BuilderVerbatimTests {
         for line in art.split(separator: "\n") {
             #expect(built.text.string.contains(line), "lost artwork line: \(line)")
         }
+        #expect(built.text.string.contains(art), "artwork must survive as one contiguous block, newlines included")
     }
 
     @Test func artworkIsMonospacedAndNeverWraps() throws {
