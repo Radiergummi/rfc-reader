@@ -29,6 +29,10 @@ struct DocumentView: View {
     @State private var showOriginal = false
     @State private var showTableOfContents = false
     @State private var visibleAnchor: String?
+    /// The same value, written without waiting for SwiftUI to observe it. Only
+    /// `saveReadingPosition` reads it, and only because it cannot afford to lose a
+    /// report that was computed but not yet delivered.
+    @State private var lastVisibleAnchor = VisibleAnchorBox()
     @State private var copiedStyle: CitationStyle?
 
     private var metadata: RFCMetadata? { library.metadata(id) }
@@ -71,6 +75,7 @@ struct DocumentView: View {
             RFCTextView(
                 built: built,
                 trackedAnchors: sectionAnchors,
+                lastVisibleAnchor: lastVisibleAnchor,
                 scrollTarget: scrollTarget,
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: { visibleAnchor = $0 },
@@ -159,6 +164,10 @@ struct DocumentView: View {
     private func load() async {
         loadError = nil
         built = nil
+        // A reused view must not carry the previous document's place into the new
+        // one; `install()` reports the real anchor a moment later.
+        visibleAnchor = nil
+        lastVisibleAnchor.anchor = nil
         showOriginal = preferOriginalText
         do {
             let loaded = try await library.document(for: id)
@@ -239,13 +248,14 @@ struct DocumentView: View {
     }
 
     private func saveReadingPosition() {
+        let anchor = lastVisibleAnchor.anchor ?? visibleAnchor
         let number = id.number
         let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
         if let existing = try? modelContext.fetch(descriptor).first {
-            existing.sectionAnchor = visibleAnchor
+            existing.sectionAnchor = anchor
             existing.updatedAt = .now
         } else {
-            modelContext.insert(ReadingPosition(number: number, sectionAnchor: visibleAnchor))
+            modelContext.insert(ReadingPosition(number: number, sectionAnchor: anchor))
         }
     }
 }

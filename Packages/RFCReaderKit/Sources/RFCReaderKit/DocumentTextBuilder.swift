@@ -44,10 +44,25 @@ public final class DocumentTextBuilder {
 
 extension DocumentTextBuilder {
     func appendDocument(_ document: RFCDocument) {
-        appendBlocks(document.header.abstract, indent: 0)
+        appendAbstract(document.header.abstract)
         for section in document.sections {
             appendSection(section, depth: 1)
         }
+    }
+
+    /// The abstract is the first prose in the storage, and its heading belongs here
+    /// with it: neither parser keeps "Abstract" as a block — both consume it into
+    /// `DocumentHeader.abstract` — and the reader's header view stops above the
+    /// status banner, so a label placed there would sit on the wrong side of it.
+    /// No anchor: nothing links to the abstract, and it is not in the contents.
+    private func appendAbstract(_ blocks: [Block]) {
+        guard !blocks.isEmpty else { return }
+        append("Abstract\n", [
+            .font: style.headingFont(depth: 1),
+            .foregroundColor: RFCColors.label,
+            .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6),
+        ])
+        appendBlocks(blocks, indent: 0)
     }
 
     private func appendSection(_ section: Section, depth: Int) {

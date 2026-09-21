@@ -67,6 +67,34 @@ struct BuilderStructureTests {
         #expect(abstractOffset < sectionOffset)
     }
 
+    /// Neither parser keeps "Abstract" as a block, and the reader's header view no
+    /// longer draws it, so the builder is the only thing left that can.
+    @Test func theAbstractIsLabelled() throws {
+        let document = try Fixtures.rfc8999()
+        let built = DocumentTextBuilder.build(document, style: style)
+        let text = built.text.string
+        let label = try #require(text.range(of: "Abstract"), "the abstract has no heading")
+        #expect(text.distance(from: text.startIndex, to: label.lowerBound) == 0, "the heading is the first thing in the storage")
+
+        let firstParagraph = try #require(document.header.abstract.compactMap { block -> String? in
+            guard case .paragraph(let paragraph) = block else { return nil }
+            return paragraph.plainText
+        }.first)
+        let prose = try #require(text.range(of: firstParagraph))
+        #expect(label.upperBound <= prose.lowerBound, "the heading must precede the abstract's first paragraph")
+
+        let offset = text.distance(from: text.startIndex, to: label.lowerBound)
+        #expect(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont == style.headingFont(depth: 1))
+        #expect(built.anchors.offset(of: "Abstract") == nil, "the heading carries no anchor")
+    }
+
+    @Test func aDocumentWithNoAbstractGetsNoHeading() throws {
+        var document = try Fixtures.rfc8999()
+        document.header.abstract = []
+        let built = DocumentTextBuilder.build(document, style: style)
+        #expect(!built.text.string.hasPrefix("Abstract"))
+    }
+
     @Test func headingTextIsTheSectionDisplayTitle() throws {
         let document = try Fixtures.rfc8999()
         let built = DocumentTextBuilder.build(document, style: style)

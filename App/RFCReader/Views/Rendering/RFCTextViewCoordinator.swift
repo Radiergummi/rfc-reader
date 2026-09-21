@@ -13,6 +13,18 @@ typealias PlatformTextView = NSTextView
 typealias PlatformHostingController = NSHostingController
 #endif
 
+/// The last anchor section tracking computed, outside SwiftUI's observation.
+///
+/// Reporting to `DocumentView` goes through a `Task`, because it can fire from
+/// inside a view update where mutating state is illegal — and a `Task` has no
+/// ordering guarantee against `onDisappear`, so a scroll immediately followed by
+/// navigating away would persist the section before last. `saveReadingPosition`
+/// reads this instead: it is written the moment the anchor is computed.
+@MainActor
+final class VisibleAnchorBox {
+    var anchor: String?
+}
+
 /// Everything the two representables share. Both platforms drive the same anchor
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
@@ -52,10 +64,23 @@ final class RFCTextViewCoordinator: NSObject {
         }
     }
 
+    /// Where section tracking last put the reader, written the moment it is computed.
+    /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
+    /// main-actor hop, which `onDisappear` cannot afford to wait for.
+    var lastVisibleAnchor: VisibleAnchorBox?
+
     private(set) var built: BuiltDocument?
     private var trackedIndex = AnchorIndex([])
     private var lastReportedAnchor: String?
     private var laidOutColumn: CGFloat?
+    private var laidOutHeaderHeight: CGFloat?
+
+    /// The bottom of the last laid-out fragment, in container coordinates. The text
+    /// view's own `contentSize`/`frame` are republished by *its* layout pass, not by
+    /// `ensureLayout`, so they can still read near zero in the same update that
+    /// installed the document — and clamping a deep jump against that would land at
+    /// the top and overwrite the reading position with section one.
+    private var laidOutEnd: CGFloat?
 
     // MARK: - Storage
 
@@ -86,20 +111,35 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     private func layOutEverything() {
+        laidOutEnd = nil
         guard let layout = textView?.textLayoutManager else { return }
         layout.ensureLayout(for: layout.documentRange)
+        var end: CGFloat?
+        layout.enumerateTextLayoutFragments(from: layout.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { fragment in
+            end = fragment.layoutFragmentFrame.maxY
+            return false
+        }
+        laidOutEnd = end
     }
 
     // MARK: - Geometry
 
-    /// Centres the column, hangs the header in the top inset, and re-lays out only
-    /// when the column itself changed: a window wider than the measure moves the
-    /// gutters, not the text.
+    /// Centres the column and hangs the header in the top inset.
+    ///
+    /// This runs on every update pass — and an update pass happens on every section
+    /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
+    /// the column or the header's height actually moved. A relayout costs more
+    /// still, and only the column can force one: a window wider than the measure
+    /// moves the gutters, not the text.
     func layOut(width: CGFloat) {
         guard let textView, width > 0 else { return }
         let gutter = max(Self.margin, (width - Self.measure) / 2)
         let column = width - gutter * 2
         let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
+        guard column != laidOutColumn || headerHeight != laidOutHeaderHeight else { return }
+        let columnChanged = column != laidOutColumn
+        laidOutColumn = column
+        laidOutHeaderHeight = headerHeight
 
         #if canImport(UIKit)
         textView.textContainerInset = UIEdgeInsets(top: headerHeight, left: gutter, bottom: Self.margin, right: gutter)
@@ -111,9 +151,7 @@ final class RFCTextViewCoordinator: NSObject {
         #endif
         headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
-        guard laidOutColumn != column else { return }
-        laidOutColumn = column
-        layOutEverything()
+        if columnChanged { layOutEverything() }
     }
 
     // MARK: - Scrolling
@@ -149,6 +187,7 @@ final class RFCTextViewCoordinator: NSObject {
         guard let anchor = trackedIndex.anchor(at: offset) ?? trackedIndex.entries.first?.anchor,
               anchor != lastReportedAnchor else { return }
         lastReportedAnchor = anchor
+        lastVisibleAnchor?.anchor = anchor
         // Deferred for the same reason as `onScrollHandled`: installing a document
         // reports from inside SwiftUI's update, where mutating state is illegal.
         Task { self.onVisibleAnchorChange(anchor) }
@@ -164,17 +203,39 @@ final class RFCTextViewCoordinator: NSObject {
         #endif
     }
 
+    /// Clamped against the laid-out document end rather than the text view's own
+    /// published height, and **not clamped at all** if that end is unknown: an
+    /// overshoot self-corrects on the next scroll, whereas clamping to the top
+    /// silently rewrites the reading position.
     private func scrollContainerTopTo(_ containerY: CGFloat) {
         guard let textView else { return }
+        // The view's own geometry has to be current before an offset is set against
+        // it, or the platform clamps the jump to a content size it has not published
+        // yet. The text is laid out already, so this only syncs frames.
         #if canImport(UIKit)
-        let target = containerY + textView.textContainerInset.top
-        let limit = max(0, textView.contentSize.height - textView.bounds.height)
-        textView.setContentOffset(CGPoint(x: 0, y: min(max(0, target), limit)), animated: false)
+        textView.layoutIfNeeded()
+        #else
+        textView.enclosingScrollView?.layoutSubtreeIfNeeded()
+        #endif
+        #if canImport(UIKit)
+        let inset = textView.textContainerInset
+        let top = inset.top
+        let content = laidOutEnd.map { top + $0 + inset.bottom }
+        let viewport = textView.bounds.height
         #else
         guard let scroll = textView.enclosingScrollView else { return }
-        let target = containerY + textView.textContainerOrigin.y
-        let limit = max(0, textView.bounds.height - scroll.contentView.bounds.height)
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, target), limit)))
+        let top = textView.textContainerOrigin.y
+        let content = laidOutEnd.map { top + $0 + textView.textContainerInset.height }
+        let viewport = scroll.contentView.bounds.height
+        #endif
+        var target = max(0, containerY + top)
+        if let content {
+            target = min(target, max(0, content - viewport))
+        }
+        #if canImport(UIKit)
+        textView.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+        #else
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: target))
         scroll.reflectScrolledClipView(scroll.contentView)
         #endif
     }

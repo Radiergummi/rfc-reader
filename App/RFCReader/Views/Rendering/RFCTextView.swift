@@ -14,6 +14,8 @@ struct RFCTextView<Header: View>: View {
     /// The section anchors: the only anchors section tracking may report. See
     /// `RFCTextViewCoordinator.trackedAnchors`.
     let trackedAnchors: Set<String>
+    /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
+    let lastVisibleAnchor: VisibleAnchorBox
     let scrollTarget: String?
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
@@ -25,6 +27,7 @@ struct RFCTextView<Header: View>: View {
             Representable(
                 built: built,
                 trackedAnchors: trackedAnchors,
+                lastVisibleAnchor: lastVisibleAnchor,
                 width: geometry.size.width,
                 scrollTarget: scrollTarget,
                 onScrollHandled: onScrollHandled,
@@ -40,6 +43,7 @@ struct RFCTextView<Header: View>: View {
 private struct Representable: UIViewRepresentable {
     let built: BuiltDocument
     let trackedAnchors: Set<String>
+    let lastVisibleAnchor: VisibleAnchorBox
     let width: CGFloat
     let scrollTarget: String?
     let onScrollHandled: () -> Void
@@ -70,6 +74,7 @@ private struct Representable: UIViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.headerHost = host
+        context.coordinator.lastVisibleAnchor = lastVisibleAnchor
         return textView
     }
 
@@ -93,6 +98,7 @@ private struct Representable: UIViewRepresentable {
 private struct Representable: NSViewRepresentable {
     let built: BuiltDocument
     let trackedAnchors: Set<String>
+    let lastVisibleAnchor: VisibleAnchorBox
     let width: CGFloat
     let scrollTarget: String?
     let onScrollHandled: () -> Void
@@ -139,6 +145,7 @@ private struct Representable: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.headerHost = host
+        context.coordinator.lastVisibleAnchor = lastVisibleAnchor
         return scroll
     }
 
