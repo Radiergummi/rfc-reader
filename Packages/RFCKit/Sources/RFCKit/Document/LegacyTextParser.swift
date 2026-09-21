@@ -54,7 +54,7 @@ public struct LegacyTextParser: Sendable {
     }
 
     private static func depaginate(_ text: String) -> [Line] {
-        let rawLines = text.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
+        let rawLines = removingControlCharacters(text).replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
         var lines: [Line] = []
         var expectingHeader = false
         var firstContentSeen = false
@@ -89,6 +89,30 @@ public struct LegacyTextParser: Sendable {
         return lines
     }
 
+    /// Resolves nroff overstrikes (`T\bT` for bold, `_\bT` for underline) and drops the
+    /// NUL padding and escape bytes found in a few dozen 1970s and 1980s RFCs.
+    static func removingControlCharacters(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { $0.value < 0x20 && $0 != "\n" && $0 != "\t" && $0 != "\r" && $0 != "\u{0C}" }) else {
+            return text
+        }
+        var result: [Unicode.Scalar] = []
+        result.reserveCapacity(text.unicodeScalars.count)
+        var iterator = text.unicodeScalars.makeIterator()
+        while let scalar = iterator.next() {
+            if scalar == "\u{08}" {
+                guard let previous = result.popLast(), let next = iterator.next() else { continue }
+                result.append(next == "_" ? previous : next)
+            } else if scalar.value < 0x20, scalar != "\n", scalar != "\t", scalar != "\r", scalar != "\u{0C}" {
+                continue
+            } else {
+                result.append(scalar)
+            }
+        }
+        var output = ""
+        output.unicodeScalars.append(contentsOf: result)
+        return output
+    }
+
     // MARK: - Parsing
 
     private struct RawBlock {
@@ -116,9 +140,10 @@ public struct LegacyTextParser: Sendable {
     nonisolated(unsafe) private static let appendixHeadingPattern = #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
 
     public func parse(_ text: String) -> RFCDocument {
-        let lines = Self.depaginate(text)
+        let lines = Self.collapsingDoubleSpacing(Self.depaginate(text))
         let (frontLines, bodyStart) = Self.splitFrontMatter(lines)
         var header = Self.parseFrontMatter(frontLines)
+        let bodyIsIndented = Self.bodyIsIndented(lines[bodyStart...])
 
         // Split the body into raw sections at column-0 headings.
         var sections: [RawSection] = [RawSection(heading: nil)]
@@ -133,8 +158,8 @@ public struct LegacyTextParser: Sendable {
             pendingBreak = false
         }
 
-        for line in lines[bodyStart...] {
-            switch line {
+        for index in lines.indices[bodyStart...] {
+            switch lines[index] {
             case .pageBreak:
                 if current.isEmpty, var last = sections[sections.count - 1].blocks.popLast() {
                     last.followedByPageBreak = true
@@ -144,9 +169,9 @@ public struct LegacyTextParser: Sendable {
                     flushBlock()
                 }
             case .text(let string):
-                if string.trimmingCharacters(in: .whitespaces).isEmpty {
+                if string.isBlank {
                     flushBlock()
-                } else if string.first != " ", let heading = Self.heading(from: string) {
+                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, startsBlock: current.isEmpty) {
                     flushBlock()
                     sections.append(RawSection(heading: heading))
                 } else {
@@ -218,25 +243,38 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: Front matter
 
-    /// Front matter runs from the top of the file to the first column-0 heading.
+    /// Front matter is the header block (first run of lines), the title (second run, which
+    /// may start at column 0 when it fills the line), and anything up to the next heading.
     private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
-        var seenTitleCandidate = false
+        var run = 0
+        var previousWasBlank = true
+        // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
+        // RFC 1144), so no heading ever arrives. Ending the front matter after the title
+        // keeps the prose; swallowing the whole file would leave an empty document.
+        var afterTitle: (front: [String], bodyStart: Int)?
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
-            let trimmed = string.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
+            if string.isBlank {
                 front.append("")
+                previousWasBlank = true
                 continue
             }
-            let isHeaderBlockLine = !seenTitleCandidate && string.first != " "
-            if string.first != " ", !isHeaderBlockLine, heading(from: string) != nil {
-                return (front, offset)
+            if previousWasBlank { run += 1 }
+            previousWasBlank = false
+            if run > 2 {
+                if afterTitle == nil { afterTitle = (front, offset) }
+                // Deliberately laxer than the body's rule: the stand-alone test needs the
+                // body's indent, which is not known until this scan has finished. Stopping
+                // early only leaves a line in the body that turns out not to be a heading;
+                // stopping late would swallow it into the front matter and lose it.
+                if string.startsAtColumnZero, heading(from: string) != nil {
+                    return (front, offset)
+                }
             }
-            if string.first == " " { seenTitleCandidate = true }
             front.append(string)
         }
-        return (front, lines.count)
+        return afterTitle ?? (front, lines.count)
     }
 
     nonisolated(unsafe) private static let monthYearPattern = #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
@@ -274,16 +312,14 @@ public struct LegacyTextParser: Sendable {
             }
         }
 
-        // Title: the next non-blank, indented lines.
+        // Title: the next run of non-blank lines, whatever their indentation.
         var titleLines: [String] = []
         while index < lines.count {
             let line = lines[index]
             if line.isEmpty {
                 if !titleLines.isEmpty { break }
-            } else if line.first == " " {
-                titleLines.append(line.trimmingCharacters(in: .whitespaces))
             } else {
-                break
+                titleLines.append(line.trimmingCharacters(in: .whitespaces))
             }
             index += 1
         }
@@ -298,6 +334,69 @@ public struct LegacyTextParser: Sendable {
     // MARK: Headings
 
     private static let nonHeadingWords: Set<String> = ["rfc", "request", "network", "internet", "obsoletes", "updates", "category", "issn"]
+
+    /// True when the body sits at an indent and headings stand out at column 0, which is
+    /// the layout `heading(from:)` assumes. A few hundred legacy RFCs (1142, 1305, 1247,
+    /// 1034 and others) set their prose at column 0 as well; there the indent says nothing
+    /// and every line would otherwise become an unnumbered heading.
+    private static func bodyIsIndented(_ body: ArraySlice<Line>) -> Bool {
+        var counts: [Int: Int] = [:]
+        for case .text(let string) in body where !string.isBlank {
+            // Spaces only: the handful of tab-indented documents set their body at column 0
+            // anyway, and counting a tab as an indent would classify them the other way.
+            counts[string.leadingSpaceCount, default: 0] += 1
+        }
+        // A tie keeps the classic layout, which is what the rest of the parser assumes.
+        guard let mode = counts.max(by: { ($0.value, $0.key) < ($1.value, $1.key) })?.key else {
+            return true
+        }
+        return mode > 0
+    }
+
+    /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
+    /// body starts there too — so that the indent says nothing — it also has to stand alone
+    /// between blank lines. `heading(from:)` judges the text; this judges the position.
+    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, startsBlock: Bool) -> HeadingInfo? {
+        guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
+        guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
+        return heading(from: string)
+    }
+
+    private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
+        guard lines.indices.contains(index) else { return true }
+        switch lines[index] {
+        case .pageBreak:
+            return true
+        case .text(let string):
+            return string.isBlank
+        }
+    }
+
+    /// A couple of dozen documents (RFC 817, 813, 888, 827) are typeset double spaced: a
+    /// blank line sits between every pair of lines, so no paragraph ever forms and every
+    /// line stands alone. Drop those single blanks and keep the wider gaps, which are the
+    /// real paragraph breaks. The "as published" view goes through `stripPagination(_:)`
+    /// and is not touched.
+    private static func collapsingDoubleSpacing(_ lines: [Line]) -> [Line] {
+        var content = 0
+        var isolated = 0
+        for (index, line) in lines.enumerated() {
+            guard case .text(let string) = line, !string.isBlank else { continue }
+            content += 1
+            if isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1) { isolated += 1 }
+        }
+        guard content > 20, isolated * 5 >= content * 3 else { return lines }
+
+        var result: [Line] = []
+        for (index, line) in lines.enumerated() {
+            if case .text(let string) = line, string.isBlank,
+               !isBlankOrEnd(lines, at: index - 1), !isBlankOrEnd(lines, at: index + 1) {
+                continue
+            }
+            result.append(line)
+        }
+        return result
+    }
 
     private static func heading(from line: String) -> HeadingInfo? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -397,15 +496,87 @@ public struct LegacyTextParser: Sendable {
 
     private static func looksLikeProse(_ lines: [String]) -> Bool {
         guard let first = lines.first else { return false }
-        let indent = first.leadingSpaceCount
-        guard indent <= 6 else { return false }
-        for line in lines {
-            if line.leadingSpaceCount != indent { return false }
+        // Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+        // margin (RFC 722, 891, 904), so the block's indent comes from the second line.
+        let indent = (lines.count > 1 ? lines[1] : first).leadingSpaceCount
+        let firstLineIndent = first.leadingSpaceCount - indent
+        guard indent <= 6, (0...8).contains(firstLineIndent) else { return false }
+        let justified = isJustified(lines)
+        for (offset, line) in lines.enumerated() {
+            if offset > 0, line.leadingSpaceCount != indent { return false }
             let content = line.trimmingCharacters(in: .whitespaces)
             if content.contains(artworkPattern) { return false }
-            if content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
+            if !justified, content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
         }
         return true
+    }
+
+    /// The early RFCs typeset with justified text (757, 806, 841, 909, 1341) pad the gaps
+    /// between words until every line reaches a common right margin. Those runs of spaces
+    /// are what marks artwork everywhere else, so all of their prose was preformatted.
+    ///
+    /// Four tells have to agree, because a table, a definition list or a block of code
+    /// satisfies any one of them on its own: every line but the last ends at the same
+    /// margin, no gutter of blank columns runs through the block, the padding is spread
+    /// over most of the lines rather than sitting in one column, and the words read like
+    /// sentences rather than identifiers.
+    private static func isJustified(_ lines: [String]) -> Bool {
+        guard lines.count >= 3 else { return false }
+        let widths = lines.map { $0.reversed().drop(while: \.isWhitespace).count }
+        guard let margin = widths.first, let last = widths.last, margin >= 60 else { return false }
+        guard widths.dropLast().allSatisfy({ $0 == margin }), last <= margin else { return false }
+        guard !hasColumnGutter(lines) else { return false }
+        let padded = lines.dropLast().count { internalGapCount($0) >= 2 }
+        guard padded * 2 >= lines.count - 1 else { return false }
+        return readsLikeSentences(lines)
+    }
+
+    /// A run of two or more columns left blank by every line: the gutter of a two-column
+    /// layout. Justified prose has its gaps in a different place on every line.
+    private static func hasColumnGutter(_ lines: [String]) -> Bool {
+        let rows = lines.map(Array.init)
+        let start = rows.map { $0.prefix(while: \.isWhitespace).count }.min() ?? 0
+        let end = rows.map { $0.reversed().drop(while: \.isWhitespace).count }.min() ?? 0
+        guard start < end else { return false }
+        var run = 0
+        for column in start..<end {
+            guard rows.allSatisfy({ column >= $0.count || $0[column].isWhitespace }) else {
+                run = 0
+                continue
+            }
+            run += 1
+            if run >= 2 { return true }
+        }
+        return false
+    }
+
+    /// Runs of two or more spaces sitting between two non-space characters.
+    private static func internalGapCount(_ line: String) -> Int {
+        var count = 0
+        var run = 0
+        var seenText = false
+        for character in line {
+            if character.isWhitespace {
+                if seenText { run += 1 }
+            } else {
+                if run >= 2 { count += 1 }
+                run = 0
+                seenText = true
+            }
+        }
+        return count
+    }
+
+    /// Mostly ordinary lower-case words, which a listing of identifiers, addresses or
+    /// numbers does not have however neatly its columns happen to line up.
+    private static func readsLikeSentences(_ lines: [String]) -> Bool {
+        let words = lines.flatMap { $0.split(separator: " ") }
+        guard !words.isEmpty else { return false }
+        let ordinary = words.count { word in
+            guard word.first?.isLowercase == true else { return false }
+            return word.allSatisfy { $0.isLetter || "'-.,;:)".contains($0) }
+        }
+        return ordinary * 5 >= words.count * 3
     }
 
     private static func classify(_ block: RawBlock, linker: InlineLinker) -> [Block] {
@@ -498,7 +669,7 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: References
 
-    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s]+)\]\s+(?<text>\S.*)$/#
+    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s]+)\]\s*(?<text>.*)$/#
 
     private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
         var references: [Reference] = []
@@ -518,7 +689,7 @@ public struct LegacyTextParser: Sendable {
                 if let match = line.firstMatch(of: referenceStartPattern) {
                     flush()
                     currentAnchor = String(match.anchor)
-                    currentLines = [String(match.text)]
+                    currentLines = match.text.isEmpty ? [] : [String(match.text)]
                 } else if currentAnchor != nil {
                     currentLines.append(line.trimmingCharacters(in: .whitespaces))
                 }
@@ -633,6 +804,12 @@ struct InlineLinker: Sendable {
 // MARK: - String helpers
 
 extension String {
+    var isBlank: Bool { allSatisfy(\.isWhitespace) }
+
+    /// A tab indents as surely as a space does: RFC 1142's contents listing is tab-indented
+    /// and every entry otherwise matched the numbered-heading pattern.
+    var startsAtColumnZero: Bool { first?.isWhitespace == false }
+
     var leadingSpaceCount: Int {
         var count = 0
         for character in self {

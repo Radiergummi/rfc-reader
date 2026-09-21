@@ -436,7 +436,13 @@ public struct RFCXMLSerializer: Sendable {
                 case "&": result += "&amp;"
                 case "<": result += "&lt;"
                 case ">": result += "&gt;"
-                default: result.append(character)
+                default:
+                    // XML 1.0 forbids C0 control characters other than tab, newline and return.
+                    if let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1,
+                       scalar.value < 0x20, scalar != "\t", scalar != "\n", scalar != "\r" {
+                        continue
+                    }
+                    result.append(character)
                 }
             }
             return result

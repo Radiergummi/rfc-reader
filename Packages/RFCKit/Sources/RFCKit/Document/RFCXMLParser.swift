@@ -158,7 +158,15 @@ public struct RFCXMLParser: Sendable {
         // MARK: Sections
 
         func parseSections(in parent: XMLElement, appendix: Bool) -> [Section] {
-            parent.all("section").map { parseSection($0, appendix: appendix) }
+            parent.elements.compactMap { child in
+                switch child.name {
+                case "section": parseSection(child, appendix: appendix)
+                // Not valid RFCXML, but our serializer emits it for a references subsection
+                // whose siblings are ordinary sections; keep it as a subsection.
+                case "references": parseReferencesSection(child)
+                default: nil
+                }
+            }
         }
 
         func parseSection(_ element: XMLElement, appendix: Bool) -> Section {
@@ -359,7 +367,7 @@ public struct RFCXMLParser: Sendable {
                 return .blockQuote(parseBlocks(in: element))
             case "aside":
                 return .aside(parseBlocks(in: element))
-            case "name", "section", "toc", "boilerplate":
+            case "name", "section", "references", "toc", "boilerplate":
                 return nil
             case "texttable", "list", "vspace", "preamble", "postamble", "ttcol", "c":
                 // RFCXML v2 leftovers; the prepped RFC Editor output does not contain them.
