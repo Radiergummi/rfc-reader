@@ -10,6 +10,10 @@ struct RFCReaderApp: App {
     @State private var library = LibraryModel.shared
 
     var body: some Scene {
+        // Deliberately plain: neither `WindowGroup(id:)` nor `WindowGroup(for:)`
+        // opens a window at launch — measured, both leave the app running with no
+        // interface at all — so this cannot carry the link for a new tab. The link
+        // goes through `LibraryModel` and the tab itself comes from AppKit.
         WindowGroup {
             ContentView()
                 .environment(library)

@@ -85,7 +85,14 @@ struct ContentView: View {
                 .controlGroupStyle(.navigation)
             }
         }
-        .onAppear { library.register(navigation) }
+        .onAppear {
+            library.register(navigation)
+            // Set by whoever asked for this window; nil when it was opened from the
+            // menu or at launch, which lands on the library as before.
+            if let link = library.takePendingSceneLink() {
+                navigation.open(link, in: library.index)
+            }
+        }
         .onDisappear { library.unregister(navigation) }
         // Any navigation in this tab makes it the one an untargeted deep link lands in.
         .onChange(of: navigation.selection) { library.activate(navigation) }

@@ -20,7 +20,7 @@ struct RFCTextView: View {
     let scrollTarget: String?
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
-    let onLink: (URL) -> Bool
+    let onLink: (URL, LinkActivation) -> Bool
     /// Erased on the way in rather than carried as a generic parameter: the only
     /// thing done with it is to hand it to a hosting controller, which is not
     /// generic either.
@@ -35,7 +35,7 @@ struct RFCTextView: View {
         scrollTarget: String?,
         onScrollHandled: @escaping () -> Void,
         onVisibleAnchorChange: @escaping (String) -> Void,
-        onLink: @escaping (URL) -> Bool,
+        onLink: @escaping (URL, LinkActivation) -> Bool,
         headerIdentity: DocumentHeaderView.Identity,
         @ViewBuilder header: () -> some View
     ) {
@@ -78,7 +78,7 @@ struct ReaderInputs {
     let scrollTarget: String?
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
-    let onLink: (URL) -> Bool
+    let onLink: (URL, LinkActivation) -> Bool
     let library: LibraryModel
     let header: AnyView
     let headerIdentity: DocumentHeaderView.Identity

@@ -2,7 +2,9 @@ import Foundation
 
 /// Understands every way people link to RFCs, so the app can open them all:
 /// its own `rfc://` scheme, rfc-editor.org, datatracker.ietf.org and tools.ietf.org.
-public struct RFCLink: Hashable, Sendable {
+/// `Codable` so it can be a `WindowGroup` value: opening a reference in its own tab
+/// hands the link to a new scene, and SwiftUI persists that value across launches.
+public struct RFCLink: Hashable, Sendable, Codable {
     public var id: DocumentID
     /// Section or appendix number, e.g. `4.2` or `A.1`.
     public var section: String?

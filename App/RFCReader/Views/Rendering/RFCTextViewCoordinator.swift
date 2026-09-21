@@ -64,7 +64,7 @@ final class RFCTextViewCoordinator: NSObject {
 
     var onVisibleAnchorChange: (String) -> Void = { _ in }
     var onScrollHandled: () -> Void = {}
-    var onLink: (URL) -> Bool = { _ in false }
+    var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
 
     /// Where section tracking last put the reader, written the moment it is computed.
     /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -269,7 +269,9 @@ final class RFCTextViewCoordinator: NSObject {
 extension RFCTextViewCoordinator: UITextViewDelegate {
     func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
         guard case .link(let url) = textItem.content else { return defaultAction }
-        return onLink(url) ? nil : defaultAction
+        // A tap carries no modifiers. Opening a reference elsewhere is the long-press
+        // menu's job on this platform, not a chord's.
+        return onLink(url, .here) ? nil : defaultAction
     }
 
     /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
@@ -295,7 +297,11 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
-        return onLink(url)
+        // `clickedOnLink` carries no event, so the modifiers come from the click that
+        // is still being dispatched. Read here rather than passed down from the view:
+        // by the time SwiftUI's `openURL` sees it, the event is gone.
+        let modifiers = LinkActivation.ModifierKeys(NSApp.currentEvent?.modifierFlags ?? [])
+        return onLink(url, .from(modifiers: modifiers))
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.

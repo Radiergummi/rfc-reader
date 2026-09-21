@@ -217,6 +217,23 @@ final class LibraryModel {
         weak var model: NavigationModel?
     }
 
+    /// Handed to the next scene that appears.
+    ///
+    /// A new window cannot be given its document directly — see the note on the
+    /// window group — so a Cmd-click leaves the link here and opens a window, and the
+    /// scene that appears takes it. Cleared on the way out so no later window picks
+    /// up a stale one.
+    private var pendingSceneLink: RFCLink?
+
+    func handOver(_ link: RFCLink) {
+        pendingSceneLink = link
+    }
+
+    func takePendingSceneLink() -> RFCLink? {
+        defer { pendingSceneLink = nil }
+        return pendingSceneLink
+    }
+
     func register(_ scene: NavigationModel) {
         scenes.removeAll { $0.model == nil || $0.model === scene }
         scenes.insert(WeakScene(model: scene), at: 0)

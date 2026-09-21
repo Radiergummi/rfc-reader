@@ -1,3 +1,6 @@
+#if os(macOS)
+import AppKit
+#endif
 import RFCKit
 import RFCReaderKit
 import SwiftData
@@ -132,7 +135,7 @@ struct DocumentView: View {
                     // back returns here rather than to the top of the document.
                     navigation.visiblePosition = $0
                 },
-                onLink: { openInApp($0) },
+                onLink: { openInApp($0, activation: $1) },
                 headerIdentity: headerIdentity,
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
@@ -277,27 +280,60 @@ struct DocumentView: View {
     }
 
     /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
+    ///
+    /// No modifiers here: SwiftUI's `openURL` carries no event, so a Cmd-click that
+    /// arrives this way follows the link in place. The text view's own delegate reads
+    /// the modifiers and is the path a click on a reference actually takes.
     private func handleLink(_ url: URL) -> OpenURLAction.Result {
-        openInApp(url) ? .handled : .systemAction
+        openInApp(url, activation: .here) ? .handled : .systemAction
     }
 
     /// The same decision as `handleLink`, as a `Bool`: the text view's delegate wants
     /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
     /// not `Equatable`.
-    private func openInApp(_ url: URL) -> Bool {
+    private func openInApp(_ url: URL, activation: LinkActivation) -> Bool {
         if let anchor = DocumentTextBuilder.anchor(from: url) {
+            // A jump inside this document has nowhere else to go: a tab of its own
+            // showing the same document scrolled elsewhere is not what Cmd means.
             navigation.jump(toSection: anchor)
             return true
         }
-        if let link = RFCLink(url: url) {
+        guard let link = RFCLink(url: url) else { return false }
+        switch activation {
+        case .here:
             if link.id == id, let section = link.section {
                 navigation.jump(toSection: section)
             } else {
                 navigation.open(link, in: library.index)
             }
-            return true
+        case .newTabInBackground:
+            openScene(for: link, staying: true)
+        case .newTabInForeground, .newWindow:
+            openScene(for: link, staying: false)
         }
-        return false
+        return true
+    }
+
+    /// Opens `link` in a tab of its own.
+    ///
+    /// Through AppKit rather than SwiftUI. `openWindow` needs a `WindowGroup` with an
+    /// id or a value, and both of those stop the app opening a window at launch —
+    /// measured, it comes up with no interface. `newWindowForTab:` is the action
+    /// behind the tab bar's own "+", which SwiftUI implements for a plain
+    /// `WindowGroup`, so this is the same thing the user could click.
+    ///
+    /// The document is handed over through `LibraryModel` because nothing can be
+    /// passed along this path; the scene that appears takes it.
+    private func openScene(for link: RFCLink, staying: Bool) {
+        library.handOver(link)
+        #if os(macOS)
+        let previous = staying ? NSApp.keyWindow : nil
+        NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
+        guard let previous else { return }
+        // On the next turn of the run loop: the new tab is ordered front as part of
+        // being made, so taking the focus back any sooner is simply undone by it.
+        DispatchQueue.main.async { previous.makeKeyAndOrderFront(nil) }
+        #endif
     }
 
     private func toggleBookmark() {
