@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios corpus corpus-tool corpus-fetch corpus-convert corpus-manifest
+.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-convert corpus-manifest
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
@@ -63,15 +63,50 @@ xcodeproj:
 DEVELOPMENT_TEAM ?=
 SIGNING := $(if $(DEVELOPMENT_TEAM),DEVELOPMENT_TEAM=$(DEVELOPMENT_TEAM),CODE_SIGNING_ALLOWED=NO)
 
+# Debug for everything but `install`, which puts a Release build in /Applications.
+CONFIGURATION ?= Debug
+
+# Where xcodebuild left RFCReader.app. Asked for rather than spelled out: the
+# DerivedData directory carries a hash of the project's own path, so it differs
+# per checkout. Recursively expanded (`=`, not `:=`) so only the targets that
+# need it pay for the xcodebuild call.
+app_path = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+	  -destination 'platform=macOS' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
+	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
+
 ## Build the app for macOS
 build-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
-	  -destination 'platform=macOS' -quiet $(SIGNING)
+	  -destination 'platform=macOS' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
 ## Build the app for the iOS Simulator
 build-ios: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
-	  -destination 'generic/platform=iOS Simulator' -quiet $(SIGNING)
+	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Build and launch the macOS app
+# Unsigned is enough to run locally: the linker ad-hoc signs the bundle, which
+# satisfies the sandbox entitlements on this machine. A running copy is quit
+# first, or `open` would just bring the old build back to the front.
+run: build-app
+	@app='$(app_path)'; \
+	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
+	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
+	  echo "launching $$app"; \
+	  open "$$app"
+
+## Install a Release build into /Applications
+# Ad-hoc signed unless a DEVELOPMENT_TEAM is passed, which is fine for a local
+# install -- a locally built bundle carries no quarantine flag, so Gatekeeper
+# does not object. Pass a team to get something you can hand to anyone else.
+install: CONFIGURATION := Release
+install: build-app
+	@app='$(app_path)'; \
+	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
+	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
+	  rm -rf '/Applications/$(SCHEME).app'; \
+	  cp -R "$$app" /Applications/; \
+	  echo "installed /Applications/$(SCHEME).app"
 
 ## Build the corpus pipeline in release mode
 # Phony rather than a rule on $(CORPUS_BIN): swift build tracks its own sources
