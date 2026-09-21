@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -14,6 +15,15 @@ struct DocumentView: View {
     let id: DocumentID
 
     @State private var document: RFCDocument?
+    /// The document as one attributed string plus its anchor index. Built in
+    /// `load()` and on a settled font-size change — never in `body`, which would
+    /// rebuild the whole document on every redraw.
+    @State private var built: BuiltDocument?
+    /// Every `Section.anchor` in the document. The anchor index the builder emits is
+    /// wider than this on purpose — figures, tables and reference rows are in it too,
+    /// so `rfc-anchor:` links reach them — but `visibleAnchor`'s four consumers all
+    /// resolve it with `document.section(anchor:)`, so only these may be reported.
+    @State private var sectionAnchors: Set<String> = []
     @State private var originalText: String?
     @State private var loadError: String?
     @State private var showOriginal = false
@@ -23,6 +33,7 @@ struct DocumentView: View {
 
     private var metadata: RFCMetadata? { library.metadata(id) }
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
+    private var readingStyle: ReadingStyle { ReadingStyle(bodySize: fontSize) }
 
     var body: some View {
         content
@@ -41,6 +52,7 @@ struct DocumentView: View {
                 }
             }
             .task(id: id) { await load() }
+            .task(id: fontSize) { await restyle() }
             .onChange(of: library.pendingSection) { _, section in
                 jump(toSection: section)
             }
@@ -55,37 +67,29 @@ struct DocumentView: View {
         if showOriginal {
             OriginalTextView(text: originalText, fontSize: fontSize)
                 .task { originalText = try? await library.originalText(for: id) }
-        } else if let document {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        DocumentHeaderView(header: document.header, metadata: metadata)
-                        if let metadata {
-                            StatusBanner(metadata: metadata)
-                        }
-                        ForEach(document.sections) { section in
-                            SectionView(section: section, level: 1, onAppear: { visibleAnchor = $0 })
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: 760, alignment: .leading)
-                    .frame(maxWidth: .infinity)
-                    .textSelection(.enabled)
+        } else if let document, let built {
+            RFCTextView(
+                built: built,
+                trackedAnchors: sectionAnchors,
+                scrollTarget: scrollTarget,
+                onScrollHandled: { scrollTarget = nil },
+                onVisibleAnchorChange: { visibleAnchor = $0 },
+                onLink: { openInApp($0) },
+                // Hosted outside the storage, so it needs the environment handed to
+                // it: the banner's links to newer RFCs go through `LibraryModel`.
+                header: {
+                    DocumentHeaderView(header: document.header, metadata: metadata)
+                        .environment(library)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
                 }
-                .font(.system(size: fontSize))
-                .onChange(of: scrollTarget) { _, target in
-                    guard let target else { return }
-                    withAnimation { proxy.scrollTo(target, anchor: .top) }
-                    scrollTarget = nil
-                }
-                .onAppear {
-                    // Deep link or restored reading position.
-                    if library.pendingSection != nil {
-                        jump(toSection: library.pendingSection)
-                    } else if let saved = savedPosition(), document.section(anchor: saved) != nil {
-                        scrollTarget = saved
-                    }
+            )
+            .onAppear {
+                // Deep link or restored reading position.
+                if library.pendingSection != nil {
+                    jump(toSection: library.pendingSection)
+                } else if let saved = savedPosition(), document.section(anchor: saved) != nil {
+                    scrollTarget = saved
                 }
             }
         } else if let loadError {
@@ -154,12 +158,29 @@ struct DocumentView: View {
 
     private func load() async {
         loadError = nil
+        built = nil
         showOriginal = preferOriginalText
         do {
-            document = try await library.document(for: id)
+            let loaded = try await library.document(for: id)
+            document = loaded
+            sectionAnchors = Set(loaded.allSections.map(\.anchor))
+            built = DocumentTextBuilder.build(loaded, style: readingStyle)
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// A font-size change costs a rebuild of the whole attributed string plus a full
+    /// relayout — 650 ms on the largest documents in the library — so the slider is
+    /// debounced by that much. `.task(id:)` cancels the pending rebuild on every
+    /// further tick, and the anchor index puts the reader back where they were.
+    private func restyle() async {
+        guard let document, built != nil else { return }
+        try? await Task.sleep(for: .milliseconds(650))
+        guard !Task.isCancelled else { return }
+        let place = visibleAnchor
+        built = DocumentTextBuilder.build(document, style: readingStyle)
+        scrollTarget = place
     }
 
     private func jump(toSection section: String?) {
@@ -172,11 +193,18 @@ struct DocumentView: View {
 
     /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
     private func handleLink(_ url: URL) -> OpenURLAction.Result {
-        if url.scheme == InlineText.anchorScheme {
-            let anchor = url.absoluteString.dropFirst(InlineText.anchorScheme.count + 1)
+        openInApp(url) ? .handled : .systemAction
+    }
+
+    /// The same decision as `handleLink`, as a `Bool`: the text view's delegate wants
+    /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
+    /// not `Equatable`.
+    private func openInApp(_ url: URL) -> Bool {
+        if url.scheme == DocumentTextBuilder.anchorScheme {
+            let anchor = url.absoluteString.dropFirst(DocumentTextBuilder.anchorScheme.count + 1)
                 .removingPercentEncoding ?? ""
             scrollTarget = anchor
-            return .handled
+            return true
         }
         if let link = RFCLink(url: url) {
             if link.id == id, let section = link.section {
@@ -184,9 +212,9 @@ struct DocumentView: View {
             } else {
                 library.open(link)
             }
-            return .handled
+            return true
         }
-        return .systemAction
+        return false
     }
 
     private func toggleBookmark() {
@@ -224,6 +252,11 @@ struct DocumentView: View {
 
 // MARK: - Pieces
 
+/// Everything above the first line of prose: title, badges, authors, and the status
+/// banner. Hosted in the text view's top content inset, so it scrolls with the body
+/// without being part of it — the banner carries buttons, and nobody selects through
+/// it. The abstract is no longer here; it is the first prose in the storage, which is
+/// what puts the banner between the title and the abstract as `VISION.md` asks.
 struct DocumentHeaderView: View {
     let header: DocumentHeader
     let metadata: RFCMetadata?
@@ -252,14 +285,9 @@ struct DocumentHeaderView: View {
                 Text(authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }.joined(separator: ", "))
                     .font(.subheadline)
             }
-            if !header.abstract.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Abstract").font(.headline)
-                    ForEach(Array(header.abstract.enumerated()), id: \.offset) { _, block in
-                        BlockView(block: block)
-                    }
-                }
-                .padding(.top, 8)
+            if let metadata {
+                StatusBanner(metadata: metadata)
+                    .padding(.top, 4)
             }
         }
     }
@@ -302,37 +330,6 @@ struct StatusBanner: View {
             }
         }
         .font(.subheadline)
-    }
-}
-
-struct SectionView: View {
-    let section: RFCKit.Section
-    let level: Int
-    let onAppear: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(section.displayTitle)
-                .font(headingFont)
-                .fixedSize(horizontal: false, vertical: true)
-                .id(section.anchor)
-                .onAppear { onAppear(section.anchor) }
-            ForEach(Array(section.blocks.enumerated()), id: \.offset) { _, block in
-                BlockView(block: block)
-            }
-            ForEach(section.subsections) { subsection in
-                SectionView(section: subsection, level: level + 1, onAppear: onAppear)
-            }
-        }
-        .padding(.top, level == 1 ? 12 : 4)
-    }
-
-    private var headingFont: Font {
-        switch level {
-        case 1: .title2.weight(.semibold)
-        case 2: .title3.weight(.semibold)
-        default: .headline
-        }
     }
 }
 
