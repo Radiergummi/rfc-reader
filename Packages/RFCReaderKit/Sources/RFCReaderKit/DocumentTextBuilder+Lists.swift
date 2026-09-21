@@ -13,14 +13,16 @@ extension DocumentTextBuilder {
             mark(item.anchor)
             let marker = Self.marker(for: list.style, at: index)
             let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
-            var attributes = bodyAttributes(indent: markerColumn)
+            var attributes: [NSAttributedString.Key: Any] = [.font: style.bodyFont, .foregroundColor: RFCColors.label]
             attributes[.paragraphStyle] = paragraphStyle(
                 indent: markerColumn,
+                firstLineIndent: indent,
                 spacingAfter: spacing,
                 tabStops: [NSTextTab(textAlignment: .left, location: markerColumn)]
             )
-            // The marker sits in its own tab column, so a wrapped item lines up under
-            // its text rather than under the bullet.
+            // The marker is drawn at the outer indent, left of the tab stop at
+            // markerColumn, so the tab advances to it and a wrapped item lines up
+            // under its own text rather than under the bullet.
             var markerAttributes = attributes
             markerAttributes[.foregroundColor] = RFCColors.secondaryLabel
             let firstLine = NSMutableAttributedString(string: marker + "\t", attributes: markerAttributes)

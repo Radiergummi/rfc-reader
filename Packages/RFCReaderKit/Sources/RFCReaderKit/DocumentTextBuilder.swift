@@ -98,13 +98,14 @@ extension DocumentTextBuilder {
 
     func paragraphStyle(
         indent: CGFloat = 0,
+        firstLineIndent: CGFloat? = nil,
         spacingBefore: CGFloat = 0,
         spacingAfter: CGFloat,
         tabStops: [NSTextTab]? = nil,
         wraps: Bool = true
     ) -> NSParagraphStyle {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.firstLineHeadIndent = indent
+        paragraph.firstLineHeadIndent = firstLineIndent ?? indent
         paragraph.headIndent = indent
         paragraph.paragraphSpacingBefore = spacingBefore
         paragraph.paragraphSpacing = spacingAfter
