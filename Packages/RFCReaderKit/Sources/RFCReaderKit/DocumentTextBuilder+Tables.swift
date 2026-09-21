@@ -39,7 +39,7 @@ extension DocumentTextBuilder {
         return (0..<columns).map { column in
             rows.compactMap { row -> CGFloat? in
                 guard row.cells.count > column else { return nil }
-                return NSAttributedString(string: row.cells[column].plainText, attributes: [.font: row.font]).size().width
+                return lineWidth(row.cells[column].plainText, font: row.font)
             }.max() ?? 0
         }
     }

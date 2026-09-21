@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 import RFCKit
 #if canImport(UIKit)
@@ -39,6 +40,17 @@ public final class DocumentTextBuilder {
 
     func append(_ string: String, _ attributes: [NSAttributedString.Key: Any]) {
         output.append(NSAttributedString(string: string, attributes: attributes))
+    }
+
+    /// The width of `string` set as one line in `font`, via CoreText rather than
+    /// `NSAttributedString.size()`. NSStringDrawing applies line-breaking and
+    /// drawing-context layout semantics that are the wrong tool for measuring a
+    /// single line, and under CPU load it has been observed to raise an uncaught
+    /// `NSException`; a `CTLine`'s typographic bounds answer the same question
+    /// directly, without going through a drawing context at all.
+    func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: [.font: font]))
+        return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
     }
 }
 

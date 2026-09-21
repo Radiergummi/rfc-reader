@@ -43,7 +43,7 @@ extension DocumentTextBuilder {
     func monospaceScale(for text: String) -> CGFloat {
         let columns = text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
         guard columns > 0 else { return 1 }
-        let advance = NSAttributedString(string: "0", attributes: [.font: style.monospacedFont(scale: 1)]).size().width
+        let advance = lineWidth("0", font: style.monospacedFont(scale: 1))
         guard advance > 0 else { return 1 }
         return min(1, style.measure / (CGFloat(columns) * advance))
     }
