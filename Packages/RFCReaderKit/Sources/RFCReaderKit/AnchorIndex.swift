@@ -9,10 +9,14 @@ public struct AnchorIndex: Sendable, Equatable {
     public struct Entry: Sendable, Equatable {
         public let anchor: String
         public let offset: Int
+        /// True when the anchor names a `Section`, which the builder knows and
+        /// nothing downstream can tell by looking. See `DocumentTextBuilder.mark`.
+        public let isSection: Bool
 
-        public init(anchor: String, offset: Int) {
+        public init(anchor: String, offset: Int, isSection: Bool = false) {
             self.anchor = anchor
             self.offset = offset
+            self.isSection = isSection
         }
     }
 
@@ -23,6 +27,12 @@ public struct AnchorIndex: Sendable, Equatable {
         let sorted = entries.sorted { $0.offset < $1.offset }
         self.entries = sorted
         self.offsets = Dictionary(sorted.map { ($0.anchor, $0.offset) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Just the section anchors, as an index of their own: what section tracking
+    /// hit-tests against.
+    public var sections: AnchorIndex {
+        AnchorIndex(entries.filter(\.isSection))
     }
 
     public func offset(of anchor: String) -> Int? {

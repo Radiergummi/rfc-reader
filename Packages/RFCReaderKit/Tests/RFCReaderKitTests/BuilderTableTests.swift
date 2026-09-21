@@ -16,11 +16,7 @@ struct BuilderTableTests {
     }
 
     private func document(_ table: RFCKit.Table) -> RFCDocument {
-        RFCDocument(
-            header: DocumentHeader(title: "T"),
-            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.table(table)])],
-            source: .xml
-        )
+        Fixtures.document(.table(table))
     }
 
     private var narrow: RFCKit.Table {
@@ -45,14 +41,18 @@ struct BuilderTableTests {
         )
     }
 
+    /// The production path: measure the columns, then let the widths decide.
+    private func shape(_ table: RFCKit.Table, measure: CGFloat = ReadingStyle().measure) -> TableShape {
+        let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
+        return builder.tableShape(widths: builder.naturalColumnWidths(table))
+    }
+
     @Test func aNarrowTableUsesTheGrid() {
-        let builder = DocumentTextBuilder(style: ReadingStyle())
-        #expect(builder.tableShape(narrow) == .grid)
+        #expect(shape(narrow) == .grid)
     }
 
     @Test func aTableWithAProseColumnStacks() {
-        let builder = DocumentTextBuilder(style: ReadingStyle())
-        #expect(builder.tableShape(prose) == .stacked)
+        #expect(shape(prose) == .stacked)
     }
 
     /// The brief's phone-measure test asserted `narrow` stacks at measure 320, but its
@@ -64,8 +64,8 @@ struct BuilderTableTests {
         let widths = wide.naturalColumnWidths(narrow)
         let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
 
-        #expect(DocumentTextBuilder(style: ReadingStyle(measure: total + 1)).tableShape(narrow) == .grid)
-        #expect(DocumentTextBuilder(style: ReadingStyle(measure: total - 1)).tableShape(narrow) == .stacked)
+        #expect(shape(narrow, measure: total + 1) == .grid)
+        #expect(shape(narrow, measure: total - 1) == .stacked)
     }
 
     @Test func gridRowsAreTabSeparatedAndCarryTabStops() throws {
@@ -78,8 +78,7 @@ struct BuilderTableTests {
     }
 
     @Test func stackedRowsLeadWithTheirColumnHeader() throws {
-        let builder = DocumentTextBuilder(style: ReadingStyle())
-        #expect(builder.tableShape(prose) == .stacked)
+        #expect(shape(prose) == .stacked)
 
         let built = DocumentTextBuilder.build(document(prose), style: ReadingStyle())
         // "Code  404" (bold label, two spaces, cell) only appears in the stacked
@@ -87,10 +86,7 @@ struct BuilderTableTests {
         // and "404\t…" on another, never this adjacency.
         #expect(built.text.string.contains("Code  404"))
 
-        let offset = built.text.string.distance(
-            from: built.text.string.startIndex,
-            to: try #require(built.text.string.range(of: "404")).lowerBound
-        )
+        let offset = try Fixtures.offset(of: "404", in: built.text)
         let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
         // Stacked cells wrap, so they must not be clipped.
         #expect(paragraph.lineBreakMode != .byClipping)
@@ -105,10 +101,7 @@ struct BuilderTableTests {
             anchor: "table-3"
         )
         let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
-        let offset = built.text.string.distance(
-            from: built.text.string.startIndex,
-            to: try #require(built.text.string.range(of: "[RFC 9110]")).lowerBound
-        )
+        let offset = try Fixtures.offset(of: "[RFC 9110]", in: built.text)
         #expect(built.text.attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox)
         #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
     }

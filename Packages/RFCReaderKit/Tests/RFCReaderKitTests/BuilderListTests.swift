@@ -40,11 +40,7 @@ struct BuilderListTests {
             ListItem(text: "first"),
             ListItem(text: "second"),
         ])
-        let document = RFCDocument(
-            header: DocumentHeader(title: "T"),
-            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.list(list)])],
-            source: .xml
-        )
+        let document = Fixtures.document(.list(list))
         let built = DocumentTextBuilder.build(document, style: style)
         #expect(built.text.string.contains("•\tfirst"))
         #expect(built.text.string.contains("•\tsecond"))
@@ -52,37 +48,22 @@ struct BuilderListTests {
 
     @Test func definitionTermsAreBoldAndDefinitionsAreIndented() throws {
         let item = DefinitionItem(term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))])
-        let document = RFCDocument(
-            header: DocumentHeader(title: "T"),
-            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.definitionList([item])])],
-            source: .xml
-        )
+        let document = Fixtures.document(.definitionList([item]))
         let built = DocumentTextBuilder.build(document, style: style)
-        let termOffset = try #require(built.text.string.range(of: "MUST")).lowerBound
-        let offset = built.text.string.distance(from: built.text.string.startIndex, to: termOffset)
+        let offset = try Fixtures.offset(of: "MUST", in: built.text)
         let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
         #expect(font?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true)
 
-        let definitionOffset = built.text.string.distance(
-            from: built.text.string.startIndex,
-            to: try #require(built.text.string.range(of: "absolute requirement")).lowerBound
-        )
+        let definitionOffset = try Fixtures.offset(of: "absolute requirement", in: built.text)
         let paragraph = built.text.attribute(.paragraphStyle, at: definitionOffset, effectiveRange: nil) as? NSParagraphStyle
         #expect((paragraph?.headIndent ?? 0) > 0)
     }
 
     @Test func aListItemHangsItsMarkerLeftOfItsText() throws {
         let list = ListBlock(style: .bullet, items: [ListItem(text: "first")])
-        let document = RFCDocument(
-            header: DocumentHeader(title: "T"),
-            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.list(list)])],
-            source: .xml
-        )
+        let document = Fixtures.document(.list(list))
         let built = DocumentTextBuilder.build(document, style: style)
-        let offset = built.text.string.distance(
-            from: built.text.string.startIndex,
-            to: try #require(built.text.string.range(of: "first")).lowerBound
-        )
+        let offset = try Fixtures.offset(of: "first", in: built.text)
         let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
         #expect(paragraph.firstLineHeadIndent < paragraph.headIndent, "the marker must start left of the wrapped text")
         #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent }, "the marker's tab must land exactly on the wrapped-text column")

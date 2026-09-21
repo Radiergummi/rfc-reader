@@ -6,7 +6,7 @@ extension DocumentTextBuilder {
         mark(figure.anchor)
         let start = output.length
         appendBlocks(figure.blocks, indent: indent)
-        let caption = figure.title.map { title in figure.number.map { number in "Figure \(number): \(title)" } ?? title }
+        let caption = Self.caption("Figure", number: figure.number, title: figure.title)
         // Tag any artwork the figure just contributed with the caption, so the
         // accessibility element has a name even when `Preformatted.name` is absent.
         if let caption {
@@ -24,6 +24,21 @@ extension DocumentTextBuilder {
     func appendDecorated(_ blocks: [Block], decoration: RFCDecoration, indent: CGFloat) {
         let start = output.length
         appendBlocks(blocks, indent: indent + style.indentStep)
+        decorate(from: start, with: decoration)
+    }
+
+    /// Marks everything emitted since `start` as one decorated block. **The only
+    /// writer of `.rfcDecoration`.**
+    ///
+    /// Two rules have to hold for a block to draw as one band, and both were learned
+    /// the hard way. The value is stored as its raw `String` because a boxed Swift
+    /// enum does not reliably compare equal across insertions, and runs that do not
+    /// compare equal do not merge. And *every* character between the block's first
+    /// and last must carry it — a separator newline emitted without it splits the
+    /// run, and the renderer then reads each half as a complete decoration and draws
+    /// it as its own fully rounded card. Decorating a finished range, rather than
+    /// asking each `append` to remember, is what makes both unconditional.
+    func decorate(from start: Int, with decoration: RFCDecoration) {
         guard output.length > start else { return }
         let range = NSRange(location: start, length: output.length - start)
         // A nested quote or aside has already claimed its own span, and the inner,
@@ -33,45 +48,7 @@ extension DocumentTextBuilder {
             if value == nil { gaps.append(subrange) }
         }
         for gap in gaps {
-            output.addAttribute(.rfcDecoration, value: decoration, range: gap)
-        }
-    }
-
-    func appendReferences(_ list: ReferenceList, indent: CGFloat) {
-        for entry in list.entries {
-            mark("ref-\(entry.anchor)")
-            var labelAttributes = bodyAttributes(indent: indent)
-            labelAttributes[.font] = style.codeFont
-            labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
-            labelAttributes[.paragraphStyle] = paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.2)
-            if let id = entry.documentID {
-                labelAttributes[.link] = RFCLink(id: id, section: nil).appURL
-                labelAttributes[.rfcReference] = ReferenceBox(CrossReference(target: .document(id, section: nil), text: "[\(entry.anchor)]"))
-            }
-            append("[\(entry.anchor)]\n", labelAttributes)
-
-            let bodyIndent = indent + style.indentStep * 1.5
-            var attributes = bodyAttributes(indent: bodyIndent)
-            attributes[.paragraphStyle] = paragraphStyle(indent: bodyIndent, spacingAfter: style.paragraphSpacing)
-
-            if let raw = entry.rawText, entry.title.isEmpty {
-                append(raw + "\n", attributes)
-                continue
-            }
-
-            var lines: [String] = []
-            if !entry.authors.isEmpty { lines.append(entry.authors.joined(separator: ", ")) }
-            lines.append("\u{201C}\(entry.title)\u{201D}")
-            let series = entry.seriesInfo.filter { $0.name != "DOI" }.map { "\($0.name) \($0.value)" }
-            let trailer = (series + [entry.date?.formatted].compactMap { $0 }).joined(separator: ", ")
-            if !trailer.isEmpty { lines.append(trailer) }
-            append(lines.joined(separator: "\n") + "\n", attributes)
-
-            if let url = entry.url {
-                var linkAttributes = attributes
-                linkAttributes[.link] = url
-                append((url.host() ?? url.absoluteString) + "\n", linkAttributes)
-            }
+            output.addAttribute(.rfcDecoration, value: decoration.rawValue, range: gap)
         }
     }
 }

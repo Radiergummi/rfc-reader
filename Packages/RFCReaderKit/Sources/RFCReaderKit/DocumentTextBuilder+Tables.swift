@@ -20,8 +20,7 @@ extension DocumentTextBuilder {
     /// or three short ones, and tab stops do not wrap. So measure first: grid when
     /// the natural widths fit, stacked when they do not. The stacked shape is also
     /// what a phone measure needs for tables that fit comfortably on a Mac.
-    func tableShape(_ table: RFCKit.Table) -> TableShape {
-        let widths = naturalColumnWidths(table)
+    func tableShape(widths: [CGFloat]) -> TableShape {
         guard !widths.isEmpty else { return .grid }
         let total = widths.reduce(0, +) + Self.columnGutter * CGFloat(widths.count - 1)
         return total <= style.measure ? .grid : .stacked
@@ -46,15 +45,19 @@ extension DocumentTextBuilder {
 
     func appendTable(_ table: RFCKit.Table, indent: CGFloat) {
         mark(table.anchor)
-        switch tableShape(table) {
-        case .grid: appendGridTable(table, indent: indent)
+        // Measured once: the shape decision and the grid's tab stops want the same
+        // numbers, and every cell costs a `CTLine` to measure.
+        let widths = naturalColumnWidths(table)
+        let start = output.length
+        switch tableShape(widths: widths) {
+        case .grid: appendGridTable(table, widths: widths, indent: indent)
         case .stacked: appendStackedTable(table, indent: indent)
         }
-        appendCaption(table.title.map { title in table.number.map { n in "Table \(n): \(title)" } ?? title }, indent: indent)
+        decorate(from: start, with: .table)
+        appendCaption(Self.caption("Table", number: table.number, title: table.title), indent: indent)
     }
 
-    private func appendGridTable(_ table: RFCKit.Table, indent: CGFloat) {
-        let widths = naturalColumnWidths(table)
+    private func appendGridTable(_ table: RFCKit.Table, widths: [CGFloat], indent: CGFloat) {
         var location = indent
         var stops: [NSTextTab] = []
         for width in widths.dropLast() {
@@ -68,10 +71,9 @@ extension DocumentTextBuilder {
             var attributes = bodyAttributes(indent: indent)
             attributes[.font] = isHeader ? style.boldBodyFont : style.bodyFont
             attributes[.paragraphStyle] = rowStyle
-            attributes[.rfcDecoration] = RFCDecoration.table
             for (column, cell) in row.enumerated() {
                 if column > 0 { append("\t", attributes) }
-                output.append(Self.inlineRuns(cell, style: style, base: attributes))
+                output.append(inlineRuns(cell, base: attributes))
             }
             append("\n", attributes)
         }
@@ -86,32 +88,34 @@ extension DocumentTextBuilder {
                     indent: indent + style.indentStep,
                     spacingAfter: style.paragraphSpacing * 0.25
                 )
-                attributes[.rfcDecoration] = RFCDecoration.table
                 if column < headers.count {
                     var labelAttributes = attributes
                     labelAttributes[.font] = style.boldBodyFont
                     labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
-                    output.append(Self.inlineRuns(headers[column], style: style, base: labelAttributes))
+                    output.append(inlineRuns(headers[column], base: labelAttributes))
                     append("  ", attributes)
                 }
-                output.append(Self.inlineRuns(cell, style: style, base: attributes))
+                output.append(inlineRuns(cell, base: attributes))
                 append("\n", attributes)
             }
-            // A blank line separates one row's cells from the next row's.
+            // A blank line separates one row's cells from the next row's. It needs no
+            // decoration of its own: `appendTable` decorates the whole emitted range.
             append("\n", bodyAttributes(indent: indent))
         }
     }
 
+    /// `Figure 3: Packet layout`, or just the title when the block is unnumbered.
+    static func caption(_ kind: String, number: Int?, title: String?) -> String? {
+        guard let title else { return nil }
+        return number.map { "\(kind) \($0): \(title)" } ?? title
+    }
+
     func appendCaption(_ caption: String?, indent: CGFloat) {
         guard let caption, !caption.isEmpty else { return }
-        let centred = NSMutableParagraphStyle()
-        centred.alignment = .center
-        centred.paragraphSpacing = style.paragraphSpacing
-        centred.lineHeightMultiple = style.lineHeightMultiple
         append(caption + "\n", [
             .font: style.captionFont,
             .foregroundColor: RFCColors.secondaryLabel,
-            .paragraphStyle: centred,
+            .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing, alignment: .center),
         ])
     }
 }

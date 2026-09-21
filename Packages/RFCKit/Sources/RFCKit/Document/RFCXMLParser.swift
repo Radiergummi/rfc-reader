@@ -509,7 +509,7 @@ public struct RFCXMLParser: Sendable {
                 // it; anything else is a tag the author chose ("[QUIC-TRANSPORT]") and
                 // is the name the document uses throughout.
                 let raw = derived ?? targetAnchor
-                let isCanonical = raw == id.description
+                let isCanonical = CrossReference.isCanonicalTag(raw, for: id)
                 let label = "[\(isCanonical ? CrossReference.nonBreakingLabel(id.displayName) : raw)]"
                 let text: String
                 if !innerText.isEmpty {

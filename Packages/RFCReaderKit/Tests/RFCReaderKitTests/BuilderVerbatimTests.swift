@@ -14,11 +14,7 @@ struct BuilderVerbatimTests {
     private let style = ReadingStyle()
 
     private func document(_ content: Preformatted) -> RFCDocument {
-        RFCDocument(
-            header: DocumentHeader(title: "T"),
-            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.preformatted(content)])],
-            source: .xml
-        )
+        Fixtures.document(.preformatted(content))
     }
 
     @Test func artworkSurvivesLineForLine() {
@@ -33,10 +29,7 @@ struct BuilderVerbatimTests {
     @Test func artworkIsMonospacedAndNeverWraps() throws {
         let art = "GET / HTTP/1.1"
         let built = DocumentTextBuilder.build(document(Preformatted(kind: .artwork, text: art)), style: style)
-        let offset = built.text.string.distance(
-            from: built.text.string.startIndex,
-            to: try #require(built.text.string.range(of: art)).lowerBound
-        )
+        let offset = try Fixtures.offset(of: art, in: built.text)
         let font = try #require(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
         let builder = DocumentTextBuilder(style: style)
         let narrow = builder.lineWidth("i", font: font)
@@ -51,7 +44,7 @@ struct BuilderVerbatimTests {
         let content = Preformatted(kind: .artwork, text: "x", anchor: "figure-1")
         let built = DocumentTextBuilder.build(document(content), style: style)
         let offset = try #require(built.anchors.offset(of: "figure-1"))
-        #expect(built.text.attribute(.rfcDecoration, at: offset, effectiveRange: nil) as? RFCDecoration == .artwork)
+        #expect(RFCDecoration(attributeValue: built.text.attribute(.rfcDecoration, at: offset, effectiveRange: nil)) == .artwork)
         let box = try #require(built.text.attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox)
         #expect(box.content.text == "x")
     }
@@ -82,5 +75,28 @@ struct BuilderVerbatimTests {
         let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
         let built = DocumentTextBuilder.build(document(content), style: style)
         #expect(built.text.string.contains("ABNF"))
+    }
+
+    /// Artwork is scaled so its widest line fills the measure. Inside the abstract —
+    /// which is set smaller than the body — that scaling has to be worked out in the
+    /// abstract's own style, not applied on top of a full-size answer.
+    ///
+    /// Quietening the abstract as a second pass over finished attributes got this
+    /// wrong: the block was measured at body size, then shrunk again, so its widest
+    /// line came out short of the measure by exactly the abstract's scale.
+    @Test func artworkInTheAbstractIsScaledOnceInItsOwnStyle() throws {
+        let wide = String(repeating: "#", count: 200)
+        let document = RFCDocument(
+            header: DocumentHeader(title: "T", abstract: [.preformatted(Preformatted(kind: .artwork, text: wide, anchor: "art"))]),
+            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.paragraph(Paragraph(text: "body"))])],
+            source: .xml
+        )
+        let built = DocumentTextBuilder.build(document, style: style)
+        let offset = try #require(built.anchors.offset(of: "art"))
+        let font = try #require(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+
+        let ruler = DocumentTextBuilder(style: style)
+        let rendered = ruler.lineWidth(wide, font: font)
+        #expect(abs(rendered - style.measure) < 1, "the widest line fills the measure: \(rendered) vs \(style.measure)")
     }
 }

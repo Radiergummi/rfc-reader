@@ -300,6 +300,17 @@ public struct Table: Sendable {
     }
 }
 
+extension Reference {
+    /// `BCP 14 · March 1997` — where a reference sits in the series and when it was
+    /// published, as one short line. The DOI is dropped: it names the same document
+    /// again, in the one form nobody reads. A short form of what `CitationFormatter`
+    /// spells out in full.
+    public var provenance: String {
+        let series = seriesInfo.filter { $0.name != "DOI" }.map { "\($0.name) \($0.value)" }
+        return (series + [date?.formatted].compactMap { $0 }).joined(separator: " · ")
+    }
+}
+
 public struct ReferenceList: Sendable {
     public var title: String
     public var entries: [Reference]
@@ -376,12 +387,87 @@ public struct CrossReference: Sendable, Hashable {
         self.isCanonicalLabel = isCanonicalLabel
     }
 
+    /// The label this reference shows: its own `text` when it has one, otherwise the
+    /// one derived from the target. `[Inline].plainText` and the reader's renderer
+    /// both go through this, so a copied selection and the rendered text cannot
+    /// disagree.
+    public var label: String {
+        if let text { return text }
+        switch target {
+        case .anchor(let anchor):
+            return anchor
+        case .document(let id, let section):
+            return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
+        }
+    }
+
+    /// How a reader lays this reference out: the text it shows, and which part of
+    /// that text — if any — may be drawn as a chip.
+    ///
+    /// One rule, in one place, because the screen and a copied selection have to
+    /// agree. The renderer used to compose the section form itself while
+    /// `plainText` kept the parser's phrasing, so copying `RFC 9110 § 4.2` off the
+    /// screen yielded "Section 4.2 of [RFC 9110]".
+    public struct Display: Sendable, Equatable {
+        public let text: String
+        /// The span of `text` a chip covers, or nil when the reference reads as
+        /// ordinary link text.
+        public let chip: Range<String.Index>?
+    }
+
+    public var display: Display {
+        let label = self.label
+        // `isCanonicalLabel` says the tag is the series' own spelling; the brackets
+        // say the *parser* composed this label, rather than the author supplying
+        // their own words for the link. Only then may a renderer restyle it.
+        guard isCanonicalLabel,
+              case .document(let id, let section) = target,
+              let bracketed = Self.bracketedRange(in: label) else {
+            return Display(text: label, chip: nil)
+        }
+        if let section {
+            // One reference to one place, so it reads as one chip: the section is a
+            // suffix of the document it is in, not a sentence with the document
+            // buried in the middle of it.
+            let text = "\(Self.nonBreakingLabel(id.displayName))\u{00A0}§\u{00A0}\(section)"
+            return Display(text: text, chip: text.startIndex..<text.endIndex)
+        }
+        // The chip's tint replaces the brackets, so the brackets come out.
+        let before = String(label[label.startIndex..<bracketed.lowerBound])
+        let inner = String(label[label.index(after: bracketed.lowerBound)..<label.index(before: bracketed.upperBound)])
+        let text = before + inner + String(label[bracketed.upperBound...])
+        let start = text.index(text.startIndex, offsetBy: before.count)
+        return Display(text: text, chip: start..<text.index(start, offsetBy: inner.count))
+    }
+
+    /// The text a reader shows for this reference — what `[Inline].plainText`
+    /// flattens to, and what the reader draws.
+    public var displayLabel: String { display.text }
+
+    /// The `[...]` span in a label, brackets included, or nil if there is none.
+    static func bracketedRange(in label: String) -> Range<String.Index>? {
+        guard let open = label.firstIndex(of: "["), let close = label.lastIndex(of: "]"), open < close else { return nil }
+        return open..<label.index(after: close)
+    }
+
     /// A label should never break between its word and its number, so "RFC 9110"
     /// and "Section 4.2" are joined with U+00A0.
     nonisolated(unsafe) private static let labelNumberPattern = #/(\p{L})[ \t]+(\d)/#
 
     static func nonBreakingLabel(_ label: String) -> String {
         label.replacing(labelNumberPattern) { match in "\(match.1)\u{00A0}\(match.2)" }
+    }
+
+    /// True when `tag` is exactly how the series spells `id` — `[RFC9110]` — rather
+    /// than a tag the author chose (`[QUIC-TRANSPORT]`), which is the name the
+    /// document uses throughout and must survive verbatim. This is what licenses a
+    /// renderer to replace the brackets with a chip.
+    ///
+    /// One predicate for both parsers on purpose: they each used to decide it, and
+    /// they disagreed about case, so the same reference could draw as a chip from
+    /// one source format and as plain text from the other.
+    public static func isCanonicalTag(_ tag: String, for id: DocumentID) -> Bool {
+        tag.caseInsensitiveCompare(id.description) == .orderedSame
     }
 }
 
@@ -405,14 +491,7 @@ extension Array where Element == Inline {
             switch inline {
             case .text(let text), .code(let text), .superscript(let text), .subscript(let text): text
             case .emphasis(let inner), .strong(let inner), .link(_, let inner): inner.plainText
-            case .crossReference(let xref):
-                xref.text ?? {
-                    switch xref.target {
-                    case .anchor(let anchor): anchor
-                    case .document(let id, let section):
-                        section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
-                    }
-                }()
+            case .crossReference(let xref): xref.displayLabel
             case .lineBreak: "\n"
             }
         }.joined()

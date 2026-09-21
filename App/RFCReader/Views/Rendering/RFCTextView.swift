@@ -9,60 +9,110 @@ import SwiftUI
 ///
 /// The `GeometryReader` is the width channel: it is what makes a window resize reach
 /// the representable at all, and the column is centred from it.
-struct RFCTextView<Header: View>: View {
+struct RFCTextView: View {
     // The coordinator builds the hover/long-press preview's hosting controller
     // itself, which sits outside SwiftUI's environment chain — so it needs the
     // library handed to it explicitly, the same way it is here.
     @Environment(LibraryModel.self) private var library
     let built: BuiltDocument
-    /// The section anchors: the only anchors section tracking may report. See
-    /// `RFCTextViewCoordinator.trackedAnchors`.
-    let trackedAnchors: Set<String>
     /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
     let lastVisibleAnchor: VisibleAnchorBox
     let scrollTarget: String?
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
-    /// The real text column, reported whenever the coordinator's `layOut(width:)`
-    /// computes a new one — see Critical Finding 3. `DocumentView` rebuilds the
-    /// document with a matching `ReadingStyle.measure` so artwork and tables scale
-    /// against the column they actually render into, not a fixed 712 pt default.
-    let onColumnChange: (CGFloat) -> Void
-    @ViewBuilder let header: () -> Header
+    /// Erased on the way in rather than carried as a generic parameter: the only
+    /// thing done with it is to hand it to a hosting controller, which is not
+    /// generic either.
+    let header: AnyView
+    /// What the header displays, so the coordinator can tell a genuine change from
+    /// the freshly erased `AnyView` it gets handed on every update pass.
+    let headerIdentity: DocumentHeaderView.Identity
+
+    init(
+        built: BuiltDocument,
+        lastVisibleAnchor: VisibleAnchorBox,
+        scrollTarget: String?,
+        onScrollHandled: @escaping () -> Void,
+        onVisibleAnchorChange: @escaping (String) -> Void,
+        onLink: @escaping (URL) -> Bool,
+        headerIdentity: DocumentHeaderView.Identity,
+        @ViewBuilder header: () -> some View
+    ) {
+        self.built = built
+        self.lastVisibleAnchor = lastVisibleAnchor
+        self.scrollTarget = scrollTarget
+        self.onScrollHandled = onScrollHandled
+        self.onVisibleAnchorChange = onVisibleAnchorChange
+        self.onLink = onLink
+        self.headerIdentity = headerIdentity
+        self.header = AnyView(header())
+    }
 
     var body: some View {
         GeometryReader { geometry in
             Representable(
-                built: built,
-                trackedAnchors: trackedAnchors,
-                lastVisibleAnchor: lastVisibleAnchor,
-                width: geometry.size.width,
-                scrollTarget: scrollTarget,
-                onScrollHandled: onScrollHandled,
-                onVisibleAnchorChange: onVisibleAnchorChange,
-                onLink: onLink,
-                onColumnChange: onColumnChange,
-                library: library,
-                header: AnyView(header())
+                inputs: ReaderInputs(
+                    built: built,
+                    lastVisibleAnchor: lastVisibleAnchor,
+                    scrollTarget: scrollTarget,
+                    onScrollHandled: onScrollHandled,
+                    onVisibleAnchorChange: onVisibleAnchorChange,
+                    onLink: onLink,
+                    library: library,
+                    header: header,
+                    headerIdentity: headerIdentity
+                ),
+                width: geometry.size.width
             )
+        }
+    }
+}
+
+/// Everything the two representables hand their shared coordinator, and the one
+/// place that handing-over is written. Declared outside the `#if` so a new callback
+/// is added once instead of in both platform structs and both update bodies.
+struct ReaderInputs {
+    let built: BuiltDocument
+    let lastVisibleAnchor: VisibleAnchorBox
+    let scrollTarget: String?
+    let onScrollHandled: () -> Void
+    let onVisibleAnchorChange: (String) -> Void
+    let onLink: (URL) -> Bool
+    let library: LibraryModel
+    let header: AnyView
+    let headerIdentity: DocumentHeaderView.Identity
+
+    /// Called on every SwiftUI update pass, so it does the cheap assignments first
+    /// and only installs when the document itself changed.
+    @MainActor
+    func apply(to coordinator: RFCTextViewCoordinator, width: CGFloat) {
+        coordinator.onScrollHandled = onScrollHandled
+        coordinator.onVisibleAnchorChange = onVisibleAnchorChange
+        coordinator.onLink = onLink
+        coordinator.library = library
+        // Only when it actually changed: the hosting controller is outside SwiftUI's
+        // diffing, so assigning `rootView` re-renders the whole header subtree, and
+        // this runs on every update pass — including one per section crossing while
+        // scrolling.
+        if coordinator.headerIdentity != headerIdentity {
+            coordinator.headerIdentity = headerIdentity
+            coordinator.headerHost?.rootView = header
+        }
+        coordinator.layOut(width: width)
+        if coordinator.built?.text !== built.text {
+            coordinator.install(built)
+        }
+        if let scrollTarget {
+            coordinator.scroll(to: scrollTarget)
         }
     }
 }
 
 #if canImport(UIKit)
 private struct Representable: UIViewRepresentable {
-    let built: BuiltDocument
-    let trackedAnchors: Set<String>
-    let lastVisibleAnchor: VisibleAnchorBox
+    let inputs: ReaderInputs
     let width: CGFloat
-    let scrollTarget: String?
-    let onScrollHandled: () -> Void
-    let onVisibleAnchorChange: (String) -> Void
-    let onLink: (URL) -> Bool
-    let onColumnChange: (CGFloat) -> Void
-    let library: LibraryModel
-    let header: AnyView
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
 
@@ -78,50 +128,29 @@ private struct Representable: UIViewRepresentable {
         textView.contentInsetAdjustmentBehavior = .never
         textView.textContainer.lineFragmentPadding = 0
         textView.textContainer.widthTracksTextView = true
+        // Find-in-document, which is half of why the reader is a text view at all.
+        textView.isFindInteractionEnabled = true
         textView.textLayoutManager?.delegate = context.coordinator
         textView.delegate = context.coordinator
 
-        let host = UIHostingController(rootView: header)
+        let host = UIHostingController(rootView: inputs.header)
         host.view.backgroundColor = .clear
         textView.addSubview(host.view)
 
         context.coordinator.textView = textView
         context.coordinator.headerHost = host
-        context.coordinator.lastVisibleAnchor = lastVisibleAnchor
+        context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
         return textView
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.onScrollHandled = onScrollHandled
-        coordinator.onVisibleAnchorChange = onVisibleAnchorChange
-        coordinator.onLink = onLink
-        coordinator.onColumnChange = onColumnChange
-        coordinator.library = library
-        coordinator.trackedAnchors = trackedAnchors
-        coordinator.headerHost?.rootView = header
-        coordinator.layOut(width: width)
-        if coordinator.built?.text !== built.text {
-            coordinator.install(built)
-        }
-        if let scrollTarget {
-            coordinator.scroll(to: scrollTarget)
-        }
+        inputs.apply(to: context.coordinator, width: width)
     }
 }
 #else
 private struct Representable: NSViewRepresentable {
-    let built: BuiltDocument
-    let trackedAnchors: Set<String>
-    let lastVisibleAnchor: VisibleAnchorBox
+    let inputs: ReaderInputs
     let width: CGFloat
-    let scrollTarget: String?
-    let onScrollHandled: () -> Void
-    let onVisibleAnchorChange: (String) -> Void
-    let onLink: (URL) -> Bool
-    let onColumnChange: (CGFloat) -> Void
-    let library: LibraryModel
-    let header: AnyView
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
 
@@ -140,10 +169,14 @@ private struct Representable: NSViewRepresentable {
         textView.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
+        // The find bar lives in the scroll view, so `usesFindBar` needs the text view
+        // to already be inside one — see where the scroll view is assembled below.
+        textView.isIncrementalSearchingEnabled = true
+        textView.usesFindBar = true
         textView.textLayoutManager?.delegate = context.coordinator
         textView.delegate = context.coordinator
 
-        let host = NSHostingController(rootView: header)
+        let host = NSHostingController(rootView: inputs.header)
         textView.addSubview(host.view)
 
         let scroll = NSScrollView()
@@ -162,26 +195,12 @@ private struct Representable: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.headerHost = host
-        context.coordinator.lastVisibleAnchor = lastVisibleAnchor
+        context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.onScrollHandled = onScrollHandled
-        coordinator.onVisibleAnchorChange = onVisibleAnchorChange
-        coordinator.onLink = onLink
-        coordinator.onColumnChange = onColumnChange
-        coordinator.library = library
-        coordinator.trackedAnchors = trackedAnchors
-        coordinator.headerHost?.rootView = header
-        coordinator.layOut(width: width)
-        if coordinator.built?.text !== built.text {
-            coordinator.install(built)
-        }
-        if let scrollTarget {
-            coordinator.scroll(to: scrollTarget)
-        }
+        inputs.apply(to: context.coordinator, width: width)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

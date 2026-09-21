@@ -10,32 +10,24 @@ extension DocumentTextBuilder {
     /// Renders a run of inlines. `base` carries the font and colour of the context
     /// the run sits in — body prose, a heading, a table cell — and each inline
     /// layers its own attributes on top.
-    static func inlineRuns(
-        _ inlines: [Inline],
-        style: ReadingStyle,
-        base: [NSAttributedString.Key: Any]
-    ) -> NSAttributedString {
+    func inlineRuns(_ inlines: [Inline], base: [NSAttributedString.Key: Any]) -> NSAttributedString {
         let result = NSMutableAttributedString()
         for inline in inlines {
-            result.append(run(inline, style: style, base: base))
+            result.append(run(inline, base: base))
         }
         return result
     }
 
-    private static func run(
-        _ inline: Inline,
-        style: ReadingStyle,
-        base: [NSAttributedString.Key: Any]
-    ) -> NSAttributedString {
+    private func run(_ inline: Inline, base: [NSAttributedString.Key: Any]) -> NSAttributedString {
         switch inline {
         case .text(let text):
             return NSAttributedString(string: text, attributes: base)
 
         case .emphasis(let inner):
-            return inlineRuns(inner, style: style, base: base.adding(trait: RFCTraits.italic, style: style))
+            return inlineRuns(inner, base: base.adding(trait: RFCTraits.italic, style: style))
 
         case .strong(let inner):
-            return inlineRuns(inner, style: style, base: base.adding(trait: RFCTraits.bold, style: style))
+            return inlineRuns(inner, base: base.adding(trait: RFCTraits.bold, style: style))
 
         case .code(let text):
             var attributes = base
@@ -55,7 +47,7 @@ extension DocumentTextBuilder {
             return NSAttributedString(string: text, attributes: attributes)
 
         case .link(let url, let inner):
-            let result = NSMutableAttributedString(attributedString: inlineRuns(inner, style: style, base: base))
+            let result = NSMutableAttributedString(attributedString: inlineRuns(inner, base: base))
             result.addAttribute(.link, value: url, range: NSRange(location: 0, length: result.length))
             return result
 
@@ -63,28 +55,17 @@ extension DocumentTextBuilder {
             var attributes = base
             attributes[.rfcReference] = ReferenceBox(xref)
             if let url = url(for: xref) { attributes[.link] = url }
-            let label = label(for: xref)
-            guard xref.isCanonicalLabel, let bracketed = bracketedRange(in: label) else {
-                return NSAttributedString(string: label, attributes: attributes)
+            // What the reference reads as, and which part of it is a chip, are the
+            // model's to say — `CrossReference.display`, which `plainText` answers
+            // from too, so the screen and a copied selection cannot disagree.
+            let display = xref.display
+            guard let chip = display.chip else {
+                return NSAttributedString(string: display.text, attributes: attributes)
             }
-            // What isCanonicalLabel licenses is replacing a canonical series id's
-            // brackets with a chip, not a claim about who authored them: the legacy
-            // parser's brackets are literally in the source text. The rest of the
-            // phrase stays plain link text.
             let result = NSMutableAttributedString()
-            result.append(NSAttributedString(string: String(label[label.startIndex..<bracketed.lowerBound]), attributes: attributes))
-            var chip = attributes
-            // The run's own `ReferenceBox`, not `true`: `NSAttributedString` merges
-            // contiguous runs with equal attribute values, and two adjacent chips
-            // (`[RFC9110][RFC9111]`) would otherwise share one `effectiveRange` and
-            // draw as a single rounded rect. Reference identity never compares equal.
-            chip[.rfcChip] = attributes[.rfcReference]
-            if let symbolRun = chipSymbolRun(attributes: chip) {
-                result.append(symbolRun)
-            }
-            let inner = label.index(after: bracketed.lowerBound)..<label.index(before: bracketed.upperBound)
-            result.append(NSAttributedString(string: String(label[inner]), attributes: chip))
-            result.append(NSAttributedString(string: String(label[bracketed.upperBound...]), attributes: attributes))
+            result.append(NSAttributedString(string: String(display.text[display.text.startIndex..<chip.lowerBound]), attributes: attributes))
+            result.append(chipRun(String(display.text[chip]), attributes: attributes))
+            result.append(NSAttributedString(string: String(display.text[chip.upperBound...]), attributes: attributes))
             return result
 
         case .lineBreak:
@@ -92,22 +73,29 @@ extension DocumentTextBuilder {
         }
     }
 
-    /// The label a cross reference shows. Mirrors `[Inline].plainText` exactly, so a
-    /// copied selection and the rendered text never disagree.
-    static func label(for xref: CrossReference) -> String {
-        if let text = xref.text { return text }
-        switch xref.target {
-        case .anchor(let anchor):
-            return anchor
-        case .document(let id, let section):
-            return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
+    /// The only constructor of a `.rfcChip` run, and the only place `nextChipID` is
+    /// touched: the symbol, the joiner and the id are one recipe, and a second copy
+    /// of it is how the two chip shapes (`[RFC9110]` and `Section 4.2 of
+    /// [RFC9110]`) drift apart.
+    ///
+    /// The id is a serial number, not `true`: `NSAttributedString` merges contiguous
+    /// runs whose attribute values compare equal, and two adjacent chips
+    /// (`[RFC9110][RFC9111]`) sharing one effective range would draw as a single
+    /// rounded rect. Each chip therefore carries a value no other chip has.
+    private func chipRun(_ text: String, attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+        var chip = attributes
+        nextChipID += 1
+        chip[.rfcChip] = nextChipID
+        let result = NSMutableAttributedString()
+        if let symbol = chipSymbolRun(attributes: chip) {
+            result.append(symbol)
+            // U+2060 WORD JOINER: an attachment character is its own grapheme and
+            // offers a line-break opportunity on either side, so in a narrow column
+            // the chip's icon wrapped onto the line above its own label.
+            result.append(NSAttributedString(string: "\u{2060}", attributes: chip))
         }
-    }
-
-    /// The `[...]` span in a label, brackets included, or nil if there is none.
-    static func bracketedRange(in label: String) -> Range<String.Index>? {
-        guard let open = label.firstIndex(of: "["), let close = label.lastIndex(of: "]"), open < close else { return nil }
-        return open..<label.index(after: close)
+        result.append(NSAttributedString(string: text, attributes: chip))
+        return result
     }
 
     /// The leading `doc.text` glyph that rides inside the chip's own run, so it
@@ -115,32 +103,46 @@ extension DocumentTextBuilder {
     /// (image:)` sits the image's bottom edge on the text baseline by default,
     /// which reads low against the words around it, so the symbol is drawn at the
     /// run's own font size and its bounds are centred on that font's cap height.
-    private static func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+    private func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
         let font = (attributes[.font] as? PlatformFont) ?? PlatformFont.systemFont(ofSize: 17)
-        let configuration = PlatformImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
-        let attachment = NSTextAttachment()
-        #if canImport(UIKit)
-        guard let symbol = PlatformImage(systemName: "doc.text")?.withConfiguration(configuration) else { return nil }
-        attachment.image = symbol
-        #else
+        guard let symbol = chipSymbol(pointSize: font.pointSize) else { return nil }
         // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
-        // after the default initializer instead.
-        guard let symbol = PlatformImage(systemName: "doc.text")?.withSymbolConfiguration(configuration) else { return nil }
+        // after the default initializer instead, which UIKit also accepts.
+        let attachment = NSTextAttachment()
         attachment.image = symbol
-        #endif
         attachment.bounds = CGRect(x: 0, y: (font.capHeight - symbol.size.height) / 2, width: symbol.size.width, height: symbol.size.height)
         let run = NSMutableAttributedString(attachment: attachment)
         run.addAttributes(attributes, range: NSRange(location: 0, length: run.length))
         return run
     }
 
-    static func url(for xref: CrossReference) -> URL? {
+    /// Rendering the symbol is the expensive part and depends only on the point size,
+    /// of which a build sees one or two — but there is a chip per cross reference, and
+    /// RFCs are full of them. The attachment itself stays per run.
+    private func chipSymbol(pointSize: CGFloat) -> PlatformImage? {
+        if let cached = chipSymbols[pointSize] { return cached }
+        guard let symbol = PlatformImage.symbol(named: "doc.text", pointSize: pointSize) else { return nil }
+        chipSymbols[pointSize] = symbol
+        return symbol
+    }
+
+    /// The other half of `url(for:)`'s anchor case: nil when the URL is not one of
+    /// ours. Kept beside the encoder, because a scheme whose two halves live in
+    /// different modules is one percent-encoding rule away from silently failing on
+    /// an anchor containing `?` or `#`.
+    public static func anchor(from url: URL) -> String? {
+        guard url.scheme == anchorScheme else { return nil }
+        let encoded = url.absoluteString.dropFirst(anchorScheme.count + 1)
+        return String(encoded).removingPercentEncoding ?? String(encoded)
+    }
+
+    func url(for xref: CrossReference) -> URL? {
         switch xref.target {
         case .document(let id, let section):
             return RFCLink(id: id, section: section).appURL
         case .anchor(let anchor):
             let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
-            return URL(string: "\(anchorScheme):\(encoded)")
+            return URL(string: "\(Self.anchorScheme):\(encoded)")
         }
     }
 }
@@ -150,15 +152,7 @@ extension [NSAttributedString.Key: Any] {
     func adding(trait: PlatformFontDescriptor.SymbolicTraits, style: ReadingStyle) -> Self {
         var result = self
         let current = (self[.font] as? PlatformFont) ?? style.bodyFont
-        let descriptor = current.fontDescriptor
-        #if canImport(UIKit)
-        if let traited = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(trait)) {
-            result[.font] = PlatformFont(descriptor: traited, size: current.pointSize)
-        }
-        #else
-        let traited = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(trait))
-        result[.font] = PlatformFont(descriptor: traited, size: current.pointSize) ?? current
-        #endif
+        result[.font] = current.adding(traits: trait)
         return result
     }
 }

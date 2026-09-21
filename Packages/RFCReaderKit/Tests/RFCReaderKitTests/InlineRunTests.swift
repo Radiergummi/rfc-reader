@@ -9,7 +9,7 @@ struct InlineRunTests {
     private let style = ReadingStyle()
 
     private func run(_ inlines: [Inline]) -> NSAttributedString {
-        DocumentTextBuilder.inlineRuns(inlines, style: style, base: [.font: style.bodyFont])
+        Fixtures.inlineRun(inlines, style: style)
     }
 
     @Test func plainTextSurvives() {

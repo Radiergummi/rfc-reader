@@ -7,71 +7,104 @@ import AppKit
 #endif
 
 /// Draws what attributed text cannot express: the card behind artwork and tables,
-/// the rule beside a block quote, the tint behind an aside — and, from Task 12, the
-/// reference chip.
+/// the rule beside a block quote, the tint behind an aside, and the reference chip.
+///
+/// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
+/// RFCReaderKit, where it is under test.
 final class RFCTextLayoutFragment: NSTextLayoutFragment {
     static let cardPadding: CGFloat = 10
     static let rulePadding: CGFloat = 8
     static let ruleWidth: CGFloat = 3
 
-    /// The furthest any decoration reaches outside its own fragment frame. The
-    /// rule sits `rulePadding + ruleWidth` to the left of the text, which is more
-    /// than the card's `cardPadding` — widening by only `cardPadding` clips about a
-    /// third of the rule.
-    private static let surfaceInset = max(cardPadding, rulePadding + ruleWidth)
-
-    /// Without widening this, the card and the rule are clipped to the glyph bounds.
+    /// Everything drawn outside the glyph bounds has to be declared here or it is
+    /// clipped away. Derived from the rects actually drawn rather than from a
+    /// constant kept in step with them by hand: the card spans the whole column,
+    /// which is far wider than a short artwork line's own fragment, the rule hangs
+    /// further left still, and a chip's tint reaches past its glyphs at both ends.
+    ///
+    /// Only a fragment that draws something pays for this. Most of an RFC is plain
+    /// prose, and inflating every fragment's backing store for decoration it does
+    /// not have is pure cost.
     override var renderingSurfaceBounds: CGRect {
-        super.renderingSurfaceBounds.union(
-            CGRect(origin: .zero, size: layoutFragmentFrame.size)
-                .insetBy(dx: -Self.surfaceInset, dy: -Self.cardPadding)
+        var bounds = super.renderingSurfaceBounds
+        if let span = decorationSpan {
+            let band = placement(at: .zero, span: span)
+                .decorationRect(padding: Self.cardPadding, capTop: true, capBottom: true)
+            bounds = bounds.union(band.insetBy(dx: -(Self.rulePadding + Self.ruleWidth), dy: 0))
+        }
+        for chip in chipRects {
+            bounds = bounds.union(chip.rect)
+        }
+        return bounds
+    }
+
+    // MARK: - Content
+
+    /// The fragment's own span, as the document-relative character range every
+    /// `FragmentGeometry` call is expressed in.
+    private var documentRange: NSRange? {
+        guard let textLayoutManager else { return nil }
+        let start = textLayoutManager.offset(of: rangeInElement.location)
+        let end = textLayoutManager.offset(of: rangeInElement.endLocation)
+        guard start >= 0, end >= start else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
+
+    /// All three are pure functions of content that is immutable once built, so they
+    /// are worked out once per fragment rather than on every `renderingSurfaceBounds`
+    /// read and every draw — and only once the content is actually reachable, or a
+    /// fragment asked before its layout manager is attached would cache "nothing to
+    /// draw" for good.
+    ///
+    /// The chip rects are cached at the origin, because only their position depends
+    /// on where the fragment is being drawn.
+    private var cachedDecorationSpan: FragmentGeometry.DecorationSpan??
+    private var cachedChipRects: [FragmentGeometry.ChipRect]?
+
+    override func invalidateLayout() {
+        cachedDecorationSpan = nil
+        cachedChipRects = nil
+        super.invalidateLayout()
+    }
+
+    private var decorationSpan: FragmentGeometry.DecorationSpan? {
+        if let cachedDecorationSpan { return cachedDecorationSpan }
+        guard let text = textLayoutManager?.attributedText, let range = documentRange else { return nil }
+        let span = FragmentGeometry.decorationSpan(in: text, fragment: range)
+        cachedDecorationSpan = .some(span)
+        return span
+    }
+
+    private var chipRects: [FragmentGeometry.ChipRect] {
+        if let cachedChipRects { return cachedChipRects }
+        guard let text = textLayoutManager?.attributedText, let range = documentRange else { return [] }
+        let rects = FragmentGeometry.chipRects(in: text, lines: textLineFragments, fragment: range, origin: .zero)
+        cachedChipRects = rects
+        return rects
+    }
+
+    /// Where this fragment sits in the column, for whatever is drawn around it.
+    private func placement(at point: CGPoint, span: FragmentGeometry.DecorationSpan) -> FragmentGeometry.Placement {
+        FragmentGeometry.Placement(
+            origin: point,
+            frame: layoutFragmentFrame,
+            containerWidth: textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width,
+            indent: span.indent
         )
     }
 
-    /// A decoration this fragment's own range carries, plus whether it is the
-    /// first and/or last fragment of that decoration's run.
-    private struct DecorationSpan {
-        let decoration: RFCDecoration
-        let isFirst: Bool
-        let isLast: Bool
-    }
-
-    /// A decoration can span several fragments — a multi-line artwork block lays
-    /// out one fragment per line, and a multi-row table one per row — because the
-    /// builder stores the attribute once per contiguous run rather than once per
-    /// fragment. `effectiveRange` names that whole run; comparing this fragment's
-    /// own start and end against it says whether this fragment is the run's first,
-    /// its last, both (the common single-fragment case), or neither (a middle
-    /// fragment, which draws no cap and must not repeat the run's outer padding
-    /// or its rounding, or the band would show a seam at every fragment boundary).
-    private var decorationSpan: DecorationSpan? {
-        guard let textLayoutManager,
-              let storage = textLayoutManager.textContentManager as? NSTextContentStorage,
-              let text = storage.attributedString else { return nil }
-        let documentStart = textLayoutManager.documentRange.location
-        let start = textLayoutManager.offset(from: documentStart, to: rangeInElement.location)
-        guard start >= 0, start < text.length else { return nil }
-        var effectiveRange = NSRange(location: 0, length: 0)
-        guard let decoration = text.attribute(.rfcDecoration, at: start, effectiveRange: &effectiveRange) as? RFCDecoration else { return nil }
-        let end = textLayoutManager.offset(from: documentStart, to: rangeInElement.endLocation)
-        return DecorationSpan(
-            decoration: decoration,
-            isFirst: start <= effectiveRange.location,
-            isLast: end >= NSMaxRange(effectiveRange)
-        )
-    }
+    // MARK: - Drawing
 
     override func draw(at point: CGPoint, in context: CGContext) {
         if let span = decorationSpan {
-            let frame = CGRect(origin: point, size: layoutFragmentFrame.size)
             context.saveGState()
             switch span.decoration {
             case .artwork, .table:
-                drawCard(frame: frame, span: span, alpha: 0.3, in: context)
+                drawCard(at: point, span: span, alpha: 0.3, in: context)
             case .aside:
-                drawCard(frame: frame, span: span, alpha: 0.4, in: context)
+                drawCard(at: point, span: span, alpha: 0.4, in: context)
             case .blockQuote:
-                drawRule(frame: frame, span: span, in: context)
+                drawRule(at: point, span: span, in: context)
             }
             context.restoreGState()
         }
@@ -79,82 +112,37 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         super.draw(at: point, in: context)
     }
 
-    /// A chip's fill and rounding, worked out per *line* fragment. A chip that
-    /// wraps is still one contiguous `.rfcChip` run laid out across several
-    /// `NSTextLineFragment`s inside this single layout fragment (TextKit 2 lays
-    /// out a whole paragraph as one fragment holding many line fragments) — so the
-    /// line that holds the run's first character rounds only its left corners, the
-    /// line holding its last character rounds only its right corners, and a middle
-    /// line (a chip wrapping across three or more lines) rounds neither.
-    private struct ChipRect {
-        let rect: CGRect
-        let roundsLeading: Bool
-        let roundsTrailing: Bool
-    }
-
-    private static let chipPadding: CGFloat = 5
-
-    /// The chip's own padding (5 pt) is well inside `surfaceInset` (11 pt, from the
-    /// rule), so drawing outside the glyph bounds by that much still lands inside
-    /// `renderingSurfaceBounds` and needs no separate widening there.
-    private func chipRects(at point: CGPoint) -> [ChipRect] {
-        guard let textLayoutManager,
-              let storage = textLayoutManager.textContentManager as? NSTextContentStorage,
-              let text = storage.attributedString else { return [] }
-        let documentStart = textLayoutManager.documentRange.location
-        let fragmentStart = textLayoutManager.offset(from: documentStart, to: rangeInElement.location)
-        guard fragmentStart >= 0 else { return [] }
-
-        var result: [ChipRect] = []
-        for line in textLineFragments {
-            let lineStart = fragmentStart + line.characterRange.location
-            let lineRange = NSRange(location: lineStart, length: line.characterRange.length)
-            guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
-
-            text.enumerateAttribute(.rfcChip, in: lineRange) { value, pieceRange, _ in
-                guard value != nil else { return }
-
-                // The piece `enumerateAttribute` hands back is already clipped to
-                // this line; the run's own full extent — which may start before or
-                // end after this line — decides which ends round.
-                var runRange = NSRange(location: 0, length: 0)
-                _ = text.attribute(.rfcChip, at: pieceRange.location, effectiveRange: &runRange)
-                let roundsLeading = runRange.location >= lineRange.location
-                let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
-
-                // `locationForCharacter(at:)` takes an index relative to
-                // `line.attributedString` — the whole paragraph the fragment lays
-                // out, not the line — so the index has to be relative to the
-                // fragment's start, not the line's. The two coincide only on the
-                // fragment's first line, which is why every hand-trace and every
-                // single-line fixture looked right before this fix.
-                let localStart = pieceRange.location - fragmentStart
-                let localEnd = localStart + pieceRange.length
-                let startX = line.locationForCharacter(at: localStart).x
-                let endX = line.locationForCharacter(at: localEnd).x
-                let padLeft: CGFloat = roundsLeading ? Self.chipPadding : 0
-                let padRight: CGFloat = roundsTrailing ? Self.chipPadding : 0
-
-                let rect = CGRect(
-                    x: point.x + line.typographicBounds.minX + startX - padLeft,
-                    y: point.y + line.typographicBounds.minY + 1,
-                    width: endX - startX + padLeft + padRight,
-                    height: line.typographicBounds.height - 2
-                )
-                result.append(ChipRect(rect: rect, roundsLeading: roundsLeading, roundsTrailing: roundsTrailing))
-            }
-        }
-        return result
+    /// Where this fragment sits in the column, for whatever is drawn around it.
+    ///
+    /// The indent comes from the whole decoration run, not this fragment, so every
+    /// fragment of one block draws the same band.
+    private func placement(at point: CGPoint) -> FragmentGeometry.Placement {
+        let indent = textLayoutManager?.attributedText.flatMap { text in
+            decorationSpan.map { FragmentGeometry.indent(in: text, over: $0.runRange) }
+        } ?? 0
+        return FragmentGeometry.Placement(
+            origin: point,
+            frame: layoutFragmentFrame,
+            containerWidth: textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width,
+            indent: indent
+        )
     }
 
     private func drawChips(at point: CGPoint, in context: CGContext) {
-        for chip in chipRects(at: point) {
-            var corners: Corners = []
-            if chip.roundsLeading { corners.formUnion(.left) }
-            if chip.roundsTrailing { corners.formUnion(.right) }
-            context.setFillColor(RFCColors.accent.withAlphaComponent(0.15).cgColor)
-            context.addPath(Self.roundedPath(in: chip.rect, cornerRadius: 6, corners: corners))
-            context.fillPath()
+        let chips = chipRects
+        guard !chips.isEmpty else { return }
+        // Resolved once per draw rather than once per chip, but still per draw, so a
+        // change of appearance or accent colour is picked up. The geometry is not
+        // appearance-dependent, so it comes from the cache and only moves.
+        let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
+        for chip in chips {
+            fill(
+                chip.rect.offsetBy(dx: point.x, dy: point.y),
+                radius: 6,
+                corners: Corners(leading: chip.roundsLeading, trailing: chip.roundsTrailing),
+                color: tint,
+                in: context
+            )
         }
     }
 
@@ -162,30 +150,42 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
     /// edge — a middle fragment sits flush against its neighbours, so consecutive
     /// fragments' cards tile into one continuous band instead of overlapping (and
     /// darkening, since the fill is translucent) at every line boundary.
-    private func drawCard(frame: CGRect, span: DecorationSpan, alpha: CGFloat, in context: CGContext) {
-        let topInset = span.isFirst ? Self.cardPadding / 2 : 0
-        let bottomInset = span.isLast ? Self.cardPadding / 2 : 0
-        let card = CGRect(
-            x: frame.minX - Self.cardPadding,
-            y: frame.minY - topInset,
-            width: frame.width + Self.cardPadding * 2,
-            height: frame.height + topInset + bottomInset
+    private func drawCard(at point: CGPoint, span: FragmentGeometry.DecorationSpan, alpha: CGFloat, in context: CGContext) {
+        let card = placement(at: point, span: span)
+            .decorationRect(padding: Self.cardPadding, capTop: span.isFirst, capBottom: span.isLast)
+        fill(
+            card,
+            radius: 8,
+            corners: Corners(first: span.isFirst, last: span.isLast),
+            color: RFCColors.quaternaryFill.withAlphaComponent(alpha).cgColor,
+            in: context
         )
-        var corners: Corners = []
-        if span.isFirst { corners.formUnion(.top) }
-        if span.isLast { corners.formUnion(.bottom) }
-        context.setFillColor(RFCColors.quaternaryFill.withAlphaComponent(alpha).cgColor)
-        context.addPath(Self.roundedPath(in: card, cornerRadius: 8, corners: corners))
-        context.fillPath()
     }
 
-    private func drawRule(frame: CGRect, span: DecorationSpan, in context: CGContext) {
-        let rule = CGRect(x: frame.minX - Self.rulePadding - Self.ruleWidth, y: frame.minY, width: Self.ruleWidth, height: frame.height)
-        var corners: Corners = []
-        if span.isFirst { corners.formUnion(.top) }
-        if span.isLast { corners.formUnion(.bottom) }
-        context.setFillColor(RFCColors.quaternaryFill.cgColor)
-        context.addPath(Self.roundedPath(in: rule, cornerRadius: 1.5, corners: corners))
+    /// The rule hangs to the left of the quoted text's own edge, which is the column
+    /// left plus the block's indent -- not the fragment's, or a short line would pull
+    /// the rule inwards and the rule would zigzag down the quote.
+    private func drawRule(at point: CGPoint, span: FragmentGeometry.DecorationSpan, in context: CGContext) {
+        let left = placement(at: point, span: span).columnLeft
+        let rule = CGRect(
+            x: left - Self.rulePadding - Self.ruleWidth,
+            y: point.y,
+            width: Self.ruleWidth,
+            height: layoutFragmentFrame.height
+        )
+        fill(
+            rule,
+            radius: 1.5,
+            corners: Corners(first: span.isFirst, last: span.isLast),
+            color: RFCColors.quaternaryFill.cgColor,
+            in: context
+        )
+    }
+
+    /// The tail every decoration shares: pick the corners, fill the rounded path.
+    private func fill(_ rect: CGRect, radius: CGFloat, corners: Corners, color: CGColor, in context: CGContext) {
+        context.setFillColor(color)
+        context.addPath(Self.roundedPath(in: rect, cornerRadius: radius, corners: corners))
         context.fillPath()
     }
 
@@ -200,7 +200,6 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         static let bottom: Corners = [.bottomLeft, .bottomRight]
         static let left: Corners = [.topLeft, .bottomLeft]
         static let right: Corners = [.topRight, .bottomRight]
-        static let all: Corners = [.top, .bottom]
     }
 
     /// `rect`, rounded only on the corners named — square where a decoration's band
@@ -227,5 +226,23 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - bottomLeftRadius), radius: bottomLeftRadius)
         path.closeSubpath()
         return path
+    }
+}
+
+extension RFCTextLayoutFragment.Corners {
+    /// A band that runs down the page: rounded where the run starts and ends,
+    /// square where it continues into the next fragment.
+    init(first: Bool, last: Bool) {
+        self = []
+        if first { formUnion(.top) }
+        if last { formUnion(.bottom) }
+    }
+
+    /// A chip that runs along a line: rounded at the ends of the run, square where
+    /// it continues onto the next line.
+    init(leading: Bool, trailing: Bool) {
+        self = []
+        if leading { formUnion(.left) }
+        if trailing { formUnion(.right) }
     }
 }

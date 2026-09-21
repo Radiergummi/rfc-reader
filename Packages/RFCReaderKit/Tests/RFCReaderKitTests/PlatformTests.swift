@@ -11,12 +11,17 @@ struct PlatformTests {
         #expect(RFCColors.label !== RFCColors.secondaryLabel)
     }
 
-    @Test func monospacedFontIsMonospaced() {
-        let font = PlatformFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        let builder = DocumentTextBuilder(style: ReadingStyle())
-        let narrow = builder.lineWidth("i", font: font)
-        let wide = builder.lineWidth("W", font: font)
-        #expect(abs(narrow - wide) < 0.01)
+    @Test func theSymbolShimRendersAtTheSizeAsked() throws {
+        let small = try #require(PlatformImage.symbol(named: "doc.text", pointSize: 10))
+        let large = try #require(PlatformImage.symbol(named: "doc.text", pointSize: 30))
+        #expect(large.size.height > small.size.height)
+    }
+
+    @Test func addingATraitKeepsTheSizeAndAddsTheTrait() {
+        let base = PlatformFont.systemFont(ofSize: 17)
+        let bold = base.adding(traits: RFCTraits.bold)
+        #expect(bold.pointSize == base.pointSize)
+        #expect(bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
     }
 
     @Test func traitsAreDistinctAndNonEmpty() {

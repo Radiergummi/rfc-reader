@@ -32,17 +32,6 @@ final class VisibleAnchorBox {
 /// stays reviewable side by side.
 @MainActor
 final class RFCTextViewCoordinator: NSObject {
-    /// The design ceiling on the text column: below this width the column tracks
-    /// the view exactly (less `margin` on each side); above it, the gutter grows
-    /// to keep the column from exceeding this. It is *not* what `built` was
-    /// measured against — that varies with the real column (see `onColumnChange`
-    /// below) — this is only the target `layOut(width:)` centres the column
-    /// against.
-    static let idealMeasure = ReadingStyle().measure
-
-    /// The smallest gutter beside the column, and the padding under the last line.
-    static let margin: CGFloat = 24
-
     /// The text view this coordinator drives. Weak: SwiftUI owns both, and the view
     /// outlives no part of this. AppKit's hover preview needs a tracking area the
     /// moment the view exists, hence the `didSet`; UIKit needs no such setup.
@@ -60,6 +49,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// Dynamic Type — with it.
     var headerHost: PlatformHostingController<AnyView>?
 
+    /// What the hosted header currently displays; see `ReaderInputs.apply`.
+    var headerIdentity: DocumentHeaderView.Identity?
+
     /// Retained for the same reason as `headerHost`: the iOS long-press preview's
     /// hosting controller must outlive the `UITargetedPreview` that wraps its view.
     var referencePreviewHost: PlatformHostingController<ReferencePreview>?
@@ -73,24 +65,6 @@ final class RFCTextViewCoordinator: NSObject {
     var onVisibleAnchorChange: (String) -> Void = { _ in }
     var onScrollHandled: () -> Void = {}
     var onLink: (URL) -> Bool = { _ in false }
-    /// Reports the real column whenever `layOut(width:)` computes a new one, so
-    /// `DocumentView` can rebuild the document with a matching `ReadingStyle.measure`
-    /// — see Critical Finding 3 in the final whole-branch review. Without this, the
-    /// builder always measured artwork and tables against `ReadingStyle`'s 712 pt
-    /// default, regardless of how narrow the real column was.
-    var onColumnChange: (CGFloat) -> Void = { _ in }
-
-    /// The anchors tracking is allowed to report. The index covers *every* anchor —
-    /// paragraphs, figures, tables, reference rows — because `scroll(to:)` has to
-    /// reach all of them, but every consumer of `visibleAnchor` resolves it with
-    /// `document.section(anchor:)`, so reporting a paragraph anchor would silently
-    /// break all four. Sections only, therefore, and the index of them is derived.
-    var trackedAnchors: Set<String> = [] {
-        didSet {
-            guard trackedAnchors != oldValue else { return }
-            deriveTrackedIndex()
-        }
-    }
 
     /// Where section tracking last put the reader, written the moment it is computed.
     /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -98,7 +72,13 @@ final class RFCTextViewCoordinator: NSObject {
     var lastVisibleAnchor: VisibleAnchorBox?
 
     private(set) var built: BuiltDocument?
-    private var trackedIndex = AnchorIndex([])
+    /// The anchors tracking may report. The full index covers *every* anchor —
+    /// paragraphs, figures, tables, reference rows — because `scroll(to:)` has to
+    /// reach all of them, but every consumer of the reader's visible anchor resolves
+    /// it with `RFCDocument.section(anchor:)`, so reporting a paragraph anchor would
+    /// silently break all of them. The builder marks which entries are sections; this
+    /// is just that subset.
+    private var sectionIndex = AnchorIndex([])
     private var lastReportedAnchor: String?
     private var laidOutColumn: CGFloat?
     private var laidOutHeaderHeight: CGFloat?
@@ -109,14 +89,6 @@ final class RFCTextViewCoordinator: NSObject {
     /// installed the document — and clamping a deep jump against that would land at
     /// the top and overwrite the reading position with section one.
     private var laidOutEnd: CGFloat?
-
-    /// Coalesces the full-document relayout a column change triggers. Below the
-    /// `idealMeasure` breakpoint the column changes on every pixel of a live
-    /// window resize, and each `layOutEverything()` costs a ~530 ms synchronous
-    /// `ensureLayout` — see Important Finding 8. The geometry writes in `layOut`
-    /// (`textContainerInset`, the header frame) stay immediate; only this expensive
-    /// relayout is debounced.
-    private var relayoutTask: Task<Void, Never>?
 
     // MARK: - Accessibility
 
@@ -152,42 +124,36 @@ final class RFCTextViewCoordinator: NSObject {
         guard let textView,
               let layout = textView.textLayoutManager,
               let storage = layout.textContentManager as? NSTextContentStorage else { return }
-        relayoutTask?.cancel()
         self.built = built
         lastReportedAnchor = nil
-        deriveTrackedIndex()
+        sectionIndex = built.anchors.sections
         deriveAccessibilityItems()
+        // Written through the backing `NSTextStorage`, never by assigning
+        // `storage.attributedString`.
+        //
+        // That assignment *discards* the `NSTextStorage` — measured: non-nil before,
+        // nil immediately after, and `textView.textStorage` nil with it. TextKit 2
+        // lays out and draws from `attributedString` alone, so the document still
+        // renders perfectly and the damage is invisible: what breaks is everything
+        // AppKit still routes through the text storage. Dragging computed a correct
+        // selection and then discarded it at mouse-up, and `clickedOnLink` never
+        // fired, so the reader could be read but not selected, copied, or clicked.
         storage.performEditingTransaction {
-            storage.attributedString = built.text
+            storage.textStorage?.setAttributedString(built.text)
         }
         layOutEverything()
         reportVisibleAnchor()
-    }
-
-    private func deriveTrackedIndex() {
-        trackedIndex = AnchorIndex(built?.anchors.entries.filter { trackedAnchors.contains($0.anchor) } ?? [])
     }
 
     private func layOutEverything() {
         laidOutEnd = nil
         guard let layout = textView?.textLayoutManager else { return }
         layout.ensureLayout(for: layout.documentRange)
-        var end: CGFloat?
-        layout.enumerateTextLayoutFragments(from: layout.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { fragment in
-            end = fragment.layoutFragmentFrame.maxY
-            return false
-        }
-        laidOutEnd = end
-    }
-
-    /// Debounces `layOutEverything()` after a column change; see `relayoutTask`.
-    private func scheduleRelayout() {
-        relayoutTask?.cancel()
-        relayoutTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
-            self?.layOutEverything()
-        }
+        // Exact, because the whole document has just been laid out. The usual caveat
+        // about this value — that it keeps moving as the viewport does, which is why
+        // the reader lays out everything up front — applies to viewport layout, not
+        // here.
+        laidOutEnd = layout.usageBoundsForTextContainer.maxY
     }
 
     // MARK: - Geometry
@@ -201,20 +167,20 @@ final class RFCTextViewCoordinator: NSObject {
     /// moves the gutters, not the text.
     func layOut(width: CGFloat) {
         guard let textView, width > 0 else { return }
-        let gutter = max(Self.margin, (width - Self.idealMeasure) / 2)
-        let column = width - gutter * 2
+        let gutter = ReaderLayout.gutter(forWidth: width)
+        let column = ReaderLayout.column(forWidth: width)
+        // Measured every pass, deliberately: the height depends on the width, on the
+        // content size category, and on metadata that can arrive after the first
+        // layout, and a cache keyed on any one of those goes stale as a header
+        // overlapping the first paragraph. Only the writes below are conditional.
         let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
         guard column != laidOutColumn || headerHeight != laidOutHeaderHeight else { return }
         let columnChanged = column != laidOutColumn
         laidOutColumn = column
         laidOutHeaderHeight = headerHeight
-        // Deferred for the same reason as `onScrollHandled`: this runs inside
-        // SwiftUI's update, where mutating state (`DocumentView`'s `column`) is
-        // illegal.
-        if columnChanged { Task { self.onColumnChange(column) } }
 
         #if canImport(UIKit)
-        textView.textContainerInset = UIEdgeInsets(top: headerHeight, left: gutter, bottom: Self.margin, right: gutter)
+        textView.textContainerInset = UIEdgeInsets(top: headerHeight, left: gutter, bottom: ReaderLayout.margin, right: gutter)
         #else
         // AppKit's inset is symmetric, so the header's height is echoed as padding
         // under the last line. NSTextView has no asymmetric equivalent.
@@ -223,7 +189,11 @@ final class RFCTextViewCoordinator: NSObject {
         #endif
         headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
-        if columnChanged { scheduleRelayout() }
+        // No relayout here: `DocumentView` derives the column from the same width and
+        // rebuilds, which lands in `install()` — the one place the document is laid
+        // out. Until it does, the laid-out end belongs to the previous column, and an
+        // unknown end is the safe state (`scrollContainerTopTo` then does not clamp).
+        if columnChanged { laidOutEnd = nil }
     }
 
     // MARK: - Scrolling
@@ -237,7 +207,7 @@ final class RFCTextViewCoordinator: NSObject {
               let built,
               let layout = textView.textLayoutManager,
               let offset = built.anchors.offset(of: anchor),
-              let location = layout.location(layout.documentRange.location, offsetBy: offset),
+              let location = layout.location(atOffset: offset),
               let fragment = layout.textLayoutFragment(for: location) else { return }
         scrollContainerTopTo(fragment.layoutFragmentFrame.minY)
         reportVisibleAnchor()
@@ -249,14 +219,14 @@ final class RFCTextViewCoordinator: NSObject {
     func reportVisibleAnchor() {
         guard let textView,
               built != nil,
-              let layout = textView.textLayoutManager,
-              let top = visibleContainerTop,
-              let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: max(0, top))) else { return }
-        let offset = layout.offset(from: layout.documentRange.location, to: fragment.rangeInElement.location)
+              let layout = textView.textLayoutManager else { return }
+        let top = max(0, textView.viewportTop)
+        guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
+        let offset = layout.offset(of: fragment.rangeInElement.location)
         // The abstract is the first prose in the storage and sits ahead of section
         // one, so while it is on screen the reader is, as far as every consumer of
         // this is concerned, in section one — which is what the old view reported too.
-        guard let anchor = trackedIndex.anchor(at: offset) ?? trackedIndex.entries.first?.anchor,
+        guard let anchor = sectionIndex.anchor(at: offset) ?? sectionIndex.entries.first?.anchor,
               anchor != lastReportedAnchor else { return }
         lastReportedAnchor = anchor
         lastVisibleAnchor?.anchor = anchor
@@ -265,57 +235,20 @@ final class RFCTextViewCoordinator: NSObject {
         Task { self.onVisibleAnchorChange(anchor) }
     }
 
-    /// The top of the viewport in text-container coordinates.
-    private var visibleContainerTop: CGFloat? {
-        guard let textView else { return nil }
-        #if canImport(UIKit)
-        return textView.contentOffset.y - textView.textContainerInset.top
-        #else
-        return textView.visibleRect.minY - textView.textContainerOrigin.y
-        #endif
-    }
-
     /// Clamped against the laid-out document end rather than the text view's own
     /// published height, and **not clamped at all** if that end is unknown: an
     /// overshoot self-corrects on the next scroll, whereas clamping to the top
     /// silently rewrites the reading position.
     private func scrollContainerTopTo(_ containerY: CGFloat) {
         guard let textView else { return }
-        // The view's own geometry has to be current before an offset is set against
-        // it, or the platform clamps the jump to a content size it has not published
-        // yet. The text is laid out already, so this only syncs frames.
-        #if canImport(UIKit)
-        textView.layoutIfNeeded()
-        #else
-        textView.enclosingScrollView?.layoutSubtreeIfNeeded()
-        #endif
-        #if canImport(UIKit)
-        let inset = textView.textContainerInset
-        let top = inset.top
-        let content = laidOutEnd.map { top + $0 + inset.bottom }
-        let viewport = textView.bounds.height
-        #else
-        guard let scroll = textView.enclosingScrollView else { return }
-        let top = textView.textContainerOrigin.y
-        let content = laidOutEnd.map { top + $0 + textView.textContainerInset.height }
-        let viewport = scroll.contentView.bounds.height
-        #endif
+        textView.syncLayout()
+        let top = textView.containerTop
         var target = max(0, containerY + top)
-        if let content {
-            target = min(target, max(0, content - viewport))
+        if let end = laidOutEnd {
+            let content = top + end + textView.containerBottom
+            target = min(target, max(0, content - textView.viewportHeight))
         }
-        #if canImport(UIKit)
-        textView.setContentOffset(CGPoint(x: 0, y: target), animated: false)
-        #else
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: target))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        #endif
-    }
-
-    // MARK: - Links
-
-    func handle(_ url: URL) -> Bool {
-        onLink(url)
+        textView.scroll(toY: target)
     }
 
     // MARK: - References
@@ -324,9 +257,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// and the full extent of its run. Shared by the iOS long-press lookup and the
     /// macOS hover hit test below.
     private func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
-        guard let layout = textView?.textLayoutManager,
-              let storage = layout.textContentManager as? NSTextContentStorage,
-              let text = storage.attributedString,
+        guard let text = textView?.textLayoutManager?.attributedText,
               offset >= 0, offset < text.length else { return nil }
         var range = NSRange(location: 0, length: 0)
         guard let box = text.attribute(.rfcReference, at: offset, effectiveRange: &range) as? ReferenceBox else { return nil }
@@ -338,7 +269,7 @@ final class RFCTextViewCoordinator: NSObject {
 extension RFCTextViewCoordinator: UITextViewDelegate {
     func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
         guard case .link(let url) = textItem.content else { return defaultAction }
-        return handle(url) ? nil : defaultAction
+        return onLink(url) ? nil : defaultAction
     }
 
     /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
@@ -364,7 +295,7 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
-        return handle(url)
+        return onLink(url)
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
@@ -455,22 +386,18 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
         guard let layout = textView?.textLayoutManager,
               let fragment = layout.textLayoutFragment(for: containerPoint) else { return nil }
-        let fragmentStart = layout.offset(from: layout.documentRange.location, to: fragment.rangeInElement.location)
+        let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
         guard fragmentStart >= 0 else { return nil }
         let pointInFragment = CGPoint(
             x: containerPoint.x - fragment.layoutFragmentFrame.minX,
             y: containerPoint.y - fragment.layoutFragmentFrame.minY
         )
-        for line in fragment.textLineFragments
-        where line.typographicBounds.minY <= pointInFragment.y && pointInFragment.y < line.typographicBounds.maxY {
-            let pointInLine = CGPoint(x: pointInFragment.x - line.typographicBounds.minX, y: pointInFragment.y - line.typographicBounds.minY)
-            // `characterIndex(for:)` already returns an index relative to the whole
-            // paragraph (`line.attributedString`), not the line, so it already
-            // includes `line.characterRange.location` — adding it again double-counts.
-            let offset = fragmentStart + line.characterIndex(for: pointInLine)
-            return reference(at: offset)
-        }
-        return nil
+        guard let offset = FragmentGeometry.characterOffset(
+            in: fragment.textLineFragments,
+            fragmentStart: fragmentStart,
+            at: pointInFragment
+        ) else { return nil }
+        return reference(at: offset)
     }
 
     /// The rect of a reference's run, in text-container coordinates — the
@@ -479,9 +406,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// selection rendering.
     private func referenceRect(for range: NSRange) -> CGRect? {
         guard let layout = textView?.textLayoutManager,
-              let start = layout.location(layout.documentRange.location, offsetBy: range.location),
-              let end = layout.location(layout.documentRange.location, offsetBy: NSMaxRange(range)),
-              let textRange = NSTextRange(location: start, end: end) else { return nil }
+              let textRange = layout.textRange(for: range) else { return nil }
         var union: CGRect?
         layout.enumerateTextSegments(in: textRange, type: .standard) { _, frame, _, _ in
             union = union.map { $0.union(frame) } ?? frame

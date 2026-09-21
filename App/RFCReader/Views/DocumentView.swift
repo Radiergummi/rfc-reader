@@ -15,42 +15,63 @@ struct DocumentView: View {
     let id: DocumentID
 
     @State private var document: RFCDocument?
-    /// The document as one attributed string plus its anchor index. Built in
-    /// `load()` and on a settled font-size change — never in `body`, which would
-    /// rebuild the whole document on every redraw.
+    /// The document as one attributed string plus its anchor index. Built only in
+    /// `rebuild()` — never in `body`, which would rebuild on every redraw.
     @State private var built: BuiltDocument?
-    /// Every `Section.anchor` in the document. The anchor index the builder emits is
-    /// wider than this on purpose — figures, tables and reference rows are in it too,
-    /// so `rfc-anchor:` links reach them — but `visibleAnchor`'s four consumers all
-    /// resolve it with `document.section(anchor:)`, so only these may be reported.
-    @State private var sectionAnchors: Set<String> = []
     @State private var originalText: String?
     @State private var loadError: String?
     @State private var showOriginal = false
     @State private var showTableOfContents = false
-    @State private var visibleAnchor: String?
-    /// The same value, written without waiting for SwiftUI to observe it. Only
-    /// `saveReadingPosition` reads it, and only because it cannot afford to lose a
-    /// report that was computed but not yet delivered.
+    /// Which of the two the inspector is showing. Both are ways of navigating the
+    /// document, so they share one panel rather than competing for the toolbar.
+    @State private var inspectorTab = InspectorTab.contents
+    /// The two lists the inspector shows. Derived once when a document loads: the
+    /// inspector's body re-evaluates on every section crossing while scrolling, and
+    /// both of these walk every section and block of the document.
+    @State private var bodySections: [RFCKit.Section] = []
+    @State private var referenceGroups: [ReferenceGroup] = []
+    /// Where the reader is, written the moment tracking computes it. This is the
+    /// value; `visibleAnchor` below is its SwiftUI-observable mirror, which lags it
+    /// by a main-actor hop. Anything that cannot afford that lag — persisting the
+    /// reading position on the way out, restoring the place across a rebuild — reads
+    /// the box.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
+    /// The same value, for the parts of `body` that have to redraw when it changes:
+    /// the table of contents' highlight and the "copy link to this section" item.
+    @State private var visibleAnchor: String?
     @State private var copiedStyle: CitationStyle?
-    /// The real text column, reported by `RFCTextView`'s coordinator once it knows
-    /// the view's width. Starts at `ReadingStyle`'s own default so the very first
-    /// build (before the column is known) matches what a wide window settles on.
-    /// See Critical Finding 3.
-    @State private var column = ReadingStyle().measure
+    /// The text column this view's width implies, and nil until a width is known.
+    ///
+    /// Artwork scaling and table shape are measured against the column, so the column
+    /// has to be settled *before* the first build or the document is built against a
+    /// guess and immediately thrown away. It is a pure function of the width
+    /// (`ReaderLayout`), so this view can work it out for itself rather than waiting
+    /// to be told by the text view it has not created yet — which is why nothing is
+    /// built until the geometry reader has run once.
+    @State private var column: CGFloat?
 
     private var metadata: RFCMetadata? { library.metadata(id) }
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
-    private var readingStyle: ReadingStyle { ReadingStyle(bodySize: fontSize, measure: column) }
-    /// Both a font-size change and a column change require the same rebuild, so
-    /// they share one debounced `restyle()` rather than each running its own timer
-    /// — see Critical Finding 3 and Important Finding 8.
-    private struct RestyleTrigger: Equatable {
+
+    /// Everything a build depends on. One trigger, so the document is built in one
+    /// place whatever changed — a new RFC, the font-size slider, or a window resize.
+    private struct BuildInputs: Equatable {
+        /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
+        /// triggers the build. It also carries a change of document on its own:
+        /// `load()` clears `document` before awaiting the next one, so every new RFC
+        /// arrives as a false → true transition and needs no id of its own here.
+        let hasDocument: Bool
         let fontSize: Double
-        let column: CGFloat
+        let column: CGFloat?
+
+        var style: ReadingStyle? {
+            column.map { ReadingStyle(bodySize: fontSize, measure: $0) }
+        }
     }
-    private var restyleTrigger: RestyleTrigger { RestyleTrigger(fontSize: fontSize, column: column) }
+
+    private var buildInputs: BuildInputs {
+        BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
+    }
 
     var body: some View {
         content
@@ -61,15 +82,23 @@ struct DocumentView: View {
             .toolbar { toolbar }
             .inspector(isPresented: $showTableOfContents) {
                 if let document {
-                    TableOfContentsView(document: document, current: visibleAnchor) { anchor in
-                        library.pendingSection = nil
-                        scrollTarget = anchor
-                    }
-                    .inspectorColumnWidth(min: 220, ideal: 280)
+                    DocumentInspector(
+                        document: document,
+                        sections: bodySections,
+                        groups: referenceGroups,
+                        tab: $inspectorTab,
+                        current: visibleAnchor,
+                        selectSection: { anchor in
+                            library.pendingSection = nil
+                            scrollTarget = anchor
+                        },
+                        openDocument: { library.open($0) }
+                    )
+                    .inspectorColumnWidth(min: 260, ideal: 320)
                 }
             }
             .task(id: id) { await load() }
-            .task(id: restyleTrigger) { await restyle() }
+            .task(id: buildInputs) { await rebuild() }
             .onChange(of: library.pendingSection) { _, section in
                 jump(toSection: section)
             }
@@ -79,21 +108,30 @@ struct DocumentView: View {
 
     @State private var scrollTarget: String?
 
-    @ViewBuilder
+    /// The width channel. It wraps everything, including the loading state, so the
+    /// column is known before there is a document to build.
     private var content: some View {
+        states
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                guard width > 0 else { return }
+                column = ReaderLayout.column(forWidth: width)
+            }
+    }
+
+    @ViewBuilder
+    private var states: some View {
         if showOriginal {
             OriginalTextView(text: originalText, fontSize: fontSize)
                 .task { originalText = try? await library.originalText(for: id) }
         } else if let document, let built {
             RFCTextView(
                 built: built,
-                trackedAnchors: sectionAnchors,
                 lastVisibleAnchor: lastVisibleAnchor,
                 scrollTarget: scrollTarget,
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: { visibleAnchor = $0 },
                 onLink: { openInApp($0) },
-                onColumnChange: { column = $0 },
+                headerIdentity: DocumentHeaderView.Identity(header: document.header, metadata: metadata),
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
                 header: {
@@ -175,9 +213,14 @@ struct DocumentView: View {
 
     // MARK: - Actions
 
+    /// Fetches. Building is `rebuild()`'s job, which this triggers by setting
+    /// `document`.
     private func load() async {
         loadError = nil
+        document = nil
         built = nil
+        bodySections = []
+        referenceGroups = []
         // A reused view must not carry the previous document's place into the new
         // one; `install()` reports the real anchor a moment later.
         visibleAnchor = nil
@@ -185,26 +228,41 @@ struct DocumentView: View {
         showOriginal = preferOriginalText
         do {
             let loaded = try await library.document(for: id)
+            referenceGroups = ReferenceGroup.groups(in: loaded)
             document = loaded
-            sectionAnchors = Set(loaded.allSections.map(\.anchor))
-            built = DocumentTextBuilder.build(loaded, style: readingStyle)
         } catch {
             loadError = error.localizedDescription
         }
     }
 
-    /// A font-size or column change costs a rebuild of the whole attributed string
-    /// plus a full relayout — 650 ms on the largest documents in the library — so
-    /// both are debounced by that much through `restyleTrigger`. `.task(id:)`
-    /// cancels the pending rebuild on every further tick, and the anchor index
-    /// puts the reader back where they were.
-    private func restyle() async {
-        guard let document, built != nil else { return }
-        try? await Task.sleep(for: .milliseconds(650))
+    /// The one place the document is built.
+    ///
+    /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
+    /// the largest documents in the library — so a change to an *existing* document's
+    /// style waits that long to settle, and `.task(id:)` cancels the pending rebuild
+    /// on every further tick of the font-size slider or the window's edge. The first
+    /// build of a document does not wait: there is nothing on screen to disturb, and
+    /// the column is already known, so it is built once and built right.
+    private func rebuild() async {
+        guard let document, let style = buildInputs.style else { return }
+        if built != nil {
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled else { return }
+        }
+        // Off the main actor: this is string assembly and text measurement, and
+        // blocking the main thread for it is what made the font-size slider stutter.
+        let place = built == nil ? nil : lastVisibleAnchor.anchor
+        let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
         guard !Task.isCancelled else { return }
-        let place = visibleAnchor
-        built = DocumentTextBuilder.build(document, style: readingStyle)
-        scrollTarget = place
+        built = rebuilt
+        // The sections the storage actually holds, straight from the index the
+        // builder just emitted — rather than re-deriving "is this a bibliography?"
+        // from the model and hoping the two rules stay in step. A contents row that
+        // has no anchor is a destination `scroll(to:)` cannot reach.
+        bodySections = document.allSections.filter { rebuilt.anchors.sections.offset(of: $0.anchor) != nil }
+        // Only a restyle has a place to restore; a first build lets `onAppear` decide
+        // between a deep link and the saved reading position.
+        if let place { scrollTarget = place }
     }
 
     private func jump(toSection section: String?) {
@@ -224,9 +282,7 @@ struct DocumentView: View {
     /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
     /// not `Equatable`.
     private func openInApp(_ url: URL) -> Bool {
-        if url.scheme == DocumentTextBuilder.anchorScheme {
-            let anchor = url.absoluteString.dropFirst(DocumentTextBuilder.anchorScheme.count + 1)
-                .removingPercentEncoding ?? ""
+        if let anchor = DocumentTextBuilder.anchor(from: url) {
             scrollTarget = anchor
             return true
         }
@@ -263,7 +319,7 @@ struct DocumentView: View {
     }
 
     private func saveReadingPosition() {
-        let anchor = lastVisibleAnchor.anchor ?? visibleAnchor
+        let anchor = lastVisibleAnchor.anchor
         let number = id.number
         let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
         if let existing = try? modelContext.fetch(descriptor).first {
@@ -283,6 +339,39 @@ struct DocumentView: View {
 /// it. The abstract is no longer here; it is the first prose in the storage, which is
 /// what puts the banner between the title and the abstract as `VISION.md` asks.
 struct DocumentHeaderView: View {
+    /// Exactly what the body below reads, and nothing else.
+    ///
+    /// The header is hosted in a `UIHostingController`/`NSHostingController` that
+    /// sits outside SwiftUI's diffing, so assigning `rootView` re-renders the whole
+    /// subtree — on every update pass, which includes every section crossing while
+    /// scrolling. Comparing this decides whether that assignment is needed at all.
+    /// It has to list every field the view displays, or a header goes stale; the
+    /// compiler cannot check that, so the two are kept adjacent.
+    struct Identity: Equatable {
+        let title: String
+        let date: String?
+        let workingGroup: String?
+        let authors: [String]
+        let status: String?
+        let stream: String?
+        let obsoletedBy: [DocumentID]
+        let updatedBy: [DocumentID]
+        let hasErrata: Bool
+
+        init(header: DocumentHeader, metadata: RFCMetadata?) {
+            title = header.title
+            date = (header.date ?? metadata?.date)?.formatted
+            workingGroup = header.workingGroup ?? metadata?.workingGroup
+            let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
+            self.authors = authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }
+            status = metadata.map { String(describing: $0.currentStatus) }
+            stream = metadata?.stream.displayName
+            obsoletedBy = metadata?.obsoletedBy ?? []
+            updatedBy = metadata?.updatedBy ?? []
+            hasErrata = metadata?.hasErrata ?? false
+        }
+    }
+
     let header: DocumentHeader
     let metadata: RFCMetadata?
 
@@ -377,13 +466,14 @@ struct OriginalTextView: View {
 }
 
 struct TableOfContentsView: View {
-    let document: RFCDocument
+    /// Only the sections the storage holds; see `DocumentView.bodySections`.
+    let sections: [RFCKit.Section]
     let current: String?
     let select: (String) -> Void
 
     var body: some View {
         List {
-            ForEach(document.allSections) { section in
+            ForEach(sections) { section in
                 Button {
                     select(section.anchor)
                 } label: {

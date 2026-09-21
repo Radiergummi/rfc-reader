@@ -13,6 +13,9 @@ extension NSAttributedString.Key {
     /// yet implemented; this attribute is what it would read from too.)
     public static let rfcVerbatim = NSAttributedString.Key("rfcVerbatim")
     /// Marks the run that should be drawn as a chip: the span the brackets enclosed.
+    /// The value is a serial number unique to that chip, because `NSAttributedString`
+    /// merges contiguous runs whose values compare equal and two adjacent chips must
+    /// stay two runs. Only its distinctness is meaningful; nothing reads the number.
     public static let rfcChip = NSAttributedString.Key("rfcChip")
     /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
     /// sits inside a captioned figure: the accessibility element's fallback label
@@ -25,6 +28,25 @@ public enum RFCDecoration: String, Sendable {
     case aside
     case artwork
     case table
+}
+
+extension RFCDecoration {
+    /// How a decoration travels in an attributed string: as its raw `String`, never
+    /// as the enum itself.
+    ///
+    /// `NSAttributedString` merges contiguous runs whose values compare equal, and a
+    /// Swift enum boxed into an attribute does not compare equal across separate
+    /// insertions. A block whose decoration is applied once — artwork, appended in a
+    /// single call — merged fine; one applied per piece — a stacked table's cells,
+    /// an authors' block — did not, so every paragraph reported itself as a complete
+    /// decoration run. The renderer reads that run's `effectiveRange` to cap the
+    /// band's rounded corners and to place its left edge, so unmerged runs drew one
+    /// fully rounded card per line at its own indent: the staircase. `NSString`
+    /// compares by value, so runs merge.
+    public init?(attributeValue: Any?) {
+        guard let raw = attributeValue as? String, let decoration = RFCDecoration(rawValue: raw) else { return nil }
+        self = decoration
+    }
 }
 
 /// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute.

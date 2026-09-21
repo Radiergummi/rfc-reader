@@ -29,22 +29,21 @@ extension DocumentTextBuilder {
         }
 
         let body = content.text.hasSuffix("\n") ? content.text : content.text + "\n"
+        let start = output.length
         append(body, [
             .font: style.monospacedFont(scale: scale),
-            .foregroundColor: RFCColors.label,
-            .rfcDecoration: RFCDecoration.artwork,
+            .foregroundColor: bodyColour,
             .rfcVerbatim: box,
             .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing, wraps: false),
         ])
+        decorate(from: start, with: .artwork)
     }
 
     /// 1 when the block already fits, otherwise the factor that makes its widest line
     /// fit the measure.
     func monospaceScale(for text: String) -> CGFloat {
         let columns = text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
-        guard columns > 0 else { return 1 }
-        let advance = lineWidth("0", font: style.monospacedFont(scale: 1))
-        guard advance > 0 else { return 1 }
-        return min(1, style.measure / (CGFloat(columns) * advance))
+        guard columns > 0, monospaceAdvance > 0 else { return 1 }
+        return min(1, style.measure / (CGFloat(columns) * monospaceAdvance))
     }
 }

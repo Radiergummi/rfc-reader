@@ -13,7 +13,7 @@ extension DocumentTextBuilder {
             mark(item.anchor)
             let marker = Self.marker(for: list.style, at: index)
             let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
-            var attributes: [NSAttributedString.Key: Any] = [.font: style.bodyFont, .foregroundColor: RFCColors.label]
+            var attributes: [NSAttributedString.Key: Any] = [.font: style.bodyFont, .foregroundColor: bodyColour]
             attributes[.paragraphStyle] = paragraphStyle(
                 indent: markerColumn,
                 firstLineIndent: indent,
@@ -34,7 +34,7 @@ extension DocumentTextBuilder {
             }
             output.append(firstLine)
             if case .paragraph(let paragraph) = first {
-                output.append(Self.inlineRuns(paragraph.inlines, style: style, base: attributes))
+                output.append(inlineRuns(paragraph.inlines, base: attributes))
                 append("\n", attributes)
                 appendBlocks(Array(item.blocks.dropFirst()), indent: markerColumn)
             } else {
@@ -50,7 +50,7 @@ extension DocumentTextBuilder {
             var termAttributes = bodyAttributes(indent: indent)
             termAttributes[.font] = style.boldBodyFont
             termAttributes[.paragraphStyle] = paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.3)
-            output.append(Self.inlineRuns(item.term, style: style, base: termAttributes))
+            output.append(inlineRuns(item.term, base: termAttributes))
             append("\n", termAttributes)
             appendBlocks(item.definition, indent: indent + style.indentStep)
         }

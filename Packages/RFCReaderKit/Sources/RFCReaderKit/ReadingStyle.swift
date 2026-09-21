@@ -18,6 +18,12 @@ public struct ReadingStyle: Sendable, Equatable {
         self.lineHeightMultiple = lineHeightMultiple
     }
 
+    /// The same style at a different size — everything else about reading it is
+    /// unchanged, so only the body size moves and the rest follows from it.
+    public func scaled(by scale: CGFloat) -> ReadingStyle {
+        ReadingStyle(bodySize: bodySize * scale, measure: measure, lineHeightMultiple: lineHeightMultiple)
+    }
+
     public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
     public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
     public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
@@ -39,4 +45,28 @@ public struct ReadingStyle: Sendable, Equatable {
 
     public var paragraphSpacing: CGFloat { bodySize * 0.7 }
     public var indentStep: CGFloat { bodySize * 1.4 }
+}
+
+/// How wide the text column is, given how wide the view is.
+///
+/// A function of the view's width and nothing else, which is why it lives here
+/// rather than inside the text view: the reader has to know the column *before* it
+/// builds, because artwork scaling and table shape are measured against it, and a
+/// document built against a guess has to be thrown away and built again.
+public enum ReaderLayout {
+    /// The design ceiling on the column: below this width the column tracks the view
+    /// exactly (less `margin` on each side); above it the gutters grow instead, so
+    /// the measure never exceeds what is comfortable to read.
+    public static let idealMeasure = ReadingStyle().measure
+
+    /// The smallest gutter beside the column, and the padding under the last line.
+    public static let margin: CGFloat = 24
+
+    public static func gutter(forWidth width: CGFloat) -> CGFloat {
+        max(margin, (width - idealMeasure) / 2)
+    }
+
+    public static func column(forWidth width: CGFloat) -> CGFloat {
+        width - gutter(forWidth: width) * 2
+    }
 }

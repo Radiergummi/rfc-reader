@@ -76,3 +76,34 @@ public enum RFCTraits {
         #endif
     }
 }
+
+extension PlatformImage {
+    /// An SF Symbol rendered at `pointSize`. AppKit and UIKit spell the
+    /// configuration step differently (`withSymbolConfiguration` against
+    /// `withConfiguration`); that difference belongs here rather than in the builder.
+    static func symbol(named name: String, pointSize: CGFloat) -> PlatformImage? {
+        let configuration = SymbolConfiguration(pointSize: pointSize, weight: .regular)
+        #if canImport(UIKit)
+        return PlatformImage(systemName: name)?.withConfiguration(configuration)
+        #else
+        return PlatformImage(systemName: name)?.withSymbolConfiguration(configuration)
+        #endif
+    }
+}
+
+extension PlatformFont {
+    /// This font with `traits` added, or this font unchanged when the descriptor
+    /// cannot supply them. UIKit's `withSymbolicTraits` returns an optional
+    /// descriptor and AppKit's does not, and only AppKit's font initializer is
+    /// failable; both spellings collapse to the same fallback here.
+    func adding(traits: PlatformFontDescriptor.SymbolicTraits) -> PlatformFont {
+        let descriptor = fontDescriptor
+        let combined = descriptor.symbolicTraits.union(traits)
+        #if canImport(UIKit)
+        guard let traited = descriptor.withSymbolicTraits(combined) else { return self }
+        return PlatformFont(descriptor: traited, size: pointSize)
+        #else
+        return PlatformFont(descriptor: descriptor.withSymbolicTraits(combined), size: pointSize) ?? self
+        #endif
+    }
+}

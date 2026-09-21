@@ -8,10 +8,16 @@ import Testing
 struct BuilderStructureTests {
     private let style = ReadingStyle()
 
+    /// The bibliography lives in a panel, not in the reading flow, so its sections
+    /// are deliberately absent from the storage. Everything else must be there.
+    private func bodySections(of document: RFCDocument) -> [Section] {
+        document.allSections.filter { !DocumentTextBuilder.holdsOnlyReferences($0) }
+    }
+
     @Test func everySectionAnchorIsIndexed() throws {
         let document = try Fixtures.rfc8999()
         let built = DocumentTextBuilder.build(document, style: style)
-        for section in document.allSections {
+        for section in bodySections(of: document) {
             #expect(built.anchors.offset(of: section.anchor) != nil, "missing anchor \(section.anchor)")
         }
     }
@@ -20,7 +26,7 @@ struct BuilderStructureTests {
         let document = try Fixtures.rfc8999()
         let built = DocumentTextBuilder.build(document, style: style)
         let text = built.text.string as NSString
-        for section in document.allSections {
+        for section in bodySections(of: document) {
             let offset = try #require(built.anchors.offset(of: section.anchor))
             let length = min((section.displayTitle as NSString).length, text.length - offset)
             let slice = text.substring(with: NSRange(location: offset, length: length))
@@ -63,7 +69,7 @@ struct BuilderStructureTests {
 
         let firstSection = try #require(document.sections.first)
         let sectionOffset = try #require(built.anchors.offset(of: firstSection.anchor))
-        let abstractOffset = built.text.string.distance(from: built.text.string.startIndex, to: try #require(abstractRange).lowerBound)
+        let abstractOffset = try Fixtures.offset(of: abstractText, in: built.text)
         #expect(abstractOffset < sectionOffset)
     }
 
@@ -74,7 +80,7 @@ struct BuilderStructureTests {
         let built = DocumentTextBuilder.build(document, style: style)
         let text = built.text.string
         let label = try #require(text.range(of: "Abstract"), "the abstract has no heading")
-        #expect(text.distance(from: text.startIndex, to: label.lowerBound) == 0, "the heading is the first thing in the storage")
+        #expect(try Fixtures.offset(of: "Abstract", in: built.text) == 0, "the heading is the first thing in the storage")
 
         let firstParagraph = try #require(document.header.abstract.compactMap { block -> String? in
             guard case .paragraph(let paragraph) = block else { return nil }
@@ -83,9 +89,13 @@ struct BuilderStructureTests {
         let prose = try #require(text.range(of: firstParagraph))
         #expect(label.upperBound <= prose.lowerBound, "the heading must precede the abstract's first paragraph")
 
-        let offset = text.distance(from: text.startIndex, to: label.lowerBound)
+        let offset = try Fixtures.offset(of: "Abstract", in: built.text)
         #expect(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont == style.headingFont(depth: 1))
-        #expect(built.anchors.offset(of: "Abstract") == nil, "the heading carries no anchor")
+        // Anchored like every other heading, so the rotor and `rfc-anchor:` reach it
+        // by the general rule — but not a section, so tracking will not report it.
+        #expect(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor) == offset)
+        #expect(built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String == DocumentTextBuilder.abstractAnchor)
+        #expect(built.anchors.sections.offset(of: DocumentTextBuilder.abstractAnchor) == nil, "the abstract is not a section")
     }
 
     @Test func aDocumentWithNoAbstractGetsNoHeading() throws {
@@ -98,7 +108,7 @@ struct BuilderStructureTests {
     @Test func headingTextIsTheSectionDisplayTitle() throws {
         let document = try Fixtures.rfc8999()
         let built = DocumentTextBuilder.build(document, style: style)
-        for section in document.allSections {
+        for section in bodySections(of: document) {
             #expect(built.text.string.contains(section.displayTitle), "missing heading \(section.displayTitle)")
         }
     }
@@ -114,11 +124,18 @@ struct BuilderStructureTests {
         }
     }
 
-    /// Mirrors what the builder renders, computed independently from the model
-    /// rather than by calling the builder's own `bracketedRange(in:)`, so this
-    /// stays a check on the builder rather than a restatement of it. A canonical
-    /// cross reference's label loses its outer brackets and gains the chip's
-    /// leading `U+FFFC` symbol in their place; everything else is `plainText`.
+    /// The symbol attachment plus the word joiner that stops it wrapping away from
+    /// the label it belongs to.
+    private static let chipPrefix = "\u{FFFC}\u{2060}"
+
+    /// What the builder should have written for a run of inlines.
+    ///
+    /// This used to restate the label rules — which brackets come off, how a section
+    /// reference is phrased — and had already drifted from them in one place. Those
+    /// rules now live on `CrossReference.display`, which `plainText` answers from
+    /// too, so the only thing left for the builder to get right is *rendering* them:
+    /// the chip's symbol goes in front of the span the model marked, and nothing
+    /// else moves.
     private static func renderedLabel(_ inlines: [Inline]) -> String {
         inlines.map { inline -> String in
             switch inline {
@@ -127,23 +144,11 @@ struct BuilderStructureTests {
             case .emphasis(let inner), .strong(let inner), .link(_, let inner):
                 return renderedLabel(inner)
             case .crossReference(let xref):
-                let label = xref.text ?? {
-                    switch xref.target {
-                    case .anchor(let anchor): return anchor
-                    case .document(let id, let section):
-                        return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
-                    }
-                }()
-                guard xref.isCanonicalLabel,
-                      let open = label.firstIndex(of: "["),
-                      let close = label.lastIndex(of: "]"),
-                      open < close else {
-                    return label
-                }
-                let before = label[label.startIndex..<open]
-                let inner = label[label.index(after: open)..<close]
-                let after = label[label.index(after: close)...]
-                return "\(before)\u{FFFC}\(inner)\(after)"
+                let display = xref.display
+                guard let chip = display.chip else { return display.text }
+                return String(display.text[display.text.startIndex..<chip.lowerBound])
+                    + chipPrefix
+                    + String(display.text[chip.lowerBound...])
             case .lineBreak:
                 return "\n"
             }
@@ -154,5 +159,64 @@ struct BuilderStructureTests {
         let built = DocumentTextBuilder.build(try Fixtures.rfc2119(), style: style)
         #expect(built.text.length > 0)
         #expect(!built.anchors.entries.isEmpty)
+    }
+
+    /// The abstract introduces the document rather than being part of it, so it is
+    /// set smaller and quieter than the body prose that follows.
+    @Test func theAbstractIsSetAsAStandfirst() throws {
+        let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+        let abstract = try #require(try Fixtures.rfc8999().header.abstract.compactMap { block -> String? in
+            guard case .paragraph(let paragraph) = block else { return nil }
+            return paragraph.plainText
+        }.first)
+        let abstractOffset = try Fixtures.offset(of: abstract, in: built.text)
+        let bodyOffset = try Fixtures.offset(of: "QUIC is a connection-oriented protocol", in: built.text)
+
+        let abstractFont = try #require(built.text.attribute(.font, at: abstractOffset, effectiveRange: nil) as? PlatformFont)
+        let bodyFont = try #require(built.text.attribute(.font, at: bodyOffset, effectiveRange: nil) as? PlatformFont)
+        #expect(abstractFont.pointSize < bodyFont.pointSize)
+
+        let abstractColour = built.text.attribute(.foregroundColor, at: abstractOffset, effectiveRange: nil) as? PlatformColor
+        #expect(abstractColour == RFCColors.secondaryLabel)
+        #expect(built.text.attribute(.foregroundColor, at: bodyOffset, effectiveRange: nil) as? PlatformColor == RFCColors.label)
+    }
+
+    /// The heading stays a heading: full size, anchored, and in the rotor.
+    @Test func theAbstractHeadingIsNotDimmed() throws {
+        let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+        let offset = try Fixtures.offset(of: "Abstract", in: built.text)
+        #expect(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont == style.headingFont(depth: 1))
+        #expect(built.text.attribute(.foregroundColor, at: offset, effectiveRange: nil) as? PlatformColor == RFCColors.label)
+    }
+
+    /// The bibliography leaves the body entirely — heading and all, so no empty
+    /// "9. References" is left behind where the rows used to be.
+    @Test func theBibliographyIsNotInTheBody() throws {
+        let document = try Fixtures.rfc8999()
+        let built = DocumentTextBuilder.build(document, style: style)
+        let skipped = document.allSections.filter { DocumentTextBuilder.holdsOnlyReferences($0) }
+        #expect(!skipped.isEmpty, "RFC 8999 has a references section to skip")
+        for section in skipped {
+            #expect(!built.text.string.contains(section.displayTitle), "\(section.displayTitle) belongs in the panel")
+            #expect(built.anchors.offset(of: section.anchor) == nil)
+        }
+    }
+
+    /// A section that merely *contains* references alongside prose is still prose.
+    @Test func onlyAPureBibliographySectionIsSkipped() {
+        let entry = Reference(anchor: "RFC2119", title: "Key words")
+        let pure = Section(anchor: "s1", title: "References", blocks: [.references(ReferenceList(title: "References", entries: [entry]))])
+        let mixed = Section(
+            anchor: "s2",
+            title: "Notes",
+            blocks: [.paragraph(Paragraph(text: "prose")), .references(ReferenceList(title: "Notes", entries: [entry]))]
+        )
+        let parent = Section(anchor: "s3", title: "References", subsections: [pure])
+        let empty = Section(anchor: "s4", title: "Placeholder")
+
+        #expect(DocumentTextBuilder.holdsOnlyReferences(pure))
+        #expect(!DocumentTextBuilder.holdsOnlyReferences(mixed))
+        #expect(DocumentTextBuilder.holdsOnlyReferences(parent), "a parent of bibliography subsections goes too")
+        #expect(!DocumentTextBuilder.holdsOnlyReferences(empty), "an empty section is not a bibliography")
     }
 }
