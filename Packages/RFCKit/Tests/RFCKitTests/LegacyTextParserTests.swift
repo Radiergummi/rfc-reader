@@ -452,6 +452,35 @@ struct LegacyTextCorpusFindingsTests {
         #expect(intro.blocks.count == 2, "no line survives as its own block")
     }
 
+    /// RFC 757 is typeset justified: every line is padded with extra spaces between words
+    /// to reach a common right margin. Those runs of spaces are what tells prose from
+    /// artwork everywhere else, so all 60-odd of its paragraphs were preformatted blocks.
+    @Test func justifiedProseIsNotArtwork() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc757.txt"))
+        #expect(document.header.title == "A Suggested Solution to the Naming, Addressing, and Delivery Problem for ARPAnet Message Systems")
+
+        var paragraphs = 0
+        var artwork = 0
+        for block in document.allSections.flatMap(\.blocks) {
+            switch block {
+            case .paragraph: paragraphs += 1
+            case .preformatted: artwork += 1
+            default: break
+            }
+        }
+        // What is left as artwork is genuine: diagrams, and the paragraphs whose footnote
+        // markers sit on a line of their own.
+        #expect(paragraphs > artwork, "got \(paragraphs) paragraphs against \(artwork) artwork blocks")
+
+        // The padding is collapsed on reflow, so the text reads normally.
+        let introduction = try #require(document.section(number: "1"))
+        guard case .paragraph(let first)? = introduction.blocks.first else {
+            Issue.record("expected the introduction to start with a paragraph")
+            return
+        }
+        #expect(first.plainText == "The current ARPAnet message handling scheme has evolved from rather informal, decentralized beginnings. Early developers took advantage of pre-existing tools -- TECO, FTP -- in order to implement their first systems. Later, protocols were developed to codify the conventions already in use. While these conventions have been able to support an amazing variety and amount of service, they have a number of shortcomings.")
+    }
+
     @Test func overstrikesAndControlBytesAreRemoved() {
         let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
         let underlined = "_\u{08}R_\u{08}F_\u{08}C"

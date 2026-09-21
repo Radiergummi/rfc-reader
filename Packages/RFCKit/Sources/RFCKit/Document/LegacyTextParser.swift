@@ -501,13 +501,82 @@ public struct LegacyTextParser: Sendable {
         let indent = (lines.count > 1 ? lines[1] : first).leadingSpaceCount
         let firstLineIndent = first.leadingSpaceCount - indent
         guard indent <= 6, (0...8).contains(firstLineIndent) else { return false }
+        let justified = isJustified(lines)
         for (offset, line) in lines.enumerated() {
             if offset > 0, line.leadingSpaceCount != indent { return false }
             let content = line.trimmingCharacters(in: .whitespaces)
             if content.contains(artworkPattern) { return false }
-            if content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
+            if !justified, content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
         }
         return true
+    }
+
+    /// The early RFCs typeset with justified text (757, 806, 841, 909, 1341) pad the gaps
+    /// between words until every line reaches a common right margin. Those runs of spaces
+    /// are what marks artwork everywhere else, so all of their prose was preformatted.
+    ///
+    /// Four tells have to agree, because a table, a definition list or a block of code
+    /// satisfies any one of them on its own: every line but the last ends at the same
+    /// margin, no gutter of blank columns runs through the block, the padding is spread
+    /// over most of the lines rather than sitting in one column, and the words read like
+    /// sentences rather than identifiers.
+    private static func isJustified(_ lines: [String]) -> Bool {
+        guard lines.count >= 3 else { return false }
+        let widths = lines.map { $0.reversed().drop(while: \.isWhitespace).count }
+        guard let margin = widths.first, let last = widths.last, margin >= 60 else { return false }
+        guard widths.dropLast().allSatisfy({ $0 == margin }), last <= margin else { return false }
+        guard !hasColumnGutter(lines) else { return false }
+        let padded = lines.dropLast().count { internalGapCount($0) >= 2 }
+        guard padded * 2 >= lines.count - 1 else { return false }
+        return readsLikeSentences(lines)
+    }
+
+    /// A run of two or more columns left blank by every line: the gutter of a two-column
+    /// layout. Justified prose has its gaps in a different place on every line.
+    private static func hasColumnGutter(_ lines: [String]) -> Bool {
+        let rows = lines.map(Array.init)
+        let start = rows.map { $0.prefix(while: \.isWhitespace).count }.min() ?? 0
+        let end = rows.map { $0.reversed().drop(while: \.isWhitespace).count }.min() ?? 0
+        guard start < end else { return false }
+        var run = 0
+        for column in start..<end {
+            guard rows.allSatisfy({ column >= $0.count || $0[column].isWhitespace }) else {
+                run = 0
+                continue
+            }
+            run += 1
+            if run >= 2 { return true }
+        }
+        return false
+    }
+
+    /// Runs of two or more spaces sitting between two non-space characters.
+    private static func internalGapCount(_ line: String) -> Int {
+        var count = 0
+        var run = 0
+        var seenText = false
+        for character in line {
+            if character.isWhitespace {
+                if seenText { run += 1 }
+            } else {
+                if run >= 2 { count += 1 }
+                run = 0
+                seenText = true
+            }
+        }
+        return count
+    }
+
+    /// Mostly ordinary lower-case words, which a listing of identifiers, addresses or
+    /// numbers does not have however neatly its columns happen to line up.
+    private static func readsLikeSentences(_ lines: [String]) -> Bool {
+        let words = lines.flatMap { $0.split(separator: " ") }
+        guard !words.isEmpty else { return false }
+        let ordinary = words.count { word in
+            guard word.first?.isLowercase == true else { return false }
+            return word.allSatisfy { $0.isLetter || "'-.,;:)".contains($0) }
+        }
+        return ordinary * 5 >= words.count * 3
     }
 
     private static func classify(_ block: RawBlock, linker: InlineLinker) -> [Block] {
