@@ -274,6 +274,12 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
 }
 #endif
 
-extension RFCTextViewCoordinator: NSTextLayoutManagerDelegate {
-    // Filled in by Task 10; until then the default fragment is what we want.
+extension RFCTextViewCoordinator: @MainActor NSTextLayoutManagerDelegate {
+    func textLayoutManager(
+        _ textLayoutManager: NSTextLayoutManager,
+        textLayoutFragmentFor location: any NSTextLocation,
+        in textElement: NSTextElement
+    ) -> NSTextLayoutFragment {
+        RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
+    }
 }
