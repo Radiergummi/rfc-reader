@@ -15,6 +15,7 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | tail -1)"
       - run: swift --version
       - run: swift test --package-path Packages/RFCKit
+      - run: make test-app
 
   app-build:
     name: App build (macOS + iOS)

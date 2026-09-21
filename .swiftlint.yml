@@ -8,6 +8,8 @@ included:
   - App
   - Packages/RFCKit/Sources
   - Packages/RFCKit/Tests
+  - Packages/RFCReaderKit/Sources
+  - Packages/RFCReaderKit/Tests
   - Tools/corpus-build/Sources
 
 disabled_rules:

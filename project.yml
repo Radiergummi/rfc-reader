@@ -19,6 +19,8 @@ settings:
 packages:
   RFCKit:
     path: Packages/RFCKit
+  RFCReaderKit:
+    path: Packages/RFCReaderKit
 
 targets:
   RFCReader:
@@ -28,6 +30,7 @@ targets:
       - path: App/RFCReader
     dependencies:
       - package: RFCKit
+      - package: RFCReaderKit
     info:
       path: App/RFCReader/Info.plist
       properties:
