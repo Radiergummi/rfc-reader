@@ -69,6 +69,10 @@ extension DocumentTextBuilder {
             switch block {
             case .paragraph(let paragraph):
                 appendParagraph(paragraph, indent: indent)
+            case .list(let list):
+                appendList(list, indent: indent)
+            case .definitionList(let items):
+                appendDefinitionList(items, indent: indent)
             default:
                 // Lists, verbatim, tables, figures, quotes and references arrive in
                 // Tasks 5 to 8; until then they emit nothing.
