@@ -66,13 +66,6 @@ final class LibraryModel {
     private(set) var indexState: IndexState = .idle
     private(set) var recent: [RecentRFC] = []
 
-    var filter: LibraryFilter = .all
-    var searchText = ""
-    var selection: DocumentID?
-    /// A section to scroll to once the selected document has loaded.
-    var pendingSection: String?
-    var isShowingGoToSheet = false
-
     private let client = RFCEditorClient()
     private let store = DocumentStore()
     private var search: IndexSearch?
@@ -113,7 +106,7 @@ final class LibraryModel {
         self.index = index
         self.search = IndexSearch(index: index)
         self.topWorkingGroups = Self.workingGroups(in: index)
-        listCache = nil
+        listCache.removeAll()
         indexState = .ready(count: index.rfcs.count, updatedAt: updatedAt)
     }
 
@@ -138,11 +131,12 @@ final class LibraryModel {
         return counts.sorted { $0.value > $1.value }.prefix(12).map(\.key)
     }
 
-    /// Everything the list is a function of. `list` is read from `RFCListView.body`,
-    /// which SwiftUI evaluates far more often than any of this changes -- twice per
-    /// pass, several passes per click -- so the answer is remembered against its
-    /// inputs. Without it a single filter change ran the full-text scan a dozen times.
-    private struct ListKey: Equatable {
+    /// Everything the list is a function of.
+    ///
+    /// The filter and the query are passed in rather than read off `self`: they belong
+    /// to one tab (`NavigationModel`), and two tabs may be listing different things at
+    /// the same time. Gathering them into one value also gives the cache its key.
+    private struct ListKey: Hashable {
         let filter: LibraryFilter
         let query: String
         let bookmarked: Set<Int>
@@ -150,9 +144,27 @@ final class LibraryModel {
         let downloaded: Set<Int>
     }
 
-    private var listCache: (key: ListKey, value: [RFCMetadata])?
+    /// Answers remembered against their inputs.
+    ///
+    /// `list` is read from `RFCListView.body`, which SwiftUI evaluates far more often
+    /// than any of these inputs change -- twice per pass, several passes per click.
+    /// Uncached, one filter change ran the full-text scan a dozen times over, and that
+    /// scan measures 107 ms against the real index.
+    ///
+    /// A dictionary rather than a single slot because tabs have their own filters now:
+    /// with one slot, two tabs listing different things evict each other on every pass
+    /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
+    /// -- this is a cache, so losing an entry costs time, never correctness.
+    private var listCache: [ListKey: [RFCMetadata]] = [:]
+    private static let listCacheLimit = 8
 
-    func list(bookmarked: Set<Int>, recentlyRead: [Int], downloaded: Set<Int>) -> [RFCMetadata] {
+    func list(
+        filter: LibraryFilter,
+        searchText: String,
+        bookmarked: Set<Int>,
+        recentlyRead: [Int],
+        downloaded: Set<Int>
+    ) -> [RFCMetadata] {
         let key = ListKey(
             filter: filter,
             query: searchText.trimmingCharacters(in: .whitespaces),
@@ -160,14 +172,16 @@ final class LibraryModel {
             recentlyRead: recentlyRead,
             downloaded: downloaded
         )
-        if let listCache, listCache.key == key {
-            return listCache.value
-        }
+        if let hit = listCache[key] { return hit }
         let computed = computeList(key)
-        listCache = (key, computed)
+        if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
+        listCache[key] = computed
         return computed
     }
 
+    /// Reads every input off the key, so the cache cannot go stale against something
+    /// this consults but the key does not carry. The one input not in the key is
+    /// `index`, which is why `apply` empties the cache.
     private func computeList(_ key: ListKey) -> [RFCMetadata] {
         let filter = key.filter
         guard let index else { return [] }
@@ -189,21 +203,46 @@ final class LibraryModel {
         return search.search(key.query, limit: 500).map(\.rfc).filter { allowed.contains($0.number) }
     }
 
-    // MARK: - Navigation
+    // MARK: - Scene routing
 
-    func open(_ link: RFCLink) {
-        var id = link.id
-        // BCP/STD links open their first member RFC.
-        if id.series != .rfc, let first = index?.series(id)?.members.first {
-            id = first
-        }
-        pendingSection = link.section
-        selection = id
-        filter = .all
+    /// The open scenes, most recently used first.
+    ///
+    /// Weak, because a scene's lifetime is its window's and nothing here should keep a
+    /// closed tab alive. This registry exists because `onOpenURL` is delivered to
+    /// *every* open scene: without one place to decide, a deep link would open in all
+    /// of them at once.
+    private var scenes: [WeakScene] = []
+
+    private struct WeakScene {
+        weak var model: NavigationModel?
     }
 
-    func open(_ id: DocumentID, section: String? = nil) {
-        open(RFCLink(id: id, section: section))
+    func register(_ scene: NavigationModel) {
+        scenes.removeAll { $0.model == nil || $0.model === scene }
+        scenes.insert(WeakScene(model: scene), at: 0)
+    }
+
+    func unregister(_ scene: NavigationModel) {
+        scenes.removeAll { $0.model == nil || $0.model === scene }
+    }
+
+    /// Marks a scene as the one the reader is using, which is where an untargeted
+    /// link lands.
+    func activate(_ scene: NavigationModel) {
+        guard scenes.first?.model !== scene else { return }
+        register(scene)
+    }
+
+    /// Sends `link` to exactly one scene: the tab already showing that document if
+    /// there is one, otherwise the most recently used tab.
+    ///
+    /// Focusing that tab's window when it is not the frontmost one needs its
+    /// `NSWindow`, which SwiftUI does not hand out; the state is correct either way,
+    /// and the window follows in a later change.
+    func route(_ link: RFCLink) {
+        scenes.removeAll { $0.model == nil }
+        let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
+        target?.open(link, in: index)
     }
 
     // MARK: - Documents

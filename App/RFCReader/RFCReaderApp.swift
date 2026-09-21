@@ -17,8 +17,12 @@ struct RFCReaderApp: App {
                 .onOpenURL { url in
                     // rfc://9110/section/4.2, plus rfc-editor.org and datatracker links
                     // handed over via the share sheet or Universal Links later on.
+                    //
+                    // Every open scene receives this, so the routing decision cannot be
+                    // made here: `LibraryModel` holds the registry and picks exactly one
+                    // scene to act on it.
                     if let link = RFCLink(url: url) {
-                        library.open(link)
+                        library.route(link)
                     }
                 }
         }
@@ -38,11 +42,25 @@ struct RFCReaderApp: App {
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
     @FocusedValue(\.openDocumentAction) private var openDocument
+    /// The focused scene's navigation, so Back and Forward act on the tab the reader
+    /// is actually looking at rather than on whichever one registered last.
+    @FocusedValue(\.navigationModel) private var navigation
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("Go to RFC…") { openDocument?() }
                 .keyboardShortcut("l", modifiers: .command)
+        }
+        CommandGroup(before: .sidebar) {
+            Section {
+                // Cmd+arrow, as Safari and Finder bind it.
+                Button("Back") { navigation?.goBack() }
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                    .disabled(navigation?.canGoBack != true)
+                Button("Forward") { navigation?.goForward() }
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                    .disabled(navigation?.canGoForward != true)
+            }
         }
         #if os(macOS)
         // `NSTextView.usesFindBar` puts a find bar in the scroll view, but nothing
@@ -91,10 +109,19 @@ struct OpenDocumentActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct NavigationModelKey: FocusedValueKey {
+    typealias Value = NavigationModel
+}
+
 extension FocusedValues {
     var openDocumentAction: OpenDocumentActionKey.Value? {
         get { self[OpenDocumentActionKey.self] }
         set { self[OpenDocumentActionKey.self] = newValue }
+    }
+
+    var navigationModel: NavigationModel? {
+        get { self[NavigationModelKey.self] }
+        set { self[NavigationModelKey.self] = newValue }
     }
 }
 

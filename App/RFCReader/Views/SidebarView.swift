@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
 
     var body: some View {
         List(selection: selection) {
@@ -30,7 +31,7 @@ struct SidebarView: View {
                 Section("Just Published") {
                     ForEach(library.recent.prefix(5)) { recent in
                         Button {
-                            library.open(recent.id)
+                            navigation.open(recent.id, in: library.index)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(recent.id.displayName).font(.caption).foregroundStyle(.secondary)
@@ -53,8 +54,8 @@ struct SidebarView: View {
     /// should leave the current filter in place rather than clear it.
     private var selection: Binding<LibraryFilter?> {
         Binding(
-            get: { library.filter },
-            set: { if let new = $0 { library.filter = new } }
+            get: { navigation.filter },
+            set: { if let new = $0 { navigation.filter = new } }
         )
     }
 

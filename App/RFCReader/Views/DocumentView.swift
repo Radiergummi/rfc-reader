@@ -6,6 +6,7 @@ import SwiftUI
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var systemOpenURL
     @Query private var bookmarks: [Bookmark]
@@ -86,19 +87,16 @@ struct DocumentView: View {
                         groups: referenceGroups,
                         tab: $inspectorTab,
                         current: visibleAnchor,
-                        selectSection: { anchor in
-                            library.pendingSection = nil
-                            scrollTarget = anchor
-                        },
-                        openDocument: { library.open($0) }
+                        selectSection: { anchor in navigation.jump(toSection: anchor) },
+                        openDocument: { navigation.open($0, in: library.index) }
                     )
                     .inspectorColumnWidth(min: 260, ideal: 320)
                 }
             }
             .task(id: id) { await load() }
             .task(id: buildInputs) { await rebuild() }
-            .onChange(of: library.pendingSection) { _, section in
-                jump(toSection: section)
+            .onChange(of: navigation.scrollRequest) { _, request in
+                jump(toSection: request?.section)
             }
             .onDisappear(perform: saveReadingPosition)
             .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -128,22 +126,26 @@ struct DocumentView: View {
                 lastVisibleAnchor: lastVisibleAnchor,
                 scrollTarget: scrollTarget,
                 onScrollHandled: { scrollTarget = nil },
-                onVisibleAnchorChange: { visibleAnchor = $0 },
+                onVisibleAnchorChange: {
+                    visibleAnchor = $0
+                    // Recorded on the history entry when navigating away, so coming
+                    // back returns here rather than to the top of the document.
+                    navigation.visiblePosition = $0
+                },
                 onLink: { openInApp($0) },
                 headerIdentity: headerIdentity,
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
                 header: {
-                    DocumentHeaderView(identity: headerIdentity)
-                        .environment(library)
+                    DocumentHeaderView(library: library, navigation: navigation, identity: headerIdentity)
                         .padding(.top, 16)
                         .padding(.bottom, 12)
                 }
             )
             .onAppear {
                 // Deep link or restored reading position.
-                if library.pendingSection != nil {
-                    jump(toSection: library.pendingSection)
+                if let request = navigation.scrollRequest {
+                    jump(toSection: request.section)
                 } else if let saved = savedPosition(), document.section(anchor: saved) != nil {
                     scrollTarget = saved
                 }
@@ -268,12 +270,10 @@ struct DocumentView: View {
         if let place { scrollTarget = place }
     }
 
+    /// Resolves a section number or an anchor to the anchor the reader scrolls to.
     private func jump(toSection section: String?) {
         guard let section, let document else { return }
-        if let target = document.section(number: section) ?? document.section(anchor: section) {
-            scrollTarget = target.anchor
-        }
-        library.pendingSection = nil
+        scrollTarget = (document.section(number: section) ?? document.section(anchor: section))?.anchor ?? section
     }
 
     /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
@@ -286,14 +286,14 @@ struct DocumentView: View {
     /// not `Equatable`.
     private func openInApp(_ url: URL) -> Bool {
         if let anchor = DocumentTextBuilder.anchor(from: url) {
-            scrollTarget = anchor
+            navigation.jump(toSection: anchor)
             return true
         }
         if let link = RFCLink(url: url) {
             if link.id == id, let section = link.section {
-                jump(toSection: section)
+                navigation.jump(toSection: section)
             } else {
-                library.open(link)
+                navigation.open(link, in: library.index)
             }
             return true
         }
@@ -341,6 +341,11 @@ struct DocumentView: View {
 /// it. The abstract is no longer here; it is the first prose in the storage, which is
 /// what puts the banner between the title and the abstract as `VISION.md` asks.
 struct DocumentHeaderView: View {
+    /// Passed down for the same reason `StatusBanner` takes them: this whole subtree
+    /// is hosted outside the SwiftUI hierarchy.
+    let library: LibraryModel
+    let navigation: NavigationModel
+
     /// Exactly what the body below reads, and nothing else.
     ///
     /// The header is hosted in a `UIHostingController`/`NSHostingController` that
@@ -396,7 +401,7 @@ struct DocumentHeaderView: View {
                     .font(.subheadline)
             }
             if let metadata = identity.metadata {
-                StatusBanner(metadata: metadata)
+                StatusBanner(library: library, navigation: navigation, metadata: metadata)
                     .padding(.top, 4)
             }
         }
@@ -411,7 +416,15 @@ struct DocumentHeaderView: View {
 
 /// The single most important piece of context: is this still the current document?
 struct StatusBanner: View {
-    @Environment(LibraryModel.self) private var library
+    /// Handed over rather than read from the environment.
+    ///
+    /// This view is hosted in an `NSHostingController`/`UIHostingController` in the
+    /// text view's top inset — outside the SwiftUI tree that `ContentView` injects
+    /// into — so an `@Environment` lookup here is a runtime trap waiting to fire
+    /// rather than a compile-time requirement. The two models arrive as properties so
+    /// the compiler is the thing that notices when a call site forgets one.
+    let library: LibraryModel
+    let navigation: NavigationModel
     let metadata: RFCMetadata
 
     var body: some View {
@@ -440,7 +453,7 @@ struct StatusBanner: View {
             Image(systemName: symbol).foregroundStyle(tint)
             Text(title).fontWeight(.medium)
             ForEach(ids, id: \.self) { id in
-                Button(id.displayName) { library.open(id) }
+                Button(id.displayName) { navigation.open(id, in: library.index) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
             }

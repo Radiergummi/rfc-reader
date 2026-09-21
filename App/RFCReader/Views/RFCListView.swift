@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RFCListView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
     @Query(sort: \Bookmark.createdAt, order: .reverse) private var bookmarks: [Bookmark]
     @Query(sort: \ReadingPosition.updatedAt, order: .reverse) private var positions: [ReadingPosition]
     @State private var downloaded: Set<Int> = []
@@ -17,16 +18,27 @@ struct RFCListView: View {
 
     private var rfcs: [RFCMetadata] {
         library.list(
+            filter: navigation.filter,
+            searchText: navigation.searchText,
             bookmarked: bookmarkedNumbers,
             recentlyRead: positions.map(\.number),
             downloaded: downloaded
         )
     }
 
+    /// Selecting a row is a navigation, so it goes through the history rather than
+    /// assigning the selection behind its back.
+    private var selectionBinding: Binding<DocumentID?> {
+        Binding(
+            get: { navigation.selection },
+            set: { if let id = $0 { navigation.open(id, in: library.index) } }
+        )
+    }
+
     var body: some View {
-        @Bindable var library = library
+        @Bindable var navigation = navigation
         let bookmarked = bookmarkedNumbers
-        List(selection: $library.selection) {
+        List(selection: selectionBinding) {
             ForEach(rfcs) { rfc in
                 RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
                     .tag(rfc.id)
@@ -35,12 +47,12 @@ struct RFCListView: View {
         .listStyle(.plain)
         .overlay {
             if rfcs.isEmpty, case .ready = library.indexState {
-                ContentUnavailableView.search(text: library.searchText)
+                ContentUnavailableView.search(text: navigation.searchText)
             }
         }
-        .searchable(text: $library.searchText, prompt: "Search")
-        .navigationTitle(library.filter.title)
-        .task(id: library.filter) {
+        .searchable(text: $navigation.searchText, prompt: "Search")
+        .navigationTitle(navigation.filter.title)
+        .task(id: navigation.filter) {
             downloaded = await library.downloadedNumbers()
         }
     }
