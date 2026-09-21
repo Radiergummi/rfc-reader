@@ -16,6 +16,24 @@ jobs:
       - run: swift --version
       - run: swift test --package-path Packages/RFCKit
 
+  app-build:
+    name: App build (macOS + iOS)
+    # macos-26 is the current macos-latest: Xcode 26.6 and iOS 26 simulators,
+    # which is what project.yml's deployment targets need. Pinned rather than
+    # -latest so a runner rollover cannot silently drop the toolchain.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      # Compiling is the point, so both builds go unsigned; project.yml ships
+      # without a DEVELOPMENT_TEAM and the Makefile turns signing off without one.
+      - name: Build for macOS
+        run: make build-app
+      - name: Build for the iOS Simulator
+        run: make build-ios
+
   rfckit-linux:
     name: RFCKit tests (Linux)
     runs-on: ubuntu-24.04
