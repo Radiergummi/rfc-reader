@@ -66,13 +66,6 @@ final class LibraryModel {
     private(set) var indexState: IndexState = .idle
     private(set) var recent: [RecentRFC] = []
 
-    var filter: LibraryFilter = .all
-    var searchText = ""
-    var selection: DocumentID?
-    /// A section to scroll to once the selected document has loaded.
-    var pendingSection: String?
-    var isShowingGoToSheet = false
-
     private let client = RFCEditorClient()
     private let store = DocumentStore()
     private var search: IndexSearch?
@@ -131,7 +124,16 @@ final class LibraryModel {
         return counts.sorted { $0.value > $1.value }.prefix(12).map(\.key)
     }
 
-    func list(bookmarked: Set<Int>, recentlyRead: [Int], downloaded: Set<Int>) -> [RFCMetadata] {
+    /// The filter and the query are passed in rather than read off `self`: they belong
+    /// to one tab (`NavigationModel`), and two tabs may be listing different things at
+    /// the same time.
+    func list(
+        filter: LibraryFilter,
+        searchText: String,
+        bookmarked: Set<Int>,
+        recentlyRead: [Int],
+        downloaded: Set<Int>
+    ) -> [RFCMetadata] {
         guard let index else { return [] }
         let base: [RFCMetadata]
         switch filter {
@@ -152,21 +154,46 @@ final class LibraryModel {
         return search.search(query, limit: 500).map(\.rfc).filter { allowed.contains($0.number) }
     }
 
-    // MARK: - Navigation
+    // MARK: - Scene routing
 
-    func open(_ link: RFCLink) {
-        var id = link.id
-        // BCP/STD links open their first member RFC.
-        if id.series != .rfc, let first = index?.series(id)?.members.first {
-            id = first
-        }
-        pendingSection = link.section
-        selection = id
-        filter = .all
+    /// The open scenes, most recently used first.
+    ///
+    /// Weak, because a scene's lifetime is its window's and nothing here should keep a
+    /// closed tab alive. This registry exists because `onOpenURL` is delivered to
+    /// *every* open scene: without one place to decide, a deep link would open in all
+    /// of them at once.
+    private var scenes: [WeakScene] = []
+
+    private struct WeakScene {
+        weak var model: NavigationModel?
     }
 
-    func open(_ id: DocumentID, section: String? = nil) {
-        open(RFCLink(id: id, section: section))
+    func register(_ scene: NavigationModel) {
+        scenes.removeAll { $0.model == nil || $0.model === scene }
+        scenes.insert(WeakScene(model: scene), at: 0)
+    }
+
+    func unregister(_ scene: NavigationModel) {
+        scenes.removeAll { $0.model == nil || $0.model === scene }
+    }
+
+    /// Marks a scene as the one the reader is using, which is where an untargeted
+    /// link lands.
+    func activate(_ scene: NavigationModel) {
+        guard scenes.first?.model !== scene else { return }
+        register(scene)
+    }
+
+    /// Sends `link` to exactly one scene: the tab already showing that document if
+    /// there is one, otherwise the most recently used tab.
+    ///
+    /// Focusing that tab's window when it is not the frontmost one needs its
+    /// `NSWindow`, which SwiftUI does not hand out; the state is correct either way,
+    /// and the window follows in a later change.
+    func route(_ link: RFCLink) {
+        scenes.removeAll { $0.model == nil }
+        let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
+        target?.open(link, in: index)
     }
 
     // MARK: - Documents

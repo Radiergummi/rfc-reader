@@ -21,7 +21,9 @@ struct OpenRFCIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        LibraryModel.shared.open(.rfc(number), section: section)
+        // Routed rather than assigned: the intent has no scene of its own, so the
+        // library decides which open tab answers it.
+        LibraryModel.shared.route(RFCLink(id: .rfc(number), section: section))
         return .result()
     }
 }

@@ -5,9 +5,14 @@ import SwiftUI
 struct ContentView: View {
     @Environment(LibraryModel.self) private var library
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// This scene's own navigation state. `@State` here is what makes a tab a tab:
+    /// every window and tab instantiates `ContentView` afresh, so each gets its own
+    /// selection, filter, search text and back/forward stack. Shared library state —
+    /// the index, the cache — stays on the environment's `LibraryModel`.
+    @State private var navigation = NavigationModel()
 
     var body: some View {
-        @Bindable var library = library
+        @Bindable var navigation = navigation
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -15,24 +20,60 @@ struct ContentView: View {
             RFCListView()
                 .navigationSplitViewColumnWidth(min: 280, ideal: 360)
         } detail: {
-            if let selection = library.selection {
+            if let selection = navigation.selection {
                 DocumentView(id: selection)
                     .id(selection)
             } else {
                 EmptyDetailView()
             }
         }
-        .sheet(isPresented: $library.isShowingGoToSheet) {
+        .environment(navigation)
+        // On the split view rather than on `DocumentView`: macOS gives the detail
+        // column no leading toolbar slot — a `.navigation` item declared down there is
+        // silently dropped — and scene-level navigation belongs beside the sidebar
+        // toggle anyway, not with the document's own actions.
+        //
+        // Shown only once there is somewhere to go. An app that has opened one
+        // document has no history, and a pair of permanently dimmed arrows is just
+        // furniture.
+        .toolbar {
+            if navigation.canGoBack || navigation.canGoForward {
+                ToolbarItem(placement: .navigation) {
+                    ControlGroup {
+                        Button {
+                            navigation.goBack()
+                        } label: {
+                            Label("Back", systemImage: "chevron.backward")
+                        }
+                        .disabled(!navigation.canGoBack)
+
+                        Button {
+                            navigation.goForward()
+                        } label: {
+                            Label("Forward", systemImage: "chevron.forward")
+                        }
+                        .disabled(!navigation.canGoForward)
+                    }
+                    .controlGroupStyle(.navigation)
+                }
+            }
+        }
+        .onAppear { library.register(navigation) }
+        .onDisappear { library.unregister(navigation) }
+        // Any navigation in this tab makes it the one an untargeted deep link lands in.
+        .onChange(of: navigation.selection) { library.activate(navigation) }
+        .sheet(isPresented: $navigation.isShowingGoToSheet) {
             GoToDocumentSheet()
         }
         .focusedSceneValue(\.openDocumentAction) {
-            library.isShowingGoToSheet = true
+            navigation.isShowingGoToSheet = true
         }
+        .focusedSceneValue(\.navigationModel, navigation)
     }
 }
 
 struct EmptyDetailView: View {
-    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
 
     var body: some View {
         ContentUnavailableView {
@@ -40,7 +81,7 @@ struct EmptyDetailView: View {
         } description: {
             Text("Browse the sidebar, search, or jump straight to a number.")
         } actions: {
-            Button("Go to RFC…") { library.isShowingGoToSheet = true }
+            Button("Go to RFC…") { navigation.isShowingGoToSheet = true }
                 .keyboardShortcut("l", modifiers: .command)
         }
     }
@@ -49,6 +90,7 @@ struct EmptyDetailView: View {
 /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, or any RFC Editor / Datatracker URL.
 struct GoToDocumentSheet: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @FocusState private var focused: Bool
@@ -92,7 +134,7 @@ struct GoToDocumentSheet: View {
 
     private func open() {
         guard let link = resolved else { return }
-        library.open(link)
+        navigation.open(link, in: library.index)
         dismiss()
     }
 }
