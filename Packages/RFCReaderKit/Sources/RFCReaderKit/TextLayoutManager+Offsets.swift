@@ -28,14 +28,19 @@ extension NSTextLayoutManager {
         location(documentRange.location, offsetBy: offset)
     }
 
-    /// The document-relative character range of `element`, which is what every
+    /// The document-relative character range of `textRange`, which is what every
     /// `FragmentGeometry` call is expressed in.
-    public func range(of element: NSTextElement) -> NSRange? {
-        guard let elementRange = element.elementRange else { return nil }
-        let start = offset(of: elementRange.location)
-        let end = offset(of: elementRange.endLocation)
+    public func range(of textRange: NSTextRange) -> NSRange? {
+        let start = offset(of: textRange.location)
+        let end = offset(of: textRange.endLocation)
         guard start >= 0, end >= start else { return nil }
         return NSRange(location: start, length: end - start)
+    }
+
+    /// The same, for an element that knows its own range.
+    public func range(of element: NSTextElement) -> NSRange? {
+        guard let elementRange = element.elementRange else { return nil }
+        return range(of: elementRange)
     }
 
     /// The text range spanning `range`, in document-relative character offsets.

@@ -39,7 +39,6 @@ struct DocumentView: View {
     /// The same value, for the parts of `body` that have to redraw when it changes:
     /// the table of contents' highlight and the "copy link to this section" item.
     @State private var visibleAnchor: String?
-    @State private var copiedStyle: CitationStyle?
     /// The text column this view's width implies, and nil until a width is known.
     ///
     /// Artwork scaling and table shape are measured against the column, so the column
@@ -81,9 +80,8 @@ struct DocumentView: View {
             #endif
             .toolbar { toolbar }
             .inspector(isPresented: $showTableOfContents) {
-                if let document {
+                if document != nil {
                     DocumentInspector(
-                        document: document,
                         sections: bodySections,
                         groups: referenceGroups,
                         tab: $inspectorTab,
@@ -124,6 +122,7 @@ struct DocumentView: View {
             OriginalTextView(text: originalText, fontSize: fontSize)
                 .task { originalText = try? await library.originalText(for: id) }
         } else if let document, let built {
+            let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
             RFCTextView(
                 built: built,
                 lastVisibleAnchor: lastVisibleAnchor,
@@ -131,11 +130,11 @@ struct DocumentView: View {
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: { visibleAnchor = $0 },
                 onLink: { openInApp($0) },
-                headerIdentity: DocumentHeaderView.Identity(header: document.header, metadata: metadata),
+                headerIdentity: headerIdentity,
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
                 header: {
-                    DocumentHeaderView(header: document.header, metadata: metadata)
+                    DocumentHeaderView(identity: headerIdentity)
                         .environment(library)
                         .padding(.top, 16)
                         .padding(.bottom, 12)
@@ -259,7 +258,11 @@ struct DocumentView: View {
         // builder just emitted — rather than re-deriving "is this a bibliography?"
         // from the model and hoping the two rules stay in step. A contents row that
         // has no anchor is a destination `scroll(to:)` cannot reach.
-        bodySections = document.allSections.filter { rebuilt.anchors.sections.offset(of: $0.anchor) != nil }
+        // Taken once: `AnchorIndex.sections` filters, sorts and re-indexes every
+        // anchor in the document, so asking inside the filter would rebuild the
+        // whole index once per section.
+        let sections = rebuilt.anchors.sections
+        bodySections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
         // Only a restyle has a place to restore; a first build lets `onAppear` decide
         // between a deep link and the saved reading position.
         if let place { scrollTarget = place }
@@ -309,7 +312,6 @@ struct DocumentView: View {
         guard let metadata else { return }
         let section = visibleAnchor.flatMap { document?.section(anchor: $0)?.number }
         Clipboard.copy(CitationFormatter().cite(metadata, section: style == .bibtex ? nil : section, style: style))
-        copiedStyle = style
     }
 
     private func savedPosition() -> String? {
@@ -345,18 +347,16 @@ struct DocumentHeaderView: View {
     /// sits outside SwiftUI's diffing, so assigning `rootView` re-renders the whole
     /// subtree — on every update pass, which includes every section crossing while
     /// scrolling. Comparing this decides whether that assignment is needed at all.
-    /// It has to list every field the view displays, or a header goes stale; the
-    /// compiler cannot check that, so the two are kept adjacent.
+    /// It is also the view's input, so a field it does not carry is a field the
+    /// header cannot display, and the two cannot fall out of step.
     struct Identity: Equatable {
         let title: String
         let date: String?
         let workingGroup: String?
         let authors: [String]
-        let status: String?
-        let stream: String?
-        let obsoletedBy: [DocumentID]
-        let updatedBy: [DocumentID]
-        let hasErrata: Bool
+        /// Everything else the header shows comes straight off the metadata, which
+        /// is `Hashable` — so it is compared whole rather than field by field.
+        let metadata: RFCMetadata?
 
         init(header: DocumentHeader, metadata: RFCMetadata?) {
             title = header.title
@@ -364,42 +364,38 @@ struct DocumentHeaderView: View {
             workingGroup = header.workingGroup ?? metadata?.workingGroup
             let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
             self.authors = authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }
-            status = metadata.map { String(describing: $0.currentStatus) }
-            stream = metadata?.stream.displayName
-            obsoletedBy = metadata?.obsoletedBy ?? []
-            updatedBy = metadata?.updatedBy ?? []
-            hasErrata = metadata?.hasErrata ?? false
+            self.metadata = metadata
         }
     }
 
-    let header: DocumentHeader
-    let metadata: RFCMetadata?
+    /// The view renders from the identity rather than beside it, so the two cannot
+    /// describe different headers.
+    let identity: Identity
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(header.title)
+            Text(identity.title)
                 .font(.largeTitle.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                if let metadata {
+                if let metadata = identity.metadata {
                     StatusBadge(status: metadata.currentStatus)
                     Text(metadata.stream.displayName)
                 }
-                if let date = header.date ?? metadata?.date {
-                    Text(date.formatted)
+                if let date = identity.date {
+                    Text(date)
                 }
-                if let group = header.workingGroup ?? metadata?.workingGroup {
+                if let group = identity.workingGroup {
                     Text(group)
                 }
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
-            if !authors.isEmpty {
-                Text(authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }.joined(separator: ", "))
+            if !identity.authors.isEmpty {
+                Text(identity.authors.joined(separator: ", "))
                     .font(.subheadline)
             }
-            if let metadata {
+            if let metadata = identity.metadata {
                 StatusBanner(metadata: metadata)
                     .padding(.top, 4)
             }

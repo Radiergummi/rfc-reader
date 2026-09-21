@@ -42,19 +42,18 @@ extension RFCTextViewCoordinator {
         }
         let full = NSRange(location: 0, length: text.length)
 
-        var headings: [AccessibilityRotorItem] = []
-        text.enumerateAttribute(.rfcAnchor, in: full) { value, range, _ in
-            guard value != nil else { return }
-            headings.append(AccessibilityRotorItem(range: range, label: nil))
+        // Both rotors are the same walk: every run carrying the attribute, labelled
+        // by the text under it.
+        func items(carrying key: NSAttributedString.Key) -> [AccessibilityRotorItem] {
+            var items: [AccessibilityRotorItem] = []
+            text.enumerateAttribute(key, in: full) { value, range, _ in
+                guard value != nil else { return }
+                items.append(AccessibilityRotorItem(range: range, label: nil))
+            }
+            return items
         }
-        accessibilityHeadings = headings
-
-        var links: [AccessibilityRotorItem] = []
-        text.enumerateAttribute(.link, in: full) { value, range, _ in
-            guard value != nil else { return }
-            links.append(AccessibilityRotorItem(range: range, label: nil))
-        }
-        accessibilityLinks = links
+        accessibilityHeadings = items(carrying: .rfcAnchor)
+        accessibilityLinks = items(carrying: .link)
 
         // Adjacent runs sharing the same `VerbatimBox` instance are one diagram —
         // `appendVerbatim` emits a source-code language label and its body as two

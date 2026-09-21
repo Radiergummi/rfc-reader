@@ -212,9 +212,9 @@ extension DocumentTextBuilder {
 
     func appendParagraph(_ paragraph: Paragraph, indent: CGFloat) {
         mark(paragraph.anchor)
-        let runs = inlineRuns(paragraph.inlines, base: bodyAttributes(indent: indent))
-        output.append(runs)
-        append("\n", bodyAttributes(indent: indent))
+        let attributes = bodyAttributes(indent: indent)
+        output.append(inlineRuns(paragraph.inlines, base: attributes))
+        append("\n", attributes)
     }
 
     func bodyAttributes(indent: CGFloat) -> [NSAttributedString.Key: Any] {

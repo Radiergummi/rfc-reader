@@ -14,7 +14,6 @@ enum InspectorTab {
 /// screens of rows nobody reads in order. As a panel it can be consulted beside the
 /// text instead of interrupting it.
 struct DocumentInspector: View {
-    let document: RFCDocument
     /// The sections the body actually contains, and the bibliography it does not.
     /// Both are derived once per document by `DocumentView` rather than here, where
     /// every section crossing re-evaluates this body.

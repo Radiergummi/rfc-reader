@@ -9,22 +9,28 @@ import AppKit
 extension DocumentTextBuilder {
     func appendList(_ list: ListBlock, indent: CGFloat) {
         let markerColumn = indent + style.indentStep
-        for (index, item) in list.items.enumerated() {
-            mark(item.anchor)
-            let marker = Self.marker(for: list.style, at: index)
-            let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
-            var attributes: [NSAttributedString.Key: Any] = [.font: style.bodyFont, .foregroundColor: bodyColour]
-            attributes[.paragraphStyle] = paragraphStyle(
+        // Every item of one list shares its indents and spacing, so both dictionaries
+        // and the tab stop are built once for the list rather than once per item.
+        let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: style.bodyFont,
+            .foregroundColor: bodyColour,
+            .paragraphStyle: paragraphStyle(
                 indent: markerColumn,
                 firstLineIndent: indent,
                 spacingAfter: spacing,
                 tabStops: [NSTextTab(textAlignment: .left, location: markerColumn)]
-            )
-            // The marker is drawn at the outer indent, left of the tab stop at
-            // markerColumn, so the tab advances to it and a wrapped item lines up
-            // under its own text rather than under the bullet.
-            var markerAttributes = attributes
-            markerAttributes[.foregroundColor] = RFCColors.secondaryLabel
+            ),
+        ]
+        // The marker is drawn at the outer indent, left of the tab stop at
+        // markerColumn, so the tab advances to it and a wrapped item lines up
+        // under its own text rather than under the bullet.
+        var markerAttributes = attributes
+        markerAttributes[.foregroundColor] = RFCColors.secondaryLabel
+
+        for (index, item) in list.items.enumerated() {
+            mark(item.anchor)
+            let marker = Self.marker(for: list.style, at: index)
             let firstLine = NSMutableAttributedString(string: marker + "\t", attributes: markerAttributes)
 
             guard let first = item.blocks.first else {
@@ -45,11 +51,13 @@ extension DocumentTextBuilder {
     }
 
     func appendDefinitionList(_ items: [DefinitionItem], indent: CGFloat) {
+        let termAttributes: [NSAttributedString.Key: Any] = [
+            .font: style.boldBodyFont,
+            .foregroundColor: bodyColour,
+            .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.3),
+        ]
         for item in items {
             mark(item.anchor)
-            var termAttributes = bodyAttributes(indent: indent)
-            termAttributes[.font] = style.boldBodyFont
-            termAttributes[.paragraphStyle] = paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.3)
             output.append(inlineRuns(item.term, base: termAttributes))
             append("\n", termAttributes)
             appendBlocks(item.definition, indent: indent + style.indentStep)

@@ -73,6 +73,18 @@ struct DecorationGeometryTests {
         #expect(upper.maxY == lower.minY)
     }
 
+    /// The block quote's rule hangs outside the band, beside the quoted text's own
+    /// edge -- not the fragment's, or a short line would pull the rule inwards and it
+    /// would zigzag down the quote. Consecutive fragments' rules meet end to end.
+    @Test func theRuleHangsLeftOfTheTextAtAConstantOffset() {
+        let narrow = placement(narrowLine, indent: 40).ruleRect(padding: 8, width: 3)
+        let wide = placement(wideLine, indent: 40).ruleRect(padding: 8, width: 3)
+        #expect(narrow.minX == wide.minX, "a zigzag starts when the left edges disagree")
+        #expect(narrow.maxX == placement(narrowLine, indent: 40).columnLeft - 8)
+        #expect(narrow.width == 3)
+        #expect(narrow.maxY == wide.minY, "consecutive fragments' rules must meet with no gap")
+    }
+
     @Test func theColumnLeftIgnoresHowWideTheFragmentIs() {
         let a = FragmentGeometry.Placement(origin: CGPoint(x: 24, y: 0), frame: narrowLine, containerWidth: column, indent: 0).columnLeft
         let b = FragmentGeometry.Placement(origin: CGPoint(x: 24, y: 0), frame: wideLine, containerWidth: column, indent: 0).columnLeft

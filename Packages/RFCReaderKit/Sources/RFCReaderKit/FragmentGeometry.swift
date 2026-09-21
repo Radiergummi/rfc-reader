@@ -220,6 +220,16 @@ public enum FragmentGeometry {
                 height: frame.height + top + bottom
             )
         }
+
+        /// The rule a block quote hangs beside its text.
+        ///
+        /// Left of the decorated text's own edge, not the fragment's: a short line
+        /// would otherwise pull the rule inwards and it would zigzag down the quote.
+        /// It spans this fragment's height alone, so consecutive fragments' rules
+        /// meet end to end.
+        public func ruleRect(padding: CGFloat, width: CGFloat) -> CGRect {
+            CGRect(x: columnLeft - padding - width, y: origin.y, width: width, height: frame.height)
+        }
     }
 
     /// The document-relative character offset under `pointInFragment`, or nil when

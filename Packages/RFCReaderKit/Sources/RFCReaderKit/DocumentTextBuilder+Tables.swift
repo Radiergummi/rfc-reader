@@ -65,12 +65,16 @@ extension DocumentTextBuilder {
             stops.append(NSTextTab(textAlignment: .left, location: location))
         }
         let rowStyle = paragraphStyle(indent: indent, spacingAfter: 0, tabStops: stops, wraps: false)
+        // Only the font differs between a header row and a data row, and nothing in
+        // either varies down the table, so both are built once here rather than per
+        // row.
+        let dataAttributes: [NSAttributedString.Key: Any] =
+            [.font: style.bodyFont, .foregroundColor: bodyColour, .paragraphStyle: rowStyle]
+        var headerAttributes = dataAttributes
+        headerAttributes[.font] = style.boldBodyFont
 
         for (index, row) in (table.header + table.rows).enumerated() {
-            let isHeader = index < table.header.count
-            var attributes = bodyAttributes(indent: indent)
-            attributes[.font] = isHeader ? style.boldBodyFont : style.bodyFont
-            attributes[.paragraphStyle] = rowStyle
+            let attributes = index < table.header.count ? headerAttributes : dataAttributes
             for (column, cell) in row.enumerated() {
                 if column > 0 { append("\t", attributes) }
                 output.append(inlineRuns(cell, base: attributes))
@@ -81,17 +85,22 @@ extension DocumentTextBuilder {
 
     private func appendStackedTable(_ table: RFCKit.Table, indent: CGFloat) {
         let headers = table.header.first ?? []
+        // Nothing here varies by row or cell, so the three dictionaries are built
+        // once for the whole table rather than once per cell.
+        let cellIndent = indent + style.indentStep
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: style.bodyFont,
+            .foregroundColor: bodyColour,
+            .paragraphStyle: paragraphStyle(indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25),
+        ]
+        var labelAttributes = attributes
+        labelAttributes[.font] = style.boldBodyFont
+        labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
+        let separatorAttributes = bodyAttributes(indent: indent)
+
         for row in table.rows {
             for (column, cell) in row.enumerated() {
-                var attributes = bodyAttributes(indent: indent + style.indentStep)
-                attributes[.paragraphStyle] = paragraphStyle(
-                    indent: indent + style.indentStep,
-                    spacingAfter: style.paragraphSpacing * 0.25
-                )
                 if column < headers.count {
-                    var labelAttributes = attributes
-                    labelAttributes[.font] = style.boldBodyFont
-                    labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
                     output.append(inlineRuns(headers[column], base: labelAttributes))
                     append("  ", attributes)
                 }
@@ -100,7 +109,7 @@ extension DocumentTextBuilder {
             }
             // A blank line separates one row's cells from the next row's. It needs no
             // decoration of its own: `appendTable` decorates the whole emitted range.
-            append("\n", bodyAttributes(indent: indent))
+            append("\n", separatorAttributes)
         }
     }
 

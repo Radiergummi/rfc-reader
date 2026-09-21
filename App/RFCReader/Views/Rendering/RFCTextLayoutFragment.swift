@@ -28,9 +28,16 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
     override var renderingSurfaceBounds: CGRect {
         var bounds = super.renderingSurfaceBounds
         if let span = decorationSpan {
-            let band = placement(at: .zero, span: span)
-                .decorationRect(padding: Self.cardPadding, capTop: true, capBottom: true)
-            bounds = bounds.union(band.insetBy(dx: -(Self.rulePadding + Self.ruleWidth), dy: 0))
+            let placement = placement(at: .zero, span: span)
+            bounds = bounds.union(placement.decorationRect(padding: Self.cardPadding, capTop: true, capBottom: true))
+            if span.decoration == .blockQuote {
+                // A point of slack on each side: the rule is drawn with rounded ends,
+                // and antialiasing puts ink just outside the rect it is filled from.
+                // This clipped by about a third once already, when the surface was
+                // widened by the card's padding alone.
+                let rule = placement.ruleRect(padding: Self.rulePadding, width: Self.ruleWidth)
+                bounds = bounds.union(rule.insetBy(dx: -1, dy: -1))
+            }
         }
         for chip in chipRects {
             bounds = bounds.union(chip.rect)
@@ -43,11 +50,7 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
     /// The fragment's own span, as the document-relative character range every
     /// `FragmentGeometry` call is expressed in.
     private var documentRange: NSRange? {
-        guard let textLayoutManager else { return nil }
-        let start = textLayoutManager.offset(of: rangeInElement.location)
-        let end = textLayoutManager.offset(of: rangeInElement.endLocation)
-        guard start >= 0, end >= start else { return nil }
-        return NSRange(location: start, length: end - start)
+        textLayoutManager?.range(of: rangeInElement)
     }
 
     /// All three are pure functions of content that is immutable once built, so they
@@ -112,22 +115,6 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         super.draw(at: point, in: context)
     }
 
-    /// Where this fragment sits in the column, for whatever is drawn around it.
-    ///
-    /// The indent comes from the whole decoration run, not this fragment, so every
-    /// fragment of one block draws the same band.
-    private func placement(at point: CGPoint) -> FragmentGeometry.Placement {
-        let indent = textLayoutManager?.attributedText.flatMap { text in
-            decorationSpan.map { FragmentGeometry.indent(in: text, over: $0.runRange) }
-        } ?? 0
-        return FragmentGeometry.Placement(
-            origin: point,
-            frame: layoutFragmentFrame,
-            containerWidth: textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width,
-            indent: indent
-        )
-    }
-
     private func drawChips(at point: CGPoint, in context: CGContext) {
         let chips = chipRects
         guard !chips.isEmpty else { return }
@@ -162,19 +149,10 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         )
     }
 
-    /// The rule hangs to the left of the quoted text's own edge, which is the column
-    /// left plus the block's indent -- not the fragment's, or a short line would pull
-    /// the rule inwards and the rule would zigzag down the quote.
+    /// Where the rule goes is `Placement.ruleRect`; this only fills it.
     private func drawRule(at point: CGPoint, span: FragmentGeometry.DecorationSpan, in context: CGContext) {
-        let left = placement(at: point, span: span).columnLeft
-        let rule = CGRect(
-            x: left - Self.rulePadding - Self.ruleWidth,
-            y: point.y,
-            width: Self.ruleWidth,
-            height: layoutFragmentFrame.height
-        )
         fill(
-            rule,
+            placement(at: point, span: span).ruleRect(padding: Self.rulePadding, width: Self.ruleWidth),
             radius: 1.5,
             corners: Corners(first: span.isFirst, last: span.isLast),
             color: RFCColors.quaternaryFill.cgColor,
