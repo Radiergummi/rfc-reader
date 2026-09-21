@@ -10,6 +10,10 @@ import SwiftUI
 /// The `GeometryReader` is the width channel: it is what makes a window resize reach
 /// the representable at all, and the column is centred from it.
 struct RFCTextView<Header: View>: View {
+    // The coordinator builds the hover/long-press preview's hosting controller
+    // itself, which sits outside SwiftUI's environment chain — so it needs the
+    // library handed to it explicitly, the same way it is here.
+    @Environment(LibraryModel.self) private var library
     let built: BuiltDocument
     /// The section anchors: the only anchors section tracking may report. See
     /// `RFCTextViewCoordinator.trackedAnchors`.
@@ -33,6 +37,7 @@ struct RFCTextView<Header: View>: View {
                 onScrollHandled: onScrollHandled,
                 onVisibleAnchorChange: onVisibleAnchorChange,
                 onLink: onLink,
+                library: library,
                 header: AnyView(header())
             )
         }
@@ -49,6 +54,7 @@ private struct Representable: UIViewRepresentable {
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
+    let library: LibraryModel
     let header: AnyView
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -83,6 +89,7 @@ private struct Representable: UIViewRepresentable {
         coordinator.onScrollHandled = onScrollHandled
         coordinator.onVisibleAnchorChange = onVisibleAnchorChange
         coordinator.onLink = onLink
+        coordinator.library = library
         coordinator.trackedAnchors = trackedAnchors
         coordinator.headerHost?.rootView = header
         coordinator.layOut(width: width)
@@ -104,6 +111,7 @@ private struct Representable: NSViewRepresentable {
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
+    let library: LibraryModel
     let header: AnyView
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -154,6 +162,7 @@ private struct Representable: NSViewRepresentable {
         coordinator.onScrollHandled = onScrollHandled
         coordinator.onVisibleAnchorChange = onVisibleAnchorChange
         coordinator.onLink = onLink
+        coordinator.library = library
         coordinator.trackedAnchors = trackedAnchors
         coordinator.headerHost?.rootView = header
         coordinator.layOut(width: width)
@@ -163,6 +172,13 @@ private struct Representable: NSViewRepresentable {
         if let scrollTarget {
             coordinator.scroll(to: scrollTarget)
         }
+    }
+
+    /// The hover preview's timer is self-cleaning (its `[weak self]` capture on
+    /// the coordinator means it cannot outlive this view), but a popover already
+    /// on screen would not otherwise close when the view goes away.
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: RFCTextViewCoordinator) {
+        coordinator.cancelHover()
     }
 }
 #endif

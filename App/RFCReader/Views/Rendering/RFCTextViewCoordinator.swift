@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 import SwiftUI
 
@@ -40,13 +41,30 @@ final class RFCTextViewCoordinator: NSObject {
     static let margin: CGFloat = 24
 
     /// The text view this coordinator drives. Weak: SwiftUI owns both, and the view
-    /// outlives no part of this.
-    weak var textView: PlatformTextView?
+    /// outlives no part of this. AppKit's hover preview needs a tracking area the
+    /// moment the view exists, hence the `didSet`; UIKit needs no such setup.
+    weak var textView: PlatformTextView? {
+        didSet {
+            #if !canImport(UIKit)
+            setUpHoverTracking()
+            #endif
+        }
+    }
 
     /// Retained deliberately: `UIHostingController().view` does not keep its
     /// controller alive, and a released controller takes trait propagation — and so
     /// Dynamic Type — with it.
     var headerHost: PlatformHostingController<AnyView>?
+
+    /// Retained for the same reason as `headerHost`: the iOS long-press preview's
+    /// hosting controller must outlive the `UITargetedPreview` that wraps its view.
+    var referencePreviewHost: PlatformHostingController<ReferencePreview>?
+
+    /// Injected explicitly: a hosting controller the coordinator builds — the
+    /// reference preview, on both platforms — sits outside SwiftUI's environment
+    /// chain, so `@Environment(LibraryModel.self)` inside it would come back empty
+    /// rather than crash. `ReferencePreview` takes the library directly instead.
+    var library: LibraryModel?
 
     var onVisibleAnchorChange: (String) -> Void = { _ in }
     var onScrollHandled: () -> Void = {}
@@ -81,6 +99,18 @@ final class RFCTextViewCoordinator: NSObject {
     /// installed the document — and clamping a deep jump against that would land at
     /// the top and overwrite the reading position with section one.
     private var laidOutEnd: CGFloat?
+
+    #if !canImport(UIKit)
+    /// `.inVisibleRect` keeps this correct across resizes and scrolling without an
+    /// `updateTrackingAreas` override; see `setUpHoverTracking`.
+    private var trackingArea: NSTrackingArea?
+    /// Fires the hover preview after a 0.5 s dwell. Captures `self` weakly, so a
+    /// coordinator that goes away before it fires neither leaks nor crashes.
+    private var dwellTimer: Timer?
+    /// The reference the pointer is currently over, timing or already previewed.
+    private var hoveredReference: CrossReference?
+    private var popover: NSPopover?
+    #endif
 
     // MARK: - Storage
 
@@ -245,6 +275,21 @@ final class RFCTextViewCoordinator: NSObject {
     func handle(_ url: URL) -> Bool {
         onLink(url)
     }
+
+    // MARK: - References
+
+    /// The cross reference tagged on the run at this absolute character offset,
+    /// and the full extent of its run. Shared by the iOS long-press lookup and the
+    /// macOS hover hit test below.
+    private func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
+        guard let layout = textView?.textLayoutManager,
+              let storage = layout.textContentManager as? NSTextContentStorage,
+              let text = storage.attributedString,
+              offset >= 0, offset < text.length else { return nil }
+        var range = NSRange(location: 0, length: 0)
+        guard let box = text.attribute(.rfcReference, at: offset, effectiveRange: &range) as? ReferenceBox else { return nil }
+        return (box, range)
+    }
 }
 
 #if canImport(UIKit)
@@ -252,6 +297,21 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
     func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
         guard case .link(let url) = textItem.content else { return defaultAction }
         return handle(url) ? nil : defaultAction
+    }
+
+    /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
+    /// carrying `.rfcReference` gets the extra preview card above it.
+    func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+        guard let box = reference(at: textItem), let library else { return .init(menu: defaultMenu) }
+        let host = UIHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
+        referencePreviewHost = host
+        return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
+    }
+
+    private func reference(at textItem: UITextItem) -> ReferenceBox? {
+        // `UITextItem.range` is a plain `NSRange` — already the absolute character
+        // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
+        reference(at: textItem.range.location)?.box
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -267,9 +327,122 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
     /// Registered with the selector-based API so it unregisters with the coordinator.
+    /// Scrolling also cancels any hover in progress — the popover is anchored to a
+    /// character rect that scrolling has just moved out from under it.
     @objc
     func viewportDidScroll(_ notification: Notification) {
         reportVisibleAnchor()
+        cancelHover()
+    }
+
+    // MARK: - Hover preview
+
+    /// Added once, the moment `textView` is set. `.inVisibleRect` recomputes the
+    /// tracking rect from the view's own visible rect on every resize and scroll,
+    /// so there is no `updateTrackingAreas` override to keep in sync by hand.
+    /// `.mouseEnteredAndExited` is what lets `mouseExited` end a hover when the
+    /// pointer leaves the view entirely, rather than only on the next in-view move.
+    private func setUpHoverTracking() {
+        guard let textView, trackingArea == nil else { return }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        textView.addTrackingArea(area)
+        trackingArea = area
+    }
+
+    @objc
+    private func mouseMoved(with event: NSEvent) {
+        guard let textView else { return }
+        let viewPoint = textView.convert(event.locationInWindow, from: nil)
+        let point = CGPoint(x: viewPoint.x - textView.textContainerOrigin.x, y: viewPoint.y - textView.textContainerOrigin.y)
+        guard let (box, range) = reference(at: point) else {
+            cancelHover()
+            return
+        }
+        guard box.reference != hoveredReference else { return }
+        cancelHover()
+        hoveredReference = box.reference
+        dwellTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.showPopover(for: box, range: range) }
+        }
+    }
+
+    @objc
+    private func mouseExited(with event: NSEvent) {
+        cancelHover()
+    }
+
+    /// Cancels the dwell timer and closes the popover, if either is active. Called
+    /// on every move to a different reference or to no reference, on scroll
+    /// (`viewportDidScroll`), and when the view is dismantled
+    /// (`Representable.dismantleNSView`) — the timer's own `[weak self]` capture
+    /// means a coordinator that is simply deallocated needs no help from here, but
+    /// a popover left open after the view goes away would not close itself.
+    func cancelHover() {
+        dwellTimer?.invalidate()
+        dwellTimer = nil
+        hoveredReference = nil
+        if popover?.isShown == true { popover?.performClose(nil) }
+        popover = nil
+    }
+
+    /// Checks `hoveredReference` again before showing: a move that changed or
+    /// cleared the hover already invalidated this timer, but the guard costs
+    /// nothing and keeps this function correct even if that ever stops being true.
+    private func showPopover(for box: ReferenceBox, range: NSRange) {
+        guard let textView, let library, hoveredReference == box.reference,
+              let rect = referenceRect(for: range) else { return }
+        let host = NSHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
+        let shown = NSPopover()
+        shown.behavior = .transient
+        shown.contentViewController = host
+        let anchor = rect.offsetBy(dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
+        shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+        popover = shown
+    }
+
+    /// Hit-tests a point in text-container coordinates down to a character offset,
+    /// fragment → line → glyph. `NSTextView`'s older `characterIndex(for:)` goes
+    /// through the TextKit 1 compatibility shim and is unreliable on a view built
+    /// `usingTextLayoutManager: true`; this walks the same TextKit 2 object graph
+    /// `RFCTextLayoutFragment` draws against, in reverse.
+    private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
+        guard let layout = textView?.textLayoutManager,
+              let fragment = layout.textLayoutFragment(for: containerPoint) else { return nil }
+        let fragmentStart = layout.offset(from: layout.documentRange.location, to: fragment.rangeInElement.location)
+        guard fragmentStart >= 0 else { return nil }
+        let pointInFragment = CGPoint(
+            x: containerPoint.x - fragment.layoutFragmentFrame.minX,
+            y: containerPoint.y - fragment.layoutFragmentFrame.minY
+        )
+        for line in fragment.textLineFragments
+        where line.typographicBounds.minY <= pointInFragment.y && pointInFragment.y < line.typographicBounds.maxY {
+            let pointInLine = CGPoint(x: pointInFragment.x - line.typographicBounds.minX, y: pointInFragment.y - line.typographicBounds.minY)
+            let offset = fragmentStart + line.characterRange.location + line.characterIndex(for: pointInLine)
+            return reference(at: offset)
+        }
+        return nil
+    }
+
+    /// The rect of a reference's run, in text-container coordinates — the
+    /// popover's anchor. `enumerateTextSegments` folds a run that wraps across
+    /// lines into the right set of rects on its own, the same as it does for
+    /// selection rendering.
+    private func referenceRect(for range: NSRange) -> CGRect? {
+        guard let layout = textView?.textLayoutManager,
+              let start = layout.location(layout.documentRange.location, offsetBy: range.location),
+              let end = layout.location(layout.documentRange.location, offsetBy: NSMaxRange(range)),
+              let textRange = NSTextRange(location: start, end: end) else { return nil }
+        var union: CGRect?
+        layout.enumerateTextSegments(in: textRange, type: .standard) { _, frame, _, _ in
+            union = union.map { $0.union(frame) } ?? frame
+            return true
+        }
+        return union
     }
 }
 #endif
