@@ -400,6 +400,12 @@ struct DocumentHeaderView: View {
                     .padding(.top, 4)
             }
         }
+        // The header is hosted, not placed by SwiftUI, and a hosting view lays its
+        // root out at that root's own width rather than at the frame the coordinator
+        // gave it — so a `VStack` that hugs its content ends up somewhere other than
+        // the column's leading edge, and by a distance that changes with the title's
+        // length. Filling the column is the same instruction the body text gets.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
