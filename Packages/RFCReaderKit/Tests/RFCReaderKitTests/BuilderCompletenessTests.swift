@@ -51,6 +51,26 @@ struct BuilderCompletenessTests {
         #expect(built.anchors.offset(of: "figure-3") != nil)
     }
 
+    @Test func aCaptionedFigureTagsItsArtworkWithTheCaption() throws {
+        let figure = Figure(
+            title: "Packet layout",
+            number: 3,
+            blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))],
+            anchor: "figure-3"
+        )
+        let document = RFCDocument(
+            header: DocumentHeader(title: "T"),
+            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [.figure(figure)])],
+            source: .xml
+        )
+        let built = DocumentTextBuilder.build(document, style: style)
+        let offset = built.text.string.distance(
+            from: built.text.string.startIndex,
+            to: try #require(built.text.string.range(of: "+--+")).lowerBound
+        )
+        #expect(built.text.attribute(.rfcCaption, at: offset, effectiveRange: nil) as? String == "Figure 3: Packet layout")
+    }
+
     @Test func blockQuotesAndAsidesAreIndentedTextWithADecoration() throws {
         let document = RFCDocument(
             header: DocumentHeader(title: "T"),

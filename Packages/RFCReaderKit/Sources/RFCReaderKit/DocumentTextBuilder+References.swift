@@ -4,8 +4,18 @@ import RFCKit
 extension DocumentTextBuilder {
     func appendFigure(_ figure: Figure, indent: CGFloat) {
         mark(figure.anchor)
+        let start = output.length
         appendBlocks(figure.blocks, indent: indent)
         let caption = figure.title.map { title in figure.number.map { number in "Figure \(number): \(title)" } ?? title }
+        // Tag any artwork the figure just contributed with the caption, so the
+        // accessibility element has a name even when `Preformatted.name` is absent.
+        if let caption {
+            let range = NSRange(location: start, length: output.length - start)
+            output.enumerateAttribute(.rfcVerbatim, in: range) { value, subrange, _ in
+                guard value != nil else { return }
+                output.addAttribute(.rfcCaption, value: caption, range: subrange)
+            }
+        }
         appendCaption(caption, indent: indent)
     }
 

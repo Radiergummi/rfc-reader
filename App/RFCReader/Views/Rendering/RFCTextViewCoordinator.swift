@@ -48,6 +48,7 @@ final class RFCTextViewCoordinator: NSObject {
             #if !canImport(UIKit)
             setUpHoverTracking()
             #endif
+            setUpAccessibilityRotors()
         }
     }
 
@@ -100,6 +101,14 @@ final class RFCTextViewCoordinator: NSObject {
     /// the top and overwrite the reading position with section one.
     private var laidOutEnd: CGFloat?
 
+    // MARK: - Accessibility
+
+    /// The headings, links and diagrams rotors search — cached by
+    /// `deriveAccessibilityItems()` in `RFCTextViewCoordinator+Accessibility.swift`.
+    var accessibilityHeadings: [AccessibilityRotorItem] = []
+    var accessibilityLinks: [AccessibilityRotorItem] = []
+    var accessibilityDiagrams: [AccessibilityRotorItem] = []
+
     #if !canImport(UIKit)
     /// `.inVisibleRect` keeps this correct across resizes and scrolling without an
     /// `updateTrackingAreas` override; see `setUpHoverTracking`.
@@ -129,6 +138,7 @@ final class RFCTextViewCoordinator: NSObject {
         self.built = built
         lastReportedAnchor = nil
         deriveTrackedIndex()
+        deriveAccessibilityItems()
         storage.performEditingTransaction {
             storage.attributedString = built.text
         }

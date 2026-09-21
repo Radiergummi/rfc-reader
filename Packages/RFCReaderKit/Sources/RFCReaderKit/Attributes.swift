@@ -13,6 +13,10 @@ extension NSAttributedString.Key {
     public static let rfcVerbatim = NSAttributedString.Key("rfcVerbatim")
     /// Marks the run that should be drawn as a chip: the span the brackets enclosed.
     public static let rfcChip = NSAttributedString.Key("rfcChip")
+    /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
+    /// sits inside a captioned figure: the accessibility element's fallback label
+    /// when `Preformatted.name` is absent.
+    public static let rfcCaption = NSAttributedString.Key("rfcCaption")
 }
 
 public enum RFCDecoration: String, Sendable {
