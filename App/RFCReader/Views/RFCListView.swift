@@ -8,9 +8,16 @@ struct RFCListView: View {
     @Query(sort: \ReadingPosition.updatedAt, order: .reverse) private var positions: [ReadingPosition]
     @State private var downloaded: Set<Int> = []
 
+    /// Built once per body pass and shared by every row: `RFCRow` used to scan the
+    /// whole bookmark list itself, which is a linear search per row over a list that
+    /// can be 9,842 rows long.
+    private var bookmarkedNumbers: Set<Int> {
+        Set(bookmarks.map(\.number))
+    }
+
     private var rfcs: [RFCMetadata] {
         library.list(
-            bookmarked: Set(bookmarks.map(\.number)),
+            bookmarked: bookmarkedNumbers,
             recentlyRead: positions.map(\.number),
             downloaded: downloaded
         )
@@ -18,9 +25,10 @@ struct RFCListView: View {
 
     var body: some View {
         @Bindable var library = library
+        let bookmarked = bookmarkedNumbers
         List(selection: $library.selection) {
             ForEach(rfcs) { rfc in
-                RFCRow(rfc: rfc, isBookmarked: bookmarks.contains { $0.number == rfc.number })
+                RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
                     .tag(rfc.id)
             }
         }
