@@ -77,10 +77,14 @@ extension DocumentTextBuilder {
                 appendVerbatim(content, indent: indent)
             case .table(let table):
                 appendTable(table, indent: indent)
-            default:
-                // Lists, verbatim, tables, figures, quotes and references arrive in
-                // Tasks 5 to 8; until then they emit nothing.
-                break
+            case .figure(let figure):
+                appendFigure(figure, indent: indent)
+            case .blockQuote(let inner):
+                appendDecorated(inner, decoration: .blockQuote, indent: indent)
+            case .aside(let inner):
+                appendDecorated(inner, decoration: .aside, indent: indent)
+            case .references(let list):
+                appendReferences(list, indent: indent)
             }
         }
     }
