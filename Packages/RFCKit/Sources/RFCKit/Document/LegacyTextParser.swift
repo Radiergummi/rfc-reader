@@ -758,8 +758,10 @@ struct InlineLinker: Sendable {
             } else {
                 continue
             }
+            let matched = String(text[match.range])
+            let canonical = DocumentID(parsing: anchor).map { $0.description == anchor.uppercased() } ?? false
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: target, text: CrossReference.nonBreakingLabel(String(text[match.range])))
+                CrossReference(target: target, text: CrossReference.nonBreakingLabel(matched), isCanonicalLabel: canonical)
             )))
         }
         for match in text.matches(of: Self.bareRFCPattern) {

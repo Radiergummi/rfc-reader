@@ -129,6 +129,24 @@ struct RFCXMLParserTests {
         #expect(transport.text == "[QUIC-TRANSPORT]", "an author's own reference tag is left alone")
     }
 
+    @Test func canonicalLabelsAreFlaggedForTheRenderer() throws {
+        let document = try Self.document()
+        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+            guard case .paragraph(let paragraph) = block else { return [] }
+            return paragraph.inlines.compactMap { inline in
+                if case .crossReference(let xref) = inline { return xref }
+                return nil
+            }
+        }
+
+        let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
+        #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
+        #expect(bcp14.text == "[RFC\u{00A0}2119]", "the brackets stay in the model; the builder drops them")
+
+        let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
+        #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
+    }
+
     /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.
     @Test func sectionCompositeLabelsUseNonBreakingSpaces() throws {
         let xml = """

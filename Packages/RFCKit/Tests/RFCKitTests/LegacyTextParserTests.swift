@@ -492,4 +492,20 @@ struct LegacyTextCorpusFindingsTests {
         #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
         #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
     }
+
+    @Test func legacyBracketedRFCLabelsAreFlaggedAsCanonical() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+            guard case .paragraph(let paragraph) = block else { return [] }
+            return paragraph.inlines.compactMap { inline in
+                if case .crossReference(let xref) = inline { return xref }
+                return nil
+            }
+        }
+        let canonical = try #require(xrefs.first { $0.text?.hasPrefix("[RFC") == true },
+                                     "without this, 85% of the library shows no chips")
+        #expect(canonical.isCanonicalLabel)
+        let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
+        #expect(!authored.isCanonicalLabel, "an author's own tag must survive verbatim")
+    }
 }
