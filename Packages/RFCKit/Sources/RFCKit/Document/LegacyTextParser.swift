@@ -745,7 +745,7 @@ struct InlineLinker: Sendable {
         for match in text.matches(of: Self.sectionOfRFCPattern) {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .document(.rfc(number), section: String(match.section)), text: String(text[match.range]))
+                CrossReference(target: .document(.rfc(number), section: String(match.section)), text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
         }
         for match in text.matches(of: Self.bracketPattern) {
@@ -759,18 +759,18 @@ struct InlineLinker: Sendable {
                 continue
             }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: target, text: String(text[match.range]))
+                CrossReference(target: target, text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
         }
         for match in text.matches(of: Self.bareRFCPattern) {
             guard match.bracket.isEmpty, let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .document(.rfc(number), section: nil), text: String(text[match.range]))
+                CrossReference(target: .document(.rfc(number), section: nil), text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
         }
         for match in text.matches(of: Self.sectionPattern) where sectionNumbers.contains(String(match.section)) {
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .anchor("section-\(match.section)"), text: String(text[match.range]))
+                CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
         }
         for match in text.matches(of: Self.urlPattern) {
