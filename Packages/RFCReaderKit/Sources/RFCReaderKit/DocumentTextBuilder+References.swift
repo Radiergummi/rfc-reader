@@ -15,7 +15,16 @@ extension DocumentTextBuilder {
         let start = output.length
         appendBlocks(blocks, indent: indent + style.indentStep)
         guard output.length > start else { return }
-        output.addAttribute(.rfcDecoration, value: decoration, range: NSRange(location: start, length: output.length - start))
+        let range = NSRange(location: start, length: output.length - start)
+        // A nested quote or aside has already claimed its own span, and the inner,
+        // more specific decoration is the one to keep — so fill only what it left unset.
+        var gaps: [NSRange] = []
+        output.enumerateAttribute(.rfcDecoration, in: range) { value, subrange, _ in
+            if value == nil { gaps.append(subrange) }
+        }
+        for gap in gaps {
+            output.addAttribute(.rfcDecoration, value: decoration, range: gap)
+        }
     }
 
     func appendReferences(_ list: ReferenceList, indent: CGFloat) {

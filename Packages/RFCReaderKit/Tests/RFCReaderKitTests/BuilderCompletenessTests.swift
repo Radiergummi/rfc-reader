@@ -63,6 +63,32 @@ struct BuilderCompletenessTests {
         }
     }
 
+    /// `RFCXMLParser` wraps any unrecognised child element as `.aside(blocks)`, so an
+    /// unrecognised element inside a `<blockquote>` nests an aside inside a quote for
+    /// real documents, not just hypothetically. The more specific, inner decoration
+    /// must survive; the outer one only fills what the inner call left unset.
+    @Test func aNestedAsideInsideABlockQuoteKeepsItsOwnDecoration() throws {
+        let document = RFCDocument(
+            header: DocumentHeader(title: "T"),
+            sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: [
+                .blockQuote([
+                    .paragraph(Paragraph(text: "quoted")),
+                    .aside([.paragraph(Paragraph(text: "noted"))]),
+                ]),
+            ])],
+            source: .xml
+        )
+        let built = DocumentTextBuilder.build(document, style: style)
+
+        for (needle, expected) in [("quoted", RFCDecoration.blockQuote), ("noted", RFCDecoration.aside)] {
+            let offset = built.text.string.distance(
+                from: built.text.string.startIndex,
+                to: try #require(built.text.string.range(of: needle)).lowerBound
+            )
+            #expect(built.text.attribute(.rfcDecoration, at: offset, effectiveRange: nil) as? RFCDecoration == expected)
+        }
+    }
+
     @Test func referenceRowsAreTextWithAnOpenLink() throws {
         let reference = Reference(
             anchor: "RFC9110",
