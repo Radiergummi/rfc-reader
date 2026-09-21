@@ -306,7 +306,7 @@ struct StatusBanner: View {
 }
 
 struct SectionView: View {
-    let section: Section
+    let section: RFCKit.Section
     let level: Int
     let onAppear: (String) -> Void
 
