@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -16,10 +17,17 @@ struct ContentView: View {
         navigation.selection?.displayName ?? navigation.filter.title
     }
 
-    /// The prose title goes here, where macOS has room for it.
+    /// The prose title goes here, where macOS has room for it — truncated, because a
+    /// tab is far narrower than the window and clips rather than eliding.
     private var windowSubtitle: String {
-        navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
+        navigation.selection
+            .flatMap { library.metadata($0)?.title }?
+            .truncated(to: Self.subtitleLimit) ?? ""
     }
+
+    /// Long enough that most RFC titles survive whole, short enough that the series'
+    /// genuinely long ones stop before the tab's edge.
+    private static let subtitleLimit = 64
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -38,10 +46,14 @@ struct ContentView: View {
             }
         }
         .environment(navigation)
-        // On the split view, not on `DocumentView`: in a `NavigationSplitView` the
-        // window (and therefore the tab) takes its title from the split view itself,
-        // so a title set down in the detail column is outranked by the list column's
-        // and every tab read "All RFCs" whatever it was showing.
+        // The window's title, and therefore the tab's.
+        //
+        // Only one `navigationTitle` in a `NavigationSplitView` reaches the window,
+        // and the list column's was winning it — so every tab read "All RFCs"
+        // whatever it was showing, while the subtitle set here came through
+        // untouched because nothing competed for it. The list column no longer sets
+        // one: the sidebar already shows which filter is active, so that title was
+        // spending the window's only title slot on something said elsewhere.
         .navigationTitle(windowTitle)
         #if os(macOS)
         .navigationSubtitle(windowSubtitle)

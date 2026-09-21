@@ -51,7 +51,6 @@ struct RFCListView: View {
             }
         }
         .searchable(text: $navigation.searchText, prompt: "Search")
-        .navigationTitle(navigation.filter.title)
         .task(id: navigation.filter) {
             downloaded = await library.downloadedNumbers()
         }
