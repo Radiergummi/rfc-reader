@@ -75,6 +75,8 @@ extension DocumentTextBuilder {
                 appendDefinitionList(items, indent: indent)
             case .preformatted(let content):
                 appendVerbatim(content, indent: indent)
+            case .table(let table):
+                appendTable(table, indent: indent)
             default:
                 // Lists, verbatim, tables, figures, quotes and references arrive in
                 // Tasks 5 to 8; until then they emit nothing.
