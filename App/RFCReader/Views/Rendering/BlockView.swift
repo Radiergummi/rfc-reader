@@ -131,7 +131,7 @@ struct ListBlockView: View {
 }
 
 struct TableBlockView: View {
-    let table: Table
+    let table: RFCKit.Table
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

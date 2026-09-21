@@ -30,9 +30,12 @@ struct RFCReaderShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: OpenRFCIntent(),
+            // Phrases may only interpolate AppEntity/AppEnum parameters, so the number
+            // is asked for after the phrase matches. An RFC AppEntity would let Siri
+            // hear it directly; that belongs with Spotlight indexing.
             phrases: [
-                "Open RFC \(\.$number) in \(.applicationName)",
-                "Show RFC \(\.$number) in \(.applicationName)",
+                "Open an RFC in \(.applicationName)",
+                "Show an RFC in \(.applicationName)",
             ],
             shortTitle: "Open RFC",
             systemImageName: "doc.text"

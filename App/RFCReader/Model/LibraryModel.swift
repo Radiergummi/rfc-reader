@@ -10,7 +10,7 @@ enum LibraryFilter: Hashable, Identifiable {
     case downloaded
     case standards
     case bestCurrentPractice
-    case stream(Stream)
+    case stream(RFCKit.Stream)
     case workingGroup(String)
     case series(DocumentID)
 

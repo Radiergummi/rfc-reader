@@ -53,7 +53,7 @@ Design choices worth knowing:
 
 - **Anchors are stable strings**, not indices. XML documents use the author's `anchor` or the RFC Editor's `pn` part number; text documents synthesise `section-4.2`, `appendix-A`, `name-security-considerations`, `ref-RFC2119`. Deep links, the table of contents and reading positions all key off these.
 - **Cross references are resolved at parse time.** The XML parser indexes `<reference>` anchors first, so `<xref target="QUIC-TRANSPORT">` becomes `.document(RFC9000)`. The text parser does the same with `[RFC2119]`-style entries in the References section, then linkifies `[Anchor]`, `RFC 1234`, `Section 4.2 of [RFC9110]`, `Section 3` (only if that section exists) and URLs in prose.
-- **Display text travels with the reference.** RFCXML's prepped output carries `derivedContent` ("Figure 1", "Section 4.2"); the parser turns it into the exact label the RFC Editor renders, so we never re-implement numbering rules.
+- **Display text travels with the reference.** RFCXML's prepped output carries `derivedContent` ("Figure 1", "Section 4.2"); the parser reuses it rather than re-implementing numbering rules. The one thing it restyles is a bare canonical number (`RFC9110` → `RFC` + U+00A0 + `9110`); an author's own tag (`QUIC-TRANSPORT`) is left exactly as the document writes it.
 
 ## Parsing the two source formats
 
@@ -104,6 +104,17 @@ CI (`.github/workflows/ci.yml`) runs the package tests on macOS and in a Linux S
 *Decided September 2026.* The reader's prose is rendered by `UITextView` / `NSTextView` with TextKit 2, not by SwiftUI `Text`. The wishlist needs link previews on hard press, hover popovers on Mac and find-in-document; SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
 
 Shape: keep `RFCDocument` as the source, render each section's prose blocks into one TextKit-backed view (paragraphs, lists and definition lists as attributed text with paragraph styles), and keep artwork, tables and figures as native SwiftUI views between them. `InlineText.attributedString(_:)` already produces the attributed text, so the change is confined to the paragraph renderer and the link handler. The current SwiftUI `InlineText` is a placeholder until then; do not add features to it.
+
+Reference labels ride on this decision. Today the parsers bake the whole label into
+`CrossReference.text` (`[RFC 9110]`, `Section 4.2 of [RFC 9110]`), with U+00A0 joining
+each word to its number so a reference never breaks across a line. The square brackets
+are ours, not the RFC Editor's — `derivedContent` is a bare `RFC9110` — and they are
+doing delimiter work: adjacent references (`<xref/> <xref/>`, common in list items)
+would otherwise read as one run. Dropping them therefore waits for the TextKit 2
+renderer, where a reference can become a proper chip (leading `doc.text` symbol,
+tinted rounded background) via `NSTextAttachment` and custom background drawing.
+SwiftUI `Text` offers only a hard square `backgroundColor` with no padding or radius,
+so building it now would be thrown away.
 
 This is the first app task after the Xcode project builds.
 

@@ -109,6 +109,84 @@ struct RFCXMLParserTests {
         #expect(document.referencedDocuments.contains(.rfc(2119)))
     }
 
+    /// A reference tagged with its canonical number reads as "RFC 2119", and the
+    /// space never breaks across a line. A reference the author tagged themselves
+    /// ("[QUIC-TRANSPORT]") keeps the name the document uses throughout.
+    @Test func canonicalDocumentLabelsUseANonBreakingSpace() throws {
+        let document = try Self.document()
+        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+            guard case .paragraph(let paragraph) = block else { return [] }
+            return paragraph.inlines.compactMap { inline in
+                if case .crossReference(let xref) = inline { return xref }
+                return nil
+            }
+        }
+
+        let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
+        #expect(bcp14.text == "[RFC\u{00A0}2119]")
+
+        let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
+        #expect(transport.text == "[QUIC-TRANSPORT]", "an author's own reference tag is left alone")
+    }
+
+    /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.
+    @Test func sectionCompositeLabelsUseNonBreakingSpaces() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <rfc number="9999" version="3">
+          <front><title>Composite</title></front>
+          <middle>
+            <section anchor="intro"><name>Intro</name>
+              <t>See <xref target="RFC9110" section="4.2" sectionFormat="of" derivedContent="RFC9110"/>.</t>
+            </section>
+          </middle>
+          <back>
+            <references><name>References</name>
+              <reference anchor="RFC9110">
+                <front><title>HTTP Semantics</title><author surname="Fielding"/><date year="2022"/></front>
+                <seriesInfo name="RFC" value="9110"/>
+              </reference>
+            </references>
+          </back>
+        </rfc>
+        """
+        let document = try RFCXMLParser.parse(Data(xml.utf8))
+        let intro = try #require(document.section(anchor: "intro"))
+        guard case .paragraph(let paragraph)? = intro.blocks.first else {
+            Issue.record("expected a paragraph")
+            return
+        }
+        let xref = try #require(paragraph.inlines.compactMap { inline -> CrossReference? in
+            if case .crossReference(let value) = inline { return value }
+            return nil
+        }.first)
+        #expect(xref.text == "Section\u{00A0}4.2 of [RFC\u{00A0}9110]")
+    }
+
+    /// XML collapses #x20, #x9, #xD and #xA. U+00A0 is not one of them, and
+    /// collapsing it would undo every non-breaking label on a round trip.
+    @Test func nonBreakingSpacesSurviveWhitespaceCollapsing() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <rfc number="9999" version="3">
+          <front><title>Spacing</title></front>
+          <middle>
+            <section anchor="intro"><name>Intro</name>
+              <t>RFC\u{00A0}9110   wraps     as
+              one unit.</t>
+            </section>
+          </middle>
+        </rfc>
+        """
+        let document = try RFCXMLParser.parse(Data(xml.utf8))
+        let intro = try #require(document.section(anchor: "intro"))
+        guard case .paragraph(let paragraph)? = intro.blocks.first else {
+            Issue.record("expected a paragraph")
+            return
+        }
+        #expect(paragraph.plainText == "RFC\u{00A0}9110 wraps as one unit.")
+    }
+
     @Test func references() throws {
         let document = try Self.document()
         let references = try #require(document.sections.first { $0.title == "References" })

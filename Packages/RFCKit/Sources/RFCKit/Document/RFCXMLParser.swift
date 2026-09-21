@@ -505,16 +505,21 @@ public struct RFCXMLParser: Sendable {
             let format = element["format"] ?? "default"
 
             if let id = referenceTargets[targetAnchor] {
-                let label = "[\(derived ?? targetAnchor)]"
+                // "RFC9110" is the canonical number, so render it as the series reads
+                // it; anything else is a tag the author chose ("[QUIC-TRANSPORT]") and
+                // is the name the document uses throughout.
+                let raw = derived ?? targetAnchor
+                let label = "[\(raw == id.description ? CrossReference.nonBreakingLabel(id.displayName) : raw)]"
                 let text: String
                 if !innerText.isEmpty {
                     text = innerText
                 } else if let section {
+                    let sectionLabel = CrossReference.nonBreakingLabel("Section \(section)")
                     switch element["sectionFormat"] {
-                    case "comma": text = "\(label), Section \(section)"
-                    case "parens": text = "\(label) (Section \(section))"
+                    case "comma": text = "\(label), \(sectionLabel)"
+                    case "parens": text = "\(label) (\(sectionLabel))"
                     case "bare": text = section
-                    default: text = "Section \(section) of \(label)"
+                    default: text = "\(sectionLabel) of \(label)"
                     }
                 } else if format == "counter" || format == "title" {
                     text = derived ?? label

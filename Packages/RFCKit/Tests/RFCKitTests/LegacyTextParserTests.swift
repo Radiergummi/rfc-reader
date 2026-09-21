@@ -376,6 +376,7 @@ struct LegacyTextCorpusFindingsTests {
             return nil
         }
         #expect(paragraphs.count == 2)
+        // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
         #expect(paragraphs.first == "A model is developed of interactions between programs. Salient features of this model which promote and simplify the construction of reliable, responsive services are identified.")
         #expect(!(intro?.blocks ?? []).contains { block in
             if case .preformatted = block { return true }
@@ -448,6 +449,7 @@ struct LegacyTextCorpusFindingsTests {
             return nil
         }
         #expect(paragraphs.count == 2)
+        // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
         #expect(paragraphs.first == "Experience suggests that one of the most important factors in determining the performance of an implementation is the manner in which that implementation is modularized.")
         #expect(intro.blocks.count == 2, "no line survives as its own block")
     }
@@ -478,6 +480,7 @@ struct LegacyTextCorpusFindingsTests {
             Issue.record("expected the introduction to start with a paragraph")
             return
         }
+        // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
         #expect(first.plainText == "The current ARPAnet message handling scheme has evolved from rather informal, decentralized beginnings. Early developers took advantage of pre-existing tools -- TECO, FTP -- in order to implement their first systems. Later, protocols were developed to codify the conventions already in use. While these conventions have been able to support an amazing variety and amount of service, they have a number of shortcomings.")
     }
 

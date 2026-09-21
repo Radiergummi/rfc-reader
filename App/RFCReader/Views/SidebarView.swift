@@ -5,8 +5,7 @@ struct SidebarView: View {
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
-        @Bindable var library = library
-        List(selection: $library.filter) {
+        List(selection: selection) {
             Section("Library") {
                 row(.bookmarks)
                 row(.recent)
@@ -16,7 +15,7 @@ struct SidebarView: View {
                 row(.all)
                 row(.standards)
                 row(.bestCurrentPractice)
-                ForEach([Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
+                ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
                     row(.stream(stream))
                 }
             }
@@ -47,6 +46,15 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom) {
             IndexStatusView()
         }
+    }
+
+    /// iOS only offers `List(selection:)` with an optional binding, and deselecting
+    /// should leave the current filter in place rather than clear it.
+    private var selection: Binding<LibraryFilter?> {
+        Binding(
+            get: { library.filter },
+            set: { if let new = $0 { library.filter = new } }
+        )
     }
 
     private func row(_ filter: LibraryFilter) -> some View {
