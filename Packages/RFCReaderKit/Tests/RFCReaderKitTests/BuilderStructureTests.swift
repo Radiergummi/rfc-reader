@@ -16,10 +16,23 @@ struct BuilderStructureTests {
         }
     }
 
-    @Test func anchorOffsetsIncreaseMonotonically() throws {
-        let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
-        let offsets = built.anchors.entries.map(\.offset)
-        #expect(offsets == offsets.sorted())
+    @Test func eachSectionAnchorPointsAtItsHeading() throws {
+        let document = try Fixtures.rfc8999()
+        let built = DocumentTextBuilder.build(document, style: style)
+        let text = built.text.string as NSString
+        for section in document.allSections {
+            let offset = try #require(built.anchors.offset(of: section.anchor))
+            let length = min((section.displayTitle as NSString).length, text.length - offset)
+            let slice = text.substring(with: NSRange(location: offset, length: length))
+            #expect(slice == section.displayTitle, "anchor \(section.anchor) does not point at its heading")
+        }
+    }
+
+    @Test func theBuilderRecordsAnchorsInDocumentOrder() throws {
+        let builder = DocumentTextBuilder(style: style)
+        builder.appendDocument(try Fixtures.rfc8999())
+        let offsets = builder.entries.map(\.offset)
+        #expect(offsets == offsets.sorted(), "mark() must be called in document order, before the run it names")
     }
 
     @Test func anchorOffsetsAreInsideTheString() throws {
