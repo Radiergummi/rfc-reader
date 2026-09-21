@@ -77,14 +77,23 @@ struct BuilderTableTests {
         #expect(paragraph.lineBreakMode == .byClipping)
     }
 
-    @Test func stackedRowsLeadWithTheirColumnHeader() {
+    @Test func stackedRowsLeadWithTheirColumnHeader() throws {
+        let builder = DocumentTextBuilder(style: ReadingStyle())
+        #expect(builder.tableShape(prose) == .stacked)
+
         let built = DocumentTextBuilder.build(document(prose), style: ReadingStyle())
-        #expect(built.text.string.contains("Code"))
-        #expect(built.text.string.contains("Description"))
-        #expect(built.text.string.contains("404"))
+        // "Code  404" (bold label, two spaces, cell) only appears in the stacked
+        // shape; the grid shape would emit "Code\tDescription\tRef." on one line
+        // and "404\t…" on another, never this adjacency.
+        #expect(built.text.string.contains("Code  404"))
+
+        let offset = built.text.string.distance(
+            from: built.text.string.startIndex,
+            to: try #require(built.text.string.range(of: "404")).lowerBound
+        )
+        let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
         // Stacked cells wrap, so they must not be clipped.
-        let range = built.text.string.range(of: "404")
-        #expect(range != nil)
+        #expect(paragraph.lineBreakMode != .byClipping)
     }
 
     @Test func cellInlinesKeepTheirCrossReferences() throws {

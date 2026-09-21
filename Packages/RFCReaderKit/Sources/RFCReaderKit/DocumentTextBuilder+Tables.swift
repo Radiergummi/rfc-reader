@@ -28,13 +28,18 @@ extension DocumentTextBuilder {
     }
 
     func naturalColumnWidths(_ table: RFCKit.Table) -> [CGFloat] {
-        let rows = table.header + table.rows
-        let columns = rows.map(\.count).max() ?? 0
+        // Measure what appendGridTable renders: header rows in bold, data rows in
+        // the regular weight. Bold glyphs are wider, and the header is frequently
+        // the widest content in its column, so measuring both in the regular font
+        // under-measures and lets a tab stop fall through to defaultTabInterval.
+        let rows: [(cells: [[Inline]], font: PlatformFont)] =
+            table.header.map { ($0, style.boldBodyFont) } + table.rows.map { ($0, style.bodyFont) }
+        let columns = rows.map { $0.cells.count }.max() ?? 0
         guard columns > 0 else { return [] }
         return (0..<columns).map { column in
             rows.compactMap { row -> CGFloat? in
-                guard row.count > column else { return nil }
-                return NSAttributedString(string: row[column].plainText, attributes: [.font: style.bodyFont]).size().width
+                guard row.cells.count > column else { return nil }
+                return NSAttributedString(string: row.cells[column].plainText, attributes: [.font: row.font]).size().width
             }.max() ?? 0
         }
     }
