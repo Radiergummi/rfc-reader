@@ -57,6 +57,27 @@ struct RFCXMLSerializerTests {
         #expect(xml.contains("rel=\"alternate\""))
     }
 
+    @Test func canonicalLabelsSurviveLegacyRoundTrip() throws {
+        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+        let xml = RFCXMLSerializer().serialize(parsed)
+        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+
+        let xrefs = reparsed.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+            guard case .paragraph(let paragraph) = block else { return [] }
+            return paragraph.inlines.compactMap { inline in
+                if case .crossReference(let xref) = inline { return xref }
+                return nil
+            }
+        }
+
+        let canonical = try #require(xrefs.first { $0.text?.hasPrefix("[RFC") == true },
+                                     "round trip must preserve canonical RFC refs")
+        #expect(canonical.isCanonicalLabel, "canonical label flag must survive LegacyTextParser → Serializer → XMLParser")
+
+        let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
+        #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
+    }
+
     @Test func unresolvedDocumentReferencesSurviveAsLinks() throws {
         // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
         let document = RFCDocument(

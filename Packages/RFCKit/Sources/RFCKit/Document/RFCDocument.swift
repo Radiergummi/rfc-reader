@@ -364,8 +364,8 @@ public struct CrossReference: Sendable, Hashable {
     public var target: Target
     /// Text to display; nil means the renderer derives it (`Section 4.2`, `[RFC9110]`).
     public var text: String?
-    /// True when `text` wraps a canonical series id (`RFC 9110`) in brackets that are
-    /// ours, not the source's — so a renderer may drop them and draw a chip instead.
+    /// True when this label is a canonical series id in brackets that a renderer may
+    /// replace with a chip, without losing information.
     /// False for an author's own tag (`[QUIC-TRANSPORT]`), which is the name the
     /// document uses throughout and must survive verbatim.
     public var isCanonicalLabel: Bool
