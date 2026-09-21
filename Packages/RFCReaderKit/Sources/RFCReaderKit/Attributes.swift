@@ -8,8 +8,9 @@ extension NSAttributedString.Key {
     public static let rfcAnchor = NSAttributedString.Key("rfcAnchor")
     /// What the layout fragment should draw behind or beside this run.
     public static let rfcDecoration = NSAttributedString.Key("rfcDecoration")
-    /// The verbatim block a run came from: the "Copy Figure" item and the
-    /// accessibility element both need the original text, not the laid-out lines.
+    /// The verbatim block a run came from: the accessibility element needs the
+    /// original text, not the laid-out lines. ("Copy Figure" is planned but not
+    /// yet implemented; this attribute is what it would read from too.)
     public static let rfcVerbatim = NSAttributedString.Key("rfcVerbatim")
     /// Marks the run that should be drawn as a chip: the span the brackets enclosed.
     public static let rfcChip = NSAttributedString.Key("rfcChip")

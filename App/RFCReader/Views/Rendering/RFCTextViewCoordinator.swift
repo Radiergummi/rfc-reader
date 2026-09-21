@@ -32,10 +32,13 @@ final class VisibleAnchorBox {
 /// stays reviewable side by side.
 @MainActor
 final class RFCTextViewCoordinator: NSObject {
-    /// The text column. `ReadingStyle.measure` is what the builder measured artwork
-    /// and tables against, so the container has to match it or the two disagree
-    /// about what fits.
-    static let measure = ReadingStyle().measure
+    /// The design ceiling on the text column: below this width the column tracks
+    /// the view exactly (less `margin` on each side); above it, the gutter grows
+    /// to keep the column from exceeding this. It is *not* what `built` was
+    /// measured against — that varies with the real column (see `onColumnChange`
+    /// below) — this is only the target `layOut(width:)` centres the column
+    /// against.
+    static let idealMeasure = ReadingStyle().measure
 
     /// The smallest gutter beside the column, and the padding under the last line.
     static let margin: CGFloat = 24
@@ -70,6 +73,12 @@ final class RFCTextViewCoordinator: NSObject {
     var onVisibleAnchorChange: (String) -> Void = { _ in }
     var onScrollHandled: () -> Void = {}
     var onLink: (URL) -> Bool = { _ in false }
+    /// Reports the real column whenever `layOut(width:)` computes a new one, so
+    /// `DocumentView` can rebuild the document with a matching `ReadingStyle.measure`
+    /// — see Critical Finding 3 in the final whole-branch review. Without this, the
+    /// builder always measured artwork and tables against `ReadingStyle`'s 712 pt
+    /// default, regardless of how narrow the real column was.
+    var onColumnChange: (CGFloat) -> Void = { _ in }
 
     /// The anchors tracking is allowed to report. The index covers *every* anchor —
     /// paragraphs, figures, tables, reference rows — because `scroll(to:)` has to
@@ -100,6 +109,14 @@ final class RFCTextViewCoordinator: NSObject {
     /// installed the document — and clamping a deep jump against that would land at
     /// the top and overwrite the reading position with section one.
     private var laidOutEnd: CGFloat?
+
+    /// Coalesces the full-document relayout a column change triggers. Below the
+    /// `idealMeasure` breakpoint the column changes on every pixel of a live
+    /// window resize, and each `layOutEverything()` costs a ~530 ms synchronous
+    /// `ensureLayout` — see Important Finding 8. The geometry writes in `layOut`
+    /// (`textContainerInset`, the header frame) stay immediate; only this expensive
+    /// relayout is debounced.
+    private var relayoutTask: Task<Void, Never>?
 
     // MARK: - Accessibility
 
@@ -135,6 +152,7 @@ final class RFCTextViewCoordinator: NSObject {
         guard let textView,
               let layout = textView.textLayoutManager,
               let storage = layout.textContentManager as? NSTextContentStorage else { return }
+        relayoutTask?.cancel()
         self.built = built
         lastReportedAnchor = nil
         deriveTrackedIndex()
@@ -162,6 +180,16 @@ final class RFCTextViewCoordinator: NSObject {
         laidOutEnd = end
     }
 
+    /// Debounces `layOutEverything()` after a column change; see `relayoutTask`.
+    private func scheduleRelayout() {
+        relayoutTask?.cancel()
+        relayoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            self?.layOutEverything()
+        }
+    }
+
     // MARK: - Geometry
 
     /// Centres the column and hangs the header in the top inset.
@@ -173,13 +201,17 @@ final class RFCTextViewCoordinator: NSObject {
     /// moves the gutters, not the text.
     func layOut(width: CGFloat) {
         guard let textView, width > 0 else { return }
-        let gutter = max(Self.margin, (width - Self.measure) / 2)
+        let gutter = max(Self.margin, (width - Self.idealMeasure) / 2)
         let column = width - gutter * 2
         let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
         guard column != laidOutColumn || headerHeight != laidOutHeaderHeight else { return }
         let columnChanged = column != laidOutColumn
         laidOutColumn = column
         laidOutHeaderHeight = headerHeight
+        // Deferred for the same reason as `onScrollHandled`: this runs inside
+        // SwiftUI's update, where mutating state (`DocumentView`'s `column`) is
+        // illegal.
+        if columnChanged { Task { self.onColumnChange(column) } }
 
         #if canImport(UIKit)
         textView.textContainerInset = UIEdgeInsets(top: headerHeight, left: gutter, bottom: Self.margin, right: gutter)
@@ -191,7 +223,7 @@ final class RFCTextViewCoordinator: NSObject {
         #endif
         headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
-        if columnChanged { layOutEverything() }
+        if columnChanged { scheduleRelayout() }
     }
 
     // MARK: - Scrolling
@@ -432,7 +464,10 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         for line in fragment.textLineFragments
         where line.typographicBounds.minY <= pointInFragment.y && pointInFragment.y < line.typographicBounds.maxY {
             let pointInLine = CGPoint(x: pointInFragment.x - line.typographicBounds.minX, y: pointInFragment.y - line.typographicBounds.minY)
-            let offset = fragmentStart + line.characterRange.location + line.characterIndex(for: pointInLine)
+            // `characterIndex(for:)` already returns an index relative to the whole
+            // paragraph (`line.attributedString`), not the line, so it already
+            // includes `line.characterRange.location` — adding it again double-counts.
+            let offset = fragmentStart + line.characterIndex(for: pointInLine)
             return reference(at: offset)
         }
         return nil

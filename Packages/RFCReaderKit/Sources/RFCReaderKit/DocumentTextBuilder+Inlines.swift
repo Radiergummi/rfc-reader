@@ -74,7 +74,11 @@ extension DocumentTextBuilder {
             let result = NSMutableAttributedString()
             result.append(NSAttributedString(string: String(label[label.startIndex..<bracketed.lowerBound]), attributes: attributes))
             var chip = attributes
-            chip[.rfcChip] = true
+            // The run's own `ReferenceBox`, not `true`: `NSAttributedString` merges
+            // contiguous runs with equal attribute values, and two adjacent chips
+            // (`[RFC9110][RFC9111]`) would otherwise share one `effectiveRange` and
+            // draw as a single rounded rect. Reference identity never compares equal.
+            chip[.rfcChip] = attributes[.rfcReference]
             if let symbolRun = chipSymbolRun(attributes: chip) {
                 result.append(symbolRun)
             }

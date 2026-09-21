@@ -13,8 +13,9 @@ struct PlatformTests {
 
     @Test func monospacedFontIsMonospaced() {
         let font = PlatformFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        let narrow = NSAttributedString(string: "i", attributes: [.font: font]).size().width
-        let wide = NSAttributedString(string: "W", attributes: [.font: font]).size().width
+        let builder = DocumentTextBuilder(style: ReadingStyle())
+        let narrow = builder.lineWidth("i", font: font)
+        let wide = builder.lineWidth("W", font: font)
         #expect(abs(narrow - wide) < 0.01)
     }
 

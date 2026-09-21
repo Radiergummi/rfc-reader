@@ -38,8 +38,9 @@ struct BuilderVerbatimTests {
             to: try #require(built.text.string.range(of: art)).lowerBound
         )
         let font = try #require(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
-        let narrow = NSAttributedString(string: "i", attributes: [.font: font]).size().width
-        let wide = NSAttributedString(string: "W", attributes: [.font: font]).size().width
+        let builder = DocumentTextBuilder(style: style)
+        let narrow = builder.lineWidth("i", font: font)
+        let wide = builder.lineWidth("W", font: font)
         #expect(abs(narrow - wide) < 0.01)
 
         let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
@@ -67,7 +68,7 @@ struct BuilderVerbatimTests {
         #expect(scale < 1)
 
         let font = style.monospacedFont(scale: scale)
-        let width = NSAttributedString(string: wide, attributes: [.font: font]).size().width
+        let width = builder.lineWidth(wide, font: font)
         #expect(width <= style.measure + 1, "129 columns must fit the measure after scaling")
     }
 

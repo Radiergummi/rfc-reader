@@ -122,7 +122,13 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
                 let roundsLeading = runRange.location >= lineRange.location
                 let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
 
-                let localStart = pieceRange.location - lineStart
+                // `locationForCharacter(at:)` takes an index relative to
+                // `line.attributedString` — the whole paragraph the fragment lays
+                // out, not the line — so the index has to be relative to the
+                // fragment's start, not the line's. The two coincide only on the
+                // fragment's first line, which is why every hand-trace and every
+                // single-line fixture looked right before this fix.
+                let localStart = pieceRange.location - fragmentStart
                 let localEnd = localStart + pieceRange.length
                 let startX = line.locationForCharacter(at: localStart).x
                 let endX = line.locationForCharacter(at: localEnd).x

@@ -17,7 +17,7 @@ The decision is to proceed with the single-storage TextKit 2 design as specified
 revisit layout cost later as a paging optimisation. The measured numbers and the verdict itself
 are unchanged.
 
-**Resolution (added once the milestone shipped):** the gate's Stop was overridden by that
+**Resolution (added 2026-09-21, once the milestone shipped):** the gate's Stop was overridden by that
 decision, not acted on. Neither of the two options the gate cell names below was taken —
 there is no chunked storage per chapter, and the design did not weaken requirement 1. The
 project shipped the single-storage design as specified, accepted the visible ~530 ms delay
@@ -47,7 +47,7 @@ was not yet deleted and no workaround was invented in this task. **The decision 
 proceed — chunked storages per chapter, or accepting a visible delay on deep links — was the
 controller's, not this task's.**
 
-**Update (added once the milestone shipped):** both of those statements describe this task's
+**Update (added 2026-09-21, once the milestone shipped):** both of those statements describe this task's
 moment, not the file's current state. The probe tool *was* deleted once its run was captured
 here (see the file header above and "Files" below); it does not still exist. And the decision
 was made: see the "Resolution" note above the gate table. Neither named option was taken —

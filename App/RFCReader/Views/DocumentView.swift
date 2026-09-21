@@ -34,10 +34,23 @@ struct DocumentView: View {
     /// report that was computed but not yet delivered.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
     @State private var copiedStyle: CitationStyle?
+    /// The real text column, reported by `RFCTextView`'s coordinator once it knows
+    /// the view's width. Starts at `ReadingStyle`'s own default so the very first
+    /// build (before the column is known) matches what a wide window settles on.
+    /// See Critical Finding 3.
+    @State private var column = ReadingStyle().measure
 
     private var metadata: RFCMetadata? { library.metadata(id) }
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
-    private var readingStyle: ReadingStyle { ReadingStyle(bodySize: fontSize) }
+    private var readingStyle: ReadingStyle { ReadingStyle(bodySize: fontSize, measure: column) }
+    /// Both a font-size change and a column change require the same rebuild, so
+    /// they share one debounced `restyle()` rather than each running its own timer
+    /// — see Critical Finding 3 and Important Finding 8.
+    private struct RestyleTrigger: Equatable {
+        let fontSize: Double
+        let column: CGFloat
+    }
+    private var restyleTrigger: RestyleTrigger { RestyleTrigger(fontSize: fontSize, column: column) }
 
     var body: some View {
         content
@@ -56,7 +69,7 @@ struct DocumentView: View {
                 }
             }
             .task(id: id) { await load() }
-            .task(id: fontSize) { await restyle() }
+            .task(id: restyleTrigger) { await restyle() }
             .onChange(of: library.pendingSection) { _, section in
                 jump(toSection: section)
             }
@@ -80,6 +93,7 @@ struct DocumentView: View {
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: { visibleAnchor = $0 },
                 onLink: { openInApp($0) },
+                onColumnChange: { column = $0 },
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
                 header: {
@@ -179,10 +193,11 @@ struct DocumentView: View {
         }
     }
 
-    /// A font-size change costs a rebuild of the whole attributed string plus a full
-    /// relayout — 650 ms on the largest documents in the library — so the slider is
-    /// debounced by that much. `.task(id:)` cancels the pending rebuild on every
-    /// further tick, and the anchor index puts the reader back where they were.
+    /// A font-size or column change costs a rebuild of the whole attributed string
+    /// plus a full relayout — 650 ms on the largest documents in the library — so
+    /// both are debounced by that much through `restyleTrigger`. `.task(id:)`
+    /// cancels the pending rebuild on every further tick, and the anchor index
+    /// puts the reader back where they were.
     private func restyle() async {
         guard let document, built != nil else { return }
         try? await Task.sleep(for: .milliseconds(650))

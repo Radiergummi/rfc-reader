@@ -24,6 +24,11 @@ struct RFCTextView<Header: View>: View {
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
+    /// The real text column, reported whenever the coordinator's `layOut(width:)`
+    /// computes a new one — see Critical Finding 3. `DocumentView` rebuilds the
+    /// document with a matching `ReadingStyle.measure` so artwork and tables scale
+    /// against the column they actually render into, not a fixed 712 pt default.
+    let onColumnChange: (CGFloat) -> Void
     @ViewBuilder let header: () -> Header
 
     var body: some View {
@@ -37,6 +42,7 @@ struct RFCTextView<Header: View>: View {
                 onScrollHandled: onScrollHandled,
                 onVisibleAnchorChange: onVisibleAnchorChange,
                 onLink: onLink,
+                onColumnChange: onColumnChange,
                 library: library,
                 header: AnyView(header())
             )
@@ -54,6 +60,7 @@ private struct Representable: UIViewRepresentable {
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
+    let onColumnChange: (CGFloat) -> Void
     let library: LibraryModel
     let header: AnyView
 
@@ -89,6 +96,7 @@ private struct Representable: UIViewRepresentable {
         coordinator.onScrollHandled = onScrollHandled
         coordinator.onVisibleAnchorChange = onVisibleAnchorChange
         coordinator.onLink = onLink
+        coordinator.onColumnChange = onColumnChange
         coordinator.library = library
         coordinator.trackedAnchors = trackedAnchors
         coordinator.headerHost?.rootView = header
@@ -111,6 +119,7 @@ private struct Representable: NSViewRepresentable {
     let onScrollHandled: () -> Void
     let onVisibleAnchorChange: (String) -> Void
     let onLink: (URL) -> Bool
+    let onColumnChange: (CGFloat) -> Void
     let library: LibraryModel
     let header: AnyView
 
@@ -162,6 +171,7 @@ private struct Representable: NSViewRepresentable {
         coordinator.onScrollHandled = onScrollHandled
         coordinator.onVisibleAnchorChange = onVisibleAnchorChange
         coordinator.onLink = onLink
+        coordinator.onColumnChange = onColumnChange
         coordinator.library = library
         coordinator.trackedAnchors = trackedAnchors
         coordinator.headerHost?.rootView = header

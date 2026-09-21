@@ -3,7 +3,12 @@ import SwiftUI
 
 /// A card previewing a cross reference's target: hover on macOS, long press on
 /// iOS. Reads the target from the library's index rather than the reference's
-/// own text, which is deliberately terse ("Section 4.2 of [RFC9110]").
+/// own text, which is deliberately terse ("Section 4.2 of [RFC9110]"). Purely
+/// informational — no button: on macOS the popover closes on `mouseExited` the
+/// moment the pointer moves toward it, so a button inside could never be
+/// clicked, and on iOS the same view is a non-interactive context-menu preview.
+/// Clicking the chip itself already opens the document, through `clickedOnLink`
+/// on macOS and `primaryActionFor` on iOS.
 struct ReferencePreview: View {
     let reference: CrossReference
     let library: LibraryModel
@@ -11,11 +16,6 @@ struct ReferencePreview: View {
     private var documentID: DocumentID? {
         guard case .document(let id, _) = reference.target else { return nil }
         return id
-    }
-
-    private var section: String? {
-        guard case .document(_, let section) = reference.target else { return nil }
-        return section
     }
 
     var body: some View {
@@ -28,9 +28,6 @@ struct ReferencePreview: View {
                 }
                 if let abstract = metadata.abstract {
                     Text(abstract).font(.callout).foregroundStyle(.secondary).lineLimit(4)
-                }
-                Button("Open \(metadata.id.displayName)") {
-                    library.open(metadata.id, section: section)
                 }
             } else if let documentID {
                 // Referenced but not in the library's index — an unpublished draft,
