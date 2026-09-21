@@ -11,6 +11,16 @@ struct ContentView: View {
     /// the index, the cache — stays on the environment's `LibraryModel`.
     @State private var navigation = NavigationModel()
 
+    /// Short enough to survive a tab: the document's designation, not its title.
+    private var windowTitle: String {
+        navigation.selection?.displayName ?? navigation.filter.title
+    }
+
+    /// The prose title goes here, where macOS has room for it.
+    private var windowSubtitle: String {
+        navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
+    }
+
     var body: some View {
         @Bindable var navigation = navigation
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -28,34 +38,39 @@ struct ContentView: View {
             }
         }
         .environment(navigation)
+        // On the split view, not on `DocumentView`: in a `NavigationSplitView` the
+        // window (and therefore the tab) takes its title from the split view itself,
+        // so a title set down in the detail column is outranked by the list column's
+        // and every tab read "All RFCs" whatever it was showing.
+        .navigationTitle(windowTitle)
+        #if os(macOS)
+        .navigationSubtitle(windowSubtitle)
+        #endif
         // On the split view rather than on `DocumentView`: macOS gives the detail
         // column no leading toolbar slot — a `.navigation` item declared down there is
         // silently dropped — and scene-level navigation belongs beside the sidebar
         // toggle anyway, not with the document's own actions.
         //
-        // Shown only once there is somewhere to go. An app that has opened one
-        // document has no history, and a pair of permanently dimmed arrows is just
-        // furniture.
+        // Always present, dimmed when there is nowhere to go, as Safari does. A pair
+        // that appears and vanishes with the history shifts everything beside it.
         .toolbar {
-            if navigation.canGoBack || navigation.canGoForward {
-                ToolbarItem(placement: .navigation) {
-                    ControlGroup {
-                        Button {
-                            navigation.goBack()
-                        } label: {
-                            Label("Back", systemImage: "chevron.backward")
-                        }
-                        .disabled(!navigation.canGoBack)
-
-                        Button {
-                            navigation.goForward()
-                        } label: {
-                            Label("Forward", systemImage: "chevron.forward")
-                        }
-                        .disabled(!navigation.canGoForward)
+            ToolbarItem(placement: .navigation) {
+                ControlGroup {
+                    Button {
+                        navigation.goBack()
+                    } label: {
+                        Label("Back", systemImage: "chevron.backward")
                     }
-                    .controlGroupStyle(.navigation)
+                    .disabled(!navigation.canGoBack)
+
+                    Button {
+                        navigation.goForward()
+                    } label: {
+                        Label("Forward", systemImage: "chevron.forward")
+                    }
+                    .disabled(!navigation.canGoForward)
                 }
+                .controlGroupStyle(.navigation)
             }
         }
         .onAppear { library.register(navigation) }

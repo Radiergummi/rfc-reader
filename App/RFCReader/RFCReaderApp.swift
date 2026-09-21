@@ -51,15 +51,14 @@ struct DocumentCommands: Commands {
             Button("Go to RFC…") { openDocument?() }
                 .keyboardShortcut("l", modifiers: .command)
         }
-        // Replaces the sidebar-toggle defaults SwiftUI puts here; these are the
-        // bracket shortcuts every document browser uses.
         CommandGroup(before: .sidebar) {
             Section {
+                // Cmd+arrow, as Safari and Finder bind it.
                 Button("Back") { navigation?.goBack() }
-                    .keyboardShortcut("[", modifiers: .command)
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
                     .disabled(navigation?.canGoBack != true)
                 Button("Forward") { navigation?.goForward() }
-                    .keyboardShortcut("]", modifiers: .command)
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
                     .disabled(navigation?.canGoForward != true)
             }
         }
