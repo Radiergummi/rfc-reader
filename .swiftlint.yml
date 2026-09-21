@@ -1,0 +1,45 @@
+# SwiftLint configuration. `make lint` runs this with --strict, so anything left
+# enabled has to hold across the whole tree: thresholds sit where the code already
+# is, and rules the codebase deliberately disagrees with are off, with the reason.
+
+# Only our own sources. Without this SwiftLint also walks the SwiftPM build
+# directories and lints generated test entry points.
+included:
+  - App
+  - Packages/RFCKit/Sources
+  - Packages/RFCKit/Tests
+  - Tools/corpus-build/Sources
+
+disabled_rules:
+  # The parsers are long, branchy state machines: LegacyTextParser alone decides
+  # heading, list, table and artwork shape from indentation. Splitting them to
+  # satisfy a threshold would scatter one decision across several functions.
+  - cyclomatic_complexity
+  - function_body_length
+  - type_body_length
+  - file_length
+
+  # Trailing commas in multi-line literals are the house style, and the rule
+  # flags them unless every literal has one.
+  - trailing_comma
+
+  # `if cond { x }` followed by `else if cond { y }` on the next line reads as a
+  # table of cases; the rule wants the `else` pulled up onto the closing brace.
+  - statement_position
+
+  # `String(data:encoding:)` is used where a decode failure and empty input are
+  # handled the same way; the failable initializer the rule prefers buys nothing.
+  - optional_data_string_conversion
+
+line_length:
+  warning: 200
+  error: 200
+  ignores_urls: true
+  ignores_comments: true
+  ignores_interpolated_strings: true
+
+# `i`, `n`, `w`, `h` in the layout and scanning loops.
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
