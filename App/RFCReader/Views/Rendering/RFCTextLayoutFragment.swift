@@ -75,7 +75,81 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
             }
             context.restoreGState()
         }
+        drawChips(at: point, in: context)
         super.draw(at: point, in: context)
+    }
+
+    /// A chip's fill and rounding, worked out per *line* fragment. A chip that
+    /// wraps is still one contiguous `.rfcChip` run laid out across several
+    /// `NSTextLineFragment`s inside this single layout fragment (TextKit 2 lays
+    /// out a whole paragraph as one fragment holding many line fragments) — so the
+    /// line that holds the run's first character rounds only its left corners, the
+    /// line holding its last character rounds only its right corners, and a middle
+    /// line (a chip wrapping across three or more lines) rounds neither.
+    private struct ChipRect {
+        let rect: CGRect
+        let roundsLeading: Bool
+        let roundsTrailing: Bool
+    }
+
+    private static let chipPadding: CGFloat = 5
+
+    /// The chip's own padding (5 pt) is well inside `surfaceInset` (11 pt, from the
+    /// rule), so drawing outside the glyph bounds by that much still lands inside
+    /// `renderingSurfaceBounds` and needs no separate widening there.
+    private func chipRects(at point: CGPoint) -> [ChipRect] {
+        guard let textLayoutManager,
+              let storage = textLayoutManager.textContentManager as? NSTextContentStorage,
+              let text = storage.attributedString else { return [] }
+        let documentStart = textLayoutManager.documentRange.location
+        let fragmentStart = textLayoutManager.offset(from: documentStart, to: rangeInElement.location)
+        guard fragmentStart >= 0 else { return [] }
+
+        var result: [ChipRect] = []
+        for line in textLineFragments {
+            let lineStart = fragmentStart + line.characterRange.location
+            let lineRange = NSRange(location: lineStart, length: line.characterRange.length)
+            guard lineRange.location >= 0, NSMaxRange(lineRange) <= text.length else { continue }
+
+            text.enumerateAttribute(.rfcChip, in: lineRange) { value, pieceRange, _ in
+                guard value != nil else { return }
+
+                // The piece `enumerateAttribute` hands back is already clipped to
+                // this line; the run's own full extent — which may start before or
+                // end after this line — decides which ends round.
+                var runRange = NSRange(location: 0, length: 0)
+                _ = text.attribute(.rfcChip, at: pieceRange.location, effectiveRange: &runRange)
+                let roundsLeading = runRange.location >= lineRange.location
+                let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
+
+                let localStart = pieceRange.location - lineStart
+                let localEnd = localStart + pieceRange.length
+                let startX = line.locationForCharacter(at: localStart).x
+                let endX = line.locationForCharacter(at: localEnd).x
+                let padLeft: CGFloat = roundsLeading ? Self.chipPadding : 0
+                let padRight: CGFloat = roundsTrailing ? Self.chipPadding : 0
+
+                let rect = CGRect(
+                    x: point.x + line.typographicBounds.minX + startX - padLeft,
+                    y: point.y + line.typographicBounds.minY + 1,
+                    width: endX - startX + padLeft + padRight,
+                    height: line.typographicBounds.height - 2
+                )
+                result.append(ChipRect(rect: rect, roundsLeading: roundsLeading, roundsTrailing: roundsTrailing))
+            }
+        }
+        return result
+    }
+
+    private func drawChips(at point: CGPoint, in context: CGContext) {
+        for chip in chipRects(at: point) {
+            var corners: Corners = []
+            if chip.roundsLeading { corners.formUnion(.left) }
+            if chip.roundsTrailing { corners.formUnion(.right) }
+            context.setFillColor(RFCColors.accent.withAlphaComponent(0.15).cgColor)
+            context.addPath(Self.roundedPath(in: chip.rect, cornerRadius: 6, corners: corners))
+            context.fillPath()
+        }
     }
 
     /// The card's outer padding is only added on the run's own top and/or bottom
@@ -91,37 +165,60 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
             width: frame.width + Self.cardPadding * 2,
             height: frame.height + topInset + bottomInset
         )
+        var corners: Corners = []
+        if span.isFirst { corners.formUnion(.top) }
+        if span.isLast { corners.formUnion(.bottom) }
         context.setFillColor(RFCColors.quaternaryFill.withAlphaComponent(alpha).cgColor)
-        context.addPath(Self.roundedPath(in: card, cornerRadius: 8, roundTop: span.isFirst, roundBottom: span.isLast))
+        context.addPath(Self.roundedPath(in: card, cornerRadius: 8, corners: corners))
         context.fillPath()
     }
 
     private func drawRule(frame: CGRect, span: DecorationSpan, in context: CGContext) {
         let rule = CGRect(x: frame.minX - Self.rulePadding - Self.ruleWidth, y: frame.minY, width: Self.ruleWidth, height: frame.height)
+        var corners: Corners = []
+        if span.isFirst { corners.formUnion(.top) }
+        if span.isLast { corners.formUnion(.bottom) }
         context.setFillColor(RFCColors.quaternaryFill.cgColor)
-        context.addPath(Self.roundedPath(in: rule, cornerRadius: 1.5, roundTop: span.isFirst, roundBottom: span.isLast))
+        context.addPath(Self.roundedPath(in: rule, cornerRadius: 1.5, corners: corners))
         context.fillPath()
     }
 
-    /// `rect`, rounded only on the edges named — square where a decoration's band
-    /// continues into the next or previous fragment, rounded where the band
-    /// starts or ends. `CGPath(roundedRect:cornerWidth:cornerHeight:transform:)`
-    /// has no per-corner variant, hence the manual path. Task 12's reference chip
-    /// can wrap across a line break, which is the same shape problem, so this is
-    /// written to be reused there rather than duplicated.
-    static func roundedPath(in rect: CGRect, cornerRadius: CGFloat, roundTop: Bool, roundBottom: Bool) -> CGPath {
+    /// Which corners `roundedPath` should round.
+    struct Corners: OptionSet {
+        let rawValue: Int
+        static let topLeft = Corners(rawValue: 1 << 0)
+        static let topRight = Corners(rawValue: 1 << 1)
+        static let bottomLeft = Corners(rawValue: 1 << 2)
+        static let bottomRight = Corners(rawValue: 1 << 3)
+        static let top: Corners = [.topLeft, .topRight]
+        static let bottom: Corners = [.bottomLeft, .bottomRight]
+        static let left: Corners = [.topLeft, .bottomLeft]
+        static let right: Corners = [.topRight, .bottomRight]
+        static let all: Corners = [.top, .bottom]
+    }
+
+    /// `rect`, rounded only on the corners named — square where a decoration's band
+    /// continues into the next or previous fragment, rounded where the band starts
+    /// or ends. `CGPath(roundedRect:cornerWidth:cornerHeight:transform:)` has no
+    /// per-corner variant, hence the manual path. The reference chip needs this at
+    /// a finer grain than the card and the rule do: a chip that wraps across a
+    /// line break rounds the left two corners on its first line and the right two
+    /// on its last, which top/bottom rounding alone cannot express.
+    static func roundedPath(in rect: CGRect, cornerRadius: CGFloat, corners: Corners) -> CGPath {
         let radius = max(0, min(cornerRadius, min(rect.width, rect.height) / 2))
-        let topRadius = roundTop ? radius : 0
-        let bottomRadius = roundBottom ? radius : 0
+        let topLeftRadius = corners.contains(.topLeft) ? radius : 0
+        let topRightRadius = corners.contains(.topRight) ? radius : 0
+        let bottomRightRadius = corners.contains(.bottomRight) ? radius : 0
+        let bottomLeftRadius = corners.contains(.bottomLeft) ? radius : 0
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + topRadius))
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX + topRadius, y: rect.minY), radius: topRadius)
-        path.addLine(to: CGPoint(x: rect.maxX - topRadius, y: rect.minY))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY + topRadius), radius: topRadius)
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRadius))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX - bottomRadius, y: rect.maxY), radius: bottomRadius)
-        path.addLine(to: CGPoint(x: rect.minX + bottomRadius, y: rect.maxY))
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - bottomRadius), radius: bottomRadius)
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + topLeftRadius))
+        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX + topLeftRadius, y: rect.minY), radius: topLeftRadius)
+        path.addLine(to: CGPoint(x: rect.maxX - topRightRadius, y: rect.minY))
+        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY + topRightRadius), radius: topRightRadius)
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRightRadius))
+        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX - bottomRightRadius, y: rect.maxY), radius: bottomRightRadius)
+        path.addLine(to: CGPoint(x: rect.minX + bottomLeftRadius, y: rect.maxY))
+        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - bottomLeftRadius), radius: bottomLeftRadius)
         path.closeSubpath()
         return path
     }

@@ -1,5 +1,10 @@
 import Foundation
 import RFCKit
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 extension DocumentTextBuilder {
     /// Renders a run of inlines. `base` carries the font and colour of the context
@@ -58,7 +63,25 @@ extension DocumentTextBuilder {
             var attributes = base
             attributes[.rfcReference] = ReferenceBox(xref)
             if let url = url(for: xref) { attributes[.link] = url }
-            return NSAttributedString(string: label(for: xref), attributes: attributes)
+            let label = label(for: xref)
+            guard xref.isCanonicalLabel, let bracketed = bracketedRange(in: label) else {
+                return NSAttributedString(string: label, attributes: attributes)
+            }
+            // What isCanonicalLabel licenses is replacing a canonical series id's
+            // brackets with a chip, not a claim about who authored them: the legacy
+            // parser's brackets are literally in the source text. The rest of the
+            // phrase stays plain link text.
+            let result = NSMutableAttributedString()
+            result.append(NSAttributedString(string: String(label[label.startIndex..<bracketed.lowerBound]), attributes: attributes))
+            var chip = attributes
+            chip[.rfcChip] = true
+            if let symbolRun = chipSymbolRun(attributes: chip) {
+                result.append(symbolRun)
+            }
+            let inner = label.index(after: bracketed.lowerBound)..<label.index(before: bracketed.upperBound)
+            result.append(NSAttributedString(string: String(label[inner]), attributes: chip))
+            result.append(NSAttributedString(string: String(label[bracketed.upperBound...]), attributes: attributes))
+            return result
 
         case .lineBreak:
             return NSAttributedString(string: "\n", attributes: base)
@@ -75,6 +98,36 @@ extension DocumentTextBuilder {
         case .document(let id, let section):
             return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
         }
+    }
+
+    /// The `[...]` span in a label, brackets included, or nil if there is none.
+    static func bracketedRange(in label: String) -> Range<String.Index>? {
+        guard let open = label.firstIndex(of: "["), let close = label.lastIndex(of: "]"), open < close else { return nil }
+        return open..<label.index(after: close)
+    }
+
+    /// The leading `doc.text` glyph that rides inside the chip's own run, so it
+    /// falls inside both the drawn background and the hit region. `NSTextAttachment
+    /// (image:)` sits the image's bottom edge on the text baseline by default,
+    /// which reads low against the words around it, so the symbol is drawn at the
+    /// run's own font size and its bounds are centred on that font's cap height.
+    private static func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+        let font = (attributes[.font] as? PlatformFont) ?? PlatformFont.systemFont(ofSize: 17)
+        let configuration = PlatformImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
+        let attachment = NSTextAttachment()
+        #if canImport(UIKit)
+        guard let symbol = PlatformImage(systemName: "doc.text")?.withConfiguration(configuration) else { return nil }
+        attachment.image = symbol
+        #else
+        // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
+        // after the default initializer instead.
+        guard let symbol = PlatformImage(systemName: "doc.text")?.withSymbolConfiguration(configuration) else { return nil }
+        attachment.image = symbol
+        #endif
+        attachment.bounds = CGRect(x: 0, y: (font.capHeight - symbol.size.height) / 2, width: symbol.size.width, height: symbol.size.height)
+        let run = NSMutableAttributedString(attachment: attachment)
+        run.addAttributes(attributes, range: NSRange(location: 0, length: run.length))
+        return run
     }
 
     static func url(for xref: CrossReference) -> URL? {

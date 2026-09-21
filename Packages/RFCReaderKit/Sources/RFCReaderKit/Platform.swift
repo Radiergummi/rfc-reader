@@ -4,12 +4,22 @@ import UIKit
 public typealias PlatformFont = UIFont
 public typealias PlatformColor = UIColor
 public typealias PlatformFontDescriptor = UIFontDescriptor
+public typealias PlatformImage = UIImage
 #else
 import AppKit
 
 public typealias PlatformFont = NSFont
 public typealias PlatformColor = NSColor
 public typealias PlatformFontDescriptor = NSFontDescriptor
+public typealias PlatformImage = NSImage
+
+extension NSImage {
+    /// Mirrors `UIImage(systemName:)` so the builder can ask for an SF Symbol
+    /// without branching on platform.
+    convenience init?(systemName: String) {
+        self.init(systemSymbolName: systemName, accessibilityDescription: nil)
+    }
+}
 #endif
 
 /// Dynamic colours, stored in the attributed string unresolved so that a change of

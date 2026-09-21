@@ -13,14 +13,24 @@ import AppKit
 struct BuilderCompletenessTests {
     private let style = ReadingStyle()
 
-    /// The guard on the central decision. An attachment character anywhere means a
-    /// block kind quietly became a hosted view, which is the hole in the storage
-    /// this design exists to avoid.
+    /// The guard on the central decision. An attachment character outside a chip's
+    /// own run means a block kind quietly became a hosted view, which is the hole
+    /// in the storage this design exists to avoid; the chip's leading doc.text
+    /// symbol is the one sanctioned exception, and only inside its own `.rfcChip` run.
     @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
     func nothingBecomesAnAttachment(fixture: String) throws {
         let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
         let built = DocumentTextBuilder.build(document, style: style)
-        #expect(!built.text.string.contains("\u{FFFC}"), "\(fixture) produced an attachment character")
+        let text = built.text.string
+        var searchStart = text.startIndex
+        while let found = text.range(of: "\u{FFFC}", range: searchStart..<text.endIndex) {
+            let offset = text.distance(from: text.startIndex, to: found.lowerBound)
+            #expect(
+                built.text.attribute(.rfcChip, at: offset, effectiveRange: nil) != nil,
+                "\(fixture) has an attachment character outside a chip run at offset \(offset)"
+            )
+            searchStart = found.upperBound
+        }
     }
 
     @Test func aFigureContributesArtworkAndACaptionAsText() {

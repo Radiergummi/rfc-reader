@@ -11,6 +11,8 @@ extension NSAttributedString.Key {
     /// The verbatim block a run came from: the "Copy Figure" item and the
     /// accessibility element both need the original text, not the laid-out lines.
     public static let rfcVerbatim = NSAttributedString.Key("rfcVerbatim")
+    /// Marks the run that should be drawn as a chip: the span the brackets enclosed.
+    public static let rfcChip = NSAttributedString.Key("rfcChip")
 }
 
 public enum RFCDecoration: String, Sendable {

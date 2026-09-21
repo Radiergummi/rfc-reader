@@ -108,9 +108,46 @@ struct BuilderStructureTests {
         let built = DocumentTextBuilder.build(document, style: style)
         for section in document.allSections {
             for case .paragraph(let paragraph) in section.blocks where !paragraph.plainText.isEmpty {
-                #expect(built.text.string.contains(paragraph.plainText), "missing paragraph: \(paragraph.plainText.prefix(60))")
+                let projection = Self.renderedLabel(paragraph.inlines)
+                #expect(built.text.string.contains(projection), "missing paragraph: \(paragraph.plainText.prefix(60))")
             }
         }
+    }
+
+    /// Mirrors what the builder renders, computed independently from the model
+    /// rather than by calling the builder's own `bracketedRange(in:)`, so this
+    /// stays a check on the builder rather than a restatement of it. A canonical
+    /// cross reference's label loses its outer brackets and gains the chip's
+    /// leading `U+FFFC` symbol in their place; everything else is `plainText`.
+    private static func renderedLabel(_ inlines: [Inline]) -> String {
+        inlines.map { inline -> String in
+            switch inline {
+            case .text(let text), .code(let text), .superscript(let text), .subscript(let text):
+                return text
+            case .emphasis(let inner), .strong(let inner), .link(_, let inner):
+                return renderedLabel(inner)
+            case .crossReference(let xref):
+                let label = xref.text ?? {
+                    switch xref.target {
+                    case .anchor(let anchor): return anchor
+                    case .document(let id, let section):
+                        return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
+                    }
+                }()
+                guard xref.isCanonicalLabel,
+                      let open = label.firstIndex(of: "["),
+                      let close = label.lastIndex(of: "]"),
+                      open < close else {
+                    return label
+                }
+                let before = label[label.startIndex..<open]
+                let inner = label[label.index(after: open)..<close]
+                let after = label[label.index(after: close)...]
+                return "\(before)\u{FFFC}\(inner)\(after)"
+            case .lineBreak:
+                return "\n"
+            }
+        }.joined()
     }
 
     @Test func theLegacyPathBuildsToo() throws {
