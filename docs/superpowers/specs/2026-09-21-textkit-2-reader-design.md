@@ -174,25 +174,53 @@ What the user loses, and what replaces it:
 
 `PreformattedView.swift` is therefore **deleted**, not reused.
 
-### Tables as text
+### Tables as text, in one of two shapes
 
-One paragraph per row, column positions as `NSParagraphStyle.tabStops` measured by the builder,
-`.byClipping`, and the same fit-to-measure scaling as artwork. Cells keep their inlines, so a
-cross reference inside a cell is still a link, still a chip, and still reachable by a later
-find — which an attachment would cost.
+Tables are text too — cells keep their inlines, so a cross reference inside a cell is still a
+link, still a chip, and still reachable by a later find, all of which an attachment would cost.
+But a single mechanism does not fit them, and the reason is measurable.
 
-This is the least certain part of the design, and it is honestly less certain than artwork.
-Table cells are `[[Inline]]`: they can be long, and tab stops do not wrap. Two facts bound the
-risk:
+Tab stops alone were the first answer, and real documents refuse it. The natural column widths
+of RFC 9110's twelve tables, in characters:
+
+| Table | Columns | Natural widths | Row width |
+|---|---|---|---|
+| 1 | 3 | 87, 9, 3 | 105 |
+| 4 | 3 | 11, **92**, 7 | 116 |
+| 6 | 2 | 14, **89** | 106 |
+| 10 | 3 | 10, 67, 7 | 90 |
+| 7 | 4 | 7, 4, 10, 7 | 37 |
+| 5 | 2 | 24, 13 | 40 |
+
+RFC tables routinely carry one **prose** column — a description 87 to 92 characters long — beside
+two or three short ones. Tab stops do not wrap, so such a row is either clipped or scaled until
+the prose is unreadable: at the 760 pt measure, 17 pt body text breaks even around 87 characters,
+and a 116-character row needs roughly 0.75×. Meanwhile RFC 9114's five tables (36–93 characters)
+mostly fit at 1.0× and read best as a grid.
+
+So the builder measures the natural column widths and picks:
+
+- **Grid.** Total width fits the measure → one paragraph per row, column positions as
+  `NSParagraphStyle.tabStops`, `.byClipping`. This is the common case and the one that looks
+  like a table.
+- **Stacked.** It does not fit → one paragraph per *cell*, each led by its column header in the
+  header style, indented, wrapping normally at the measure. The same shape a responsive web
+  table collapses to on a phone.
+
+One measurement, two layouts, both pure and both unit-testable. The stacked shape is not a
+consolation prize: it is also what a narrow iPhone measure needs, so the rule earns its keep on
+small screens even for tables that fit on a Mac.
+
+Two facts bound what remains of the risk:
 
 - **`LegacyTextParser` never emits a `table`.** There are zero `<table>` elements across the
   8,457-document corpus; tables exist only in real RFCXML, roughly one library document in
   seven. A regression here cannot touch the legacy path.
-- The fallback is known and cheap to reach: if tab stops prove unusable, tables become the one
-  hosted view in the body, non-interactive, with their plain text substituted on copy — the
+- The fallback is still known and cheap to reach: if both shapes disappoint, tables become the
+  one hosted view in the body, non-interactive, with their plain text substituted on copy — the
   attachment machinery this design otherwise avoids, built for exactly one block kind.
 
-Step 0 probes this against real modern RFCs with wide tables before step 1 commits to it.
+Step 0 verifies the threshold with real font metrics rather than the character estimate above.
 
 ### The chip
 
@@ -371,8 +399,10 @@ layout, or one storage per section) range from awkward to a requirement-1 failur
 **Probe B — restyle.** Rebuild RFC 9110 on a font-size change and measure. Sets the debounce,
 and decides whether the two-pass restyle is speculative or necessary.
 
-**Probe C — tables.** Tab stops against real modern RFCs with wide tables and long cells. Gates
-the tables-as-text decision against the fallback named above.
+**Probe C — the table threshold.** Measure the natural column widths of RFC 9110's twelve
+tables and RFC 9114's five with real font metrics at both the 760 pt Mac measure and an iPhone
+measure, and confirm the grid/stacked split falls where the character estimate says it does.
+Gates the threshold, not the mechanism.
 
 Note that the first draft's step-0 gate — "does `tracksTextAttachmentViewBounds` size
 SwiftUI-hosted content correctly" — tested a property the API does not have. It only makes the
@@ -386,7 +416,7 @@ With no hosted views left in the body, the question no longer arises.
 |---|---|
 | Deep jumps force full-document layout | probe A, first thing, before any commitment |
 | Wide artwork clips or shrinks too far | fit-to-measure scaling; the corpus says 99.998% of blocks are ≤ 79 columns |
-| Tables as tab stops break on long cells | probe C; fallback to a single non-interactive hosted view, affecting no legacy document |
+| Tables read badly in one shape or the other | the grid/stacked threshold, measured in probe C; fallback to a single non-interactive hosted view, affecting no legacy document |
 | Whole-document rebuild on every slider tick | debounce, restore position from the anchor index; two-pass restyle if probe B says so |
 | A rebuild on every appearance change | dynamic colours in the storage, not resolved ones in `ReadingStyle` |
 | VoiceOver collapses to a single element | custom rotors and per-artwork elements, step 5, inside this milestone |
