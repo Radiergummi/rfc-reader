@@ -137,9 +137,7 @@ struct DocumentView: View {
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
                 header: {
-                    DocumentHeaderView(identity: headerIdentity)
-                        .environment(library)
-                        .environment(navigation)
+                    DocumentHeaderView(library: library, navigation: navigation, identity: headerIdentity)
                         .padding(.top, 16)
                         .padding(.bottom, 12)
                 }
@@ -343,6 +341,11 @@ struct DocumentView: View {
 /// it. The abstract is no longer here; it is the first prose in the storage, which is
 /// what puts the banner between the title and the abstract as `VISION.md` asks.
 struct DocumentHeaderView: View {
+    /// Passed down for the same reason `StatusBanner` takes them: this whole subtree
+    /// is hosted outside the SwiftUI hierarchy.
+    let library: LibraryModel
+    let navigation: NavigationModel
+
     /// Exactly what the body below reads, and nothing else.
     ///
     /// The header is hosted in a `UIHostingController`/`NSHostingController` that
@@ -398,7 +401,7 @@ struct DocumentHeaderView: View {
                     .font(.subheadline)
             }
             if let metadata = identity.metadata {
-                StatusBanner(metadata: metadata)
+                StatusBanner(library: library, navigation: navigation, metadata: metadata)
                     .padding(.top, 4)
             }
         }
@@ -413,8 +416,15 @@ struct DocumentHeaderView: View {
 
 /// The single most important piece of context: is this still the current document?
 struct StatusBanner: View {
-    @Environment(LibraryModel.self) private var library
-    @Environment(NavigationModel.self) private var navigation
+    /// Handed over rather than read from the environment.
+    ///
+    /// This view is hosted in an `NSHostingController`/`UIHostingController` in the
+    /// text view's top inset — outside the SwiftUI tree that `ContentView` injects
+    /// into — so an `@Environment` lookup here is a runtime trap waiting to fire
+    /// rather than a compile-time requirement. The two models arrive as properties so
+    /// the compiler is the thing that notices when a call site forgets one.
+    let library: LibraryModel
+    let navigation: NavigationModel
     let metadata: RFCMetadata
 
     var body: some View {
