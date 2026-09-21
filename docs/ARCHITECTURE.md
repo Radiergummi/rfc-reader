@@ -103,18 +103,23 @@ CI (`.github/workflows/ci.yml`) runs the package tests on macOS and in a Linux S
 
 *Decided September 2026.* The reader's prose is rendered by `UITextView` / `NSTextView` with TextKit 2, not by SwiftUI `Text`. The wishlist needs link previews on hard press, hover popovers on Mac and find-in-document; SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
 
-Shape: keep `RFCDocument` as the source, render each section's prose blocks into one TextKit-backed view (paragraphs, lists and definition lists as attributed text with paragraph styles), and keep artwork, tables and figures as native SwiftUI views between them. `InlineText.attributedString(_:)` already produces the attributed text, so the change is confined to the paragraph renderer and the link handler. The current SwiftUI `InlineText` is a placeholder until then; do not add features to it.
+Shape: one `NSTextContentStorage` holds the whole section body — paragraphs, lists, definition lists, artwork, tables, figures, block quotes, asides and references are all text, built by `DocumentTextBuilder` in a new `RFCReaderKit` package and laid out by a shared `RFCTextViewCoordinator` behind a macOS `NSTextView` and an iOS `UITextView`. Nothing in the body becomes a hosted SwiftUI view; the decorations attributed text cannot express on its own — the card behind artwork and tables, the rule beside a block quote, the aside tint, the reference chip — are drawn by an `NSTextLayoutFragment` subclass instead. The document header is not in the storage: it is a SwiftUI view hosted in the text view's top content inset, because it carries buttons (the status banner's links to newer RFCs) that nobody selects through. `DocumentTextBuilder` replaces `InlineText.attributedString(_:)` and the per-block SwiftUI views that fed the old `LazyVStack`; `BuilderCompletenessTests.nothingBecomesAnAttachment` guards the "nothing becomes a hosted view" rule directly, failing on any `NSTextAttachment` outside the one chip run the design allows. See `docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md` for the full design.
 
-Reference labels ride on this decision. Today the parsers bake the whole label into
+Reference labels still ride on this decision. The parsers still bake the whole label into
 `CrossReference.text` (`[RFC 9110]`, `Section 4.2 of [RFC 9110]`), with U+00A0 joining
-each word to its number so a reference never breaks across a line. The square brackets
-are ours, not the RFC Editor's — `derivedContent` is a bare `RFC9110` — and they are
-doing delimiter work: adjacent references (`<xref/> <xref/>`, common in list items)
-would otherwise read as one run. Dropping them therefore waits for the TextKit 2
-renderer, where a reference can become a proper chip (leading `doc.text` symbol,
-tinted rounded background) via `NSTextAttachment` and custom background drawing.
-SwiftUI `Text` offers only a hard square `backgroundColor` with no padding or radius,
-so building it now would be thrown away.
+each word to its number so a reference never breaks across a line — that part is
+unchanged. What is new is `CrossReference.isCanonicalLabel`, set by both parsers, which
+says whose brackets they are: true for a canonical series id (`[RFC 9110]`) that a
+renderer may restyle, false for an author's own tag (`[QUIC-TRANSPORT]`), which must
+survive verbatim. Whether the brackets themselves are ours depends on the source format:
+the XML parser synthesises them around `derivedContent` (a bare `RFC9110`), so they are
+ours on that path — but the legacy parser matches a literal `[RFC2119]` already sitting in
+the plain-text source and copies it verbatim, so on that path the brackets are the RFC
+Editor's own, not ours. `DocumentTextBuilder` uses the flag to drop the brackets and draw
+a chip instead: a leading `doc.text` glyph (the one `NSTextAttachment` in the whole
+design) followed by a tinted rounded background painted by `RFCTextLayoutFragment`, the
+whole run marked `.rfcChip` so the builder's completeness test and the fragment's drawing
+code can both find it.
 
 This is the first app task after the Xcode project builds.
 
@@ -129,6 +134,9 @@ This is the first app task after the Xcode project builds.
 
 - Legacy text: definition lists with hanging indents (e.g. the cache directives in RFC 2616 §14.9.1) render as preformatted blocks; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
 - Search: ~70 ms per query over the full index, in memory. Run it off the main actor with a short debounce for now; move to SQLite FTS5 (GRDB) when full-text search over document bodies lands, and let the same index serve metadata search.
-- Rendering: `LazyVStack` scroll-to-anchor is best-effort. If it proves unreliable, render sections in a plain `VStack` up to a size threshold, or move the reader to a `UITextView`/`NSTextView` with TextKit 2 and keep the block model as the source.
 - SVG artwork (`<artwork type="svg">`) is skipped in favour of the ASCII alternative.
 - No Spotlight indexing, iCloud sync, errata or Datatracker integration yet; the client has the endpoints, the model has the fields.
+- The reader lays out the whole section body in one synchronous `ensureLayout` before first paint; measured at ~530 ms on RFC 5661, the largest RFC in the corpus. Accepted deliberately for this milestone — paging the layout is the deferred fix (issue #9).
+- `CrossReference.isCanonicalLabel` is recomputed on reparse rather than persisted: `RFCXMLSerializer` writes neither the flag nor `derivedContent`, so it can diverge when a source document's `derivedContent` differs from its own reference anchor. The legacy corpus-build path is safe and has a test; issue #6's layering change would dissolve this gap entirely (issue #10).
+- Copying a reference chip puts U+FFFC on the pasteboard and loses the bracket delimiters, so adjacent references (`RFC 9110 RFC 9111`) run together in copied text instead of staying separated the way the chip's tint separates them on screen (issue #11).
+- VoiceOver still reads artwork character by character during ordinary swipe-through reading; only a Diagrams rotor for jumping between artwork blocks was added, not a spoken-through replacement (issue #12).

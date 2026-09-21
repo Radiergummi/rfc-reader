@@ -17,6 +17,13 @@ The decision is to proceed with the single-storage TextKit 2 design as specified
 revisit layout cost later as a paging optimisation. The measured numbers and the verdict itself
 are unchanged.
 
+**Resolution (added once the milestone shipped):** the gate's Stop was overridden by that
+decision, not acted on. Neither of the two options the gate cell names below was taken —
+there is no chunked storage per chapter, and the design did not weaken requirement 1. The
+project shipped the single-storage design as specified, accepted the visible ~530 ms delay
+on the largest documents at first paint, and deferred paging as the fix. That deferred work
+is now tracked as issue #9, which cites these exact numbers (551.5 / 532.5 / 539.3 ms).
+
 Cold storage, lay out only as far as the last section (`ensureLayout` over the full document
 range in one call, timed).
 
@@ -35,9 +42,16 @@ range in one call, timed).
 | **> 400 ms** | **Stop.** Sequential layout is too expensive for reading-position restore on every open. Return to the spec: the remaining options are chunked storages per chapter, which weakens requirement 1, or accepting a visible delay on deep links. |
 
 Both warm trials (532.5 ms, 539.3 ms) land in the **> 400 ms — Stop** band. Per the task
-instructions, this is reported as a concern rather than acted on: the probe tool is not deleted
-and no workaround is invented here. **The decision on how to proceed — chunked storages per
-chapter, or accepting a visible delay on deep links — is the controller's, not this task's.**
+instructions at the time, this was reported as a concern rather than acted on: the probe tool
+was not yet deleted and no workaround was invented in this task. **The decision on how to
+proceed — chunked storages per chapter, or accepting a visible delay on deep links — was the
+controller's, not this task's.**
+
+**Update (added once the milestone shipped):** both of those statements describe this task's
+moment, not the file's current state. The probe tool *was* deleted once its run was captured
+here (see the file header above and "Files" below); it does not still exist. And the decision
+was made: see the "Resolution" note above the gate table. Neither named option was taken —
+the controller instead accepted the design as specified and opened issue #9 for paging.
 
 ## Probe B — restyle
 

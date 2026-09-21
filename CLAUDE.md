@@ -10,6 +10,7 @@ Everything goes through the `Makefile`:
 |---|---|
 | `make check` | `lint build test` — the gate before committing |
 | `make test` | RFCKit test suite (~60 tests, ~0.1 s, no simulator) |
+| `make test-app` | RFCReaderKit test suite (needs an Apple SDK, not part of `make check`) |
 | `swift test --package-path Packages/RFCKit --filter <testName>` | one test or suite |
 | `make lint` / `make fmt` | `swiftlint lint --strict` / `swiftlint --fix` |
 | `make build` | both Swift packages (RFCKit, corpus-build) |
@@ -33,7 +34,7 @@ Swift 6 language mode with complete strict concurrency, everywhere.
 
 Standing constraints those documents establish, which are easy to violate by accident:
 
-- **`InlineText` is a placeholder** until the reader body moves to TextKit 2 (`UITextView`/`NSTextView`). Do not add features to it. The square brackets on reference labels and the whole-label-in-`CrossReference.text` approach are deliberate and wait for the same change.
+- **The reader body is one text storage.** `RFCTextView`/`RFCTextViewCoordinator` lay out a single `NSTextContentStorage` per document with `UITextView`/`NSTextView`; nothing in it may become a hosted SwiftUI view. New block kinds are added to `DocumentTextBuilder` (`Packages/RFCReaderKit`), not as SwiftUI views. `BuilderCompletenessTests.nothingBecomesAnAttachment` is the guard, and it now allows an attachment character only inside a `.rfcChip` run.
 - **Anchors are stable strings**, never indices — deep links, the table of contents and reading positions all key off them.
 - **Cross references resolve at parse time**, not at render time. Both parsers index the references section first, then linkify.
 - Both XML parsers **deliberately ignore a parser error reported after the root element closes** (a swift-corelibs-foundation quirk on large valid inputs). There is a test pinning it; it is not a bug to fix.
