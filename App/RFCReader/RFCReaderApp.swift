@@ -7,41 +7,76 @@ import AppKit
 
 @main
 struct RFCReaderApp: App {
+    #if !os(macOS)
     @State private var library = LibraryModel.shared
+    #else
+    /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
+    /// contents panel has to be a real `NSSplitViewItem` in the window's own split
+    /// view controller for the tab bar and the toolbar to be confined by it, and a
+    /// window `WindowGroup` made cannot be given one — see `ReaderWindowController`.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #endif
 
     var body: some Scene {
+        #if os(macOS)
+        // The only scene, and still enough to carry the menu bar: `.commands` are
+        // honoured with no `WindowGroup` present, measured, which is what keeps the
+        // whole menu from having to be rebuilt in AppKit. What it does not carry is
+        // File ▸ New Window, which `WindowGroup` used to contribute — `WindowCommands`
+        // puts it back.
+        Settings {
+            SettingsView()
+        }
+        .commands {
+            WindowCommands()
+            DocumentCommands()
+        }
+        #else
         // Deliberately plain: neither `WindowGroup(id:)` nor `WindowGroup(for:)`
         // opens a window at launch — measured, both leave the app running with no
-        // interface at all — so this cannot carry the link for a new tab. The link
-        // goes through `LibraryModel` and the tab itself comes from AppKit.
+        // interface at all — so this cannot carry the link for a new tab.
         WindowGroup {
             ContentView()
                 .environment(library)
                 .task { await library.bootstrap() }
                 .onOpenURL { url in
-                    // rfc://9110/section/4.2, plus rfc-editor.org and datatracker links
-                    // handed over via the share sheet or Universal Links later on.
+                    // rfc://9110/section/4.2, plus rfc-editor.org and datatracker
+                    // links handed over via the share sheet or Universal Links later.
                     //
-                    // Every open scene receives this, so the routing decision cannot be
-                    // made here: `LibraryModel` holds the registry and picks exactly one
-                    // scene to act on it.
+                    // Every open scene receives this, so the routing decision cannot
+                    // be made here: `LibraryModel` holds the registry and picks
+                    // exactly one scene to act on it.
                     if let link = RFCLink(url: url) {
                         library.route(link)
                     }
                 }
         }
-        .modelContainer(for: [Bookmark.self, ReadingPosition.self])
+        .modelContainer(AppData.container)
         .commands {
             DocumentCommands()
-        }
-
-        #if os(macOS)
-        Settings {
-            SettingsView()
         }
         #endif
     }
 }
+
+#if os(macOS)
+/// What `WindowGroup` used to contribute to the File menu.
+struct WindowCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Window") {
+                AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+            }
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button("New Tab") {
+                AppDelegate.shared?.openWindow(tabbedWith: AppDelegate.shared?.activeController, inBackground: false)
+            }
+            .keyboardShortcut("t", modifiers: .command)
+        }
+    }
+}
+#endif
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {

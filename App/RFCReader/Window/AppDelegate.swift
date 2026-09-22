@@ -1,0 +1,92 @@
+#if os(macOS)
+import AppKit
+import RFCKit
+
+/// Makes windows, because nothing else does any more.
+///
+/// The app's only scene on macOS is `Settings`, which still gives us the menu bar and
+/// everything `.commands` declares — measured — but contributes no windows. Every
+/// reader window is created here and kept here: an `NSWindowController` with no owner
+/// is deallocated the moment the call that made it returns.
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private(set) static weak var shared: AppDelegate?
+
+    private var controllers: [ReaderWindowController] = []
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.shared = self
+        // The scene's `.task` did this; there is no scene on macOS any more.
+        Task { await LibraryModel.shared.bootstrap() }
+        openWindow(tabbedWith: nil, inBackground: false)
+    }
+
+    /// The dock icon, with every window closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows {
+            openWindow(tabbedWith: nil, inBackground: false)
+        }
+        return true
+    }
+
+    /// `rfc://9110/section/4.2`, plus rfc-editor.org and datatracker links handed over
+    /// by the share sheet.
+    ///
+    /// This was `onOpenURL` on the scene. With no `WindowGroup` there is no scene to
+    /// declare it on — and this is the better place regardless, because the routing
+    /// decision was never the view's: `LibraryModel` holds the registry of open tabs
+    /// and picks exactly one to act on the link.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let link = RFCLink(url: url) else { continue }
+            if controllers.isEmpty {
+                openWindow(tabbedWith: nil, inBackground: false)
+            }
+            LibraryModel.shared.route(link)
+        }
+    }
+
+    /// Opens a window, as a tab of `sibling` when there is one.
+    @discardableResult
+    func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) -> ReaderWindowController {
+        let controller = ReaderWindowController(library: LibraryModel.shared)
+        controllers.append(controller)
+
+        if let host = sibling?.window, let fresh = controller.window {
+            host.addTabbedWindow(fresh, ordered: .above)
+            if inBackground {
+                // The new tab is ordered front as part of being made, so taking the
+                // focus back any sooner is simply undone by it.
+                host.makeKeyAndOrderFront(nil)
+            } else {
+                fresh.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            controller.showWindow(nil)
+        }
+        return controller
+    }
+
+    /// A window controller owns its window, so a closed tab lives until this runs.
+    /// Called from `windowWillClose(_:)` rather than inferred from visibility: a
+    /// window that has been made but not yet shown is not visible either, and
+    /// treating that as closed emptied the registry between making the first window
+    /// and showing it — so the `rfc://` link that followed opened a second one.
+    func forget(_ controller: ReaderWindowController) {
+        controllers.removeAll { $0 === controller }
+    }
+
+    /// The window the menu acts on: the key window's, or the frontmost reader's when
+    /// the key window is a sheet or the settings.
+    var activeController: ReaderWindowController? {
+        if let key = NSApp.keyWindow, let controller = ReaderWindowController.controller(for: key) {
+            return controller
+        }
+        if let sheetParent = NSApp.keyWindow?.sheetParent,
+           let controller = ReaderWindowController.controller(for: sheetParent) {
+            return controller
+        }
+        return NSApp.orderedWindows.lazy.compactMap(ReaderWindowController.controller(for:)).first
+    }
+}
+#endif

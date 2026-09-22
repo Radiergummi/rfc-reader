@@ -3,6 +3,11 @@ import RFCReaderKit
 import SwiftData
 import SwiftUI
 
+// macOS has no `WindowGroup`, so nothing on that platform instantiates this view:
+// the window's content is an `NSSplitViewController` built by
+// `ReaderWindowController`, because only a split view controller that is the
+// window's own root gets AppKit to confine the tab bar and split the toolbar.
+#if !os(macOS)
 struct ContentView: View {
     @Environment(LibraryModel.self) private var library
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -110,6 +115,7 @@ struct ContentView: View {
         .environment(navigation)
     }
 }
+#endif
 
 struct EmptyDetailView: View {
     @Environment(NavigationModel.self) private var navigation
