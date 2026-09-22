@@ -42,6 +42,34 @@ struct DocumentInspector: View {
     }
 }
 
+/// `DocumentInspector` wired to the window's `ReaderState`, and the one place that
+/// wiring is written.
+///
+/// macOS hosts this in the window's own split item and iOS presents it with
+/// `.inspector`; the six inputs are the same either way, so the next one added to
+/// `DocumentInspector` is added once.
+struct PanelHost: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
+
+    var body: some View {
+        @Bindable var reader = reader
+        if reader.hasDocument {
+            DocumentInspector(
+                sections: reader.sections,
+                groups: reader.groups,
+                tab: $reader.tab,
+                current: reader.currentAnchor,
+                selectSection: { navigation.jump(toSection: $0) },
+                openDocument: { library.open($0, activation: .current, in: navigation) }
+            )
+        } else {
+            Color.clear
+        }
+    }
+}
+
 /// The panel's two tabs, drawn the way an inspector's are rather than as a segmented
 /// control.
 ///
@@ -53,26 +81,12 @@ struct DocumentInspector: View {
 private struct InspectorTabBar: View {
     @Binding var tab: InspectorTab
 
-    private static let tabs: [(tab: InspectorTab, title: String)] = [
-        (.contents, "Contents"),
-        (.references, "References"),
-    ]
-
     var body: some View {
+        // No rule between the two: Pages draws one only between labels that are both
+        // unselected, and with two tabs one of them always is the pill.
         HStack(spacing: 0) {
-            ForEach(Array(Self.tabs.enumerated()), id: \.offset) { index, item in
-                if index > 0 {
-                    // Between two unselected labels only: beside the pill it would be
-                    // a second edge a pixel from the first. With two tabs one of them
-                    // is always selected, so this never draws — as in Pages, where the
-                    // rule shows a divider between its second and third tabs and none
-                    // beside the first.
-                    Divider()
-                        .frame(height: 14)
-                        .opacity(touchesSelection(index) ? 0 : 1)
-                }
-                segment(item.tab, item.title)
-            }
+            segment(.contents, "Contents")
+            segment(.references, "References")
         }
         // The track the segments sit in, and the inset that keeps the selected pill
         // inside it rather than flush with its edge.
@@ -102,11 +116,6 @@ private struct InspectorTabBar: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-    }
-
-    /// Whether the divider at `index` sits against the selected tab.
-    private func touchesSelection(_ index: Int) -> Bool {
-        Self.tabs[index].tab == tab || Self.tabs[index - 1].tab == tab
     }
 }
 

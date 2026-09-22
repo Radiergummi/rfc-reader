@@ -11,8 +11,13 @@ struct DocumentView: View {
     /// not inside this view any more.
     @Environment(ReaderState.self) private var reader
     @Environment(\.modelContext) private var modelContext
+    #if !os(macOS)
+    // Only the iOS toolbar reads these. On macOS the bookmark button and the
+    // external links are the window's, and a `@Query` left outside this guard ran a
+    // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
     @Query private var bookmarks: [Bookmark]
+    #endif
     @AppStorage("readingFontSize") private var fontSize = 17.0
     @AppStorage("preferOriginalText") private var preferOriginalText = false
 
@@ -33,6 +38,9 @@ struct DocumentView: View {
     /// reading position on the way out, restoring the place across a rebuild — reads
     /// the box.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
+    /// Anchor to section number, built once with the document. See
+    /// `onVisibleAnchorChange` for why it is not asked of the document each time.
+    @State private var sectionNumbers: [String: String] = [:]
     /// The pane's full width — the whole of it, panel or no panel — and nil until the
     /// geometry reader has run.
     ///
@@ -58,7 +66,9 @@ struct DocumentView: View {
     }
 
     private var metadata: RFCMetadata? { library.metadata(id) }
+    #if !os(macOS)
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
+    #endif
 
     /// Everything a build depends on. One trigger, so the document is built in one
     /// place whatever changed — a new RFC, the font-size slider, or a window resize.
@@ -104,9 +114,7 @@ struct DocumentView: View {
             // swallows an iPhone, and in compact width the inspector already presents
             // itself as a sheet.
             .inspector(isPresented: $showTableOfContents) {
-                if document != nil {
-                    inspector.inspectorColumnWidth(min: 260, ideal: 320)
-                }
+                PanelHost().inspectorColumnWidth(min: 260, ideal: 320)
             }
             #endif
             .task(id: id) { await load() }
@@ -119,22 +127,6 @@ struct DocumentView: View {
     }
 
     @State private var scrollTarget: String?
-
-    #if !os(macOS)
-    /// The contents and references panel, as iOS presents it. macOS hosts
-    /// `DocumentInspector` in the window's own split item instead; see `PanelHost`.
-    private var inspector: some View {
-        @Bindable var reader = reader
-        return DocumentInspector(
-            sections: reader.sections,
-            groups: reader.groups,
-            tab: $reader.tab,
-            current: reader.currentAnchor,
-            selectSection: { anchor in navigation.jump(toSection: anchor) },
-            openDocument: { library.open($0, activation: .current, in: navigation) }
-        )
-    }
-    #endif
 
     /// The width channel. It wraps everything, including the loading state, so the
     /// column is known before there is a document to build.
@@ -172,8 +164,11 @@ struct DocumentView: View {
                     reader.currentAnchor = $0
                     // Resolved here, where the document is: the toolbar's citation and
                     // section link need the number, and on macOS the toolbar is in the
-                    // window rather than in this view.
-                    reader.currentSection = document.section(anchor: $0)?.number
+                    // window rather than in this view. Through the map rather than
+                    // `document.section(anchor:)`, which walks the whole section tree
+                    // and materialises it afresh — 305 sections on RFC 9110 — and this
+                    // runs on every section crossing while scrolling.
+                    reader.currentSection = sectionNumbers[$0]
                     // Recorded on the history entry when navigating away, so coming
                     // back returns here rather than to the top of the document.
                     navigation.visiblePosition = $0
@@ -239,7 +234,7 @@ struct DocumentView: View {
             }
 
             Menu {
-                Toggle("Original Text", isOn: $reader.showOriginal)
+                Toggle("Original Text", isOn: Bindable(reader).showOriginal)
                 Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
                 if let url = metadata?.errataURL {
                     Button("Errata") { systemOpenURL(url) }
@@ -269,6 +264,7 @@ struct DocumentView: View {
         loadError = nil
         document = nil
         built = nil
+        sectionNumbers = [:]
         // A reused view must not carry the previous document's place into the new
         // one; `install()` reports the real anchor a moment later.
         reader.clear()
@@ -277,6 +273,10 @@ struct DocumentView: View {
         do {
             let loaded = try await library.document(for: id)
             reader.groups = ReferenceGroup.groups(in: loaded)
+            sectionNumbers = Dictionary(
+                loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
+                uniquingKeysWith: { first, _ in first }
+            )
             document = loaded
             reader.hasDocument = true
         } catch {
@@ -351,6 +351,7 @@ struct DocumentView: View {
         return true
     }
 
+    #if !os(macOS)
     private func toggleBookmark() {
         if let existing = bookmarks.first(where: { $0.number == id.number }) {
             modelContext.delete(existing)
@@ -364,6 +365,7 @@ struct DocumentView: View {
         let section = style == .bibtex ? nil : reader.currentSection
         Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
     }
+    #endif
 
     private func savedPosition() -> String? {
         let number = id.number

@@ -91,20 +91,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controllers.removeAll { $0 === controller }
     }
 
-    /// The window the menu acts on: the key window's, or the frontmost reader's when
-    /// the key window is a sheet or the settings.
+    /// The window the menu and the actions both act on.
     ///
-    /// Not observable, and it does not need to be — `ActiveReaderWindow` is what the
-    /// menu watches. This is for the code that acts rather than the code that draws.
+    /// `ActiveReaderWindow` is the one answer to this: it holds the reader that was
+    /// made key last, which is still the right one when the key window is a sheet
+    /// over it or the settings beside it. The fallback covers the only case it
+    /// cannot — that window having closed.
     var activeController: ReaderWindowController? {
-        if let key = NSApp.keyWindow, let controller = ReaderWindowController.controller(for: key) {
-            return controller
-        }
-        if let sheetParent = NSApp.keyWindow?.sheetParent,
-           let controller = ReaderWindowController.controller(for: sheetParent) {
-            return controller
-        }
-        return NSApp.orderedWindows.lazy.compactMap(ReaderWindowController.controller(for:)).first
+        ActiveReaderWindow.shared.controller
+            ?? NSApp.orderedWindows.lazy.compactMap(ReaderWindowController.controller(for:)).first
     }
 }
 

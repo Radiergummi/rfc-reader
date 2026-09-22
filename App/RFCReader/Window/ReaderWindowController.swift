@@ -44,15 +44,11 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// How wide the contents panel is drawn. Unchanged from the overlay it replaces.
     static let panelWidth: CGFloat = 320
 
-    /// Weak, keyed by window: a closed tab must not be kept alive by this registry.
-    private static var controllers: [ObjectIdentifier: WeakController] = [:]
-
-    private struct WeakController {
-        weak var controller: ReaderWindowController?
-    }
-
-    static func controller(for window: NSWindow) -> ReaderWindowController? {
-        controllers[ObjectIdentifier(window)]?.controller
+    /// `NSWindowController.init(window:)` makes itself the window's controller, so
+    /// AppKit already keeps this mapping; a registry of our own would only be a
+    /// second copy to prune, keyed by an address a later window can be handed again.
+    static func controller(for window: NSWindow?) -> ReaderWindowController? {
+        window?.windowController as? ReaderWindowController
     }
 
     init(library: LibraryModel) {
@@ -119,7 +115,13 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // below, where the panel is not part of the sum.
         readerItem = reader
 
-        let panel = NSSplitViewItem(inspectorWithViewController: host(PanelHost()))
+        // The glass is the window's business, not the panel's: without this the list
+        // draws its own opaque sidebar background over the inspector and the panel
+        // stops being translucent at all. Applied here rather than inside
+        // `PanelHost`, which iOS presents in a sheet that wants its own background.
+        let panel = NSSplitViewItem(
+            inspectorWithViewController: host(PanelHost().scrollContentBackground(.hidden))
+        )
         panel.allowsFullHeightLayout = true
         // The window must not grow when the panel opens. By default an inspector
         // widens the window by its own thickness to keep its siblings' widths —
@@ -139,7 +141,6 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
         window.contentViewController = splitController
         applyMinimumWidth(to: window)
-        Self.controllers[ObjectIdentifier(window)] = WeakController(controller: self)
 
         let toolbar = ReaderToolbar(controller: self)
         // The title is capped to the column it sits over, so it has to be told when
@@ -173,8 +174,19 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// `@Environment(LibraryModel.self)` inside one is a runtime trap with no
     /// compile-time warning — the same reason `DocumentHeaderView` and `StatusBanner`
     /// take theirs as properties.
-    private func host(_ view: some View) -> NSHostingController<AnyView> {
-        let controller = NSHostingController(rootView: AnyView(withWindowEnvironment(view)))
+    ///
+    /// The root keeps its own type rather than being erased to `AnyView`: these roots
+    /// are re-evaluated by observation — `PanelHost` reads `reader.currentAnchor`, so
+    /// it updates on every section crossing while scrolling — and an erased root
+    /// gives SwiftUI nothing to diff against.
+    private func host(_ view: some View) -> NSHostingController<some View> {
+        let controller = NSHostingController(
+            rootView: view
+                .environment(library)
+                .environment(navigation)
+                .environment(reader)
+                .modelContainer(AppData.container)
+        )
         // The hosted view must not size the window. By default a hosting controller
         // reports its content's preferred size, and as a split view item that reaches
         // the window: measured, it pinned the window at 219 pt tall and left the
@@ -182,16 +194,6 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // window's business; these views fill whatever they are given.
         controller.sizingOptions = []
         return controller
-    }
-
-    /// The models this window's views share, handed to anything hosted in it —
-    /// including the toolbar's items, which are hosted too.
-    func withWindowEnvironment(_ view: some View) -> some View {
-        view
-            .environment(library)
-            .environment(navigation)
-            .environment(reader)
-            .modelContainer(AppData.container)
     }
 
     /// How wide the list column is right now. The title drawn over it is capped to
@@ -219,6 +221,10 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
             window?.title = title
             window?.subtitle = subtitle
             toolbar?.showTitle(title, subtitle: subtitle)
+            // Here because this is already the one place that re-fires when the
+            // selection changes, and the fetch must not be on the toolbar's
+            // validation path; see `isBookmarked`.
+            refreshBookmarked()
         } onChange: {
             Task { @MainActor [weak self] in self?.observeTitle() }
         }
@@ -228,9 +234,13 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// genuinely long ones stop before the tab's edge.
     private static let subtitleLimit = 64
 
+    private static let sidebarMinimum: CGFloat = 200
+    private static let listMinimum: CGFloat = 280
+
     /// The narrowest the window may be: the two fixed columns plus a readable
-    /// measure. Nothing here for the panel — deliberately.
-    private static let minimumContentWidth: CGFloat = 200 + 280 + ReaderLayout.minimumPaneWidth
+    /// measure. Named rather than restated, so dragging a column's floor cannot leave
+    /// the window's behind. Nothing here for the panel — deliberately.
+    private static let minimumContentWidth: CGFloat = sidebarMinimum + listMinimum + ReaderLayout.minimumPaneWidth
 
     /// Holds the window's minimum *constant* as the panel opens and closes.
     ///
@@ -316,13 +326,21 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
     // MARK: - The document's actions
 
-    /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
-    /// cannot disagree about what bookmarking means.
-    var isBookmarked: Bool {
-        guard let id = navigation.selection else { return false }
-        return bookmark(for: id) != nil
+    /// Whether the document on screen is bookmarked, for the toolbar's glyph.
+    ///
+    /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
+    /// item once per event cycle, and asking SwiftData there put a compiled
+    /// `#Predicate` and a store round trip under every mouse move, once per open tab.
+    /// Nothing else on macOS writes a `Bookmark`, so the two places it can change
+    /// are the selection moving and `toggleBookmark()`.
+    private(set) var isBookmarked = false
+
+    private func refreshBookmarked() {
+        isBookmarked = navigation.selection.flatMap { bookmark(for: $0) } != nil
     }
 
+    /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
+    /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
         guard let id = navigation.selection else { return }
         let context = AppData.container.mainContext
@@ -333,6 +351,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
             context.insert(Bookmark(number: id.number, title: title))
         }
         try? context.save()
+        refreshBookmarked()
     }
 
     private func bookmark(for id: DocumentID) -> Bookmark? {
@@ -398,33 +417,6 @@ struct ReaderHost: View {
         .onChange(of: navigation.selection) { library.activate(navigation) }
         .sheet(isPresented: $navigation.isShowingGoToSheet) {
             GoToDocumentSheet()
-        }
-    }
-}
-
-/// The contents panel: a split item of its own, so the window's chrome knows it is
-/// there. What it draws is the same `DocumentInspector` the overlay drew.
-struct PanelHost: View {
-    @Environment(LibraryModel.self) private var library
-    @Environment(NavigationModel.self) private var navigation
-    @Environment(ReaderState.self) private var reader
-
-    var body: some View {
-        @Bindable var reader = reader
-        if reader.hasDocument {
-            DocumentInspector(
-                sections: reader.sections,
-                groups: reader.groups,
-                tab: $reader.tab,
-                current: reader.currentAnchor,
-                selectSection: { navigation.jump(toSection: $0) },
-                openDocument: { library.open($0, activation: .current, in: navigation) }
-            )
-            // Without this the list draws its own opaque sidebar background over the
-            // inspector's glass, and the panel stops being translucent at all.
-            .scrollContentBackground(.hidden)
-        } else {
-            Color.clear
         }
     }
 }

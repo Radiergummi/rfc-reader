@@ -80,27 +80,31 @@ private final class TitleView: NSView {
         self.title.stringValue = title
         self.subtitle.stringValue = subtitle
         self.subtitle.isHidden = subtitle.isEmpty
+        // The only place the strings change, so the only place the text has to be
+        // measured. `limit(to:)` runs once per frame of a divider drag.
+        textWidth = max(
+            self.title.intrinsicContentSize.width,
+            subtitle.isEmpty ? 0 : self.subtitle.intrinsicContentSize.width
+        )
         applyWidth()
     }
 
     /// The width of the column the title sits over. The labels truncate with an
     /// ellipsis inside whatever this leaves them.
     func limit(to column: CGFloat) {
+        guard column != limit else { return }
         limit = column
         applyWidth()
     }
 
     private var limit: CGFloat = 0
+    private var textWidth: CGFloat = 0
 
     private func applyWidth() {
-        let text = max(
-            title.intrinsicContentSize.width,
-            subtitle.isHidden ? 0 : subtitle.intrinsicContentSize.width
-        )
-        // The leading padding, and as much again at the trailing edge so the title
-        // stops short of the divider rather than against it.
-        let room = max(80, limit - 24)
-        widthConstraint.constant = min(text + 16, room)
+        let width = ToolbarTitleLayout.width(forText: textWidth, inColumn: limit)
+        // Assigning a constant dirties the titlebar's layout whether or not it moved.
+        guard width != widthConstraint.constant else { return }
+        widthConstraint.constant = width
     }
 }
 
@@ -112,6 +116,12 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
     /// for why AppKit is not allowed to draw them.
     private let titleView = TitleView()
 
+    /// Held so `menuNeedsUpdate` can tell them apart by identity. Their contents are
+    /// built when they open rather than held and mutated: what they say depends on
+    /// the document, and the document changes under them.
+    private let citeMenu = NSMenu()
+    private let moreMenu = NSMenu()
+
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
     private var id: DocumentID? { navigation.selection }
@@ -120,6 +130,8 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
     init(controller: ReaderWindowController) {
         self.controller = controller
         super.init()
+        citeMenu.delegate = self
+        moreMenu.delegate = self
     }
 
     func showTitle(_ title: String, subtitle: String) {
@@ -228,7 +240,7 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
             item.label = "Cite"
             item.image = NSImage(systemSymbolName: "quote.opening", accessibilityDescription: "Cite")
             item.showsIndicator = false
-            item.menu = menu(delegate: self, tag: MenuTag.cite)
+            item.menu = citeMenu
             return item
 
         case .rfcShare:
@@ -242,7 +254,7 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
             item.label = "More"
             item.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "More")
             item.showsIndicator = false
-            item.menu = menu(delegate: self, tag: MenuTag.more)
+            item.menu = moreMenu
             return item
 
         case .rfcPanelToggle:
@@ -269,24 +281,10 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
         return item
     }
 
-    /// Both menus are built when they open rather than held and mutated: what they
-    /// say depends on the document, and the document changes under them.
-    private enum MenuTag {
-        static let cite = 1
-        static let more = 2
-    }
-
-    private func menu(delegate: NSMenuDelegate, tag: Int) -> NSMenu {
-        let menu = NSMenu()
-        menu.delegate = delegate
-        menu.identifier = NSUserInterfaceItemIdentifier("rfc.menu.\(tag)")
-        return menu
-    }
-
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        switch menu.identifier?.rawValue {
-        case "rfc.menu.\(MenuTag.cite)":
+        switch menu {
+        case citeMenu:
             for style in CitationStyle.allCases {
                 let item = NSMenuItem(title: style.displayName, action: #selector(copyCitation), keyEquivalent: "")
                 item.target = self
@@ -294,11 +292,9 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
                 menu.addItem(item)
             }
             menu.addItem(.separator())
-            let link = NSMenuItem(title: "Copy Link to Current Section", action: #selector(copySectionLink), keyEquivalent: "")
-            link.target = self
-            menu.addItem(link)
+            add(to: menu, "Copy Link to Current Section", #selector(copySectionLink))
 
-        case "rfc.menu.\(MenuTag.more)":
+        case moreMenu:
             let original = NSMenuItem(title: "Original Text", action: #selector(toggleOriginalText), keyEquivalent: "")
             original.target = self
             original.state = reader.showOriginal ? .on : .off
@@ -322,17 +318,22 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
 
     // MARK: - Validation
 
+    /// What the bookmark item's glyph is currently showing.
+    private var bookmarkSymbol = "bookmark"
+
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         switch item.itemIdentifier.rawValue {
         case "rfc.back": return navigation.canGoBack
         case "rfc.forward": return navigation.canGoForward
         case NSToolbarItem.Identifier.rfcBookmark.rawValue:
             // The filled glyph is the state, and validation is the one call AppKit
-            // makes often enough to keep it honest.
-            item.image = NSImage(
-                systemSymbolName: controller.isBookmarked ? "bookmark.fill" : "bookmark",
-                accessibilityDescription: "Bookmark"
-            )
+            // makes often enough to keep it honest — which is also why it allocates
+            // an image only when the glyph actually changed.
+            let symbol = controller.isBookmarked ? "bookmark.fill" : "bookmark"
+            if symbol != bookmarkSymbol {
+                bookmarkSymbol = symbol
+                item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
+            }
             return id != nil
         case NSToolbarItem.Identifier.rfcPanelToggle.rawValue:
             return reader.hasDocument

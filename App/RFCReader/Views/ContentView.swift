@@ -25,18 +25,6 @@ struct ContentView: View {
         navigation.selection?.displayName ?? navigation.filter.title
     }
 
-    /// The prose title goes here, where macOS has room for it — truncated, because a
-    /// tab is far narrower than the window and clips rather than eliding.
-    private var windowSubtitle: String {
-        navigation.selection
-            .flatMap { library.metadata($0)?.title }?
-            .truncated(to: Self.subtitleLimit) ?? ""
-    }
-
-    /// Long enough that most RFC titles survive whole, short enough that the series'
-    /// genuinely long ones stop before the tab's edge.
-    private static let subtitleLimit = 64
-
     var body: some View {
         @Bindable var navigation = navigation
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -67,9 +55,6 @@ struct ContentView: View {
         // one: the sidebar already shows which filter is active, so that title was
         // spending the window's only title slot on something said elsewhere.
         .navigationTitle(windowTitle)
-        #if os(macOS)
-        .navigationSubtitle(windowSubtitle)
-        #endif
         // On the split view rather than on `DocumentView`: macOS gives the detail
         // column no leading toolbar slot — a `.navigation` item declared down there is
         // silently dropped — and scene-level navigation belongs beside the sidebar

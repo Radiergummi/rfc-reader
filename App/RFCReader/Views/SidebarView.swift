@@ -6,7 +6,6 @@ struct SidebarView: View {
     @Environment(NavigationModel.self) private var navigation
 
     var body: some View {
-        @Bindable var navigation = navigation
         List(selection: selection) {
             Section("Library") {
                 row(.bookmarks)
@@ -55,9 +54,9 @@ struct SidebarView: View {
         // sidebar is its own hosting controller now, with no `NavigationSplitView`
         // around it to give `.sidebar` placement a meaning. Measured — the window
         // contained no text field at all.
-        .safeAreaInset(edge: .top) { SidebarSearchField(text: $navigation.searchText) }
+        .safeAreaInset(edge: .top) { SidebarSearchField(navigation: navigation) }
         #else
-        .searchable(text: $navigation.searchText, placement: .sidebar, prompt: "Search")
+        .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
         #endif
         .labelStyle(SidebarLabelStyle())
         .safeAreaInset(edge: .bottom) {
@@ -81,18 +80,25 @@ struct SidebarView: View {
 
 #if os(macOS)
 /// The sidebar's search field.
+///
+/// Takes the model rather than a binding out of `SidebarView.body`: a binding made
+/// up there makes the whole sidebar — the filter list, the working groups, the index
+/// status — depend on the search text and re-evaluate on every keystroke. In here
+/// the dependency reaches no further than the field.
 private struct SidebarSearchField: View {
-    @Binding var text: String
+    @Bindable var navigation: NavigationModel
+
+    private var text: Binding<String> { $navigation.searchText }
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search", text: $text)
+            TextField("Search", text: text)
                 .textFieldStyle(.plain)
-            if !text.isEmpty {
+            if !navigation.searchText.isEmpty {
                 Button {
-                    text = ""
+                    navigation.searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                 }

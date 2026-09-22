@@ -39,3 +39,26 @@ struct ReaderLayoutTests {
         #expect(column > 300)
     }
 }
+
+@Suite("Toolbar title layout")
+struct ToolbarTitleLayoutTests {
+    /// A short title takes the width of its text and no more — the point of drawing
+    /// the title ourselves rather than letting AppKit's own block expand to fill.
+    @Test func aShortTitleTakesOnlyTheWidthOfItsText() {
+        #expect(ToolbarTitleLayout.width(forText: 120, inColumn: 400) == 136)
+    }
+
+    /// Capped to the column it names: a long RFC title ran past the list's trailing
+    /// edge and over the reader's own toolbar section.
+    @Test func aLongTitleStopsShortOfTheDivider() {
+        let width = ToolbarTitleLayout.width(forText: 2000, inColumn: 300)
+        #expect(width < 300)
+        #expect(width == 276)
+    }
+
+    /// A column dragged to nothing still leaves the title a readable stub rather
+    /// than a zero-width item the toolbar lays other items over.
+    @Test func aCollapsedColumnStillLeavesAStub() {
+        #expect(ToolbarTitleLayout.width(forText: 2000, inColumn: 0) == 80)
+    }
+}

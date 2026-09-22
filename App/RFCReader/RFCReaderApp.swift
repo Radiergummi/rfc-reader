@@ -177,6 +177,10 @@ final class FindCommand: NSObject {
 }
 #endif
 
+// Published by `ContentView` and read by `DocumentCommands`, both of which are
+// iOS-only now: on macOS the menu finds its target through `ActiveReaderWindow`,
+// because focused values do not resolve out of a hosted root.
+#if !os(macOS)
 struct OpenDocumentActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -196,6 +200,7 @@ extension FocusedValues {
         set { self[NavigationModelKey.self] = newValue }
     }
 }
+#endif
 
 struct SettingsView: View {
     @AppStorage("readingFontSize") private var fontSize = 17.0
