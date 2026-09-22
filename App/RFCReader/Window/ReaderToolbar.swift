@@ -5,6 +5,7 @@ import RFCReaderKit
 
 extension NSToolbarItem.Identifier {
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
+    static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
     static let rfcTitle = NSToolbarItem.Identifier("rfc.title")
     static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
@@ -126,7 +127,11 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
             // a section that ends with the sidebar, and what is declared before it
             // lands inside that section.
             .toggleSidebar, .rfcSidebarSeparator,
-            .rfcNavigation, .rfcTitle, .flexibleSpace,
+            // The list's section: what is on screen there is what the title names.
+            .rfcTitle, .rfcListSeparator,
+            // The reader's own section, so Back and Forward stand at the leading edge
+            // of the document they act on rather than over the list beside it.
+            .rfcNavigation, .flexibleSpace,
             .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
             // The panel's own section. The flexible space holds the toggle against
             // the window's trailing corner, so it stays in the corner whether the
@@ -151,6 +156,14 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
                 identifier: identifier,
                 splitView: controller.splitController.splitView,
                 dividerIndex: 0
+            )
+
+        case .rfcListSeparator:
+            // Divider 1: list | reader.
+            return NSTrackingSeparatorToolbarItem(
+                identifier: identifier,
+                splitView: controller.splitController.splitView,
+                dividerIndex: 1
             )
 
         case .rfcPanelSeparator:
