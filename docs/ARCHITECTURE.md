@@ -82,7 +82,8 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
                                                           ▼
                        LibraryModel (@Observable, @MainActor) ── index, filter, search text, selection, pendingSection
                                                           ▼
-                       SwiftUI views ── NavigationSplitView(sidebar, list, DocumentView)
+                       SwiftUI views ── macOS: NSSplitViewController(sidebar, list, DocumentView, panel)
+                                        iOS:   NavigationSplitView(sidebar, list, DocumentView)
                                                           ▼
                        SwiftData ── Bookmark, ReadingPosition (user data only; iCloud later)
 ```
@@ -133,7 +134,29 @@ This is the first app task after the Xcode project builds.
 
 *Decided September 2026.* A reference opens in its own tab on Command-click, in front with Shift; the conventions are the browser's, because that is what a reader's hands already know. What a click means is `LinkActivation`, and where it goes is `LinkDestination.resolve` — both in `RFCReaderKit`, because the App target has no test bundle and the three rules that make a click feel right are not obvious: an anchor never leaves the document whatever is held down, a section of the document already on screen scrolls instead of re-opening it, and that shortcut applies only when following in place. `LibraryModel.open(_:activation:in:)` is the single place an activation becomes an effect, so a Command-click means the same thing on a cross reference in the prose, a reference in the inspector and a button in the status banner. The document list is the one surface that does not join in: `List(selection:)` is handed the outcome rather than the click, and Command-click on a row is the platform's multi-select chord rather than ours to take.
 
+**Superseded for macOS in September 2026 — see "Decision: the window layer is AppKit's on macOS".** A tab is now a `ReaderWindowController` the app delegate makes and joins with `addTabbedWindow(_:ordered:)`; `LibraryModel`'s latch works exactly as described below, because a window still cannot be handed a value as it is made. The paragraph below remains true of iOS and of why `openWindow` is not the answer.
+
 **Neither `WindowGroup(id:)` nor `WindowGroup(for:)` can be used here** — measured, both leave the app running at launch with no interface at all, and the plain `WindowGroup` that does open a window cannot be handed a value. So a new tab comes from AppKit: `NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)))`, the same action behind the tab bar's own "+", which SwiftUI implements for a plain `WindowGroup`. Nothing can be passed along that path, which is why `LibraryModel` holds the link in a private latch for the scene that appears to take in `register(_:)`. A background tab is opened and then the previous window is made key again on the next turn of the run loop — the new tab is ordered front as part of being made, so taking focus back any sooner is simply undone by it. This is the part to re-read before reaching for `openWindow` again.
+
+## Decision: the window layer is AppKit's on macOS
+
+*Decided 22 September 2026, after four earlier attempts recorded in issue #34 and two more measured in `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`.*
+
+The contents panel must sit in the window the way Pages' inspector does: full-height glass, the **window tab bar** ending at the panel's leading edge rather than running under it, and the toolbar splitting at the same point. None of that is reachable from SwiftUI, because window chrome only engages for an `NSSplitViewController` that **is** the window's `contentViewController`. `.inspector` is not a split item at all — probed on the running app, the controller still reports three items with it showing — and an item added to SwiftUI's own controller is reconciled away.
+
+Replacing a `WindowGroup` window's `contentViewController` looked like the cheap way in, and it is not: SwiftUI treats the scene as closed and opens a replacement window, which the installer replaces in turn — **24 windows in 0.9 s**, measured, with the scene's view tree parked, hidden, visible and spike-shaped. So macOS has no `WindowGroup`. `AppDelegate` makes every window; each is a `ReaderWindowController` holding a four-item split controller — sidebar, list, reader, inspector — with the existing SwiftUI views in `NSHostingController`s.
+
+What this costs and what it does not: the menu bar is still SwiftUI's, because a `Settings`-only scene honours `.commands` (measured: the full `File`/`Edit`/`View`/`Window`/`Help` bar, with our own items in it). What `WindowGroup` used to contribute and we now write ourselves is New Window, New Tab, and the per-window state that `ContentView` held as `@State`. `@FocusedValue` does **not** survive: published from a hosted root it never resolves, and ⌘L opened nothing at all until the commands were pointed at the key window through `ActiveReaderWindow`.
+
+Three pieces of arithmetic are load-bearing, and each was got wrong first:
+
+- **The window must not grow when the panel opens.** AppKit adds an uncollapsed inspector's thickness on top of `contentMinSize`, so a fixed 900 pt floor became 1222 and the window grew to meet it. The floor drops by the panel's width while the panel shows, which keeps the effective minimum constant.
+- **The reader keeps its full width underneath.** The panel's width comes back as a right safe-area inset, and a scroll view turns its safe area into content insets that the text view tracks — the scroll view stayed 1019 pt while the text view went to 699 and its column from 712 to 392. `ReaderScrollView` refuses the trailing inset, and only the trailing one: zeroing the insets outright puts the first lines of the document behind the toolbar. `ignoresSafeArea` on the hosted root, on the representable, and `NSHostingController.safeAreaRegions = []` all leave the clip view untouched.
+- **A hosted view must not size the window.** A hosting controller reports its content's preferred size, and as a split item that reaches the window: it pinned the window at 219 pt tall. `sizingOptions = []` on every hosted root.
+
+The toolbar's items are AppKit's own. Hosted SwiftUI controls were tried first, to keep the declarations `DocumentView` already had, and an `NSHostingView` reports no width the toolbar will honour: every item drew on top of the one before it, the bookmark inside the back/forward group and the share icon over the panel's toggle.
+
+Verified by measurement rather than by eye, on RFC 9110 in a 1500 pt window with a 320 pt panel: the tab bar ends at 1177 pt against a panel edge of 1180; window and reader unchanged at 1500 and 1019 across a toggle; column 712 both ways; **zero differing pixels** in the region the panel does not cover. Captures that disagreed with that turned out to be racing the reading-position restore — settle the document before diffing.
 
 ## Decision: a section is a fragment
 
