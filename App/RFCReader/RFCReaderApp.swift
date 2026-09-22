@@ -7,56 +7,124 @@ import AppKit
 
 @main
 struct RFCReaderApp: App {
+    #if !os(macOS)
     @State private var library = LibraryModel.shared
+    #else
+    /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
+    /// contents panel has to be a real `NSSplitViewItem` in the window's own split
+    /// view controller for the tab bar and the toolbar to be confined by it, and a
+    /// window `WindowGroup` made cannot be given one — see `ReaderWindowController`.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #endif
 
     var body: some Scene {
+        #if os(macOS)
+        // The only scene, and still enough to carry the menu bar: `.commands` are
+        // honoured with no `WindowGroup` present, measured, which is what keeps the
+        // whole menu from having to be rebuilt in AppKit. What it does not carry is
+        // File ▸ New Window, which `WindowGroup` used to contribute — `WindowCommands`
+        // puts it back.
+        Settings {
+            SettingsView()
+        }
+        .commands {
+            WindowCommands()
+            DocumentCommands()
+        }
+        #else
         // Deliberately plain: neither `WindowGroup(id:)` nor `WindowGroup(for:)`
         // opens a window at launch — measured, both leave the app running with no
-        // interface at all — so this cannot carry the link for a new tab. The link
-        // goes through `LibraryModel` and the tab itself comes from AppKit.
+        // interface at all — so this cannot carry the link for a new tab.
         WindowGroup {
             ContentView()
                 .environment(library)
                 .task { await library.bootstrap() }
                 .onOpenURL { url in
-                    // rfc://9110/section/4.2, plus rfc-editor.org and datatracker links
-                    // handed over via the share sheet or Universal Links later on.
+                    // rfc://9110/section/4.2, plus rfc-editor.org and datatracker
+                    // links handed over via the share sheet or Universal Links later.
                     //
-                    // Every open scene receives this, so the routing decision cannot be
-                    // made here: `LibraryModel` holds the registry and picks exactly one
-                    // scene to act on it.
+                    // Every open scene receives this, so the routing decision cannot
+                    // be made here: `LibraryModel` holds the registry and picks
+                    // exactly one scene to act on it.
                     if let link = RFCLink(url: url) {
                         library.route(link)
                     }
                 }
         }
-        .modelContainer(for: [Bookmark.self, ReadingPosition.self])
+        .modelContainer(AppData.container)
         .commands {
             DocumentCommands()
-        }
-
-        #if os(macOS)
-        Settings {
-            SettingsView()
         }
         #endif
     }
 }
 
+#if os(macOS)
+/// What `WindowGroup` used to contribute to the File menu.
+struct WindowCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Window") {
+                AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+            }
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button("New Tab") {
+                AppDelegate.shared?.openTab(inBackground: false)
+            }
+            .keyboardShortcut("t", modifiers: .command)
+        }
+    }
+}
+#endif
+
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
+    #if os(macOS)
+    /// The key window's navigation, so Back and Forward act on the tab the reader is
+    /// actually looking at. `@FocusedValue` cannot answer that any more: the views
+    /// that published it are hosted outside the scene, and measured on this build the
+    /// values never resolve — ⌘L opened nothing.
+    @State private var active = ActiveReaderWindow.shared
+
+    private var navigation: NavigationModel? { active.controller?.navigation }
+    private var openDocument: (() -> Void)? {
+        guard let navigation else { return nil }
+        return { navigation.isShowingGoToSheet = true }
+    }
+    #else
     @FocusedValue(\.openDocumentAction) private var openDocument
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
+    #endif
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("Go to RFC…") { openDocument?() }
                 .keyboardShortcut("l", modifiers: .command)
+                .disabled(openDocument == nil)
         }
+        #if os(macOS)
+        // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
+        // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
+        CommandGroup(after: .pasteboard) {
+            Section {
+                // Static title: whether this RFC is bookmarked is a SwiftData fetch,
+                // not something the menu observes, so a "Remove Bookmark" label would
+                // go stale. The toolbar's filled glyph carries the state.
+                Button("Bookmark") { active.controller?.toggleBookmark() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(navigation?.selection == nil)
+            }
+        }
+        #endif
         CommandGroup(before: .sidebar) {
             Section {
+                #if os(macOS)
+                Button("Contents") { active.controller?.togglePanel() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                #endif
                 // Cmd+arrow, as Safari and Finder bind it.
                 Button("Back") { navigation?.goBack() }
                     .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -109,6 +177,10 @@ final class FindCommand: NSObject {
 }
 #endif
 
+// Published by `ContentView` and read by `DocumentCommands`, both of which are
+// iOS-only now: on macOS the menu finds its target through `ActiveReaderWindow`,
+// because focused values do not resolve out of a hosted root.
+#if !os(macOS)
 struct OpenDocumentActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -128,6 +200,7 @@ extension FocusedValues {
         set { self[NavigationModelKey.self] = newValue }
     }
 }
+#endif
 
 struct SettingsView: View {
     @AppStorage("readingFontSize") private var fontSize = 17.0

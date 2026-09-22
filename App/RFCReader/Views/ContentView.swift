@@ -3,6 +3,11 @@ import RFCReaderKit
 import SwiftData
 import SwiftUI
 
+// macOS has no `WindowGroup`, so nothing on that platform instantiates this view:
+// the window's content is an `NSSplitViewController` built by
+// `ReaderWindowController`, because only a split view controller that is the
+// window's own root gets AppKit to confine the tab bar and split the toolbar.
+#if !os(macOS)
 struct ContentView: View {
     @Environment(LibraryModel.self) private var library
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -11,23 +16,14 @@ struct ContentView: View {
     /// selection, filter, search text and back/forward stack. Shared library state —
     /// the index, the cache — stays on the environment's `LibraryModel`.
     @State private var navigation = NavigationModel()
+    /// What the reader is showing, shared with the panel. One per scene, for the same
+    /// reason `NavigationModel` is.
+    @State private var reader = ReaderState()
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
         navigation.selection?.displayName ?? navigation.filter.title
     }
-
-    /// The prose title goes here, where macOS has room for it — truncated, because a
-    /// tab is far narrower than the window and clips rather than eliding.
-    private var windowSubtitle: String {
-        navigation.selection
-            .flatMap { library.metadata($0)?.title }?
-            .truncated(to: Self.subtitleLimit) ?? ""
-    }
-
-    /// Long enough that most RFC titles survive whole, short enough that the series'
-    /// genuinely long ones stop before the tab's edge.
-    private static let subtitleLimit = 64
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -38,6 +34,11 @@ struct ContentView: View {
             RFCListView()
                 .navigationSplitViewColumnWidth(min: 280, ideal: 360)
         } detail: {
+            // The detail column takes no `navigationSplitViewColumnWidth` — the
+            // modifier applies to the sidebar and content columns only — so the
+            // reader's floor comes from its own frame, inside `DocumentView`. Put
+            // here it would bound the reader and its panel together, which is how the
+            // contents panel came to leave the text 190 pt wide.
             if let selection = navigation.selection {
                 DocumentView(id: selection)
                     .id(selection)
@@ -54,9 +55,6 @@ struct ContentView: View {
         // one: the sidebar already shows which filter is active, so that title was
         // spending the window's only title slot on something said elsewhere.
         .navigationTitle(windowTitle)
-        #if os(macOS)
-        .navigationSubtitle(windowSubtitle)
-        #endif
         // On the split view rather than on `DocumentView`: macOS gives the detail
         // column no leading toolbar slot — a `.navigation` item declared down there is
         // silently dropped — and scene-level navigation belongs beside the sidebar
@@ -103,8 +101,10 @@ struct ContentView: View {
         // a runtime trap with no compile-time warning. Out here it covers both, and
         // the next presentation added to this view as well.
         .environment(navigation)
+        .environment(reader)
     }
 }
+#endif
 
 struct EmptyDetailView: View {
     @Environment(NavigationModel.self) private var navigation

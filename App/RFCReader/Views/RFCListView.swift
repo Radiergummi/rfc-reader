@@ -53,7 +53,6 @@ struct RFCListView: View {
                 ContentUnavailableView.search(text: navigation.searchText)
             }
         }
-        .searchable(text: $navigation.searchText, prompt: "Search")
         .task(id: navigation.filter) {
             downloaded = await library.downloadedNumbers()
         }

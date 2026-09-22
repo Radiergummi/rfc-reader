@@ -285,23 +285,16 @@ final class LibraryModel {
 
     /// Opens `link` in a tab of its own, either behind the current one or in front.
     ///
-    /// Through AppKit rather than SwiftUI. `openWindow` needs a `WindowGroup` with an
-    /// id or a value, and both of those stop the app opening a window at launch —
-    /// measured, it comes up with no interface. `newWindowForTab:` is the action
-    /// behind the tab bar's own "+", which SwiftUI implements for a plain
-    /// `WindowGroup`, so this is the same thing the user could click.
+    /// Through AppKit, because on macOS the app makes its own windows: there is no
+    /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
+    /// controller rather than by SwiftUI.
     ///
-    /// Nothing can be passed along that path, so the link waits in `pendingSceneLink`
-    /// for the scene that appears to take in `register(_:)`.
+    /// Nothing can be passed to a window as it is made, so the link waits in
+    /// `pendingSceneLink` for the window that appears to take it in `register(_:)`.
     private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
         #if os(macOS)
         pendingSceneLink = link
-        let previous = inBackground ? NSApp.keyWindow : nil
-        NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
-        guard let previous else { return }
-        // On the next turn of the run loop: the new tab is ordered front as part of
-        // being made, so taking the focus back any sooner is simply undone by it.
-        DispatchQueue.main.async { previous.makeKeyAndOrderFront(nil) }
+        AppDelegate.shared?.openTab(inBackground: inBackground)
         #endif
     }
 

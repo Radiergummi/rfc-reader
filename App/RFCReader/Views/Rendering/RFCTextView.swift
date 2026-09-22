@@ -109,6 +109,27 @@ struct ReaderInputs {
     }
 }
 
+#if !canImport(UIKit)
+/// The reader's scroll view, which does not give up width to the contents panel.
+///
+/// The reader's pane runs underneath the panel, so AppKit reports the panel's width
+/// as a right safe-area inset — and a scroll view turns its safe area into content
+/// insets, which the text view tracks. Measured: the scroll view and its clip view
+/// stayed 1019 pt wide while the text view inside went to 699 and its column to 392,
+/// so the text re-wrapped although nothing above it had changed. Refusing the inset
+/// here is the level that works: it was tried on the hosted root, on this
+/// representable and on the hosting controller, and none of those reach the clip
+/// view. Only the trailing edge is refused, because zeroing the insets outright puts
+/// the first lines of the document behind the toolbar.
+final class ReaderScrollView: NSScrollView {
+    override var safeAreaInsets: NSEdgeInsets {
+        var insets = super.safeAreaInsets
+        insets.right = 0
+        return insets
+    }
+}
+#endif
+
 #if canImport(UIKit)
 private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
@@ -154,7 +175,7 @@ private struct Representable: NSViewRepresentable {
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> ReaderScrollView {
         let textView = NSTextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
@@ -179,10 +200,11 @@ private struct Representable: NSViewRepresentable {
         let host = NSHostingController(rootView: inputs.header)
         textView.addSubview(host.view)
 
-        let scroll = NSScrollView()
+        let scroll = ReaderScrollView()
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
+
         // AppKit has no scroll delegate. The selector-based observer unregisters
         // itself with the coordinator, which the block-based one would not.
         scroll.contentView.postsBoundsChangedNotifications = true
@@ -199,14 +221,14 @@ private struct Representable: NSViewRepresentable {
         return scroll
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
+    func updateNSView(_ scroll: ReaderScrollView, context: Context) {
         inputs.apply(to: context.coordinator, width: width)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on
     /// the coordinator means it cannot outlive this view), but a popover already
     /// on screen would not otherwise close when the view goes away.
-    static func dismantleNSView(_ nsView: NSScrollView, coordinator: RFCTextViewCoordinator) {
+    static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
         coordinator.cancelHover()
     }
 }

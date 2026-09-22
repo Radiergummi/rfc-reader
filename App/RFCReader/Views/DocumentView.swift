@@ -7,9 +7,17 @@ import SwiftUI
 struct DocumentView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
+    /// Shared with the window's toolbar and its contents panel, which on macOS are
+    /// not inside this view any more.
+    @Environment(ReaderState.self) private var reader
     @Environment(\.modelContext) private var modelContext
+    #if !os(macOS)
+    // Only the iOS toolbar reads these. On macOS the bookmark button and the
+    // external links are the window's, and a `@Query` left outside this guard ran a
+    // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
     @Query private var bookmarks: [Bookmark]
+    #endif
     @AppStorage("readingFontSize") private var fontSize = 17.0
     @AppStorage("preferOriginalText") private var preferOriginalText = false
 
@@ -21,37 +29,46 @@ struct DocumentView: View {
     @State private var built: BuiltDocument?
     @State private var originalText: String?
     @State private var loadError: String?
-    @State private var showOriginal = false
+    #if !os(macOS)
     @State private var showTableOfContents = false
-    /// Which of the two the inspector is showing. Both are ways of navigating the
-    /// document, so they share one panel rather than competing for the toolbar.
-    @State private var inspectorTab = InspectorTab.contents
-    /// The two lists the inspector shows. Derived once when a document loads: the
-    /// inspector's body re-evaluates on every section crossing while scrolling, and
-    /// both of these walk every section and block of the document.
-    @State private var bodySections: [RFCKit.Section] = []
-    @State private var referenceGroups: [ReferenceGroup] = []
+    #endif
     /// Where the reader is, written the moment tracking computes it. This is the
-    /// value; `visibleAnchor` below is its SwiftUI-observable mirror, which lags it
-    /// by a main-actor hop. Anything that cannot afford that lag — persisting the
+    /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
+    /// a main-actor hop. Anything that cannot afford that lag — persisting the
     /// reading position on the way out, restoring the place across a rebuild — reads
     /// the box.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
-    /// The same value, for the parts of `body` that have to redraw when it changes:
-    /// the table of contents' highlight and the "copy link to this section" item.
-    @State private var visibleAnchor: String?
-    /// The text column this view's width implies, and nil until a width is known.
+    /// Anchor to section number, built once with the document. See
+    /// `onVisibleAnchorChange` for why it is not asked of the document each time.
+    @State private var sectionNumbers: [String: String] = [:]
+    /// The pane's full width — the whole of it, panel or no panel — and nil until the
+    /// geometry reader has run.
     ///
-    /// Artwork scaling and table shape are measured against the column, so the column
-    /// has to be settled *before* the first build or the document is built against a
-    /// guess and immediately thrown away. It is a pure function of the width
-    /// (`ReaderLayout`), so this view can work it out for itself rather than waiting
-    /// to be told by the text view it has not created yet — which is why nothing is
-    /// built until the geometry reader has run once.
-    @State private var column: CGFloat?
+    /// The column is derived from this rather than stored beside it. Artwork scaling
+    /// and table shape are measured against the column, so it has to be settled
+    /// *before* the first build or the document is built against a guess and
+    /// immediately thrown away. It is a pure function of the width (`ReaderLayout`),
+    /// so this view can work it out for itself rather than waiting to be told by the
+    /// text view it has not created yet — which is why nothing is built until the
+    /// geometry reader has run once.
+    @State private var paneWidth: CGFloat?
+
+    /// Derived from the pane's width, and nothing else.
+    ///
+    /// The panel does not appear here and must not: on macOS the reader's pane spans
+    /// it — the panel is a full-height inspector item drawn over the top — so the
+    /// column is the same number whether it is showing or not. That is what keeps
+    /// opening it from re-wrapping the document and — via `BuildInputs` — from
+    /// rebuilding it and losing the reader's place. What the panel overlaps, it
+    /// covers, and closing it uncovers.
+    private var column: CGFloat? {
+        paneWidth.map { ReaderLayout.column(forWidth: $0) }
+    }
 
     private var metadata: RFCMetadata? { library.metadata(id) }
+    #if !os(macOS)
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
+    #endif
 
     /// Everything a build depends on. One trigger, so the document is built in one
     /// place whatever changed — a new RFC, the font-size slider, or a window resize.
@@ -73,26 +90,33 @@ struct DocumentView: View {
         BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
     }
 
+    /// The reader, and on macOS only the reader.
+    ///
+    /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
+    /// window. The toolbar is an `NSToolbar` with our own delegate (`ReaderToolbar`),
+    /// because only a delegate-owned toolbar can carry the tracking separator that
+    /// splits it at the panel's edge; the panel is an `NSSplitViewItem`, because only
+    /// a real split item makes AppKit confine the tab bar and draw the glass.
+    ///
+    /// The overlay this replaces is worth remembering: `.inspector` put the reader
+    /// beside the panel, and `.safeAreaBar` reserved layout space — so opening it
+    /// widened the window, which widened the pane, which changed the column, which
+    /// rebuilt the document and lost the reader's place. The split item avoids all of
+    /// that by a different route: the reader's frame spans the panel, and the inset
+    /// it reports is ignored in the representable.
     var body: some View {
         content
             .navigationTitle(id.displayName)
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar { toolbar }
+            // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
+            // swallows an iPhone, and in compact width the inspector already presents
+            // itself as a sheet.
             .inspector(isPresented: $showTableOfContents) {
-                if document != nil {
-                    DocumentInspector(
-                        sections: bodySections,
-                        groups: referenceGroups,
-                        tab: $inspectorTab,
-                        current: visibleAnchor,
-                        selectSection: { anchor in navigation.jump(toSection: anchor) },
-                        openDocument: { library.open($0, activation: .current, in: navigation) }
-                    )
-                    .inspectorColumnWidth(min: 260, ideal: 320)
-                }
+                PanelHost().inspectorColumnWidth(min: 260, ideal: 320)
             }
+            #endif
             .task(id: id) { await load() }
             .task(id: buildInputs) { await rebuild() }
             .onChange(of: navigation.scrollRequest) { _, request in
@@ -106,17 +130,27 @@ struct DocumentView: View {
 
     /// The width channel. It wraps everything, including the loading state, so the
     /// column is known before there is a document to build.
+    ///
+    /// The floor is here rather than on the split view's detail column, where it
+    /// guarded the reader *and* the panel together and so let the panel take all but
+    /// 190 pt of it. This is the reader alone.
     private var content: some View {
         states
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 guard width > 0 else { return }
-                column = ReaderLayout.column(forWidth: width)
+                paneWidth = width
             }
+            #if os(macOS)
+            // Constant, panel or no panel. Adding the panel's width here is what made
+            // the window jump wider every time it opened: the floor rose by 320, and
+            // macOS grew the window to satisfy it.
+            .frame(minWidth: ReaderLayout.minimumPaneWidth)
+            #endif
     }
 
     @ViewBuilder
     private var states: some View {
-        if showOriginal {
+        if reader.showOriginal {
             OriginalTextView(text: originalText, fontSize: fontSize)
                 .task { originalText = try? await library.originalText(for: id) }
         } else if let document, let built {
@@ -127,7 +161,14 @@ struct DocumentView: View {
                 scrollTarget: scrollTarget,
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: {
-                    visibleAnchor = $0
+                    reader.currentAnchor = $0
+                    // Resolved here, where the document is: the toolbar's citation and
+                    // section link need the number, and on macOS the toolbar is in the
+                    // window rather than in this view. Through the map rather than
+                    // `document.section(anchor:)`, which walks the whole section tree
+                    // and materialises it afresh — 305 sections on RFC 9110 — and this
+                    // runs on every section crossing while scrolling.
+                    reader.currentSection = sectionNumbers[$0]
                     // Recorded on the history entry when navigating away, so coming
                     // back returns here rather than to the top of the document.
                     navigation.visiblePosition = $0
@@ -165,6 +206,7 @@ struct DocumentView: View {
         }
     }
 
+    #if !os(macOS)
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
@@ -181,8 +223,7 @@ struct DocumentView: View {
                 }
                 Divider()
                 Button("Copy Link to Current Section") {
-                    let section = visibleAnchor.flatMap { document?.section(anchor: $0)?.number }
-                    Clipboard.copy(RFCLink(id: id, section: section).webURL.absoluteString)
+                    Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
                 }
             } label: {
                 Label("Cite", systemImage: "quote.opening")
@@ -193,7 +234,7 @@ struct DocumentView: View {
             }
 
             Menu {
-                Toggle("Original Text", isOn: $showOriginal)
+                Toggle("Original Text", isOn: Bindable(reader).showOriginal)
                 Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
                 if let url = metadata?.errataURL {
                     Button("Errata") { systemOpenURL(url) }
@@ -202,15 +243,18 @@ struct DocumentView: View {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
+        }
 
+        ToolbarItem(placement: .primaryAction) {
             Button {
-                showTableOfContents.toggle()
+                withAnimation(.snappy) { showTableOfContents.toggle() }
             } label: {
                 Label("Contents", systemImage: "list.bullet.indent")
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
         }
     }
+    #endif
 
     // MARK: - Actions
 
@@ -220,17 +264,21 @@ struct DocumentView: View {
         loadError = nil
         document = nil
         built = nil
-        bodySections = []
-        referenceGroups = []
+        sectionNumbers = [:]
         // A reused view must not carry the previous document's place into the new
         // one; `install()` reports the real anchor a moment later.
-        visibleAnchor = nil
+        reader.clear()
         lastVisibleAnchor.anchor = nil
-        showOriginal = preferOriginalText
+        reader.showOriginal = preferOriginalText
         do {
             let loaded = try await library.document(for: id)
-            referenceGroups = ReferenceGroup.groups(in: loaded)
+            reader.groups = ReferenceGroup.groups(in: loaded)
+            sectionNumbers = Dictionary(
+                loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
+                uniquingKeysWith: { first, _ in first }
+            )
             document = loaded
+            reader.hasDocument = true
         } catch {
             loadError = error.localizedDescription
         }
@@ -264,7 +312,7 @@ struct DocumentView: View {
         // anchor in the document, so asking inside the filter would rebuild the
         // whole index once per section.
         let sections = rebuilt.anchors.sections
-        bodySections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
+        reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
         // Only a restyle has a place to restore; a first build lets `onAppear` decide
         // between a deep link and the saved reading position.
         if let place { scrollTarget = place }
@@ -303,6 +351,7 @@ struct DocumentView: View {
         return true
     }
 
+    #if !os(macOS)
     private func toggleBookmark() {
         if let existing = bookmarks.first(where: { $0.number == id.number }) {
             modelContext.delete(existing)
@@ -313,9 +362,10 @@ struct DocumentView: View {
 
     private func copyCitation(_ style: CitationStyle) {
         guard let metadata else { return }
-        let section = visibleAnchor.flatMap { document?.section(anchor: $0)?.number }
-        Clipboard.copy(CitationFormatter().cite(metadata, section: style == .bibtex ? nil : section, style: style))
+        let section = style == .bibtex ? nil : reader.currentSection
+        Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
     }
+    #endif
 
     private func savedPosition() -> String? {
         let number = id.number
@@ -484,7 +534,7 @@ struct OriginalTextView: View {
 }
 
 struct TableOfContentsView: View {
-    /// Only the sections the storage holds; see `DocumentView.bodySections`.
+    /// Only the sections the storage holds; see `DocumentView.rebuild()`.
     let sections: [RFCKit.Section]
     let current: String?
     let select: (String) -> Void
