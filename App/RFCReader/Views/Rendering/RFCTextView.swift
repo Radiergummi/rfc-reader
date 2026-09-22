@@ -50,18 +50,6 @@ struct RFCTextView: View {
     }
 
     var body: some View {
-        geometryBody
-            #if os(macOS)
-            // The reader spans the contents panel, which arrives as a right
-            // safe-area inset. Ignoring it on the hosted root keeps `DocumentView`'s
-            // column steady, but the inset still reaches the scroll view underneath:
-            // measured, the text view went 1019 → 699 and its container 712 → 392, so
-            // the text re-wrapped even though nothing above it had changed. This is
-            // the level it has to be undone at.
-            #endif
-    }
-
-    private var geometryBody: some View {
         GeometryReader { geometry in
             Representable(
                 inputs: ReaderInputs(

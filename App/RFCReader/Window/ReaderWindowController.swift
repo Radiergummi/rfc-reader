@@ -80,27 +80,33 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
     private func build(in window: NSWindow) {
         let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
-        sidebar.minimumThickness = 200
+        sidebar.minimumThickness = Self.sidebarMinimum
         sidebar.maximumThickness = 320
 
         let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
-        list.minimumThickness = 280
+        list.minimumThickness = Self.listMinimum
         listItem = list
 
-        // The reader ignores the trailing safe area, and this is the one place that
-        // works. The panel's width arrives as a right safe-area inset, and honouring
-        // it took the reader from 1019 pt to 699 and the column from 712 to 651 the
-        // moment the panel opened — measured both ways. Issue #34 recorded that
-        // `ignoresSafeArea` does not undo an AppKit inset, and inside
-        // `NavigationSplitView`'s detail column it does not; on the hosted root of
-        // the split item itself it does. What the panel overlaps, it covers.
+        // The panel's width arrives as a right safe-area inset, and honouring it
+        // would take 320 pt off the reader the moment the panel opened — which
+        // re-wraps the text, rebuilds the document and loses the reader's place.
+        // What the panel overlaps, it covers.
+        //
+        // Two layers have to refuse it, because they are two different measurements
+        // of two different things. This one is SwiftUI's: the width `DocumentView`
+        // derives its column from comes from a `GeometryReader` in this hosted root,
+        // and a root that honours the inset reports 919 pt shut and 599 pt open.
+        // Clearing `safeAreaRegions` holds it at 919 both ways — measured, with the
+        // view's own frame unchanged at 919 and the inset still arriving as 320.
+        // `ignoresSafeArea` inside `NavigationSplitView`'s detail column did not do
+        // this; on the hosted root of a split item it does (issue #34).
+        //
+        // It reaches no further down than SwiftUI, though. Underneath, AppKit hands
+        // the same inset to the scroll view, which turns it into content insets the
+        // text view tracks — 1019 → 699 pt there, separately measured. That one is
+        // `ReaderScrollView`'s to refuse.
         let readerHost = host(ReaderHost())
-        // EXPERIMENT: clear the hosted root's safe area entirely.
         readerHost.safeAreaRegions = []
-        // The panel's width comes back as a right safe-area inset, and honouring it
-        // would take 320 pt off the column the moment the panel opened — measured at
-        // 919 → 599 pt, which re-wraps the text, rebuilds the document and loses the
-        // reader's place. What the panel overlaps, it covers.
         let reader = NSSplitViewItem(viewController: readerHost)
         // On the *content* item, never on the panel: this is what makes the reader's
         // frame span the panel and hands the panel's width back as a right safe-area
