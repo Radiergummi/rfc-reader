@@ -209,3 +209,64 @@ creates the window: the tab bar stops at the panel's leading edge, the toolbar
 splits at divider 2, and the content item reports `safeAreaInsets.right = 320`.
 Those were measured in a window whose root was ours, which is what the app now
 builds.
+
+---
+
+## Round three: what the built window measures
+
+Built and measured on RFC 9110, 1500 pt window, 320 pt panel, two tabs.
+
+| | window | reader item | safe area right | reader column |
+|---|---|---|---|---|
+| panel closed | 1500 | 1019 | 0 | 712 |
+| panel open | 1500 | 1019 | 320 | 712 |
+
+- **Tab bar ends at 1177 pt**, against a panel leading edge of 1180. The toolbar
+  splits at the same divider, with the contents toggle alone on the panel's side.
+- **Zero differing pixels** in the region the panel does not cover, across a
+  toggle (`magick compare -metric AE`, 1200 × 1400 crop). The overlay on
+  `reader-panel-overlay` scores 6 on the same machine.
+
+### M9 — Where the safe-area inset actually bites
+
+`ignoresSafeArea` does undo the inset for SwiftUI's own geometry — `DocumentView`
+kept reporting 1019 pt and never rebuilt — while the text still re-wrapped,
+because the inset reaches the reader further down: an `NSScrollView` turns its
+safe area into **content insets**, and the text view tracks those.
+
+```
+scroll=1019.0  clip=1019.0  tv=699.0  container=392.0
+```
+
+The scroll view and its clip view keep their width; the text view inside them
+does not. Four levels were measured and only the last works:
+
+| Where | Result |
+|---|---|
+| `ignoresSafeArea` on the hosted root | SwiftUI geometry correct, text still re-wraps |
+| `ignoresSafeArea` on the representable | same |
+| `NSHostingController.safeAreaRegions = []` | same |
+| `automaticallyAdjustsSafeAreaInsets = false` on the item | panel *takes* the width: reader 699, column 649 |
+| `NSScrollView` subclass refusing the trailing inset | **correct** |
+
+Zeroing `contentInsets` outright also works for width and puts the first lines
+of the document behind the toolbar, so only the trailing edge is refused.
+
+### M10 — Measurement hygiene, the expensive kind
+
+Three separate "the text re-wrapped" findings were artefacts, and each cost a
+round of debugging:
+
+- **Captures racing the reading-position restore.** The reader scrolls to the
+  saved anchor seconds after launch, so a before/after pair straddling it differs
+  by ~150,000 pixels with the content visibly offset. Let the document settle,
+  and check by taking two captures with *no* action between them: that pair
+  scores 0, and anything else means the app has not finished.
+- **`screencapture -R` grabs whatever is on screen**, so a capture taken while
+  the app was not frontmost recorded somebody else's window entirely.
+- **`screencapture -l` on a tabbed window** returns that tab's own surface, which
+  for a background tab is stale and shows no tab bar. Bring the tab to the front
+  and capture the region.
+- **`keystroke` goes to the frontmost application.** Half a dozen toggles went
+  into the terminal, and two went into the app's own search field. Activate
+  first, or drive the menu item directly, which also proves the command path.

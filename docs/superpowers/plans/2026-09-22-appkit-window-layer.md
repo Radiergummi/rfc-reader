@@ -6,6 +6,8 @@
 
 **Architecture:** On macOS the app has no `WindowGroup`: an `NSApplicationDelegate` creates every window, each an `NSWindowController` whose `contentViewController` is an `NSSplitViewController` — sidebar, list, reader, inspector — with each item hosting the existing SwiftUI view in an `NSHostingController`, and an `NSToolbar` owned by our delegate carrying an `NSTrackingSeparatorToolbarItem`. The panel is a real split item, so AppKit confines the tab bar and splits the toolbar itself. The menu bar is still SwiftUI's: a `Settings`-only scene keeps `.commands` working (measured, M7), so only window creation moves to AppKit. The reader item extends underneath the panel and ignores the resulting safe-area inset inside the representable. iOS is untouched.
 
+**Completed 2026-09-22.** All seven tasks are landed on `appkit-window-layer`; the outcome and final numbers are in the spec's "Round three". Two things the plan got wrong and the work corrected: Task 4's fix belongs in an `NSScrollView` subclass rather than in `makeNSView`'s insets (M9), and Task 3's `DocumentOutline` became `ReaderState`, which also carries the Original Text toggle, because the toolbar left `DocumentView` in Task 2 and took that state with it.
+
 **Revised 2026-09-22 after M6:** this plan first tried to keep `WindowGroup` and replace the window's content view controller. Measured in the real app, SwiftUI destroys and re-opens any window whose content it loses — 24 windows in 0.9 s. The window has to be ours from birth. Tasks 2, 3, 4, 6 and 7 are unaffected; Task 1 and Task 5 are rewritten.
 
 **Tech Stack:** Swift 6 (complete strict concurrency), SwiftUI, AppKit (`NSSplitViewController`, `NSToolbar`, `NSHostingController`), SwiftData, Observation.
