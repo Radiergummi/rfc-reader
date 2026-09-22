@@ -80,18 +80,51 @@ struct WindowCommands: Commands {
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
+    #if os(macOS)
+    /// The key window's navigation, so Back and Forward act on the tab the reader is
+    /// actually looking at. `@FocusedValue` cannot answer that any more: the views
+    /// that published it are hosted outside the scene, and measured on this build the
+    /// values never resolve — ⌘L opened nothing.
+    @State private var active = ActiveReaderWindow.shared
+
+    private var navigation: NavigationModel? { active.controller?.navigation }
+    private var openDocument: (() -> Void)? {
+        guard let navigation else { return nil }
+        return { navigation.isShowingGoToSheet = true }
+    }
+    #else
     @FocusedValue(\.openDocumentAction) private var openDocument
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
+    #endif
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("Go to RFC…") { openDocument?() }
                 .keyboardShortcut("l", modifiers: .command)
+                .disabled(openDocument == nil)
         }
+        #if os(macOS)
+        // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
+        // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
+        CommandGroup(after: .pasteboard) {
+            Section {
+                // Static title: whether this RFC is bookmarked is a SwiftData fetch,
+                // not something the menu observes, so a "Remove Bookmark" label would
+                // go stale. The toolbar's filled glyph carries the state.
+                Button("Bookmark") { active.controller?.toggleBookmark() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(navigation?.selection == nil)
+            }
+        }
+        #endif
         CommandGroup(before: .sidebar) {
             Section {
+                #if os(macOS)
+                Button("Contents") { active.controller?.togglePanel() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                #endif
                 // Cmd+arrow, as Safari and Finder bind it.
                 Button("Back") { navigation?.goBack() }
                     .keyboardShortcut(.leftArrow, modifiers: .command)

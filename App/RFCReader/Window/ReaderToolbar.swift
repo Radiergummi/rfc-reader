@@ -1,12 +1,14 @@
 #if os(macOS)
 import AppKit
 import RFCKit
-import SwiftData
-import SwiftUI
+import RFCReaderKit
 
 extension NSToolbarItem.Identifier {
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
-    static let rfcDocumentActions = NSToolbarItem.Identifier("rfc.documentActions")
+    static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
+    static let rfcCite = NSToolbarItem.Identifier("rfc.cite")
+    static let rfcShare = NSToolbarItem.Identifier("rfc.share")
+    static let rfcMore = NSToolbarItem.Identifier("rfc.more")
     static let rfcPanelSeparator = NSToolbarItem.Identifier("rfc.panelSeparator")
     static let rfcPanelToggle = NSToolbarItem.Identifier("rfc.panelToggle")
 }
@@ -20,12 +22,20 @@ extension NSToolbarItem.Identifier {
 /// what is left of the titlebar, and the panel's toggle sits out on the panel's own
 /// glass, which is where Pages puts it.
 ///
-/// The items themselves are still SwiftUI: an `NSToolbarItem` can hold an
-/// `NSHostingView`, so the buttons and menus are the ones `DocumentView` already
-/// declared rather than a second set written in AppKit.
+/// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
+/// ones were tried first, to keep the declarations `DocumentView` already had: a
+/// hosting view reports no width the toolbar will honour, so every item was laid out
+/// on top of the one before it — the bookmark drew inside the back/forward group and
+/// the share icon over the panel's toggle. Native items also get the system's own
+/// grouping and glass, which a hosted control cannot.
 @MainActor
-final class ReaderToolbar: NSObject, NSToolbarDelegate {
+final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
+
+    private var navigation: NavigationModel { controller.navigation }
+    private var reader: ReaderState { controller.reader }
+    private var id: DocumentID? { navigation.selection }
+    private var metadata: RFCMetadata? { id.flatMap { LibraryModel.shared.metadata($0) } }
 
     init(controller: ReaderWindowController) {
         self.controller = controller
@@ -41,7 +51,11 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .rfcNavigation, .flexibleSpace, .rfcDocumentActions, .rfcPanelSeparator, .rfcPanelToggle]
+        [
+            .toggleSidebar, .rfcNavigation, .flexibleSpace,
+            .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
+            .rfcPanelSeparator, .rfcPanelToggle,
+        ]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -62,146 +76,178 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate {
                 splitView: controller.splitController.splitView,
                 dividerIndex: 2
             )
+
         case .rfcNavigation:
-            return hosted(identifier, label: "Navigation", NavigationToolbarView())
-        case .rfcDocumentActions:
-            return hosted(identifier, label: "Document", DocumentActionsToolbarView())
+            // Always both, dimmed when there is nowhere to go, as Safari does. A pair
+            // that appears and vanishes with the history shifts everything beside it.
+            let back = button(NSToolbarItem.Identifier("rfc.back"), "Back", "chevron.backward", #selector(goBack))
+            let forward = button(NSToolbarItem.Identifier("rfc.forward"), "Forward", "chevron.forward", #selector(goForward))
+            let group = NSToolbarItemGroup(itemIdentifier: identifier)
+            group.label = "Navigation"
+            group.subitems = [back, forward]
+            group.controlRepresentation = .expanded
+            return group
+
+        case .rfcBookmark:
+            return button(identifier, "Bookmark", "bookmark", #selector(toggleBookmark))
+
+        case .rfcCite:
+            let item = NSMenuToolbarItem(itemIdentifier: identifier)
+            item.label = "Cite"
+            item.image = NSImage(systemSymbolName: "quote.opening", accessibilityDescription: "Cite")
+            item.showsIndicator = false
+            item.menu = menu(delegate: self, tag: MenuTag.cite)
+            return item
+
+        case .rfcShare:
+            let item = NSSharingServicePickerToolbarItem(itemIdentifier: identifier)
+            item.label = "Share"
+            item.delegate = self
+            return item
+
+        case .rfcMore:
+            let item = NSMenuToolbarItem(itemIdentifier: identifier)
+            item.label = "More"
+            item.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "More")
+            item.showsIndicator = false
+            item.menu = menu(delegate: self, tag: MenuTag.more)
+            return item
+
         case .rfcPanelToggle:
-            return hosted(identifier, label: "Contents", PanelToggleToolbarView(toggle: { [weak controller] in
-                controller?.togglePanel()
-            }))
+            return button(identifier, "Contents", "list.bullet.indent", #selector(togglePanel))
+
         default:
             return nil
         }
     }
 
-    private func hosted(_ identifier: NSToolbarItem.Identifier, label: String, _ view: some View) -> NSToolbarItem {
+    private func button(
+        _ identifier: NSToolbarItem.Identifier,
+        _ label: String,
+        _ symbol: String,
+        _ action: Selector
+    ) -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: identifier)
         item.label = label
-        let hosting = NSHostingView(rootView: controller.withWindowEnvironment(view))
-        hosting.sizingOptions = [.intrinsicContentSize]
-        item.view = hosting
+        item.toolTip = label
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        item.target = self
+        item.action = action
+        item.isBordered = true
         return item
     }
-}
 
-// MARK: - Items
-
-/// Back and forward, beside the sidebar toggle.
-///
-/// Always present, dimmed when there is nowhere to go, as Safari does. A pair that
-/// appears and vanishes with the history shifts everything beside it.
-private struct NavigationToolbarView: View {
-    @Environment(NavigationModel.self) private var navigation
-
-    var body: some View {
-        ControlGroup {
-            Button {
-                navigation.goBack()
-            } label: {
-                Label("Back", systemImage: "chevron.backward")
-            }
-            .disabled(!navigation.canGoBack)
-
-            Button {
-                navigation.goForward()
-            } label: {
-                Label("Forward", systemImage: "chevron.forward")
-            }
-            .disabled(!navigation.canGoForward)
-        }
-        .controlGroupStyle(.navigation)
-    }
-}
-
-/// What the document itself can do: bookmark, cite, share, and the rest.
-///
-/// These were `DocumentView`'s `.toolbar`. They read the window's models rather than
-/// the reader's own state, because the toolbar is no longer inside the reader — the
-/// one thing they need from the document, the section the reader is looking at, is
-/// resolved into `ReaderState.currentSection` by the view that has the document.
-private struct DocumentActionsToolbarView: View {
-    @Environment(LibraryModel.self) private var library
-    @Environment(NavigationModel.self) private var navigation
-    @Environment(ReaderState.self) private var reader
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.openURL) private var systemOpenURL
-    @Query private var bookmarks: [Bookmark]
-
-    private var id: DocumentID? { navigation.selection }
-    private var metadata: RFCMetadata? { id.flatMap { library.metadata($0) } }
-    private var isBookmarked: Bool {
-        guard let id else { return false }
-        return bookmarks.contains { $0.number == id.number }
+    /// Both menus are built when they open rather than held and mutated: what they
+    /// say depends on the document, and the document changes under them.
+    private enum MenuTag {
+        static let cite = 1
+        static let more = 2
     }
 
-    var body: some View {
-        @Bindable var reader = reader
-        if let id, let metadata {
-            HStack(spacing: 12) {
-                Button {
-                    toggleBookmark(id, metadata)
-                } label: {
-                    Label("Bookmark", systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
-                }
-                .keyboardShortcut("d", modifiers: .command)
+    private func menu(delegate: NSMenuDelegate, tag: Int) -> NSMenu {
+        let menu = NSMenu()
+        menu.delegate = delegate
+        menu.identifier = NSUserInterfaceItemIdentifier("rfc.menu.\(tag)")
+        return menu
+    }
 
-                Menu {
-                    ForEach(CitationStyle.allCases) { style in
-                        Button(style.displayName) { copyCitation(style, metadata) }
-                    }
-                    Divider()
-                    Button("Copy Link to Current Section") {
-                        Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
-                    }
-                } label: {
-                    Label("Cite", systemImage: "quote.opening")
-                }
-
-                ShareLink(item: RFCEditorEndpoints.infoPage(id), subject: Text("\(id.displayName): \(metadata.title)"))
-
-                Menu {
-                    Toggle("Original Text", isOn: $reader.showOriginal)
-                    Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
-                    if let url = metadata.errataURL {
-                        Button("Errata") { systemOpenURL(url) }
-                    }
-                    Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        switch menu.identifier?.rawValue {
+        case "rfc.menu.\(MenuTag.cite)":
+            for style in CitationStyle.allCases {
+                let item = NSMenuItem(title: style.displayName, action: #selector(copyCitation), keyEquivalent: "")
+                item.target = self
+                item.representedObject = style
+                menu.addItem(item)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .labelStyle(.iconOnly)
-            .fixedSize()
+            menu.addItem(.separator())
+            let link = NSMenuItem(title: "Copy Link to Current Section", action: #selector(copySectionLink), keyEquivalent: "")
+            link.target = self
+            menu.addItem(link)
+
+        case "rfc.menu.\(MenuTag.more)":
+            let original = NSMenuItem(title: "Original Text", action: #selector(toggleOriginalText), keyEquivalent: "")
+            original.target = self
+            original.state = reader.showOriginal ? .on : .off
+            menu.addItem(original)
+            add(to: menu, "Open on rfc-editor.org", #selector(openInfoPage))
+            if metadata?.errataURL != nil {
+                add(to: menu, "Errata", #selector(openErrata))
+            }
+            add(to: menu, "Datatracker", #selector(openDatatracker))
+
+        default:
+            break
         }
     }
 
-    private func toggleBookmark(_ id: DocumentID, _ metadata: RFCMetadata) {
-        if let existing = bookmarks.first(where: { $0.number == id.number }) {
-            modelContext.delete(existing)
-        } else {
-            modelContext.insert(Bookmark(number: id.number, title: metadata.title))
+    private func add(to menu: NSMenu, _ title: String, _ action: Selector) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+    }
+
+    // MARK: - Validation
+
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        switch item.itemIdentifier.rawValue {
+        case "rfc.back": return navigation.canGoBack
+        case "rfc.forward": return navigation.canGoForward
+        case NSToolbarItem.Identifier.rfcBookmark.rawValue:
+            // The filled glyph is the state, and validation is the one call AppKit
+            // makes often enough to keep it honest.
+            item.image = NSImage(
+                systemSymbolName: controller.isBookmarked ? "bookmark.fill" : "bookmark",
+                accessibilityDescription: "Bookmark"
+            )
+            return id != nil
+        case NSToolbarItem.Identifier.rfcPanelToggle.rawValue:
+            return reader.hasDocument
+        default:
+            return id != nil
         }
     }
 
-    private func copyCitation(_ style: CitationStyle, _ metadata: RFCMetadata) {
+    // MARK: - Actions
+
+    @objc private func goBack() { navigation.goBack() }
+    @objc private func goForward() { navigation.goForward() }
+    @objc private func togglePanel() { controller.togglePanel() }
+    @objc private func toggleBookmark() { controller.toggleBookmark() }
+    @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
+
+    @objc private func copyCitation(_ sender: NSMenuItem) {
+        guard let metadata, let style = sender.representedObject as? CitationStyle else { return }
         let section = style == .bibtex ? nil : reader.currentSection
         Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
     }
+
+    @objc private func copySectionLink() {
+        guard let id else { return }
+        Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
+    }
+
+    @objc private func openInfoPage() {
+        guard let id else { return }
+        NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
+    }
+
+    @objc private func openErrata() {
+        guard let url = metadata?.errataURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func openDatatracker() {
+        guard let id else { return }
+        NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
+    }
 }
 
-/// The panel's toggle: the rightmost thing in the toolbar, out on the panel's glass.
-private struct PanelToggleToolbarView: View {
-    let toggle: () -> Void
-
-    var body: some View {
-        Button(action: toggle) {
-            Label("Contents", systemImage: "list.bullet.indent")
-        }
-        .labelStyle(.iconOnly)
-        .keyboardShortcut("t", modifiers: [.command, .shift])
+extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {
+    func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
+        guard let id else { return [] }
+        return [RFCEditorEndpoints.infoPage(id)]
     }
 }
 #endif

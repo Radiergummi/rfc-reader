@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Observation
 import RFCKit
 
 /// Makes windows, because nothing else does any more.
@@ -50,6 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @discardableResult
     func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) -> ReaderWindowController {
         let controller = ReaderWindowController(library: LibraryModel.shared)
+        // Only the first window of the session remembers its frame: an autosave name
+        // belongs to one window, and sharing it across tabs mangles all of them.
+        if controllers.isEmpty {
+            controller.window?.setFrameAutosaveName("ReaderWindow")
+        }
         controllers.append(controller)
 
         if let host = sibling?.window, let fresh = controller.window {
@@ -78,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The window the menu acts on: the key window's, or the frontmost reader's when
     /// the key window is a sheet or the settings.
+    ///
+    /// Not observable, and it does not need to be — `ActiveReaderWindow` is what the
+    /// menu watches. This is for the code that acts rather than the code that draws.
     var activeController: ReaderWindowController? {
         if let key = NSApp.keyWindow, let controller = ReaderWindowController.controller(for: key) {
             return controller
@@ -87,6 +96,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return controller
         }
         return NSApp.orderedWindows.lazy.compactMap(ReaderWindowController.controller(for:)).first
+    }
+}
+
+/// Which window the menu acts on.
+///
+/// Menu items used to find their target with `@FocusedValue`, published by
+/// `ContentView` with `focusedSceneValue`. Measured on this build: with the reader's
+/// views hosted in `NSHostingController`s rather than in a scene, those values never
+/// resolve — ⌘L opened nothing at all. The key window is the better question anyway:
+/// Back means the tab you are looking at.
+///
+/// Written by `ReaderWindowController`, which is its window's delegate, rather than
+/// by a notification observer: a `Notification` cannot cross an isolation boundary
+/// under strict concurrency, and the delegate is already on the main actor.
+@Observable
+@MainActor
+final class ActiveReaderWindow {
+    static let shared = ActiveReaderWindow()
+
+    private(set) var controller: ReaderWindowController?
+
+    private init() {}
+
+    func becameKey(_ controller: ReaderWindowController) {
+        self.controller = controller
+    }
+
+    func willClose(_ controller: ReaderWindowController) {
+        guard self.controller === controller else { return }
+        self.controller = nil
     }
 }
 #endif

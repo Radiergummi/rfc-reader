@@ -1,6 +1,8 @@
 #if os(macOS)
 import AppKit
+import RFCKit
 import RFCReaderKit
+import SwiftData
 import SwiftUI
 
 /// One window — which is one tab — and everything in it.
@@ -64,7 +66,11 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // front window's tab group rather than opening beside it.
         window.tabbingIdentifier = "org.rfc-editor.reader"
         window.tabbingMode = .preferred
-        window.setFrameAutosaveName("ReaderWindow")
+        // No frame autosave name here. It is one name per window, and giving every
+        // window the same one made opening a tab collapse the window from 950 pt tall
+        // to 307 and leave the new tab's split view laid out for the old width. The
+        // first window of the session takes the name, in `AppDelegate`; a tab inherits
+        // its sibling's frame from `addTabbedWindow(_:ordered:)`.
         super.init(window: window)
         window.delegate = self
         build(in: window)
@@ -83,7 +89,16 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
         list.minimumThickness = 280
 
-        let readerHost = host(ReaderHost().ignoresSafeArea(.container, edges: .trailing))
+        // The reader ignores the trailing safe area, and this is the one place that
+        // works. The panel's width arrives as a right safe-area inset, and honouring
+        // it took the reader from 1019 pt to 699 and the column from 712 to 651 the
+        // moment the panel opened — measured both ways. Issue #34 recorded that
+        // `ignoresSafeArea` does not undo an AppKit inset, and inside
+        // `NavigationSplitView`'s detail column it does not; on the hosted root of
+        // the split item itself it does. What the panel overlaps, it covers.
+        let readerHost = host(ReaderHost())
+        // EXPERIMENT: clear the hosted root's safe area entirely.
+        readerHost.safeAreaRegions = []
         // The panel's width comes back as a right safe-area inset, and honouring it
         // would take 320 pt off the column the moment the panel opened — measured at
         // 919 → 599 pt, which re-wraps the text, rebuilds the document and loses the
@@ -132,11 +147,17 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // Takes the link a new tab was opened for, if it was opened for one.
         library.register(navigation)
         observeTitle()
+        observeDocument()
 
         // Read by the measurement harness, and the first thing that would show a
         // window churn: one line per window means one window per window.
+        #if DEBUG
+        // The measurement harness reads these; they are also the first thing that
+        // would show a window churn, one line per window meaning one window per
+        // window. See docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md.
         NSLog("RFCWINDOW number=\(window.windowNumber)")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.logGeometry("at launch") }
+        #endif
     }
 
     /// Every hosted root is handed the models by hand.
@@ -146,7 +167,14 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// compile-time warning — the same reason `DocumentHeaderView` and `StatusBanner`
     /// take theirs as properties.
     private func host(_ view: some View) -> NSHostingController<AnyView> {
-        NSHostingController(rootView: AnyView(withWindowEnvironment(view)))
+        let controller = NSHostingController(rootView: AnyView(withWindowEnvironment(view)))
+        // The hosted view must not size the window. By default a hosting controller
+        // reports its content's preferred size, and as a split view item that reaches
+        // the window: measured, it pinned the window at 219 pt tall and left the
+        // split laid out for a width it no longer had. The window's size is the
+        // window's business; these views fill whatever they are given.
+        controller.sizingOptions = []
+        return controller
     }
 
     /// The models this window's views share, handed to anything hosted in it —
@@ -206,6 +234,32 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         if frame != window.frame { window.setFrame(frame, display: false) }
     }
 
+    /// Keeps the panel shut while there is nothing for it to describe.
+    ///
+    /// A new tab inherits its sibling's panel state — measured: opened from a window
+    /// whose panel was showing, a fresh tab comes up with `isCollapsed` false however
+    /// this controller set it. That left an empty strip of glass over the reader of a
+    /// tab with no document in it. The panel follows the document instead.
+    private func observeDocument() {
+        withObservationTracking {
+            _ = reader.hasDocument
+        } onChange: {
+            Task { @MainActor [weak self] in
+                self?.closePanelWithoutDocument()
+                self?.observeDocument()
+            }
+        }
+        // AppKit applies the inherited state after this runs, so the rule is enforced
+        // again on the next turn of the run loop, and whenever the window becomes key.
+        closePanelWithoutDocument()
+        DispatchQueue.main.async { [weak self] in self?.closePanelWithoutDocument() }
+    }
+
+    private func closePanelWithoutDocument() {
+        guard !reader.hasDocument, !panelItem.isCollapsed else { return }
+        panelItem.isCollapsed = true
+    }
+
     // MARK: - The panel
 
     /// Animated, so the panel slides in rather than appearing between frames — which
@@ -219,27 +273,64 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // Before AppKit gets a chance to enforce the old minimum against the new
         // arrangement.
         if let window { applyMinimumWidth(to: window) }
+        #if DEBUG
         // The evidence for "the reader keeps its width underneath": the reader's own
         // frame must not change when the panel opens, and the panel's width must come
         // back as a safe-area inset rather than as lost width.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.logGeometry("panel \(self?.panelItem.isCollapsed == true ? "closed" : "open")")
         }
+        #endif
     }
 
+    #if DEBUG
     func logGeometry(_ label: String) {
         guard let window else { return }
         let readerView = readerItem.viewController.view
         NSLog(
-            "RFCGEOM \(label) window=\(window.frame.width) reader=\(readerView.frame.width) "
+            "RFCGEOM \(label) number=\(window.windowNumber) title=\(window.title) window=\(window.frame.width) reader=\(readerView.frame.width) "
                 + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(panelItem.isCollapsed) "
                 + "toolbarItems=\(window.toolbar?.items.count ?? -1)"
         )
     }
+    #endif
+
+    // MARK: - The document's actions
+
+    /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
+    /// cannot disagree about what bookmarking means.
+    var isBookmarked: Bool {
+        guard let id = navigation.selection else { return false }
+        return bookmark(for: id) != nil
+    }
+
+    func toggleBookmark() {
+        guard let id = navigation.selection else { return }
+        let context = AppData.container.mainContext
+        if let existing = bookmark(for: id) {
+            context.delete(existing)
+        } else {
+            let title = library.metadata(id)?.title ?? id.displayName
+            context.insert(Bookmark(number: id.number, title: title))
+        }
+        try? context.save()
+    }
+
+    private func bookmark(for id: DocumentID) -> Bookmark? {
+        let number = id.number
+        let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
+        return try? AppData.container.mainContext.fetch(descriptor).first
+    }
 
     // MARK: - Lifetime
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        ActiveReaderWindow.shared.becameKey(self)
+        closePanelWithoutDocument()
+    }
+
     func windowWillClose(_ notification: Notification) {
+        ActiveReaderWindow.shared.willClose(self)
         library.unregister(navigation)
         AppDelegate.shared?.forget(self)
     }

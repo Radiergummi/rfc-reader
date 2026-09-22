@@ -45,16 +45,20 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("RFCs")
-        // Search lives on the sidebar, not on the list it filters.
-        //
-        // `.searchable` on the list column puts the field at the trailing end of the
-        // window's toolbar, outboard of everything the document declares — so the
-        // contents toggle could not be the rightmost item, and the field ran on past
-        // the panel's leading edge and under its glass. Declared here with
-        // `.sidebar`, it sits in the sidebar itself, which leaves the toolbar's
-        // trailing end to the panel's toggle. The text it binds to lives on
-        // `NavigationModel`, so `RFCListView` filters on it exactly as before.
+        // Search lives on the sidebar, not on the list it filters, and not in the
+        // toolbar: the toolbar's trailing end belongs to the panel's toggle, and the
+        // document's section of it is the wrong place for something that filters the
+        // library. The text it binds to lives on `NavigationModel`, so `RFCListView`
+        // filters on it exactly as before.
+        #if os(macOS)
+        // Written out rather than `.searchable`, which draws nothing here: the
+        // sidebar is its own hosting controller now, with no `NavigationSplitView`
+        // around it to give `.sidebar` placement a meaning. Measured — the window
+        // contained no text field at all.
+        .safeAreaInset(edge: .top) { SidebarSearchField(text: $navigation.searchText) }
+        #else
         .searchable(text: $navigation.searchText, placement: .sidebar, prompt: "Search")
+        #endif
         .labelStyle(SidebarLabelStyle())
         .safeAreaInset(edge: .bottom) {
             IndexStatusView()
@@ -74,6 +78,36 @@ struct SidebarView: View {
         Label(filter.title, systemImage: filter.systemImage).tag(filter)
     }
 }
+
+#if os(macOS)
+/// The sidebar's search field.
+private struct SidebarSearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $text)
+                .textFieldStyle(.plain)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 6))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+}
+#endif
 
 /// Gives every sidebar row's icon a column of its own, so the titles line up however
 /// wide the glyph is.
