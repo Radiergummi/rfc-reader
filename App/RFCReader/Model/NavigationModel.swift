@@ -66,6 +66,16 @@ final class NavigationModel: Identifiable {
         open(RFCLink(id: id, section: section), in: index)
     }
 
+    /// A row picked in the document list.
+    ///
+    /// Unlike `open`, it leaves the filter alone. The row is in the list the reader
+    /// is looking at by construction, so a narrowed filter cannot be hiding it, and
+    /// resetting to `.all` would swap the Bookmarks list they were working in for
+    /// the whole library with that one row highlighted somewhere inside it.
+    func select(_ id: DocumentID) {
+        go(to: Place(id: id))
+    }
+
     /// A jump within the document already open — a section link in the prose, or a
     /// row in the table of contents. Its own history entry, so Back undoes it.
     func jump(toSection section: String) {
