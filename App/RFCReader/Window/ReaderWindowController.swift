@@ -32,7 +32,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// inside it any more.
     let reader = ReaderState()
 
-    let splitController = NSSplitViewController()
+    let splitController = ReaderSplitViewController()
+    private(set) var listItem: NSSplitViewItem!
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
 
@@ -88,6 +89,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
         let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
         list.minimumThickness = 280
+        listItem = list
 
         // The reader ignores the trailing safe area, and this is the one place that
         // works. The panel's width arrives as a right safe-area inset, and honouring
@@ -140,6 +142,9 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         Self.controllers[ObjectIdentifier(window)] = WeakController(controller: self)
 
         let toolbar = ReaderToolbar(controller: self)
+        // The title is capped to the column it sits over, so it has to be told when
+        // that column is dragged.
+        splitController.didResizeSubviews = { [weak self] in self?.toolbar?.capTitleToList() }
         window.toolbar = toolbar.makeToolbar()
         window.toolbarStyle = .unified
         // The title is the toolbar's own item, not AppKit's.
@@ -197,6 +202,12 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
             .environment(navigation)
             .environment(reader)
             .modelContainer(AppData.container)
+    }
+
+    /// How wide the list column is right now. The title drawn over it is capped to
+    /// this, and the column is draggable, so it is read rather than remembered.
+    var listWidth: CGFloat {
+        listItem.viewController.view.frame.width
     }
 
     // MARK: - Title
@@ -359,6 +370,18 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// it, and there is no `WindowGroup` on macOS any more.
     @objc override func newWindowForTab(_ sender: Any?) {
         AppDelegate.shared?.openWindow(tabbedWith: self, inBackground: false)
+    }
+}
+
+/// Reports a column being dragged, so the toolbar can cap the title to the list it
+/// sits over.
+@MainActor
+final class ReaderSplitViewController: NSSplitViewController {
+    var didResizeSubviews: (() -> Void)?
+
+    override func splitViewDidResizeSubviews(_ notification: Notification) {
+        super.splitViewDidResizeSubviews(notification)
+        didResizeSubviews?()
     }
 }
 

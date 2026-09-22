@@ -80,13 +80,27 @@ private final class TitleView: NSView {
         self.title.stringValue = title
         self.subtitle.stringValue = subtitle
         self.subtitle.isHidden = subtitle.isEmpty
-        // Capped, because a long RFC title would otherwise push the document's own
-        // actions off the toolbar.
+        applyWidth()
+    }
+
+    /// The width of the column the title sits over. The labels truncate with an
+    /// ellipsis inside whatever this leaves them.
+    func limit(to column: CGFloat) {
+        limit = column
+        applyWidth()
+    }
+
+    private var limit: CGFloat = 0
+
+    private func applyWidth() {
         let text = max(
-            self.title.intrinsicContentSize.width,
-            self.subtitle.isHidden ? 0 : self.subtitle.intrinsicContentSize.width
+            title.intrinsicContentSize.width,
+            subtitle.isHidden ? 0 : subtitle.intrinsicContentSize.width
         )
-        widthConstraint.constant = min(text, 360) + 16
+        // The leading padding, and as much again at the trailing edge so the title
+        // stops short of the divider rather than against it.
+        let room = max(80, limit - 24)
+        widthConstraint.constant = min(text + 16, room)
     }
 }
 
@@ -110,6 +124,13 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
 
     func showTitle(_ title: String, subtitle: String) {
         titleView.show(title, subtitle: subtitle)
+        capTitleToList()
+    }
+
+    /// Keeps the title inside the column it names. Without it a long RFC title ran
+    /// past the list's trailing edge and over the reader's own section.
+    func capTitleToList() {
+        titleView.limit(to: controller.listWidth)
     }
 
     func makeToolbar() -> NSToolbar {
