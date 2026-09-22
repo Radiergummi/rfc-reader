@@ -165,16 +165,6 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         library.register(navigation)
         observeTitle()
         observeDocument()
-
-        // Read by the measurement harness, and the first thing that would show a
-        // window churn: one line per window means one window per window.
-        #if DEBUG
-        // The measurement harness reads these; they are also the first thing that
-        // would show a window churn, one line per window meaning one window per
-        // window. See docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md.
-        NSLog("RFCWINDOW number=\(window.windowNumber)")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.logGeometry("at launch") }
-        #endif
     }
 
     /// Every hosted root is handed the models by hand.
@@ -300,17 +290,14 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // Before AppKit gets a chance to enforce the old minimum against the new
         // arrangement.
         if let window { applyMinimumWidth(to: window) }
-        #if DEBUG
-        // The evidence for "the reader keeps its width underneath": the reader's own
-        // frame must not change when the panel opens, and the panel's width must come
-        // back as a safe-area inset rather than as lost width.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.logGeometry("panel \(self?.panelItem.isCollapsed == true ? "closed" : "open")")
-        }
-        #endif
     }
 
     #if DEBUG
+    /// Called from the debugger when a geometry claim needs re-checking: the reader's
+    /// own frame must not change when the panel opens, and the panel's width must
+    /// come back as a safe-area inset rather than as lost width. The readings this
+    /// produced are written up in
+    /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`.
     func logGeometry(_ label: String) {
         guard let window else { return }
         let readerView = readerItem.viewController.view
