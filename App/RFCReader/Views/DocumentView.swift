@@ -117,7 +117,10 @@ struct DocumentView: View {
                 PanelHost().inspectorColumnWidth(min: 260, ideal: 320)
             }
             #endif
-            .task(id: id) { await load() }
+            .task(id: id) {
+                markAsRead()
+                await load()
+            }
             .task(id: buildInputs) { await rebuild() }
             .onChange(of: navigation.scrollRequest) { _, request in
                 jump(toSection: request?.section)
@@ -367,21 +370,40 @@ struct DocumentView: View {
     }
     #endif
 
-    private func savedPosition() -> String? {
+    private func storedPosition() -> ReadingPosition? {
         let number = id.number
         let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
-        return try? modelContext.fetch(descriptor).first?.sectionAnchor
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    private func savedPosition() -> String? {
+        storedPosition()?.sectionAnchor
+    }
+
+    /// Dates the entry as this document is opened, not only as it is left.
+    ///
+    /// `saveReadingPosition` runs from `onDisappear`, which is the one moment the
+    /// scroll anchor is known — but it left the document currently on screen carrying
+    /// the date it was last *closed*. Switching the sidebar away from Recently read
+    /// and back then sorted on that stale date and listed what you are reading now
+    /// below things you finished with earlier. Touching the anchor here would undo
+    /// the place being restored a moment later in the reader's `onAppear`, so only
+    /// the date is written.
+    private func markAsRead() {
+        if let existing = storedPosition() {
+            existing.updatedAt = .now
+        } else {
+            modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: nil))
+        }
     }
 
     private func saveReadingPosition() {
         let anchor = lastVisibleAnchor.anchor
-        let number = id.number
-        let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
-        if let existing = try? modelContext.fetch(descriptor).first {
+        if let existing = storedPosition() {
             existing.sectionAnchor = anchor
             existing.updatedAt = .now
         } else {
-            modelContext.insert(ReadingPosition(number: number, sectionAnchor: anchor))
+            modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: anchor))
         }
     }
 }

@@ -8,6 +8,16 @@ struct RFCListView: View {
     @Query(sort: \Bookmark.createdAt, order: .reverse) private var bookmarks: [Bookmark]
     @Query(sort: \ReadingPosition.updatedAt, order: .reverse) private var positions: [ReadingPosition]
     @State private var downloaded: Set<Int> = []
+    /// The Recently read order, taken once when the filter is entered.
+    ///
+    /// Not `positions.map(\.number)` read live: leaving a document writes its
+    /// `updatedAt`, and the query sorts on that, so every click in the Recently read
+    /// list re-sorted the list the click came from — the row you just left jumped to
+    /// the top and everything below it shifted down a place. Held here instead, the
+    /// order is whatever it was when you arrived and stays put while you read
+    /// through it; coming back to the filter takes a fresh one, the same way
+    /// `downloaded` beside it does.
+    @State private var recentOrder: [Int] = []
 
     /// Built once per body pass and shared by every row: `RFCRow` used to scan the
     /// whole bookmark list itself, which is a linear search per row over a list that
@@ -21,7 +31,7 @@ struct RFCListView: View {
             filter: navigation.filter,
             searchText: navigation.searchText,
             bookmarked: bookmarkedNumbers,
-            recentlyRead: positions.map(\.number),
+            recentlyRead: recentOrder,
             downloaded: downloaded
         )
     }
@@ -54,6 +64,7 @@ struct RFCListView: View {
             }
         }
         .task(id: navigation.filter) {
+            recentOrder = positions.map(\.number)
             downloaded = await library.downloadedNumbers()
         }
     }
