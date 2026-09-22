@@ -16,6 +16,9 @@ struct ContentView: View {
     /// selection, filter, search text and back/forward stack. Shared library state —
     /// the index, the cache — stays on the environment's `LibraryModel`.
     @State private var navigation = NavigationModel()
+    /// What the reader is showing, shared with the panel. One per scene, for the same
+    /// reason `NavigationModel` is.
+    @State private var reader = ReaderState()
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
@@ -113,6 +116,7 @@ struct ContentView: View {
         // a runtime trap with no compile-time warning. Out here it covers both, and
         // the next presentation added to this view as well.
         .environment(navigation)
+        .environment(reader)
     }
 }
 #endif

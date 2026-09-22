@@ -26,11 +26,17 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// hosted root is handed the same one.
     let navigation = NavigationModel()
 
+    /// What the reader is showing, for the toolbar and the panel — which are not
+    /// inside it any more.
+    let reader = ReaderState()
+
     let splitController = NSSplitViewController()
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
 
     private let library: LibraryModel
+    /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
+    private var toolbar: ReaderToolbar?
 
     /// How wide the contents panel is drawn. Unchanged from the overlay it replaces.
     static let panelWidth: CGFloat = 320
@@ -77,17 +83,34 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
         list.minimumThickness = 280
 
-        let reader = NSSplitViewItem(viewController: host(ReaderHost()))
+        let readerHost = host(ReaderHost().ignoresSafeArea(.container, edges: .trailing))
+        // The panel's width comes back as a right safe-area inset, and honouring it
+        // would take 320 pt off the column the moment the panel opened — measured at
+        // 919 → 599 pt, which re-wraps the text, rebuilds the document and loses the
+        // reader's place. What the panel overlaps, it covers.
+        let reader = NSSplitViewItem(viewController: readerHost)
         // On the *content* item, never on the panel: this is what makes the reader's
         // frame span the panel and hands the panel's width back as a right safe-area
         // inset instead of taking the width away. The reader then ignores that inset
         // in the representable, which is what keeps the text from re-wrapping.
         reader.automaticallyAdjustsSafeAreaInsets = true
-        reader.minimumThickness = ReaderLayout.minimumPaneWidth
+        // Deliberately no `minimumThickness`. AppKit adds up the minimum thickness of
+        // every uncollapsed item to get the window's own minimum width, and the
+        // inspector counts even though it overlays rather than displaces — so a
+        // 420 pt floor here plus the panel's 320 grew the window from 901 to 1222 pt
+        // the moment the panel opened. Measured. The floor is the window's instead,
+        // below, where the panel is not part of the sum.
         readerItem = reader
 
         let panel = NSSplitViewItem(inspectorWithViewController: host(PanelHost()))
         panel.allowsFullHeightLayout = true
+        // The window must not grow when the panel opens. By default an inspector
+        // widens the window by its own thickness to keep its siblings' widths —
+        // measured at 900 → 1222 pt, which re-wraps the text and loses the reader's
+        // place. This keeps the window fixed and lets the siblings take the change;
+        // the reader's own frame spans the panel regardless, so what it loses is
+        // covered, not removed.
+        panel.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
         panel.minimumThickness = Self.panelWidth
         panel.maximumThickness = Self.panelWidth
         panel.isCollapsed = true
@@ -98,7 +121,13 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         }
 
         window.contentViewController = splitController
+        applyMinimumWidth(to: window)
         Self.controllers[ObjectIdentifier(window)] = WeakController(controller: self)
+
+        let toolbar = ReaderToolbar(controller: self)
+        window.toolbar = toolbar.makeToolbar()
+        window.toolbarStyle = .unified
+        self.toolbar = toolbar
 
         // Takes the link a new tab was opened for, if it was opened for one.
         library.register(navigation)
@@ -107,6 +136,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         // Read by the measurement harness, and the first thing that would show a
         // window churn: one line per window means one window per window.
         NSLog("RFCWINDOW number=\(window.windowNumber)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.logGeometry("at launch") }
     }
 
     /// Every hosted root is handed the models by hand.
@@ -115,13 +145,18 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// `@Environment(LibraryModel.self)` inside one is a runtime trap with no
     /// compile-time warning — the same reason `DocumentHeaderView` and `StatusBanner`
     /// take theirs as properties.
-    private func host(_ view: some View) -> NSViewController {
-        NSHostingController(
-            rootView: view
-                .environment(library)
-                .environment(navigation)
-                .modelContainer(AppData.container)
-        )
+    private func host(_ view: some View) -> NSHostingController<AnyView> {
+        NSHostingController(rootView: AnyView(withWindowEnvironment(view)))
+    }
+
+    /// The models this window's views share, handed to anything hosted in it —
+    /// including the toolbar's items, which are hosted too.
+    func withWindowEnvironment(_ view: some View) -> some View {
+        view
+            .environment(library)
+            .environment(navigation)
+            .environment(reader)
+            .modelContainer(AppData.container)
     }
 
     // MARK: - Title
@@ -147,6 +182,60 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// Long enough that most RFC titles survive whole, short enough that the series'
     /// genuinely long ones stop before the tab's edge.
     private static let subtitleLimit = 64
+
+    /// The narrowest the window may be: the two fixed columns plus a readable
+    /// measure. Nothing here for the panel — deliberately.
+    private static let minimumContentWidth: CGFloat = 200 + 280 + ReaderLayout.minimumPaneWidth
+
+    /// Holds the window's minimum *constant* as the panel opens and closes.
+    ///
+    /// AppKit adds an uncollapsed inspector's thickness on top of `contentMinSize`,
+    /// so a fixed 900 pt minimum became 1222 the moment the panel appeared and the
+    /// window grew to meet it — which widens the pane, changes the column, rebuilds
+    /// the document and loses the reader's place, the whole chain the overlay existed
+    /// to avoid. Taking the panel's width off the minimum while it is showing leaves
+    /// the effective floor where it was, and the window never moves.
+    private func applyMinimumWidth(to window: NSWindow) {
+        let panelAllowance = panelItem.isCollapsed ? 0 : Self.panelWidth
+        window.contentMinSize = NSSize(width: Self.minimumContentWidth - panelAllowance, height: 480)
+        // A restored frame is not re-checked against the minimum, so a window saved
+        // narrower than the floor comes back narrower than the floor.
+        var frame = window.frame
+        frame.size.width = max(frame.width, window.contentMinSize.width)
+        frame.size.height = max(frame.height, window.contentMinSize.height)
+        if frame != window.frame { window.setFrame(frame, display: false) }
+    }
+
+    // MARK: - The panel
+
+    /// Animated, so the panel slides in rather than appearing between frames — which
+    /// is what `.inspector` did for the overlay, and an ordinary `isCollapsed`
+    /// assignment does not.
+    func togglePanel() {
+        NSAnimationContext.runAnimationGroup { context in
+            context.allowsImplicitAnimation = true
+            panelItem.animator().isCollapsed.toggle()
+        }
+        // Before AppKit gets a chance to enforce the old minimum against the new
+        // arrangement.
+        if let window { applyMinimumWidth(to: window) }
+        // The evidence for "the reader keeps its width underneath": the reader's own
+        // frame must not change when the panel opens, and the panel's width must come
+        // back as a safe-area inset rather than as lost width.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.logGeometry("panel \(self?.panelItem.isCollapsed == true ? "closed" : "open")")
+        }
+    }
+
+    func logGeometry(_ label: String) {
+        guard let window else { return }
+        let readerView = readerItem.viewController.view
+        NSLog(
+            "RFCGEOM \(label) window=\(window.frame.width) reader=\(readerView.frame.width) "
+                + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(panelItem.isCollapsed) "
+                + "toolbarItems=\(window.toolbar?.items.count ?? -1)"
+        )
+    }
 
     // MARK: - Lifetime
 
@@ -192,10 +281,30 @@ struct ReaderHost: View {
     }
 }
 
-/// The contents panel. Filled in once the reader has a document to describe.
+/// The contents panel: a split item of its own, so the window's chrome knows it is
+/// there. What it draws is the same `DocumentInspector` the overlay drew.
 struct PanelHost: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
+
     var body: some View {
-        Color.clear
+        @Bindable var reader = reader
+        if reader.hasDocument {
+            DocumentInspector(
+                sections: reader.sections,
+                groups: reader.groups,
+                tab: $reader.tab,
+                current: reader.currentAnchor,
+                selectSection: { navigation.jump(toSection: $0) },
+                openDocument: { library.open($0, activation: .current, in: navigation) }
+            )
+            // Without this the list draws its own opaque sidebar background over the
+            // inspector's glass, and the panel stops being translucent at all.
+            .scrollContentBackground(.hidden)
+        } else {
+            Color.clear
+        }
     }
 }
 #endif

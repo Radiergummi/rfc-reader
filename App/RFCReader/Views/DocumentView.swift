@@ -7,6 +7,9 @@ import SwiftUI
 struct DocumentView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
+    /// Shared with the window's toolbar and its contents panel, which on macOS are
+    /// not inside this view any more.
+    @Environment(ReaderState.self) private var reader
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var systemOpenURL
     @Query private var bookmarks: [Bookmark]
@@ -21,25 +24,15 @@ struct DocumentView: View {
     @State private var built: BuiltDocument?
     @State private var originalText: String?
     @State private var loadError: String?
-    @State private var showOriginal = false
+    #if !os(macOS)
     @State private var showTableOfContents = false
-    /// Which of the two the inspector is showing. Both are ways of navigating the
-    /// document, so they share one panel rather than competing for the toolbar.
-    @State private var inspectorTab = InspectorTab.contents
-    /// The two lists the inspector shows. Derived once when a document loads: the
-    /// inspector's body re-evaluates on every section crossing while scrolling, and
-    /// both of these walk every section and block of the document.
-    @State private var bodySections: [RFCKit.Section] = []
-    @State private var referenceGroups: [ReferenceGroup] = []
+    #endif
     /// Where the reader is, written the moment tracking computes it. This is the
-    /// value; `visibleAnchor` below is its SwiftUI-observable mirror, which lags it
-    /// by a main-actor hop. Anything that cannot afford that lag — persisting the
+    /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
+    /// a main-actor hop. Anything that cannot afford that lag — persisting the
     /// reading position on the way out, restoring the place across a rebuild — reads
     /// the box.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
-    /// The same value, for the parts of `body` that have to redraw when it changes:
-    /// the table of contents' highlight and the "copy link to this section" item.
-    @State private var visibleAnchor: String?
     /// The pane's full width — the whole of it, panel or no panel — and nil until the
     /// geometry reader has run.
     ///
@@ -52,20 +45,14 @@ struct DocumentView: View {
     /// geometry reader has run once.
     @State private var paneWidth: CGFloat?
 
-    /// How wide the contents panel is drawn, and how much of the pane it covers.
-    private static let panelWidth: CGFloat = 320
-
-    /// One glass-grouped toolbar button: the toggle's own footprint, which stays out
-    /// on the panel and so is not part of what the spacer below has to reserve.
-    private static let toggleGroupWidth: CGFloat = 56
-
     /// Derived from the pane's width, and nothing else.
     ///
-    /// The panel does not appear here and must not: it is an overlay, so it takes no
-    /// width from the pane, and the column is the same number whether it is showing
-    /// or not. That is what keeps opening it from re-wrapping the document and — via
-    /// `BuildInputs` — from rebuilding it and losing the reader's place. What the
-    /// panel overlaps, it covers, and closing it uncovers.
+    /// The panel does not appear here and must not: on macOS the reader's pane spans
+    /// it — the panel is a full-height inspector item drawn over the top — so the
+    /// column is the same number whether it is showing or not. That is what keeps
+    /// opening it from re-wrapping the document and — via `BuildInputs` — from
+    /// rebuilding it and losing the reader's place. What the panel overlaps, it
+    /// covers, and closing it uncovers.
     private var column: CGFloat? {
         paneWidth.map { ReaderLayout.column(forWidth: $0) }
     }
@@ -93,56 +80,29 @@ struct DocumentView: View {
         BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
     }
 
+    /// The reader, and on macOS only the reader.
+    ///
+    /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
+    /// window. The toolbar is an `NSToolbar` with our own delegate (`ReaderToolbar`),
+    /// because only a delegate-owned toolbar can carry the tracking separator that
+    /// splits it at the panel's edge; the panel is an `NSSplitViewItem`, because only
+    /// a real split item makes AppKit confine the tab bar and draw the glass.
+    ///
+    /// The overlay this replaces is worth remembering: `.inspector` put the reader
+    /// beside the panel, and `.safeAreaBar` reserved layout space — so opening it
+    /// widened the window, which widened the pane, which changed the column, which
+    /// rebuilt the document and lost the reader's place. The split item avoids all of
+    /// that by a different route: the reader's frame spans the panel, and the inset
+    /// it reports is ignored in the representable.
     var body: some View {
         content
             .navigationTitle(id.displayName)
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar { toolbar }
-            // Two presentations of the same panel.
-            //
-            // On macOS it is an overlay, and it has to be an overlay rather than any
-            // of the things that look like one. `.inspector` is a split-view column,
-            // so it splits the toolbar too and puts the reader beside the panel. A
-            // `.safeAreaBar` looks closer — the system draws it on glass — but a safe
-            // area is *reserved layout space*: the container sizes for the bar even
-            // when the content ignores it, so opening the panel widened the window,
-            // the wider window widened the pane, the wider pane changed the column,
-            // and the column change rebuilt the document and lost the reader's place.
-            // One modifier, four visible symptoms.
-            //
-            // An overlay claims nothing. The pane's width does not move, so neither
-            // does the text, and there is no rebuild to lose a scroll position to.
-            //
             // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
             // swallows an iPhone, and in compact width the inspector already presents
             // itself as a sheet.
-            #if os(macOS)
-            .overlay(alignment: .trailing) {
-                if showTableOfContents, document != nil {
-                    inspector
-                        .frame(width: Self.panelWidth)
-                        .frame(maxHeight: .infinity)
-                        // Without this the list draws its own opaque sidebar
-                        // background over the glass, and the panel stops being
-                        // translucent at all.
-                        .scrollContentBackground(.hidden)
-                        // The glass runs the full height of the window, up behind the
-                        // toolbar and down past the bottom edge, so the panel is a
-                        // side of the window rather than a card floating inside the
-                        // reader. Only the surface ignores the safe area: letting the
-                        // content ignore it too pushes the Contents/References picker
-                        // up behind the toolbar, where it cannot be seen or clicked.
-                        .background {
-                            Color.clear
-                                .glassEffect(.regular, in: .rect)
-                                .ignoresSafeArea(.container, edges: .vertical)
-                        }
-                        .transition(.move(edge: .trailing))
-                }
-            }
-            #else
             .inspector(isPresented: $showTableOfContents) {
                 if document != nil {
                     inspector.inspectorColumnWidth(min: 260, ideal: 320)
@@ -160,17 +120,21 @@ struct DocumentView: View {
 
     @State private var scrollTarget: String?
 
-    /// The contents and references panel, however the platform presents it.
+    #if !os(macOS)
+    /// The contents and references panel, as iOS presents it. macOS hosts
+    /// `DocumentInspector` in the window's own split item instead; see `PanelHost`.
     private var inspector: some View {
-        DocumentInspector(
-            sections: bodySections,
-            groups: referenceGroups,
-            tab: $inspectorTab,
-            current: visibleAnchor,
+        @Bindable var reader = reader
+        return DocumentInspector(
+            sections: reader.sections,
+            groups: reader.groups,
+            tab: $reader.tab,
+            current: reader.currentAnchor,
             selectSection: { anchor in navigation.jump(toSection: anchor) },
             openDocument: { library.open($0, activation: .current, in: navigation) }
         )
     }
+    #endif
 
     /// The width channel. It wraps everything, including the loading state, so the
     /// column is known before there is a document to build.
@@ -194,7 +158,7 @@ struct DocumentView: View {
 
     @ViewBuilder
     private var states: some View {
-        if showOriginal {
+        if reader.showOriginal {
             OriginalTextView(text: originalText, fontSize: fontSize)
                 .task { originalText = try? await library.originalText(for: id) }
         } else if let document, let built {
@@ -205,7 +169,11 @@ struct DocumentView: View {
                 scrollTarget: scrollTarget,
                 onScrollHandled: { scrollTarget = nil },
                 onVisibleAnchorChange: {
-                    visibleAnchor = $0
+                    reader.currentAnchor = $0
+                    // Resolved here, where the document is: the toolbar's citation and
+                    // section link need the number, and on macOS the toolbar is in the
+                    // window rather than in this view.
+                    reader.currentSection = document.section(anchor: $0)?.number
                     // Recorded on the history entry when navigating away, so coming
                     // back returns here rather than to the top of the document.
                     navigation.visiblePosition = $0
@@ -243,6 +211,7 @@ struct DocumentView: View {
         }
     }
 
+    #if !os(macOS)
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
@@ -259,8 +228,7 @@ struct DocumentView: View {
                 }
                 Divider()
                 Button("Copy Link to Current Section") {
-                    let section = visibleAnchor.flatMap { document?.section(anchor: $0)?.number }
-                    Clipboard.copy(RFCLink(id: id, section: section).webURL.absoluteString)
+                    Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
                 }
             } label: {
                 Label("Cite", systemImage: "quote.opening")
@@ -271,7 +239,7 @@ struct DocumentView: View {
             }
 
             Menu {
-                Toggle("Original Text", isOn: $showOriginal)
+                Toggle("Original Text", isOn: $reader.showOriginal)
                 Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
                 if let url = metadata?.errataURL {
                     Button("Errata") { systemOpenURL(url) }
@@ -280,38 +248,10 @@ struct DocumentView: View {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
-
         }
-
-        // Its own group, so the glass separates the panel's toggle from the
-        // document's actions instead of running them together — as Pages separates
-        // its inspector toggles from the document's. The toggle is last, the
-        // rightmost thing in the toolbar, over the panel it opens.
-        ToolbarSpacer(.fixed, placement: .primaryAction)
-
-        // While the panel is showing, everything to its left is pushed off it.
-        //
-        // A split-view inspector gets this for free: it owns a section of the
-        // titlebar, and AppKit lays the document's toolbar out in what is left. An
-        // overlay owns nothing, so the toolbar keeps spanning the window and the
-        // document's actions end up sitting on the panel's glass. Reserving the
-        // panel's width here does by hand what the split view would have done, and
-        // leaves the toggle itself out on the glass where Pages puts it.
-        #if os(macOS)
-        if showTableOfContents, document != nil {
-            ToolbarItem(placement: .primaryAction) {
-                Color.clear.frame(width: Self.panelWidth - Self.toggleGroupWidth, height: 1)
-            }
-            // Otherwise the reserved width joins the toggle's glass group and the two
-            // render as one long empty pill running back across the panel.
-            .sharedBackgroundVisibility(.hidden)
-        }
-        #endif
 
         ToolbarItem(placement: .primaryAction) {
             Button {
-                // An overlay is ordinary content and would otherwise appear and
-                // vanish between frames; `.inspector` animated itself.
                 withAnimation(.snappy) { showTableOfContents.toggle() }
             } label: {
                 Label("Contents", systemImage: "list.bullet.indent")
@@ -319,6 +259,7 @@ struct DocumentView: View {
             .keyboardShortcut("t", modifiers: [.command, .shift])
         }
     }
+    #endif
 
     // MARK: - Actions
 
@@ -328,17 +269,16 @@ struct DocumentView: View {
         loadError = nil
         document = nil
         built = nil
-        bodySections = []
-        referenceGroups = []
         // A reused view must not carry the previous document's place into the new
         // one; `install()` reports the real anchor a moment later.
-        visibleAnchor = nil
+        reader.clear()
         lastVisibleAnchor.anchor = nil
-        showOriginal = preferOriginalText
+        reader.showOriginal = preferOriginalText
         do {
             let loaded = try await library.document(for: id)
-            referenceGroups = ReferenceGroup.groups(in: loaded)
+            reader.groups = ReferenceGroup.groups(in: loaded)
             document = loaded
+            reader.hasDocument = true
         } catch {
             loadError = error.localizedDescription
         }
@@ -372,7 +312,7 @@ struct DocumentView: View {
         // anchor in the document, so asking inside the filter would rebuild the
         // whole index once per section.
         let sections = rebuilt.anchors.sections
-        bodySections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
+        reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
         // Only a restyle has a place to restore; a first build lets `onAppear` decide
         // between a deep link and the saved reading position.
         if let place { scrollTarget = place }
@@ -421,8 +361,8 @@ struct DocumentView: View {
 
     private func copyCitation(_ style: CitationStyle) {
         guard let metadata else { return }
-        let section = visibleAnchor.flatMap { document?.section(anchor: $0)?.number }
-        Clipboard.copy(CitationFormatter().cite(metadata, section: style == .bibtex ? nil : section, style: style))
+        let section = style == .bibtex ? nil : reader.currentSection
+        Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
     }
 
     private func savedPosition() -> String? {
@@ -592,7 +532,7 @@ struct OriginalTextView: View {
 }
 
 struct TableOfContentsView: View {
-    /// Only the sections the storage holds; see `DocumentView.bodySections`.
+    /// Only the sections the storage holds; see `DocumentView.rebuild()`.
     let sections: [RFCKit.Section]
     let current: String?
     let select: (String) -> Void
