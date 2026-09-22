@@ -26,16 +26,9 @@ struct DocumentInspector: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("View", selection: $tab) {
-                Text("Contents").tag(InspectorTab.contents)
-                Text("References").tag(InspectorTab.references)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
+            InspectorTabBar(tab: $tab)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
 
             switch tab {
             case .contents:
@@ -46,6 +39,64 @@ struct DocumentInspector: View {
                 ReferencesView(groups: groups, open: openDocument)
             }
         }
+    }
+}
+
+/// The panel's two tabs, drawn the way an inspector's are rather than as a segmented
+/// control.
+///
+/// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which
+/// reads as a form field sitting on the panel rather than as the panel's own
+/// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
+/// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
+/// divider only between two unselected labels.
+private struct InspectorTabBar: View {
+    @Binding var tab: InspectorTab
+
+    private static let tabs: [(tab: InspectorTab, title: String)] = [
+        (.contents, "Contents"),
+        (.references, "References"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(Self.tabs.enumerated()), id: \.offset) { index, item in
+                if index > 0 {
+                    // Between two unselected labels only: beside the pill it would be
+                    // a second edge a pixel from the first.
+                    Divider()
+                        .frame(height: 14)
+                        .opacity(touchesSelection(index) ? 0 : 1)
+                }
+                segment(item.tab, item.title)
+            }
+        }
+    }
+
+    private func segment(_ value: InspectorTab, _ title: String) -> some View {
+        let isSelected = tab == value
+        return Button {
+            tab = value
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 7).fill(Color.accentColor)
+                    }
+                }
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Whether the divider at `index` sits against the selected tab.
+    private func touchesSelection(_ index: Int) -> Bool {
+        Self.tabs[index].tab == tab || Self.tabs[index - 1].tab == tab
     }
 }
 

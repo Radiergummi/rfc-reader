@@ -4,6 +4,7 @@ import RFCKit
 import RFCReaderKit
 
 extension NSToolbarItem.Identifier {
+    static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
     static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
     static let rfcCite = NSToolbarItem.Identifier("rfc.cite")
@@ -52,9 +53,17 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
-            .toggleSidebar, .rfcNavigation, .flexibleSpace,
+            // Over the sidebar, beside the traffic lights, where Notes and Mail put
+            // it: a tracking separator on the sidebar's own divider gives the toolbar
+            // a section that ends with the sidebar, and what is declared before it
+            // lands inside that section.
+            .toggleSidebar, .rfcSidebarSeparator,
+            .rfcNavigation, .flexibleSpace,
             .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
-            .rfcPanelSeparator, .rfcPanelToggle,
+            // The panel's own section. The flexible space holds the toggle against
+            // the window's trailing corner, so it stays in the corner whether the
+            // panel is showing or not rather than travelling with the panel's edge.
+            .rfcPanelSeparator, .flexibleSpace, .rfcPanelToggle,
         ]
     }
 
@@ -68,6 +77,14 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         switch identifier {
+        case .rfcSidebarSeparator:
+            // Divider 0: sidebar | list.
+            return NSTrackingSeparatorToolbarItem(
+                identifier: identifier,
+                splitView: controller.splitController.splitView,
+                dividerIndex: 0
+            )
+
         case .rfcPanelSeparator:
             // Divider 2 of four items: sidebar | list | reader | panel, so the
             // dividers are 0, 1, 2 and this is the reader's trailing edge.
