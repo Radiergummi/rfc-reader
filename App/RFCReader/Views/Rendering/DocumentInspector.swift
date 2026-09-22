@@ -63,7 +63,10 @@ private struct InspectorTabBar: View {
             ForEach(Array(Self.tabs.enumerated()), id: \.offset) { index, item in
                 if index > 0 {
                     // Between two unselected labels only: beside the pill it would be
-                    // a second edge a pixel from the first.
+                    // a second edge a pixel from the first. With two tabs one of them
+                    // is always selected, so this never draws — as in Pages, where the
+                    // rule shows a divider between its second and third tabs and none
+                    // beside the first.
                     Divider()
                         .frame(height: 14)
                         .opacity(touchesSelection(index) ? 0 : 1)
@@ -71,6 +74,10 @@ private struct InspectorTabBar: View {
                 segment(item.tab, item.title)
             }
         }
+        // The track the segments sit in, and the inset that keeps the selected pill
+        // inside it rather than flush with its edge.
+        .padding(2)
+        .background(.quaternary.opacity(0.7), in: .rect(cornerRadius: 9))
     }
 
     private func segment(_ value: InspectorTab, _ title: String) -> some View {
