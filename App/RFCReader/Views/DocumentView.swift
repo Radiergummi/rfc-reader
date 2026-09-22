@@ -40,15 +40,35 @@ struct DocumentView: View {
     /// The same value, for the parts of `body` that have to redraw when it changes:
     /// the table of contents' highlight and the "copy link to this section" item.
     @State private var visibleAnchor: String?
-    /// The text column this view's width implies, and nil until a width is known.
+    /// The pane's full width — the whole of it, panel or no panel — and nil until the
+    /// geometry reader has run.
     ///
-    /// Artwork scaling and table shape are measured against the column, so the column
-    /// has to be settled *before* the first build or the document is built against a
-    /// guess and immediately thrown away. It is a pure function of the width
-    /// (`ReaderLayout`), so this view can work it out for itself rather than waiting
-    /// to be told by the text view it has not created yet — which is why nothing is
-    /// built until the geometry reader has run once.
-    @State private var column: CGFloat?
+    /// The column is derived from this rather than stored beside it. Artwork scaling
+    /// and table shape are measured against the column, so it has to be settled
+    /// *before* the first build or the document is built against a guess and
+    /// immediately thrown away. It is a pure function of the width (`ReaderLayout`),
+    /// so this view can work it out for itself rather than waiting to be told by the
+    /// text view it has not created yet — which is why nothing is built until the
+    /// geometry reader has run once.
+    @State private var paneWidth: CGFloat?
+
+    /// How wide the contents panel is drawn, and how much of the pane it covers.
+    private static let panelWidth: CGFloat = 320
+
+    /// One glass-grouped toolbar button: the toggle's own footprint, which stays out
+    /// on the panel and so is not part of what the spacer below has to reserve.
+    private static let toggleGroupWidth: CGFloat = 56
+
+    /// Derived from the pane's width, and nothing else.
+    ///
+    /// The panel does not appear here and must not: it is an overlay, so it takes no
+    /// width from the pane, and the column is the same number whether it is showing
+    /// or not. That is what keeps opening it from re-wrapping the document and — via
+    /// `BuildInputs` — from rebuilding it and losing the reader's place. What the
+    /// panel overlaps, it covers, and closing it uncovers.
+    private var column: CGFloat? {
+        paneWidth.map { ReaderLayout.column(forWidth: $0) }
+    }
 
     private var metadata: RFCMetadata? { library.metadata(id) }
     private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
@@ -80,19 +100,55 @@ struct DocumentView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { toolbar }
-            .inspector(isPresented: $showTableOfContents) {
-                if document != nil {
-                    DocumentInspector(
-                        sections: bodySections,
-                        groups: referenceGroups,
-                        tab: $inspectorTab,
-                        current: visibleAnchor,
-                        selectSection: { anchor in navigation.jump(toSection: anchor) },
-                        openDocument: { library.open($0, activation: .current, in: navigation) }
-                    )
-                    .inspectorColumnWidth(min: 260, ideal: 320)
+            // Two presentations of the same panel.
+            //
+            // On macOS it is an overlay, and it has to be an overlay rather than any
+            // of the things that look like one. `.inspector` is a split-view column,
+            // so it splits the toolbar too and puts the reader beside the panel. A
+            // `.safeAreaBar` looks closer — the system draws it on glass — but a safe
+            // area is *reserved layout space*: the container sizes for the bar even
+            // when the content ignores it, so opening the panel widened the window,
+            // the wider window widened the pane, the wider pane changed the column,
+            // and the column change rebuilt the document and lost the reader's place.
+            // One modifier, four visible symptoms.
+            //
+            // An overlay claims nothing. The pane's width does not move, so neither
+            // does the text, and there is no rebuild to lose a scroll position to.
+            //
+            // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
+            // swallows an iPhone, and in compact width the inspector already presents
+            // itself as a sheet.
+            #if os(macOS)
+            .overlay(alignment: .trailing) {
+                if showTableOfContents, document != nil {
+                    inspector
+                        .frame(width: Self.panelWidth)
+                        .frame(maxHeight: .infinity)
+                        // Without this the list draws its own opaque sidebar
+                        // background over the glass, and the panel stops being
+                        // translucent at all.
+                        .scrollContentBackground(.hidden)
+                        // The glass runs the full height of the window, up behind the
+                        // toolbar and down past the bottom edge, so the panel is a
+                        // side of the window rather than a card floating inside the
+                        // reader. Only the surface ignores the safe area: letting the
+                        // content ignore it too pushes the Contents/References picker
+                        // up behind the toolbar, where it cannot be seen or clicked.
+                        .background {
+                            Color.clear
+                                .glassEffect(.regular, in: .rect)
+                                .ignoresSafeArea(.container, edges: .vertical)
+                        }
+                        .transition(.move(edge: .trailing))
                 }
             }
+            #else
+            .inspector(isPresented: $showTableOfContents) {
+                if document != nil {
+                    inspector.inspectorColumnWidth(min: 260, ideal: 320)
+                }
+            }
+            #endif
             .task(id: id) { await load() }
             .task(id: buildInputs) { await rebuild() }
             .onChange(of: navigation.scrollRequest) { _, request in
@@ -104,14 +160,36 @@ struct DocumentView: View {
 
     @State private var scrollTarget: String?
 
+    /// The contents and references panel, however the platform presents it.
+    private var inspector: some View {
+        DocumentInspector(
+            sections: bodySections,
+            groups: referenceGroups,
+            tab: $inspectorTab,
+            current: visibleAnchor,
+            selectSection: { anchor in navigation.jump(toSection: anchor) },
+            openDocument: { library.open($0, activation: .current, in: navigation) }
+        )
+    }
+
     /// The width channel. It wraps everything, including the loading state, so the
     /// column is known before there is a document to build.
+    ///
+    /// The floor is here rather than on the split view's detail column, where it
+    /// guarded the reader *and* the panel together and so let the panel take all but
+    /// 190 pt of it. This is the reader alone.
     private var content: some View {
         states
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 guard width > 0 else { return }
-                column = ReaderLayout.column(forWidth: width)
+                paneWidth = width
             }
+            #if os(macOS)
+            // Constant, panel or no panel. Adding the panel's width here is what made
+            // the window jump wider every time it opened: the floor rose by 320, and
+            // macOS grew the window to satisfy it.
+            .frame(minWidth: ReaderLayout.minimumPaneWidth)
+            #endif
     }
 
     @ViewBuilder
@@ -203,8 +281,38 @@ struct DocumentView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
 
+        }
+
+        // Its own group, so the glass separates the panel's toggle from the
+        // document's actions instead of running them together — as Pages separates
+        // its inspector toggles from the document's. The toggle is last, the
+        // rightmost thing in the toolbar, over the panel it opens.
+        ToolbarSpacer(.fixed, placement: .primaryAction)
+
+        // While the panel is showing, everything to its left is pushed off it.
+        //
+        // A split-view inspector gets this for free: it owns a section of the
+        // titlebar, and AppKit lays the document's toolbar out in what is left. An
+        // overlay owns nothing, so the toolbar keeps spanning the window and the
+        // document's actions end up sitting on the panel's glass. Reserving the
+        // panel's width here does by hand what the split view would have done, and
+        // leaves the toggle itself out on the glass where Pages puts it.
+        #if os(macOS)
+        if showTableOfContents, document != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Color.clear.frame(width: Self.panelWidth - Self.toggleGroupWidth, height: 1)
+            }
+            // Otherwise the reserved width joins the toggle's glass group and the two
+            // render as one long empty pill running back across the panel.
+            .sharedBackgroundVisibility(.hidden)
+        }
+        #endif
+
+        ToolbarItem(placement: .primaryAction) {
             Button {
-                showTableOfContents.toggle()
+                // An overlay is ordinary content and would otherwise appear and
+                // vanish between frames; `.inspector` animated itself.
+                withAnimation(.snappy) { showTableOfContents.toggle() }
             } label: {
                 Label("Contents", systemImage: "list.bullet.indent")
             }

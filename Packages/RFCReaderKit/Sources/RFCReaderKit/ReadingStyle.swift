@@ -62,6 +62,15 @@ public enum ReaderLayout {
     /// The smallest gutter beside the column, and the padding under the last line.
     public static let margin: CGFloat = 24
 
+    /// The narrowest the reader's pane may be dragged to.
+    ///
+    /// The split view's other two columns declare their own minima; the detail
+    /// column declared none, so it absorbed every pixel of a shrinking window and
+    /// could be crushed to a few characters wide. This leaves a 372 pt column, a
+    /// little wider than an iPhone's, and puts the window's floor at 900 pt with all
+    /// three columns showing.
+    public static let minimumPaneWidth: CGFloat = 420
+
     public static func gutter(forWidth width: CGFloat) -> CGFloat {
         max(margin, (width - idealMeasure) / 2)
     }

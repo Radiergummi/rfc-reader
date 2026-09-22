@@ -6,6 +6,7 @@ struct SidebarView: View {
     @Environment(NavigationModel.self) private var navigation
 
     var body: some View {
+        @Bindable var navigation = navigation
         List(selection: selection) {
             Section("Library") {
                 row(.bookmarks)
@@ -44,6 +45,16 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("RFCs")
+        // Search lives on the sidebar, not on the list it filters.
+        //
+        // `.searchable` on the list column puts the field at the trailing end of the
+        // window's toolbar, outboard of everything the document declares — so the
+        // contents toggle could not be the rightmost item, and the field ran on past
+        // the panel's leading edge and under its glass. Declared here with
+        // `.sidebar`, it sits in the sidebar itself, which leaves the toolbar's
+        // trailing end to the panel's toggle. The text it binds to lives on
+        // `NavigationModel`, so `RFCListView` filters on it exactly as before.
+        .searchable(text: $navigation.searchText, placement: .sidebar, prompt: "Search")
         .labelStyle(SidebarLabelStyle())
         .safeAreaInset(edge: .bottom) {
             IndexStatusView()

@@ -81,6 +81,10 @@ final class RFCTextViewCoordinator: NSObject {
     private var sectionIndex = AnchorIndex([])
     private var lastReportedAnchor: String?
     private var laidOutColumn: CGFloat?
+    /// Tracked separately from the column, because above the breakpoint the two move
+    /// independently: the column pins at the ideal measure and the gutter takes the
+    /// whole resize. The inset is the gutter, so the gutter is what invalidates it.
+    private var laidOutGutter: CGFloat?
     private var laidOutHeaderHeight: CGFloat?
 
     /// The bottom of the last laid-out fragment, in container coordinates. The text
@@ -221,7 +225,7 @@ final class RFCTextViewCoordinator: NSObject {
     ///
     /// This runs on every update pass — and an update pass happens on every section
     /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
-    /// the column or the header's height actually moved. A relayout costs more
+    /// the gutter, the column or the header's height moved. A relayout costs more
     /// still, and only the column can force one: a window wider than the measure
     /// moves the gutters, not the text.
     func layOut(width: CGFloat) {
@@ -233,9 +237,10 @@ final class RFCTextViewCoordinator: NSObject {
         // layout, and a cache keyed on any one of those goes stale as a header
         // overlapping the first paragraph. Only the writes below are conditional.
         let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
-        guard column != laidOutColumn || headerHeight != laidOutHeaderHeight else { return }
+        guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight else { return }
         let columnChanged = column != laidOutColumn
         laidOutColumn = column
+        laidOutGutter = gutter
         laidOutHeaderHeight = headerHeight
 
         #if canImport(UIKit)

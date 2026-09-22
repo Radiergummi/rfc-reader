@@ -38,6 +38,11 @@ struct ContentView: View {
             RFCListView()
                 .navigationSplitViewColumnWidth(min: 280, ideal: 360)
         } detail: {
+            // The detail column takes no `navigationSplitViewColumnWidth` — the
+            // modifier applies to the sidebar and content columns only — so the
+            // reader's floor comes from its own frame, inside `DocumentView`. Put
+            // here it would bound the reader and its panel together, which is how the
+            // contents panel came to leave the text 190 pt wide.
             if let selection = navigation.selection {
                 DocumentView(id: selection)
                     .id(selection)
