@@ -6,6 +6,7 @@ import RFCReaderKit
 extension NSToolbarItem.Identifier {
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
+    static let rfcTitle = NSToolbarItem.Identifier("rfc.title")
     static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
     static let rfcCite = NSToolbarItem.Identifier("rfc.cite")
     static let rfcShare = NSToolbarItem.Identifier("rfc.share")
@@ -29,9 +30,72 @@ extension NSToolbarItem.Identifier {
 /// on top of the one before it — the bookmark drew inside the back/forward group and
 /// the share icon over the panel's toggle. Native items also get the system's own
 /// grouping and glass, which a hosted control cannot.
+/// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
+/// so that it takes the width of its text instead of every pixel that is going.
+@MainActor
+private final class TitleView: NSView {
+    private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
+    private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
+
+    private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
+        let field = NSTextField(labelWithString: "")
+        field.font = font
+        field.textColor = colour
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.usesSingleLineMode = true
+        return field
+    }
+
+    /// The toolbar sizes a custom view from its constraints, and from nothing else:
+    /// an intrinsic width alone left the title drawn on top of the navigation group,
+    /// the same way the hosted SwiftUI items drew on top of each other.
+    private var widthConstraint: NSLayoutConstraint!
+
+    init() {
+        super.init(frame: .zero)
+        let stack = NSStackView(views: [title, subtitle])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        translatesAutoresizingMaskIntoConstraints = false
+        widthConstraint = widthAnchor.constraint(equalToConstant: 1)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            heightAnchor.constraint(equalToConstant: 32),
+            widthConstraint,
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used: the titlebar is built in code")
+    }
+
+    func show(_ title: String, subtitle: String) {
+        self.title.stringValue = title
+        self.subtitle.stringValue = subtitle
+        self.subtitle.isHidden = subtitle.isEmpty
+        // Capped, because a long RFC title would otherwise push the document's own
+        // actions off the toolbar.
+        let text = max(
+            self.title.intrinsicContentSize.width,
+            self.subtitle.isHidden ? 0 : self.subtitle.intrinsicContentSize.width
+        )
+        widthConstraint.constant = min(text, 360) + 16
+    }
+}
+
 @MainActor
 final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
+
+    /// The window's title and subtitle, drawn by us; see `ReaderWindowController`
+    /// for why AppKit is not allowed to draw them.
+    private let titleView = TitleView()
 
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
@@ -41,6 +105,10 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
     init(controller: ReaderWindowController) {
         self.controller = controller
         super.init()
+    }
+
+    func showTitle(_ title: String, subtitle: String) {
+        titleView.show(title, subtitle: subtitle)
     }
 
     func makeToolbar() -> NSToolbar {
@@ -58,7 +126,7 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
             // a section that ends with the sidebar, and what is declared before it
             // lands inside that section.
             .toggleSidebar, .rfcSidebarSeparator,
-            .rfcNavigation, .flexibleSpace,
+            .rfcNavigation, .rfcTitle, .flexibleSpace,
             .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
             // The panel's own section. The flexible space holds the toggle against
             // the window's trailing corner, so it stays in the corner whether the
@@ -104,6 +172,19 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
             group.subitems = [back, forward]
             group.controlRepresentation = .expanded
             return group
+
+        case .rfcTitle:
+            let item = NSToolbarItem(itemIdentifier: identifier)
+            item.label = "Title"
+            item.view = titleView
+            // Text, not a control: without this the toolbar draws the title inside a
+            // bordered pill and it reads as a button.
+            item.isBordered = false
+            item.isNavigational = false
+            // The first thing to give up its room when the window narrows — the tab
+            // bar carries the same title, and the document's actions do not.
+            item.visibilityPriority = .low
+            return item
 
         case .rfcBookmark:
             return button(identifier, "Bookmark", "bookmark", #selector(toggleBookmark))

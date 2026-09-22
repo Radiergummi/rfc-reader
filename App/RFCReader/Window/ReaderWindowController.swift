@@ -141,18 +141,18 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
         let toolbar = ReaderToolbar(controller: self)
         window.toolbar = toolbar.makeToolbar()
-        // The title gets a row of its own, which is the only way to have both a
-        // title and Back and Forward at the leading edge.
+        window.toolbarStyle = .unified
+        // The title is the toolbar's own item, not AppKit's.
         //
-        // In the unified style a window that shows a title draws it as a block at the
-        // start of the document's toolbar section, and that block expands to fill:
-        // the navigation group was pushed from 204 pt out to 1199 on a 1500 pt
-        // window, with and without a subtitle, landing hard against the document's
-        // own actions. A leading titlebar accessory does sit before the title, but it
-        // is laid out over the sidebar and pushed the sidebar's toggle into the
-        // toolbar's overflow menu. Expanded costs a taller titlebar and gives the
-        // title and subtitle a line to themselves.
-        window.toolbarStyle = .expanded
+        // A window that draws its own title puts it in a block at the start of the
+        // document's toolbar section, and that block expands to fill — measured, it
+        // pushed Back and Forward from 204 pt out to 1199 on a 1500 pt window, with
+        // and without a subtitle. The expanded style gives the title a row of its
+        // own and costs a second row of titlebar; a leading titlebar accessory is
+        // laid out over the sidebar and pushes the sidebar's toggle into the
+        // overflow menu. An ordinary toolbar item is none of those things: it sits
+        // where it is declared and takes the width it needs.
+        window.titleVisibility = .hidden
 
         self.toolbar = toolbar
 
@@ -208,12 +208,16 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// once, which is why it re-arms itself.
     private func observeTitle() {
         withObservationTracking {
-            window?.title = navigation.selection?.displayName ?? navigation.filter.title
+            // Still set on the window, because the tab bar reads it from there.
+            let title = navigation.selection?.displayName ?? navigation.filter.title
             // The prose title, where macOS has room for it — truncated, because a tab
             // is far narrower than the window and clips rather than eliding.
-            window?.subtitle = navigation.selection
+            let subtitle = navigation.selection
                 .flatMap { library.metadata($0)?.title }?
                 .truncated(to: Self.subtitleLimit) ?? ""
+            window?.title = title
+            window?.subtitle = subtitle
+            toolbar?.showTitle(title, subtitle: subtitle)
         } onChange: {
             Task { @MainActor [weak self] in self?.observeTitle() }
         }
