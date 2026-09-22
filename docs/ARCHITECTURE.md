@@ -148,6 +148,8 @@ Replacing a `WindowGroup` window's `contentViewController` looked like the cheap
 
 What this costs and what it does not: the menu bar is still SwiftUI's, because a `Settings`-only scene honours `.commands` (measured: the full `File`/`Edit`/`View`/`Window`/`Help` bar, with our own items in it). What `WindowGroup` used to contribute and we now write ourselves is New Window, New Tab, and the per-window state that `ContentView` held as `@State`. `@FocusedValue` does **not** survive: published from a hosted root it never resolves, and ⌘L opened nothing at all until the commands were pointed at the key window through `ActiveReaderWindow`.
 
+The window's title is set on the `NSWindow` but **not drawn in the toolbar**. A window with a subtitle draws the two as a block at the start of the document's toolbar section — Mail's and Notes' shape — and that block expands to fill, which pushed Back and Forward from the leading edge out to 928 pt. The tab bar still carries each tab's title, and the document's own title is the first thing in the reader, so `titleVisibility = .hidden` costs nothing that is not said better elsewhere.
+
 Three pieces of arithmetic are load-bearing, and each was got wrong first:
 
 - **The window must not grow when the panel opens.** AppKit adds an uncollapsed inspector's thickness on top of `contentMinSize`, so a fixed 900 pt floor became 1222 and the window grew to meet it. The floor drops by the panel's width while the panel shows, which keeps the effective minimum constant.

@@ -142,6 +142,16 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         let toolbar = ReaderToolbar(controller: self)
         window.toolbar = toolbar.makeToolbar()
         window.toolbarStyle = .unified
+        // The title is not drawn in the toolbar, so Back and Forward can sit at the
+        // leading edge of the document's section where a reader expects them.
+        //
+        // A window with a subtitle draws the two as a block at the start of that
+        // section — the shape Mail and Notes have — and that block expands to fill
+        // the space, which pushed the navigation group from 204 pt out to 928.
+        // Hiding it costs nothing that is not said better elsewhere: the tab bar
+        // still carries each tab's title, and the document's own title is the first
+        // thing in the reader.
+        window.titleVisibility = .hidden
         self.toolbar = toolbar
 
         // Takes the link a new tab was opened for, if it was opened for one.
