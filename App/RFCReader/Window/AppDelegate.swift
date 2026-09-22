@@ -47,9 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Opens a window as a tab of the window the user is looking at — ⌘T, the tab
+    /// bar's `+`, and a link that asked for a tab of its own.
+    func openTab(inBackground: Bool) {
+        openWindow(tabbedWith: activeController, inBackground: inBackground)
+    }
+
     /// Opens a window, as a tab of `sibling` when there is one.
-    @discardableResult
-    func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) -> ReaderWindowController {
+    func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) {
         let controller = ReaderWindowController(library: LibraryModel.shared)
         // Only the first window of the session remembers its frame: an autosave name
         // belongs to one window, and sharing it across tabs mangles all of them.
@@ -67,10 +72,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 fresh.makeKeyAndOrderFront(nil)
             }
+            // Ordering a window into a tab group is what copies the group's inspector
+            // state onto it, so this is the one moment the panel's rule can be broken
+            // by something other than the document changing — and the one place that
+            // has to put it back. See `closePanelWithoutDocument()` for the readings.
+            controller.closePanelWithoutDocument()
         } else {
             controller.showWindow(nil)
         }
-        return controller
     }
 
     /// A window controller owns its window, so a closed tab lives until this runs.

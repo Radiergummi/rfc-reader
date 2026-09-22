@@ -294,7 +294,7 @@ final class LibraryModel {
     private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
         #if os(macOS)
         pendingSceneLink = link
-        AppDelegate.shared?.openWindow(tabbedWith: AppDelegate.shared?.activeController, inBackground: inBackground)
+        AppDelegate.shared?.openTab(inBackground: inBackground)
         #endif
     }
 

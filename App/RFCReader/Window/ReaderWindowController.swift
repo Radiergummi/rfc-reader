@@ -251,12 +251,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
         if frame != window.frame { window.setFrame(frame, display: false) }
     }
 
-    /// Keeps the panel shut while there is nothing for it to describe.
-    ///
-    /// A new tab inherits its sibling's panel state — measured: opened from a window
-    /// whose panel was showing, a fresh tab comes up with `isCollapsed` false however
-    /// this controller set it. That left an empty strip of glass over the reader of a
-    /// tab with no document in it. The panel follows the document instead.
+    /// Keeps the panel shut while there is nothing for it to describe: an inspector's
+    /// glass over a tab with no document in it is a strip of nothing.
     private func observeDocument() {
         withObservationTracking {
             _ = reader.hasDocument
@@ -266,13 +262,22 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
                 self?.observeDocument()
             }
         }
-        // AppKit applies the inherited state after this runs, so the rule is enforced
-        // again on the next turn of the run loop, and whenever the window becomes key.
-        closePanelWithoutDocument()
-        DispatchQueue.main.async { [weak self] in self?.closePanelWithoutDocument() }
     }
 
-    private func closePanelWithoutDocument() {
+    /// The same rule, applied from outside for the one case the observation cannot
+    /// see: nothing about this window changed, its sibling's panel state was copied
+    /// onto it.
+    ///
+    /// A window ordered into a tab group adopts the group's inspector state. Measured
+    /// on this build: `isCollapsed` is still the one this controller set immediately
+    /// after `addTabbedWindow(_:ordered:)`, and the sibling's immediately after the
+    /// window is ordered front — so the adoption happens inside
+    /// `makeKeyAndOrderFront(_:)`, and a tab opened in the background, which is never
+    /// made key, never inherits at all. A correction made once the ordering call has
+    /// returned holds: measured unchanged on the next turn of the run loop and a
+    /// second later. `AppDelegate` makes it there, which is why nothing here has to
+    /// watch for it afterwards.
+    func closePanelWithoutDocument() {
         guard !reader.hasDocument, !panelItem.isCollapsed else { return }
         panelItem.isCollapsed = true
     }
@@ -340,7 +345,6 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         ActiveReaderWindow.shared.becameKey(self)
-        closePanelWithoutDocument()
     }
 
     func windowWillClose(_ notification: Notification) {

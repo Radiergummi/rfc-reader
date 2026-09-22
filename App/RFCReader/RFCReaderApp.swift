@@ -70,7 +70,7 @@ struct WindowCommands: Commands {
             .keyboardShortcut("n", modifiers: .command)
 
             Button("New Tab") {
-                AppDelegate.shared?.openWindow(tabbedWith: AppDelegate.shared?.activeController, inBackground: false)
+                AppDelegate.shared?.openTab(inBackground: false)
             }
             .keyboardShortcut("t", modifiers: .command)
         }
