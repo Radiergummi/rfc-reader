@@ -77,7 +77,7 @@ private struct InspectorTabBar: View {
         // The track the segments sit in, and the inset that keeps the selected pill
         // inside it rather than flush with its edge.
         .padding(2)
-        .background(.quaternary.opacity(0.7), in: .rect(cornerRadius: 9))
+        .background(.quaternary.opacity(0.7), in: .capsule)
     }
 
     private func segment(_ value: InspectorTab, _ title: String) -> some View {
@@ -93,7 +93,10 @@ private struct InspectorTabBar: View {
                 .padding(.vertical, 5)
                 .background {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 7).fill(Color.accentColor)
+                        // Fully rounded, not a rounded rectangle: the selected tab in
+                        // an inspector is a capsule, and at this height the difference
+                        // between a 7 pt radius and a capsule is the whole look.
+                        Capsule().fill(Color.accentColor)
                     }
                 }
                 .contentShape(.rect)
