@@ -38,7 +38,7 @@ public enum RFCEditorEndpoints {
     public static func datatracker(_ id: DocumentID, section: String? = nil) -> URL {
         var url = datatrackerBase.appending(path: "doc/html/\(id.fileStem)")
         if let section {
-            url = URL(string: url.absoluteString + "#section-\(section)") ?? url
+            url = URL(string: url.absoluteString + "#\(RFCLink.fragment(for: section))") ?? url
         }
         return url
     }

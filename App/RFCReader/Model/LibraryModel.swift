@@ -1,6 +1,10 @@
+#if os(macOS)
+import AppKit
+#endif
 import Foundation
 import Observation
 import RFCKit
+import RFCReaderKit
 
 /// What the list in the middle column shows.
 enum LibraryFilter: Hashable, Identifiable {
@@ -217,26 +221,19 @@ final class LibraryModel {
         weak var model: NavigationModel?
     }
 
-    /// Handed to the next scene that appears.
-    ///
-    /// A new window cannot be given its document directly — see the note on the
-    /// window group — so a Cmd-click leaves the link here and opens a window, and the
-    /// scene that appears takes it. Cleared on the way out so no later window picks
-    /// up a stale one.
+    /// Waiting for the next scene to appear, because nothing can be handed to a tab
+    /// as it is made — see `openInNewScene(_:inBackground:)`. Taken in `register(_:)`
+    /// and cleared there, so no later window picks up a stale one.
     private var pendingSceneLink: RFCLink?
 
-    func handOver(_ link: RFCLink) {
-        pendingSceneLink = link
-    }
-
-    func takePendingSceneLink() -> RFCLink? {
-        defer { pendingSceneLink = nil }
-        return pendingSceneLink
-    }
-
+    /// Registers a new scene, and gives it the link it was opened for if it was
+    /// opened for one. Nil for a window from the menu or at launch, which lands on
+    /// the library as before.
     func register(_ scene: NavigationModel) {
-        scenes.removeAll { $0.model == nil || $0.model === scene }
-        scenes.insert(WeakScene(model: scene), at: 0)
+        promote(scene)
+        guard let link = pendingSceneLink else { return }
+        pendingSceneLink = nil
+        scene.open(link, in: index)
     }
 
     func unregister(_ scene: NavigationModel) {
@@ -247,7 +244,12 @@ final class LibraryModel {
     /// link lands.
     func activate(_ scene: NavigationModel) {
         guard scenes.first?.model !== scene else { return }
-        register(scene)
+        promote(scene)
+    }
+
+    private func promote(_ scene: NavigationModel) {
+        unregister(scene)
+        scenes.insert(WeakScene(model: scene), at: 0)
     }
 
     /// Sends `link` to exactly one scene: the tab already showing that document if
@@ -260,6 +262,47 @@ final class LibraryModel {
         scenes.removeAll { $0.model == nil }
         let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
         target?.open(link, in: index)
+    }
+
+    /// Opens `link` the way the click asked for: in `scene`, or in a tab of its own.
+    ///
+    /// The single place an activation becomes an effect, so Command-click means the
+    /// same thing on a cross reference in the prose, a reference in the inspector and
+    /// a button in the status banner. Every gesture that owns its own click goes
+    /// through here; the document list is the exception, and says why at its binding.
+    func open(_ id: DocumentID, activation: LinkActivation, in scene: NavigationModel) {
+        open(RFCLink(id: id), activation: activation, in: scene)
+    }
+
+    func open(_ link: RFCLink, activation: LinkActivation, in scene: NavigationModel) {
+        switch activation {
+        case .here:
+            scene.open(link, in: index)
+        case .newTab(let inBackground):
+            openInNewScene(link, inBackground: inBackground)
+        }
+    }
+
+    /// Opens `link` in a tab of its own, either behind the current one or in front.
+    ///
+    /// Through AppKit rather than SwiftUI. `openWindow` needs a `WindowGroup` with an
+    /// id or a value, and both of those stop the app opening a window at launch —
+    /// measured, it comes up with no interface. `newWindowForTab:` is the action
+    /// behind the tab bar's own "+", which SwiftUI implements for a plain
+    /// `WindowGroup`, so this is the same thing the user could click.
+    ///
+    /// Nothing can be passed along that path, so the link waits in `pendingSceneLink`
+    /// for the scene that appears to take in `register(_:)`.
+    private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
+        #if os(macOS)
+        pendingSceneLink = link
+        let previous = inBackground ? NSApp.keyWindow : nil
+        NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
+        guard let previous else { return }
+        // On the next turn of the run loop: the new tab is ordered front as part of
+        // being made, so taking the focus back any sooner is simply undone by it.
+        DispatchQueue.main.async { previous.makeKeyAndOrderFront(nil) }
+        #endif
     }
 
     // MARK: - Documents

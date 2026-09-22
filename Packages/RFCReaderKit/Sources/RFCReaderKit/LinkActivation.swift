@@ -1,58 +1,49 @@
-import Foundation
-#if canImport(UIKit)
-import UIKit
-#else
+#if canImport(AppKit)
 import AppKit
 #endif
 
 /// What a click on a reference is asking for.
 ///
 /// The modifier conventions are the browser's, because that is what a reader's hands
-/// already know: Command opens elsewhere and stays put, adding Shift means "and take
-/// me there", Shift alone opens a window of its own.
+/// already know: Command opens elsewhere and stays put, and Shift means "and take me
+/// there".
 public enum LinkActivation: Equatable, Sendable {
     /// Follow it here, replacing what is on screen.
     case here
-    /// A new tab behind the current one; the reader keeps reading.
-    case newTabInBackground
-    /// A new tab, brought to the front.
-    case newTabInForeground
-    /// A window of its own.
-    case newWindow
+    /// A tab of its own, either left behind the current one or brought to the front.
+    case newTab(inBackground: Bool)
 
     /// Reads the intent off the modifiers held at the moment of the click.
     ///
-    /// A pure function of the flags, so the mapping is testable without a click: the
-    /// App target has no test bundle, and getting Command-Shift to mean "foreground"
-    /// rather than falling through to `newWindow` is exactly the sort of ordering
-    /// mistake that only shows up under the fingers.
-    public static func from(modifiers: ModifierKeys) -> LinkActivation {
-        if modifiers.contains(.command) {
-            return modifiers.contains(.shift) ? .newTabInForeground : .newTabInBackground
+    /// A pure function of the two flags, so the mapping is testable without a click:
+    /// the App target has no test bundle, and getting Command-Shift to mean
+    /// "foreground" rather than "background" is exactly the sort of mistake that only
+    /// shows up under the fingers.
+    public init(command: Bool, shift: Bool) {
+        guard command || shift else {
+            self = .here
+            return
         }
-        if modifiers.contains(.shift) {
-            return .newWindow
-        }
-        return .here
+        self = .newTab(inBackground: command && !shift)
     }
+}
 
-    /// Just the two flags that matter, named so the mapping above can be tested
-    /// without conjuring an `NSEvent`.
-    public struct ModifierKeys: OptionSet, Sendable {
-        public let rawValue: Int
-        public init(rawValue: Int) { self.rawValue = rawValue }
-
-        public static let command = ModifierKeys(rawValue: 1 << 0)
-        public static let shift = ModifierKeys(rawValue: 1 << 1)
-
-        #if !canImport(UIKit)
-        /// Only AppKit builds one of these: a tap carries no modifiers.
-        public init(_ flags: NSEvent.ModifierFlags) {
-            var keys = ModifierKeys()
-            if flags.contains(.command) { keys.insert(.command) }
-            if flags.contains(.shift) { keys.insert(.shift) }
-            self = keys
-        }
+extension LinkActivation {
+    /// The modifiers held right now.
+    ///
+    /// The one place the app asks. Most gestures carry no event of their own — a
+    /// SwiftUI `Button` action runs after the click is over, and `NSTextView`'s
+    /// `clickedOnLink:` is handed no event either — so the flags are read from the
+    /// click still being dispatched, falling back to the keyboard's current state
+    /// when there is no event at all. UIKit publishes neither, so every tap reads as
+    /// a plain one: opening a reference elsewhere is the long-press menu's job there,
+    /// not a chord's.
+    public static var current: LinkActivation {
+        #if canImport(AppKit)
+        let flags = NSApp?.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+        return LinkActivation(command: flags.contains(.command), shift: flags.contains(.shift))
+        #else
+        return .here
         #endif
     }
 }

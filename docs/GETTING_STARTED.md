@@ -45,7 +45,7 @@ Add the file to the target's resources. `DocumentStore` picks it up when no down
 - In RFC 9110 tap any `[RFC7231]`; note the red "Obsoleted by RFC 9110" banner on the old document, and tap it to come back.
 - Open RFC 1149 (text only) and toggle *Original Text* from the ⋯ menu to compare the reflowed rendering with the file as published.
 - Search `wg:httpbis status:current cache`.
-- From Terminal: `open "rfc://9110/section/9.3.1"`.
+- From Terminal: `open "rfc://9110#section-9.3.1"`.
 - Ask Siri "Open RFC 9000 in RFC Reader" (App Shortcuts need one launch to register).
 
 ## 5. Where to go next

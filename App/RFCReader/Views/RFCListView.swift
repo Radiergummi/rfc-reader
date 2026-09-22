@@ -31,6 +31,9 @@ struct RFCListView: View {
     private var selectionBinding: Binding<DocumentID?> {
         Binding(
             get: { navigation.selection },
+            // Not `library.open(_:activation:in:)` like every other open: a selection
+            // binding is handed the outcome, not the click, and Command-click on a
+            // list row is the platform's multi-select chord rather than ours to take.
             set: { if let id = $0 { navigation.open(id, in: library.index) } }
         )
     }

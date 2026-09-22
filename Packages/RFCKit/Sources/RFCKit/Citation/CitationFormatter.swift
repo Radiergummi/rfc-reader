@@ -49,8 +49,7 @@ public struct CitationFormatter: Sendable {
     public static func url(for id: DocumentID, section: String? = nil) -> URL {
         let base = RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)")
         guard let section else { return RFCEditorEndpoints.infoPage(id) }
-        let isAppendix = section.first?.isLetter == true
-        return URL(string: base.absoluteString + (isAppendix ? "#appendix-\(section)" : "#section-\(section)")) ?? base
+        return URL(string: base.absoluteString + "#\(RFCLink.fragment(for: section))") ?? base
     }
 
     private func sectionSuffix(_ section: String?) -> String? {

@@ -1,6 +1,3 @@
-#if os(macOS)
-import AppKit
-#endif
 import RFCKit
 import RFCReaderKit
 import SwiftData
@@ -91,7 +88,7 @@ struct DocumentView: View {
                         tab: $inspectorTab,
                         current: visibleAnchor,
                         selectSection: { anchor in navigation.jump(toSection: anchor) },
-                        openDocument: { navigation.open($0, in: library.index) }
+                        openDocument: { library.open($0, activation: .current, in: navigation) }
                     )
                     .inspectorColumnWidth(min: 260, ideal: 320)
                 }
@@ -135,7 +132,7 @@ struct DocumentView: View {
                     // back returns here rather than to the top of the document.
                     navigation.visiblePosition = $0
                 },
-                onLink: { openInApp($0, activation: $1) },
+                onLink: openInApp,
                 headerIdentity: headerIdentity,
                 // Hosted outside the storage, so it needs the environment handed to
                 // it: the banner's links to newer RFCs go through `LibraryModel`.
@@ -291,49 +288,19 @@ struct DocumentView: View {
     /// The same decision as `handleLink`, as a `Bool`: the text view's delegate wants
     /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
     /// not `Equatable`.
+    ///
+    /// Where the click goes is decided in `LinkDestination`, which is testable; this
+    /// is only the one effect per answer.
     private func openInApp(_ url: URL, activation: LinkActivation) -> Bool {
-        if let anchor = DocumentTextBuilder.anchor(from: url) {
-            // A jump inside this document has nowhere else to go: a tab of its own
-            // showing the same document scrolled elsewhere is not what Cmd means.
-            navigation.jump(toSection: anchor)
-            return true
-        }
-        guard let link = RFCLink(url: url) else { return false }
-        switch activation {
-        case .here:
-            if link.id == id, let section = link.section {
-                navigation.jump(toSection: section)
-            } else {
-                navigation.open(link, in: library.index)
-            }
-        case .newTabInBackground:
-            openScene(for: link, staying: true)
-        case .newTabInForeground, .newWindow:
-            openScene(for: link, staying: false)
+        switch LinkDestination.resolve(url, from: id, activation: activation) {
+        case .jump(let section):
+            navigation.jump(toSection: section)
+        case .document(let link):
+            library.open(link, activation: activation, in: navigation)
+        case .unhandled:
+            return false
         }
         return true
-    }
-
-    /// Opens `link` in a tab of its own.
-    ///
-    /// Through AppKit rather than SwiftUI. `openWindow` needs a `WindowGroup` with an
-    /// id or a value, and both of those stop the app opening a window at launch —
-    /// measured, it comes up with no interface. `newWindowForTab:` is the action
-    /// behind the tab bar's own "+", which SwiftUI implements for a plain
-    /// `WindowGroup`, so this is the same thing the user could click.
-    ///
-    /// The document is handed over through `LibraryModel` because nothing can be
-    /// passed along this path; the scene that appears takes it.
-    private func openScene(for link: RFCLink, staying: Bool) {
-        library.handOver(link)
-        #if os(macOS)
-        let previous = staying ? NSApp.keyWindow : nil
-        NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
-        guard let previous else { return }
-        // On the next turn of the run loop: the new tab is ordered front as part of
-        // being made, so taking the focus back any sooner is simply undone by it.
-        DispatchQueue.main.async { previous.makeKeyAndOrderFront(nil) }
-        #endif
     }
 
     private func toggleBookmark() {
@@ -489,7 +456,7 @@ struct StatusBanner: View {
             Image(systemName: symbol).foregroundStyle(tint)
             Text(title).fontWeight(.medium)
             ForEach(ids, id: \.self) { id in
-                Button(id.displayName) { navigation.open(id, in: library.index) }
+                Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
             }

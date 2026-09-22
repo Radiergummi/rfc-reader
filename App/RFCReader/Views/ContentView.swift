@@ -45,7 +45,6 @@ struct ContentView: View {
                 EmptyDetailView()
             }
         }
-        .environment(navigation)
         // The window's title, and therefore the tab's.
         //
         // Only one `navigationTitle` in a `NavigationSplitView` reaches the window,
@@ -85,14 +84,7 @@ struct ContentView: View {
                 .controlGroupStyle(.navigation)
             }
         }
-        .onAppear {
-            library.register(navigation)
-            // Set by whoever asked for this window; nil when it was opened from the
-            // menu or at launch, which lands on the library as before.
-            if let link = library.takePendingSceneLink() {
-                navigation.open(link, in: library.index)
-            }
-        }
+        .onAppear { library.register(navigation) }
         .onDisappear { library.unregister(navigation) }
         // Any navigation in this tab makes it the one an untargeted deep link lands in.
         .onChange(of: navigation.selection) { library.activate(navigation) }
@@ -103,6 +95,14 @@ struct ContentView: View {
             navigation.isShowingGoToSheet = true
         }
         .focusedSceneValue(\.navigationModel, navigation)
+        // Outermost, and it has to be: an environment value reaches what is *inside*
+        // the modifier that sets it, and a presentation is the content of the
+        // modifier that presents it. Written on the split view, this covered the
+        // three columns and missed the sheet above it — so ⌘L crashed the app on
+        // `GoToDocumentSheet`'s `@Environment(NavigationModel.self)` lookup, which is
+        // a runtime trap with no compile-time warning. Out here it covers both, and
+        // the next presentation added to this view as well.
+        .environment(navigation)
     }
 }
 
@@ -137,20 +137,59 @@ struct GoToDocumentSheet: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macOSBody
+        #else
+        iOSBody
+        #endif
+    }
+
+    #if os(macOS)
+    /// Laid out by hand rather than by `Form`, because a form in a sheet is a
+    /// settings window's layout in a dialog's frame: it puts the field's label in a
+    /// column of its own — hard against the sheet's left edge, with no margin to sit
+    /// in — and stretches the field to the opposite edge. What a macOS dialog does
+    /// instead is what this does: 20 pt of margin all round, the question at the
+    /// top, the default button bottom trailing with Cancel to its left.
+    private var macOSBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Go to RFC")
+                .font(.headline)
+            TextField("RFC number or link", text: $input)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit(open)
+            // Always present, so the sheet does not grow and shrink under the
+            // pointer as what was typed starts and stops resolving.
+            status
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Open", action: open)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(resolved == nil)
+            }
+            .padding(.top, 6)
+        }
+        .padding(20)
+        .frame(width: 420)
+        .onAppear { focused = true }
+    }
+    #else
+    private var iOSBody: some View {
         NavigationStack {
             Form {
                 TextField("RFC number or link", text: $input)
                     .focused($focused)
                     .onSubmit(open)
-                    #if !os(macOS)
                     .keyboardType(.numbersAndPunctuation)
                     .textInputAutocapitalization(.never)
-                    #endif
-                if let link = resolved, let metadata = library.metadata(link.id) {
-                    LabeledContent(link.id.displayName, value: metadata.title)
-                } else if !input.isEmpty, resolved == nil {
-                    Text("Not something I recognise as an RFC.").foregroundStyle(.secondary)
-                }
+                status
             }
             .navigationTitle("Go to RFC")
             .toolbar {
@@ -161,14 +200,26 @@ struct GoToDocumentSheet: View {
             }
         }
         .onAppear { focused = true }
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 160)
-        #endif
+    }
+    #endif
+
+    /// What the typed text resolves to, or what it would take to resolve: the one
+    /// line under the field that turns a blind text box into something that tells
+    /// the reader whether it understood them.
+    @ViewBuilder
+    private var status: some View {
+        if let link = resolved, let metadata = library.metadata(link.id) {
+            Text("\(link.id.displayName) — \(metadata.title)")
+        } else if !input.isEmpty {
+            Text("Not something I recognise as an RFC.")
+        } else {
+            Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
+        }
     }
 
     private func open() {
         guard let link = resolved else { return }
-        navigation.open(link, in: library.index)
+        library.open(link, activation: .current, in: navigation)
         dismiss()
     }
 }

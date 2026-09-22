@@ -31,7 +31,7 @@ struct SidebarView: View {
                 Section("Just Published") {
                     ForEach(library.recent.prefix(5)) { recent in
                         Button {
-                            navigation.open(recent.id, in: library.index)
+                            library.open(recent.id, activation: .current, in: navigation)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(recent.id.displayName).font(.caption).foregroundStyle(.secondary)

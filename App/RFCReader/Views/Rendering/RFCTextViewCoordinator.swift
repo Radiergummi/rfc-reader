@@ -89,6 +89,16 @@ final class RFCTextViewCoordinator: NSObject {
     /// installed the document — and clamping a deep jump against that would land at
     /// the top and overwrite the reading position with section one.
     private var laidOutEnd: CGFloat?
+    /// How far into the document layout has reached, in characters. Everything
+    /// before it has real fragment frames; everything after it has none yet.
+    private var laidOutThrough = 0
+    /// The slices after the first one, running between frames until the document is
+    /// laid out. Cancelled by the next `install` — and by a change of column, which
+    /// invalidates every frame it has computed.
+    private var layoutTask: Task<Void, Never>?
+    /// Characters per slice: about 8 ms of layout on this machine, so a slice fits
+    /// inside a frame.
+    private static let layoutSlice = 20_000
 
     // MARK: - Accessibility
 
@@ -112,14 +122,20 @@ final class RFCTextViewCoordinator: NSObject {
 
     // MARK: - Storage
 
-    /// Swaps in a document and lays the whole of it out, synchronously.
+    /// Swaps in a document and starts laying it out.
     ///
-    /// Viewport layout would be cheaper here and wrong afterwards:
-    /// `usageBoundsForTextContainer` keeps moving as the viewport does, which the
-    /// scroller shows as jitter, and estimated fragment heights run well above the
-    /// laid-out ones, so an anchor's y is a guess. The document is immutable once
-    /// built, so one pass buys a stable content size, an exact anchor → y mapping
-    /// and correct hit-testing for the rest of its life.
+    /// The whole document does get laid out — viewport layout would be cheaper here
+    /// and wrong afterwards: `usageBoundsForTextContainer` keeps moving as the
+    /// viewport does, which the scroller shows as jitter, and estimated fragment
+    /// heights run well above the laid-out ones, so an anchor's y is a guess. The
+    /// document is immutable once built, so laying all of it out buys a stable
+    /// content size, an exact anchor → y mapping and correct hit-testing for the
+    /// rest of its life.
+    ///
+    /// What is *not* done here is all of it at once. One `ensureLayout` over the
+    /// document range measured 547 ms on RFC 5661 — the main thread, and therefore
+    /// the whole interface, frozen for that long every time a document opens. It is
+    /// spread over run-loop turns instead; see `beginLayout()`.
     func install(_ built: BuiltDocument) {
         guard let textView,
               let layout = textView.textLayoutManager,
@@ -141,18 +157,61 @@ final class RFCTextViewCoordinator: NSObject {
         storage.performEditingTransaction {
             storage.textStorage?.setAttributedString(built.text)
         }
-        layOutEverything()
+        beginLayout()
         reportVisibleAnchor()
     }
 
-    private func layOutEverything() {
+    /// Lays out the first slice now and the rest between frames.
+    ///
+    /// The first slice is far more than a viewport, so the document is complete
+    /// where it can be seen before it is drawn; everything below it lands in
+    /// `layoutSlice`-sized pieces, each about 8 ms, with a turn of the run loop
+    /// between them. The interface stays live throughout — the alternative, one
+    /// pass over the document range, is half a second of frozen window on the
+    /// largest RFCs.
+    ///
+    /// Until the last slice lands the document end is unknown, which is exactly the
+    /// state `scrollContainerTopTo` already treats as "do not clamp".
+    private func beginLayout() {
+        layoutTask?.cancel()
         laidOutEnd = nil
-        guard let layout = textView?.textLayoutManager else { return }
-        layout.ensureLayout(for: layout.documentRange)
-        // Exact, because the whole document has just been laid out. The usual caveat
-        // about this value — that it keeps moving as the viewport does, which is why
-        // the reader lays out everything up front — applies to viewport layout, not
-        // here.
+        laidOutThrough = 0
+        ensureLayout(through: Self.layoutSlice)
+        layoutTask = Task { [weak self] in
+            while let self, self.laidOutEnd == nil {
+                // A sleep rather than `Task.yield()`: yielding hands the main actor
+                // its next queued job, which is this loop again, and the run loop
+                // never gets between two slices. A timer does.
+                try? await Task.sleep(for: .milliseconds(1))
+                guard !Task.isCancelled else { return }
+                let before = self.laidOutThrough
+                self.ensureLayout(through: before + Self.layoutSlice)
+                // A slice that laid nothing out means there is nothing left to lay
+                // out — an empty document, or a text view that has gone away. Either
+                // way the end stays unknown, which is the safe state, and looping on
+                // it would spin.
+                guard self.laidOutThrough > before else { return }
+            }
+        }
+    }
+
+    /// Lays out from the start of the document through `offset`, and records the
+    /// document's end once the last character is in.
+    ///
+    /// Always from the start: TextKit keeps what it has already laid out, so this is
+    /// the cheap incremental call it looks like, and asking for a range that begins
+    /// mid-document would leave everything before it un-laid-out and every y after
+    /// it wrong.
+    private func ensureLayout(through offset: Int) {
+        guard let layout = textView?.textLayoutManager, let built else { return }
+        let end = min(offset, built.text.length)
+        guard end > laidOutThrough, let range = layout.textRange(for: NSRange(location: 0, length: end)) else { return }
+        layout.ensureLayout(for: range)
+        laidOutThrough = end
+        guard end == built.text.length else { return }
+        // Exact, because the whole document is now laid out. The usual caveat about
+        // this value — that it keeps moving as the viewport does, which is why the
+        // reader lays all of it out — applies to viewport layout, not here.
         laidOutEnd = layout.usageBoundsForTextContainer.maxY
     }
 
@@ -193,21 +252,30 @@ final class RFCTextViewCoordinator: NSObject {
         // rebuilds, which lands in `install()` — the one place the document is laid
         // out. Until it does, the laid-out end belongs to the previous column, and an
         // unknown end is the safe state (`scrollContainerTopTo` then does not clamp).
-        if columnChanged { laidOutEnd = nil }
+        if columnChanged {
+            layoutTask?.cancel()
+            laidOutEnd = nil
+        }
     }
 
     // MARK: - Scrolling
 
-    /// Puts the anchor's fragment at the top of the viewport. The document is laid
-    /// out already, so this is a lookup rather than a layout pass.
+    /// Puts the anchor's fragment at the top of the viewport.
+    ///
+    /// A jump can arrive — as a deep link, or as the reading position restored on
+    /// the way in — before the slices have reached the section it names, and a
+    /// fragment that has not been laid out has no frame to scroll to. So the jump
+    /// pays for its own target: everything above it is laid out first, which is what
+    /// makes its y the real one.
     func scroll(to anchor: String) {
         // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
         defer { Task { self.onScrollHandled() } }
         guard let textView,
               let built,
               let layout = textView.textLayoutManager,
-              let offset = built.anchors.offset(of: anchor),
-              let location = layout.location(atOffset: offset),
+              let offset = built.anchors.offset(of: anchor) else { return }
+        ensureLayout(through: offset + Self.layoutSlice)
+        guard let location = layout.location(atOffset: offset),
               let fragment = layout.textLayoutFragment(for: location) else { return }
         scrollContainerTopTo(fragment.layoutFragmentFrame.minY)
         reportVisibleAnchor()
@@ -297,11 +365,9 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
-        // `clickedOnLink` carries no event, so the modifiers come from the click that
-        // is still being dispatched. Read here rather than passed down from the view:
-        // by the time SwiftUI's `openURL` sees it, the event is gone.
-        let modifiers = LinkActivation.ModifierKeys(NSApp.currentEvent?.modifierFlags ?? [])
-        return onLink(url, .from(modifiers: modifiers))
+        // Read here rather than passed down from the view: by the time SwiftUI's
+        // `openURL` sees the link, the click that carried the modifiers is gone.
+        return onLink(url, .current)
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.

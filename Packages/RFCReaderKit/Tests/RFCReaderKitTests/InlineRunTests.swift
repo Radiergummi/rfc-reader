@@ -44,7 +44,7 @@ struct InlineRunTests {
         #expect(attributed.string == "Section 4.2 of [RFC 9110]")
         let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
         #expect(url.scheme == "rfc")
-        #expect(url.absoluteString == "rfc://9110/section/4.2")
+        #expect(url.absoluteString == "rfc://9110#section-4.2")
         #expect(attributed.attribute(.rfcReference, at: 0, effectiveRange: nil) is ReferenceBox)
     }
 

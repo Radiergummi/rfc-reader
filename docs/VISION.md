@@ -53,7 +53,7 @@ Reference
 - Every cross-reference is a link. Same-document references scroll; other-RFC references open the document at that section.
 - Cite menu: short (`RFC 9110, Section 4.2`), RFC Editor full citation, Markdown link, BibTeX, URL. Section-aware.
 - Share sheet with the canonical info page URL.
-- `rfc://9110/section/4.2` URL scheme; App Intent "Open RFC" for Siri, Shortcuts and Spotlight.
+- `rfc://9110#section-4.2` URL scheme; App Intent "Open RFC" for Siri, Shortcuts and Spotlight.
 - Bookmarks (SwiftData, local for now).
 
 ### Tier 1 — the reader people recommend ("0.2 – 0.3")
