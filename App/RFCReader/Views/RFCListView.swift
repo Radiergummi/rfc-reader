@@ -6,17 +6,15 @@ struct RFCListView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     @Query(sort: \Bookmark.createdAt, order: .reverse) private var bookmarks: [Bookmark]
-    @Query(sort: \ReadingPosition.updatedAt, order: .reverse) private var positions: [ReadingPosition]
     @State private var downloaded: Set<Int> = []
     /// The Recently read order, taken once when the filter is entered.
     ///
-    /// Not `positions.map(\.number)` read live: leaving a document writes its
-    /// `updatedAt`, and the query sorts on that, so every click in the Recently read
-    /// list re-sorted the list the click came from — the row you just left jumped to
-    /// the top and everything below it shifted down a place. Held here instead, the
-    /// order is whatever it was when you arrived and stays put while you read
-    /// through it; coming back to the filter takes a fresh one, the same way
-    /// `downloaded` beside it does.
+    /// Not a live `@Query`: opening or leaving a document writes its `updatedAt`, so
+    /// a query sorted on that re-sorted the list the click came from — the row just
+    /// left jumped to the top and everything below it shifted down a place. Held
+    /// here instead, the order is whatever it was on arrival and stays put while it
+    /// is being read through; coming back to the filter takes a fresh one, the same
+    /// way `downloaded` beside it does.
     @State private var recentOrder: [Int] = []
 
     /// Built once per body pass and shared by every row: `RFCRow` used to scan the
@@ -64,7 +62,7 @@ struct RFCListView: View {
             }
         }
         .task(id: navigation.filter) {
-            recentOrder = positions.map(\.number)
+            recentOrder = library.recentlyReadNumbers()
             downloaded = await library.downloadedNumbers()
         }
     }

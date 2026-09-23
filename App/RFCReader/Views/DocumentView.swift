@@ -190,7 +190,7 @@ struct DocumentView: View {
                 // Deep link or restored reading position.
                 if let request = navigation.scrollRequest {
                     jump(toSection: request.section)
-                } else if let saved = savedPosition(), document.section(anchor: saved) != nil {
+                } else if let saved = storedPosition()?.sectionAnchor, document.section(anchor: saved) != nil {
                     scrollTarget = saved
                 }
             }
@@ -374,10 +374,6 @@ struct DocumentView: View {
         let number = id.number
         let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
         return try? modelContext.fetch(descriptor).first
-    }
-
-    private func savedPosition() -> String? {
-        storedPosition()?.sectionAnchor
     }
 
     /// Dates the entry as this document is opened, not only as it is left.

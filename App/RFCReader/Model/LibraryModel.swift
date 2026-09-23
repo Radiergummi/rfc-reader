@@ -5,6 +5,7 @@ import Foundation
 import Observation
 import RFCKit
 import RFCReaderKit
+import SwiftData
 
 /// What the list in the middle column shows.
 enum LibraryFilter: Hashable, Identifiable {
@@ -314,6 +315,20 @@ final class LibraryModel {
 
     func downloadedNumbers() async -> Set<Int> {
         await store.cachedNumbers()
+    }
+
+    /// The documents the reader has opened, most recent first.
+    ///
+    /// Fetched on demand rather than observed, and that is the point: the Recently
+    /// read list is history as of the moment the filter is entered, and a live query
+    /// re-sorted it under the click that was reading it. `RFCListView` takes one of
+    /// these when its filter changes, exactly as it takes `downloadedNumbers()`.
+    func recentlyReadNumbers() -> [Int] {
+        let descriptor = FetchDescriptor<ReadingPosition>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let positions = (try? AppData.container.mainContext.fetch(descriptor)) ?? []
+        return positions.map(\.number)
     }
 
     func download(_ id: DocumentID) async throws {
