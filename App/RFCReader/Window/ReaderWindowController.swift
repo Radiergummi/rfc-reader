@@ -38,6 +38,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     private(set) var panelItem: NSSplitViewItem!
 
     private let library: LibraryModel
+    /// See `placeInitialFocus()`.
+    private var hasPlacedInitialFocus = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -53,7 +55,7 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
     init(library: LibraryModel) {
         self.library = library
-        let window = NSWindow(
+        let window = ReaderWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
@@ -231,8 +233,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
             // selection changes, and the fetch must not be on the toolbar's
             // validation path; see `isBookmarked`.
             refreshBookmarked()
-        } onChange: {
-            Task { @MainActor [weak self] in self?.observeTitle() }
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeTitle() }
         }
     }
 
@@ -272,8 +274,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     private func observeDocument() {
         withObservationTracking {
             _ = reader.hasDocument
-        } onChange: {
-            Task { @MainActor [weak self] in
+        } onChange: { [weak self] in
+            Task { @MainActor in
                 self?.closePanelWithoutDocument()
                 self?.observeDocument()
             }
@@ -370,6 +372,17 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         ActiveReaderWindow.shared.becameKey(self)
+        placeInitialFocus()
+    }
+
+    /// Hands the list first responder the first time this window comes up, so the
+    /// arrow keys walk the library without a click to wake them.
+    ///
+    /// Once per window rather than once per activation: coming back to the app after
+    /// reading should leave focus wherever the reader left it.
+    private func placeInitialFocus() {
+        guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
+        hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
     }
 
     func windowWillClose(_ notification: Notification) {
