@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -16,6 +17,10 @@ struct RFCListView: View {
     /// is being read through; coming back to the filter takes a fresh one, the same
     /// way `downloaded` beside it does.
     @State private var recentOrder: [Int] = []
+    /// How many rows are handed to the `List`. See `ListWindow`: all 9,842 of them at
+    /// once is one large diff on the main thread, and AppKit then scans every row to
+    /// build its type-ahead strings — measurably, until it gives up and says so.
+    @State private var limit = ListWindow.page
 
     /// Built once per body pass and shared by every row: `RFCRow` used to scan the
     /// whole bookmark list itself, which is a linear search per row over a list that
@@ -49,10 +54,19 @@ struct RFCListView: View {
     var body: some View {
         @Bindable var navigation = navigation
         let bookmarked = bookmarkedNumbers
+        // Once, and shared by everything below: `rfcs` was read twice per body pass —
+        // here and in the overlay — which is half of why the memoised list was worth
+        // memoising.
+        let rows = rfcs
+        let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
         List(selection: selectionBinding) {
-            ForEach(rfcs) { rfc in
+            ForEach(rows.prefix(limit)) { rfc in
                 RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
                     .tag(rfc.id)
+                    .onAppear {
+                        guard rfc.id == trigger else { return }
+                        limit = ListWindow.extendedLimit(from: limit, total: rows.count)
+                    }
             }
         }
         // Inset rather than plain: the selection is a rounded capsule with a margin
@@ -60,14 +74,37 @@ struct RFCListView: View {
         // the row edge to edge and squares it off.
         .listStyle(.inset)
         .overlay {
-            if rfcs.isEmpty, case .ready = library.indexState {
+            if rows.isEmpty, case .ready = library.indexState {
                 ContentUnavailableView.search(text: navigation.searchText)
             }
         }
         .task(id: navigation.filter) {
             recentOrder = library.recentlyReadNumbers()
             downloaded = await library.downloadedNumbers()
+            // After the two above, not before: both are inputs to the list the window
+            // is being measured against.
+            limit = ListWindow.initialLimit(covering: selectedRow())
         }
+        .onChange(of: navigation.searchText) {
+            limit = ListWindow.initialLimit(covering: selectedRow())
+        }
+        // Only ever wider. A selection arriving from outside the list — a deep link, a
+        // citation, the Go to RFC palette — may sit far below the first page, and
+        // `NavigationModel.open` resets the filter to `.all` precisely so nothing
+        // hides it. Narrowing here instead would throw away a window the reader has
+        // already scrolled down through.
+        .onChange(of: navigation.selection) {
+            limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
+        }
+    }
+
+    /// Where the selected document sits in the list, if it is in it at all.
+    ///
+    /// A linear scan, but only on the three changes above rather than per body pass,
+    /// and it compares two `Int`s per row.
+    private func selectedRow() -> Int? {
+        guard let selection = navigation.selection else { return nil }
+        return rfcs.firstIndex { $0.id == selection }
     }
 }
 
