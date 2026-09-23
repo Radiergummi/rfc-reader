@@ -55,7 +55,10 @@ struct RFCListView: View {
                     .tag(rfc.id)
             }
         }
-        .listStyle(.plain)
+        // Inset rather than plain: the selection is a rounded capsule with a margin
+        // either side, the way every other macOS content list draws one. Plain fills
+        // the row edge to edge and squares it off.
+        .listStyle(.inset)
         .overlay {
             if rfcs.isEmpty, case .ready = library.indexState {
                 ContentUnavailableView.search(text: navigation.searchText)
