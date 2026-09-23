@@ -34,6 +34,13 @@ final class ReaderState {
     /// Whether there is anything to describe. The panel draws nothing without it.
     var hasDocument = false
 
+    /// The title the document gives itself, for the one caller the index cannot
+    /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
+    /// Here for the same reason `currentSection` is — the toolbar needs one string
+    /// out of a document it is not inside, and handing it the document instead would
+    /// be a far larger thing to share for it.
+    var documentTitle: String?
+
     /// The 72-column original instead of the rendered document. Toolbar state, read
     /// by the reader.
     var showOriginal = false
@@ -44,5 +51,6 @@ final class ReaderState {
         currentAnchor = nil
         currentSection = nil
         hasDocument = false
+        documentTitle = nil
     }
 }

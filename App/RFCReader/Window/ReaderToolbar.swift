@@ -352,13 +352,12 @@ final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
 
     @objc private func copyCitation(_ sender: NSMenuItem) {
         guard let metadata, let style = sender.representedObject as? CitationStyle else { return }
-        let section = style == .bibtex ? nil : reader.currentSection
-        Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
+        Clipboard.copy(DocumentActions.citation(metadata, section: reader.currentSection, style: style))
     }
 
     @objc private func copySectionLink() {
         guard let id else { return }
-        Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
     }
 
     @objc private func openInfoPage() {

@@ -226,7 +226,7 @@ struct DocumentView: View {
                 }
                 Divider()
                 Button("Copy Link to Current Section") {
-                    Clipboard.copy(RFCLink(id: id, section: reader.currentSection).webURL.absoluteString)
+                    Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
                 }
             } label: {
                 Label("Cite", systemImage: "quote.opening")
@@ -281,6 +281,7 @@ struct DocumentView: View {
                 uniquingKeysWith: { first, _ in first }
             )
             document = loaded
+            reader.documentTitle = loaded.header.title
             reader.hasDocument = true
         } catch {
             loadError = error.localizedDescription
@@ -356,17 +357,13 @@ struct DocumentView: View {
 
     #if !os(macOS)
     private func toggleBookmark() {
-        if let existing = bookmarks.first(where: { $0.number == id.number }) {
-            modelContext.delete(existing)
-        } else {
-            modelContext.insert(Bookmark(number: id.number, title: metadata?.title ?? document?.header.title ?? id.displayName))
-        }
+        let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: reader.documentTitle, id: id)
+        BookmarkStore.toggle(id, title: title, in: modelContext)
     }
 
     private func copyCitation(_ style: CitationStyle) {
         guard let metadata else { return }
-        let section = style == .bibtex ? nil : reader.currentSection
-        Clipboard.copy(CitationFormatter().cite(metadata, section: section, style: style))
+        Clipboard.copy(DocumentActions.citation(metadata, section: reader.currentSection, style: style))
     }
     #endif
 

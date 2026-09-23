@@ -344,28 +344,19 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     private(set) var isBookmarked = false
 
     private func refreshBookmarked() {
-        isBookmarked = navigation.selection.flatMap { bookmark(for: $0) } != nil
+        isBookmarked = navigation.selection.map { BookmarkStore.isBookmarked($0, in: AppData.container.mainContext) } ?? false
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
         guard let id = navigation.selection else { return }
-        let context = AppData.container.mainContext
-        if let existing = bookmark(for: id) {
-            context.delete(existing)
-        } else {
-            let title = library.metadata(id)?.title ?? id.displayName
-            context.insert(Bookmark(number: id.number, title: title))
-        }
-        try? context.save()
-        refreshBookmarked()
-    }
-
-    private func bookmark(for id: DocumentID) -> Bookmark? {
-        let number = id.number
-        let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
-        return try? AppData.container.mainContext.fetch(descriptor).first
+        let title = DocumentActions.bookmarkTitle(
+            metadata: library.metadata(id),
+            documentTitle: reader.documentTitle,
+            id: id
+        )
+        isBookmarked = BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     }
 
     // MARK: - Lifetime
