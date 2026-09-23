@@ -12,6 +12,20 @@
 /// bundle, and the cases that matter are the ones that are tedious to produce by
 /// hand: a list shorter than one page, a window already at the end, a selection far
 /// below the first page.
+///
+/// It also answers the reentrancy that issue #22 carried unexplained through a
+/// breakpoint sweep of every public `NSTableView` and `NSOutlineView` mutation, none
+/// of which ever fired:
+///
+///     WARNING: Application performed a reentrant operation in its NSTableView
+///     delegate. This warning will become an assert in the future.
+///
+/// Measured as an A/B over six launches of the same debug build, differing only in
+/// whether `RFCListView` windows -- three before, one warning each; three after,
+/// none. So it was a consequence of the size of the table update rather than of
+/// anything the app calls, which is why no breakpoint caught it. That is the launch
+/// case only, where nothing has been clicked; it says nothing about whether the
+/// selection bindings can still provoke one under interaction.
 public enum ListWindow {
     /// Rows in the first page, and added by each extension.
     ///
