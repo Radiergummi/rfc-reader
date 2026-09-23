@@ -72,6 +72,11 @@ final class NavigationModel: Identifiable {
     /// is looking at by construction, so a narrowed filter cannot be hiding it, and
     /// resetting to `.all` would swap the Bookmarks list they were working in for
     /// the whole library with that one row highlighted somewhere inside it.
+    ///
+    /// It also skips the BCP/STD resolution `open` does, because every row the list
+    /// can emit is already an RFC: `LibraryModel.list` draws from `index.rfcs` and,
+    /// for `.series`, from the members those entries resolve to. A list that could
+    /// show a series row would have to come back through `open`.
     func select(_ id: DocumentID) {
         go(to: Place(id: id))
     }
