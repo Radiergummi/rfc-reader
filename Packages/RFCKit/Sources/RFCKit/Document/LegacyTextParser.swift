@@ -92,6 +92,8 @@ public struct LegacyTextParser: Sendable {
         return removingRecurringFurniture(lines)
     }
 
+    private enum Side { case head, foot }
+
     /// Drops the lines that recur at the edges of the pages (#52). The running-header
     /// pattern knows one shape, `RFC nnnn ... yyyy`; plenty of documents set a header
     /// that names no RFC at all -- RFC 793 opens 62 pages with `September 1981`,
@@ -113,8 +115,6 @@ public struct LegacyTextParser: Sendable {
     /// first copy stays, unless the document heads the section itself somewhere with
     /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
     /// at quite well without a second, empty one beside it.
-    private enum Side { case head, foot }
-
     private static func removingRecurringFurniture(_ lines: [Line]) -> [Line] {
         var pages: [Range<Int>] = []
         var start = 0
@@ -128,20 +128,7 @@ public struct LegacyTextParser: Sendable {
         let later = pages.dropFirst()
         guard later.count >= 3 else { return lines }
 
-        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> [Int] {
-            var edge: [Int] = []
-            for index in indices {
-                guard case .text(let string) = lines[index] else { continue }
-                if string.isBlank {
-                    if edge.isEmpty { continue } else { break }
-                }
-                edge.append(index)
-                if edge.count == 4 { break }
-            }
-            return edge
-        }
-        func key(_ index: Int) -> String {
-            guard case .text(let string) = lines[index] else { return "" }
+        func key(_ string: String) -> String {
             var key = ""
             for word in string.split(whereSeparator: \.isWhitespace) {
                 if !key.isEmpty { key.append(" ") }
@@ -153,6 +140,18 @@ public struct LegacyTextParser: Sendable {
             }
             return key
         }
+        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> [(index: Int, key: String)] {
+            var edge: [(index: Int, key: String)] = []
+            for index in indices {
+                guard case .text(let string) = lines[index] else { continue }
+                if string.isBlank {
+                    if edge.isEmpty { continue } else { break }
+                }
+                edge.append((index, key(string)))
+                if edge.count == 4 { break }
+            }
+            return edge
+        }
 
         // Keyed by which edge it sits at as well as what it says, because furniture
         // recurs in the same place: a line at the foot of one page and a line at the
@@ -160,9 +159,9 @@ public struct LegacyTextParser: Sendable {
         var edgesByKey: [Side: [String: [Int]]] = [.head: [:], .foot: [:]]
         var pagesByKey: [Side: [String: [Int]]] = [.head: [:], .foot: [:]]
         for (ordinal, page) in later.enumerated() {
-            for (side, indices) in [(Side.head, edge(page)), (.foot, edge(page.reversed()))] {
-                for index in indices { edgesByKey[side]?[key(index), default: []].append(index) }
-                for key in Set(indices.map(key)) { pagesByKey[side]?[key, default: []].append(ordinal) }
+            for (side, edges) in [(Side.head, edge(page)), (.foot, edge(page.reversed()))] {
+                for (index, key) in edges { edgesByKey[side]?[key, default: []].append(index) }
+                for key in Set(edges.map(\.key)) { pagesByKey[side]?[key, default: []].append(ordinal) }
             }
         }
 
@@ -182,7 +181,7 @@ public struct LegacyTextParser: Sendable {
             }
         }
         guard !furniture.isEmpty else { return lines }
-        return lines.indices.filter { !furniture.contains($0) }.map { lines[$0] }
+        return lines.enumerated().compactMap { furniture.contains($0.offset) ? nil : $0.element }
     }
 
     nonisolated(unsafe) private static let statedHeadingPattern = #/^\d+(?:\.\d+)*\.?\s+(?<title>\S.*)$/#
@@ -498,15 +497,24 @@ public struct LegacyTextParser: Sendable {
     private static func bodyIsIndented(_ body: ArraySlice<Line>) -> Bool {
         var counts: [Int: Int] = [:]
         for case .text(let string) in body where !string.isBlank {
-            // Spaces only: the handful of tab-indented documents set their body at column 0
-            // anyway, and counting a tab as an indent would classify them the other way.
             counts[string.leadingSpaceCount, default: 0] += 1
         }
-        // A tie keeps the classic layout, which is what the rest of the parser assumes.
         guard let mode = counts.max(by: { ($0.value, $0.key) < ($1.value, $1.key) })?.key else {
             return true
         }
-        return mode > 0
+        // A heading standing out at column 0 only says anything where column 0 is the
+        // exception, and the mode alone cannot say that: RFC 1540 sets 395 lines at
+        // each of column 0 and column 3, and a tie used to resolve to an indented body
+        // and turn its 300-row protocol table into 300 headings (#56).
+        //
+        // A quarter more, which is where the corpus separates. Below it are the
+        // standards lists and port registries that are a column-0 table with a little
+        // prose around it -- RFC 1540 at 1.00, 1500 at 1.02, 1410 at 1.16, 34 documents
+        // in all. The nearest document above is RFC 2060 at 1.46, IMAP4rev1, which is
+        // ordinary numbered prose and loses every heading if it is read the other way.
+        // The corpus is otherwise nowhere near this line: the median document has 12.5
+        // times as much body as column 0.
+        return mode > 0 && counts[mode, default: 0] * 4 > counts[0, default: 0] * 5
     }
 
     /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
@@ -632,7 +640,11 @@ public struct LegacyTextParser: Sendable {
         // The marker indent of the list `result.last` holds, while it holds one.
         var openListIndent: Int?
         for block in merged {
-            if let marker = openListIndent, attachContinuation(block, toListAt: marker, in: &result, linker: linker) {
+            // Probed once: the continuation test needs to know the block opens with no
+            // marker, and a list the block produces needs the column of its own.
+            let marker = listMarker(of: block.lines)
+            if let indent = openListIndent,
+               attachContinuation(block, toListAt: indent, marker: marker, in: &result, linker: linker) {
                 continue
             }
             for parsed in classify(block, linker: linker) {
@@ -644,7 +656,7 @@ public struct LegacyTextParser: Sendable {
                     result.append(parsed)
                 }
             }
-            openListIndent = if case .list? = result.last { listMarker(of: block.lines)?.indent } else { nil }
+            openListIndent = if case .list? = result.last { marker?.indent } else { nil }
         }
         return result
     }
@@ -666,11 +678,12 @@ public struct LegacyTextParser: Sendable {
     private static func attachContinuation(
         _ block: RawBlock,
         toListAt markerIndent: Int,
+        marker: (style: ListBlock.Style, indent: Int)?,
         in result: inout [Block],
         linker: InlineLinker
     ) -> Bool {
         guard case .list(var list)? = result.last, var item = list.items.last else { return false }
-        guard block.indent > markerIndent, Self.listMarker(of: block.lines) == nil else { return false }
+        guard block.indent > markerIndent, marker == nil else { return false }
         // A list above a block says what its indent means; it says nothing about
         // whether the block is prose, and the deep indents under a list item are full
         // of algorithm steps (`c = OS2IP (C).`), grammar productions and tagged
@@ -1109,6 +1122,14 @@ struct InlineLinker: Sendable {
     }
 
     func link(_ text: String) -> [Inline] {
+        // Every pattern below needs one of four literals to match at all, and a
+        // substring scan does not start the regex engine. Most fragments carry no
+        // citation, and the XML parser now runs this over every text node of every
+        // document where it used to run over none.
+        guard !text.isEmpty else { return [] }
+        guard text.contains("[") || text.contains("RFC") || text.contains("http")
+            || (!sectionNumbers.isEmpty && text.contains("Section")) else { return [.text(text)] }
+
         var candidates: [Candidate] = []
 
         for match in text.matches(of: Self.sectionOfRFCPattern) {
@@ -1141,22 +1162,26 @@ struct InlineLinker: Sendable {
                                text: Self.label(String(text[match.range]), canonicalFor: .rfc(number)))
             )))
         }
-        for list in text.contains("RFCs") ? Array(text.matches(of: Self.rfcListPattern)) : [] {
-            for match in text[list.range].matches(of: Self.listNumberPattern) {
-                guard let number = Int(match.output) else { continue }
-                candidates.append(Candidate(range: match.range, inline: .crossReference(
-                    CrossReference(target: .document(.rfc(number), section: nil), text: String(match.output))
-                )))
+        if text.contains("RFCs") {
+            for list in text.matches(of: Self.rfcListPattern) {
+                for match in text[list.range].matches(of: Self.listNumberPattern) {
+                    guard let number = Int(match.output) else { continue }
+                    candidates.append(Candidate(range: match.range, inline: .crossReference(
+                        CrossReference(target: .document(.rfc(number), section: nil), text: String(match.output))
+                    )))
+                }
             }
         }
         // Skipped outright when there are no section numbers to match, which is how
         // the XML parser runs: `<xref>` is how authored XML points at a section, so
         // every match of this pass would be filtered out again.
-        for match in sectionNumbers.isEmpty ? [] : Array(text.matches(of: Self.sectionPattern))
-        where sectionNumbers.contains(String(match.section)) {
-            candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
-            )))
+        if !sectionNumbers.isEmpty {
+            for match in text.matches(of: Self.sectionPattern)
+            where sectionNumbers.contains(String(match.section)) {
+                candidates.append(Candidate(range: match.range, inline: .crossReference(
+                    CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
+                )))
+            }
         }
         for match in text.matches(of: Self.urlPattern) {
             let raw = String(match.output).trimmingTrailingPunctuation()
@@ -1191,8 +1216,10 @@ struct InlineLinker: Sendable {
 extension String {
     var isBlank: Bool { allSatisfy(\.isWhitespace) }
 
-    /// A tab indents as surely as a space does: RFC 1142's contents listing is tab-indented
-    /// and every entry otherwise matched the numbered-heading pattern.
+    /// Whitespace rather than a space: `depaginate` expands tabs before any line reaches
+    /// the heuristics (RFC 1142's contents listing is tab-indented, and every entry
+    /// otherwise matched the numbered-heading pattern), and this stays general so a
+    /// caller that has not been through it cannot read a tab as column zero.
     var startsAtColumnZero: Bool { first?.isWhitespace == false }
 
     var leadingSpaceCount: Int {

@@ -213,13 +213,7 @@ struct LegacyTextParserTests {
 
     @Test func legacyBracketedRFCLabelsAreFlaggedAsCanonical() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
-            guard case .paragraph(let paragraph) = block else { return [] }
-            return paragraph.inlines.compactMap { inline in
-                if case .crossReference(let xref) = inline { return xref }
-                return nil
-            }
-        }
+        let xrefs = document.crossReferences
         // Measured over 1,200 corpus documents before this rule was fixed: 12,612
         // references, 253 of them chips. The rest were exactly this case.
         let canonical = try #require(xrefs.first { xref in
@@ -241,10 +235,7 @@ struct LegacyTextCorpusFindingsTests {
     /// against 1,640 of the plain `RFC 791` the linker already knew.
     @Test func hyphenatedAndPluralMentionsLink() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc980.txt"))
-        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
-            guard case .paragraph(let paragraph) = block else { return [] }
-            return paragraph.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil }
-        }
+        let xrefs = document.crossReferences
         let byTarget = Dictionary(xrefs.map { ($0.target, $0) }, uniquingKeysWith: { first, _ in first })
 
         // The hyphen is the author's, not ours: `isCanonicalTag` does not count it as
@@ -267,10 +258,7 @@ struct LegacyTextCorpusFindingsTests {
     /// 2535 produced no bibliography at all. 782 entries across 205 documents.
     @Test func referenceAnchorsMayHoldSpaces() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
-        let lists = document.allSections.flatMap(\.blocks).compactMap { block -> ReferenceList? in
-            guard case .references(let list) = block else { return nil }
-            return list
-        }
+        let lists = document.referenceLists
         let list = try #require(lists.first, "the bibliography is lost entirely without this")
         #expect(list.entries.map(\.anchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
         #expect(list.entries[0].documentID == .rfc(1034))
@@ -453,10 +441,7 @@ struct LegacyTextCorpusFindingsTests {
     /// its pages; dropping every one of those lost all 58 entries.
     @Test func aSectionRunningHeaderStillOpensItsSection() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))
-        let lists = document.allSections.flatMap(\.blocks).compactMap { block -> ReferenceList? in
-            guard case .references(let list) = block else { return nil }
-            return list
-        }
+        let lists = document.referenceLists
         #expect(lists.flatMap(\.entries).count == 58)
         #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
     }
@@ -467,10 +452,7 @@ struct LegacyTextCorpusFindingsTests {
     /// `[RFC-1524]` the same line recurring across pages, and both were dropped.
     @Test func numbersInsideAWordDoNotMakeTwoLinesTheSame() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
-        let anchors = document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
-            guard case .references(let list) = block else { return [] }
-            return list.entries.map(\.anchor)
-        }
+        let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
         #expect(anchors.contains("RFC-1522"))
         #expect(anchors.contains("RFC-1524"))
         #expect(anchors.count == 42)
@@ -482,12 +464,30 @@ struct LegacyTextCorpusFindingsTests {
     /// on the entry's third line, and the pair straddles a page break.
     @Test func theSameLineAtOppositeEdgesIsNotARunningHeader() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
-        let anchors = document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
-            guard case .references(let list) = block else { return [] }
-            return list.entries.map(\.anchor)
-        }
+        let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
         #expect(anchors.filter { $0 == "ISO-8859" }.count == 2)
         #expect(anchors.count == 7)
+    }
+
+    /// Where a document sets as much text at column 0 as at its body indent, column 0
+    /// says nothing about what is a heading, and a heading has to stand alone between
+    /// blank lines to be read as one (#56). RFC 1540 lists the protocol standards one
+    /// per line at column 0 against a body indented three, 395 lines each way: the tie
+    /// used to resolve to an indented body and every row became a section.
+    @Test func aColumnZeroTableIsNotAStackOfHeadings() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+        let titles = document.allSections.map(\.titleText)
+        #expect(!titles.contains { $0.hasPrefix("IP ") || $0.hasPrefix("TCP ") })
+        #expect(document.allSections.count < 60, "\(document.allSections.count) sections")
+
+        // The numbered headings it does set are still headings, and the table is a block.
+        #expect(titles.contains("The Standardization Process"))
+        #expect(titles.contains("The Request for Comments Documents"))
+        let artwork = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
+            guard case .preformatted(let art) = block else { return nil }
+            return art.text
+        }
+        #expect(artwork.contains { $0.contains("Internet Protocol") && $0.contains("791") })
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
@@ -721,19 +721,17 @@ struct LegacyTextCorpusFindingsTests {
 
 }
 
-extension Block {
-    /// A short name for a block, for test failure messages only.
-    var kindName: String {
-        switch self {
-        case .paragraph: "paragraph"
-        case .list: "list"
-        case .definitionList: "definitionList"
-        case .preformatted: "preformatted"
-        case .figure: "figure"
-        case .table: "table"
-        case .blockQuote: "blockQuote"
-        case .aside: "aside"
-        case .references: "references"
+extension RFCDocument {
+    /// The two extractions most assertions here open with: every bibliography in the
+    /// document, and every cross reference its paragraphs carry.
+    var referenceLists: [ReferenceList] {
+        allSections.flatMap(\.blocks).compactMap { if case .references(let list) = $0 { return list }; return nil }
+    }
+
+    var crossReferences: [CrossReference] {
+        allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+            guard case .paragraph(let paragraph) = block else { return [] }
+            return paragraph.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil }
         }
     }
 }
