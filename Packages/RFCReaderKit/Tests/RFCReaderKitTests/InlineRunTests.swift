@@ -55,12 +55,27 @@ struct InlineRunTests {
         #expect(url.absoluteString == "rfc-anchor:section-3")
     }
 
-    @Test func aCrossReferenceWithoutTextFallsBackToADerivedLabel() {
+    /// A reference with no text of its own is one the source left to us, so the
+    /// reader composes it and draws it as a chip. The plain form it composes -- what
+    /// `label` gives, brackets and all -- is what goes out through the serializer.
+    @Test func aCrossReferenceWithoutTextIsComposedAndChipped() {
+        let chipPrefix = "\u{FFFC}\u{2060}"
+
         let withSection = CrossReference(target: .document(.rfc(2119), section: "2"))
-        #expect(run([.crossReference(withSection)]).string == "Section 2 of RFC 2119")
+        #expect(withSection.label == "Section\u{00A0}2 of [RFC\u{00A0}2119]")
+        #expect(run([.crossReference(withSection)]).string == chipPrefix + "RFC\u{00A0}2119\u{00A0}§\u{00A0}2")
 
         let withoutSection = CrossReference(target: .document(.rfc(2119), section: nil))
-        #expect(run([.crossReference(withoutSection)]).string == "[RFC2119]")
+        #expect(withoutSection.label == "[RFC\u{00A0}2119]")
+        #expect(run([.crossReference(withoutSection)]).string == chipPrefix + "RFC\u{00A0}2119")
+    }
+
+    /// `bare` is the source asking for the section number on its own, which is a
+    /// wording decision -- so it is left alone rather than composed over.
+    @Test func aBareSectionFormatIsNotChipped() {
+        let xref = CrossReference(target: .document(.rfc(2119), section: "2"), sectionFormat: .bare)
+        #expect(xref.displayLabel == "2")
+        #expect(run([.crossReference(xref)]).attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
     }
 
     @Test func lineBreaksBecomeNewlines() {

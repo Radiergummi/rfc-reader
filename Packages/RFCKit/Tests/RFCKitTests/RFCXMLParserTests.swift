@@ -123,7 +123,8 @@ struct RFCXMLParserTests {
         }
 
         let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
-        #expect(bcp14.text == "[RFC\u{00A0}2119]")
+        #expect(bcp14.text == nil, "the series' own spelling is a label to compose, not words to keep")
+        #expect(bcp14.label == "[RFC\u{00A0}2119]")
 
         let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
         #expect(transport.text == "[QUIC-TRANSPORT]", "an author's own reference tag is left alone")
@@ -141,7 +142,8 @@ struct RFCXMLParserTests {
 
         let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
         #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
-        #expect(bcp14.text == "[RFC\u{00A0}2119]", "the brackets stay in the model; the builder drops them")
+        #expect(bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
+        #expect(bcp14.display.chip != nil)
 
         let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
         #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
@@ -178,7 +180,8 @@ struct RFCXMLParserTests {
             if case .crossReference(let value) = inline { return value }
             return nil
         }.first)
-        #expect(xref.text == "Section\u{00A0}4.2 of [RFC\u{00A0}9110]")
+        #expect(xref.text == nil, "the whole phrasing is ours to compose")
+        #expect(xref.label == "Section\u{00A0}4.2 of [RFC\u{00A0}9110]")
     }
 
     /// XML collapses #x20, #x9, #xD and #xA. U+00A0 is not one of them, and

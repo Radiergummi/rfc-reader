@@ -745,7 +745,10 @@ struct InlineLinker: Sendable {
         for match in text.matches(of: Self.sectionOfRFCPattern) {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .document(.rfc(number), section: String(match.section)), text: CrossReference.nonBreakingLabel(String(text[match.range])))
+                // The matched prose *is* the label we compose, so it is left to be
+                // composed rather than copied: "Section 4.2 of [RFC9110]" reads back
+                // out the same, and the reader is free to draw it as one chip.
+                CrossReference(target: .document(.rfc(number), section: String(match.section)), sectionFormat: .of)
             )))
         }
         for match in text.matches(of: Self.bracketPattern) {
@@ -759,15 +762,18 @@ struct InlineLinker: Sendable {
                 continue
             }
             let matched = String(text[match.range])
+            // `[RFC2119]` is the series' own spelling and composes back identically;
+            // `[QUIC-TRANSPORT]` is this document's name for the reference and stays
+            // exactly as the RFC Editor set it.
             let canonical = DocumentID(parsing: anchor).map { CrossReference.isCanonicalTag(anchor, for: $0) } ?? false
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: target, text: CrossReference.nonBreakingLabel(matched), isCanonicalLabel: canonical)
+                CrossReference(target: target, text: canonical ? nil : CrossReference.nonBreakingLabel(matched))
             )))
         }
         for match in text.matches(of: Self.bareRFCPattern) {
             guard match.bracket.isEmpty, let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .document(.rfc(number), section: nil), text: CrossReference.nonBreakingLabel(String(text[match.range])))
+                CrossReference(target: .document(.rfc(number), section: nil))
             )))
         }
         for match in text.matches(of: Self.sectionPattern) where sectionNumbers.contains(String(match.section)) {

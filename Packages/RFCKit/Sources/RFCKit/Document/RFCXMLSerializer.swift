@@ -325,7 +325,13 @@ public struct RFCXMLSerializer: Sendable {
         case .document(let id, let section):
             if let anchor = context.referenceAnchors[id] {
                 var attributes = " target=\"\(Writer.escapeAttribute(anchor))\""
-                if let section { attributes += " section=\"\(Writer.escapeAttribute(section))\" sectionFormat=\"of\"" }
+                // The source's own wording, not a fixed "of": it decides how the label
+                // reads on the way back in, and `bare` in particular means something
+                // different enough that the reader declines to chip it.
+                if let section {
+                    attributes += " section=\"\(Writer.escapeAttribute(section))\""
+                    attributes += " sectionFormat=\"\(xref.sectionFormat.rawValue)\""
+                }
                 return content.isEmpty ? "<xref\(attributes)/>" : "<xref\(attributes)>\(content)</xref>"
             }
             // No bibliography entry: an external link the parser maps back to a document reference.

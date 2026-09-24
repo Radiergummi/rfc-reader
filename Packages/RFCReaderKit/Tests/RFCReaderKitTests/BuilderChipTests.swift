@@ -13,7 +13,7 @@ struct BuilderChipTests {
     }
 
     @Test func aCanonicalLabelLosesItsBrackets() {
-        let xref = CrossReference(target: .document(.rfc(9110), section: nil), text: "[RFC\u{00A0}9110]", isCanonicalLabel: true)
+        let xref = CrossReference(target: .document(.rfc(9110), section: nil))
         #expect(run(xref).string == "\u{FFFC}\u{2060}RFC\u{00A0}9110")
     }
 
@@ -21,33 +21,21 @@ struct BuilderChipTests {
     /// one chip with the section as a suffix -- not as a sentence fragment with the
     /// document buried in the middle of it.
     @Test func aSectionReferenceBecomesOneChipWithASectionSuffix() {
-        let xref = CrossReference(
-            target: .document(.rfc(9110), section: "4.2"),
-            text: "Section\u{00A0}4.2 of [RFC\u{00A0}9110]",
-            isCanonicalLabel: true
-        )
+        let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
         #expect(run(xref).string == "\u{FFFC}\u{2060}RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
     }
 
     /// Nothing in the label may break across a line: not the series word from its
     /// number, and not the section mark from its number.
     @Test func aSectionLabelIsBoundTogether() {
-        let xref = CrossReference(
-            target: .document(.rfc(9110), section: "4.2"),
-            text: "Section\u{00A0}4.2 of [RFC\u{00A0}9110]",
-            isCanonicalLabel: true
-        )
+        let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
         #expect(xref.displayLabel == "RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
         #expect(!xref.displayLabel.contains(" "), "an ordinary space would let the chip wrap mid-label")
     }
 
     /// The screen and a copied selection say the same thing.
     @Test func whatIsCopiedIsWhatIsShown() {
-        let xref = CrossReference(
-            target: .document(.rfc(9110), section: "4.2"),
-            text: "Section\u{00A0}4.2 of [RFC\u{00A0}9110]",
-            isCanonicalLabel: true
-        )
+        let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
         // The rendered run is the display label plus the chip's own symbol and joiner.
         #expect(run(xref).string == Self.chipPrefix + xref.displayLabel)
         #expect([Inline.crossReference(xref)].plainText == xref.displayLabel)
@@ -56,11 +44,7 @@ struct BuilderChipTests {
     /// An author's own words for a link are not a composed label, so they are left
     /// exactly as written — no chip, no restyling.
     @Test func anAuthorsOwnLinkTextIsLeftAlone() {
-        let xref = CrossReference(
-            target: .document(.rfc(9110), section: "4.2"),
-            text: "the caching rules",
-            isCanonicalLabel: true
-        )
+        let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"), text: "the caching rules")
         #expect(xref.displayLabel == "the caching rules")
         #expect(run(xref).string == "the caching rules")
         #expect(run(xref).attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
@@ -69,11 +53,7 @@ struct BuilderChipTests {
     private static let chipPrefix = "\u{FFFC}\u{2060}"
 
     @Test func theWholeSectionReferenceIsOneChipRun() throws {
-        let xref = CrossReference(
-            target: .document(.rfc(9110), section: "4.2"),
-            text: "Section\u{00A0}4.2 of [RFC\u{00A0}9110]",
-            isCanonicalLabel: true
-        )
+        let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
         let attributed = run(xref)
         var range = NSRange(location: 0, length: 0)
         let chip = attributed.attribute(.rfcChip, at: 0, longestEffectiveRange: &range, in: NSRange(location: 0, length: attributed.length))
@@ -82,7 +62,7 @@ struct BuilderChipTests {
     }
 
     @Test func anAuthorTagKeepsItsBracketsAndGetsNoChip() {
-        let xref = CrossReference(target: .document(.rfc(9000), section: nil), text: "[QUIC-TRANSPORT]", isCanonicalLabel: false)
+        let xref = CrossReference(target: .document(.rfc(9000), section: nil), text: "[QUIC-TRANSPORT]")
         let attributed = run(xref)
         #expect(attributed.string == "[QUIC-TRANSPORT]")
         #expect(attributed.attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
@@ -93,8 +73,8 @@ struct BuilderChipTests {
     /// `.rfcChip == true` would report one `effectiveRange` spanning both and draw
     /// as a single rounded rect. Each chip carries its own serial number instead.
     @Test func adjacentChipsDoNotMergeIntoOneEffectiveRange() throws {
-        let first = CrossReference(target: .document(.rfc(9110), section: nil), text: "[RFC\u{00A0}9110]", isCanonicalLabel: true)
-        let second = CrossReference(target: .document(.rfc(9111), section: nil), text: "[RFC\u{00A0}9111]", isCanonicalLabel: true)
+        let first = CrossReference(target: .document(.rfc(9110), section: nil))
+        let second = CrossReference(target: .document(.rfc(9111), section: nil))
         let attributed = Fixtures.inlineRun([.crossReference(first), .crossReference(second)], style: style)
 
         // `enumerateAttribute` is what `RFCTextLayoutFragment.chipRects(at:)` uses to
@@ -110,7 +90,7 @@ struct BuilderChipTests {
     }
 
     @Test func theWholeLabelStaysALinkEitherWay() throws {
-        let xref = CrossReference(target: .document(.rfc(9110), section: nil), text: "[RFC\u{00A0}9110]", isCanonicalLabel: true)
+        let xref = CrossReference(target: .document(.rfc(9110), section: nil))
         let attributed = run(xref)
         let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
         #expect(url.absoluteString == "rfc://9110")

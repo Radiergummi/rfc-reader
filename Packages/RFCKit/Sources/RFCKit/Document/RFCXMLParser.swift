@@ -467,7 +467,12 @@ public struct RFCXMLParser: Sendable {
                 // Links into the RFC series are document references, whichever site they point at.
                 if let link = RFCLink(url: url), link.id.series == .rfc {
                     let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
-                    return [.crossReference(CrossReference(target: .document(link.id, section: link.section), text: text))]
+                    // This is the shape `RFCXMLSerializer` writes a document mention in
+                    // when the document has no bibliography entry, which is most of the
+                    // legacy corpus -- and the mention it wrote is the series' own
+                    // spelling, so it is a label to compose rather than words to keep.
+                    let authored = text.flatMap { CrossReference.isCanonicalTag($0, for: link.id) ? nil : $0 }
+                    return [.crossReference(CrossReference(target: .document(link.id, section: link.section), text: authored))]
                 }
                 return [.link(url, inner.isEmpty ? [.text(target)] : inner)]
             case "em":
@@ -504,30 +509,29 @@ public struct RFCXMLParser: Sendable {
             let derived = element["derivedContent"].flatMap { $0.isEmpty ? nil : $0 }
             let format = element["format"] ?? "default"
 
+            let sectionFormat = CrossReference.SectionFormat(rawValue: element["sectionFormat"] ?? "") ?? .of
+
             if let id = referenceTargets[targetAnchor] {
-                // "RFC9110" is the canonical number, so render it as the series reads
-                // it; anything else is a tag the author chose ("[QUIC-TRANSPORT]") and
-                // is the name the document uses throughout.
-                let raw = derived ?? targetAnchor
-                let isCanonical = CrossReference.isCanonicalTag(raw, for: id)
-                let label = "[\(isCanonical ? CrossReference.nonBreakingLabel(id.displayName) : raw)]"
-                let text: String
-                if !innerText.isEmpty {
-                    text = innerText
-                } else if let section {
-                    let sectionLabel = CrossReference.nonBreakingLabel("Section \(section)")
-                    switch element["sectionFormat"] {
-                    case "comma": text = "\(label), \(sectionLabel)"
-                    case "parens": text = "\(label) (\(sectionLabel))"
-                    case "bare": text = section
-                    default: text = "\(sectionLabel) of \(label)"
-                    }
-                } else if format == "counter" || format == "title" {
-                    text = derived ?? label
-                } else {
-                    text = label
+                let target = CrossReference.Target.document(id, section: section)
+                // Words the source put inside the link stand in for the label -- unless
+                // they are the series spelling its own name, which is the label we
+                // would have composed anyway.
+                if !innerText.isEmpty, !CrossReference.isCanonicalTag(innerText, for: id) {
+                    return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
                 }
-                return CrossReference(target: .document(id, section: section), text: text, isCanonicalLabel: isCanonical)
+                // "RFC9110" is the canonical number; anything else is a tag the author
+                // chose ("QUIC-TRANSPORT") and is the name the document uses
+                // throughout, so it survives verbatim, brackets and all.
+                let raw = derived ?? targetAnchor
+                if !CrossReference.isCanonicalTag(raw, for: id) {
+                    return CrossReference(target: target, text: "[\(raw)]", sectionFormat: sectionFormat)
+                }
+                // `counter` and `title` ask for something the target cannot supply --
+                // a number, a heading -- so the tooling's own rendering is the label.
+                if format == "counter" || format == "title", let derived {
+                    return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
+                }
+                return CrossReference(target: target, sectionFormat: sectionFormat)
             }
 
             let text = innerText.isEmpty ? derived : innerText

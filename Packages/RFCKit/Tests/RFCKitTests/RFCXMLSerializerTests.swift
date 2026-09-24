@@ -70,9 +70,12 @@ struct RFCXMLSerializerTests {
             }
         }
 
-        let canonical = try #require(xrefs.first { $0.text?.hasPrefix("[RFC") == true },
-                                     "round trip must preserve canonical RFC refs")
-        #expect(canonical.isCanonicalLabel, "canonical label flag must survive LegacyTextParser → Serializer → XMLParser")
+        let canonical = try #require(xrefs.first { xref in
+            guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+            return xref.isCanonicalLabel
+        }, "round trip must preserve canonical RFC refs")
+        #expect(canonical.text == nil, "a composed label must survive LegacyTextParser → Serializer → XMLParser composed")
+        #expect(canonical.label.hasPrefix("[RFC"))
 
         let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
         #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")

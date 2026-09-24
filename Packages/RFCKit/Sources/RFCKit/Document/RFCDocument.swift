@@ -372,42 +372,79 @@ public struct CrossReference: Sendable, Hashable {
         case document(DocumentID, section: String?)
     }
 
-    public var target: Target
-    /// Text to display; nil means the renderer derives it (`Section 4.2`, `[RFC9110]`).
-    public var text: String?
-    /// True when this label is a canonical series id in brackets that a renderer may
-    /// replace with a chip, without losing information.
-    /// False for an author's own tag (`[QUIC-TRANSPORT]`), which is the name the
-    /// document uses throughout and must survive verbatim.
-    public var isCanonicalLabel: Bool
-
-    public init(target: Target, text: String? = nil, isCanonicalLabel: Bool = false) {
-        self.target = target
-        self.text = text
-        self.isCanonicalLabel = isCanonicalLabel
+    /// How the source asked a section reference to be worded.
+    ///
+    /// RFCXML's own `sectionFormat`. The legacy text format has no equivalent, so the
+    /// text parser reports the shape it matched in the prose.
+    public enum SectionFormat: String, Sendable, Hashable, CaseIterable {
+        /// `Section 4.2 of [RFC 9110]`
+        case of
+        /// `[RFC 9110], Section 4.2`
+        case comma
+        /// `[RFC 9110] (Section 4.2)`
+        case parens
+        /// `4.2`, with the document left unsaid.
+        case bare
     }
 
-    /// The label this reference shows: its own `text` when it has one, otherwise the
-    /// one derived from the target. `[Inline].plainText` and the reader's renderer
-    /// both go through this, so a copied selection and the rendered text cannot
-    /// disagree.
+    public var target: Target
+    /// Words the source supplied for this link, standing in for the label we would
+    /// otherwise compose: the author's own text inside `<xref>`, or a tag the
+    /// document uses for the reference (`QUIC-TRANSPORT`).
+    ///
+    /// Nil is the interesting value. It means nothing in the source dictates how this
+    /// reference reads, so the label is ours to compose -- and ours to restyle as a
+    /// chip. The parsers used to bake a finished string in here and the renderer had
+    /// to work backwards out of it by looking for brackets, which is why 76% of the
+    /// corpus's references never drew as chips: a bare `RFC 95` linkified out of
+    /// legacy prose is exactly the label we would have composed, and there was no way
+    /// left to tell.
+    public var text: String?
+    /// How to word the section, when the label is ours to compose.
+    public var sectionFormat: SectionFormat
+
+    public init(target: Target, text: String? = nil, sectionFormat: SectionFormat = .of) {
+        self.target = target
+        self.text = text
+        self.sectionFormat = sectionFormat
+    }
+
+    /// Whether a renderer may draw this reference however it likes.
+    ///
+    /// Which is the same question as whether the source had anything to say about the
+    /// wording. An author's own words and a document's own tag are both answers a
+    /// renderer must not overrule; everything else is ours.
+    public var isCanonicalLabel: Bool { text == nil }
+
+    /// The label this reference shows in plain text: the source's words when it has
+    /// them, otherwise the one composed from the target. `[Inline].plainText` and the
+    /// reader's renderer both go through `display`, which starts here, so a copied
+    /// selection and the rendered text cannot disagree.
     public var label: String {
         if let text { return text }
         switch target {
         case .anchor(let anchor):
             return anchor
         case .document(let id, let section):
-            return section.map { "Section \($0) of \(id.displayName)" } ?? "[\(id.description)]"
+            let name = Self.nonBreakingLabel(id.displayName)
+            guard let section else { return "[\(name)]" }
+            let sectionLabel = Self.nonBreakingLabel("Section \(section)")
+            switch sectionFormat {
+            case .of: return "\(sectionLabel) of [\(name)]"
+            case .comma: return "[\(name)], \(sectionLabel)"
+            case .parens: return "[\(name)] (\(sectionLabel))"
+            case .bare: return section
+            }
         }
     }
 
     /// How a reader lays this reference out: the text it shows, and which part of
-    /// that text — if any — may be drawn as a chip.
+    /// that text -- if any -- may be drawn as a chip.
     ///
     /// One rule, in one place, because the screen and a copied selection have to
-    /// agree. The renderer used to compose the section form itself while
-    /// `plainText` kept the parser's phrasing, so copying `RFC 9110 § 4.2` off the
-    /// screen yielded "Section 4.2 of [RFC 9110]".
+    /// agree. The renderer used to compose the section form itself while `plainText`
+    /// kept the parser's phrasing, so copying `RFC 9110 § 4.2` off the screen yielded
+    /// "Section 4.2 of [RFC 9110]".
     public struct Display: Sendable, Equatable {
         public let text: String
         /// The span of `text` a chip covers, or nil when the reference reads as
@@ -416,39 +453,28 @@ public struct CrossReference: Sendable, Hashable {
     }
 
     public var display: Display {
-        let label = self.label
-        // `isCanonicalLabel` says the tag is the series' own spelling; the brackets
-        // say the *parser* composed this label, rather than the author supplying
-        // their own words for the link. Only then may a renderer restyle it.
-        guard isCanonicalLabel,
-              case .document(let id, let section) = target,
-              let bracketed = Self.bracketedRange(in: label) else {
+        // Words from the source, or a reference within this document: neither is ours
+        // to restyle.
+        guard text == nil, case .document(let id, let section) = target else {
             return Display(text: label, chip: nil)
         }
-        if let section {
-            // One reference to one place, so it reads as one chip: the section is a
-            // suffix of the document it is in, not a sentence with the document
-            // buried in the middle of it.
-            let text = "\(Self.nonBreakingLabel(id.displayName))\u{00A0}§\u{00A0}\(section)"
-            return Display(text: text, chip: text.startIndex..<text.endIndex)
+        // `bare` is the source asking for the section number alone. Drawing "RFC 9110
+        // § 4.2" over the top of that would be answering a question it already
+        // answered.
+        if sectionFormat == .bare, section != nil {
+            return Display(text: label, chip: nil)
         }
-        // The chip's tint replaces the brackets, so the brackets come out.
-        let before = String(label[label.startIndex..<bracketed.lowerBound])
-        let inner = String(label[label.index(after: bracketed.lowerBound)..<label.index(before: bracketed.upperBound)])
-        let text = before + inner + String(label[bracketed.upperBound...])
-        let start = text.index(text.startIndex, offsetBy: before.count)
-        return Display(text: text, chip: start..<text.index(start, offsetBy: inner.count))
+        let name = Self.nonBreakingLabel(id.displayName)
+        // One reference to one place, so it reads as one chip: the section is a suffix
+        // of the document it is in, not a sentence with the document buried in the
+        // middle of it. Nothing in it may break across a line.
+        let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
+        return Display(text: composed, chip: composed.startIndex..<composed.endIndex)
     }
 
-    /// The text a reader shows for this reference — what `[Inline].plainText`
+    /// The text a reader shows for this reference -- what `[Inline].plainText`
     /// flattens to, and what the reader draws.
     public var displayLabel: String { display.text }
-
-    /// The `[...]` span in a label, brackets included, or nil if there is none.
-    static func bracketedRange(in label: String) -> Range<String.Index>? {
-        guard let open = label.firstIndex(of: "["), let close = label.lastIndex(of: "]"), open < close else { return nil }
-        return open..<label.index(after: close)
-    }
 
     /// A label should never break between its word and its number, so "RFC 9110"
     /// and "Section 4.2" are joined with U+00A0.
@@ -458,16 +484,32 @@ public struct CrossReference: Sendable, Hashable {
         label.replacing(labelNumberPattern) { match in "\(match.1)\u{00A0}\(match.2)" }
     }
 
-    /// True when `tag` is exactly how the series spells `id` — `[RFC9110]` — rather
-    /// than a tag the author chose (`[QUIC-TRANSPORT]`), which is the name the
-    /// document uses throughout and must survive verbatim. This is what licenses a
-    /// renderer to replace the brackets with a chip.
+    /// True when `tag` is how the series spells `id` itself — `RFC9110`, `RFC 9110`,
+    /// `[RFC 9110]` — rather than a tag the author chose (`[QUIC-TRANSPORT]`), which
+    /// is the name the document uses throughout and must survive verbatim.
+    ///
+    /// Both spellings count, and that is the point: the XML tooling writes `RFC9110`
+    /// into `derivedContent` while legacy prose says `RFC 9110`, and a predicate that
+    /// knew only the first called three quarters of the corpus's references
+    /// author-supplied. Brackets and the non-breaking space are ours either way, so
+    /// they are stripped before comparing.
     ///
     /// One predicate for both parsers on purpose: they each used to decide it, and
-    /// they disagreed about case, so the same reference could draw as a chip from
-    /// one source format and as plain text from the other.
+    /// they disagreed, so the same reference could draw as a chip from one source
+    /// format and as plain text from the other.
+    private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
+
     public static func isCanonicalTag(_ tag: String, for id: DocumentID) -> Bool {
-        tag.caseInsensitiveCompare(id.description) == .orderedSame
+        // One pass, no `CharacterSet`: this runs per bracket match over every document
+        // in the corpus, and `id.description` ("RFC9110") already has the separator
+        // taken out, so dropping brackets and either kind of space from the tag is
+        // enough to compare the two.
+        var squeezed = ""
+        squeezed.reserveCapacity(tag.count)
+        for character in tag where !Self.presentationCharacters.contains(character) {
+            squeezed.append(character)
+        }
+        return squeezed.caseInsensitiveCompare(id.description) == .orderedSame
     }
 }
 

@@ -112,21 +112,37 @@ The text column is a pure function of the view's width (`ReaderLayout`), which i
 
 Shape: one `NSTextContentStorage` holds the whole document body — paragraphs, lists, definition lists, artwork, tables, figures, block quotes, asides and references are all text, built by `DocumentTextBuilder` in a new `RFCReaderKit` package and laid out by a shared `RFCTextViewCoordinator` behind a macOS `NSTextView` and an iOS `UITextView`. Nothing in the body becomes a hosted SwiftUI view; the decorations attributed text cannot express on its own — the card behind artwork and tables, the rule beside a block quote, the aside tint, the reference chip — are drawn by an `NSTextLayoutFragment` subclass instead. The document header is not in the storage: it is a SwiftUI view hosted in the text view's top content inset, because it carries buttons (the status banner's links to newer RFCs) that nobody selects through. `DocumentTextBuilder` replaces `InlineText.attributedString(_:)` and the per-block SwiftUI views that fed the old `LazyVStack`; `BuilderCompletenessTests.nothingBecomesAnAttachment` guards the "nothing becomes a hosted view" rule directly, failing on any `NSTextAttachment` outside the one chip run the design allows. See `docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md` for the full design.
 
-Reference labels still ride on this decision. The parsers still bake the whole label into
-`CrossReference.text` (`[RFC 9110]`, `Section 4.2 of [RFC 9110]`), with U+00A0 joining
-each word to its number so a reference never breaks across a line — that part is
-unchanged. What is new is `CrossReference.isCanonicalLabel`, set by both parsers, which
-says whose brackets they are: true for a canonical series id (`[RFC 9110]`) that a
-renderer may restyle, false for an author's own tag (`[QUIC-TRANSPORT]`), which must
-survive verbatim. Whether the brackets themselves are ours depends on the source format:
-the XML parser synthesises them around `derivedContent` (a bare `RFC9110`), so they are
-ours on that path — but the legacy parser matches a literal `[RFC2119]` already sitting in
-the plain-text source and copies it verbatim, so on that path the brackets are the RFC
-Editor's own, not ours. `DocumentTextBuilder` uses the flag to drop the brackets and draw
-a chip instead: a leading `doc.text` glyph (the one `NSTextAttachment` in the whole
-design) followed by a tinted rounded background painted by `RFCTextLayoutFragment`, the
-whole run marked `.rfcChip` so the builder's completeness test and the fragment's drawing
-code can both find it.
+### Decision: the parsers do not decide how a reference reads
+
+*Decided September 2026 (issue #6), replacing the baked-label note this paragraph used to
+carry.* `CrossReference.text` holds only what the **source** said: the author's own words
+inside an `<xref>`, or the tag the document uses for the reference (`QUIC-TRANSPORT`,
+`[1]`). `nil` is the load-bearing value — it means nothing in the source dictates the
+wording, so the label is ours to compose and ours to restyle. `isCanonicalLabel` is no
+longer a stored flag both parsers set and could disagree about; it is `text == nil`.
+
+The label is composed in one place, `CrossReference.label` for plain text and `.display`
+for the reader, from the target plus `sectionFormat` (`of` / `comma` / `parens` / `bare`,
+RFCXML's own wording, which the serializer now round-trips instead of writing a fixed
+`of`). U+00A0 still joins each word to its number so a reference never breaks across a
+line; that part is unchanged, it just happens once at the end rather than in four places
+in two parsers.
+
+Why it was worth undoing: the renderer had been recovering structure out of the baked
+string by looking for brackets, and `isCanonicalTag` compared against `RFC9110` only.
+Legacy prose linkifies a bare `RFC 95`, which is the series' own spelling with a space in
+it — so the predicate called it an author's tag, and the bracket hunt found nothing to
+strip. Measured over 1,200 corpus documents: **12,612 references, 253 of them chips**.
+After: **2,902**. The remaining majority are labels like `[1]`, which genuinely are the
+document's own name for the reference and must survive verbatim, since its own reference
+list uses them.
+
+`DocumentTextBuilder` draws a composed label as a chip: a leading `doc.text` glyph (the
+one `NSTextAttachment` in the whole design) followed by a tinted rounded background
+painted by `RFCTextLayoutFragment`, the whole run marked `.rfcChip` so the builder's
+completeness test and the fragment's drawing code can both find it. `sectionFormat:
+.bare` is the one composed shape that does not chip: it is the source asking for the
+section number alone, which is a wording decision like any other.
 
 This is the first app task after the Xcode project builds.
 
