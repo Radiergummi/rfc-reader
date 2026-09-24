@@ -123,6 +123,9 @@ enum Convert {
         var artwork: Int
         var references: Int
         var resolvedDocuments: Int
+        /// Lines dropped as page furniture. Compared across runs, this is what shows
+        /// a furniture rule deleting the body: the block counts cannot.
+        var furniture: Int?
         var overridden: Bool
         var warnings: [String]
     }
@@ -265,6 +268,7 @@ enum Convert {
                 warnings.append("generated XML does not parse: \(error)")
             }
             var entry = report(for: document, id: stem, overridden: false)
+            entry.furniture = LegacyTextParser.recurringFurniture(in: text).count
             entry.warnings += warnings
             reports.append(entry)
 
@@ -315,7 +319,7 @@ enum Convert {
         return Report(
             id: id, title: document.header.title, sections: document.allSections.count,
             paragraphs: paragraphs, lists: lists, artwork: artwork, references: references,
-            resolvedDocuments: document.referencedDocuments.count, overridden: overridden, warnings: warnings
+            resolvedDocuments: document.referencedDocuments.count, furniture: nil, overridden: overridden, warnings: warnings
         )
     }
 }

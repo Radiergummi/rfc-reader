@@ -446,6 +446,24 @@ struct LegacyTextCorpusFindingsTests {
         #expect(anchors.count == 42)
     }
 
+    /// A line that recurs at page edges is furniture only if it is not also the body's.
+    /// RFC 2013 is a MIB module, where every object ends in `STATUS current` and a
+    /// `DESCRIPTION`, and those fall within four lines of the foot of three pages; read
+    /// as a section running header, every copy after the first was dropped from the
+    /// module. A running header sits at the head of its pages, on every page of its
+    /// section, set off by a blank line -- and is rarer anywhere else than at the edge.
+    @Test func aLineTheBodyRepeatsIsNotFurniture() throws {
+        let text = try Fixtures.string("rfc2013.txt")
+        let document = LegacyTextParser.parse(text)
+        func count(_ line: String, in text: String) -> Int {
+            text.split(separator: "\n").filter { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") == line }.count
+        }
+        let artwork = document.artworkText.joined(separator: "\n")
+        for line in ["STATUS current", "DESCRIPTION"] {
+            #expect(count(line, in: artwork) == count(line, in: text), "\(line)")
+        }
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number
