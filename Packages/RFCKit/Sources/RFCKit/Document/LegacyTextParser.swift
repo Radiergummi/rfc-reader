@@ -89,7 +89,117 @@ public struct LegacyTextParser: Sendable {
             if !trimmed.isEmpty { firstContentSeen = true }
             lines.append(.text(line.trimmingTrailingWhitespace()))
         }
-        return lines
+        return removingRecurringFurniture(lines)
+    }
+
+    /// Drops the lines that recur at the edges of the pages (#52). The running-header
+    /// pattern knows one shape, `RFC nnnn ... yyyy`; plenty of documents set a header
+    /// that names no RFC at all -- RFC 793 opens 62 pages with `September 1981`,
+    /// `Transmission Control Protocol`, `Functional Specification` -- and the one
+    /// thing every header has in common is that it recurs, in the same place, page
+    /// after page.
+    ///
+    /// A page's edge is the block of up to four lines at its top and at its bottom,
+    /// and lines are compared with whitespace collapsed and whole numbers masked, so
+    /// `Page 7` and `Page 8` are one line. Only edge lines are dropped, never the same words
+    /// elsewhere, and never on the first page, where the title block would otherwise
+    /// match its own running header.
+    ///
+    /// There are two kinds, and they differ in what the first one means. A line at the
+    /// edge of half the pages or more names the document, and every copy goes. A line
+    /// at the edge of three pages, or of two in a row, but fewer than half, names the
+    /// section those pages are in -- RFC 793's `Philosophy` -- and its first copy is
+    /// where that section starts. In RFC 770 it is the only thing that says so, so the
+    /// first copy stays, unless the document heads the section itself somewhere with
+    /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
+    /// at quite well without a second, empty one beside it.
+    private enum Side { case head, foot }
+
+    private static func removingRecurringFurniture(_ lines: [Line]) -> [Line] {
+        var pages: [Range<Int>] = []
+        var start = 0
+        for (index, line) in lines.enumerated() {
+            if case .pageBreak = line {
+                pages.append(start..<index)
+                start = index + 1
+            }
+        }
+        pages.append(start..<lines.count)
+        let later = pages.dropFirst()
+        guard later.count >= 3 else { return lines }
+
+        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> [Int] {
+            var edge: [Int] = []
+            for index in indices {
+                guard case .text(let string) = lines[index] else { continue }
+                if string.isBlank {
+                    if edge.isEmpty { continue } else { break }
+                }
+                edge.append(index)
+                if edge.count == 4 { break }
+            }
+            return edge
+        }
+        func key(_ index: Int) -> String {
+            guard case .text(let string) = lines[index] else { return "" }
+            var key = ""
+            for word in string.split(whereSeparator: \.isWhitespace) {
+                if !key.isEmpty { key.append(" ") }
+                // A whole number and nothing else, because the page number is the one
+                // thing that varies from page to page and it is a word of its own.
+                // Masking digits wherever they fall would make `[RFC-1522]` and
+                // `[RFC-1524]` the same line, and a bibliography sets one per entry.
+                key += word.allSatisfy { $0.isASCII && $0.isNumber } ? "#" : word
+            }
+            return key
+        }
+
+        // Keyed by which edge it sits at as well as what it says, because furniture
+        // recurs in the same place: a line at the foot of one page and a line at the
+        // head of the next are two sightings of two lines, not one of a header.
+        var edgesByKey: [Side: [String: [Int]]] = [.head: [:], .foot: [:]]
+        var pagesByKey: [Side: [String: [Int]]] = [.head: [:], .foot: [:]]
+        for (ordinal, page) in later.enumerated() {
+            for (side, indices) in [(Side.head, edge(page)), (.foot, edge(page.reversed()))] {
+                for index in indices { edgesByKey[side]?[key(index), default: []].append(index) }
+                for key in Set(indices.map(key)) { pagesByKey[side]?[key, default: []].append(ordinal) }
+            }
+        }
+
+        var furniture: Set<Int> = []
+        var statedHeadings: Set<String>?
+        for (side, keyed) in pagesByKey {
+            for (key, pages) in keyed {
+                let adjacent = zip(pages, pages.dropFirst()).contains { $1 == $0 + 1 }
+                guard pages.count >= 3 || adjacent, let edges = edgesByKey[side]?[key] else { continue }
+                if pages.count * 2 >= later.count {
+                    furniture.formUnion(edges)
+                    continue
+                }
+                if statedHeadings == nil { statedHeadings = numberedHeadingTitles(lines) }
+                let stated = statedHeadings?.contains(key.lowercased()) == true
+                furniture.formUnion(stated ? edges : Array(edges.dropFirst()))
+            }
+        }
+        guard !furniture.isEmpty else { return lines }
+        return lines.indices.filter { !furniture.contains($0) }.map { lines[$0] }
+    }
+
+    nonisolated(unsafe) private static let statedHeadingPattern = #/^\d+(?:\.\d+)*\.?\s+(?<title>\S.*)$/#
+
+    /// The titles of the numbered headings, lowercased with whitespace collapsed: what
+    /// a section running header is compared against to learn whether the document
+    /// already heads that section itself. At any indent, because RFC 793 centres
+    /// `2.  PHILOSOPHY`; numbered only, because RFC 770 centres an unnumbered
+    /// `REFERENCES` that is no heading, and its running header is all it has.
+    private static func numberedHeadingTitles(_ lines: [Line]) -> Set<String> {
+        var titles: Set<String> = []
+        for case .text(let line) in lines {
+            let string = line.drop { $0 == " " }
+            guard string.first?.isNumber == true, let match = string.firstMatch(of: statedHeadingPattern) else { continue }
+            titles.insert(match.title.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased())
+        }
+        return titles
     }
 
     /// Resolves nroff overstrikes (`T\bT` for bold, `_\bT` for underline) and drops the

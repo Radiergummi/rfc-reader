@@ -420,6 +420,76 @@ struct LegacyTextCorpusFindingsTests {
         #expect(lines.contains("    0 -- Escape; protocol is specified by a subsequent field"))
     }
 
+    /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on
+    /// facing pages, and it names no RFC, so the running-header pattern never matched it
+    /// (#52). Each page then opened with `Transmission Control Protocol` at column 0,
+    /// which is a heading: ~33 sections called `Functional Specification`, and every
+    /// paragraph that crossed a page break cut in two by one of them.
+    @Test func recurringPageHeadersAreFurnitureNotSections() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+        let furniture = ["Transmission Control Protocol", "Functional Specification", "September 1981"]
+        let spurious = document.allSections.filter { furniture.contains($0.titleText) }
+        #expect(spurious.isEmpty, "\(spurious.count) sections are page headers")
+        // The third line names the section the page is in -- `Introduction` on four
+        // pages, `Philosophy` on six -- and each of those sections is already headed
+        // `1.  INTRODUCTION`, `2.  PHILOSOPHY`, so none of it is a heading either.
+        let unnumbered = document.allSections.filter { $0.number == nil }.map(\.titleText)
+        let repeated = Dictionary(grouping: unnumbered, by: \.self).filter { $0.value.count > 1 }.keys
+        #expect(repeated.isEmpty, "unnumbered headings that repeat: \(repeated.sorted())")
+        #expect(!unnumbered.contains("Philosophy"))
+
+        // With the header gone the page break is only a page break, and the sentence
+        // across it is one paragraph again.
+        let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
+            guard case .paragraph(let paragraph) = block else { return nil }
+            return paragraph.plainText
+        }
+        #expect(paragraphs.contains { $0.contains("the TCP must tell user to go into \"normal mode\".") })
+    }
+
+    /// A section running header is furniture on every page but the first, where it is
+    /// the only thing that says a section starts. RFC 770 heads its bibliography with
+    /// a centred `REFERENCES` that is no heading, and a running `References` on each of
+    /// its pages; dropping every one of those lost all 58 entries.
+    @Test func aSectionRunningHeaderStillOpensItsSection() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))
+        let lists = document.allSections.flatMap(\.blocks).compactMap { block -> ReferenceList? in
+            guard case .references(let list) = block else { return nil }
+            return list
+        }
+        #expect(lists.flatMap(\.entries).count == 58)
+        #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
+    }
+
+    /// Only a whole number varies from page to page, so only a whole number is masked
+    /// when furniture is compared. RFC 2049 sets one-line anchors in its bibliography
+    /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and
+    /// `[RFC-1524]` the same line recurring across pages, and both were dropped.
+    @Test func numbersInsideAWordDoNotMakeTwoLinesTheSame() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+        let anchors = document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
+            guard case .references(let list) = block else { return [] }
+            return list.entries.map(\.anchor)
+        }
+        #expect(anchors.contains("RFC-1522"))
+        #expect(anchors.contains("RFC-1524"))
+        #expect(anchors.count == 42)
+    }
+
+    /// Furniture recurs in the same place, so a line at the foot of one page and a line
+    /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
+    /// parts 6 and 8 as one anchor each, word for word the same up to the part number
+    /// on the entry's third line, and the pair straddles a page break.
+    @Test func theSameLineAtOppositeEdgesIsNotARunningHeader() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
+        let anchors = document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
+            guard case .references(let list) = block else { return [] }
+            return list.entries.map(\.anchor)
+        }
+        #expect(anchors.filter { $0 == "ISO-8859" }.count == 2)
+        #expect(anchors.count == 7)
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
