@@ -66,6 +66,9 @@ public struct LegacyTextParser: Sendable {
                 line = line.replacingOccurrences(of: "\u{0C}", with: "")
                 sawFormFeed = true
             }
+            // Before anything reads a column: every indent heuristic below counts
+            // spaces, and a tab-indented line would otherwise read as indent 0 (#40).
+            line = line.expandingTabs()
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             if firstContentSeen, trimmed.contains(footerPattern) {
@@ -1088,6 +1091,25 @@ extension String {
             if character == " " { count += 1 } else { break }
         }
         return count
+    }
+
+    /// Tabs replaced by spaces to the next multiple-of-eight column, which is what the
+    /// line printers and terminals these documents were typed for did with them.
+    func expandingTabs() -> String {
+        guard contains("\t") else { return self }
+        var result = ""
+        var column = 0
+        for character in self {
+            if character == "\t" {
+                let width = 8 - column % 8
+                result += String(repeating: " ", count: width)
+                column += width
+            } else {
+                result.append(character)
+                column += 1
+            }
+        }
+        return result
     }
 
     func trimmingTrailingWhitespace() -> String {

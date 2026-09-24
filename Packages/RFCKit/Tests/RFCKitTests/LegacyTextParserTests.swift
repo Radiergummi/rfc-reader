@@ -398,6 +398,28 @@ struct LegacyTextCorpusFindingsTests {
         #expect(abstract.plainText.hasSuffix("OSPF is an Interior Gateway Protocol)."))
     }
 
+    /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
+    /// indented with one read as indent 0 (#40). RFC 717 indents a list with tabs
+    /// under prose indented six spaces: the block's indent came out as 0, the four
+    /// columns its figure shares were never stripped, and the tabs themselves reached
+    /// the reader, whose verbatim style sets no tab stops.
+    @Test func tabsAreColumnsBeforeAnyIndentIsRead() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc717.txt"))
+        let artwork = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
+            guard case .preformatted(let art) = block else { return nil }
+            return art.text
+        }
+        #expect(!artwork.contains { $0.contains("\t") }, "a tab survived into artwork")
+        #expect(!document.allSections.contains { $0.titleText.contains("\t") }, "a tab survived into a heading")
+
+        let header = try #require(artwork.first { $0.contains("Destination net") })
+        let lines = header.split(separator: "\n", omittingEmptySubsequences: false)
+        // The block's indent is four, from `    0`, and every line loses exactly that.
+        #expect(lines.first == "0           Destination net          (8)")
+        #expect(lines.contains("  This field selects the appropriate gateway processing and is used"))
+        #expect(lines.contains("    0 -- Escape; protocol is specified by a subsequent field"))
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
