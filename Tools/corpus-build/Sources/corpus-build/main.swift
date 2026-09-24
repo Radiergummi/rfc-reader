@@ -8,6 +8,7 @@ import FoundationNetworking
 //
 //   corpus-build fetch    --out corpus [--format text|xml] [--index rfc-index.xml] [--limit N] [--concurrency 6]
 //   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
+//                         [--diagnostics corpus/prose.json]
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //
 // See docs/DATA_PIPELINE.md for the why and the pack layout.
@@ -123,6 +124,89 @@ enum Convert {
         var warnings: [String]
     }
 
+    /// What the prose test decided across the corpus, and where it decided narrowly.
+    ///
+    /// Not every block: at roughly a million of them the file would be unusable. The
+    /// two things worth keeping are the shape of the whole — which guard fires, how
+    /// often — and the blocks refused by exactly one guard, which is the sample
+    /// hand-labelling draws from.
+    struct ProseReport: Codable {
+        var documents = 0
+        var blocks = 0
+        var prose = 0
+        /// Claimed by the list parser, so never put to the prose test.
+        var lists = 0
+        var nearMisses = 0
+        /// How often each guard refused a block, counting a block once per guard.
+        var byRejection: [String: Int] = [:]
+        /// How often each guard was the *only* one to refuse: relax that guard alone,
+        /// and this many blocks change their verdict.
+        var soleRejection: [String: Int] = [:]
+        /// Which justification tell dissented, among blocks where the others agreed.
+        var justificationDissent: [String: Int] = [:]
+        /// The near misses themselves, capped. The counts above stay exact; this is a
+        /// sample and is named one. A full corpus run puts the near-miss population in
+        /// the hundreds of thousands, which is tens of megabytes of JSON nobody reads.
+        var sample: [NearMiss] = []
+    }
+
+    /// Enough near misses to see the shape of each guard's population by eye.
+    static let sampleLimit = 2000
+
+    struct NearMiss: Codable {
+        var document: String
+        var section: String
+        var firstLine: String
+        var lineCount: Int
+        var rejection: String
+        var indent: Int
+        var firstLineIndent: Int
+        var artworkMatches: Int
+        var sentenceRatio: Double
+    }
+
+    static func accumulate(_ text: String, id: String, into report: inout ProseReport) {
+        report.documents += 1
+        for block in LegacyTextParser.proseDiagnostics(for: text) {
+            let diagnosis = block.diagnosis
+            report.blocks += 1
+            if block.claimedByList {
+                report.lists += 1
+                continue
+            }
+            if diagnosis.isProse {
+                report.prose += 1
+                continue
+            }
+            for rejection in diagnosis.rejections {
+                report.byRejection[rejection.rawValue, default: 0] += 1
+            }
+            // The tells gate the internalGap guard and nothing else, so counting dissent
+            // on a block refused elsewhere would mix in blocks where they were inert.
+            if diagnosis.rejections.contains(.internalGap) {
+                let dissent = diagnosis.justification.dissenting
+                if dissent.count == 1, let only = dissent.first {
+                    report.justificationDissent[only, default: 0] += 1
+                }
+            }
+            guard diagnosis.isNearMiss, let rejection = diagnosis.rejections.first else { continue }
+            report.nearMisses += 1
+            report.soleRejection[rejection.rawValue, default: 0] += 1
+            guard report.sample.count < sampleLimit else { continue }
+            report.sample.append(NearMiss(
+                document: id,
+                section: block.section,
+                firstLine: block.firstLine,
+                lineCount: block.lineCount,
+                rejection: rejection.rawValue,
+                indent: diagnosis.indent,
+                firstLineIndent: diagnosis.firstLineIndent,
+                artworkMatches: diagnosis.artworkMatches,
+                sentenceRatio: (diagnosis.sentenceRatio * 1000).rounded() / 1000
+            ))
+        }
+    }
+
     static func run(_ arguments: Arguments) throws {
         let inDirectory = URL(fileURLWithPath: arguments.require("in"))
         let outDirectory = URL(fileURLWithPath: arguments.require("out"))
@@ -135,6 +219,11 @@ enum Convert {
         log("converting \(files.count) documents")
 
         var reports: [Report] = []
+        // Diagnosing re-segments every document, which roughly doubles the run. Only pay
+        // it when the report is actually asked for. Overridden documents are hand-corrected,
+        // so they `continue` below and never reach the accumulator at all.
+        let wantsDiagnostics = arguments["diagnostics"] != nil
+        var prose = ProseReport()
         for (offset, file) in files.enumerated() {
             let stem = String(file.dropLast(4))
             let outputURL = outDirectory.appending(path: "\(stem).xml")
@@ -153,6 +242,7 @@ enum Convert {
                 ?? String(data: bytes, encoding: .windowsCP1252)
                 ?? String(decoding: bytes, as: UTF8.self)
             let document = LegacyTextParser.parse(text)
+            if wantsDiagnostics { accumulate(text, id: stem, into: &prose) }
             let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
             let serializer = RFCXMLSerializer(options: .init(
                 generatorComment: "Generated by rfc-reader corpus-build from \(file). Structure recovered heuristically from the plain-text RFC; the text itself is unchanged. Corrections: https://github.com/Radiergummi/rfc-reader",
@@ -179,9 +269,15 @@ enum Convert {
         }
 
         if let reportPath = arguments["report"] {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(reports).write(to: URL(fileURLWithPath: reportPath), options: .atomic)
+            try writeJSON(reports, to: reportPath)
+        }
+        if let diagnosticsPath = arguments["diagnostics"] {
+            try writeJSON(prose, to: diagnosticsPath)
+            let rejected = prose.blocks - prose.prose - prose.lists
+            log("prose: \(prose.blocks) blocks, \(prose.lists) lists, \(prose.prose) prose, \(rejected) rejected, \(prose.nearMisses) by one guard only")
+            for (guardName, count) in prose.soleRejection.sorted(by: { $0.value > $1.value }) {
+                log("  only \(guardName): \(count)")
+            }
         }
         let flagged = reports.filter { !$0.warnings.isEmpty }
         log("done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings")
@@ -246,9 +342,7 @@ enum Manifest {
             entries.append(Entry(path: name, bytes: data.count, sha256: SHA256.hex(data)))
         }
         let manifest = File(version: version, generatedAt: ISO8601DateFormatter().string(from: .now), files: entries)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(manifest).write(to: output, options: .atomic)
+        try writeJSON(manifest, to: output.path)
         log("wrote \(entries.count) entries to \(output.path)")
     }
 }
@@ -290,6 +384,14 @@ struct Arguments {
         }
         return value
     }
+}
+
+/// `.sortedKeys` is what makes these files diffable between corpus runs, so the encoder
+/// is configured in one place rather than at each of the three call sites.
+func writeJSON(_ value: some Encodable, to path: String) throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(value).write(to: URL(fileURLWithPath: path), options: .atomic)
 }
 
 func log(_ message: String) {

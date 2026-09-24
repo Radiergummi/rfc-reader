@@ -139,13 +139,45 @@ public struct LegacyTextParser: Sendable {
     nonisolated(unsafe) private static let numberedHeadingPattern = #/^(?<number>\d+(?:\.\d+)*)\.?\s+(?<title>\S.*)$/#
     nonisolated(unsafe) private static let appendixHeadingPattern = #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
 
-    public func parse(_ text: String) -> RFCDocument {
-        let lines = Self.collapsingDoubleSpacing(Self.depaginate(text))
-        let (frontLines, bodyStart) = Self.splitFrontMatter(lines)
-        var header = Self.parseFrontMatter(frontLines)
-        let bodyIsIndented = Self.bodyIsIndented(lines[bodyStart...])
+    /// Diagnoses every block of a document without building one: what the prose test
+    /// decided about each, and why.
+    ///
+    /// Shares `rawSections` with `parse`, so the blocks reported here are exactly the
+    /// blocks the parser classifies — not a re-segmentation that might disagree.
+    public static func proseDiagnostics(for text: String) -> [BlockDiagnostics] {
+        prepared(text).sections.flatMap { section in
+            let anchor = section.heading?.anchor ?? ""
+            return section.blocks.map { block in
+                BlockDiagnostics(
+                    section: anchor,
+                    firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
+                    lineCount: block.lines.count,
+                    claimedByList: listItems(block.lines) != nil,
+                    diagnosis: diagnose(block.lines)
+                )
+            }
+        }
+    }
 
-        // Split the body into raw sections at column-0 headings.
+    /// Everything between raw text and blocks: depagination, front matter, segmentation.
+    ///
+    /// Both entry points go through here so neither can normalise the text differently
+    /// from the other. Extracting only `rawSections` left this prelude written twice,
+    /// which is the same drift one level up.
+    private static func prepared(_ text: String) -> (front: [String], sections: [RawSection]) {
+        let lines = collapsingDoubleSpacing(depaginate(text))
+        let (front, bodyStart) = splitFrontMatter(lines)
+        return (front, rawSections(in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented(lines[bodyStart...])))
+    }
+
+    /// Splits the body into raw sections at column-0 headings, and each section into
+    /// blocks at blank lines.
+    ///
+    /// Extracted from `parse` so that the diagnostic entry point can report on exactly
+    /// the blocks the parser classifies. A second segmentation written alongside this
+    /// one would drift, and a diagnosis of blocks the parser never saw is worse than
+    /// none.
+    private static func rawSections(in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool) -> [RawSection] {
         var sections: [RawSection] = [RawSection(heading: nil)]
         var current: [String] = []
         var pendingBreak = false
@@ -180,6 +212,12 @@ public struct LegacyTextParser: Sendable {
             }
         }
         flushBlock()
+        return sections
+    }
+
+    public func parse(_ text: String) -> RFCDocument {
+        let (frontLines, sections) = Self.prepared(text)
+        var header = Self.parseFrontMatter(frontLines)
 
         // Collect known section numbers and reference anchors for link resolution.
         let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
@@ -452,6 +490,9 @@ public struct LegacyTextParser: Sendable {
     nonisolated(unsafe) private static let bulletPattern = #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
     nonisolated(unsafe) private static let numberedItemPattern = #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
     nonisolated(unsafe) private static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+    /// A run of three or more spaces between two non-space characters, not following
+    /// sentence punctuation: a column gap rather than the gap after a full stop.
+    nonisolated(unsafe) private static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
 
     private static func blocks(from rawBlocks: [RawBlock], linker: InlineLinker) -> [Block] {
         // Re-join paragraphs that a page break cut in half.
@@ -495,20 +536,68 @@ public struct LegacyTextParser: Sendable {
     }
 
     private static func looksLikeProse(_ lines: [String]) -> Bool {
-        guard let first = lines.first else { return false }
+        // `thorough: false` stops at the first guard that refuses, exactly as the guards
+        // used to when they were written as early returns. The verdict is identical — a
+        // conjunction of absolute vetoes cannot change once one has fired — and it is
+        // what this path costs that matters: measured over 300 documents, computing the
+        // full diagnosis for every block of every document made parsing 1.67x slower.
+        diagnose(lines, thorough: false).isProse
+    }
+
+    /// The prose test, reporting its working.
+    ///
+    /// `looksLikeProse` is this function and nothing else, so a report can never
+    /// describe a decision other than the one actually taken. The guards are absolute
+    /// and independent — any one of them rejects the block on its own — so the useful
+    /// thing to record is not just *that* a block was refused but which guard refused
+    /// it and by what margin.
+    ///
+    /// Unlike the predicate it backs, this evaluates every guard rather than returning
+    /// at the first failure: a block refused on its indent still has an artwork count
+    /// and a sentence ratio worth knowing.
+    static func diagnose(_ lines: [String], thorough: Bool = true) -> ProseDiagnostics {
+        var diagnosis = ProseDiagnostics()
+        guard let first = lines.first else {
+            diagnosis.rejections = [.noLines]
+            return diagnosis
+        }
         // Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
         // margin (RFC 722, 891, 904), so the block's indent comes from the second line.
         let indent = (lines.count > 1 ? lines[1] : first).leadingSpaceCount
-        let firstLineIndent = first.leadingSpaceCount - indent
-        guard indent <= 6, (0...8).contains(firstLineIndent) else { return false }
-        let justified = isJustified(lines)
+        diagnosis.indent = indent
+        diagnosis.firstLineIndent = first.leadingSpaceCount - indent
+
+        if indent > 6 { diagnosis.rejections.append(.indentTooDeep) }
+        if !(0...8).contains(diagnosis.firstLineIndent) { diagnosis.rejections.append(.firstLineIndentOutOfRange) }
+        if !thorough, !diagnosis.rejections.isEmpty { return diagnosis }
+
+        diagnosis.justification = justificationTells(lines, thorough: thorough)
+        if thorough { diagnosis.sentenceRatio = sentenceRatio(lines) }
+
+        let justified = diagnosis.justification.agreed
+        var ragged = false
+        var gapped = false
         for (offset, line) in lines.enumerated() {
-            if offset > 0, line.leadingSpaceCount != indent { return false }
+            if offset > 0, line.leadingSpaceCount != indent {
+                ragged = true
+                if !thorough { break }
+            }
             let content = line.trimmingCharacters(in: .whitespaces)
-            if content.contains(artworkPattern) { return false }
-            if !justified, content.contains(#/[^.?!:]\s{3,}\S/#) { return false }
+            if thorough {
+                diagnosis.artworkMatches += content.matches(of: artworkPattern).count
+            } else if content.contains(artworkPattern) {
+                diagnosis.artworkMatches = 1
+                break
+            }
+            if !justified, content.contains(internalGapPattern) {
+                gapped = true
+                if !thorough { break }
+            }
         }
-        return true
+        if ragged { diagnosis.rejections.append(.raggedIndent) }
+        if diagnosis.artworkMatches > 0 { diagnosis.rejections.append(.artworkPattern) }
+        if gapped { diagnosis.rejections.append(.internalGap) }
+        return diagnosis
     }
 
     /// The early RFCs typeset with justified text (757, 806, 841, 909, 1341) pad the gaps
@@ -520,15 +609,24 @@ public struct LegacyTextParser: Sendable {
     /// margin, no gutter of blank columns runs through the block, the padding is spread
     /// over most of the lines rather than sitting in one column, and the words read like
     /// sentences rather than identifiers.
-    private static func isJustified(_ lines: [String]) -> Bool {
-        guard lines.count >= 3 else { return false }
+    /// `thorough: false` stops at the first tell that dissents. Only `agreed` is readable
+    /// afterwards, which is all the prose test wants; the report asks for everything.
+    private static func justificationTells(_ lines: [String], thorough: Bool = true) -> JustificationTells {
+        var tells = JustificationTells()
+        tells.enoughLines = lines.count >= 3
+        guard tells.enoughLines else { return tells }
         let widths = lines.map { $0.reversed().drop(while: \.isWhitespace).count }
-        guard let margin = widths.first, let last = widths.last, margin >= 60 else { return false }
-        guard widths.dropLast().allSatisfy({ $0 == margin }), last <= margin else { return false }
-        guard !hasColumnGutter(lines) else { return false }
+        if let margin = widths.first, let last = widths.last, margin >= 60 {
+            tells.commonRightMargin = widths.dropLast().allSatisfy { $0 == margin } && last <= margin
+        }
+        guard thorough || tells.commonRightMargin else { return tells }
+        tells.noColumnGutter = !hasColumnGutter(lines)
+        guard thorough || tells.noColumnGutter else { return tells }
         let padded = lines.dropLast().count { internalGapCount($0) >= 2 }
-        guard padded * 2 >= lines.count - 1 else { return false }
-        return readsLikeSentences(lines)
+        tells.paddingSpread = padded * 2 >= lines.count - 1
+        guard thorough || tells.paddingSpread else { return tells }
+        tells.readsLikeSentences = readsLikeSentences(lines)
+        return tells
     }
 
     /// A run of two or more columns left blank by every line: the gutter of a two-column
@@ -567,16 +665,31 @@ public struct LegacyTextParser: Sendable {
         return count
     }
 
-    /// Mostly ordinary lower-case words, which a listing of identifiers, addresses or
-    /// numbers does not have however neatly its columns happen to line up.
     private static func readsLikeSentences(_ lines: [String]) -> Bool {
+        let counted = sentenceWords(lines)
+        guard counted.total > 0 else { return false }
+        // Kept as an exact integer comparison rather than a threshold on `sentenceRatio`:
+        // the two agree everywhere, but only this one is free of rounding at the boundary.
+        return counted.ordinary * 5 >= counted.total * 3
+    }
+
+    /// The same quantity `readsLikeSentences` tests, reported rather than judged.
+    private static func sentenceRatio(_ lines: [String]) -> Double {
+        let counted = sentenceWords(lines)
+        guard counted.total > 0 else { return 0 }
+        return Double(counted.ordinary) / Double(counted.total)
+    }
+
+    /// Words that read as ordinary lower-case prose, against words in total. Mostly
+    /// lower-case words are what a listing of identifiers, addresses or numbers lacks,
+    /// however neatly its columns happen to line up.
+    private static func sentenceWords(_ lines: [String]) -> (ordinary: Int, total: Int) {
         let words = lines.flatMap { $0.split(separator: " ") }
-        guard !words.isEmpty else { return false }
         let ordinary = words.count { word in
             guard word.first?.isLowercase == true else { return false }
             return word.allSatisfy { $0.isLetter || "'-.,;:)".contains($0) }
         }
-        return ordinary * 5 >= words.count * 3
+        return (ordinary, words.count)
     }
 
     private static func classify(_ block: RawBlock, linker: InlineLinker) -> [Block] {
@@ -620,6 +733,27 @@ public struct LegacyTextParser: Sendable {
     }
 
     private static func parseList(_ lines: [String], linker: InlineLinker) -> ListBlock? {
+        guard let (style, items) = listItems(lines) else { return nil }
+        let listItems = items.map { itemLines -> ListItem in
+            var text = Self.joinWrappedLines(itemLines)
+            if let match = text.firstMatch(of: bulletPattern) {
+                text = String(match.text)
+            } else if let match = text.firstMatch(of: numberedItemPattern) {
+                text = String(match.text)
+            }
+            return ListItem(blocks: [.paragraph(Paragraph(linker.link(text)))])
+        }
+        return ListBlock(style: style, items: listItems)
+    }
+
+    /// Whether these lines are a list, and how they divide into items — the shape
+    /// decision alone, with no rendering and so no linker.
+    ///
+    /// Split out because `classify` offers every block to the list parser before it asks
+    /// the prose test, and the diagnostics have to know which branch a block took. Asking
+    /// this function is asking the same question `classify` asks; re-deriving it from the
+    /// line patterns would be a second copy free to drift.
+    private static func listItems(_ lines: [String]) -> (style: ListBlock.Style, items: [[String]])? {
         guard let first = lines.first else { return nil }
         let style: ListBlock.Style
         let itemIndent: Int
@@ -654,17 +788,7 @@ public struct LegacyTextParser: Sendable {
             }
         }
         guard !items.isEmpty else { return nil }
-
-        let listItems = items.map { itemLines -> ListItem in
-            var text = Self.joinWrappedLines(itemLines)
-            if let match = text.firstMatch(of: bulletPattern) {
-                text = String(match.text)
-            } else if let match = text.firstMatch(of: numberedItemPattern) {
-                text = String(match.text)
-            }
-            return ListItem(blocks: [.paragraph(Paragraph(linker.link(text)))])
-        }
-        return ListBlock(style: style, items: listItems)
+        return (style, items)
     }
 
     // MARK: References
