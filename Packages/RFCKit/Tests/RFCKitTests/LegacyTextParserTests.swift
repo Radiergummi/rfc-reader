@@ -201,10 +201,7 @@ struct LegacyTextParserTests {
 
         let multi = LegacyTextParser.parse(try Fixtures.string("rfc2147.txt"))
         #expect(multi.referencedDocuments.contains(.rfc(1883)))
-        let notes = multi.allSections.flatMap(\.blocks).compactMap { block -> Paragraph? in
-            guard case .paragraph(let paragraph) = block, paragraph.plainText.hasPrefix("Note 2") else { return nil }
-            return paragraph
-        }
+        let notes = multi.paragraphs.filter { $0.plainText.hasPrefix("Note 2") }
         let note = try #require(notes.first)
         // The tags beside the RFC are the author's, so the brackets stay as text and
         // only the reference inside them is linked.
@@ -298,10 +295,7 @@ struct LegacyTextCorpusFindingsTests {
     /// into one single-item list per item.
     @Test func listContinuationParagraphsStayProse() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc234.txt"))
-        let lists = document.allSections.flatMap(\.blocks).compactMap { block -> ListBlock? in
-            guard case .list(let list) = block else { return nil }
-            return list
-        }
+        let lists = document.lists
         let carrying = try #require(lists.first { $0.items.contains { $0.blocks.count > 1 } },
                                     "an item's second paragraph belongs to the item")
         let item = try #require(carrying.items.first { $0.blocks.count > 1 })
@@ -393,10 +387,7 @@ struct LegacyTextCorpusFindingsTests {
     /// the reader, whose verbatim style sets no tab stops.
     @Test func tabsAreColumnsBeforeAnyIndentIsRead() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc717.txt"))
-        let artwork = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
-            guard case .preformatted(let art) = block else { return nil }
-            return art.text
-        }
+        let artwork = document.artworkText
         #expect(!artwork.contains { $0.contains("\t") }, "a tab survived into artwork")
         #expect(!document.allSections.contains { $0.titleText.contains("\t") }, "a tab survived into a heading")
 
@@ -428,10 +419,7 @@ struct LegacyTextCorpusFindingsTests {
 
         // With the header gone the page break is only a page break, and the sentence
         // across it is one paragraph again.
-        let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
-            guard case .paragraph(let paragraph) = block else { return nil }
-            return paragraph.plainText
-        }
+        let paragraphs = document.paragraphs.map(\.plainText)
         #expect(paragraphs.contains { $0.contains("the TCP must tell user to go into \"normal mode\".") })
     }
 
@@ -483,10 +471,7 @@ struct LegacyTextCorpusFindingsTests {
         // The numbered headings it does set are still headings, and the table is a block.
         #expect(titles.contains("The Standardization Process"))
         #expect(titles.contains("The Request for Comments Documents"))
-        let artwork = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
-            guard case .preformatted(let art) = block else { return nil }
-            return art.text
-        }
+        let artwork = document.artworkText
         #expect(artwork.contains { $0.contains("Internet Protocol") && $0.contains("791") })
     }
 
@@ -563,10 +548,7 @@ struct LegacyTextCorpusFindingsTests {
         """
         let document = LegacyTextParser.parse(text)
         #expect(document.header.title == "A DOCUMENT WITH NO COLUMN ZERO")
-        let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
-            if case .paragraph(let paragraph) = block { return paragraph.plainText }
-            return nil
-        }
+        let paragraphs = document.paragraphs.map(\.plainText)
         #expect(paragraphs.count == 2)
         #expect(paragraphs[0].hasPrefix("As a part of the Remote Site Maintenance"))
         #expect(paragraphs[1] == "We have added four commands to our server.")
@@ -689,7 +671,7 @@ struct LegacyTextCorpusFindingsTests {
 
         var paragraphs = 0
         var artwork = 0
-        for block in document.allSections.flatMap(\.blocks) {
+        for block in document.everyBlock {
             switch block {
             case .paragraph: paragraphs += 1
             case .preformatted: artwork += 1
@@ -718,20 +700,31 @@ struct LegacyTextCorpusFindingsTests {
         #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
         #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
     }
-
 }
 
 extension RFCDocument {
-    /// The two extractions most assertions here open with: every bibliography in the
-    /// document, and every cross reference its paragraphs carry.
+    /// The extractions the assertions here open with. Every one of them is a walk of
+    /// the same flattened block list, and written out at each call site the filter --
+    /// which is the part that differs -- is the line you have to read four lines to find.
+    var everyBlock: [Block] { allSections.flatMap(\.blocks) }
+
     var referenceLists: [ReferenceList] {
-        allSections.flatMap(\.blocks).compactMap { if case .references(let list) = $0 { return list }; return nil }
+        everyBlock.compactMap { if case .references(let list) = $0 { return list }; return nil }
+    }
+
+    var paragraphs: [Paragraph] {
+        everyBlock.compactMap { if case .paragraph(let paragraph) = $0 { return paragraph }; return nil }
+    }
+
+    var artworkText: [String] {
+        everyBlock.compactMap { if case .preformatted(let art) = $0 { return art.text }; return nil }
+    }
+
+    var lists: [ListBlock] {
+        everyBlock.compactMap { if case .list(let list) = $0 { return list }; return nil }
     }
 
     var crossReferences: [CrossReference] {
-        allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
-            guard case .paragraph(let paragraph) = block else { return [] }
-            return paragraph.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil }
-        }
+        paragraphs.flatMap { $0.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil } }
     }
 }
