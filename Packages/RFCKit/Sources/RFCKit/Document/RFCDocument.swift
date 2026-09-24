@@ -140,7 +140,8 @@ public struct Section: Sendable, Identifiable {
     /// Inlines rather than a string, because a heading cites documents like any
     /// other prose does -- "Changes from [RFC 3066]", "Differences from [RFC 793]" --
     /// and a `String` title could never carry the link. `titleText` is the flattened
-    /// form for everything that wants words: the outline, anchors, search.
+    /// form `displayTitle` composes for anything that wants the words; the reader draws
+    /// `displayTitleInlines`. The anchor is built from `number`, never from the title.
     public var title: [Inline]
     public var blocks: [Block]
     public var subsections: [Section]

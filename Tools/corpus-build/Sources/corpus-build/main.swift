@@ -530,8 +530,7 @@ enum Queries {
                 unparseable += 1
                 continue
             }
-            let id = document.header.id?.description.replacingOccurrences(of: " ", with: "")
-                ?? file.deletingPathExtension().lastPathComponent
+            let id = document.header.id?.description ?? file.deletingPathExtension().lastPathComponent
             for section in document.allSections {
                 if let number = section.number, !number.isEmpty { known.insert("\(id)\u{1F}\(number)") }
                 collect(section.blocks) { text, citations in
@@ -549,6 +548,7 @@ enum Queries {
         var kept: [Row] = []
         var seen: Set<String> = []
         var dropped: [String: Int] = [:]
+        let shortReason = "under \(minimumWords) content words"
         for candidate in candidates {
             guard known.contains("\(candidate.toDoc)\u{1F}\(candidate.toSection)") else {
                 dropped["target not in corpus", default: 0] += 1; continue
@@ -556,11 +556,11 @@ enum Queries {
             guard candidate.fromDoc != candidate.toDoc else {
                 dropped["self-citation", default: 0] += 1; continue
             }
-            let content = words(in: candidate.query).filter { !stopwords.contains($0.lowercased()) }
+            let content = words(in: candidate.query).map { $0.lowercased() }.filter { !stopwords.contains($0) }
             guard content.count >= minimumWords else {
-                dropped["under \(minimumWords) content words", default: 0] += 1; continue
+                dropped[shortReason, default: 0] += 1; continue
             }
-            let key = String(content.map { $0.lowercased() }.sorted().joined(separator: " ").prefix(120))
+            let key = String(content.sorted().joined(separator: " ").prefix(120))
             guard seen.insert(key).inserted else {
                 dropped["near-duplicate", default: 0] += 1; continue
             }
@@ -590,7 +590,7 @@ enum Queries {
 
     /// Flattens inlines exactly as `plainText` does, recording where each qualifying
     /// cross reference landed. The two must stay in step or the offsets are lies.
-    private static func flatten(_ inlines: [Inline], into text: inout String, citations: inout [Citation]) {
+    private static func flatten(_ inlines: [Inline], into text: inout [Character], citations: inout [Citation]) {
         for inline in inlines {
             switch inline {
             case .text(let value), .code(let value), .superscript(let value), .subscript(let value):
@@ -602,7 +602,7 @@ enum Queries {
             case .crossReference(let reference):
                 let label = reference.displayLabel
                 if case .document(let id, let section) = reference.target, let section {
-                    citations.append(Citation(target: id.description.replacingOccurrences(of: " ", with: ""),
+                    citations.append(Citation(target: id.description,
                                               section: section, start: text.count, length: label.count))
                 }
                 text += label
@@ -612,8 +612,7 @@ enum Queries {
 
     /// The sentence containing the citation, with the citation excised so the query
     /// cannot simply name its own answer.
-    private static func sentence(around citation: Citation, in text: String) -> String? {
-        let characters = Array(text)
+    private static func sentence(around citation: Citation, in characters: [Character]) -> String? {
         let end = citation.start + citation.length
         guard citation.start < characters.count, end <= characters.count else { return nil }
         var low = citation.start
@@ -632,11 +631,11 @@ enum Queries {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func collect(_ blocks: [Block], _ handle: (String, [Citation]) -> Void) {
+    private static func collect(_ blocks: [Block], _ handle: ([Character], [Citation]) -> Void) {
         for block in blocks {
             switch block {
             case .paragraph(let paragraph):
-                var text = ""
+                var text: [Character] = []
                 var citations: [Citation] = []
                 flatten(paragraph.inlines, into: &text, citations: &citations)
                 if !citations.isEmpty { handle(text, citations) }
