@@ -111,8 +111,10 @@ struct BuilderStructureTests {
         for section in bodySections(of: document) {
             // Through `renderedLabel` for the same reason paragraphs are: a heading
             // that cites a document has a chip in it, and a chip is a symbol and a
-            // word joiner ahead of its label.
-            let projection = "\(section.number.map { "\($0). " } ?? "")\(Self.renderedLabel(section.title))"
+            // word joiner ahead of its label. The prefix comes from
+            // `displayTitleInlines` rather than being composed here, or the appendix
+            // branch goes untested -- rfc8999 has one.
+            let projection = Self.renderedLabel(section.displayTitleInlines)
             #expect(built.text.string.contains(projection), "missing heading \(section.displayTitle)")
         }
     }

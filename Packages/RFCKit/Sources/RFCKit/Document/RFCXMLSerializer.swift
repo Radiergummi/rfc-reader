@@ -126,7 +126,7 @@ public struct RFCXMLSerializer: Sendable {
             attributes.append(("numbered", "false"))
         }
         writer.open("section", attributes)
-        writer.element("name", markup: inlineXML(section.title, context: &context))
+        writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
         for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
         for subsection in section.subsections {
             if Self.isReferences(subsection) {
@@ -144,7 +144,7 @@ public struct RFCXMLSerializer: Sendable {
             attributes.append(("pn", Self.partNumber(number, isAppendix: section.isAppendix)))
         }
         writer.open("references", attributes)
-        writer.element("name", markup: inlineXML(section.title, context: &context))
+        writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
         for block in section.blocks {
             guard case .references(let list) = block else {
                 context.warnings.append("dropped non-reference block in references section \(section.anchor)")
@@ -428,12 +428,6 @@ public struct RFCXMLSerializer: Sendable {
 
         mutating func element(_ name: String, _ attributes: [(String, String)] = [], text: String) {
             line("<\(name)\(Self.attributeString(attributes))>\(Self.escape(text))</\(name)>")
-        }
-
-        /// The same, for content that is already XML -- a heading's inlines, which
-        /// carry the `<xref>`s of the references cited in it.
-        mutating func element(_ name: String, _ attributes: [(String, String)] = [], markup: String) {
-            line("<\(name)\(Self.attributeString(attributes))>\(markup)</\(name)>")
         }
 
         static func attributeString(_ attributes: [(String, String)]) -> String {

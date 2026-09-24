@@ -31,13 +31,9 @@ public struct RFCXMLParser: Sendable {
         }
         guard root.name == "rfc" else { throw ParseError.notAnRFC(rootElement: root.name) }
 
-        var builder = Builder()
         // References first, so cross references in the body resolve to RFC numbers.
         let back = root.first("back")
-        if let back {
-            builder.indexReferences(in: back)
-        }
-        builder.prepareLinker()
+        let builder = Builder(referenceTargets: back.map(Builder.referenceTargets(in:)) ?? [:])
 
         let header = builder.parseHeader(root)
         var sections: [Section] = []
@@ -63,7 +59,7 @@ public struct RFCXMLParser: Sendable {
 
     private struct Builder {
         /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes.
-        var referenceTargets: [String: DocumentID] = [:]
+        let referenceTargets: [String: DocumentID]
 
         /// Authored XML marks most of its citations with `<xref>`, but prose still
         /// says "RFC 3986" in the middle of a sentence, and nothing in the schema
@@ -74,33 +70,41 @@ public struct RFCXMLParser: Sendable {
         /// No section numbers, deliberately: `<xref>` is how authored XML points at
         /// a section, so guessing at "Section 4" as well would be this parser
         /// inventing links the source declined to make.
-        var linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+        let linker: InlineLinker
 
-        mutating func prepareLinker() {
-            linker = InlineLinker(
+        init(referenceTargets: [String: DocumentID]) {
+            self.referenceTargets = referenceTargets
+            self.linker = InlineLinker(
                 sectionNumbers: [],
                 referenceTargets: referenceTargets.mapValues { .document($0, section: nil) }
             )
         }
 
-        mutating func indexReferences(in element: XMLElement) {
-            for child in element.elements {
-                switch child.name {
-                case "reference":
-                    if let anchor = child["anchor"], let id = parseReference(child).documentID {
-                        referenceTargets[anchor] = id
+        /// Every reference anchor below `element`, which has to be read before the
+        /// body so a cross reference in it resolves to a document.
+        static func referenceTargets(in element: XMLElement) -> [String: DocumentID] {
+            var targets: [String: DocumentID] = [:]
+            func walk(_ element: XMLElement) {
+                for child in element.elements {
+                    switch child.name {
+                    case "reference":
+                        if let anchor = child["anchor"], let id = parseReference(child).documentID {
+                            targets[anchor] = id
+                        }
+                    case "referencegroup":
+                        if let anchor = child["anchor"], let id = DocumentID(parsing: anchor) {
+                            targets[anchor] = id
+                        }
+                        walk(child)
+                    case "references":
+                        walk(child)
+                    default:
+                        break
                     }
-                case "referencegroup":
-                    if let anchor = child["anchor"], let id = DocumentID(parsing: anchor) {
-                        referenceTargets[anchor] = id
-                    }
-                    indexReferences(in: child)
-                case "references":
-                    indexReferences(in: child)
-                default:
-                    break
                 }
             }
+            walk(element)
+            return targets
         }
 
         // MARK: Header
@@ -118,9 +122,9 @@ public struct RFCXMLParser: Sendable {
                 header.id = .rfc(number)
             }
 
-            header.authors = (front?.all("author") ?? []).compactMap(parseAuthor)
+            header.authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor)
             if let date = front?.first("date") {
-                header.date = parseDate(date)
+                header.date = Self.parseDate(date)
             }
             header.area = front?.first("area")?.normalizedText
             header.workingGroup = front?.first("workgroup")?.normalizedText
@@ -153,7 +157,7 @@ public struct RFCXMLParser: Sendable {
                 .map { DocumentID.rfc($0) }
         }
 
-        private func parseAuthor(_ element: XMLElement) -> Author? {
+        private static func parseAuthor(_ element: XMLElement) -> Author? {
             var name = element["fullname"]
             if name == nil || name?.isEmpty == true {
                 let parts = [element["initials"], element["surname"]].compactMap { $0 }.filter { !$0.isEmpty }
@@ -167,7 +171,7 @@ public struct RFCXMLParser: Sendable {
             return Author(name: name, role: role)
         }
 
-        private func parseDate(_ element: XMLElement) -> PublicationDate? {
+        private static func parseDate(_ element: XMLElement) -> PublicationDate? {
             guard let year = element["year"].flatMap(Int.init) else { return nil }
             let month = element["month"].flatMap(PublicationDate.month(from:))
             let day = element["day"].flatMap(Int.init)
@@ -239,9 +243,9 @@ public struct RFCXMLParser: Sendable {
             for child in element.elements {
                 switch child.name {
                 case "reference":
-                    entries.append(parseReference(child))
+                    entries.append(Self.parseReference(child))
                 case "referencegroup":
-                    entries.append(parseReferenceGroup(child))
+                    entries.append(Self.parseReferenceGroup(child))
                 case "references":
                     subsections.append(parseReferencesSection(child))
                 default:
@@ -258,9 +262,9 @@ public struct RFCXMLParser: Sendable {
             )
         }
 
-        func parseReference(_ element: XMLElement) -> Reference {
+        static func parseReference(_ element: XMLElement) -> Reference {
             let front = element.first("front")
-            let authors = (front?.all("author") ?? []).compactMap(parseAuthor).map { author in
+            let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
                 author.role == nil ? author.name : "\(author.name), Ed."
             }
             let seriesInfo: [(name: String, value: String)] = (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap { info -> (name: String, value: String)? in
@@ -272,14 +276,14 @@ public struct RFCXMLParser: Sendable {
                 anchor: element["anchor"] ?? "",
                 title: front?.first("title")?.normalizedText ?? "",
                 authors: authors,
-                date: front?.first("date").flatMap(parseDate),
+                date: front?.first("date").flatMap(Self.parseDate),
                 seriesInfo: seriesInfo,
                 url: element["target"].flatMap(URL.init(string:)),
                 rawText: refContent
             )
         }
 
-        private func parseReferenceGroup(_ element: XMLElement) -> Reference {
+        private static func parseReferenceGroup(_ element: XMLElement) -> Reference {
             let anchor = element["anchor"] ?? ""
             let members = element.all("reference").map(parseReference)
             let memberNames = members.compactMap { $0.documentID?.displayName }
@@ -487,7 +491,7 @@ public struct RFCXMLParser: Sendable {
             return result
         }
 
-        private func parseInline(_ element: XMLElement, linkBare: Bool = true) -> [Inline] {
+        private func parseInline(_ element: XMLElement, linkBare: Bool) -> [Inline] {
             switch element.name {
             case "xref", "relref":
                 return [.crossReference(parseCrossReference(element))]

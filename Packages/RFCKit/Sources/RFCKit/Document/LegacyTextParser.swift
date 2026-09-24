@@ -530,12 +530,8 @@ public struct LegacyTextParser: Sendable {
                 } else {
                     result.append(parsed)
                 }
-                if case .list = parsed {
-                    openListIndent = markerIndent(of: block.lines)
-                } else {
-                    openListIndent = nil
-                }
             }
+            openListIndent = if case .list? = result.last { listMarker(of: block.lines)?.indent } else { nil }
         }
         return result
     }
@@ -561,15 +557,18 @@ public struct LegacyTextParser: Sendable {
         linker: InlineLinker
     ) -> Bool {
         guard case .list(var list)? = result.last, var item = list.items.last else { return false }
-        guard block.indent > markerIndent, Self.markerIndent(of: block.lines) == nil else { return false }
-        guard looksLikeProse(block.lines, maxIndent: block.indent) else { return false }
-        // The indent is the only test excused here, and `looksLikeProse` is the only
-        // one that consulted it. A list above a block says what its indent means; it
-        // says nothing about whether the block is prose, and the deep indents under a
-        // list item are full of algorithm steps (`c = OS2IP (C).`), grammar
-        // productions and tagged values that pass every other test by being short
-        // and uniform.
+        guard block.indent > markerIndent, Self.listMarker(of: block.lines) == nil else { return false }
+        // A list above a block says what its indent means; it says nothing about
+        // whether the block is prose, and the deep indents under a list item are full
+        // of algorithm steps (`c = OS2IP (C).`), grammar productions and tagged
+        // values that pass every other test by being short and uniform. Measured, this
+        // is also twenty times cheaper than the prose test and rejects most of what
+        // reaches here, so it is asked first.
         guard readsLikeSentences(block.lines, share: (of: 1, in: 2)) else { return false }
+        // The indent is the only test excused, and it is the only one that consulted
+        // it. `RawBlock.indent` is the smallest indent in the block and the block is
+        // uniform by the time this passes, so the cap could only ever be its own.
+        guard looksLikeProse(block.lines, maxIndent: .max) else { return false }
         let inlines = linker.link(joinWrappedLines(block.lines))
         guard !inlines.isEmpty else { return false }
         item.blocks.append(.paragraph(Paragraph(inlines)))
@@ -578,11 +577,23 @@ public struct LegacyTextParser: Sendable {
         return true
     }
 
-    /// The column a block's list marker sits in, or nil when it opens with no marker.
-    private static func markerIndent(of lines: [String]) -> Int? {
+    /// The marker a block opens with: its style, and the column it sits in. Nil when
+    /// the block opens with no marker at all.
+    ///
+    /// One probe for both facts, because `parseList` needs the style and continuation
+    /// attachment needs the column, and two copies of "does this line open an item"
+    /// drift: a third marker shape added to one of them would leave the other blind
+    /// to it, and lists of that shape would quietly lose their second paragraphs.
+    private static func listMarker(of lines: [String]) -> (style: ListBlock.Style, indent: Int)? {
         guard let first = lines.first else { return nil }
-        if let match = first.firstMatch(of: bulletPattern) { return match.indent.count }
-        if let match = first.firstMatch(of: numberedItemPattern) { return match.indent.count }
+        if let match = first.firstMatch(of: bulletPattern) {
+            return (.bullet, match.indent.count)
+        }
+        if let match = first.firstMatch(of: numberedItemPattern) {
+            let marker = String(match.marker)
+            let format = marker.first == "(" ? "(%d)" : (marker.first?.isLetter == true ? "%c." : "%d.")
+            return (.numbered(format: format, start: 1), match.indent.count)
+        }
         return nil
     }
 
@@ -828,19 +839,7 @@ public struct LegacyTextParser: Sendable {
     /// this function is asking the same question `classify` asks; re-deriving it from the
     /// line patterns would be a second copy free to drift.
     private static func listItems(_ lines: [String]) -> (style: ListBlock.Style, items: [[String]])? {
-        guard let first = lines.first else { return nil }
-        let style: ListBlock.Style
-        let itemIndent: Int
-        if let match = first.firstMatch(of: bulletPattern) {
-            style = .bullet
-            itemIndent = match.indent.count
-        } else if let match = first.firstMatch(of: numberedItemPattern) {
-            let marker = String(match.marker)
-            style = .numbered(format: marker.first == "(" ? "(%d)" : (marker.first?.isLetter == true ? "%c." : "%d."), start: 1)
-            itemIndent = match.indent.count
-        } else {
-            return nil
-        }
+        guard let (style, itemIndent) = listMarker(of: lines) else { return nil }
 
         var items: [[String]] = []
         for line in lines {
@@ -885,10 +884,14 @@ public struct LegacyTextParser: Sendable {
     /// `[ a:defaultValue = "" ]` are schema fragments, not citations.
 
     nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#
-    /// A page footer that reached the references section with its running header
-    /// stripped but its own line intact. It is the one bracket of the right shape
-    /// that never names a reference.
-    nonisolated(unsafe) private static let pageFooterAnchorPattern = #/^Page\s+\d+$/#
+    /// A page footer `depaginate` could not see. `footerPattern` is anchored to the
+    /// end of the line, and the earliest RFCs set the footer the other way round --
+    /// `[Page 0]` at the left margin with the author out at the right (RFC 753, 759,
+    /// 767, 780) -- so those lines reach the references section intact and are the
+    /// one bracket of an anchor's shape that never names a reference. Four documents,
+    /// and without this each gains a `<reference anchor="Page 52">` whose title is
+    /// whatever the footer's author column said.
+    nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
 
     private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
         var references: [Reference] = []
@@ -907,7 +910,7 @@ public struct LegacyTextParser: Sendable {
             for line in block.lines {
                 if let match = line.firstMatch(of: referenceStartPattern),
                    case let anchor = String(match.anchor).trimmingCharacters(in: .whitespaces),
-                   !anchor.contains(pageFooterAnchorPattern) {
+                   anchor.wholeMatch(of: pageFooterAnchorPattern) == nil {
                     flush()
                     currentAnchor = anchor
                     currentLines = match.text.isEmpty ? [] : [String(match.text)]
@@ -981,6 +984,17 @@ struct InlineLinker: Sendable {
     nonisolated(unsafe) private static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
     nonisolated(unsafe) private static let urlPattern = #/https?:\/\/[^\s<>"]+/#
 
+    /// What a matched mention reads as: nil when the document spelled the reference
+    /// the way the series spells itself, so the label composes back identically, and
+    /// the matched words verbatim when it did not. `[RFC2119]` and `RFC 1156` are the
+    /// series' own spelling; `[QUIC-TRANSPORT]` is this document's name for the
+    /// reference and the hyphen in `RFC-1156` is the author's, and neither is ours to
+    /// take out.
+    private static func label(_ matched: String, canonicalFor id: DocumentID?) -> String? {
+        let canonical = id.map { CrossReference.isCanonicalTag(matched, for: $0) } ?? false
+        return canonical ? nil : CrossReference.nonBreakingLabel(matched)
+    }
+
     func link(_ text: String) -> [Inline] {
         var candidates: [Candidate] = []
 
@@ -1003,28 +1017,18 @@ struct InlineLinker: Sendable {
             } else {
                 continue
             }
-            let matched = String(text[match.range])
-            // `[RFC2119]` is the series' own spelling and composes back identically;
-            // `[QUIC-TRANSPORT]` is this document's name for the reference and stays
-            // exactly as the RFC Editor set it.
-            let canonical = DocumentID(parsing: anchor).map { CrossReference.isCanonicalTag(anchor, for: $0) } ?? false
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: target, text: canonical ? nil : CrossReference.nonBreakingLabel(matched))
+                CrossReference(target: target, text: Self.label(String(text[match.range]), canonicalFor: DocumentID(parsing: anchor)))
             )))
         }
         for match in text.matches(of: Self.bareRFCPattern) {
             guard let number = Int(match.number) else { continue }
-            // The same predicate the bracket branch uses, for the same reason: `RFC
-            // 1156` is the series spelling its own name and composes back, while the
-            // hyphen in `RFC-1156` is the author's and is not ours to take out.
-            let matched = String(text[match.range])
-            let canonical = CrossReference.isCanonicalTag(matched, for: .rfc(number))
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 CrossReference(target: .document(.rfc(number), section: nil),
-                               text: canonical ? nil : CrossReference.nonBreakingLabel(matched))
+                               text: Self.label(String(text[match.range]), canonicalFor: .rfc(number)))
             )))
         }
-        for list in text.matches(of: Self.rfcListPattern) {
+        for list in text.contains("RFCs") ? Array(text.matches(of: Self.rfcListPattern)) : [] {
             for match in text[list.range].matches(of: Self.listNumberPattern) {
                 guard let number = Int(match.output) else { continue }
                 candidates.append(Candidate(range: match.range, inline: .crossReference(
@@ -1032,7 +1036,11 @@ struct InlineLinker: Sendable {
                 )))
             }
         }
-        for match in text.matches(of: Self.sectionPattern) where sectionNumbers.contains(String(match.section)) {
+        // Skipped outright when there are no section numbers to match, which is how
+        // the XML parser runs: `<xref>` is how authored XML points at a section, so
+        // every match of this pass would be filtered out again.
+        for match in sectionNumbers.isEmpty ? [] : Array(text.matches(of: Self.sectionPattern))
+        where sectionNumbers.contains(String(match.section)) {
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
