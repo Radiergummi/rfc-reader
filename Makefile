@@ -138,7 +138,8 @@ corpus-fetch: corpus-tool
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
-	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json
+	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json \
+	  --diagnostics $(CORPUS)/prose.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
