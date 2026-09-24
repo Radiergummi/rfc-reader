@@ -64,5 +64,23 @@ which 4,000 are sampled here.
    exist. Any measurement of a currency-ranking change must be split on whether the
    target is current, or it will show the change failing when it is working.
 
-Regenerate by re-running the extractor over `corpus/xml.noindex` and re-filtering;
-both are described in issue #37.
+## Regenerating
+
+```
+make corpus-queries
+```
+
+or directly:
+
+```
+corpus-build queries --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json \
+                     [--limit 4000] [--seed 11] [--min-words 8]
+```
+
+The extraction *and* the filtering live in the subcommand, because a committed
+judgement set that cannot be reproduced is not evidence of anything. The sample is
+drawn with a seeded generator rather than `shuffled()`, so `--seed` gives the same
+4,000 queries on any platform — CI runs this on Linux.
+
+`queries-hand.json` is **not** generated. It is written and maintained by hand; that
+is the whole of its value.
