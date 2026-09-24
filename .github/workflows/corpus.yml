@@ -27,7 +27,7 @@ jobs:
       - name: Restore fetched text
         uses: actions/cache@v4
         with:
-          path: corpus/text
+          path: corpus/text.noindex
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
@@ -42,10 +42,10 @@ jobs:
       - name: Convert to RFCXML
         run: |
           Tools/corpus-build/.build/release/corpus-build convert \
-            --in corpus/text --out corpus/xml --overrides corpus/overrides --report corpus/report.json
+            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json
 
       - name: Manifest
-        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml --out corpus/manifest.json --version "${{ inputs.version }}"
+        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "${{ inputs.version }}"
 
       - name: Pack
         run: |

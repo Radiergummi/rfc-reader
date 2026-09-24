@@ -57,10 +57,10 @@ Note that route 2 preserves almost everything route 1 gives: one-time offline he
 All stages are subcommands of `Tools/corpus-build`, a Swift executable that depends on RFCKit. It has no other dependencies and runs on macOS and Linux.
 
 ```
-rfc-index.xml ──▶ fetch ──▶ corpus/text/rfcNNNN.txt      (8,464 files, one-time, resumable)
+rfc-index.xml ──▶ fetch ──▶ corpus/text.noindex/rfcNNNN.txt      (8,464 files, one-time, resumable)
                               │
                               ▼
-                            convert ──▶ corpus/xml/rfcNNNN.xml   (+ corpus/report.json)
+                            convert ──▶ corpus/xml.noindex/rfcNNNN.xml   (+ corpus/report.json)
                               ▲
               corpus/overrides/rfcNNNN.xml  (hand-corrected files win over generated ones)
                               │
@@ -113,7 +113,7 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 
 `.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest`, compresses the packs and attaches them to a release. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack simply reproduces byte-for-byte unless the code changed.
 
-The full text fetch is about 450 MB and 8,464 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
+The full text fetch is about 450 MB and 8,464 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
 
 ## Repository layout for the data
 

@@ -120,6 +120,13 @@ corpus-tool:
 #
 #   make corpus CORPUS_LIMIT= CORPUS_VERSION=2026.09
 #
+# The `.noindex` suffixes are load-bearing, not decoration. macOS skips any
+# directory whose name ends in `.noindex`; without it Spotlight indexes the
+# 450 MB of text and 460 MB of XML as the pipeline writes them, and a full run
+# measured 2,294 of 8,457 documents in 2h16m with corespotlightd at 252% -- the
+# conversion queued behind the indexing of its own output (issue #38). The
+# alternative is each developer adding corpus/ to their own privacy list, which
+# fixes one machine; this fixes it for everyone who clones the repo.
 CORPUS         ?= corpus
 CORPUS_LIMIT   ?= 20
 CORPUS_VERSION ?= dev
@@ -130,12 +137,12 @@ corpus-fetch: corpus-tool
 
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 corpus-convert: corpus-tool
-	$(CORPUS_BIN) convert --in $(CORPUS)/text --out $(CORPUS)/xml \
+	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
-	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml --out $(CORPUS)/manifest.json \
+	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
 	  --version $(CORPUS_VERSION)
 
 ## Run the whole corpus pipeline: fetch, convert, manifest

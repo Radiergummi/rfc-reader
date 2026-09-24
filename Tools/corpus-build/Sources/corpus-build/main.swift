@@ -7,8 +7,8 @@ import FoundationNetworking
 // corpus-build: the offline half of RFC Reader's data pipeline.
 //
 //   corpus-build fetch    --out corpus [--index rfc-index.xml] [--limit N] [--concurrency 6]
-//   corpus-build convert  --in corpus/text --out corpus/xml [--overrides corpus/overrides] [--report corpus/report.json]
-//   corpus-build manifest --dir corpus/xml --out corpus/manifest.json --version 2026.09
+//   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
+//   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //
 // See docs/DATA_PIPELINE.md for the why and the pack layout.
 
@@ -33,7 +33,7 @@ do {
 enum Fetch {
     static func run(_ arguments: Arguments) async throws {
         let outDirectory = URL(fileURLWithPath: arguments.require("out"))
-        let textDirectory = outDirectory.appending(path: "text")
+        let textDirectory = outDirectory.appending(path: "text.noindex")
         try FileManager.default.createDirectory(at: textDirectory, withIntermediateDirectories: true)
 
         let index: RFCIndex

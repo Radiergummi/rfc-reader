@@ -63,8 +63,8 @@ Add the file to the target's resources. `DocumentStore` picks it up when no down
 ```sh
 swift build -c release --package-path Tools/corpus-build
 Tools/corpus-build/.build/release/corpus-build fetch --out corpus --limit 20
-Tools/corpus-build/.build/release/corpus-build convert --in corpus/text --out corpus/xml --report corpus/report.json
-Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml --out corpus/manifest.json --version dev
+Tools/corpus-build/.build/release/corpus-build convert --in corpus/text.noindex --out corpus/xml.noindex --report corpus/report.json
+Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version dev
 ```
 
 Drop `--limit` for the full 8,464 legacy RFCs (about 450 MB, twenty minutes at the default concurrency). `docs/DATA_PIPELINE.md` explains the packs this produces.
