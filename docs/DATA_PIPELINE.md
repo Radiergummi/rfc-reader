@@ -57,10 +57,14 @@ Note that route 2 preserves almost everything route 1 gives: one-time offline he
 All stages are subcommands of `Tools/corpus-build`, a Swift executable that depends on RFCKit. It has no other dependencies and runs on macOS and Linux.
 
 ```
-rfc-index.xml ──▶ fetch ──▶ corpus/text.noindex/rfcNNNN.txt      (8,464 files, one-time, resumable)
+rfc-index.xml ──▶ fetch ──▶ corpus/text.noindex/rfcNNNN.txt      (8,457 files, one-time, resumable)
                               │
                               ▼
                             convert ──▶ corpus/xml.noindex/rfcNNNN.xml   (+ corpus/report.json)
+                              ▲
+rfc-index.xml ──▶ fetch --format xml ─┘                          (1,378 files, no conversion)
+      RFCs authored in RFCXML are already in the runtime format; `hasXMLSource`
+      partitions the index, so the two fetches never write the same file.
                               ▲
               corpus/overrides/rfcNNNN.xml  (hand-corrected files win over generated ones)
                               │

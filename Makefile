@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-convert corpus-manifest
+.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
@@ -135,6 +135,15 @@ CORPUS_VERSION ?= dev
 corpus-fetch: corpus-tool
 	$(CORPUS_BIN) fetch --out $(CORPUS) $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 
+## Fetch the RFCs that were authored in RFCXML
+# These need no conversion, so they land straight in the XML directory beside the
+# converted ones. Without them the corpus is legacy-only, which is not merely a
+# gap in coverage: the current form of most of HTTP and TLS is a modern XML RFC,
+# so a search index built without them cannot rank by currency -- the document
+# that supersedes a hit is simply absent (issue #37).
+corpus-fetch-xml: corpus-tool
+	$(CORPUS_BIN) fetch --out $(CORPUS) --format xml $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
@@ -148,4 +157,4 @@ corpus-manifest: corpus-tool
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest

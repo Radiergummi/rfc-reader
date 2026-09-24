@@ -6,7 +6,7 @@ import FoundationNetworking
 
 // corpus-build: the offline half of RFC Reader's data pipeline.
 //
-//   corpus-build fetch    --out corpus [--index rfc-index.xml] [--limit N] [--concurrency 6]
+//   corpus-build fetch    --out corpus [--format text|xml] [--index rfc-index.xml] [--limit N] [--concurrency 6]
 //   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //
@@ -33,8 +33,20 @@ do {
 enum Fetch {
     static func run(_ arguments: Arguments) async throws {
         let outDirectory = URL(fileURLWithPath: arguments.require("out"))
-        let textDirectory = outDirectory.appending(path: "text.noindex")
-        try FileManager.default.createDirectory(at: textDirectory, withIntermediateDirectories: true)
+
+        // Two disjoint halves of the same corpus, fetched the same way.
+        //
+        //   --format text  the 8,457 RFCs published before RFCXML, which `convert`
+        //                  then turns into synthetic XML
+        //   --format xml   the 1,378 that were authored in RFCXML and need no
+        //                  conversion at all, so they land straight in the XML
+        //                  directory beside the converted ones
+        //
+        // `hasXMLSource` partitions the index, so the two runs never write the same
+        // file and `manifest --dir xml.noindex` sees the union without being told.
+        let format: FileFormat = arguments["format"] == "xml" ? .xml : .text
+        let directory = outDirectory.appending(path: format == .xml ? "xml.noindex" : "text.noindex")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let index: RFCIndex
         if let path = arguments["index"] {
@@ -48,10 +60,13 @@ enum Fetch {
         }
 
         // A few early RFCs exist only as PDF scans; there is nothing to fetch for them.
-        var wanted = index.rfcs.filter { !$0.hasXMLSource && $0.formats.contains(.text) }.map(\.id)
+        var wanted = index.rfcs
+            .filter { format == .xml ? $0.hasXMLSource : (!$0.hasXMLSource && $0.formats.contains(.text)) }
+            .map(\.id)
         if let limit = arguments["limit"].flatMap(Int.init) { wanted = Array(wanted.prefix(limit)) }
-        let missing = wanted.filter { !FileManager.default.fileExists(atPath: textDirectory.appending(path: "\($0.fileStem).txt").path) }
-        log("\(wanted.count) legacy RFCs, \(missing.count) to fetch")
+        let suffix = format.pathExtension
+        let missing = wanted.filter { !FileManager.default.fileExists(atPath: directory.appending(path: "\($0.fileStem).\(suffix)").path) }
+        log("\(wanted.count) \(format == .xml ? "RFCXML" : "legacy") RFCs, \(missing.count) to fetch")
 
         let concurrency = arguments["concurrency"].flatMap(Int.init) ?? 6
         var failures: [String] = []
@@ -61,7 +76,7 @@ enum Fetch {
             func enqueue() {
                 guard let id = iterator.next() else { return }
                 group.addTask {
-                    do { return (id, .success(try await download(RFCEditorEndpoints.document(id, format: .text)))) }
+                    do { return (id, .success(try await download(RFCEditorEndpoints.document(id, format: format)))) }
                     catch { return (id, .failure(error)) }
                 }
             }
@@ -69,7 +84,7 @@ enum Fetch {
             while let (id, result) = try await group.next() {
                 switch result {
                 case .success(let data):
-                    try data.write(to: textDirectory.appending(path: "\(id.fileStem).txt"), options: .atomic)
+                    try data.write(to: directory.appending(path: "\(id.fileStem).\(suffix)"), options: .atomic)
                 case .failure(let error):
                     failures.append("\(id): \(error)")
                 }
