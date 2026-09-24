@@ -153,7 +153,7 @@ struct ReferenceRow: View {
                 if entry.documentID != nil {
                     Image(systemName: "doc.text").foregroundStyle(.tint).imageScale(.small)
                 }
-                Text(entry.anchor)
+                Text(entry.displayAnchor)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(entry.documentID != nil ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             }

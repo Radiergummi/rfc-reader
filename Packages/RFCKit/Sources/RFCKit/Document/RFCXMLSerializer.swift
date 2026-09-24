@@ -161,6 +161,7 @@ public struct RFCXMLSerializer: Sendable {
     private func writeReference(_ reference: Reference, writer: inout Writer) {
         var attributes: [(String, String)] = [("anchor", reference.anchor)]
         if let url = reference.url { attributes.append(("target", url.absoluteString)) }
+        if reference.displayAnchor != reference.anchor { attributes.append(("derivedAnchor", reference.displayAnchor)) }
         writer.open("reference", attributes)
         writer.open("front")
         writer.element("title", text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)

@@ -41,6 +41,19 @@ struct RFCXMLSerializerTests {
         #expect(reparsed.header.keywords == original.header.keywords)
     }
 
+    @Test func anEntrysPrintedTagSurvivesARoundTrip() throws {
+        let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
+        let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+        func tags(_ document: RFCDocument) -> [String] {
+            document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
+                if case .references(let list) = block { return list.entries.map { "\($0.anchor)=\($0.displayAnchor)" } }
+                return []
+            }
+        }
+        #expect(tags(original).contains("HTTP2=HTTP/2"))
+        #expect(tags(reparsed) == tags(original))
+    }
+
     @Test func roundTripsLegacyText() throws {
         let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
         let xml = RFCXMLSerializer(options: .init(
