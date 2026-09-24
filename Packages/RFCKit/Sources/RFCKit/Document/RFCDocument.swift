@@ -137,7 +137,11 @@ public struct Section: Sendable, Identifiable {
     public var anchor: String
     /// `1`, `4.2`, `A`, `B.1`; nil for unnumbered sections such as "Acknowledgements".
     public var number: String?
-    public var title: String
+    /// Inlines rather than a string, because a heading cites documents like any
+    /// other prose does -- "Changes from [RFC 3066]", "Differences from [RFC 793]" --
+    /// and a `String` title could never carry the link. `titleText` is the flattened
+    /// form for everything that wants words: the outline, anchors, search.
+    public var title: [Inline]
     public var blocks: [Block]
     public var subsections: [Section]
     /// True for appendices; affects numbering display.
@@ -148,7 +152,7 @@ public struct Section: Sendable, Identifiable {
     public init(
         anchor: String,
         number: String? = nil,
-        title: String,
+        title: [Inline],
         blocks: [Block] = [],
         subsections: [Section] = [],
         isAppendix: Bool = false
@@ -161,10 +165,36 @@ public struct Section: Sendable, Identifiable {
         self.isAppendix = isAppendix
     }
 
+    /// A heading that is only words -- most of them, and every one a test writes.
+    public init(
+        anchor: String,
+        number: String? = nil,
+        title: String,
+        blocks: [Block] = [],
+        subsections: [Section] = [],
+        isAppendix: Bool = false
+    ) {
+        self.init(
+            anchor: anchor, number: number, title: [.text(title)],
+            blocks: blocks, subsections: subsections, isAppendix: isAppendix
+        )
+    }
+
+    public var titleText: String { title.plainText }
+
+    /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
+    /// to compose: the number lives in `number`, not in the words.
+    private var numberPrefix: String {
+        guard let number else { return "" }
+        return isAppendix ? "Appendix \(number). " : "\(number). "
+    }
+
     /// `4.2. Title` or `Appendix A. Title` or just the title.
-    public var displayTitle: String {
-        guard let number else { return title }
-        return isAppendix ? "Appendix \(number). \(title)" : "\(number). \(title)"
+    public var displayTitle: String { numberPrefix + titleText }
+
+    /// `displayTitle` with its links intact, for a reader that draws them.
+    public var displayTitleInlines: [Inline] {
+        numberPrefix.isEmpty ? title : [.text(numberPrefix)] + title
     }
 
     public var depth: Int {
