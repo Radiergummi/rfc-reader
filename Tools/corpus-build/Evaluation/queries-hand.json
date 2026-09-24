@@ -1,0 +1,730 @@
+[
+ {
+  "q": "HKDF-Expand-Label",
+  "kind": "identifier",
+  "primary": "RFC8446",
+  "answers": [
+   [
+    "RFC8446",
+    "7.1"
+   ],
+   [
+    "RFC8446",
+    "7.3"
+   ],
+   [
+    "RFC9846",
+    "7.1"
+   ],
+   [
+    "RFC9846",
+    "7.3"
+   ]
+  ]
+ },
+ {
+  "q": "SETTINGS_MAX_CONCURRENT_STREAMS",
+  "kind": "identifier",
+  "primary": "RFC7540",
+  "answers": [
+   [
+    "RFC7540",
+    "6.5.2"
+   ],
+   [
+    "RFC7540",
+    "5.1.2"
+   ],
+   [
+    "RFC9113",
+    "6.5.2"
+   ],
+   [
+    "RFC9113",
+    "5.1.2"
+   ]
+  ]
+ },
+ {
+  "q": "Sec-WebSocket-Accept",
+  "kind": "identifier",
+  "primary": "RFC6455",
+  "answers": [
+   [
+    "RFC6455",
+    "4.2.2"
+   ],
+   [
+    "RFC6455",
+    "4.2.1"
+   ],
+   [
+    "RFC6455",
+    "1.3"
+   ]
+  ]
+ },
+ {
+  "q": "authorityKeyIdentifier extension",
+  "kind": "identifier",
+  "primary": "RFC5280",
+  "answers": [
+   [
+    "RFC5280",
+    "4.2.1.1"
+   ],
+   [
+    "RFC5280",
+    "5.2.1"
+   ]
+  ]
+ },
+ {
+  "q": "503 Service Unavailable",
+  "kind": "identifier",
+  "primary": "RFC7231",
+  "answers": [
+   [
+    "RFC7231",
+    "6.6.4"
+   ],
+   [
+    "RFC9110",
+    "15.6.4"
+   ]
+  ]
+ },
+ {
+  "q": "WWW-Authenticate header field",
+  "kind": "identifier",
+  "primary": "RFC7235",
+  "answers": [
+   [
+    "RFC7235",
+    "4.1"
+   ],
+   [
+    "RFC9110",
+    "11.6.1"
+   ]
+  ]
+ },
+ {
+  "q": "base64url encoding",
+  "kind": "identifier",
+  "primary": "RFC4648",
+  "answers": [
+   [
+    "RFC4648",
+    "5"
+   ]
+  ]
+ },
+ {
+  "q": "RST_STREAM frame",
+  "kind": "identifier",
+  "primary": "RFC7540",
+  "answers": [
+   [
+    "RFC7540",
+    "6.4"
+   ],
+   [
+    "RFC9113",
+    "6.4"
+   ]
+  ]
+ },
+ {
+  "q": "Strict-Transport-Security header field",
+  "kind": "identifier",
+  "primary": "RFC6797",
+  "answers": [
+   [
+    "RFC6797",
+    "6.1"
+   ],
+   [
+    "RFC6797",
+    "8.1"
+   ]
+  ]
+ },
+ {
+  "q": "subjectAltName dNSName",
+  "kind": "identifier",
+  "primary": "RFC5280",
+  "answers": [
+   [
+    "RFC5280",
+    "4.2.1.6"
+   ]
+  ]
+ },
+ {
+  "q": "how does the server prove it owns the certificate",
+  "kind": "concept",
+  "primary": "RFC8446",
+  "answers": [
+   [
+    "RFC8446",
+    "4.4.3"
+   ],
+   [
+    "RFC9846",
+    "4.5.2"
+   ]
+  ]
+ },
+ {
+  "q": "what stops an attacker replaying early data",
+  "kind": "concept",
+  "primary": "RFC8446",
+  "answers": [
+   [
+    "RFC8446",
+    "8"
+   ],
+   [
+    "RFC8446",
+    "8.1"
+   ],
+   [
+    "RFC8446",
+    "8.2"
+   ],
+   [
+    "RFC8446",
+    "E.5"
+   ],
+   [
+    "RFC9846",
+    "8"
+   ],
+   [
+    "RFC9846",
+    "8.1"
+   ],
+   [
+    "RFC9846",
+    "8.2"
+   ],
+   [
+    "RFC9846",
+    "F.5"
+   ]
+  ]
+ },
+ {
+  "q": "how are header fields compressed in HTTP/2",
+  "kind": "concept",
+  "primary": "RFC7541",
+  "answers": [
+   [
+    "RFC7541",
+    "2"
+   ],
+   [
+    "RFC7541",
+    "3"
+   ],
+   [
+    "RFC7541",
+    "1.1"
+   ]
+  ]
+ },
+ {
+  "q": "how is a relative reference turned into an absolute URI",
+  "kind": "concept",
+  "primary": "RFC3986",
+  "answers": [
+   [
+    "RFC3986",
+    "5"
+   ],
+   [
+    "RFC3986",
+    "5.2"
+   ],
+   [
+    "RFC3986",
+    "5.2.2"
+   ]
+  ]
+ },
+ {
+  "q": "how do I find out whether a certificate was revoked",
+  "kind": "concept",
+  "primary": "RFC5280",
+  "answers": [
+   [
+    "RFC5280",
+    "6.3"
+   ],
+   [
+    "RFC5280",
+    "6.3.3"
+   ],
+   [
+    "RFC5280",
+    "5"
+   ]
+  ]
+ },
+ {
+  "q": "how does a websocket connection get established",
+  "kind": "concept",
+  "primary": "RFC6455",
+  "answers": [
+   [
+    "RFC6455",
+    "4"
+   ],
+   [
+    "RFC6455",
+    "1.3"
+   ],
+   [
+    "RFC6455",
+    "4.1"
+   ]
+  ]
+ },
+ {
+  "q": "what prevents a shared cache storing a private response",
+  "kind": "concept",
+  "primary": "RFC7234",
+  "answers": [
+   [
+    "RFC7234",
+    "5.2.2.6"
+   ],
+   [
+    "RFC7234",
+    "3"
+   ],
+   [
+    "RFC7234",
+    "3.2"
+   ],
+   [
+    "RFC9111",
+    "5.2.2.7"
+   ],
+   [
+    "RFC9111",
+    "3"
+   ],
+   [
+    "RFC9111",
+    "3.5"
+   ]
+  ]
+ },
+ {
+  "q": "how does a client and server agree on a protocol version",
+  "kind": "concept",
+  "primary": "RFC8446",
+  "answers": [
+   [
+    "RFC8446",
+    "4.2.1"
+   ],
+   [
+    "RFC8446",
+    "4.1.2"
+   ],
+   [
+    "RFC8446",
+    "9.2"
+   ],
+   [
+    "RFC9846",
+    "4.3.1"
+   ]
+  ]
+ },
+ {
+  "q": "why is compressing encrypted data dangerous",
+  "kind": "concept",
+  "primary": "RFC7541",
+  "answers": [
+   [
+    "RFC7541",
+    "7.1"
+   ],
+   [
+    "RFC7541",
+    "7"
+   ]
+  ]
+ },
+ {
+  "q": "how does a proxy know a connection can be reused",
+  "kind": "concept",
+  "primary": "RFC7230",
+  "answers": [
+   [
+    "RFC7230",
+    "6.3"
+   ],
+   [
+    "RFC7230",
+    "6.1"
+   ],
+   [
+    "RFC7230",
+    "6"
+   ],
+   [
+    "RFC9112",
+    "9.3"
+   ],
+   [
+    "RFC9112",
+    "9"
+   ]
+  ]
+ },
+ {
+  "q": "what does MUST NOT mean in a specification",
+  "kind": "definitional",
+  "primary": "RFC2119",
+  "answers": [
+   [
+    "RFC2119",
+    "2"
+   ]
+  ]
+ },
+ {
+  "q": "what is a web origin",
+  "kind": "definitional",
+  "primary": "RFC6454",
+  "answers": [
+   [
+    "RFC6454",
+    "3.2"
+   ],
+   [
+    "RFC6454",
+    "4"
+   ]
+  ]
+ },
+ {
+  "q": "what is an idempotent request method",
+  "kind": "definitional",
+  "primary": "RFC7231",
+  "answers": [
+   [
+    "RFC7231",
+    "4.2.2"
+   ],
+   [
+    "RFC9110",
+    "9.2.2"
+   ]
+  ]
+ },
+ {
+  "q": "what is a stream in HTTP/2",
+  "kind": "definitional",
+  "primary": "RFC7540",
+  "answers": [
+   [
+    "RFC7540",
+    "5"
+   ],
+   [
+    "RFC7540",
+    "5.1"
+   ],
+   [
+    "RFC9113",
+    "5"
+   ],
+   [
+    "RFC9113",
+    "5.1"
+   ]
+  ]
+ },
+ {
+  "q": "what is a URI scheme",
+  "kind": "definitional",
+  "primary": "RFC3986",
+  "answers": [
+   [
+    "RFC3986",
+    "3.1"
+   ]
+  ]
+ },
+ {
+  "q": "what is a bearer token",
+  "kind": "definitional",
+  "primary": "RFC6750",
+  "answers": [
+   [
+    "RFC6750",
+    "1.2"
+   ],
+   [
+    "RFC6750",
+    "2"
+   ]
+  ]
+ },
+ {
+  "q": "what is a JWT claim",
+  "kind": "definitional",
+  "primary": "RFC7519",
+  "answers": [
+   [
+    "RFC7519",
+    "4"
+   ],
+   [
+    "RFC7519",
+    "4.1"
+   ]
+  ]
+ },
+ {
+  "q": "what is a resource record in DNS",
+  "kind": "definitional",
+  "primary": "RFC1035",
+  "answers": [
+   [
+    "RFC1035",
+    "3.2"
+   ],
+   [
+    "RFC1035",
+    "3"
+   ],
+   [
+    "RFC1035",
+    "3.3"
+   ]
+  ]
+ },
+ {
+  "q": "what is a well-known URI",
+  "kind": "definitional",
+  "primary": "RFC5785",
+  "answers": [
+   [
+    "RFC5785",
+    "3"
+   ],
+   [
+    "RFC5785",
+    "1.1"
+   ],
+   [
+    "RFC8615",
+    "3"
+   ]
+  ]
+ },
+ {
+  "q": "what is a quoted-string",
+  "kind": "definitional",
+  "primary": "RFC7230",
+  "answers": [
+   [
+    "RFC7230",
+    "3.2.6"
+   ],
+   [
+    "RFC9110",
+    "5.6.4"
+   ]
+  ]
+ },
+ {
+  "q": "when must a client not automatically retry a request",
+  "kind": "procedural",
+  "primary": "RFC7540",
+  "answers": [
+   [
+    "RFC7540",
+    "8.1.4"
+   ],
+   [
+    "RFC7540",
+    "6.8"
+   ],
+   [
+    "RFC9113",
+    "8.7"
+   ],
+   [
+    "RFC9113",
+    "6.8"
+   ]
+  ]
+ },
+ {
+  "q": "when may a cache serve a stale response",
+  "kind": "procedural",
+  "primary": "RFC7234",
+  "answers": [
+   [
+    "RFC7234",
+    "4.2.4"
+   ],
+   [
+    "RFC7234",
+    "4.2"
+   ],
+   [
+    "RFC9111",
+    "4.2.4"
+   ],
+   [
+    "RFC9111",
+    "4.2"
+   ]
+  ]
+ },
+ {
+  "q": "how long may a resolver cache a negative answer",
+  "kind": "procedural",
+  "primary": "RFC2308",
+  "answers": [
+   [
+    "RFC2308",
+    "5"
+   ],
+   [
+    "RFC2308",
+    "3"
+   ],
+   [
+    "RFC2308",
+    "6"
+   ]
+  ]
+ },
+ {
+  "q": "when must a server send a close_notify alert",
+  "kind": "procedural",
+  "primary": "RFC8446",
+  "answers": [
+   [
+    "RFC8446",
+    "6.1"
+   ],
+   [
+    "RFC9846",
+    "6.1"
+   ]
+  ]
+ },
+ {
+  "q": "when is a request considered safe",
+  "kind": "procedural",
+  "primary": "RFC7231",
+  "answers": [
+   [
+    "RFC7231",
+    "4.2.1"
+   ],
+   [
+    "RFC9110",
+    "9.2.1"
+   ]
+  ]
+ },
+ {
+  "q": "what must a client do with an unknown frame type",
+  "kind": "procedural",
+  "primary": "RFC7540",
+  "answers": [
+   [
+    "RFC7540",
+    "5.5"
+   ],
+   [
+    "RFC7540",
+    "6"
+   ],
+   [
+    "RFC9113",
+    "5.5"
+   ],
+   [
+    "RFC9113",
+    "6"
+   ]
+  ]
+ },
+ {
+  "q": "how is a certificate path validated",
+  "kind": "procedural",
+  "primary": "RFC5280",
+  "answers": [
+   [
+    "RFC5280",
+    "6.1"
+   ],
+   [
+    "RFC5280",
+    "6"
+   ],
+   [
+    "RFC5280",
+    "6.1.3"
+   ]
+  ]
+ },
+ {
+  "q": "when must the Host header field be sent",
+  "kind": "procedural",
+  "primary": "RFC7230",
+  "answers": [
+   [
+    "RFC7230",
+    "5.4"
+   ],
+   [
+    "RFC9110",
+    "7.2"
+   ]
+  ]
+ },
+ {
+  "q": "how should a client handle a redirect",
+  "kind": "procedural",
+  "primary": "RFC7231",
+  "answers": [
+   [
+    "RFC7231",
+    "6.4"
+   ],
+   [
+    "RFC9110",
+    "15.4"
+   ]
+  ]
+ },
+ {
+  "q": "when must an endpoint fail the websocket connection",
+  "kind": "procedural",
+  "primary": "RFC6455",
+  "answers": [
+   [
+    "RFC6455",
+    "7.1.7"
+   ],
+   [
+    "RFC6455",
+    "7"
+   ]
+  ]
+ }
+]
