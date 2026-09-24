@@ -138,7 +138,7 @@ private struct Representable: UIViewRepresentable {
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
 
     func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView(usingTextLayoutManager: true)
+        let textView = ReaderTextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
         textView.backgroundColor = .clear
@@ -176,7 +176,7 @@ private struct Representable: NSViewRepresentable {
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
 
     func makeNSView(context: Context) -> ReaderScrollView {
-        let textView = NSTextView(usingTextLayoutManager: true)
+        let textView = ReaderTextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
