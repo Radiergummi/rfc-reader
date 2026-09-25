@@ -634,13 +634,11 @@ struct LegacyTextCorpusFindingsTests {
     /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
     /// the first keeps its anchor, so every link that landed on it still does.
     @Test func noTwoElementsShareAnAnchor() throws {
-        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        let fixtures = try Fixtures.legacyTexts()
         #expect(fixtures.count > 20)
         for fixture in fixtures {
             let document = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let anchors = document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor)
-            let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+            let repeated = Dictionary(grouping: document.declaredAnchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
             #expect(repeated.isEmpty, "\(fixture): \(repeated)")
         }
 
@@ -661,15 +659,13 @@ struct LegacyTextCorpusFindingsTests {
     /// parser used to target `ref-MIP-OPTIM`, which nothing declares, so 30,368 citations
     /// in 3,708 converted documents led nowhere (#81).
     @Test func everyCitedAnchorIsDeclared() throws {
-        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        let fixtures = try Fixtures.legacyTexts()
         var cited = 0
         for fixture in fixtures {
             let document = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let declared = Set(document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor))
             let targets = document.crossReferences.compactMap { if case .anchor(let anchor) = $0.target { return anchor }; return nil }
             cited += targets.count
-            let dangling = Set(targets).subtracting(declared).sorted()
+            let dangling = Set(targets).subtracting(document.declaredAnchors).sorted()
             #expect(dangling.isEmpty, "\(fixture): \(dangling)")
         }
         #expect(cited > 0, "the fixtures cite something by anchor, so the check checks something")
@@ -922,6 +918,11 @@ extension RFCDocument {
 
     var lists: [ListBlock] {
         everyBlock.compactMap { if case .list(let list) = $0 { return list }; return nil }
+    }
+
+    /// What the XML declares as an ID: every section's anchor and every bibliography entry's.
+    var declaredAnchors: [String] {
+        allSections.map(\.anchor) + referenceLists.flatMap(\.entries).map(\.anchor)
     }
 
     var crossReferences: [CrossReference] {
