@@ -506,6 +506,29 @@ struct LegacyTextCorpusFindingsTests {
         #expect(artwork.contains { $0.contains("Internet Protocol") && $0.contains("791") })
     }
 
+    /// The front matter accepted one spelling of the number line, `Request for Comments:`,
+    /// and 496 documents wrote another (#51): the series predates the convention and
+    /// never settled on one. Each fixture is the smallest real document of its shape --
+    /// a bare `RFC 757`, a colon and two spaces, a revision note after the number, a
+    /// label and number far enough apart to be two columns, the number in the right
+    /// column, a singular `Comment`, the source's own `Commments`, and `NWG RFC` with no slash.
+    @Test(arguments: [
+        ("rfc757.txt", 757), ("rfc793.txt", 793), ("rfc12.txt", 12), ("rfc50.txt", 50),
+        ("rfc811.txt", 811), ("rfc4801.txt", 4801), ("rfc2347.txt", 2347), ("rfc103.txt", 103),
+    ])
+    func everySpellingOfTheNumberLineIsRead(fixture: String, number: Int) throws {
+        #expect(LegacyTextParser.parse(try Fixtures.string(fixture)).header.id == .rfc(number))
+    }
+
+    /// The header block was taken to be the first run of lines, and RFC 609 opens with its
+    /// title instead: the number was never reached, and the header itself became the
+    /// title. Twenty documents open with a date, a title or a report number this way.
+    @Test func theHeaderIsTheRunThatStatesTheNumber() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc609.txt"))
+        #expect(document.header.id == .rfc(609))
+        #expect(document.header.title == "Statement of Upcoming Move of NIC/NLS Services")
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
