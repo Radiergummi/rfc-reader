@@ -529,6 +529,19 @@ struct LegacyTextCorpusFindingsTests {
         #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
     }
 
+    /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
+    /// specification as an appendix, abstract and all, and each `Abstract` heading was
+    /// lifted into the header in turn: the document's abstract came out as TMP's, and
+    /// neither was left in the body. The catalogues -- RFC 1292, 1632, 2116 -- give every
+    /// entry one, and lost each entry's to the header the same way (#72).
+    @Test func onlyTheFirstAbstractIsTheDocuments() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2371.txt"))
+        let abstract = document.header.abstract.compactMap { if case .paragraph(let paragraph) = $0 { return paragraph.plainText }; return nil }
+        #expect(abstract.first?.hasPrefix("In many applications where different nodes cooperate") == true)
+        #expect(document.paragraphs.contains { $0.plainText.hasPrefix("TMP provides a simple mechanism") })
+        #expect(!document.paragraphs.contains { $0.plainText.hasPrefix("In many applications where different nodes cooperate") })
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number

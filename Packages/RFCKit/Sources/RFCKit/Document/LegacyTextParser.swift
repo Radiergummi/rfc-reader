@@ -440,6 +440,10 @@ public struct LegacyTextParser: Sendable {
 
         // Convert raw sections into structured ones.
         var flat: [Section] = []
+        // A document has one abstract, the first: RFC 2371's appendix embeds a second
+        // protocol's, and a catalogue (RFC 1292, 1632, 2116) gives every entry one (#72).
+        // A later one is the body's, and stays where it is.
+        var abstractTaken = false
         for raw in sections {
             guard let heading = raw.heading else {
                 // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
@@ -454,11 +458,12 @@ public struct LegacyTextParser: Sendable {
                 // Boilerplate that the RFCXML path also omits; the original text view still has it.
                 let boilerplate = ["table of contents", "status of this memo", "status of memo", "copyright notice",
                                    "full copyright statement", "intellectual property", "disclaimer of validity"]
-                let isAbstract = lowered == "abstract"
+                let isAbstract = lowered == "abstract" && !abstractTaken
                 if isAbstract || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
                     let extent = Self.boilerplateExtent(of: raw.blocks, isContents: lowered.hasPrefix("table of contents"))
                     if isAbstract {
                         header.abstract = Self.blocks(from: Array(raw.blocks.prefix(extent)), linker: linker)
+                        abstractTaken = true
                     }
                     if extent < raw.blocks.count {
                         let body = Self.blocks(from: Array(raw.blocks.dropFirst(extent)), linker: linker)
