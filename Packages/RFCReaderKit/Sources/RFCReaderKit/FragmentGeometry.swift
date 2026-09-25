@@ -304,32 +304,31 @@ public enum FragmentGeometry {
         /// every line of a card (#31). On the grid, each fragment owns whole pixels
         /// and the band is one flat surface.
         ///
-        /// The edge is rounded in *document* coordinates — `frame.minY` plus its
-        /// offset from `origin.y` — so two neighbours rounding one edge start from the
-        /// same number whatever local space each is drawn in. That needs only the
-        /// text container's origin on the device grid, not each fragment's: NSTextView
-        /// was measured to put every fragment's local origin on a pixel, but nothing
-        /// says a UITextView's fragment views are. The container's origin is the text
-        /// view's own, which sits on the grid, plus the header's top inset, which
-        /// `RFCTextViewCoordinator.layOut` rounds up to a whole point to keep it
-        /// there; a fractional inset would put every join on a grid half a pixel off
-        /// the real one, and the seams would come back. Rounding is `floor(x + 0.5)`,
-        /// so a tie goes one way from both sides.
+        /// The edge is rounded in *device* space, through the whole of `toDevice` —
+        /// its translation as well as its scale — and mapped back. Where a device
+        /// pixel falls in the drawing space depends on everything between the
+        /// document and the backing store: the scroll offset, the header's top inset,
+        /// the text view's own origin, a fragment view's position. Rounding against
+        /// the scale alone assumed all of those were whole pixels; the translation
+        /// carries them, so nothing has to be. Two neighbours drawn into one context
+        /// map the same edge to the same device coordinate whatever local space each
+        /// is drawn in, so they round it to the same pixel; drawn into two layers,
+        /// each rounds to the pixels of the layer its fill is rasterised into. Rounding
+        /// is `floor(y + 0.5)`, so a tie goes one way from both sides.
         ///
-        /// The scale comes from `toDevice`, the context's
-        /// `userSpaceToDeviceSpaceTransform`, not its `ctm`: inside
-        /// `NSTextLayoutFragment.draw` the `ctm` is the identity and the backing scale
-        /// lives only in the base transform — measured, `(2, -2)` against an identity
-        /// `ctm` — so rounding against `ctm` rounds to whole points and makes overlaps.
+        /// `toDevice` is the context's `userSpaceToDeviceSpaceTransform`, not its
+        /// `ctm`: inside `NSTextLayoutFragment.draw` the `ctm` is the identity and the
+        /// backing scale lives only in the base transform — measured, `(2, -2)`
+        /// against an identity `ctm` — so rounding against `ctm` rounds to whole
+        /// points and makes overlaps. A transform that rotates leaves the rect alone:
+        /// a horizontal edge is then not on one device row.
         ///
         /// The run's own first and last edges are left alone: they are rounded and
         /// antialiased, and shared with nothing.
         public func snappingJoins(of rect: CGRect, top: Bool, bottom: Bool, toDevice transform: CGAffineTransform) -> CGRect {
-            let scale = hypot(transform.c, transform.d)
-            guard scale > 0 else { return rect }
-            let offset = frame.minY - origin.y
+            guard transform.b == 0, transform.d != 0 else { return rect }
             func snap(_ y: CGFloat) -> CGFloat {
-                ((y + offset) * scale + 0.5).rounded(.down) / scale - offset
+                ((y * transform.d + transform.ty + 0.5).rounded(.down) - transform.ty) / transform.d
             }
             let minY = top ? snap(rect.minY) : rect.minY
             let maxY = bottom ? snap(rect.maxY) : rect.maxY
