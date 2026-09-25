@@ -256,6 +256,25 @@ public enum FragmentGeometry {
         return nil
     }
 
+    /// The document-relative characters of the line at `y`, in fragment coordinates
+    /// — or of the next line, if `y` falls in the space above one. What the reader
+    /// records as the line at the top of the viewport.
+    public static func lineRange(at y: CGFloat, in lines: [NSTextLineFragment], fragmentStart: Int) -> NSRange? {
+        lines.first { y < $0.typographicBounds.maxY }.map {
+            NSRange(location: fragmentStart + $0.characterRange.location, length: $0.characterRange.length)
+        }
+    }
+
+    /// The top of the line holding `documentOffset`, in fragment coordinates: where
+    /// the reader scrolls to put that line at the top of the viewport. The inverse
+    /// of `lineRange(at:in:fragmentStart:)`. `characterRange` is element-relative,
+    /// like every other line index here.
+    public static func lineTop(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat? {
+        let index = elementIndex(of: documentOffset, fragmentStart: fragmentStart)
+        let line = lines.first { index < NSMaxRange($0.characterRange) } ?? lines.last
+        return line?.typographicBounds.minY
+    }
+
     /// A document-relative offset as the index `NSTextLineFragment` wants.
     ///
     /// `locationForCharacter(at:)` and `characterIndex(for:)` are both indexed

@@ -35,8 +35,8 @@ struct DocumentView: View {
     /// Where the reader is, written the moment tracking computes it. This is the
     /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
     /// a main-actor hop. Anything that cannot afford that lag — persisting the
-    /// reading position on the way out, restoring the place across a rebuild — reads
-    /// the box.
+    /// reading position on the way out — reads the box. The place across a rebuild
+    /// is finer than a section, and the coordinator keeps that itself.
     @State private var lastVisibleAnchor = VisibleAnchorBox()
     /// Anchor to section number, built once with the document. See
     /// `onVisibleAnchorChange` for why it is not asked of the document each time.
@@ -304,7 +304,6 @@ struct DocumentView: View {
         }
         // Off the main actor: this is string assembly and text measurement, and
         // blocking the main thread for it is what made the font-size slider stutter.
-        let place = built == nil ? nil : lastVisibleAnchor.anchor
         let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
         guard !Task.isCancelled else { return }
         built = rebuilt
@@ -317,9 +316,9 @@ struct DocumentView: View {
         // whole index once per section.
         let sections = rebuilt.anchors.sections
         reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
-        // Only a restyle has a place to restore; a first build lets `onAppear` decide
-        // between a deep link and the saved reading position.
-        if let place { scrollTarget = place }
+        // No place to restore here: the coordinator carries the line at the top of
+        // the viewport into the new storage itself, which a section anchor — all
+        // this view is told — could only approximate to the section's heading.
     }
 
     /// Resolves a section number or an anchor to the anchor the reader scrolls to.

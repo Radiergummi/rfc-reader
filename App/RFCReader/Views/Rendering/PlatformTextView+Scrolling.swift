@@ -4,7 +4,7 @@ import UIKit
 import AppKit
 #endif
 
-/// The five things the reader asks of a scrolling text view, spelled once per
+/// The things the reader asks of a scrolling text view, spelled once per
 /// platform here so that the parts with real reasoning in them — where an anchor
 /// lands, and why an unknown document end must not clamp to the top — are written
 /// once, not twice inside interleaved `#if` blocks.
@@ -37,6 +37,15 @@ extension PlatformTextView {
         #else
         // AppKit's inset is symmetric, so the top inset is also the bottom padding.
         return textContainerInset.height
+        #endif
+    }
+
+    /// The width the text wraps at.
+    var textContainerWidth: CGFloat? {
+        #if canImport(UIKit)
+        return textContainer.size.width
+        #else
+        return textContainer?.size.width
         #endif
     }
 

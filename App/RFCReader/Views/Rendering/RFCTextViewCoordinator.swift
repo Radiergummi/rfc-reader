@@ -80,6 +80,15 @@ final class RFCTextViewCoordinator: NSObject {
     /// is just that subset.
     private var sectionIndex = AnchorIndex([])
     private var lastReportedAnchor: String?
+    /// The line at the top of the viewport, as a position that survives a rebuild.
+    /// Tracked on every scroll and carried into the next `install`, which puts the
+    /// same line back at the top of the new storage.
+    private var place: ReadingPlace?
+    /// The text container's width when the current storage was last a faithful map
+    /// of the screen. A resize re-wraps the old storage at the new width long before
+    /// the rebuild lands, so the same scroll offset shows other text — and tracking
+    /// that would record a place the reader never was. See `reportVisibleAnchor`.
+    private var trackedWidth: CGFloat?
     private var laidOutColumn: CGFloat?
     /// Tracked separately from the column, because above the breakpoint the two move
     /// independently: the column pins at the ideal measure and the gutter takes the
@@ -144,6 +153,10 @@ final class RFCTextViewCoordinator: NSObject {
         guard let textView,
               let layout = textView.textLayoutManager,
               let storage = layout.textContentManager as? NSTextContentStorage else { return }
+        // Only a restyle has a place to carry: the first install of a document leaves
+        // the choice between a deep link and the saved reading position to
+        // `DocumentView`, and a coordinator never outlives its document.
+        let carried = self.built == nil ? nil : place
         self.built = built
         lastReportedAnchor = nil
         sectionIndex = built.anchors.sections
@@ -162,7 +175,12 @@ final class RFCTextViewCoordinator: NSObject {
             storage.textStorage?.setAttributedString(built.text)
         }
         beginLayout()
-        reportVisibleAnchor()
+        trackedWidth = textView.textContainerWidth
+        if let carried, let offset = carried.documentOffset(in: built.anchors, length: built.text.length) {
+            scroll(toOffset: offset)
+        } else {
+            reportVisibleAnchor()
+        }
     }
 
     /// Lays out the first slice now and the rest between frames.
@@ -253,13 +271,29 @@ final class RFCTextViewCoordinator: NSObject {
         #endif
         headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
 
+        // The container is the column, set here and nowhere else. Tracking the text
+        // view's width instead re-wrapped the storage on *every* resize: the frame
+        // and the inset cannot change in one step, so the container passed through a
+        // width that was neither the old column nor the new one, and TextKit threw
+        // away the whole document's layout for it — measured on RFC 9000, a resize
+        // that only moved the gutters left the reader 39,000 characters further on,
+        // with no rebuild coming to put it back.
+        //
         // No relayout here: `DocumentView` derives the column from the same width and
         // rebuilds, which lands in `install()` — the one place the document is laid
         // out. Until it does, the laid-out end belongs to the previous column, and an
-        // unknown end is the safe state (`scrollContainerTopTo` then does not clamp).
+        // unknown end is the safe state (`scrollContainerTopTo` then does not clamp);
+        // nothing is laid out at the new column yet either, so a jump in the meantime
+        // lays out from the start again rather than trusting frames that are gone.
         if columnChanged {
+            #if canImport(UIKit)
+            textView.textContainer.size = CGSize(width: column, height: .greatestFiniteMagnitude)
+            #else
+            textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
+            #endif
             layoutTask?.cancel()
             laidOutEnd = nil
+            laidOutThrough = 0
         }
     }
 
@@ -275,14 +309,24 @@ final class RFCTextViewCoordinator: NSObject {
     func scroll(to anchor: String) {
         // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
         defer { Task { self.onScrollHandled() } }
-        guard let textView,
-              let built,
-              let layout = textView.textLayoutManager,
-              let offset = built.anchors.offset(of: anchor) else { return }
+        guard let offset = built?.anchors.offset(of: anchor) else { return }
+        // Set here as well as by tracking, which does not run while a resize waits
+        // for its rebuild: a jump in that window is where the rebuild must land.
+        place = ReadingPlace(anchor: anchor, offset: 0)
+        scroll(toOffset: offset)
+    }
+
+    /// Puts the line holding `offset` at the top of the viewport — or, for the first
+    /// line, the whole fragment, spacing above it included, which is where an anchor
+    /// has always landed. A place carried across a rebuild can be any line.
+    private func scroll(toOffset offset: Int) {
+        guard let textView, let layout = textView.textLayoutManager else { return }
         ensureLayout(through: offset + Self.layoutSlice)
         guard let location = layout.location(atOffset: offset),
               let fragment = layout.textLayoutFragment(for: location) else { return }
-        scrollContainerTopTo(fragment.layoutFragmentFrame.minY)
+        let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+        let line = offset == fragmentStart ? 0 : FragmentGeometry.lineTop(of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart) ?? 0
+        scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line)
         reportVisibleAnchor()
     }
 
@@ -291,11 +335,22 @@ final class RFCTextViewCoordinator: NSObject {
     /// visible rect, so its start names a section already scrolled past.
     func reportVisibleAnchor() {
         guard let textView,
-              built != nil,
+              let built,
               let layout = textView.textLayoutManager else { return }
+        // Nothing is tracked while the storage is wrapped at a width it was not
+        // installed at. Between a change of column and the rebuild it triggers, the
+        // old text re-wraps under an unmoved scroll offset and TextKit lays out the
+        // viewport afresh from estimates: measured on RFC 9000, the top of the
+        // viewport then showed text 45,000 characters from the reader's line. That
+        // was recorded as the reader's place, and the rebuild duly restored it (#30).
+        guard textView.textContainerWidth == trackedWidth else { return }
         let top = max(0, textView.viewportTop)
         guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
         let offset = layout.offset(of: fragment.rangeInElement.location)
+        // A point of slack, so a line put exactly at the top by `scroll(toOffset:)`
+        // is read back as that line and not the one above it.
+        let line = FragmentGeometry.lineRange(at: top - fragment.layoutFragmentFrame.minY + 1, in: fragment.textLineFragments, fragmentStart: offset)
+        place = ReadingPlace.tracking(place, topLine: line ?? NSRange(location: offset, length: 0), in: built.anchors, length: built.text.length)
         // The abstract is the first prose in the storage and sits ahead of section
         // one, so while it is on screen the reader is, as far as every consumer of
         // this is concerned, in section one — which is what the old view reported too.

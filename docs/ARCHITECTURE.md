@@ -194,13 +194,15 @@ Verified by measurement rather than by eye, on RFC 9110 in a 1500 pt window with
 - **Diff.** Section alignment by title similarity and position, LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
 - **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.
 
-## Two TextKit 2 traps this reader already fell into
+## Three TextKit 2 traps this reader already fell into
 
 *Found September 2026, both by instrumenting a running build rather than by reading.*
 
 **`NSTextContentStorage.attributedString = …` discards the backing `NSTextStorage`.** Assigning it is the obvious way to install a document and it renders perfectly, because TextKit 2 lays out and draws from `attributedString` alone. But `textStorage` goes nil, and with it everything AppKit still routes through the text storage: dragging computed a correct selection and threw it away at mouse-up, and `clickedOnLink` never fired. The reader could be read but not selected, copied or clicked, with no error anywhere. Install through `storage.textStorage?.setAttributedString(_:)`.
 
 **`attribute(_:at:effectiveRange:)` returns the storage run, not the attribute's run.** It stops at *any* attribute change, so a stacked table's bold label and regular value are separate runs even though both carry the same `.rfcDecoration`. Every fragment then reported itself as both the first and last fragment of its decoration, drawing a fully rounded card at its own indent — the staircase down the page that artwork, tables and authors' blocks all showed. `longestEffectiveRange:in:` is the one that coalesces. Two corollaries: the value has to be `String`-backed to compare equal across insertions (`RFCDecoration.attributeValue`), and every character of a block has to carry it — an undecorated separator newline splits the run just as effectively as a missing attribute.
+
+**A text container that tracks the text view's width throws the whole layout away on every resize.** The column is centred with the inset, and the frame and the inset cannot change in one step, so a tracking container passes through a width that is neither the old column nor the new one — and TextKit discards every fragment frame for it and lays the viewport out again from estimates at the unmoved scroll offset. Measured on RFC 9000, a resize that only moved the gutters left the reader 39,000 characters further on, with no rebuild coming to put it back. The coordinator sizes the container to the column in `layOut(width:)`, so only a change of column re-wraps. That one still does, until its rebuild lands, and anything that samples the top of the viewport in that window reads text the reader never saw: section tracking recorded it as the reading position and the rebuild restored it (#30). Tracking now stops while the container is wider or narrower than the storage was installed at, and the position carried across a rebuild is a `ReadingPlace` — the nearest anchor of any kind plus a character distance — resolved to the line holding it, not a section anchor resolved to its heading.
 
 ## Known gaps and the next technical steps
 
