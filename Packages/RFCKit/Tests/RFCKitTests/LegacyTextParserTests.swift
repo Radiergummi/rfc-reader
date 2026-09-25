@@ -672,6 +672,25 @@ struct LegacyTextCorpusFindingsTests {
         #expect(numbered.map(\.titleText) == ["BEGIN", "LISTEN", "RESPONSE", "MESSAGE", "INTERRUPT", "END", "REPLY"].map { "\($0) Command" })
     }
 
+    /// A colon number counts only where the number before it, or the one it is under, is
+    /// a heading number too: without that, a document with one stray `11:` and no `11.`
+    /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the
+    /// next line not being blank kept it from becoming section 11.
+    @Test func aColonNumberHasToFollowFromAnother() throws {
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(try Fixtures.string("rfc526.txt").components(separatedBy: "\n")))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(try Fixtures.string("rfc2078.txt").components(separatedBy: "\n")))
+
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["0: Summary"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1: One", "2: Two"]))
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(["2: Two"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1. One", "2: Two"]), "a predecessor of either kind")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2. Two", "2.1: Under it"]), "or a parent")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2.4. Calls", "2.4.11. One", "2.4.12: Next"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1: Model", "1.1: Segments", "1.1.1.1: Layout"]), "a level skipped, as in RFC 2130")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2  Models", "3: X.500"]), "no separator, as in RFC 1309")
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(["3. Three", "2.4.12: Orphan"]))
+    }
+
     /// An anchor is what a deep link, the table of contents and a reading position key off,
     /// and the XML declares each one as an ID. Headings that repeat gave two sections one
     /// anchor -- RFC 1 has two `Introduction`s, RFC 19 two sections numbered 1 -- and a
