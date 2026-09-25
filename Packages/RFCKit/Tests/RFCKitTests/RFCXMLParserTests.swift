@@ -290,6 +290,39 @@ struct RFCXMLParserTests {
         #expect(entries.first { $0.anchor == "RFC2119" }?.displayAnchor == "RFC2119")
     }
 
+    /// Our own older conversions declared a numbered entry under its number, and a number
+    /// is a position in the list, not an RFC: RFC 1004's `[2]` is the EGP specification.
+    /// Neither an entry's anchor nor a group's names a document unless it says which
+    /// series, and a citation of one opens nothing it does not name.
+    @Test func aNumberedAnchorIsNotTheRFCOfItsNumber() throws {
+        let xml = """
+        <rfc number="1004"><front><title>Numbered</title></front>
+        <middle><section anchor="s1"><name>Introduction</name>
+        <t>See <xref target="2"/> and <xref target="3"/>, and <xref target="BCP14"/>.</t>
+        </section></middle>
+        <back><references>
+        <reference anchor="2"><front><title>Exterior Gateway Protocol Formal Specification</title></front></reference>
+        <referencegroup anchor="3"><reference anchor="x"><front><title>X</title></front></reference></referencegroup>
+        <referencegroup anchor="BCP14"><reference anchor="RFC2119"><front><title>Key words</title>
+        <seriesInfo name="RFC" value="2119"/></front></reference></referencegroup>
+        </references></back>
+        </rfc>
+        """
+        let document = try RFCXMLParser.parse(Data(xml.utf8))
+        let entries = document.allSections.flatMap { section in
+            section.blocks.flatMap { block -> [Reference] in
+                if case .references(let list) = block { return list.entries }
+                return []
+            }
+        }
+        #expect(entries.first { $0.anchor == "2" }?.documentID == nil)
+        #expect(entries.first { $0.anchor == "3" }?.documentID == nil)
+        #expect(entries.first { $0.anchor == "BCP14" }?.documentID == DocumentID(series: .bcp, number: 14))
+        #expect(!document.referencedDocuments.contains(.rfc(2)))
+        #expect(!document.referencedDocuments.contains(.rfc(3)))
+        #expect(document.referencedDocuments.contains(DocumentID(series: .bcp, number: 14)))
+    }
+
     /// RFC 8761 sets `symRefs="false"`: its prose cites `[1]`, `[2]`, and nothing in the
     /// bibliography says `BT2020-2` anywhere a reader can see.
     @Test func numberedReferencesAreLabelledByNumber() throws {
