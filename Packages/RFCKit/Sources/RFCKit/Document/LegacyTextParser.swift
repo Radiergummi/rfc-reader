@@ -1548,6 +1548,8 @@ struct InlineLinker: Sendable {
                     case "h" where bytes.holds("http", at: index): http = true
                     default: continue
                     }
+                    // `rfcs` implies `rfc`: nothing later in the fragment can change the answer.
+                    if bracket, rfcs, section, http { return }
                 }
             }
         }
