@@ -703,6 +703,8 @@ struct LegacyTextCorpusFindingsTests {
         #expect(settled(["ECMA TR 53", "ECMA TR/53"]) == ["ref-ECMA-TR-53", "ref-ECMA-TR-53-2"])
         // And an entry never takes an anchor a section can have.
         #expect(settled(["section-1"], reserved: ["section-1"]) == ["section-1-2"])
+        // A label with nothing of a name in it is a note: RFC 2130's `[*]`, RFC 906's `[**]`.
+        #expect(settled(["*", "**"]) == ["ref-note", "ref-note-2"])
     }
 
     /// A label listed twice is cited as its first entry, whether that names a document or

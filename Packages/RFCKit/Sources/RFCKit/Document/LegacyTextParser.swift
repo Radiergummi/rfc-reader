@@ -1401,7 +1401,9 @@ public struct LegacyTextParser: Sendable {
             }
         }
         while name.hasSuffix("-") { name.removeLast() }
-        return "ref-\(name)"
+        // `[*]` and `[**]` mark notes (RFC 2130, RFC 906) and spell no name at all; they
+        // were `ref-`, and a second one `ref--2`.
+        return "ref-\(name.isEmpty ? "note" : name)"
     }
 }
 
