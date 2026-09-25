@@ -239,6 +239,13 @@ enum Convert {
         var wantsFurniture: Bool
     }
 
+    /// One converted document, and where it goes in the run's output.
+    struct Converted: Sendable {
+        var offset: Int
+        var report: Report
+        var prose: ProseReport?
+    }
+
     static func run(_ arguments: Arguments) async throws {
         let job = Job(
             inDirectory: URL(fileURLWithPath: arguments.require("in")),
@@ -260,12 +267,12 @@ enum Convert {
         // that is a pure function of its text -- so they are converted across all cores.
         // Results are put back in document order before anything is written, which keeps
         // the report and the prose sample exactly what a single pass would produce.
-        var results: [(offset: Int, report: Report, prose: ProseReport?)] = []
-        try await withThrowingTaskGroup(of: (offset: Int, report: Report, prose: ProseReport?).self) { group in
+        var results: [Converted] = []
+        try await withThrowingTaskGroup(of: Converted.self) { group in
             for (offset, file) in files.enumerated() {
                 group.addTask {
                     let (report, prose) = try convert(file, job: job)
-                    return (offset, report, prose)
+                    return Converted(offset: offset, report: report, prose: prose)
                 }
             }
             for try await result in group {
