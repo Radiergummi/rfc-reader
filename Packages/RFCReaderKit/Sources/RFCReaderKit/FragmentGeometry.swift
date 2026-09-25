@@ -246,12 +246,19 @@ public enum FragmentGeometry {
                 x: pointInFragment.x - line.typographicBounds.minX,
                 y: pointInFragment.y - line.typographicBounds.minY
             )
+            // Beside the line's text — the gutter, or the space after a short line —
+            // is over no character. `characterIndex(for:)` would snap it to the
+            // nearest one, or answer `NSNotFound` past a single line's end, which
+            // overflowed when added to a nonzero fragment start.
+            guard pointInLine.x >= 0, pointInLine.x < line.typographicBounds.width else { return nil }
             // `characterIndex(for:)` already returns an index relative to the whole
             // paragraph (`line.attributedString`), the same element-relative
             // convention `elementIndex(of:fragmentStart:)` documents — so it already
             // includes `line.characterRange.location`, and adding that again
             // double-counts.
-            return fragmentStart + line.characterIndex(for: pointInLine)
+            let index = line.characterIndex(for: pointInLine)
+            guard index != NSNotFound else { return nil }
+            return fragmentStart + index
         }
         return nil
     }

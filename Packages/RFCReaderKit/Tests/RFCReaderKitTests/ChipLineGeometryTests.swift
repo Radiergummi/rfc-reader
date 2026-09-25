@@ -147,4 +147,37 @@ struct ChipLineGeometryTests {
         let below = CGPoint(x: 10, y: fixture.lines.map(\.typographicBounds.maxY).max().map { $0 + 100 } ?? 1000)
         #expect(FragmentGeometry.characterOffset(in: fixture.lines, fragmentStart: fixture.fragmentStart, at: below) == nil)
     }
+
+    /// The empty space right of a heading or a one-line paragraph, and the gutter to
+    /// the left of any line, are not over a character. `characterIndex(for:)` answers
+    /// `NSNotFound` past a single line's end, and adding a nonzero fragment start to
+    /// that trapped: hovering beside any heading below the first line crashed.
+    @Test func aPointBesideALinesTextResolvesToNothing() throws {
+        let storage = NSTextContentStorage()
+        storage.attributedString = NSAttributedString(
+            string: "A first paragraph.\nA heading\n",
+            attributes: [.font: PlatformFont.systemFont(ofSize: 17)]
+        )
+        let layout = NSTextLayoutManager()
+        storage.addTextLayoutManager(layout)
+        let container = NSTextContainer(size: CGSize(width: 600, height: 100_000))
+        container.lineFragmentPadding = 0
+        layout.textContainer = container
+        layout.ensureLayout(for: layout.documentRange)
+
+        var fragments: [NSTextLayoutFragment] = []
+        layout.enumerateTextLayoutFragments(from: layout.documentRange.location, options: [.ensuresLayout]) { fragment in
+            fragments.append(fragment)
+            return true
+        }
+        let heading = try #require(fragments.dropFirst().first)
+        let fragmentStart = layout.offset(of: heading.rangeInElement.location)
+        #expect(fragmentStart > 0)
+        let line = try #require(heading.textLineFragments.first)
+        let y = line.typographicBounds.midY
+        let right = CGPoint(x: line.typographicBounds.maxX + 50, y: y)
+        let left = CGPoint(x: line.typographicBounds.minX - 5, y: y)
+        #expect(FragmentGeometry.characterOffset(in: heading.textLineFragments, fragmentStart: fragmentStart, at: right) == nil)
+        #expect(FragmentGeometry.characterOffset(in: heading.textLineFragments, fragmentStart: fragmentStart, at: left) == nil)
+    }
 }
