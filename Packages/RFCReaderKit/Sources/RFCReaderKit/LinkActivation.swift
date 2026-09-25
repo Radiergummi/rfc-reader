@@ -38,6 +38,7 @@ extension LinkActivation {
     /// when there is no event at all. UIKit publishes neither, so every tap reads as
     /// a plain one: opening a reference elsewhere is the long-press menu's job there,
     /// not a chord's.
+    @MainActor
     public static var current: LinkActivation {
         #if canImport(AppKit)
         let flags = NSApp?.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
