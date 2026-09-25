@@ -21,6 +21,10 @@ public enum FragmentGeometry {
     /// The padding a chip's tint extends past its glyphs, on the ends that round.
     public static let chipPadding: CGFloat = 5
 
+    /// The padding a card extends past its column on either side, and half of it
+    /// past its run's own first and last line.
+    public static let cardPadding: CGFloat = 10
+
     /// A decoration a fragment's own range carries, plus whether it is the first
     /// and/or last fragment of that decoration's run.
     public struct DecorationSpan: Equatable, Sendable {
@@ -34,6 +38,10 @@ public enum FragmentGeometry {
         /// starts. Computed with the span because it is a scan over the run, and
         /// the drawing path asks for it on every draw.
         public let indent: CGFloat
+        /// Whether the run starts directly below another card, and ends directly
+        /// above one: the ends `Placement.cardRect` cuts rather than caps.
+        public let meetsCardAbove: Bool
+        public let meetsCardBelow: Bool
     }
 
     /// A chip's fill and rounding, worked out per *line* fragment.
@@ -84,8 +92,19 @@ public enum FragmentGeometry {
             isFirst: fragment.location <= effective.location,
             isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
             runRange: effective,
-            indent: indent(in: text, over: effective)
+            indent: indent(in: text, over: effective),
+            meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
+            meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective))
         )
+    }
+
+    /// Whether the character at `location` belongs to a block drawn as a card. A
+    /// quote is decorated too, but draws a rule beside its text, which no card's cap
+    /// can stack on.
+    private static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
+        guard location >= 0, location < text.length else { return false }
+        let decoration = RFCDecoration(attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
+        return decoration != nil && decoration != .blockQuote
     }
 
     /// `run` cut down to the one verbatim block at `location`, when there is one.
@@ -243,6 +262,25 @@ public enum FragmentGeometry {
                 width: max(0, containerWidth - indent) + padding * 2,
                 height: frame.height + top + bottom
             )
+        }
+
+        /// The card `span`'s fragment fills: `decorationRect`, capped at the run's own
+        /// first and last fragment — except an end where the run meets another card.
+        ///
+        /// Two blocks with nothing between them — one verbatim block after another,
+        /// a table directly followed by artwork — lay out with touching frames, so
+        /// the upper card's bottom cap and the lower card's top cap would cover the
+        /// same `padding`-high strip, and two translucent fills stack there with
+        /// their rounded corners cutting in. At such a cut neither card caps; each
+        /// gives up a quarter of the padding of its own frame instead, so the two meet
+        /// with a gap of half the padding and no text moves.
+        public func cardRect(padding: CGFloat, span: DecorationSpan) -> CGRect {
+            let cutAbove = span.isFirst && span.meetsCardAbove
+            let cutBelow = span.isLast && span.meetsCardBelow
+            let rect = decorationRect(padding: padding, capTop: span.isFirst && !cutAbove, capBottom: span.isLast && !cutBelow)
+            let top = cutAbove ? padding / 4 : 0
+            let bottom = cutBelow ? padding / 4 : 0
+            return CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(0, rect.height - top - bottom))
         }
 
         /// The rule a block quote hangs beside its text.

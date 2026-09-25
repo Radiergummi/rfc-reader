@@ -75,7 +75,11 @@ struct DecorationRunTests {
         let firstRun = try run(at: first, in: built.text)
         #expect(!NSLocationInRange(second, firstRun), "the second block must start its own card")
         let secondRun = try run(at: second, in: built.text)
-        #expect(NSMaxRange(firstRun) == secondRun.location, "the two cards meet with nothing left over")
+        // Adjacent, so each has to know it is cut against the other, or both cap the
+        // shared edge and the cards overlap (`AdjacentCardTests` lays that out).
+        let last = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: NSRange(location: NSMaxRange(firstRun) - 1, length: 1)))
+        let next = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: NSRange(location: secondRun.location, length: 1)))
+        #expect(last.meetsCardBelow && next.meetsCardAbove, "two cards that meet must know it")
         if blocks[1].type != nil {
             let string = built.text.string as NSString
             let label = string.range(of: "ABNF", range: NSRange(location: first, length: string.length - first)).location

@@ -12,7 +12,7 @@ import AppKit
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
 final class RFCTextLayoutFragment: NSTextLayoutFragment {
-    static let cardPadding: CGFloat = 10
+    static let cardPadding = FragmentGeometry.cardPadding
     static let rulePadding: CGFloat = 8
     static let ruleWidth: CGFloat = 3
 
@@ -137,14 +137,15 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
 
     /// The card's outer padding is only added on the run's own top and/or bottom
-    /// edge — a middle fragment sits flush against its neighbours, so consecutive
+    /// edge, and not even there where the run meets another card (`Placement.cardRect`)
+    /// — a middle fragment sits flush against its neighbours, so consecutive
     /// fragments' cards tile into one continuous band instead of overlapping (and
     /// darkening, since the fill is translucent) at every line boundary. The joins
     /// are then moved onto the device pixel grid, or both neighbours half-cover the
     /// pixel they share and the band shows a darker line at every seam.
     private func drawCard(at point: CGPoint, span: FragmentGeometry.DecorationSpan, alpha: CGFloat, in context: CGContext) {
         let placement = placement(at: point, span: span)
-        let card = placement.decorationRect(padding: Self.cardPadding, capTop: span.isFirst, capBottom: span.isLast)
+        let card = placement.cardRect(padding: Self.cardPadding, span: span)
         fill(
             joined(card, placement: placement, span: span, in: context),
             radius: 8,
