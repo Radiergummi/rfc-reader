@@ -513,7 +513,7 @@ public struct LegacyTextParser: Sendable {
             line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..") || line.contains(". .")
         }
         return 1 + blocks.dropFirst().prefix { block in
-            isContents ? block.lines.lazy.filter(isEntry).count * 2 >= block.lines.count : block.lines.count > 1 && looksLikeProse(block.lines)
+            isContents ? block.lines.count(where: isEntry) * 2 >= block.lines.count : block.lines.count > 1 && looksLikeProse(block.lines)
         }.count
     }
 
