@@ -581,6 +581,18 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.header.title == "Statement of Upcoming Move of NIC/NLS Services")
     }
 
+    /// A heading was refused if its first word was `network`, `internet` or `request`,
+    /// to keep `Network Working Group` and `Request for Comments: 796` out of the body --
+    /// but the rule held anywhere in a document, and refused about 120 real headings with
+    /// those two, RFC 796's only one among them: `Internet to Local Net Address Mappings`.
+    @Test func aHeadingMayStartWithAWordTheFrontMatterUses() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
+        let mappings = try #require(document.allSections.first { $0.titleText == "Internet to Local Net Address Mappings" })
+        #expect(mappings.blocks.count > 10, "\(mappings.blocks.count) blocks")
+        #expect(document.header.id == .rfc(796))
+        #expect(!document.allSections.contains { $0.titleText.hasPrefix("Network Working Group") })
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
