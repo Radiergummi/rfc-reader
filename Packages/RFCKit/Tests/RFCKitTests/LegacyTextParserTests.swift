@@ -654,6 +654,20 @@ struct LegacyTextCorpusFindingsTests {
         #expect(relabelled.displayAnchor == "ISO-8859", "a renamed entry still reads as the label its citations use")
     }
 
+    /// A numbered entry whose text names no RFC was recorded as the RFC its number
+    /// happened to be: RFC 2013's `[1]` is ISO 8824, and it and its citation became RFC 1.
+    /// 6,887 entries in 1,381 converted documents. `[2]`, which says RFC 1902, still is.
+    @Test func aNumberedEntryIsNotTheRFCOfItsNumber() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        let asn1 = try #require(entries.first { $0.displayAnchor == "1" })
+        #expect(asn1.documentID == nil)
+        #expect(asn1.anchor == "ref-1")
+        #expect(document.crossReferences.contains { $0.target == .anchor("ref-1") && $0.text == "[1]" })
+        #expect(!document.referencedDocuments.contains(.rfc(1)))
+        #expect(entries.first { $0.displayAnchor == "2" }?.documentID == .rfc(1902))
+    }
+
     /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
     /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
     /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was

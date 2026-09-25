@@ -1360,7 +1360,7 @@ public struct LegacyTextParser: Sendable {
         var seriesInfo: [(name: String, value: String)] = []
         if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) {
             seriesInfo.append((name: "RFC", value: String(match.1)))
-        } else if let id = DocumentID(parsing: label) {
+        } else if let id = DocumentID(label: label) {
             seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
         }
         if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
