@@ -21,11 +21,18 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     container: swift:6.1
+    # write only for the optional `gh release create` in the last step.
+    permissions:
+      contents: write
+    # Inputs reach the scripts as environment variables, never spliced into their text.
+    env:
+      VERSION: ${{ inputs.version }}
+      LIMIT: ${{ inputs.limit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Restore fetched text
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: corpus/text.noindex
           key: corpus-text-${{ github.run_id }}
@@ -35,9 +42,7 @@ jobs:
         run: swift build -c release --package-path Tools/corpus-build
 
       - name: Fetch legacy RFCs
-        run: |
-          LIMIT="${{ inputs.limit }}"
-          Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit $LIMIT}
+        run: Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit "$LIMIT"}
 
       - name: Convert to RFCXML
         run: |
@@ -45,16 +50,16 @@ jobs:
             --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json
 
       - name: Manifest
-        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "${{ inputs.version }}"
+        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "$VERSION"
 
       - name: Pack
         run: |
           apt-get update -qq && apt-get install -y -qq zstd >/dev/null
-          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus xml manifest.json
-          ls -la *.tar.zst
+          tar --zstd -cf "legacy-xml-$VERSION.tar.zst" -C corpus xml manifest.json
+          ls -la ./*.tar.zst
 
       - name: Upload report and packs as workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: corpus-${{ inputs.version }}
           path: |
@@ -68,6 +73,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           apt-get install -y -qq gh >/dev/null || true
-          gh release create "corpus-${{ inputs.version }}" legacy-xml-*.tar.zst corpus/manifest.json \
-            --title "Corpus packs ${{ inputs.version }}" \
+          gh release create "corpus-$VERSION" legacy-xml-*.tar.zst corpus/manifest.json \
+            --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."
