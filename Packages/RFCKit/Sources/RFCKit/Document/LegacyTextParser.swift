@@ -426,12 +426,21 @@ public struct LegacyTextParser: Sendable {
 
         // Collect known section numbers and reference anchors for link resolution.
         let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
+        let bibliographies = Self.settlingEntryAnchors(
+            sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
+                guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else { return }
+                lists[index] = Self.parseReferences(sections[index].blocks)
+            },
+            // Every anchor a section below can take, so no entry is declared under one.
+            reserved: Set(sections.compactMap(\.heading).flatMap { [$0.anchor, "after-\($0.anchor)"] } + ["preamble"])
+        )
         var referenceTargets: [String: CrossReference.Target] = [:]
         // Keyed by the label, which is what the prose cites; pointing at the anchor, which
         // is what the entry is declared under. Pointing at `ref-<label>` instead, which no
         // entry ever was, left 30,368 citations in 3,708 documents linking nowhere (#81).
-        for section in sections where section.heading.map(Self.isReferencesHeading) == true {
-            for reference in Self.parseReferences(section.blocks) {
+        // A label listed twice is cited as its first entry, whichever kind of target it is.
+        for index in bibliographies.keys.sorted() {
+            for reference in bibliographies[index] ?? [] where referenceTargets[reference.displayAnchor] == nil {
                 referenceTargets[reference.displayAnchor] = reference.documentID.map { .document($0, section: nil) }
                     ?? .anchor(reference.anchor)
             }
@@ -444,7 +453,7 @@ public struct LegacyTextParser: Sendable {
         // protocol's, and a catalogue (RFC 1292, 1632, 2116) gives every entry one (#72).
         // A later one is the body's, and stays where it is.
         var abstractTaken = false
-        for raw in sections {
+        for (index, raw) in sections.enumerated() {
             guard let heading = raw.heading else {
                 // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
                 let blocks = Self.blocks(from: raw.blocks, linker: linker)
@@ -485,8 +494,7 @@ public struct LegacyTextParser: Sendable {
                 title: linker.link(heading.title),
                 isAppendix: heading.isAppendix
             )
-            if Self.isReferencesHeading(heading) {
-                let references = Self.parseReferences(raw.blocks)
+            if let references = bibliographies[index] {
                 if !references.isEmpty {
                     section.blocks = [.references(ReferenceList(title: heading.title, entries: references))]
                 } else {
@@ -501,13 +509,42 @@ public struct LegacyTextParser: Sendable {
         return RFCDocument(header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
     }
 
+    /// Each entry's anchor as it will be declared, settled before any prose is linked so a
+    /// citation points at the anchor its entry ends with. Renaming repeats afterwards, as
+    /// `makingAnchorsUnique` does sections, moved entries out from under the citations
+    /// already pointing at them: `[X]`, `[X]`, `[X-2]` made the second `X-2` and the third
+    /// `X-2-2`, so `[X-2]` opened the second `[X]`; `[ECMA TR 53]` and `[ECMA TR/53]` spell
+    /// one name, and one of them is renamed. The first holder of an anchor keeps it; a
+    /// repeat takes the first `-2`, `-3` that no entry is declared under and no section can
+    /// take, so none is renamed again.
+    static func settlingEntryAnchors(_ lists: [Int: [Reference]], reserved: Set<String>) -> [Int: [Reference]] {
+        var lists = lists
+        let declared = Set(lists.values.joined().map(\.anchor))
+        var taken = reserved
+        for index in lists.keys.sorted() {
+            var list = lists[index] ?? []
+            for entry in list.indices {
+                let anchor = list[entry].anchor
+                if taken.insert(anchor).inserted { continue }
+                var suffix = 2
+                while taken.contains("\(anchor)-\(suffix)") || declared.contains("\(anchor)-\(suffix)") { suffix += 1 }
+                list[entry].anchor = "\(anchor)-\(suffix)"
+                taken.insert(list[entry].anchor)
+            }
+            lists[index] = list
+        }
+        return lists
+    }
+
     /// An anchor is what a deep link, the table of contents and a reading position key off,
     /// and the XML declares each one as an ID, sections and bibliography entries alike.
     /// Headings that repeat -- two `Introduction`s in RFC 1, two sections numbered 1 in RFC
     /// 19 -- and a bibliography listing one label twice gave two elements one anchor in 526
     /// documents (#65), and a link landed on whichever came first. A repeat takes the next
     /// free `-2`, `-3`, the way xml2rfc numbers them; the first keeps its anchor, so every
-    /// link that landed on it still does. An entry keeps its label as `displayAnchor`.
+    /// link that landed on it still does. An entry keeps its label as `displayAnchor`, and
+    /// arrives here unique already (`settlingEntryAnchors`); it is renamed here only if a
+    /// section's repeat is renamed onto it.
     private static func makingAnchorsUnique(_ sections: [Section]) -> [Section] {
         var taken: Set<String> = []
         func unique(_ anchor: String) -> String {

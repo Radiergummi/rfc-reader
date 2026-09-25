@@ -663,9 +663,10 @@ struct LegacyTextCorpusFindingsTests {
         var cited = 0
         for fixture in try Fixtures.legacyTexts() {
             let document = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let unnamed = document.declaredAnchors.filter { $0.wholeMatch(of: #/[A-Za-z_][A-Za-z0-9._-]*/#) == nil }
+            // An NCName, closely enough: a letter or underscore, then letters, digits, `.`, `-`, `_`.
+            let unnamed = document.declaredAnchors.filter { $0.wholeMatch(of: #/[\p{L}_][\p{L}0-9._-]*/#) == nil }
             #expect(unnamed.isEmpty, "\(fixture): \(unnamed)")
-            let targets = document.crossReferences.compactMap { if case .anchor(let anchor) = $0.target { anchor } else { nil } }
+            let targets = document.everyCrossReference.compactMap { if case .anchor(let anchor) = $0.target { anchor } else { nil } }
             cited += targets.count
             let dangling = Set(targets).subtracting(document.declaredAnchors).sorted()
             #expect(dangling.isEmpty, "\(fixture): \(dangling)")
@@ -686,6 +687,31 @@ struct LegacyTextCorpusFindingsTests {
         #expect(rfc1556.contains { $0.anchor == "ref-ECMA-TR-53" && $0.displayAnchor == "ECMA TR/53" })
         let rfc2606 = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt")).referenceLists.flatMap(\.entries)
         #expect(rfc2606.contains { $0.anchor == "RFC1034" && $0.displayAnchor == "RFC 1034" })
+    }
+
+    /// Entry anchors are settled before the prose is linked, so a citation points at the
+    /// anchor its entry ends with rather than one a later rename moves. None of these
+    /// shapes is in the corpus, so they are pinned at the guard, on entries by hand.
+    @Test func anEntryIsRenamedOnlyOntoAnAnchorNothingElseHolds() {
+        func settled(_ labels: [String], reserved: Set<String> = []) -> [String] {
+            let entries = labels.map { Reference(anchor: LegacyTextParser.entryAnchor(label: $0, documentID: nil), displayAnchor: $0, title: $0) }
+            return LegacyTextParser.settlingEntryAnchors([0: entries], reserved: reserved)[0]?.map(\.anchor) ?? []
+        }
+        // `[X-2]` keeps its own anchor, so the repeat of `[X]` does not take it from under it.
+        #expect(settled(["X", "X", "X-2"]) == ["X", "X-3", "X-2"])
+        // Two labels that spell one name are two anchors.
+        #expect(settled(["ECMA TR 53", "ECMA TR/53"]) == ["ref-ECMA-TR-53", "ref-ECMA-TR-53-2"])
+        // And an entry never takes an anchor a section can have.
+        #expect(settled(["section-1"], reserved: ["section-1"]) == ["section-1-2"])
+    }
+
+    /// A label listed twice is cited as its first entry, whether that names a document or
+    /// not: RFC 2023 lists RFCs 1883 and 1884 both as `[2]`.
+    @Test func aRepeatedLabelIsCitedAsItsFirstEntry() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt"))
+        let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(\.target)
+        #expect(!cited.isEmpty)
+        #expect(cited.allSatisfy { $0 == .document(.rfc(1883), section: nil) }, "\(cited)")
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
@@ -944,5 +970,33 @@ extension RFCDocument {
 
     var crossReferences: [CrossReference] {
         paragraphs.flatMap { $0.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil } }
+    }
+
+    /// Every citation anywhere the linker runs: headings, the abstract, and prose at any
+    /// depth -- lists, definitions, tables, quotes -- not only top-level paragraphs.
+    var everyCrossReference: [CrossReference] {
+        func fromInlines(_ inlines: [Inline]) -> [CrossReference] {
+            inlines.flatMap { inline -> [CrossReference] in
+                switch inline {
+                case .crossReference(let xref): [xref]
+                case .emphasis(let inner), .strong(let inner), .link(_, let inner): fromInlines(inner)
+                default: []
+                }
+            }
+        }
+        func fromBlocks(_ blocks: [Block]) -> [CrossReference] {
+            blocks.flatMap { block -> [CrossReference] in
+                switch block {
+                case .paragraph(let paragraph): fromInlines(paragraph.inlines)
+                case .list(let list): list.items.flatMap { fromBlocks($0.blocks) }
+                case .definitionList(let items): items.flatMap { fromInlines($0.term) + fromBlocks($0.definition) }
+                case .figure(let figure): fromBlocks(figure.blocks)
+                case .table(let table): (table.header + table.rows).flatMap { $0.flatMap(fromInlines) }
+                case .blockQuote(let inner), .aside(let inner): fromBlocks(inner)
+                case .references, .preformatted: []
+                }
+            }
+        }
+        return fromBlocks(header.abstract) + allSections.flatMap { fromInlines($0.title) + fromBlocks($0.blocks) }
     }
 }
