@@ -194,6 +194,10 @@ private struct Representable: NSViewRepresentable {
         // to already be inside one — see where the scroll view is assembled below.
         textView.isIncrementalSearchingEnabled = true
         textView.usesFindBar = true
+        // On by default: every `.link` run gets an implicit tooltip of its URL, and
+        // hovering a reference showed the raw `rfc://8174`. The hover popover is what
+        // a reference shows; nothing in the reader surfaces the app's own scheme.
+        textView.displaysLinkToolTips = false
         textView.textLayoutManager?.delegate = context.coordinator
         textView.delegate = context.coordinator
 

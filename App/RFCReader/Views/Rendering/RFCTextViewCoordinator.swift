@@ -400,7 +400,12 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         trackingArea = area
     }
 
-    @objc
+    /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
+    /// owner `mouseMoved:`, but the selector Swift derives for `mouseMoved(with:)`
+    /// on a class that is not an `NSResponder` is `mouseMovedWith:`. AppKit checks
+    /// before sending and skips an owner that does not respond, so with the derived
+    /// name the tracking area was installed and no hover ever reached this.
+    @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
         guard let textView else { return }
         let viewPoint = textView.convert(event.locationInWindow, from: nil)
@@ -417,7 +422,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         }
     }
 
-    @objc
+    @objc(mouseExited:)
     private func mouseExited(with event: NSEvent) {
         cancelHover()
     }
