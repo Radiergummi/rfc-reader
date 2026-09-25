@@ -665,7 +665,17 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: Headings
 
-    private static let nonHeadingWords: Set<String> = ["rfc", "request", "network", "internet", "obsoletes", "updates", "category", "issn"]
+    private static let nonHeadingWords: Set<String> = ["rfc", "obsoletes", "updates", "category", "issn"]
+
+    /// Header lines, refused as a heading by what they say rather than by their first
+    /// word: the body a header block names, and the number label, whose value is not
+    /// always a number (`Request for Comments: DRAFT`, `Request for Comments: 17a`).
+    /// Refusing every line that opens with `Network`, `Internet` or `Request` kept these
+    /// out of the body, and refused about 120 real headings with them -- `NETWORK
+    /// NUMBERS`, `Internet Protocol`, and RFC 796's only one.
+    private static let headerLinePrefixes = ["network working group", "internet engineering task force",
+                                             "internet architecture board", "internet research task force",
+                                             "request for comments:"]
 
     /// True when the body sits at an indent and headings stand out at column 0, which is
     /// the layout `heading(from:)` assumes. A few hundred legacy RFCs (1142, 1305, 1247,
@@ -753,7 +763,13 @@ public struct LegacyTextParser: Sendable {
         }
         // Unnumbered heading: "Abstract", "Security Considerations", "Author's Address".
         let firstWord = trimmed.split(separator: " ").first.map { String($0).lowercased() } ?? ""
-        guard !nonHeadingWords.contains(firstWord), trimmed.first?.isLetter == true else { return nil }
+        // A number line opens with its label (`RFC: 791`, `NWG/RFC# 732`). Asked anywhere in
+        // the line, the pattern also finds `RFC 399` after a sentence's double space, and
+        // prose at column 0 that mentions a document stops ending the front matter: RFC
+        // 431 lost a line of its first paragraph that way.
+        guard !nonHeadingWords.contains(firstWord), trimmed.first?.isLetter == true, trimmed.prefixMatch(of: numberLinePattern) == nil else { return nil }
+        let lowered = trimmed.lowercased()
+        guard !headerLinePrefixes.contains(where: { lowered.hasPrefix($0) }) else { return nil }
         return HeadingInfo(number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())", depth: 1)
     }
 
