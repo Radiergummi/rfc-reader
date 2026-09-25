@@ -236,7 +236,15 @@ final class RFCTextViewCoordinator: NSObject {
         // content size category, and on metadata that can arrive after the first
         // layout, and a cache keyed on any one of those goes stale as a header
         // overlapping the first paragraph. Only the writes below are conditional.
-        let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
+        //
+        // Rounded up to a whole point, which is a whole pixel at every integer scale:
+        // the height is the text container's top inset, and a card's joins are
+        // snapped to the pixel grid in container coordinates
+        // (`Placement.snappingJoins`). A fractional inset — SwiftUI measures 187.33 as
+        // readily as 188 — shifts that grid off the real pixels, and every join is
+        // half-covered from both sides again. The gutter is the horizontal inset and
+        // needs no rounding for this: the joins are all horizontal edges.
+        let headerHeight = (headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0).rounded(.up)
         guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight else { return }
         let columnChanged = column != laidOutColumn
         laidOutColumn = column

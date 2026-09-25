@@ -271,8 +271,12 @@ public enum FragmentGeometry {
         /// same number whatever local space each is drawn in. That needs only the
         /// text container's origin on the device grid, not each fragment's: NSTextView
         /// was measured to put every fragment's local origin on a pixel, but nothing
-        /// says a UITextView's fragment views are. Rounding is `floor(x + 0.5)`, so a
-        /// tie goes one way from both sides.
+        /// says a UITextView's fragment views are. The container's origin is the text
+        /// view's own, which sits on the grid, plus the header's top inset, which
+        /// `RFCTextViewCoordinator.layOut` rounds up to a whole point to keep it
+        /// there; a fractional inset would put every join on a grid half a pixel off
+        /// the real one, and the seams would come back. Rounding is `floor(x + 0.5)`,
+        /// so a tie goes one way from both sides.
         ///
         /// The scale comes from `toDevice`, the context's
         /// `userSpaceToDeviceSpaceTransform`, not its `ctm`: inside
