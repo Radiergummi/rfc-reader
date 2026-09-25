@@ -76,7 +76,7 @@ rfc-index.xml ──▶ fetch --format xml ─┘                          (1,37
 ```
 
 - **fetch** reads the index, picks every RFC without an XML format, and downloads the `.txt` with bounded concurrency (default 6, be polite to the RFC Editor). Existing files are skipped, so re-runs only fetch what is new or missing. `--limit N` for smoke tests.
-- **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, add an override when one document is.
+- **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, add an override when one document is. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes.
 - **manifest** hashes every file so the app can verify downloads and fetch individual documents by path.
 
 Regression review is a diff of two `report.json` files: a heuristic change that moves counts on hundreds of documents gets looked at before it ships. The reports for the 1969 RFCs already show what to expect: RFC 2 flags "more artwork than prose" (its hand-typed layout is indistinguishable from diagrams) and RFC 3 has no recognisable front matter. Those become overrides or targeted heuristics; the 1990s and 2000s RFCs, which are the bulk, follow the strict format the parser is built for.
@@ -126,6 +126,7 @@ corpus/                      (git-ignored working directory, or a separate data 
 ├── rfc-index.xml            snapshot used for this run
 ├── text/rfcNNNN.txt         fetched sources, byte-for-byte as served
 ├── overrides/rfcNNNN.xml    hand-corrected documents, committed and reviewed
+│   └── rfcNNNN.py           the script behind a mechanically corrected one
 ├── xml/rfcNNNN.xml          generated output
 ├── report.json              per-document counts and warnings
 └── manifest.json
