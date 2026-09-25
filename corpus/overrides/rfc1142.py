@@ -52,8 +52,11 @@ TITLE_ENDS = {"9.10": "Numbers PDU", "A.4.1": "Implementation Identification",
 # A heading line ending in a space whose next line is nevertheless the body.
 NOT_WRAPPED = {"8.4.1.5"}
 # The unnumbered sections the converter finds that are real.
-UNNUMBERED = {"ISO/IEC DIS 10589", "Introduction", "Information technology",
-              "Security Considerations", "Author's Address"}
+# `Information technology` opens the standard's own title page, not a section, and is
+# demoted with it into the Introduction. `ISO/IEC DIS 10589` is the same kind of line,
+# but it heads the first thing the converter finds after the RFC's front matter -- the
+# ISO title and the contents list -- and a demoted section needs one before it.
+UNNUMBERED = {"ISO/IEC DIS 10589", "Introduction", "Security Considerations", "Author's Address"}
 
 NUMBERED = re.compile(r"^(\d+(?:\.\d+)*|[A-D](?:\.\d+)+)\.?[ \t]+(\S.*)$")
 
