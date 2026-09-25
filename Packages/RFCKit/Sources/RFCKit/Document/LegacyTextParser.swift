@@ -493,7 +493,39 @@ public struct LegacyTextParser: Sendable {
             flat.append(section)
         }
 
-        return RFCDocument(header: header, sections: Self.nest(flat), source: .text)
+        return RFCDocument(header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
+    }
+
+    /// An anchor is what a deep link, the table of contents and a reading position key off,
+    /// and the XML declares each one as an ID, sections and bibliography entries alike.
+    /// Headings that repeat -- two `Introduction`s in RFC 1, two sections numbered 1 in RFC
+    /// 19 -- and a bibliography listing one label twice gave two elements one anchor in 526
+    /// documents (#65), and a link landed on whichever came first. A repeat takes the next
+    /// free `-2`, `-3`, the way xml2rfc numbers them; the first keeps its anchor, so every
+    /// link that landed on it still does. An entry keeps its label as `displayAnchor`.
+    private static func makingAnchorsUnique(_ sections: [Section]) -> [Section] {
+        var taken: Set<String> = []
+        func unique(_ anchor: String) -> String {
+            var candidate = anchor
+            var suffix = 2
+            while !taken.insert(candidate).inserted {
+                candidate = "\(anchor)-\(suffix)"
+                suffix += 1
+            }
+            return candidate
+        }
+        return sections.map { section in
+            var section = section
+            section.anchor = unique(section.anchor)
+            section.blocks = section.blocks.map { block in
+                guard case .references(var list) = block else { return block }
+                for index in list.entries.indices {
+                    list.entries[index].anchor = unique(list.entries[index].anchor)
+                }
+                return .references(list)
+            }
+            return section
+        }
     }
 
     /// How many of an omitted section's blocks are its own: all of them, unless it has run

@@ -535,9 +535,9 @@ struct LegacyTextCorpusFindingsTests {
     /// on the entry's third line, and the pair straddles a page break.
     @Test func theSameLineAtOppositeEdgesIsNotARunningHeader() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
-        let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
-        #expect(anchors.filter { $0 == "ISO-8859" }.count == 2)
-        #expect(anchors.count == 7)
+        let labels = document.referenceLists.flatMap { $0.entries.map(\.displayAnchor) }
+        #expect(labels.filter { $0 == "ISO-8859" }.count == 2)
+        #expect(labels.count == 7)
     }
 
     /// Where a document sets as much text at column 0 as at its body indent, column 0
@@ -612,6 +612,34 @@ struct LegacyTextCorpusFindingsTests {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc873.txt"))
         #expect(document.header.id == .rfc(873))
         #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
+    }
+
+    /// An anchor is what a deep link, the table of contents and a reading position key off,
+    /// and the XML declares each one as an ID. Headings that repeat gave two sections one
+    /// anchor -- RFC 1 has two `Introduction`s, RFC 19 two sections numbered 1 -- and a
+    /// bibliography that lists a label twice gave two entries one: 526 documents in all
+    /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
+    /// the first keeps its anchor, so every link that landed on it still does.
+    @Test func noTwoElementsShareAnAnchor() throws {
+        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        #expect(fixtures.count > 20)
+        for fixture in fixtures {
+            let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+            let anchors = document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor)
+            let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+            #expect(repeated.isEmpty, "\(fixture): \(repeated)")
+        }
+
+        let first = LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).allSections.map(\.anchor)
+        let original = try #require(first.firstIndex(of: "name-introduction"))
+        let second = try #require(first.firstIndex(of: "name-introduction-2"))
+        #expect(original < second)
+        #expect(LegacyTextParser.parse(try Fixtures.string("rfc19.txt")).allSections.map(\.anchor).contains("section-1-2"))
+
+        let entries = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
+        let relabelled = try #require(entries.first { $0.anchor == "2-2" })
+        #expect(relabelled.displayAnchor == "2", "a renamed entry still reads as the label its citations use")
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
