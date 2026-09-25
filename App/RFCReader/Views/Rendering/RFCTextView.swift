@@ -203,6 +203,9 @@ private struct Representable: NSViewRepresentable {
         textView.quickLookReference = { [weak coordinator = context.coordinator] event in
             coordinator?.quickLookReference(with: event) ?? false
         }
+        textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
+            coordinator?.mouseDownInText()
+        }
 
         let host = NSHostingController(rootView: inputs.header)
         textView.addSubview(host.view)

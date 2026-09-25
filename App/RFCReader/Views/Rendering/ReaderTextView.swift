@@ -39,6 +39,9 @@ final class ReaderTextView: NSTextView {
     /// representable, and a closure rather than the coordinator so this view stays
     /// about text.
     var quickLookReference: (NSEvent) -> Bool = { _ in false }
+    /// Told before a click is tracked, so a force click's pending mouse-up is not
+    /// mistaken for part of the next click.
+    var willTrackMouseDown: () -> Void = {}
 
     /// Only a reference is taken over. Everywhere else a force click is AppKit's
     /// Look Up, which a reader of dense technical prose uses on any word.
@@ -49,6 +52,13 @@ final class ReaderTextView: NSTextView {
     override func quickLook(with event: NSEvent) {
         guard !quickLookReference(event) else { return }
         super.quickLook(with: event)
+    }
+
+    /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
+    /// own tracking loop and does not return until the button is up.
+    override func mouseDown(with event: NSEvent) {
+        willTrackMouseDown()
+        super.mouseDown(with: event)
     }
 
     /// AppKit asks for each declared type in turn. Only the plain-text flavour is

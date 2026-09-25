@@ -124,9 +124,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// references to the same target are still two hovers.
     private var hoveredBox: ReferenceBox?
     private var popover: NSPopover?
-    /// The reference a force click just previewed, and the number of the event that
-    /// did it: see `clickedOnLink`.
-    private var forceClick: (box: ReferenceBox, eventNumber: Int)?
+    /// The reference a force click just previewed, whose own mouse-up must not
+    /// follow it: see `clickedOnLink`. The next mouse-down starts a click of its
+    /// own, and forgets it.
+    private var forceClickedBox: ReferenceBox?
     #endif
 
     // MARK: - Storage
@@ -381,12 +382,14 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         // A force click is a click too, so its mouse-up may arrive here and follow
-        // the link from under the card it just opened. Swallowed when it is the
-        // same reference and the same gesture — AppKit numbers a click's events
-        // alike, which is assumed here, not yet observed on hardware.
-        if let forceClick, forceClick.eventNumber == NSApp.currentEvent?.eventNumber,
-           textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box === forceClick.box {
-            self.forceClick = nil
+        // the link from under the card it just opened. Swallowed once, when it is
+        // the reference the force click previewed; the mouse-down of any later click
+        // has already forgotten that. No event number is compared: `eventNumber`
+        // raises on anything but a mouse event, and a force click's own events are
+        // not all mouse events.
+        if let forceClickedBox,
+           textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box === forceClickedBox {
+            self.forceClickedBox = nil
             return true
         }
         // Following a reference is what the preview was for; one still timing would
@@ -413,6 +416,11 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     func viewportDidScroll(_ notification: Notification) {
         reportVisibleAnchor()
         cancelHover()
+    }
+
+    /// The next click is a click of its own, not the tail of a force click.
+    func mouseDownInText() {
+        forceClickedBox = nil
     }
 
     // MARK: - Hover preview
@@ -469,16 +477,17 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
 
     /// Force click on a reference: the same card, without the dwell. Anywhere else
     /// it returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
+    /// So does Look Up from the keyboard, which means the selection, not whatever
+    /// the pointer happens to rest on — and a key event has no location to test.
     func quickLookReference(with event: NSEvent) -> Bool {
-        guard let (box, range) = reference(under: event) else { return false }
-        let eventNumber = NSApp.currentEvent?.eventNumber ?? event.eventNumber
+        guard event.type != .keyDown, let (box, range) = reference(under: event) else { return false }
         if hoveredBox === box, popover?.isShown == true {
-            forceClick = (box, eventNumber)
+            forceClickedBox = box
             return true
         }
         cancelHover()
         hoveredBox = box
-        forceClick = (box, eventNumber)
+        forceClickedBox = box
         showPopover(for: box, range: range)
         return true
     }
@@ -504,7 +513,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         dwellTimer?.invalidate()
         dwellTimer = nil
         hoveredBox = nil
-        forceClick = nil
+        forceClickedBox = nil
         if popover?.isShown == true { popover?.performClose(nil) }
         popover = nil
     }
