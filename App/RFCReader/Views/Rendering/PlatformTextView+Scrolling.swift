@@ -40,15 +40,6 @@ extension PlatformTextView {
         #endif
     }
 
-    /// The width the text wraps at.
-    var textContainerWidth: CGFloat? {
-        #if canImport(UIKit)
-        return textContainer.size.width
-        #else
-        return textContainer?.size.width
-        #endif
-    }
-
     var viewportHeight: CGFloat {
         #if canImport(UIKit)
         return bounds.height
