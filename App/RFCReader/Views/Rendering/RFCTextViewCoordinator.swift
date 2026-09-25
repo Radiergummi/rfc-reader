@@ -348,6 +348,11 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
     func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
         guard let box = reference(at: textItem), let library else { return .init(menu: defaultMenu) }
         let host = UIHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
+        // Sized here, the way the header host is in `layOut`: the preview is shown
+        // at its view's own size, and a hosting controller's view is not sized to
+        // its content until something lays it out.
+        host.view.frame.size = host.sizeThatFits(in: CGSize(width: 280, height: CGFloat.greatestFiniteMagnitude))
+        host.view.backgroundColor = .clear
         referencePreviewHost = host
         return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
     }
