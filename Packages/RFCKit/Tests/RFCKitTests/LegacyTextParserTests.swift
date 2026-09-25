@@ -707,6 +707,32 @@ struct LegacyTextCorpusFindingsTests {
         #expect(settled(["*", "**"]) == ["ref-note", "ref-note-2"])
     }
 
+    /// A heading that repeats is renamed after the prose is linked, so what an entry must
+    /// not take is every anchor a section can be renamed to, not only the ones it starts
+    /// with: an entry settled onto `section-1-2` beside two sections numbered 1 lost it to
+    /// the second, and its citations to a rename. Every suffix a repeat can reach is held,
+    /// past the ones another heading already spells (`name-foo-2`, for `Foo 2`).
+    @Test func aRepeatedHeadingHoldsEveryAnchorItCanBeRenamedTo() {
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1-2"])
+        #expect(LegacyTextParser.reservedAnchors(["name-foo", "name-foo", "name-foo-2"]) == ["name-foo", "name-foo-2", "name-foo-3"])
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-2"]) == ["section-1", "section-2"])
+    }
+
+    /// What `parse` reserves is every anchor its sections end with, and no entry holds one:
+    /// RFC 19 numbers two sections 1, and the second is `section-1-2`.
+    @Test func everySectionAnchorIsReservedAndNoEntryHoldsOne() throws {
+        #expect(try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1-2"))
+        for fixture in try Fixtures.legacyTexts() {
+            let text = try Fixtures.string(fixture)
+            let reserved = LegacyTextParser.reservedAnchors(in: text)
+            let document = LegacyTextParser.parse(text)
+            let unreserved = Set(document.allSections.map(\.anchor)).subtracting(reserved).sorted()
+            #expect(unreserved.isEmpty, "\(fixture): \(unreserved)")
+            let held = Set(document.referenceLists.flatMap(\.entries).map(\.anchor)).intersection(reserved).sorted()
+            #expect(held.isEmpty, "\(fixture): \(held)")
+        }
+    }
+
     /// A label listed twice is cited as its first entry, whether that names a document or
     /// not: RFC 2023 lists RFCs 1883 and 1884 both as `[2]`.
     @Test func aRepeatedLabelIsCitedAsItsFirstEntry() throws {

@@ -431,8 +431,7 @@ public struct LegacyTextParser: Sendable {
                 guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else { return }
                 lists[index] = Self.parseReferences(sections[index].blocks)
             },
-            // Every anchor a section below can take, so no entry is declared under one.
-            reserved: Set(sections.compactMap(\.heading).flatMap { [$0.anchor, "after-\($0.anchor)"] } + ["preamble"])
+            reserved: Self.reservedAnchors(Self.sectionAnchorCandidates(sections))
         )
         var referenceTargets: [String: CrossReference.Target] = [:]
         // Keyed by the label, which is what the prose cites; pointing at the anchor, which
@@ -509,6 +508,34 @@ public struct LegacyTextParser: Sendable {
         return RFCDocument(header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
     }
 
+    /// Every anchor a section can be declared under, so no entry is: each a section can start
+    /// with, and each `makingAnchorsUnique` can rename a repeat to. That rename runs after
+    /// the prose is linked, and an entry settled onto `section-1-2` beside two sections
+    /// numbered 1 was renamed off it, away from its citations. A repeat takes the first free
+    /// `-n`, and what can hold one before it is an earlier repeat or another heading
+    /// spelled so (`name-foo-2`, for `Foo 2`), so for an anchor that can appear `c` times,
+    /// with `r` headings spelling `-n` of it, the rename lands within `-2` to `-(c + r)`.
+    static func reservedAnchors(_ candidates: [String]) -> Set<String> {
+        let counts = candidates.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        var reserved = Set(candidates)
+        for (anchor, count) in counts where count > 1 {
+            let spelled = counts.keys.count { $0.hasPrefix("\(anchor)-") && $0.dropFirst(anchor.count + 1).allSatisfy(\.isNumber) }
+            for suffix in 2...(count + spelled) { reserved.insert("\(anchor)-\(suffix)") }
+        }
+        return reserved
+    }
+
+    /// `reservedAnchors` for the sections `parse` would read from `text`.
+    static func reservedAnchors(in text: String) -> Set<String> {
+        reservedAnchors(sectionAnchorCandidates(prepared(text).sections))
+    }
+
+    /// Every anchor a section can start with, in document order: the lead-in, then each
+    /// heading's own and the one its body after the boilerplate takes.
+    private static func sectionAnchorCandidates(_ sections: [RawSection]) -> [String] {
+        ["preamble"] + sections.compactMap(\.heading).flatMap { [$0.anchor, "after-\($0.anchor)"] }
+    }
+
     /// Each entry's anchor as it will be declared, settled before any prose is linked so a
     /// citation points at the anchor its entry ends with. Renaming repeats afterwards, as
     /// `makingAnchorsUnique` does sections, moved entries out from under the citations
@@ -543,8 +570,8 @@ public struct LegacyTextParser: Sendable {
     /// documents (#65), and a link landed on whichever came first. A repeat takes the next
     /// free `-2`, `-3`, the way xml2rfc numbers them; the first keeps its anchor, so every
     /// link that landed on it still does. An entry keeps its label as `displayAnchor`, and
-    /// arrives here unique already (`settlingEntryAnchors`); it is renamed here only if a
-    /// section's repeat is renamed onto it.
+    /// arrives here unique already (`settlingEntryAnchors`), clear of every anchor a
+    /// section's repeat can be renamed to (`reservedAnchors`).
     private static func makingAnchorsUnique(_ sections: [Section]) -> [Section] {
         var taken: Set<String> = []
         func unique(_ anchor: String) -> String {
