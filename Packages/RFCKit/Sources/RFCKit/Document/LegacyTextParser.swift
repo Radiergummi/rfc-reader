@@ -447,14 +447,18 @@ public struct LegacyTextParser: Sendable {
             }
             let lowered = heading.title.lowercased()
             if heading.number == nil {
-                if lowered == "abstract" {
-                    header.abstract = Self.blocks(from: raw.blocks, linker: linker)
-                    continue
-                }
                 // Boilerplate that the RFCXML path also omits; the original text view still has it.
                 let boilerplate = ["table of contents", "status of this memo", "status of memo", "copyright notice",
                                    "full copyright statement", "intellectual property", "disclaimer of validity"]
-                if boilerplate.contains(where: { lowered.hasPrefix($0) }) {
+                if lowered == "abstract" || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
+                    let extent = Self.boilerplateExtent(of: raw.blocks, isContents: lowered.hasPrefix("table of contents"))
+                    if lowered == "abstract" {
+                        header.abstract = Self.blocks(from: Array(raw.blocks.prefix(extent)), linker: linker)
+                    }
+                    let body = Self.blocks(from: Array(raw.blocks.dropFirst(extent)), linker: linker)
+                    if !body.isEmpty {
+                        flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
+                    }
                     continue
                 }
             }
@@ -483,6 +487,27 @@ public struct LegacyTextParser: Sendable {
         }
 
         return RFCDocument(header: header, sections: Self.nest(flat), source: .text)
+    }
+
+    /// How many of an omitted section's blocks are its own: all of them, unless it has run
+    /// on far past what boilerplate is, and then its first block and those after it that
+    /// are still boilerplate-shaped -- paragraphs, or for a table of contents, entries.
+    ///
+    /// Such a section ends at the next heading, and where the document's headings are of a
+    /// shape the parser does not know -- `1)` in RFC 1927, `1:` in RFC 2743, indented in
+    /// RFC 908 -- no heading ends it, and it takes the body (#60). Of the 29,856 omitted
+    /// sections in the corpus, 446 of the 552 over 60 lines are two or three blocks, none
+    /// that is boilerplate is more than 16, and every one that swallowed its body is 22 or
+    /// more. Past the gap a single line ends it, because boilerplate is paragraphs and a
+    /// lone line is where the body's own unrecognised heading sits.
+    private static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool) -> Int {
+        guard blocks.count > 20 else { return blocks.count }
+        func isEntry(_ line: String) -> Bool {
+            line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..") || line.contains(". .")
+        }
+        return 1 + blocks.dropFirst().prefix { block in
+            isContents ? block.lines.filter(isEntry).count * 2 >= block.lines.count : block.lines.count > 1 && looksLikeProse(block.lines)
+        }.count
     }
 
     // MARK: Front matter

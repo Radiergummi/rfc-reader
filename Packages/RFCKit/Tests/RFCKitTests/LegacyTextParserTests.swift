@@ -490,6 +490,28 @@ struct LegacyTextCorpusFindingsTests {
         #expect(LegacyTextParser.recurringFurniture(in: text).allSatisfy { !$0.contains("Additional information:") })
     }
 
+    /// A section the reader omits -- the memo's status, its copyright, its contents -- or
+    /// lifts into the header as its abstract is a few paragraphs long, and it ends at the
+    /// next heading. Where the document's own headings are of a shape the parser does not
+    /// know, no heading ever ends it, and the whole body went with it (#60): RFC 1927's
+    /// sections are numbered `1)`, and RFC 509 follows its one-line abstract with two
+    /// pages of traffic tables. RFC 1927 kept 3 of its blocks, RFC 509 none.
+    @Test func anOmittedSectionEndsWhereItsBoilerplateDoes() throws {
+        func middle(_ name: String) throws -> (document: RFCDocument, middle: Substring) {
+            let document = LegacyTextParser.parse(try Fixtures.string(name))
+            let xml = RFCXMLSerializer().serialize(document)
+            let start = try #require(xml.range(of: "<middle>")), end = try #require(xml.range(of: "</middle>"))
+            return (document, xml[start.upperBound..<end.lowerBound])
+        }
+        let staples = try middle("rfc1927.txt")
+        #expect(staples.middle.contains("New MIME Types: Staple"))
+        #expect(!staples.middle.contains("This memo provides information for the Internet community"))
+
+        let traffic = try middle("rfc509.txt")
+        #expect(traffic.middle.contains("HOST THROUGHPUT SUMMARY"))
+        #expect(traffic.document.header.abstract.count == 1)
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number
