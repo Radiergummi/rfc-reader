@@ -143,7 +143,7 @@ struct LegacyTextParserTests {
                 return nil
             }
         }
-        #expect(xrefs.contains { $0.target == .anchor("ref-US-ASCII") && $0.text == "[US-ASCII]" })
+        #expect(xrefs.contains { $0.target == .anchor("US-ASCII") && $0.text == "[US-ASCII]" })
         #expect(document.referencedDocuments.contains(.rfc(822)))
     }
 
@@ -653,6 +653,26 @@ struct LegacyTextCorpusFindingsTests {
         let entries = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
         let relabelled = try #require(entries.first { $0.anchor == "2-2" })
         #expect(relabelled.displayAnchor == "2", "a renamed entry still reads as the label its citations use")
+    }
+
+    /// A citation of a bibliography entry that is not an RFC targets the entry's anchor,
+    /// which is its label -- as in the RFCXML series, where `[MIP-OPTIM]` is
+    /// `<xref target="MIP-OPTIM">` and the entry `<reference anchor="MIP-OPTIM">`. The
+    /// parser used to target `ref-MIP-OPTIM`, which nothing declares, so 30,368 citations
+    /// in 3,708 converted documents led nowhere (#81).
+    @Test func everyCitedAnchorIsDeclared() throws {
+        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        var cited = 0
+        for fixture in fixtures {
+            let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+            let declared = Set(document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor))
+            let targets = document.crossReferences.compactMap { if case .anchor(let anchor) = $0.target { return anchor }; return nil }
+            cited += targets.count
+            let dangling = Set(targets).subtracting(declared).sorted()
+            #expect(dangling.isEmpty, "\(fixture): \(dangling)")
+        }
+        #expect(cited > 0, "the fixtures cite something by anchor, so the check checks something")
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the

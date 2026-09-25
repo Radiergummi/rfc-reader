@@ -432,7 +432,7 @@ public struct LegacyTextParser: Sendable {
                 if let id = reference.documentID {
                     referenceTargets[reference.anchor] = .document(id, section: nil)
                 } else {
-                    referenceTargets[reference.anchor] = .anchor("ref-\(reference.anchor)")
+                    referenceTargets[reference.anchor] = .anchor(reference.anchor)
                 }
             }
         }
