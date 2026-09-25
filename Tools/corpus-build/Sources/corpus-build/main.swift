@@ -263,6 +263,8 @@ enum Convert {
         )
         try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
         if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
+        // Read before this run overwrites it.
+        let previouslyValid = job.schema == nil ? nil : arguments["report"].flatMap(validDocuments(inReportAt:))
 
         let files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
             .filter { $0.hasSuffix(".txt") }
@@ -312,7 +314,7 @@ enum Convert {
                 log("  only \(guardName): \(count)")
             }
         }
-        if job.schema != nil { logSchema(reports) }
+        if job.schema != nil { logSchema(reports, previouslyValid: previouslyValid) }
         let flagged = reports.filter { !$0.warnings.isEmpty }
         log("done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings")
         for entry in flagged.prefix(40) { log("  \(entry.id): \(entry.warnings.joined(separator: "; "))") }
@@ -375,7 +377,11 @@ enum Convert {
     /// How many documents each cause fails, and how many it is the only cause found in:
     /// at most the documents fixing that one cause alone would make valid, since a known
     /// cause can hide an unknown one (`SchemaCheck`).
-    static func logSchema(_ reports: [Report]) {
+    ///
+    /// Then, against the report this run replaced, the documents that stopped validating,
+    /// by name: those are the regressions, and a count that nets them against documents
+    /// that started would hide them.
+    static func logSchema(_ reports: [Report], previouslyValid: Set<String>?) {
         let checked = reports.compactMap(\.schema)
         log("schema: \(checked.filter(\.isEmpty).count) of \(checked.count) validate")
         for cause in SchemaCheck.Cause.allCases {
@@ -384,6 +390,25 @@ enum Convert {
             let sole = checked.filter { $0 == [cause.rawValue] }.count
             log("  \(cause.rawValue): \(documents), the only cause found in \(sole)")
         }
+        guard let previouslyValid else { return }
+        let valid = reports.filter { $0.schema == [] }.map(\.id)
+        let stopped = reports.filter { previouslyValid.contains($0.id) && $0.schema != [] }.map(\.id)
+        let started = valid.filter { !previouslyValid.contains($0) }.count
+        log("schema: against the previous report, \(started) started validating and \(stopped.count) stopped")
+        for id in stopped.prefix(40) { log("  stopped validating: \(id)") }
+    }
+
+    /// The documents that validated in the report at `path`; nil when there is none, or
+    /// when it comes from a run that did not check, which is no baseline.
+    static func validDocuments(inReportAt path: String) -> Set<String>? {
+        struct Entry: Decodable {
+            var id: String
+            var schema: [String]?
+        }
+        guard let data = FileManager.default.contents(atPath: path),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data),
+              entries.contains(where: { $0.schema != nil }) else { return nil }
+        return Set(entries.filter { $0.schema == [] }.map(\.id))
     }
 
     static func report(for document: RFCDocument, id: String, overridden: Bool) -> Report {
