@@ -20,7 +20,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    container: swift:6.1
+    # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
+    timeout-minutes: 180
+    container: swift:6.1@sha256:3991e5dd5c40b04580c1e56f1ad6042f3173829b1995ffa53b84957371c25876
     # write only for the optional `gh release create` in the last step.
     permissions:
       contents: write
@@ -30,6 +32,8 @@ jobs:
       LIMIT: ${{ inputs.limit }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Restore fetched text
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -72,7 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get install -y -qq gh >/dev/null || true
+          apt-get install -y -qq gh >/dev/null
           gh release create "corpus-$VERSION" legacy-xml-*.tar.zst corpus/manifest.json \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."
