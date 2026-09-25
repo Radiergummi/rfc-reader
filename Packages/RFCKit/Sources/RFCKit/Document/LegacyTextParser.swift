@@ -513,34 +513,59 @@ public struct LegacyTextParser: Sendable {
     // MARK: Front matter
 
     /// Front matter is the header block (first run of lines), the title (second run, which
-    /// may start at column 0 when it fills the line), and anything up to the next heading.
+    /// may start at column 0 when it fills the line), and the runs after it up to the first
+    /// that is the body's: one holding a heading, or a paragraph before it. Where no heading
+    /// comes at all, the front matter ends after the title.
+    ///
+    /// A paragraph is the body's even before any heading: `parse` keeps it as the lead-in,
+    /// where front matter has nowhere to put it and it is lost. Ending the front matter only
+    /// at a heading lost everything above the first column-0 heading that came -- in RFC 809
+    /// the one opening its appendix, in RFC 796 `References` (#60). And the run a heading
+    /// sits in is the body's from its start: in RFC 105 and a hundred more, the first
+    /// paragraph indents its first line and sets its second at the margin, and ending at the
+    /// second line left the first behind in the front matter. So the front matter ends where
+    /// it used to or sooner, never later.
     private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
         var run = 0
-        var previousWasBlank = true
+        // Where the current run starts, what the front matter was before it, and its lines.
+        var runStart: (offset: Int, front: [String])?
+        var runLines: [String] = []
         // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
         // RFC 1144), so no heading ever arrives. Ending the front matter after the title
         // keeps the prose; swallowing the whole file would leave an empty document.
         var afterTitle: (front: [String], bodyStart: Int)?
+        // Noted, not stopped at: with no heading to come, after the title is sooner.
+        var firstParagraph: (front: [String], bodyStart: Int)?
+        func closeRun() {
+            if firstParagraph == nil, let start = runStart, run > 2, runLines.count > 1, looksLikeProse(runLines) {
+                firstParagraph = (start.front, start.offset)
+            }
+            runStart = nil
+            runLines = []
+        }
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
             if string.isBlank {
+                closeRun()
                 front.append("")
-                previousWasBlank = true
                 continue
             }
-            if previousWasBlank { run += 1 }
-            previousWasBlank = false
-            if run > 2 {
-                if afterTitle == nil { afterTitle = (front, offset) }
+            if runStart == nil {
+                run += 1
+                runStart = (offset, front)
+            }
+            if run > 2, let start = runStart {
+                if afterTitle == nil { afterTitle = (start.front, start.offset) }
                 // Deliberately laxer than the body's rule: the stand-alone test needs the
                 // body's indent, which is not known until this scan has finished. Stopping
                 // early only leaves a line in the body that turns out not to be a heading;
                 // stopping late would swallow it into the front matter and lose it.
                 if string.startsAtColumnZero, heading(from: string) != nil {
-                    return (front, offset)
+                    return firstParagraph ?? (start.front, start.offset)
                 }
             }
+            runLines.append(string)
             front.append(string)
         }
         return afterTitle ?? (front, lines.count)

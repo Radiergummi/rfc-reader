@@ -512,6 +512,23 @@ struct LegacyTextCorpusFindingsTests {
         #expect(traffic.document.header.abstract.count == 1)
     }
 
+    /// Front matter is the header and the title; a paragraph after them is the body's,
+    /// whether or not a heading has come yet. RFC 796 opens with prose under a heading of
+    /// a shape the scan does not stop at, and the first column-0 heading it does stop at is
+    /// `References`: the front matter ran on to it, and everything before it was lost (#60).
+    /// RFC 105 indents the first line of its opening paragraph and sets the second at the
+    /// margin, and the second was taken for a heading that ended the front matter, leaving
+    /// the first line in it.
+    @Test func theFrontMatterEndsAtTheFirstParagraph() throws {
+        let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
+        #expect(addresses.paragraphs.contains { $0.plainText.hasPrefix("This memo describes the relationship between address fields") })
+        #expect(addresses.header.id == .rfc(796))
+
+        let remoteJobs = LegacyTextParser.parse(try Fixtures.string("rfc105.txt"))
+        #expect(remoteJobs.paragraphs.contains { $0.plainText.hasPrefix("In the discussions that follow, 'byte' means 8 bits") })
+        #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number
