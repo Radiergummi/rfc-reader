@@ -377,7 +377,9 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
         // at its view's own size, and a hosting controller's view is not sized to
         // its content until something lays it out.
         host.view.frame.size = host.sizeThatFits(in: CGSize(width: 280, height: CGFloat.greatestFiniteMagnitude))
-        host.view.backgroundColor = .clear
+        // Opaque, as a context-menu preview's view is expected to be: the card has no
+        // background of its own, because on macOS the popover supplies one.
+        host.view.backgroundColor = .systemBackground
         referencePreviewHost = host
         return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
     }
