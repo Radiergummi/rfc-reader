@@ -411,11 +411,19 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
     /// Registered with the selector-based API so it unregisters with the coordinator.
     /// Scrolling also cancels any hover in progress — the popover is anchored to a
-    /// character rect that scrolling has just moved out from under it.
+    /// character rect that scrolling has just moved out from under it — and then
+    /// hit-tests again where the pointer is, because the text moved and the pointer
+    /// may not have. Every further scroll restarts that dwell, so a reference
+    /// scrolled under a resting pointer previews once scrolling stops.
     @objc
     func viewportDidScroll(_ notification: Notification) {
         reportVisibleAnchor()
         cancelHover()
+        guard NSApp.isActive, let textView, let window = textView.window else { return }
+        let point = window.mouseLocationOutsideOfEventStream
+        if textView.visibleRect.contains(textView.convert(point, from: nil)) {
+            hover(atWindowPoint: point)
+        }
     }
 
     /// The next click is a click of its own, not the tail of a force click.
@@ -459,7 +467,11 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// name the tracking area was installed and no hover ever reached this.
     @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
-        guard let (box, range) = reference(under: event) else {
+        hover(atWindowPoint: event.locationInWindow)
+    }
+
+    private func hover(atWindowPoint point: NSPoint) {
+        guard let (box, range) = reference(atWindowPoint: point) else {
             cancelHover()
             return
         }
@@ -482,7 +494,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// So does Look Up from the keyboard, which means the selection, not whatever
     /// the pointer happens to rest on — and a key event has no location to test.
     func quickLookReference(with event: NSEvent) -> Bool {
-        guard event.type != .keyDown, let (box, range) = reference(under: event) else { return false }
+        guard event.type != .keyDown, let (box, range) = reference(atWindowPoint: event.locationInWindow) else { return false }
         if hoveredBox === box, popover?.isShown == true {
             forceClickedBox = box
             return true
@@ -494,11 +506,12 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         return true
     }
 
-    /// The reference under the pointer. `textContainerOrigin` is the inset: the
-    /// view is flipped, so subtracting it is all it takes to reach container space.
-    private func reference(under event: NSEvent) -> (box: ReferenceBox, range: NSRange)? {
+    /// The reference under a point in window coordinates. `textContainerOrigin` is
+    /// the inset: the view is flipped, so subtracting it is all it takes to reach
+    /// container space.
+    private func reference(atWindowPoint point: NSPoint) -> (box: ReferenceBox, range: NSRange)? {
         guard let textView else { return nil }
-        let viewPoint = textView.convert(event.locationInWindow, from: nil)
+        let viewPoint = textView.convert(point, from: nil)
         return reference(at: CGPoint(x: viewPoint.x - textView.textContainerOrigin.x, y: viewPoint.y - textView.textContainerOrigin.y))
     }
 
