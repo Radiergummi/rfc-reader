@@ -434,6 +434,19 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
     }
 
+    /// A header that alternates between facing pages is on every other page, so it is
+    /// on half of them at most, and just under half where the last pages carry none.
+    /// RFC 810 sets `RFC 810 ... 1 March 1982` on its even pages, which the running-header
+    /// pattern knows, and `1 March 1982 ... RFC 810` on its odd ones, which it does not:
+    /// on three of eight, that header was read as a section's, and its first copy
+    /// stayed in the body.
+    @Test func aHeaderOnAlternatePagesNamesTheDocument() throws {
+        let text = try Fixtures.string("rfc810.txt")
+        #expect(LegacyTextParser.recurringFurniture(in: text).filter { $0.hasPrefix("1 March 1982") }.count == 3)
+        let body = LegacyTextParser.stripPagination(text).split(separator: "\n")
+        #expect(!body.contains { $0.hasPrefix("1 March 1982") && $0.hasSuffix("RFC 810") })
+    }
+
     /// Only a whole number varies from page to page, so only a whole number is masked
     /// when furniture is compared. RFC 2049 sets one-line anchors in its bibliography
     /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and

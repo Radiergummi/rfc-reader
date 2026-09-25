@@ -135,7 +135,10 @@ public struct LegacyTextParser: Sendable {
     /// `DESCRIPTION` clauses to a rule that asked only whether a line recurred.
     ///
     /// There are two kinds, and they differ in what the first one means. A line at the
-    /// edge of half the pages or more names the document, and every copy goes. A line
+    /// edge of half the pages or more names the document, and every copy goes -- half
+    /// the pages of its parity, for a line on every other page: RFC 821 alternates its
+    /// header between facing pages, the last two carry none, and on 34 of 70 the first
+    /// copy was kept as the start of a section. A line
     /// at the head of three pages or more, but fewer than half, names the section those
     /// pages are in -- RFC 793's `Philosophy` -- and its first copy is where that section
     /// starts. It is on every page of that section, or every other one where headers
@@ -196,8 +199,9 @@ public struct LegacyTextParser: Sendable {
             }
         }
 
+        // Two pages in a row are enough only for a line at the edge of half of them.
         let recurring = seen.filter { _, found in
-            found.pages.count >= 3 || zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 }
+            found.pages.count >= 3 || (found.pages.count * 2 >= later.count && zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 })
         }
         guard !recurring.isEmpty else { return [] }
         // How often each recurring line is seen away from the edges, keying the body
@@ -216,12 +220,17 @@ public struct LegacyTextParser: Sendable {
         var statedHeadings: Set<String>?
         for (sighting, found) in recurring {
             guard found.setOff * 2 >= found.lines.count, elsewhere[sighting.key, default: 0] < found.pages.count else { continue }
-            if found.pages.count * 2 >= later.count {
+            // A line on alternate pages is counted against the pages of its parity. One
+            // break in the rhythm is allowed where it is long enough to be a rhythm:
+            // RFC 908's header skips a page once in 29.
+            let gaps = zip(found.pages, found.pages.dropFirst()).map { $1 - $0 }
+            let breaks = gaps.count { $0 != 2 }
+            let parity = breaks == 0 || (breaks == 1 && gaps.count > 2) ? 2 : 1
+            if found.pages.count * parity * 2 >= later.count {
                 furniture.formUnion(found.lines)
                 continue
             }
-            let everyPage = zip(found.pages, found.pages.dropFirst()).allSatisfy { $1 - $0 <= 2 }
-            guard sighting.side == .head, found.pages.count >= 3, everyPage else { continue }
+            guard sighting.side == .head, gaps.allSatisfy({ $0 <= 2 }) else { continue }
             let titles = statedHeadings ?? numberedHeadingTitles(lines)
             statedHeadings = titles
             // Against the key, which has its numbers masked, where the titles do not:
