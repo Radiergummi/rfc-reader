@@ -651,6 +651,27 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
     }
 
+    /// RFC 2078 numbers its headings `1:` and `2.4.12:`, a shape the heading pattern did
+    /// not know, so the body came out as one untitled run: no table of contents, and
+    /// `Section 2.2.8` resolving to nothing (#71). RFC 2743 and 2130 are set the same way.
+    @Test func headingsNumberedWithAColonAreHeadings() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2078.txt"))
+        #expect(document.allSections.filter { $0.number != nil }.count == 76)
+        #expect(document.section(number: "2.4.12")?.titleText == "GSS_Release_OID call")
+        #expect(document.section(number: "2.2.8")?.anchor == "section-2.2.8")
+        #expect(document.section(number: "2.4")?.subsections.count == 19)
+        #expect(document.crossReferences.contains { $0.target == .anchor("section-2.2.8") })
+    }
+
+    /// The same shape is a second numbering where a document already has the first: RFC
+    /// 705 lists its commands as `1.  BEGIN Command` and describes each again under `1:
+    /// BEGIN   4b`, and the colon form read the descriptions as seven more sections 1-7.
+    @Test func aColonNumberRepeatingAHeadingNumberIsNotAHeading() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc705.txt"))
+        let numbered = document.allSections.filter { $0.number != nil }
+        #expect(numbered.map(\.titleText) == ["BEGIN", "LISTEN", "RESPONSE", "MESSAGE", "INTERRUPT", "END", "REPLY"].map { "\($0) Command" })
+    }
+
     /// An anchor is what a deep link, the table of contents and a reading position key off,
     /// and the XML declares each one as an ID. Headings that repeat gave two sections one
     /// anchor -- RFC 1 has two `Introduction`s, RFC 19 two sections numbered 1 -- and a
