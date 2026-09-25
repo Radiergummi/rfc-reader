@@ -42,6 +42,10 @@ final class ReaderTextView: NSTextView {
 
     /// Only a reference is taken over. Everywhere else a force click is AppKit's
     /// Look Up, which a reader of dense technical prose uses on any word.
+    ///
+    /// Unverified on Force Touch hardware: `NSTextView` runs its own immediate-action
+    /// recognizer, which may claim the gesture before this is reached. If it does,
+    /// the fallback is `pressureChange(with:)` at stage 2; see ARCHITECTURE.md.
     override func quickLook(with event: NSEvent) {
         guard !quickLookReference(event) else { return }
         super.quickLook(with: event)

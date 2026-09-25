@@ -124,6 +124,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// references to the same target are still two hovers.
     private var hoveredBox: ReferenceBox?
     private var popover: NSPopover?
+    /// The reference a force click just previewed, and the number of the event that
+    /// did it: see `clickedOnLink`.
+    private var forceClick: (box: ReferenceBox, eventNumber: Int)?
     #endif
 
     // MARK: - Storage
@@ -377,6 +380,15 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 #else
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        // A force click is a click too, so its mouse-up may arrive here and follow
+        // the link from under the card it just opened. Swallowed when it is the
+        // same reference and the same gesture — AppKit numbers a click's events
+        // alike, which is assumed here, not yet observed on hardware.
+        if let forceClick, forceClick.eventNumber == NSApp.currentEvent?.eventNumber,
+           textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box === forceClick.box {
+            self.forceClick = nil
+            return true
+        }
         // Following a reference is what the preview was for; one still timing would
         // otherwise open over the document the click is leaving.
         cancelHover()
@@ -459,8 +471,14 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// it returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
     func quickLookReference(with event: NSEvent) -> Bool {
         guard let (box, range) = reference(under: event) else { return false }
+        let eventNumber = NSApp.currentEvent?.eventNumber ?? event.eventNumber
+        if hoveredBox === box, popover?.isShown == true {
+            forceClick = (box, eventNumber)
+            return true
+        }
         cancelHover()
         hoveredBox = box
+        forceClick = (box, eventNumber)
         showPopover(for: box, range: range)
         return true
     }
@@ -478,16 +496,15 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         cancelHover()
     }
 
-    /// Cancels the dwell timer and closes the popover, if either is active. Called
-    /// on every move to a different reference or to no reference, on scroll
-    /// (`viewportDidScroll`), and when the view is dismantled
-    /// (`Representable.dismantleNSView`) — the timer's own `[weak self]` capture
-    /// means a coordinator that is simply deallocated needs no help from here, but
-    /// a popover left open after the view goes away would not close itself.
+    /// Cancels the dwell timer and closes the popover, if either is active, and
+    /// forgets a force click's pending mouse-up. The timer's own `[weak self]`
+    /// capture means a coordinator that is simply deallocated needs no help from
+    /// here, but a popover left open after the view goes away would not close itself.
     func cancelHover() {
         dwellTimer?.invalidate()
         dwellTimer = nil
         hoveredBox = nil
+        forceClick = nil
         if popover?.isShown == true { popover?.performClose(nil) }
         popover = nil
     }
