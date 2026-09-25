@@ -156,6 +156,11 @@ def convert(corpus_build, text):
         return target.joinpath("rfc1142.xml").read_text(encoding="utf-8")
 
 
+def anchor(section):
+    """The section's anchor, which the serializer writes as its `pn` alone where the two agree (PR #86)."""
+    return section.get("anchor") or section.get("pn")
+
+
 def demote_invented_sections(xml, anchors):
     root = ET.fromstring(xml)
     keep = set(anchors)
@@ -182,7 +187,7 @@ def demote_invented_sections(xml, anchors):
     # has a section before it.
     kept = []
     for section, name, blocks in flat:
-        if section.get("anchor") in keep or "".join(name.itertext()) in UNNUMBERED:
+        if anchor(section) in keep or "".join(name.itertext()) in UNNUMBERED:
             kept.append([section, name, blocks])
         else:
             paragraph = ET.Element("t")
@@ -191,7 +196,7 @@ def demote_invented_sections(xml, anchors):
 
     # Rebuild each section from its own blocks, then nest by depth as the parser does.
     def depth(section):
-        return len(section.get("anchor").split("-", 1)[1].split(".")) if section.get("numbered") == "true" else 1
+        return len(anchor(section).split("-", 1)[1].split(".")) if section.get("numbered") == "true" else 1
 
     roots, stack = [], []
     for section, name, blocks in kept:
@@ -212,7 +217,7 @@ def demote_invented_sections(xml, anchors):
     if back is None:
         back = ET.SubElement(root, "back")
     for section in roots:
-        if section.get("anchor").startswith("appendix-") or len(back):
+        if anchor(section).startswith("appendix-") or len(back):
             back.append(section)
         else:
             middle.append(section)
