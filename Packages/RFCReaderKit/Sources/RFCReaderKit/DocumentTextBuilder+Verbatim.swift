@@ -41,10 +41,11 @@ extension DocumentTextBuilder {
     }
 
     /// 1 when the block already fits, otherwise the factor that makes its widest line
-    /// fit what the measure leaves after `indent`.
+    /// fit what the measure leaves after `indent` — never less than one indent step,
+    /// or a block nested deep enough to eat the measure would scale to nothing.
     func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
         let columns = text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
         guard columns > 0, monospaceAdvance > 0 else { return 1 }
-        return min(1, max(0, style.measure - indent) / (CGFloat(columns) * monospaceAdvance))
+        return min(1, max(style.indentStep, style.measure - indent) / (CGFloat(columns) * monospaceAdvance))
     }
 }

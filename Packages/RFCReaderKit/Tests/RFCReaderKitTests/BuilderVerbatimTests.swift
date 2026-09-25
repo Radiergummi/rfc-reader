@@ -71,6 +71,14 @@ struct BuilderVerbatimTests {
         #expect(builder.monospaceScale(for: mixed, indent: 0) == builder.monospaceScale(for: String(repeating: "#", count: 120), indent: 0))
     }
 
+    /// Quotes nested deep enough to eat the whole measure must still leave the
+    /// artwork a font size: a scale of zero is a block that draws nothing.
+    @Test func artworkIndentedPastTheMeasureStillHasASize() {
+        let builder = DocumentTextBuilder(style: style)
+        #expect(builder.monospaceScale(for: "+--+", indent: style.measure) > 0)
+        #expect(builder.monospaceScale(for: "+--+", indent: style.measure * 2) > 0)
+    }
+
     @Test func sourceCodeShowsItsLanguage() {
         let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
         let built = DocumentTextBuilder.build(document(content), style: style)
