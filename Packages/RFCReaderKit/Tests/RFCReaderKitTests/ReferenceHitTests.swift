@@ -42,17 +42,5 @@ struct ReferenceHitTests {
         #expect(text.reference(at: -1) == nil)
     }
 
-    /// A reference has its preview, and its URL is the app's own scheme, which the
-    /// reader never shows. An external link's tooltip is the only place its
-    /// destination can be read before following it, so it stays.
-    @Test func onlyAReferenceLosesItsLinkToolTip() throws {
-        let external = try #require(URL(string: "https://www.rfc-editor.org/"))
-        let text = Fixtures.inlineRun([.link(external, [.text("the editor")]), .text(" and "), .crossReference(chipped)])
-        let reference = try Fixtures.offset(of: "\u{FFFC}", in: text)
-        #expect(text.linkToolTip("https://www.rfc-editor.org/", at: 0) == "https://www.rfc-editor.org/")
-        #expect(text.linkToolTip("rfc://9110#section-4.2", at: reference) == nil)
-        #expect(text.linkToolTip("rfc://9110#section-4.2", at: text.length - 1) == nil)
-    }
-
     private static let chipPrefix = "\u{FFFC}\u{2060}"
 }

@@ -194,6 +194,10 @@ private struct Representable: NSViewRepresentable {
         // to already be inside one — see where the scroll view is assembled below.
         textView.isIncrementalSearchingEnabled = true
         textView.usesFindBar = true
+        // Off: the implicit tooltip gave every reference its raw `rfc://` URL. The
+        // builder gives an external link an explicit `.toolTip` of its own URL
+        // instead, so only a reference goes without — it has its preview.
+        textView.displaysLinkToolTips = false
         textView.textLayoutManager?.delegate = context.coordinator
         textView.delegate = context.coordinator
         textView.quickLookReference = { [weak coordinator = context.coordinator] event in

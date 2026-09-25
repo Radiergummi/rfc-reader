@@ -38,6 +38,26 @@ struct InlineRunTests {
         #expect(link.attribute(.link, at: 0, effectiveRange: nil) as? URL == url)
     }
 
+    #if !canImport(UIKit)
+    /// The reader turns AppKit's implicit link tooltips off, because they gave a
+    /// reference its raw `rfc://` URL. An external link's destination is still worth
+    /// reading before following it, so it carries its URL as an explicit tooltip; a
+    /// reference, which has its preview, carries none.
+    @Test func onlyAnExternalLinkCarriesATooltip() throws {
+        let url = try #require(URL(string: "https://www.rfc-editor.org/"))
+        let external = run([.link(url, [.text("the editor")])])
+        #expect(external.attribute(.toolTip, at: 0, effectiveRange: nil) as? String == "https://www.rfc-editor.org/")
+
+        let document = run([.crossReference(CrossReference(target: .document(.rfc(9110), section: "4.2")))])
+        let anchor = run([.crossReference(CrossReference(target: .anchor("section-3"), text: "Section 3"))])
+        for reference in [document, anchor] {
+            reference.enumerateAttribute(.toolTip, in: NSRange(location: 0, length: reference.length)) { value, _, _ in
+                #expect(value == nil)
+            }
+        }
+    }
+    #endif
+
     @Test func documentCrossReferencesLinkToTheAppScheme() throws {
         let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of [RFC 9110]")
         let attributed = run([.crossReference(xref)])

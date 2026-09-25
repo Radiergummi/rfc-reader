@@ -393,13 +393,6 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         return menu
     }
 
-    /// Link tooltips stay on for external links, whose URL is the only place their
-    /// destination can be read; a reference's is suppressed. See
-    /// `NSAttributedString.linkToolTip(_:at:)`.
-    func textView(_ textView: NSTextView, willDisplayToolTip tooltip: String, forCharacterAt characterIndex: Int) -> String? {
-        textView.textLayoutManager?.attributedText?.linkToolTip(tooltip, at: characterIndex) ?? tooltip
-    }
-
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
     /// Registered with the selector-based API so it unregisters with the coordinator.
     /// Scrolling also cancels any hover in progress — the popover is anchored to a

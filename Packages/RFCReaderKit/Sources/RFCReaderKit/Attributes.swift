@@ -70,20 +70,16 @@ extension NSAttributedString {
     /// `effectiveRange` names only the piece under the pointer, and the popover
     /// pointed at a third of the chip. `ReferenceBox` compares by identity, one per
     /// reference, so two adjacent references still come back as two.
+    ///
+    /// This runs on every pointer move, and most of them are over prose, so the
+    /// cheap single-run lookup answers "no reference" first; the extent is only
+    /// walked out on a hit.
     public func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
-        guard offset >= 0, offset < length else { return nil }
+        guard offset >= 0, offset < length,
+              attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox else { return nil }
         var range = NSRange(location: 0, length: 0)
         let whole = NSRange(location: 0, length: length)
         guard let box = attribute(.rfcReference, at: offset, longestEffectiveRange: &range, in: whole) as? ReferenceBox else { return nil }
         return (box, range)
-    }
-
-    /// The tooltip AppKit may show at this character, given the one it proposes —
-    /// for a link, its URL. A reference gets none: it has its preview, and its URL
-    /// is the app's own `rfc://` scheme, which the reader never surfaces. Any other
-    /// link keeps its URL, the one place its destination can be read before it is
-    /// followed.
-    public func linkToolTip(_ proposed: String, at offset: Int) -> String? {
-        reference(at: offset) == nil ? proposed : nil
     }
 }
