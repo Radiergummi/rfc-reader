@@ -144,7 +144,11 @@ public struct LegacyTextParser: Sendable {
     /// starts. It is on every page of that section, or every other one where headers
     /// alternate between facing pages, so a line seen with a longer gap is not one;
     /// nor is one only ever at the foot, which is where a record or a table running
-    /// over a page break ends. In RFC 770 the first copy is the only thing that says
+    /// over a page break ends; nor is one below a blank line, because a section's name
+    /// is part of the page's header block -- RFC 770's `References` directly under its
+    /// `RFC 770 ... September 1980` -- where the body starts after the blank lines that
+    /// follow the header, and RFC 6208's `Additional information:` at the head of five
+    /// pages is the body's. In RFC 770 the first copy is the only thing that says
     /// where its section starts, so the first copy stays, unless the document heads the section itself somewhere with
     /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
     /// at quite well without a second, empty one beside it.
@@ -161,27 +165,30 @@ public struct LegacyTextParser: Sendable {
         let later = pages.dropFirst()
         guard later.count >= 3 else { return [] }
 
-        /// The edge's lines, and whether a blank line sets them off from the rest of the
+        /// The edge's lines, whether a blank line sets them off from the rest of the
         /// page -- looking one line past a full edge, because RFC 793's header is three
-        /// lines and a section's running header the fourth.
-        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> (lines: [(index: Int, key: String)], setOff: Bool) {
+        /// lines and a section's running header the fourth -- and whether they are the
+        /// page's very first lines, with no blank line before them.
+        struct Edge { let lines: [(index: Int, key: String)]; let setOff: Bool; let flush: Bool }
+        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> Edge {
             var found: [(index: Int, key: String)] = []
+            var flush = true
             for index in indices {
                 guard case .text(let string) = lines[index] else { continue }
                 if string.isBlank {
-                    if found.isEmpty { continue } else { return (found, true) }
+                    if found.isEmpty { flush = false; continue } else { return Edge(lines: found, setOff: true, flush: flush) }
                 }
-                if found.count == 4 { return (found, false) }
+                if found.count == 4 { return Edge(lines: found, setOff: false, flush: flush) }
                 found.append((index, furnitureKey(string)))
             }
-            return (found, false)
+            return Edge(lines: found, setOff: false, flush: flush)
         }
 
         // Keyed by which edge it sits at as well as what it says, because furniture
         // recurs in the same place: a line at the foot of one page and a line at the
         // head of the next are two sightings of two lines, not one of a header.
         struct Sighting: Hashable { let side: Side; let key: String }
-        struct Seen { var lines: [Int] = []; var pages: [Int] = []; var setOff = 0 }
+        struct Seen { var lines: [Int] = []; var pages: [Int] = []; var setOff = 0; var flush = 0 }
         var seen: [Sighting: Seen] = [:]
         var edgeLines: Set<Int> = []
         for (ordinal, page) in later.enumerated() {
@@ -190,6 +197,7 @@ public struct LegacyTextParser: Sendable {
                     edgeLines.insert(index)
                     seen[Sighting(side: side, key: key), default: Seen()].lines.append(index)
                     if edges.setOff { seen[Sighting(side: side, key: key), default: Seen()].setOff += 1 }
+                    if edges.flush { seen[Sighting(side: side, key: key), default: Seen()].flush += 1 }
                     // Appended in page order, so a key twice at one page's edge is one
                     // page and two lines.
                     if seen[Sighting(side: side, key: key)]?.pages.last != ordinal {
@@ -230,7 +238,7 @@ public struct LegacyTextParser: Sendable {
                 furniture.formUnion(found.lines)
                 continue
             }
-            guard sighting.side == .head, gaps.allSatisfy({ $0 <= 2 }) else { continue }
+            guard sighting.side == .head, found.flush * 2 >= found.lines.count, gaps.allSatisfy({ $0 <= 2 }) else { continue }
             let titles = statedHeadings ?? numberedHeadingTitles(lines)
             statedHeadings = titles
             // Against the key, which has its numbers masked, where the titles do not:
