@@ -1648,7 +1648,7 @@ struct InlineLinker: Sendable {
 
 // MARK: - String helpers
 
-extension UnsafeBufferPointer<UInt8> {
+fileprivate extension UnsafeBufferPointer<UInt8> {
     /// Whether `literal`'s bytes start at `index`: a substring test that does not start
     /// the regex engine or break graphemes, for literals the caller knows are ASCII.
     func holds(_ literal: StaticString, at index: Int) -> Bool {
