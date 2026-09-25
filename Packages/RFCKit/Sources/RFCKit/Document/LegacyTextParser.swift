@@ -896,34 +896,34 @@ public struct LegacyTextParser: Sendable {
     static func containsArtwork(_ line: String) -> Bool {
         if let found = withTrimmedASCII(line, { bytes in
             for index in bytes.indices {
-                let next = index + 1 < bytes.count ? bytes[index + 1] : 0
-                switch bytes[index] {
-                case UInt8(ascii: "+"): if next == UInt8(ascii: "-") { return true }
-                case UInt8(ascii: "-"):
-                    if next == UInt8(ascii: "+") || next == UInt8(ascii: ">") { return true }
-                    if next == UInt8(ascii: "-"), index + 2 < bytes.count, bytes[index + 2] == UInt8(ascii: "-") { return true }
-                case UInt8(ascii: "|"): if isSpace(next) { return true }
-                case UInt8(ascii: "/"), UInt8(ascii: "\\"): if next == UInt8(ascii: "_") { return true }
-                case UInt8(ascii: "_"): if next == UInt8(ascii: "/") || next == UInt8(ascii: "\\") { return true }
-                case UInt8(ascii: "."):
-                    if index + 3 < bytes.count, bytes[index + 1...index + 3].allSatisfy({ $0 == UInt8(ascii: ".") }) { return true }
-                case UInt8(ascii: "="):
-                    if index + 2 < bytes.count, bytes[index + 1...index + 2].allSatisfy({ $0 == UInt8(ascii: "=") }) { return true }
-                case UInt8(ascii: "<"): if next == UInt8(ascii: "-") { return true }
-                case UInt8(ascii: "0")...UInt8(ascii: "9"):
-                    // A digit, a run of two or more spaces, a digit: `1   2` in a table.
-                    var end = index + 1
-                    while end < bytes.count, isSpace(bytes[end]) { end += 1 }
-                    if end - index - 1 >= 2, end < bytes.count, (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[end]) { return true }
-                case let byte where isSpace(byte): if next == UInt8(ascii: "|") { return true }
-                default: continue
+                let found = switch Unicode.Scalar(bytes[index]) {
+                case "+": bytes.holds("+-", at: index)
+                case "-": bytes.holds("-+", at: index) || bytes.holds("->", at: index) || bytes.holds("---", at: index)
+                case "/": bytes.holds("/_", at: index)
+                case "\\": bytes.holds("\\_", at: index)
+                case "_": bytes.holds("_/", at: index) || bytes.holds("_\\", at: index)
+                case ".": bytes.holds("....", at: index)
+                case "=": bytes.holds("===", at: index)
+                case "<": bytes.holds("<-", at: index)
+                case "|": index + 1 < bytes.count && isSpace(bytes[index + 1])
+                case "0"..."9": digitGapDigit(bytes, at: index)
+                case let scalar where isSpace(UInt8(scalar.value)): bytes.holds("|", at: index + 1)
+                default: false
                 }
+                if found { return true }
             }
             return false
         }) {
             return found
         }
         return line.trimmingCharacters(in: .whitespaces).contains(artworkPattern)
+    }
+
+    /// A digit, a run of two or more spaces, a digit: `1   2` in a table.
+    private static func digitGapDigit(_ bytes: UnsafeBufferPointer<UInt8>, at index: Int) -> Bool {
+        var end = index + 1
+        while end < bytes.count, isSpace(bytes[end]) { end += 1 }
+        return end - index - 1 >= 2 && end < bytes.count && (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[end])
     }
 
     /// Three or more spaces before a non-space, where what precedes the run is not
@@ -1487,19 +1487,14 @@ struct InlineLinker: Sendable {
         init(in text: String) {
             var text = text
             text.withUTF8 { bytes in
-                func holds(_ literal: StaticString, at index: Int) -> Bool {
-                    let count = literal.utf8CodeUnitCount
-                    guard index + count <= bytes.count else { return false }
-                    return (0..<count).allSatisfy { bytes[index + $0] == literal.utf8Start[$0] }
-                }
                 for index in bytes.indices {
-                    switch bytes[index] {
-                    case UInt8(ascii: "["): bracket = true
-                    case UInt8(ascii: "R") where holds("RFC", at: index):
+                    switch Unicode.Scalar(bytes[index]) {
+                    case "[": bracket = true
+                    case "R" where bytes.holds("RFC", at: index):
                         rfc = true
-                        if holds("RFCs", at: index) { rfcs = true }
-                    case UInt8(ascii: "S") where holds("Section", at: index): section = true
-                    case UInt8(ascii: "h") where holds("http", at: index): http = true
+                        if bytes.holds("RFCs", at: index) { rfcs = true }
+                    case "S" where bytes.holds("Section", at: index): section = true
+                    case "h" where bytes.holds("http", at: index): http = true
                     default: continue
                     }
                 }
@@ -1603,6 +1598,16 @@ struct InlineLinker: Sendable {
 }
 
 // MARK: - String helpers
+
+extension UnsafeBufferPointer<UInt8> {
+    /// Whether `literal`'s bytes start at `index`: a substring test that does not start
+    /// the regex engine or break graphemes, for literals the caller knows are ASCII.
+    func holds(_ literal: StaticString, at index: Int) -> Bool {
+        let count = literal.utf8CodeUnitCount
+        guard index >= 0, index + count <= self.count else { return false }
+        return (0..<count).allSatisfy { self[index + $0] == literal.utf8Start[$0] }
+    }
+}
 
 extension String {
     var isBlank: Bool { allSatisfy(\.isWhitespace) }
