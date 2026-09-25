@@ -20,7 +20,7 @@ let arguments = Arguments(CommandLine.arguments.dropFirst())
 do {
     switch arguments.command {
     case "fetch": try await Fetch.run(arguments)
-    case "convert": try Convert.run(arguments)
+    case "convert": try await Convert.run(arguments)
     case "manifest": try Manifest.run(arguments)
     case "queries": try Queries.run(arguments)
     default:
@@ -154,6 +154,21 @@ enum Convert {
         /// sample and is named one. A full corpus run puts the near-miss population in
         /// the hundreds of thousands, which is tens of megabytes of JSON nobody reads.
         var sample: [NearMiss] = []
+
+        /// Each document is diagnosed into a report of its own, and they are folded
+        /// together in document order, so the capped sample is the first `sampleLimit`
+        /// near misses of the corpus -- the same ones a single pass over it would keep.
+        mutating func merge(_ other: ProseReport) {
+            documents += other.documents
+            blocks += other.blocks
+            prose += other.prose
+            lists += other.lists
+            nearMisses += other.nearMisses
+            byRejection.merge(other.byRejection, uniquingKeysWith: +)
+            soleRejection.merge(other.soleRejection, uniquingKeysWith: +)
+            justificationDissent.merge(other.justificationDissent, uniquingKeysWith: +)
+            sample += other.sample.prefix(sampleLimit - sample.count)
+        }
     }
 
     /// Enough near misses to see the shape of each guard's population by eye.
@@ -171,7 +186,8 @@ enum Convert {
         var sentenceRatio: Double
     }
 
-    static func accumulate(_ text: String, id: String, into report: inout ProseReport) {
+    static func proseReport(for text: String, id: String) -> ProseReport {
+        var report = ProseReport()
         report.documents += 1
         for block in LegacyTextParser.proseDiagnostics(for: text) {
             let diagnosis = block.diagnosis
@@ -211,68 +227,64 @@ enum Convert {
                 sentenceRatio: (diagnosis.sentenceRatio * 1000).rounded() / 1000
             ))
         }
+        return report
     }
 
-    static func run(_ arguments: Arguments) throws {
-        let inDirectory = URL(fileURLWithPath: arguments.require("in"))
-        let outDirectory = URL(fileURLWithPath: arguments.require("out"))
-        let overrides = arguments["overrides"].map { URL(fileURLWithPath: $0) }
-        try FileManager.default.createDirectory(at: outDirectory, withIntermediateDirectories: true)
+    /// What converting one document asks for; the same for every document in a run.
+    struct Job: Sendable {
+        var inDirectory: URL
+        var outDirectory: URL
+        var overrides: URL?
+        var wantsDiagnostics: Bool
+        var wantsFurniture: Bool
+    }
 
-        let files = try FileManager.default.contentsOfDirectory(atPath: inDirectory.path)
+    /// One converted document, and where it goes in the run's output.
+    struct Converted: Sendable {
+        var offset: Int
+        var report: Report
+        var prose: ProseReport?
+    }
+
+    static func run(_ arguments: Arguments) async throws {
+        let job = Job(
+            inDirectory: URL(fileURLWithPath: arguments.require("in")),
+            outDirectory: URL(fileURLWithPath: arguments.require("out")),
+            overrides: arguments["overrides"].map { URL(fileURLWithPath: $0) },
+            // Diagnosing re-segments every document, which roughly doubles the run. Only pay
+            // it when the report is actually asked for.
+            wantsDiagnostics: arguments["diagnostics"] != nil,
+            wantsFurniture: arguments["report"] != nil
+        )
+        try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
+
+        let files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
             .filter { $0.hasSuffix(".txt") }
             .sorted { ($0.rfcNumber ?? 0) < ($1.rfcNumber ?? 0) }
         log("converting \(files.count) documents")
 
-        var reports: [Report] = []
-        // Diagnosing re-segments every document, which roughly doubles the run. Only pay
-        // it when the report is actually asked for. Overridden documents are hand-corrected,
-        // so they `continue` below and never reach the accumulator at all.
-        let wantsDiagnostics = arguments["diagnostics"] != nil
-        var prose = ProseReport()
-        for (offset, file) in files.enumerated() {
-            let stem = String(file.dropLast(4))
-            let outputURL = outDirectory.appending(path: "\(stem).xml")
-
-            if let overrides, FileManager.default.fileExists(atPath: overrides.appending(path: "\(stem).xml").path) {
-                let data = try Data(contentsOf: overrides.appending(path: "\(stem).xml"))
-                let document = try RFCXMLParser.parse(data)   // overrides must at least parse
-                try data.write(to: outputURL, options: .atomic)
-                reports.append(report(for: document, id: stem, overridden: true))
-                continue
-            }
-
-            // 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather than UTF-8 (accented names, curly quotes).
-            let bytes = try Data(contentsOf: inDirectory.appending(path: file))
-            let text = String(data: bytes, encoding: .utf8)
-                ?? String(data: bytes, encoding: .windowsCP1252)
-                ?? String(decoding: bytes, as: UTF8.self)
-            let document = LegacyTextParser.parse(text)
-            if wantsDiagnostics { accumulate(text, id: stem, into: &prose) }
-            let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
-            let serializer = RFCXMLSerializer(options: .init(
-                generatorComment: "Generated by rfc-reader corpus-build from \(file). Structure recovered heuristically from the plain-text RFC; the text itself is unchanged. Corrections: https://github.com/Radiergummi/rfc-reader",
-                sourceURL: sourceURL
-            ))
-            let xml = serializer.serialize(document)
-            try Data(xml.utf8).write(to: outputURL, options: .atomic)
-
-            // Round-trip check: the XML must parse back into the same section tree.
-            var warnings: [String] = []
-            do {
-                let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-                if reparsed.allSections.count != document.allSections.count {
-                    warnings.append("round trip changed section count \(document.allSections.count) → \(reparsed.allSections.count)")
+        // Every document is independent -- its own input, its own output file, and a parse
+        // that is a pure function of its text -- so they are converted across all cores.
+        // Results are put back in document order before anything is written, which keeps
+        // the report and the prose sample exactly what a single pass would produce.
+        var results: [Converted] = []
+        try await withThrowingTaskGroup(of: Converted.self) { group in
+            for (offset, file) in files.enumerated() {
+                group.addTask {
+                    let (report, prose) = try convert(file, job: job)
+                    return Converted(offset: offset, report: report, prose: prose)
                 }
-            } catch {
-                warnings.append("generated XML does not parse: \(error)")
             }
-            var entry = report(for: document, id: stem, overridden: false)
-            if arguments["report"] != nil { entry.furniture = LegacyTextParser.recurringFurniture(in: text).count }
-            entry.warnings += warnings
-            reports.append(entry)
-
-            if (offset + 1) % 500 == 0 { log("\(offset + 1)/\(files.count)") }
+            for try await result in group {
+                results.append(result)
+                if results.count % 500 == 0 { log("\(results.count)/\(files.count)") }
+            }
+        }
+        results.sort { $0.offset < $1.offset }
+        let reports = results.map(\.report)
+        var prose = ProseReport()
+        for case let documentProse? in results.map(\.prose) {
+            prose.merge(documentProse)
         }
 
         if let reportPath = arguments["report"] {
@@ -289,6 +301,50 @@ enum Convert {
         let flagged = reports.filter { !$0.warnings.isEmpty }
         log("done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings")
         for entry in flagged.prefix(40) { log("  \(entry.id): \(entry.warnings.joined(separator: "; "))") }
+    }
+
+    /// Converts one document and writes its XML. Overridden documents are hand-corrected,
+    /// so they are never diagnosed.
+    static func convert(_ file: String, job: Job) throws -> (Report, ProseReport?) {
+        let stem = String(file.dropLast(4))
+        let outputURL = job.outDirectory.appending(path: "\(stem).xml")
+
+        if let overrides = job.overrides, FileManager.default.fileExists(atPath: overrides.appending(path: "\(stem).xml").path) {
+            let data = try Data(contentsOf: overrides.appending(path: "\(stem).xml"))
+            let document = try RFCXMLParser.parse(data)   // overrides must at least parse
+            try data.write(to: outputURL, options: .atomic)
+            return (report(for: document, id: stem, overridden: true), nil)
+        }
+
+        // 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather than UTF-8 (accented names, curly quotes).
+        let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
+        let text = String(data: bytes, encoding: .utf8)
+            ?? String(data: bytes, encoding: .windowsCP1252)
+            ?? String(decoding: bytes, as: UTF8.self)
+        let document = LegacyTextParser.parse(text)
+        let prose = job.wantsDiagnostics ? proseReport(for: text, id: stem) : nil
+        let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
+        let serializer = RFCXMLSerializer(options: .init(
+            generatorComment: "Generated by rfc-reader corpus-build from \(file). Structure recovered heuristically from the plain-text RFC; the text itself is unchanged. Corrections: https://github.com/Radiergummi/rfc-reader",
+            sourceURL: sourceURL
+        ))
+        let xml = Data(serializer.serialize(document).utf8)
+        try xml.write(to: outputURL, options: .atomic)
+
+        // Round-trip check: the XML must parse back into the same section tree.
+        var warnings: [String] = []
+        do {
+            let reparsed = try RFCXMLParser.parse(xml)
+            if reparsed.allSections.count != document.allSections.count {
+                warnings.append("round trip changed section count \(document.allSections.count) → \(reparsed.allSections.count)")
+            }
+        } catch {
+            warnings.append("generated XML does not parse: \(error)")
+        }
+        var entry = report(for: document, id: stem, overridden: false)
+        if job.wantsFurniture { entry.furniture = LegacyTextParser.recurringFurniture(in: text).count }
+        entry.warnings += warnings
+        return (entry, prose)
     }
 
     static func report(for document: RFCDocument, id: String, overridden: Bool) -> Report {
