@@ -327,16 +327,15 @@ final class RFCTextViewCoordinator: NSObject {
         scroll(toOffset: offset)
     }
 
-    /// Puts the line holding `offset` at the top of the viewport — or, for the first
-    /// line, the whole fragment, spacing above it included, which is where an anchor
-    /// has always landed. A place carried across a rebuild can be any line.
+    /// Puts the line holding `offset` at the top of the viewport; see
+    /// `FragmentGeometry.scrollTarget(of:in:fragmentStart:)`.
     private func scroll(toOffset offset: Int) {
         guard let textView, let layout = textView.textLayoutManager else { return }
         ensureLayout(through: offset + Self.layoutSlice)
         guard let location = layout.location(atOffset: offset),
               let fragment = layout.textLayoutFragment(for: location) else { return }
         let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-        let line = offset == fragmentStart ? 0 : FragmentGeometry.lineTop(of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart) ?? 0
+        let line = FragmentGeometry.scrollTarget(of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart)
         scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line)
         reportVisibleAnchor()
     }
@@ -358,10 +357,13 @@ final class RFCTextViewCoordinator: NSObject {
         let top = max(0, textView.viewportTop)
         guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
         let offset = layout.offset(of: fragment.rangeInElement.location)
-        // A point of slack, so a line put exactly at the top by `scroll(toOffset:)`
-        // is read back as that line and not the one above it.
-        let fragmentRange = NSRange(location: offset, length: layout.offset(of: fragment.rangeInElement.endLocation) - offset)
-        let line = FragmentGeometry.lineRange(at: top - fragment.layoutFragmentFrame.minY + 1, in: fragment.textLineFragments, fragment: fragmentRange)
+        let line = FragmentGeometry.topLine(
+            atViewportTop: top,
+            fragmentTop: fragment.layoutFragmentFrame.minY,
+            in: fragment.textLineFragments,
+            fragmentStart: offset,
+            fragmentEnd: layout.offset(of: fragment.rangeInElement.endLocation)
+        )
         place = ReadingPlace.tracking(place, topLine: line, in: built.anchors, length: built.text.length)
         // The abstract is the first prose in the storage and sits ahead of section
         // one, so while it is on screen the reader is, as far as every consumer of

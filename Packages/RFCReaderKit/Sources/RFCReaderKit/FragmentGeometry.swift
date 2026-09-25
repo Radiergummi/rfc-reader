@@ -280,6 +280,35 @@ public enum FragmentGeometry {
         return line?.typographicBounds.minY
     }
 
+    /// Where to scroll, in fragment coordinates, to put the line holding
+    /// `documentOffset` at the top of the viewport: the fragment's own top for its
+    /// first character — the spacing above it included, which is where an anchor has
+    /// always landed — and the line's top for any other. A place carried across a
+    /// rebuild can be any line.
+    public static func scrollTarget(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat {
+        guard documentOffset != fragmentStart else { return 0 }
+        return lineTop(of: documentOffset, in: lines, fragmentStart: fragmentStart) ?? 0
+    }
+
+    /// The line at the top of the viewport, `top` and `fragmentTop` both in container
+    /// coordinates: what the reader records as its place.
+    ///
+    /// Read a point below the top, so a line put exactly there by `scrollTarget` is
+    /// read back as that line even once the scroll view has rounded the offset down
+    /// to a pixel, rather than as the line above it.
+    public static func topLine(
+        atViewportTop top: CGFloat,
+        fragmentTop: CGFloat,
+        in lines: [NSTextLineFragment],
+        fragmentStart: Int,
+        fragmentEnd: Int
+    ) -> NSRange {
+        let fragment = NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart)
+        return lineRange(at: top - fragmentTop + readBackSlack, in: lines, fragment: fragment)
+    }
+
+    private static let readBackSlack: CGFloat = 1
+
     /// A document-relative offset as the index `NSTextLineFragment` wants.
     ///
     /// `locationForCharacter(at:)` and `characterIndex(for:)` are both indexed

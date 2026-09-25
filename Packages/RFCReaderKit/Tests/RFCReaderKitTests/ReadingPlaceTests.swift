@@ -117,6 +117,7 @@ struct ReadingPlaceLineGeometryTests {
     private struct Laid {
         let lines: [NSTextLineFragment]
         let fragment: NSRange
+        let frameTop: CGFloat
         let frameHeight: CGFloat
         var fragmentStart: Int { fragment.location }
     }
@@ -147,6 +148,7 @@ struct ReadingPlaceLineGeometryTests {
                 found = Laid(
                     lines: fragment.textLineFragments,
                     fragment: NSRange(location: start, length: end - start),
+                    frameTop: fragment.layoutFragmentFrame.minY,
                     frameHeight: fragment.layoutFragmentFrame.height
                 )
             }
@@ -196,5 +198,36 @@ struct ReadingPlaceLineGeometryTests {
         try #require(paragraph.frameHeight > lastLine + 10, "the frame must carry the spacing below its last line")
         let range = FragmentGeometry.lineRange(at: lastLine + 10, in: paragraph.lines, fragment: paragraph.fragment)
         #expect(range == NSRange(location: NSMaxRange(paragraph.fragment), length: 0))
+    }
+
+    /// What the coordinator does with the two: scroll so the line holding an
+    /// offset is at the top, then read the top of the viewport back. The first
+    /// line is scrolled to the fragment's top, spacing above it included, and
+    /// every other line to its own top; the read-back must name that line either
+    /// way, including when the scroll view has rounded the offset down to a pixel.
+    @Test func aLineScrolledToTheTopIsReadBackAsThatLine() throws {
+        let paragraph = try paragraph(spacing: 20)
+        for line in paragraph.lines {
+            let start = paragraph.fragmentStart + line.characterRange.location
+            for offset in [start, start + line.characterRange.length / 2] {
+                let target = paragraph.frameTop
+                    + FragmentGeometry.scrollTarget(of: offset, in: paragraph.lines, fragmentStart: paragraph.fragmentStart)
+                for top in [target, (target * 2).rounded(.down) / 2 - 0.5] {
+                    let read = FragmentGeometry.topLine(
+                        atViewportTop: top,
+                        fragmentTop: paragraph.frameTop,
+                        in: paragraph.lines,
+                        fragmentStart: paragraph.fragmentStart,
+                        fragmentEnd: NSMaxRange(paragraph.fragment)
+                    )
+                    #expect(read == NSRange(location: start, length: line.characterRange.length))
+                }
+            }
+        }
+    }
+
+    @Test func theFragmentsFirstCharacterScrollsToTheFragmentsTop() throws {
+        let paragraph = try paragraph(spacing: 20)
+        #expect(FragmentGeometry.scrollTarget(of: paragraph.fragmentStart, in: paragraph.lines, fragmentStart: paragraph.fragmentStart) == 0)
     }
 }
