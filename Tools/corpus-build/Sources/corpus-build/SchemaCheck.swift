@@ -1,0 +1,191 @@
+import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
+
+/// Whether a converted document is RFCXML, and if it is not, why.
+///
+/// Validity is `xmllint --relaxng` against xml2rfc's `v3.rng`, committed beside this
+/// tool with the SVG schema it includes: libxml2's own verdict, not ours. Its messages
+/// are no use for saying why, though. They cascade -- one attribute the schema refuses
+/// on `<section>` is hundreds of thousands of lines over the corpus, all of them about
+/// elements that are fine -- so the causes are found in the document instead, by
+/// looking for each mechanical way the serializer is known to leave the schema.
+///
+/// A document xmllint refuses and none of those checks explains is `unexplained`. That
+/// is the bucket a new kind of failure lands in, and the first thing to read after a run.
+enum SchemaCheck {
+    enum Cause: String, CaseIterable, Codable, Sendable {
+        /// `author+` is required in the document's `<front>` and every reference's.
+        case frontWithoutAuthor = "front-without-author"
+        /// `anchor` and `pn` are both `xsd:ID`, so one element declaring the same value
+        /// in both declares that ID twice.
+        case anchorEqualsPartNumber = "anchor-equals-pn"
+        /// An `anchor`, `pn` or `<xref target>` that is not an `NCName`: `anchor="1"`.
+        case idNotNCName = "id-not-ncname"
+        /// `li`, `dd`, `td`, `th` and `blockquote` hold inline content or blocks, never both.
+        case inlineBesideBlocks = "inline-beside-blocks"
+        /// The same ID on two elements.
+        case duplicateID = "duplicate-id"
+        /// An `<xref target>` no element declares. xmllint resolves IDREFs, so a
+        /// citation that links nowhere is a schema failure too, not only a dead link.
+        case danglingTarget = "dangling-target"
+        /// `<references>` belongs in `<back>`, ahead of its sections, or in another
+        /// `<references>` that holds no entries of its own: not in a section, not after
+        /// an appendix, and not beside a list's entries.
+        case misplacedReferences = "misplaced-references"
+        /// `<middle>` requires a section.
+        case emptyMiddle = "empty-middle"
+        /// `<abstract>` holds `t`, `dl`, `ol` and `ul` only; RFC 391's has artwork.
+        case blockInAbstract = "block-in-abstract"
+        /// Refused by xmllint, and by none of the checks above.
+        case unexplained
+    }
+
+    /// Where it failed, when it did. `firstMessage` is only read for an unexplained
+    /// failure, where libxml2's first line is the one lead there is.
+    struct Result: Sendable {
+        var causes: [Cause]
+        var firstMessage: String?
+    }
+
+    static func check(_ file: URL, schema: URL) throws -> Result {
+        guard try !validates(file, schema: schema) else { return Result(causes: []) }
+        let found = causes(in: try Data(contentsOf: file))
+        guard found.isEmpty else { return Result(causes: found) }
+        return Result(causes: [.unexplained], firstMessage: try firstMessage(file, schema: schema))
+    }
+
+    private static func validates(_ file: URL, schema: URL) throws -> Bool {
+        // Only the exit status is read here: a failing document can write megabytes of
+        // messages, and draining them costs more than the validation itself.
+        let process = xmllint(file, schema: schema)
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        switch process.terminationStatus {
+        case 0: return true
+        case 3: return false   // XMLLINT_ERR_VALID
+        default: throw CheckError.xmllintFailed(file.lastPathComponent, process.terminationStatus)
+        }
+    }
+
+    private static func firstMessage(_ file: URL, schema: URL) throws -> String? {
+        let process = xmllint(file, schema: schema)
+        let pipe = Pipe()
+        process.standardError = pipe
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        // Without the path, which differs between runs and would move every report that has one.
+        let first = String(decoding: data, as: UTF8.self).split(separator: "\n").first.map(String.init)
+        return first.map { $0.replacingOccurrences(of: file.path, with: file.lastPathComponent) }
+    }
+
+    private static func xmllint(_ file: URL, schema: URL) -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["xmllint", "--noout", "--relaxng", schema.path, file.path]
+        process.standardOutput = FileHandle.nullDevice
+        return process
+    }
+
+    enum CheckError: Error {
+        case xmllintFailed(String, Int32)
+    }
+
+    /// Every known cause present in `data`, in declaration order.
+    static func causes(in data: Data) -> [Cause] {
+        let finder = CauseFinder()
+        let parser = XMLParser(data: data)
+        parser.delegate = finder
+        parser.parse()
+        return Cause.allCases.filter(finder.found.contains)
+    }
+}
+
+/// Walks a document once and notes every `SchemaCheck.Cause` it finds in it.
+private final class CauseFinder: NSObject, XMLParserDelegate {
+    var found: Set<SchemaCheck.Cause> = []
+
+    private static let abstractBlocks: Set<String> = ["t", "dl", "ol", "ul"]
+    private static let mixedContent: Set<String> = ["li", "dd", "td", "th", "blockquote"]
+    private static let inline: Set<String> = [
+        "bcp14", "br", "cref", "em", "eref", "iref", "relref", "strong", "sub", "sup", "tt", "u", "xref",
+    ]
+
+    private struct Open {
+        var name: String
+        var hasAuthor = false
+        var hasSection = false
+        var hasInline = false
+        var hasBlock = false
+        var hasEntries = false
+        var hasLists = false
+    }
+
+    private var stack: [Open] = []
+    private var ids: Set<String> = []
+    private var targets: Set<String> = []
+
+    func parser(
+        _ parser: XMLParser, didStartElement name: String, namespaceURI: String?,
+        qualifiedName: String?, attributes: [String: String]
+    ) {
+        if let parent = stack.indices.last {
+            if name == "author" { stack[parent].hasAuthor = true }
+            if name == "section" { stack[parent].hasSection = true }
+            if stack[parent].name == "abstract", !Self.abstractBlocks.contains(name) { found.insert(.blockInAbstract) }
+            if name == "references", !["back", "references"].contains(stack[parent].name) || stack[parent].hasSection {
+                found.insert(.misplacedReferences)
+            }
+            if stack[parent].name == "references" {
+                if name == "references" { stack[parent].hasLists = true }
+                if name == "reference" || name == "referencegroup" { stack[parent].hasEntries = true }
+            }
+            if Self.mixedContent.contains(stack[parent].name) {
+                if Self.inline.contains(name) { stack[parent].hasInline = true } else { stack[parent].hasBlock = true }
+            }
+        }
+
+        let anchor = attributes["anchor"], partNumber = attributes["pn"]
+        if let anchor, anchor == partNumber { found.insert(.anchorEqualsPartNumber) }
+        // Counted once per element, so `anchor == pn` is that cause and not also this one.
+        for id in Set([anchor, partNumber].compactMap(\.self)) where !ids.insert(id).inserted {
+            found.insert(.duplicateID)
+        }
+        var references = [anchor, partNumber]
+        if name == "xref", let target = attributes["target"] {
+            references.append(target)
+            targets.insert(target)
+        }
+        if references.contains(where: { $0.map { !Self.isNCName($0) } ?? false }) { found.insert(.idNotNCName) }
+
+        stack.append(Open(name: name))
+    }
+
+    func parserDidEndDocument(_ parser: XMLParser) {
+        if !targets.isSubset(of: ids) { found.insert(.danglingTarget) }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        guard let top = stack.indices.last, Self.mixedContent.contains(stack[top].name),
+              string.contains(where: { !$0.isWhitespace }) else { return }
+        stack[top].hasInline = true
+    }
+
+    func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
+        guard let element = stack.popLast() else { return }
+        if name == "front", !element.hasAuthor { found.insert(.frontWithoutAuthor) }
+        if name == "middle", !element.hasSection { found.insert(.emptyMiddle) }
+        if element.hasInline, element.hasBlock { found.insert(.inlineBesideBlocks) }
+        if element.hasEntries, element.hasLists { found.insert(.misplacedReferences) }
+    }
+
+    /// XML's `NCName`, closely enough for what a converted RFC can contain: a letter or
+    /// underscore, then letters, digits, `.`, `-` and `_`. No colon.
+    static func isNCName(_ value: String) -> Bool {
+        guard let first = value.first, first.isLetter || first == "_" else { return false }
+        return value.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_" }
+    }
+}

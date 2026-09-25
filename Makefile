@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
@@ -131,6 +131,11 @@ CORPUS         ?= corpus
 CORPUS_LIMIT   ?= 20
 CORPUS_VERSION ?= dev
 
+# xml2rfc's RELAX NG schema for RFCXML v3, pinned and committed as data
+# (Tools/corpus-build/Schema/README.md). Checked with xmllint, which ships with
+# macOS and is libxml2-utils on Linux.
+CORPUS_SCHEMA := $(CORPUS_BUILD)/Schema/v3.rng
+
 ## Fetch the legacy plain-text RFCs
 corpus-fetch: corpus-tool
 	$(CORPUS_BIN) fetch --out $(CORPUS) $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
@@ -145,10 +150,19 @@ corpus-fetch-xml: corpus-tool
 	$(CORPUS_BIN) fetch --out $(CORPUS) --format xml $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 
 ## Convert the fetched text to RFCXML v3, writing a conversion report
+# The report's `schema` field says, per document, why the output is not valid
+# RFCXML; `[]` is a document that validates. A regression is one that stops.
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json \
-	  --diagnostics $(CORPUS)/prose.json
+	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
+
+## Check the schema check: three RFCs as the RFC Editor published them must validate
+# Needs them fetched (`make corpus-fetch-xml CORPUS_LIMIT=`). If one fails, the
+# schema or the validator is wrong, and no count the convert step reports means
+# anything until it is fixed.
+corpus-schema-control:
+	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

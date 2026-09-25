@@ -41,8 +41,10 @@ jobs:
 
       - name: Convert to RFCXML
         run: |
+          apt-get update -qq && apt-get install -y -qq libxml2-utils >/dev/null
           Tools/corpus-build/.build/release/corpus-build convert \
-            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json
+            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json \
+            --schema Tools/corpus-build/Schema/v3.rng
 
       - name: Manifest
         run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "${{ inputs.version }}"
