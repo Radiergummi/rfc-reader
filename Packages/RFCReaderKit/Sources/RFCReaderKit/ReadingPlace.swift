@@ -5,10 +5,13 @@ import Foundation
 ///
 /// A rebuild — a resize changes the column, and the column is a build input —
 /// produces a new storage in which every character offset has moved, so an offset
-/// cannot be carried across one. An anchor can, and the text of a block does not
-/// depend on the measure, so "this many characters into that paragraph" names the
-/// same line in both. A section anchor alone is too coarse: it restores to the
-/// heading, which in a long section is screens away from where the reader was.
+/// cannot be carried across one. An anchor can, and the text of a block mostly does
+/// not depend on the measure, so "this many characters into that paragraph" names
+/// the same line in both. The exception is a table, which grids at a wide measure
+/// and stacks at a narrow one, so its text changes shape and length; a place inside
+/// one lands somewhere in the same table, which `documentOffset` keeps it inside. A
+/// section anchor alone is too coarse: it restores to the heading, which in a long
+/// section is screens away from where the reader was.
 public struct ReadingPlace: Sendable, Equatable {
     /// Nil ahead of the first anchor, where `offset` counts from the document start.
     public let anchor: String?
