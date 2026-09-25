@@ -12,21 +12,27 @@ public struct AnchorIndex: Sendable, Equatable {
         /// True when the anchor names a `Section`, which the builder knows and
         /// nothing downstream can tell by looking. See `DocumentTextBuilder.mark`.
         public let isSection: Bool
+        /// A section's heading as the reader draws it, which is what an in-document
+        /// reference's preview names; nil for any other anchor.
+        public let heading: String?
 
-        public init(anchor: String, offset: Int, isSection: Bool = false) {
+        public init(anchor: String, offset: Int, isSection: Bool = false, heading: String? = nil) {
             self.anchor = anchor
             self.offset = offset
             self.isSection = isSection
+            self.heading = heading
         }
     }
 
     public let entries: [Entry]
     private let offsets: [String: Int]
+    private let headings: [String: String]
 
     public init(_ entries: [Entry]) {
         let sorted = entries.sorted { $0.offset < $1.offset }
         self.entries = sorted
         self.offsets = Dictionary(sorted.map { ($0.anchor, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        self.headings = Dictionary(sorted.compactMap { entry in entry.heading.map { (entry.anchor, $0) } }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Just the section anchors, as an index of their own: what section tracking
@@ -37,6 +43,12 @@ public struct AnchorIndex: Sendable, Equatable {
 
     public func offset(of anchor: String) -> Int? {
         offsets[anchor]
+    }
+
+    /// The heading of the section this anchor names, or nil when it names anything
+    /// else — a figure, a table, a paragraph.
+    public func heading(of anchor: String) -> String? {
+        headings[anchor]
     }
 
     /// The anchor covering `offset`: the last entry at or before it, or nil if the

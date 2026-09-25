@@ -343,6 +343,20 @@ final class RFCTextViewCoordinator: NSObject {
     private func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
         textView?.textLayoutManager?.attributedText?.reference(at: offset)
     }
+
+    /// The card for a reference, on either platform, or nil when it would say no
+    /// more than the reference already does. Another document has its title and
+    /// abstract; a place in this one has only its section's heading, and a figure
+    /// or a table has not even that.
+    private func preview(for reference: CrossReference) -> ReferencePreview? {
+        guard let library else { return nil }
+        switch reference.target {
+        case .document:
+            return ReferencePreview(reference: reference, library: library)
+        case .anchor(let anchor):
+            return built?.anchors.heading(of: anchor).map { ReferencePreview(reference: reference, library: library, heading: $0) }
+        }
+    }
 }
 
 #if canImport(UIKit)
@@ -357,8 +371,8 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
     /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
     /// carrying `.rfcReference` gets the extra preview card above it.
     func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
-        guard let box = reference(at: textItem), let library else { return .init(menu: defaultMenu) }
-        let host = UIHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
+        guard let box = reference(at: textItem), let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
+        let host = UIHostingController(rootView: preview)
         // Sized here, the way the header host is in `layOut`: the preview is shown
         // at its view's own size, and a hosting controller's view is not sized to
         // its content until something lays it out.
@@ -537,9 +551,9 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// cleared the hover already invalidated this timer, but the guard costs
     /// nothing and keeps this function correct even if that ever stops being true.
     private func showPopover(for box: ReferenceBox, range: NSRange) {
-        guard let textView, let library, hoveredBox === box,
+        guard let textView, hoveredBox === box, let preview = preview(for: box.reference),
               let rect = referenceRect(for: range) else { return }
-        let host = NSHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
+        let host = NSHostingController(rootView: preview)
         let shown = NSPopover()
         shown.behavior = .transient
         shown.contentViewController = host
