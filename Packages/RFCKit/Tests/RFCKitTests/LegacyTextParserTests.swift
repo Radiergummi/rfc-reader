@@ -33,7 +33,7 @@ struct LegacyTextParserTests {
 
     @Test func unnumberedHeadings() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
-        let titles = document.sections.map(\.title)
+        let titles = document.sections.map(\.titleText)
         #expect(titles == ["Overview and Rational", "Frame Format", "Discussion", "Security Considerations", "Author's Address"])
         #expect(document.header.abstract.isEmpty, "RFC 1149 has no abstract")
         #expect(document.sections.allSatisfy { $0.number == nil })
@@ -41,8 +41,8 @@ struct LegacyTextParserTests {
 
     @Test func abstractMovesToHeader() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc2119.txt"))
-        #expect(!document.sections.contains { $0.title == "Abstract" })
-        #expect(!document.sections.contains { $0.title.hasPrefix("Status of") })
+        #expect(!document.sections.contains { $0.titleText == "Abstract" })
+        #expect(!document.sections.contains { $0.titleText.hasPrefix("Status of") })
         guard case .paragraph(let paragraph)? = document.header.abstract.first else {
             Issue.record("abstract missing")
             return
@@ -52,7 +52,7 @@ struct LegacyTextParserTests {
 
     @Test func paragraphsSplitAcrossPagesAreRejoined() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
-        let discussion = try #require(document.sections.first { $0.title == "Discussion" })
+        let discussion = try #require(document.sections.first { $0.titleText == "Discussion" })
         let paragraphs = discussion.blocks.compactMap { block -> String? in
             if case .paragraph(let paragraph) = block { return paragraph.plainText }
             return nil
@@ -65,16 +65,16 @@ struct LegacyTextParserTests {
     @Test func numberedSectionsNest() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
         #expect(document.sections.map(\.number) == ["1", "2", "3", "4", "5", "6", "A", "B", nil])
-        #expect(document.sections.last?.title == "Authors' Addresses")
+        #expect(document.sections.last?.titleText == "Authors' Addresses")
         let operators = try #require(document.section(number: "3"))
         #expect(operators.subsections.count == 10)
-        #expect(operators.subsections.last?.title == "Operator Precedence")
-        #expect(document.section(number: "2.3")?.title == "Terminal Values")
-        #expect(document.section(number: "3.1")?.title == "Concatenation: Rule1 Rule2")
+        #expect(operators.subsections.last?.titleText == "Operator Precedence")
+        #expect(document.section(number: "2.3")?.titleText == "Terminal Values")
+        #expect(document.section(number: "3.1")?.titleText == "Concatenation: Rule1 Rule2")
         let appendixB = try #require(document.section(number: "B"))
         #expect(appendixB.isAppendix)
         #expect(appendixB.subsections.map(\.number) == ["B.1", "B.2"])
-        #expect(!document.sections.contains { $0.title == "Table of Contents" })
+        #expect(!document.sections.contains { $0.titleText == "Table of Contents" })
     }
 
     @Test func proseVersusArtwork() throws {
@@ -190,15 +190,27 @@ struct LegacyTextParserTests {
         #expect(paragraph.plainText.contains("Nothing in Section 9 exists."))
     }
 
+    /// `[RFC 2211]` matched neither pattern: the bracket pattern's anchor admitted no
+    /// space or comma, and the bare pattern discarded anything a `[` preceded.
+    /// Between them they dropped 1,606 of the 1,640 unlinked RFC mentions left in the
+    /// corpus's prose. RFC 2606 sets its citations `[RFC 1034]`; RFC 2147 writes a
+    /// multi-anchor `[RFC1883, Section 4.3]`, where the bracket is not ours to eat.
+    @Test func bracketedRFCMentionsLinkWhateverTheirSpacing() throws {
+        let spaced = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
+        #expect(spaced.referencedDocuments.contains(.rfc(1034)), "[RFC 1034] names a document")
+
+        let multi = LegacyTextParser.parse(try Fixtures.string("rfc2147.txt"))
+        #expect(multi.referencedDocuments.contains(.rfc(1883)))
+        let notes = multi.paragraphs.filter { $0.plainText.hasPrefix("Note 2") }
+        let note = try #require(notes.first)
+        // The tags beside the RFC are the author's, so the brackets stay as text and
+        // only the reference inside them is linked.
+        #expect(note.plainText.contains(", Section 4.3]"))
+    }
+
     @Test func legacyBracketedRFCLabelsAreFlaggedAsCanonical() throws {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-        let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
-            guard case .paragraph(let paragraph) = block else { return [] }
-            return paragraph.inlines.compactMap { inline in
-                if case .crossReference(let xref) = inline { return xref }
-                return nil
-            }
-        }
+        let xrefs = document.crossReferences
         // Measured over 1,200 corpus documents before this rule was fixed: 12,612
         // references, 253 of them chips. The rest were exactly this case.
         let canonical = try #require(xrefs.first { xref in
@@ -214,6 +226,89 @@ struct LegacyTextParserTests {
 
 @Suite("Legacy text parser: corpus findings")
 struct LegacyTextCorpusFindingsTests {
+    /// Two more spellings the linker was blind to, both common in the older half of
+    /// the series: `RFC-791`, and a list written once as `RFCs 765, 821 and 854`.
+    /// Measured on the corpus, prose held 2,223 of the first and 659 of the second,
+    /// against 1,640 of the plain `RFC 791` the linker already knew.
+    @Test func hyphenatedAndPluralMentionsLink() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc980.txt"))
+        let xrefs = document.crossReferences
+        let byTarget = Dictionary(xrefs.map { ($0.target, $0) }, uniquingKeysWith: { first, _ in first })
+
+        // The hyphen is the author's, not ours: `isCanonicalTag` does not count it as
+        // the series' own spelling, so the words stay exactly as they were set.
+        let hyphenated = try #require(byTarget[.document(.rfc(791), section: nil)])
+        #expect(hyphenated.text == "RFC-791")
+        #expect(byTarget[.document(.rfc(793), section: nil)]?.text == "RFC-793")
+
+        // A number in a list reads as the list wrote it -- composing "RFC 821" over
+        // the top of "RFCs 765, 821" would say RFC twice.
+        let inList = try #require(byTarget[.document(.rfc(821), section: nil)])
+        #expect(inList.text == "821")
+        #expect(Set(document.referencedDocuments).isSuperset(of: [.rfc(765), .rfc(821), .rfc(854)]))
+    }
+
+    /// The reference list sets its anchors the way the prose cites them, and a
+    /// seventh of the corpus puts a space in: `[RFC 1034]`. `referenceStartPattern`
+    /// admitted no whitespace in an anchor, so those lines started no entry and were
+    /// swallowed as continuation text of whatever came before -- RFC 2290 and RFC
+    /// 2535 produced no bibliography at all. 782 entries across 205 documents.
+    @Test func referenceAnchorsMayHoldSpaces() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
+        let lists = document.referenceLists
+        let list = try #require(lists.first, "the bibliography is lost entirely without this")
+        #expect(list.entries.map(\.anchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
+        #expect(list.entries[0].documentID == .rfc(1034))
+        // And the prose citation finds the entry it names, spaces and all.
+        #expect(document.referencedDocuments.contains(.rfc(1034)))
+    }
+
+    /// `Section.title` was a `String`, so a heading that named a document -- 3,471 of
+    /// them across the corpus, "Changes from RFC 3066" among them -- could not carry
+    /// the link even in principle. RFC 21 heads a section "Revisions to NWG/RFC 11".
+    @Test func headingsCarryTheirCrossReferences() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc21.txt"))
+        let heading = try #require(document.allSections.first { $0.titleText.contains("Revisions to") })
+        let targets = heading.title.compactMap { inline -> CrossReference.Target? in
+            if case .crossReference(let xref) = inline { return xref.target }
+            return nil
+        }
+        #expect(targets == [.document(.rfc(11), section: nil)])
+        #expect(heading.titleText == "Revisions to NWG/RFC\u{00A0}11")
+
+        // The number belongs to the section, not to the words, so the reader composes
+        // it around whatever the heading links to.
+        let number = try #require(heading.number)
+        #expect(heading.displayTitle == "\(number). Revisions to NWG/RFC\u{00A0}11")
+        if case .text(let prefix)? = heading.displayTitleInlines.first {
+            #expect(prefix == "\(number). ")
+        } else {
+            Issue.record("the number should lead the heading as its own run")
+        }
+    }
+
+    /// A hanging list whose items carry continuation paragraphs -- the shape RFC 3712
+    /// sets its Introduction in, and the reason `[RFC3066]` sat unlinked there. Each
+    /// paragraph arrives as its own block, indented past the marker and carrying no
+    /// marker of its own, so it used to fail the prose test's indent guard and be
+    /// preserved as artwork. Artwork is never linkified, and the list was shredded
+    /// into one single-item list per item.
+    @Test func listContinuationParagraphsStayProse() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc234.txt"))
+        let lists = document.lists
+        let carrying = try #require(lists.first { $0.items.contains { $0.blocks.count > 1 } },
+                                    "an item's second paragraph belongs to the item")
+        let item = try #require(carrying.items.first { $0.blocks.count > 1 })
+        #expect(item.blocks.allSatisfy { if case .paragraph = $0 { return true }; return false },
+                "the continuation is prose, not artwork")
+        let continuation = try #require(item.blocks.dropFirst().first)
+        guard case .paragraph(let paragraph) = continuation else {
+            Issue.record("expected a paragraph")
+            return
+        }
+        #expect(paragraph.plainText.contains("Commences at"))
+    }
+
     /// Shapes found in the first full corpus run (September 2026).
     @Test func columnZeroTitleAndAnchorOnlyReferences() {
         let text = """
@@ -266,13 +361,13 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.header.title == "OSPF protocol analysis")
 
         #expect(document.allSections.count < 40, "got \(document.allSections.count) sections")
-        #expect(document.section(number: "1.0")?.title == "Introduction")
-        #expect(document.section(number: "3.1")?.title == "Operational data")
-        #expect(document.section(number: "6.0")?.title == "Reference Documents")
-        #expect(document.sections.contains { $0.title == "Author's Address" })
+        #expect(document.section(number: "1.0")?.titleText == "Introduction")
+        #expect(document.section(number: "3.1")?.titleText == "Operational data")
+        #expect(document.section(number: "6.0")?.titleText == "Reference Documents")
+        #expect(document.sections.contains { $0.titleText == "Author's Address" })
 
         // Lines from the middle of a paragraph must not become sections.
-        let titles = document.allSections.map(\.title)
+        let titles = document.allSections.map(\.titleText)
         #expect(!titles.contains { $0.hasPrefix("The changes between version 1") })
         #expect(!titles.contains { $0.hasPrefix("This report attempts to summarize") })
 
@@ -283,6 +378,101 @@ struct LegacyTextCorpusFindingsTests {
         }
         #expect(abstract.plainText.hasPrefix("This is the first of two reports"))
         #expect(abstract.plainText.hasSuffix("OSPF is an Interior Gateway Protocol)."))
+    }
+
+    /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
+    /// indented with one read as indent 0 (#40). RFC 717 indents a list with tabs
+    /// under prose indented six spaces: the block's indent came out as 0, the four
+    /// columns its figure shares were never stripped, and the tabs themselves reached
+    /// the reader, whose verbatim style sets no tab stops.
+    @Test func tabsAreColumnsBeforeAnyIndentIsRead() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc717.txt"))
+        let artwork = document.artworkText
+        #expect(!artwork.contains { $0.contains("\t") }, "a tab survived into artwork")
+        #expect(!document.allSections.contains { $0.titleText.contains("\t") }, "a tab survived into a heading")
+
+        let header = try #require(artwork.first { $0.contains("Destination net") })
+        let lines = header.split(separator: "\n", omittingEmptySubsequences: false)
+        // The block's indent is four, from `    0`, and every line loses exactly that.
+        #expect(lines.first == "0           Destination net          (8)")
+        #expect(lines.contains("  This field selects the appropriate gateway processing and is used"))
+        #expect(lines.contains("    0 -- Escape; protocol is specified by a subsequent field"))
+    }
+
+    /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on
+    /// facing pages, and it names no RFC, so the running-header pattern never matched it
+    /// (#52). Each page then opened with `Transmission Control Protocol` at column 0,
+    /// which is a heading: ~33 sections called `Functional Specification`, and every
+    /// paragraph that crossed a page break cut in two by one of them.
+    @Test func recurringPageHeadersAreFurnitureNotSections() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+        let furniture = ["Transmission Control Protocol", "Functional Specification", "September 1981"]
+        let spurious = document.allSections.filter { furniture.contains($0.titleText) }
+        #expect(spurious.isEmpty, "\(spurious.count) sections are page headers")
+        // The third line names the section the page is in -- `Introduction` on four
+        // pages, `Philosophy` on six -- and each of those sections is already headed
+        // `1.  INTRODUCTION`, `2.  PHILOSOPHY`, so none of it is a heading either.
+        let unnumbered = document.allSections.filter { $0.number == nil }.map(\.titleText)
+        let repeated = Dictionary(grouping: unnumbered, by: \.self).filter { $0.value.count > 1 }.keys
+        #expect(repeated.isEmpty, "unnumbered headings that repeat: \(repeated.sorted())")
+        #expect(!unnumbered.contains("Philosophy"))
+
+        // With the header gone the page break is only a page break, and the sentence
+        // across it is one paragraph again.
+        let paragraphs = document.paragraphs.map(\.plainText)
+        #expect(paragraphs.contains { $0.contains("the TCP must tell user to go into \"normal mode\".") })
+    }
+
+    /// A section running header is furniture on every page but the first, where it is
+    /// the only thing that says a section starts. RFC 770 heads its bibliography with
+    /// a centred `REFERENCES` that is no heading, and a running `References` on each of
+    /// its pages; dropping every one of those lost all 58 entries.
+    @Test func aSectionRunningHeaderStillOpensItsSection() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))
+        let lists = document.referenceLists
+        #expect(lists.flatMap(\.entries).count == 58)
+        #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
+    }
+
+    /// Only a whole number varies from page to page, so only a whole number is masked
+    /// when furniture is compared. RFC 2049 sets one-line anchors in its bibliography
+    /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and
+    /// `[RFC-1524]` the same line recurring across pages, and both were dropped.
+    @Test func numbersInsideAWordDoNotMakeTwoLinesTheSame() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+        let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
+        #expect(anchors.contains("RFC-1522"))
+        #expect(anchors.contains("RFC-1524"))
+        #expect(anchors.count == 42)
+    }
+
+    /// Furniture recurs in the same place, so a line at the foot of one page and a line
+    /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
+    /// parts 6 and 8 as one anchor each, word for word the same up to the part number
+    /// on the entry's third line, and the pair straddles a page break.
+    @Test func theSameLineAtOppositeEdgesIsNotARunningHeader() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
+        let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
+        #expect(anchors.filter { $0 == "ISO-8859" }.count == 2)
+        #expect(anchors.count == 7)
+    }
+
+    /// Where a document sets as much text at column 0 as at its body indent, column 0
+    /// says nothing about what is a heading, and a heading has to stand alone between
+    /// blank lines to be read as one (#56). RFC 1540 lists the protocol standards one
+    /// per line at column 0 against a body indented three, 395 lines each way: the tie
+    /// used to resolve to an indented body and every row became a section.
+    @Test func aColumnZeroTableIsNotAStackOfHeadings() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+        let titles = document.allSections.map(\.titleText)
+        #expect(!titles.contains { $0.hasPrefix("IP ") || $0.hasPrefix("TCP ") })
+        #expect(document.allSections.count < 60, "\(document.allSections.count) sections")
+
+        // The numbered headings it does set are still headings, and the table is a block.
+        #expect(titles.contains("The Standardization Process"))
+        #expect(titles.contains("The Request for Comments Documents"))
+        let artwork = document.artworkText
+        #expect(artwork.contains { $0.contains("Internet Protocol") && $0.contains("791") })
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
@@ -307,7 +497,7 @@ struct LegacyTextCorpusFindingsTests {
            None worth mentioning, but the section has to exist.
         """
         let document = LegacyTextParser.parse(text)
-        #expect(document.sections.map(\.title) == ["Introduction", "Security Considerations"])
+        #expect(document.sections.map(\.titleText) == ["Introduction", "Security Considerations"])
     }
 
     /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
@@ -335,7 +525,7 @@ struct LegacyTextCorpusFindingsTests {
            machine each system runs.
         """
         let document = LegacyTextParser.parse(text)
-        #expect(document.sections.map(\.title) == ["Contents", "Scope and Field of Application"])
+        #expect(document.sections.map(\.titleText) == ["Contents", "Scope and Field of Application"])
     }
 
     /// RFC 775 and RFC 1144 indent their headings like the body, so the scan for the end of
@@ -358,10 +548,7 @@ struct LegacyTextCorpusFindingsTests {
         """
         let document = LegacyTextParser.parse(text)
         #expect(document.header.title == "A DOCUMENT WITH NO COLUMN ZERO")
-        let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
-            if case .paragraph(let paragraph) = block { return paragraph.plainText }
-            return nil
-        }
+        let paragraphs = document.paragraphs.map(\.plainText)
         #expect(paragraphs.count == 2)
         #expect(paragraphs[0].hasPrefix("As a part of the Remote Site Maintenance"))
         #expect(paragraphs[1] == "We have added four commands to our server.")
@@ -484,7 +671,7 @@ struct LegacyTextCorpusFindingsTests {
 
         var paragraphs = 0
         var artwork = 0
-        for block in document.allSections.flatMap(\.blocks) {
+        for block in document.everyBlock {
             switch block {
             case .paragraph: paragraphs += 1
             case .preformatted: artwork += 1
@@ -512,5 +699,32 @@ struct LegacyTextCorpusFindingsTests {
         #expect(LegacyTextParser.removingControlCharacters(underlined) == "RFC")
         #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
         #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
+    }
+}
+
+extension RFCDocument {
+    /// The extractions the assertions here open with. Every one of them is a walk of
+    /// the same flattened block list, and written out at each call site the filter --
+    /// which is the part that differs -- is the line you have to read four lines to find.
+    var everyBlock: [Block] { allSections.flatMap(\.blocks) }
+
+    var referenceLists: [ReferenceList] {
+        everyBlock.compactMap { if case .references(let list) = $0 { return list }; return nil }
+    }
+
+    var paragraphs: [Paragraph] {
+        everyBlock.compactMap { if case .paragraph(let paragraph) = $0 { return paragraph }; return nil }
+    }
+
+    var artworkText: [String] {
+        everyBlock.compactMap { if case .preformatted(let art) = $0 { return art.text }; return nil }
+    }
+
+    var lists: [ListBlock] {
+        everyBlock.compactMap { if case .list(let list) = $0 { return list }; return nil }
+    }
+
+    var crossReferences: [CrossReference] {
+        paragraphs.flatMap { $0.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil } }
     }
 }

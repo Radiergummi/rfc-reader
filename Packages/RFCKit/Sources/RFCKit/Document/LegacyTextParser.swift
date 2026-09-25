@@ -66,6 +66,9 @@ public struct LegacyTextParser: Sendable {
                 line = line.replacingOccurrences(of: "\u{0C}", with: "")
                 sawFormFeed = true
             }
+            // Before anything reads a column: every indent heuristic below counts
+            // spaces, and a tab-indented line would otherwise read as indent 0 (#40).
+            line = line.expandingTabs()
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             if firstContentSeen, trimmed.contains(footerPattern) {
@@ -86,7 +89,140 @@ public struct LegacyTextParser: Sendable {
             if !trimmed.isEmpty { firstContentSeen = true }
             lines.append(.text(line.trimmingTrailingWhitespace()))
         }
-        return lines
+        return removingRecurringFurniture(lines)
+    }
+
+    private enum Side { case head, foot }
+
+    /// What a block's first line opens with, where a list is concerned: the style it
+    /// implies and the column it sits in. Probed once per block and handed down.
+    private typealias ListMarker = (style: ListBlock.Style, indent: Int)
+
+    /// Drops the lines that recur at the edges of the pages (#52). The running-header
+    /// pattern knows one shape, `RFC nnnn ... yyyy`; plenty of documents set a header
+    /// that names no RFC at all -- RFC 793 opens 62 pages with `September 1981`,
+    /// `Transmission Control Protocol`, `Functional Specification` -- and the one
+    /// thing every header has in common is that it recurs, in the same place, page
+    /// after page.
+    ///
+    /// A page's edge is the block of up to four lines at its top and at its bottom,
+    /// and lines are compared with whitespace collapsed and whole numbers masked, so
+    /// `Page 7` and `Page 8` are one line. Only edge lines are dropped, never the same words
+    /// elsewhere, and never on the first page, where the title block would otherwise
+    /// match its own running header.
+    ///
+    /// There are two kinds, and they differ in what the first one means. A line at the
+    /// edge of half the pages or more names the document, and every copy goes. A line
+    /// at the edge of three pages, or of two in a row, but fewer than half, names the
+    /// section those pages are in -- RFC 793's `Philosophy` -- and its first copy is
+    /// where that section starts. In RFC 770 it is the only thing that says so, so the
+    /// first copy stays, unless the document heads the section itself somewhere with
+    /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
+    /// at quite well without a second, empty one beside it.
+    private static func removingRecurringFurniture(_ lines: [Line]) -> [Line] {
+        var pages: [Range<Int>] = []
+        var start = 0
+        for (index, line) in lines.enumerated() {
+            if case .pageBreak = line {
+                pages.append(start..<index)
+                start = index + 1
+            }
+        }
+        pages.append(start..<lines.count)
+        let later = pages.dropFirst()
+        guard later.count >= 3 else { return lines }
+
+        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> [(index: Int, key: String)] {
+            var found: [(index: Int, key: String)] = []
+            for index in indices {
+                guard case .text(let string) = lines[index] else { continue }
+                if string.isBlank {
+                    if found.isEmpty { continue } else { break }
+                }
+                found.append((index, furnitureKey(string)))
+                if found.count == 4 { break }
+            }
+            return found
+        }
+
+        // Keyed by which edge it sits at as well as what it says, because furniture
+        // recurs in the same place: a line at the foot of one page and a line at the
+        // head of the next are two sightings of two lines, not one of a header.
+        struct Sighting: Hashable { let side: Side; let key: String }
+        struct Seen { var lines: [Int] = []; var pages: [Int] = [] }
+        var seen: [Sighting: Seen] = [:]
+        for (ordinal, page) in later.enumerated() {
+            for (side, edges) in [(Side.head, edge(page)), (Side.foot, edge(page.reversed()))] {
+                for (index, key) in edges {
+                    seen[Sighting(side: side, key: key), default: Seen()].lines.append(index)
+                    // Appended in page order, so a key twice at one page's edge is one
+                    // page and two lines.
+                    if seen[Sighting(side: side, key: key)]?.pages.last != ordinal {
+                        seen[Sighting(side: side, key: key), default: Seen()].pages.append(ordinal)
+                    }
+                }
+            }
+        }
+
+        var furniture: Set<Int> = []
+        var statedHeadings: Set<String>?
+        for (sighting, found) in seen {
+            let adjacent = zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 }
+            guard found.pages.count >= 3 || adjacent else { continue }
+            if found.pages.count * 2 >= later.count {
+                furniture.formUnion(found.lines)
+                continue
+            }
+            let titles = statedHeadings ?? numberedHeadingTitles(lines)
+            statedHeadings = titles
+            // Against the key, which has its numbers masked, where the titles do not:
+            // the two sides do not normalise alike, so a running header holding a
+            // number cannot match its own stated heading and its first copy survives.
+            // Both repairs lose content and are measured in #57 -- masking the titles
+            // too makes `Chapter 3` and `Chapter 4` one heading and drops a field's
+            // value in RFC 1570; comparing the unmasked line drops RFC 783's footnote
+            // marker and four others. Keeping a heading too many is the safe side of
+            // it, and which way it should fall is that issue's to answer.
+            if titles.contains(sighting.key.lowercased()) {
+                furniture.formUnion(found.lines)
+            } else {
+                furniture.formUnion(found.lines.dropFirst())
+            }
+        }
+        guard !furniture.isEmpty else { return lines }
+        return lines.enumerated().compactMap { furniture.contains($0.offset) ? nil : $0.element }
+    }
+
+    /// What two lines are compared as when asking whether they are the same piece of
+    /// furniture: whitespace collapsed, and a word that is a whole number masked,
+    /// because the page number is the one thing that varies from page to page and it
+    /// is a word of its own. Masking digits wherever they fall would make `[RFC-1522]`
+    /// and `[RFC-1524]` the same line, and a bibliography sets one anchor per entry.
+    private static func furnitureKey<S: StringProtocol>(_ string: S) -> String {
+        string.split(whereSeparator: \.isWhitespace)
+            .map { $0.utf8.allSatisfy { byte in byte >= 0x30 && byte <= 0x39 } ? "#" : String($0) }
+            .joined(separator: " ")
+    }
+
+    /// How a heading title reads for the purpose of comparing it: whitespace collapsed,
+    /// lowercased, and numbers left alone, because in a heading a number is content.
+    private static func headingText<S: StringProtocol>(_ string: S) -> String {
+        string.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+    }
+
+    /// The titles of the numbered headings: what a section running header is compared
+    /// against to learn whether the document already heads that section itself. At any
+    /// indent, because RFC 793 centres `2.  PHILOSOPHY`; numbered only, because RFC 770
+    /// centres an unnumbered `REFERENCES` that is no heading, and its running header is
+    /// all it has.
+    private static func numberedHeadingTitles(_ lines: [Line]) -> Set<String> {
+        var titles: Set<String> = []
+        for case .text(let line) in lines {
+            let string = line.drop { $0 == " " }
+            guard string.first?.isNumber == true, let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+            titles.insert(headingText(match.title))
+        }
+        return titles
     }
 
     /// Resolves nroff overstrikes (`T\bT` for bold, `_\bT` for underline) and drops the
@@ -152,7 +288,7 @@ public struct LegacyTextParser: Sendable {
                     section: anchor,
                     firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
                     lineCount: block.lines.count,
-                    claimedByList: listItems(block.lines) != nil,
+                    claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil,
                     diagnosis: diagnose(block.lines)
                 )
             }
@@ -260,7 +396,12 @@ public struct LegacyTextParser: Sendable {
             var section = Section(
                 anchor: heading.anchor,
                 number: heading.number,
-                title: heading.title,
+                // A heading cites like any other prose -- "Changes from RFC 3066",
+                // "Differences from RFC 793" -- and roughly 3,500 headings in the
+                // corpus name a document. The number is not part of the words, so
+                // the linker never sees it and cannot mistake it for a section
+                // cross reference.
+                title: linker.link(heading.title),
                 isAppendix: heading.isAppendix
             )
             if Self.isReferencesHeading(heading) {
@@ -380,15 +521,23 @@ public struct LegacyTextParser: Sendable {
     private static func bodyIsIndented(_ body: ArraySlice<Line>) -> Bool {
         var counts: [Int: Int] = [:]
         for case .text(let string) in body where !string.isBlank {
-            // Spaces only: the handful of tab-indented documents set their body at column 0
-            // anyway, and counting a tab as an indent would classify them the other way.
             counts[string.leadingSpaceCount, default: 0] += 1
         }
-        // A tie keeps the classic layout, which is what the rest of the parser assumes.
-        guard let mode = counts.max(by: { ($0.value, $0.key) < ($1.value, $1.key) })?.key else {
-            return true
-        }
-        return mode > 0
+        guard !counts.isEmpty else { return true }
+        // A heading standing out at column 0 only says anything where column 0 is the
+        // exception, and the mode alone cannot say that: RFC 1540 sets 395 lines at
+        // each of column 0 and column 3, and a tie used to resolve to an indented body
+        // and turn its 300-row protocol table into 300 headings (#56).
+        //
+        // A quarter more, which is where the corpus separates. Below it are the
+        // standards lists and port registries that are a column-0 table with a little
+        // prose around it -- RFC 1540 at 1.00, 1500 at 1.02, 1410 at 1.16, 34 documents
+        // in all. The nearest document above is RFC 2060 at 1.46, IMAP4rev1, which is
+        // ordinary numbered prose and loses every heading if it is read the other way.
+        // The corpus is otherwise nowhere near this line: the median document has 12.5
+        // times as much body as column 0.
+        let indented = counts.lazy.filter { $0.key > 0 }.map(\.value).max() ?? 0
+        return indented * 4 > counts[0, default: 0] * 5
     }
 
     /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
@@ -511,8 +660,17 @@ public struct LegacyTextParser: Sendable {
         }
 
         var result: [Block] = []
+        // The marker indent of the list `result.last` holds, while it holds one.
+        var openListIndent: Int?
         for block in merged {
-            for parsed in classify(block, linker: linker) {
+            // Probed once: the continuation test needs to know the block opens with no
+            // marker, and a list the block produces needs the column of its own.
+            let marker = listMarker(of: block.lines)
+            if let indent = openListIndent,
+               attachContinuation(block, toListAt: indent, marker: marker, in: &result, linker: linker) {
+                continue
+            }
+            for parsed in classify(block, marker: marker, linker: linker) {
                 // Merge adjacent list blocks of the same style into one list.
                 if case .list(let list) = parsed, case .list(var previous)? = result.last, previous.style == list.style {
                     previous.items += list.items
@@ -521,8 +679,78 @@ public struct LegacyTextParser: Sendable {
                     result.append(parsed)
                 }
             }
+            openListIndent = if case .list? = result.last { marker?.indent } else { nil }
         }
         return result
+    }
+
+    /// A block indented past a list's marker and carrying no marker of its own is the
+    /// previous item's second paragraph -- the shape a hanging list takes whenever an
+    /// item runs to more than one paragraph (RFC 3712's Introduction, and a few
+    /// thousand others).
+    ///
+    /// It arrives as its own block because a blank line separates it, and it is
+    /// indented past the six columns `looksLikeProse` allows a paragraph, so it used
+    /// to be preserved as artwork: the item lost its prose, the list was cut into one
+    /// single-item list per item, and every reference in the continuation went
+    /// unlinked, because artwork is never linkified.
+    ///
+    /// The indent is only excused here, where the list above it says what the
+    /// continuation indent means. Every other test of prose still has to pass, so a
+    /// genuine example block under an item is still artwork.
+    private static func attachContinuation(
+        _ block: RawBlock,
+        toListAt markerIndent: Int,
+        marker: ListMarker?,
+        in result: inout [Block],
+        linker: InlineLinker
+    ) -> Bool {
+        guard case .list(var list)? = result.last, var item = list.items.last else { return false }
+        guard block.indent > markerIndent, marker == nil else { return false }
+        // A list above a block says what its indent means; it says nothing about
+        // whether the block is prose, and the deep indents under a list item are full
+        // of algorithm steps (`c = OS2IP (C).`), grammar productions and tagged
+        // values that pass every other test by being short and uniform. Measured, this
+        // is also twenty times cheaper than the prose test and rejects most of what
+        // reaches here, so it is asked first.
+        guard readsLikeSentences(block.lines, share: (of: 1, in: 2)) else { return false }
+        // The indent is the only test excused, and it is the only one that consulted
+        // it. `RawBlock.indent` is the smallest indent in the block and the block is
+        // uniform by the time this passes, so the cap could only ever be its own.
+        guard looksLikeProse(block.lines, maxIndent: .max) else { return false }
+        let inlines = linker.link(joinWrappedLines(block.lines))
+        guard !inlines.isEmpty else { return false }
+        item.blocks.append(.paragraph(Paragraph(inlines)))
+        list.items[list.items.count - 1] = item
+        result[result.count - 1] = .list(list)
+        return true
+    }
+
+    /// The marker a block opens with: its style, and the column it sits in. Nil when
+    /// the block opens with no marker at all.
+    ///
+    /// One probe for both facts, because `parseList` needs the style and continuation
+    /// attachment needs the column, and two copies of "does this line open an item"
+    /// drift: a third marker shape added to one of them would leave the other blind
+    /// to it, and lists of that shape would quietly lose their second paragraphs.
+    /// `parseBlocks` asks once per block and hands the answer down.
+    private static func listMarker(of lines: [String]) -> ListMarker? {
+        guard let first = lines.first else { return nil }
+        // Both patterns want one of these in the first column that is not a space, and
+        // this runs on every block: a character test rejects ordinary prose before
+        // either regex starts.
+        guard let opener = first.first(where: { $0 != " " }),
+              opener == "o" || opener == "-" || opener == "*" || opener == "\u{2022}" || opener == "("
+                || opener.isNumber || (opener.isLetter && opener.isLowercase) else { return nil }
+        if let match = first.firstMatch(of: bulletPattern) {
+            return (.bullet, match.indent.count)
+        }
+        if let match = first.firstMatch(of: numberedItemPattern) {
+            let marker = String(match.marker)
+            let format = marker.first == "(" ? "(%d)" : (marker.first?.isLetter == true ? "%c." : "%d.")
+            return (.numbered(format: format, start: 1), match.indent.count)
+        }
+        return nil
     }
 
     private static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock) -> Bool {
@@ -535,13 +763,16 @@ public struct LegacyTextParser: Sendable {
         return true
     }
 
-    private static func looksLikeProse(_ lines: [String]) -> Bool {
+    /// `maxIndent` is the deepest a paragraph may start and still read as prose.
+    /// Six columns by default: body text sits at three or four, and anything set
+    /// deeper than that with no list above it to explain the indent is an example.
+    private static func looksLikeProse(_ lines: [String], maxIndent: Int = 6) -> Bool {
         // `thorough: false` stops at the first guard that refuses, exactly as the guards
         // used to when they were written as early returns. The verdict is identical — a
         // conjunction of absolute vetoes cannot change once one has fired — and it is
         // what this path costs that matters: measured over 300 documents, computing the
         // full diagnosis for every block of every document made parsing 1.67x slower.
-        diagnose(lines, thorough: false).isProse
+        diagnose(lines, maxIndent: maxIndent, thorough: false).isProse
     }
 
     /// The prose test, reporting its working.
@@ -555,7 +786,7 @@ public struct LegacyTextParser: Sendable {
     /// Unlike the predicate it backs, this evaluates every guard rather than returning
     /// at the first failure: a block refused on its indent still has an artwork count
     /// and a sentence ratio worth knowing.
-    static func diagnose(_ lines: [String], thorough: Bool = true) -> ProseDiagnostics {
+    static func diagnose(_ lines: [String], maxIndent: Int = 6, thorough: Bool = true) -> ProseDiagnostics {
         var diagnosis = ProseDiagnostics()
         guard let first = lines.first else {
             diagnosis.rejections = [.noLines]
@@ -567,7 +798,7 @@ public struct LegacyTextParser: Sendable {
         diagnosis.indent = indent
         diagnosis.firstLineIndent = first.leadingSpaceCount - indent
 
-        if indent > 6 { diagnosis.rejections.append(.indentTooDeep) }
+        if indent > maxIndent { diagnosis.rejections.append(.indentTooDeep) }
         if !(0...8).contains(diagnosis.firstLineIndent) { diagnosis.rejections.append(.firstLineIndentOutOfRange) }
         if !thorough, !diagnosis.rejections.isEmpty { return diagnosis }
 
@@ -665,12 +896,24 @@ public struct LegacyTextParser: Sendable {
         return count
     }
 
-    private static func readsLikeSentences(_ lines: [String]) -> Bool {
+    /// Mostly ordinary lower-case words, which a listing of identifiers, addresses or
+    /// numbers does not have however neatly its columns happen to line up.
+    ///
+    /// `share` is how much of the block has to be ordinary words, as a fraction.
+    /// Three fifths for justified prose, where the question is whether a block that
+    /// already lines up at both margins is text or a table. A half for a list
+    /// item's continuation, where the answer has to hold for acronym-heavy prose:
+    /// measured over 18,832 continuation blocks in the corpus, everything below a
+    /// half is ABNF (`reply = nickname [ "*" ] "=" ...`), pseudocode (`z =
+    /// RandomInteger (0, n-1)`) or a stray page number, and everything above it
+    /// reads as sentences. RFC 3712's own paragraph sits at 0.56, held down by
+    /// `UTF-8`, `IRI` and `[W3C-IRI]`, which is why three fifths was too strict.
+    private static func readsLikeSentences(_ lines: [String], share: (of: Int, in: Int) = (of: 3, in: 5)) -> Bool {
         let counted = sentenceWords(lines)
         guard counted.total > 0 else { return false }
         // Kept as an exact integer comparison rather than a threshold on `sentenceRatio`:
         // the two agree everywhere, but only this one is free of rounding at the boundary.
-        return counted.ordinary * 5 >= counted.total * 3
+        return counted.ordinary * share.in >= counted.total * share.of
     }
 
     /// The same quantity `readsLikeSentences` tests, reported rather than judged.
@@ -680,9 +923,7 @@ public struct LegacyTextParser: Sendable {
         return Double(counted.ordinary) / Double(counted.total)
     }
 
-    /// Words that read as ordinary lower-case prose, against words in total. Mostly
-    /// lower-case words are what a listing of identifiers, addresses or numbers lacks,
-    /// however neatly its columns happen to line up.
+    /// Words that read as ordinary lower-case prose, against words in total.
     private static func sentenceWords(_ lines: [String]) -> (ordinary: Int, total: Int) {
         let words = lines.flatMap { $0.split(separator: " ") }
         let ordinary = words.count { word in
@@ -692,12 +933,12 @@ public struct LegacyTextParser: Sendable {
         return (ordinary, words.count)
     }
 
-    private static func classify(_ block: RawBlock, linker: InlineLinker) -> [Block] {
+    private static func classify(_ block: RawBlock, marker: ListMarker?, linker: InlineLinker) -> [Block] {
         let lines = block.lines
         guard !lines.isEmpty else { return [] }
 
         // Lists: the first line carries a marker and every further item shares its indent.
-        if let list = parseList(lines, linker: linker) {
+        if let list = parseList(lines, marker: marker, linker: linker) {
             return [.list(list)]
         }
 
@@ -732,8 +973,8 @@ public struct LegacyTextParser: Sendable {
         return result
     }
 
-    private static func parseList(_ lines: [String], linker: InlineLinker) -> ListBlock? {
-        guard let (style, items) = listItems(lines) else { return nil }
+    private static func parseList(_ lines: [String], marker: ListMarker?, linker: InlineLinker) -> ListBlock? {
+        guard let (style, items) = listItems(lines, marker: marker) else { return nil }
         let listItems = items.map { itemLines -> ListItem in
             var text = Self.joinWrappedLines(itemLines)
             if let match = text.firstMatch(of: bulletPattern) {
@@ -753,20 +994,8 @@ public struct LegacyTextParser: Sendable {
     /// the prose test, and the diagnostics have to know which branch a block took. Asking
     /// this function is asking the same question `classify` asks; re-deriving it from the
     /// line patterns would be a second copy free to drift.
-    private static func listItems(_ lines: [String]) -> (style: ListBlock.Style, items: [[String]])? {
-        guard let first = lines.first else { return nil }
-        let style: ListBlock.Style
-        let itemIndent: Int
-        if let match = first.firstMatch(of: bulletPattern) {
-            style = .bullet
-            itemIndent = match.indent.count
-        } else if let match = first.firstMatch(of: numberedItemPattern) {
-            let marker = String(match.marker)
-            style = .numbered(format: marker.first == "(" ? "(%d)" : (marker.first?.isLetter == true ? "%c." : "%d."), start: 1)
-            itemIndent = match.indent.count
-        } else {
-            return nil
-        }
+    private static func listItems(_ lines: [String], marker: ListMarker?) -> (style: ListBlock.Style, items: [[String]])? {
+        guard let (style, itemIndent) = marker else { return nil }
 
         var items: [[String]] = []
         for line in lines {
@@ -793,7 +1022,32 @@ public struct LegacyTextParser: Sendable {
 
     // MARK: References
 
-    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s]+)\]\s*(?<text>.*)$/#
+    /// The line that opens a reference entry, and the anchor the prose cites it by.
+    ///
+    /// The anchor may hold spaces: the RFC Editor sets `[RFC 2119]` as readily as
+    /// `[RFC2119]`, and the older documents cite by author and year
+    /// (`[Cheswick and Bellovin, 1994]`). A class that admitted no whitespace started
+    /// no entry on those lines and swallowed them as the previous entry's
+    /// continuation -- 782 entries across 205 documents, and RFC 2290 and RFC 2535
+    /// produced no bibliography at all.
+    ///
+    /// Forty characters, because this runs over every line of a references section
+    /// and not every bracket in one opens an entry. Measured over the corpus, the
+    /// longest real anchor is 38 (`[Ermann, Willians, and Gutierrez, 1990]`), while
+    /// the brackets that are not anchors are sentences: `[54 additional burst
+    /// segments deleted for brevity]`, `[Supersedes FIPS PUB 180 dated 11 May
+    /// 1993.]`. Leading whitespace is excluded for the same reason -- `[ ]` and
+    /// `[ a:defaultValue = "" ]` are schema fragments, not citations.
+
+    nonisolated(unsafe) private static let referenceStartPattern = #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#
+    /// A page footer `depaginate` could not see. `footerPattern` is anchored to the
+    /// end of the line, and the earliest RFCs set the footer the other way round --
+    /// `[Page 0]` at the left margin with the author out at the right (RFC 753, 759,
+    /// 767, 780) -- so those lines reach the references section intact and are the
+    /// one bracket of an anchor's shape that never names a reference. Four documents,
+    /// and without this each gains a `<reference anchor="Page 52">` whose title is
+    /// whatever the footer's author column said.
+    nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
 
     private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
         var references: [Reference] = []
@@ -810,9 +1064,11 @@ public struct LegacyTextParser: Sendable {
 
         for block in rawBlocks {
             for line in block.lines {
-                if let match = line.firstMatch(of: referenceStartPattern) {
+                if let match = line.firstMatch(of: referenceStartPattern),
+                   case let anchor = String(match.anchor).trimmingCharacters(in: .whitespaces),
+                   anchor.wholeMatch(of: pageFooterAnchorPattern) == nil {
                     flush()
-                    currentAnchor = String(match.anchor)
+                    currentAnchor = anchor
                     currentLines = match.text.isEmpty ? [] : [String(match.text)]
                 } else if currentAnchor != nil {
                     currentLines.append(line.trimmingCharacters(in: .whitespaces))
@@ -858,12 +1114,60 @@ struct InlineLinker: Sendable {
     }
 
     nonisolated(unsafe) private static let sectionOfRFCPattern = #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#
-    nonisolated(unsafe) private static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_]*)\]/#
-    nonisolated(unsafe) private static let bareRFCPattern = #/(?<bracket>\[?)\bRFC\s?(?<number>\d+)\b/#
+    /// A bracket holding a single citation tag. The tag may carry internal spaces,
+    /// because roughly a seventh of the corpus sets its citations as `[RFC 2211]`
+    /// rather than `[RFC2211]`; a class that admitted no space left those matching
+    /// neither this pattern nor the bare one. Anything that is not a document once
+    /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
+    /// the bare pattern picks up whatever RFC sits inside it.
+    nonisolated(unsafe) private static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#
+    /// Deliberately blind to a preceding `[`. A multi-anchor citation
+    /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
+    /// beside the RFC are the author's -- so its RFC is linked where it stands and
+    /// the brackets stay as text. Where the bracket *is* ours, `bracketPattern`
+    /// starts a character earlier and wins the overlap outright.
+    ///
+    /// The separator may be a hyphen: the older half of the series writes `RFC-1156`
+    /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
+    /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
+    /// larger of the two shapes going unlinked.
+    nonisolated(unsafe) private static let bareRFCPattern = #/\bRFC[\s\-]?(?<number>\d+)\b/#
+    /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
+    /// reference but only the first carries the word, so the numbers are linked where
+    /// they stand and the sentence is left to read as it was set.
+    nonisolated(unsafe) private static let rfcListPattern = #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#
+    nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
     nonisolated(unsafe) private static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
     nonisolated(unsafe) private static let urlPattern = #/https?:\/\/[^\s<>"]+/#
 
+    /// What a matched mention reads as: nil when the document spelled the reference
+    /// the way the series spells itself, so the label composes back identically, and
+    /// the matched words verbatim when it did not. `[RFC2119]` and `RFC 1156` are the
+    /// series' own spelling; `[QUIC-TRANSPORT]` is this document's name for the
+    /// reference and the hyphen in `RFC-1156` is the author's, and neither is ours to
+    /// take out.
+    private static func label(_ matched: String, canonicalFor id: DocumentID?) -> String? {
+        let canonical = id.map { CrossReference.isCanonicalTag(matched, for: $0) } ?? false
+        return canonical ? nil : CrossReference.nonBreakingLabel(matched)
+    }
+
     func link(_ text: String) -> [Inline] {
+        // Every pattern below needs one of four literals to match at all, and a
+        // substring scan does not start the regex engine. Most fragments carry no
+        // citation, and the XML parser now runs this over every text node of every
+        // document where it used to run over none.
+        //
+        // The scan is over UTF-8 and over first bytes alone -- `[`, and the letters
+        // `RFC`, `http` and `Section` open with -- because a grapheme-aware substring
+        // search costs an order of magnitude more per fragment, and this was four of
+        // them on exactly the fragments that match nothing. A fragment holding an `R`
+        // and no `RFC` pays one regex pass it did not need, which is the cheaper half
+        // of the trade.
+        guard !text.isEmpty else { return [] }
+        guard text.utf8.contains(where: { $0 == 0x5B || $0 == 0x52 || $0 == 0x68 || $0 == 0x53 }) else {
+            return [.text(text)]
+        }
+
         var candidates: [Candidate] = []
 
         for match in text.matches(of: Self.sectionOfRFCPattern) {
@@ -877,33 +1181,48 @@ struct InlineLinker: Sendable {
         }
         for match in text.matches(of: Self.bracketPattern) {
             let anchor = String(match.anchor)
+            // Parsed once: the label needs it on every path, so the hit path's is free.
+            let parsed = DocumentID(parsing: anchor)
             let target: CrossReference.Target
             if let known = referenceTargets[anchor] {
                 target = known
-            } else if let id = DocumentID(parsing: anchor), id.series != .rfc || anchor.uppercased().hasPrefix("RFC") {
+            } else if let id = parsed, id.series != .rfc || anchor.prefix(3).caseInsensitiveCompare("RFC") == .orderedSame {
                 target = .document(id, section: nil)
             } else {
                 continue
             }
-            let matched = String(text[match.range])
-            // `[RFC2119]` is the series' own spelling and composes back identically;
-            // `[QUIC-TRANSPORT]` is this document's name for the reference and stays
-            // exactly as the RFC Editor set it.
-            let canonical = DocumentID(parsing: anchor).map { CrossReference.isCanonicalTag(anchor, for: $0) } ?? false
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: target, text: canonical ? nil : CrossReference.nonBreakingLabel(matched))
+                CrossReference(target: target, text: Self.label(String(text[match.range]), canonicalFor: parsed))
             )))
         }
         for match in text.matches(of: Self.bareRFCPattern) {
-            guard match.bracket.isEmpty, let number = Int(match.number) else { continue }
+            guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .document(.rfc(number), section: nil))
+                CrossReference(target: .document(.rfc(number), section: nil),
+                               text: Self.label(String(text[match.range]), canonicalFor: .rfc(number)))
             )))
         }
-        for match in text.matches(of: Self.sectionPattern) where sectionNumbers.contains(String(match.section)) {
-            candidates.append(Candidate(range: match.range, inline: .crossReference(
-                CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
-            )))
+        // Only the plural opens a list, and this is the dearest of the six patterns.
+        if text.contains("RFCs") {
+            for list in text.matches(of: Self.rfcListPattern) {
+                for match in text[list.range].matches(of: Self.listNumberPattern) {
+                    guard let number = Int(match.output) else { continue }
+                    candidates.append(Candidate(range: match.range, inline: .crossReference(
+                        CrossReference(target: .document(.rfc(number), section: nil), text: String(match.output))
+                    )))
+                }
+            }
+        }
+        // Skipped outright when there are no section numbers to match, which is how
+        // the XML parser runs: `<xref>` is how authored XML points at a section, so
+        // every match of this pass would be filtered out again.
+        if !sectionNumbers.isEmpty {
+            for match in text.matches(of: Self.sectionPattern)
+            where sectionNumbers.contains(String(match.section)) {
+                candidates.append(Candidate(range: match.range, inline: .crossReference(
+                    CrossReference(target: .anchor("section-\(match.section)"), text: CrossReference.nonBreakingLabel(String(text[match.range])))
+                )))
+            }
         }
         for match in text.matches(of: Self.urlPattern) {
             let raw = String(match.output).trimmingTrailingPunctuation()
@@ -938,8 +1257,10 @@ struct InlineLinker: Sendable {
 extension String {
     var isBlank: Bool { allSatisfy(\.isWhitespace) }
 
-    /// A tab indents as surely as a space does: RFC 1142's contents listing is tab-indented
-    /// and every entry otherwise matched the numbered-heading pattern.
+    /// Whitespace rather than a space: `depaginate` expands tabs before any line reaches
+    /// the heuristics (RFC 1142's contents listing is tab-indented, and every entry
+    /// otherwise matched the numbered-heading pattern), and this stays general so a
+    /// caller that has not been through it cannot read a tab as column zero.
     var startsAtColumnZero: Bool { first?.isWhitespace == false }
 
     var leadingSpaceCount: Int {
@@ -948,6 +1269,28 @@ extension String {
             if character == " " { count += 1 } else { break }
         }
         return count
+    }
+
+    /// Tabs replaced by spaces to the next multiple-of-eight column, which is what the
+    /// line printers and terminals these documents were typed for did with them.
+    func expandingTabs() -> String {
+        // Over UTF-8: this runs on every line of every document, and `contains` over
+        // Characters is an order of magnitude dearer for a test that almost always fails.
+        guard utf8.contains(9) else { return self }
+        var result = ""
+        result.reserveCapacity(count + 8)
+        var column = 0
+        for character in self {
+            if character == "\t" {
+                let width = 8 - column % 8
+                result.append(contentsOf: repeatElement(" ", count: width))
+                column += width
+            } else {
+                result.append(character)
+                column += 1
+            }
+        }
+        return result
     }
 
     func trimmingTrailingWhitespace() -> String {

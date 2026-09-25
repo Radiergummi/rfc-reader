@@ -126,7 +126,7 @@ public struct RFCXMLSerializer: Sendable {
             attributes.append(("numbered", "false"))
         }
         writer.open("section", attributes)
-        writer.element("name", text: section.title)
+        writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
         for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
         for subsection in section.subsections {
             if Self.isReferences(subsection) {
@@ -144,7 +144,7 @@ public struct RFCXMLSerializer: Sendable {
             attributes.append(("pn", Self.partNumber(number, isAppendix: section.isAppendix)))
         }
         writer.open("references", attributes)
-        writer.element("name", text: section.title)
+        writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
         for block in section.blocks {
             guard case .references(let list) = block else {
                 context.warnings.append("dropped non-reference block in references section \(section.anchor)")

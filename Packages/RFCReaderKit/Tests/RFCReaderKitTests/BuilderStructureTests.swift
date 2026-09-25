@@ -109,8 +109,40 @@ struct BuilderStructureTests {
         let document = try Fixtures.rfc8999()
         let built = DocumentTextBuilder.build(document, style: style)
         for section in bodySections(of: document) {
-            #expect(built.text.string.contains(section.displayTitle), "missing heading \(section.displayTitle)")
+            // Through `renderedLabel` for the same reason paragraphs are: a heading
+            // that cites a document has a chip in it, and a chip is a symbol and a
+            // word joiner ahead of its label. The prefix comes from
+            // `displayTitleInlines` rather than being composed here, or the appendix
+            // branch goes untested -- rfc8999 has one.
+            let projection = Self.renderedLabel(section.displayTitleInlines)
+            #expect(built.text.string.contains(projection), "missing heading \(section.displayTitle)")
         }
+    }
+
+    /// A heading names a document as readily as a paragraph does. Now that
+    /// `Section.title` carries inlines, the heading has to be built through the same
+    /// inline path as prose, or the reference is drawn as words again.
+    @Test func headingsDrawTheirCrossReferences() throws {
+        let document = RFCDocument(
+            header: DocumentHeader(title: "T"),
+            sections: [Section(
+                anchor: "section-8",
+                number: "8",
+                title: [.text("Changes from "), .crossReference(CrossReference(target: .document(.rfc(3066), section: nil)))],
+                blocks: [.paragraph(Paragraph(text: "Body."))]
+            )],
+            source: .xml
+        )
+        let built = DocumentTextBuilder.build(document, style: style)
+        let offset = try Fixtures.offset(of: "3066", in: built.text)
+
+        #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) != nil, "the heading's reference is a link")
+        #expect(built.text.attribute(.rfcChip, at: offset, effectiveRange: nil) != nil, "and it is drawn as a chip")
+        // The number still comes from `number`, and the heading still reads as one.
+        #expect(built.text.string.contains("8. Changes from " + Self.chipPrefix + "RFC\u{00A0}3066"))
+        #expect(built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String == "section-8")
+        let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
+        #expect(font?.pointSize == style.headingFont(depth: 1).pointSize, "a chip in a heading is set at heading size")
     }
 
     @Test func noParagraphTextIsLost() throws {

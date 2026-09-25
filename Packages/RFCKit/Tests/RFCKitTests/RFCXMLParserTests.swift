@@ -32,11 +32,11 @@ struct RFCXMLParserTests {
         let document = try Self.document()
         let top = document.sections
         #expect(top.first?.number == "1")
-        #expect(top.first?.title == "An Extremely Abstract Description of QUIC")
+        #expect(top.first?.titleText == "An Extremely Abstract Description of QUIC")
         #expect(top.first?.anchor == "an-extremely-abstract-description-of-quic")
 
         let packets = try #require(document.section(number: "5"))
-        #expect(packets.title == "QUIC Packets")
+        #expect(packets.titleText == "QUIC Packets")
         #expect(packets.subsections.map(\.number) == ["5.1", "5.2", "5.3", "5.4"])
         #expect(packets.subsections[0].displayTitle == "5.1. Long Header")
 
@@ -208,11 +208,53 @@ struct RFCXMLParserTests {
         #expect(paragraph.plainText == "RFC\u{00A0}9110 wraps as one unit.")
     }
 
+    /// Authored XML marks its citations with `<xref>`, but says "RFC 3986" in prose
+    /// whenever the sentence reads better that way -- 160 times in RFC 9293, 30 in
+    /// RFC 9110. Only the legacy parser used to linkify those, so the entire
+    /// post-8650 range showed them as plain text.
+    @Test func bareRFCMentionsInProseAreLinked() throws {
+        let xml = """
+        <rfc number="9999"><front><title>Bare Mentions</title></front>
+        <middle><section anchor="s1"><name>Introduction</name>
+        <t>This document obsoletes RFC 7230 and updates <xref target="RFC3986"/>.</t>
+        <t>See <eref target="https://example.com/x">RFC 2119 elsewhere</eref>, the
+        literal <tt>RFC 5234</tt>, and <sourcecode>call(RFC 8259)</sourcecode>.</t>
+        <artwork>drawn RFC 1035</artwork>
+        </section></middle>
+        <back><references><reference anchor="RFC3986"><front><title>URI</title>
+        <seriesInfo name="RFC" value="3986"/></front></reference></references></back>
+        </rfc>
+        """
+        let document = try RFCXMLParser.parse(Data(xml.utf8))
+        let section = try #require(document.sections.first)
+
+        func xrefs(_ block: Block?) -> [CrossReference] {
+            guard case .paragraph(let paragraph)? = block else { return [] }
+            return paragraph.inlines.compactMap { inline in
+                if case .crossReference(let xref) = inline { return xref }
+                return nil
+            }
+        }
+        #expect(xrefs(section.blocks.first).map(\.target) == [
+            .document(.rfc(7230), section: nil),
+            .document(.rfc(3986), section: nil),
+        ], "a bare mention links beside an authored xref")
+
+        // A mention already inside a link is not ours to link again, and preformatted
+        // text is set as the author typed it.
+        #expect(xrefs(section.blocks.dropFirst().first).isEmpty)
+        #expect(document.referencedDocuments.contains(.rfc(7230)))
+        #expect(!document.referencedDocuments.contains(.rfc(2119)))
+        #expect(!document.referencedDocuments.contains(.rfc(5234)))
+        #expect(!document.referencedDocuments.contains(.rfc(8259)))
+        #expect(!document.referencedDocuments.contains(.rfc(1035)))
+    }
+
     @Test func references() throws {
         let document = try Self.document()
-        let references = try #require(document.sections.first { $0.title == "References" })
+        let references = try #require(document.sections.first { $0.titleText == "References" })
         #expect(references.number == "8")
-        #expect(references.subsections.map(\.title) == ["Normative References", "Informative References"])
+        #expect(references.subsections.map(\.titleText) == ["Normative References", "Informative References"])
         guard case .references(let normative)? = references.subsections[0].blocks.first else {
             Issue.record("expected a reference list")
             return

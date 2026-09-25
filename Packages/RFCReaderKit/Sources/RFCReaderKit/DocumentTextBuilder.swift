@@ -158,12 +158,18 @@ extension DocumentTextBuilder {
         // and all, rather than left behind as an empty "9. References".
         guard !Self.holdsOnlyReferences(section) else { return }
         mark(section.anchor, isSection: true)
-        append(section.displayTitle + "\n", [
+        // Through the same inline path as prose, because a heading cites documents
+        // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
+        // is in `base`, so the anchor, the font and the spacing carry across the
+        // reference's own runs and the chip is set at heading size.
+        let headingAttributes: [NSAttributedString.Key: Any] = [
             .font: style.headingFont(depth: depth),
             .foregroundColor: RFCColors.label,
             .rfcAnchor: section.anchor,
             .paragraphStyle: paragraphStyle(spacingBefore: style.paragraphSpacing * 1.6, spacingAfter: style.paragraphSpacing * 0.6),
-        ])
+        ]
+        output.append(inlineRuns(section.displayTitleInlines, base: headingAttributes))
+        append("\n", headingAttributes)
         appendBlocks(section.blocks, indent: 0)
         for subsection in section.subsections {
             appendSection(subsection, depth: depth + 1)

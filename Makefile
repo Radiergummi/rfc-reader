@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest
+.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
@@ -154,6 +154,13 @@ corpus-convert: corpus-tool
 corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
 	  --version $(CORPUS_VERSION)
+
+## Rebuild the cross-reference judgement set used to measure search ranking
+# Not part of `corpus`: it reads the converted corpus rather than producing it, and
+# the set only changes when the corpus or the filtering does. See
+# Tools/corpus-build/Evaluation/README.md for which query set measures what.
+corpus-queries: corpus-tool
+	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
 
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
