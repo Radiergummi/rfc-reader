@@ -14,6 +14,11 @@ import FoundationXML
 ///
 /// A document xmllint refuses and none of those checks explains is `unexplained`. That
 /// is the bucket a new kind of failure lands in, and the first thing to read after a run.
+/// It only sees documents with no known cause, though: a document that already has one
+/// can hold a new kind of failure behind it, and the report lists the known cause
+/// alone. So the causes say what a document *contains*, not everything xmllint refused,
+/// and the bucket watches more of the corpus the fewer documents a known cause is in.
+/// What cannot hide is a regression: a document that validated and stops is `[]` no more.
 enum SchemaCheck {
     enum Cause: String, CaseIterable, Codable, Sendable {
         /// `author+` is required in the document's `<front>` and every reference's.
@@ -21,14 +26,15 @@ enum SchemaCheck {
         /// `anchor` and `pn` are both `xsd:ID`, so one element declaring the same value
         /// in both declares that ID twice.
         case anchorEqualsPartNumber = "anchor-equals-pn"
-        /// An `anchor`, `pn` or `<xref target>` that is not an `NCName`: `anchor="1"`.
+        /// An ID or IDREF that is not an `NCName`: `anchor="1"`.
         case idNotNCName = "id-not-ncname"
         /// `li`, `dd`, `td`, `th` and `blockquote` hold inline content or blocks, never both.
         case inlineBesideBlocks = "inline-beside-blocks"
         /// The same ID on two elements.
         case duplicateID = "duplicate-id"
-        /// An `<xref target>` no element declares. xmllint resolves IDREFs, so a
-        /// citation that links nowhere is a schema failure too, not only a dead link.
+        /// An `<xref>`, `<relref>` or `<displayreference>` target, or an `iprExtract`, no
+        /// element declares. xmllint resolves IDREFs, so a citation that links nowhere is a
+        /// schema failure too, not only a dead link.
         case danglingTarget = "dangling-target"
         /// `<references>` belongs in `<back>`, ahead of its sections, or in another
         /// `<references>` that holds no entries of its own: not in a section, not after
@@ -47,6 +53,21 @@ enum SchemaCheck {
     struct Result: Sendable {
         var causes: [Cause]
         var firstMessage: String?
+    }
+
+    /// Fails once, before a run, with what is actually wrong, rather than every document
+    /// failing with xmllint's exit status: a schema path that does not resolve from here,
+    /// or no xmllint on the path (libxml2-utils, on Linux).
+    static func preflight(schema: URL) throws {
+        guard FileManager.default.fileExists(atPath: schema.path) else { throw CheckError.schemaMissing(schema.path) }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["xmllint", "--version"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CheckError.xmllintMissing }
     }
 
     static func check(_ file: URL, schema: URL) throws -> Result {
@@ -90,8 +111,18 @@ enum SchemaCheck {
         return process
     }
 
-    enum CheckError: Error {
+    enum CheckError: Error, CustomStringConvertible {
         case xmllintFailed(String, Int32)
+        case schemaMissing(String)
+        case xmllintMissing
+
+        var description: String {
+            switch self {
+            case let .xmllintFailed(file, status): "xmllint exited \(status) on \(file)"
+            case let .schemaMissing(path): "no schema at \(path) (relative paths resolve from the working directory)"
+            case .xmllintMissing: "xmllint is not on the path; on Linux it is libxml2-utils"
+            }
+        }
     }
 
     /// Every known cause present in `data`, in declaration order.
@@ -109,6 +140,8 @@ private final class CauseFinder: NSObject, XMLParserDelegate {
     var found: Set<SchemaCheck.Cause> = []
 
     private static let abstractBlocks: Set<String> = ["t", "dl", "ol", "ul"]
+    /// The elements whose `target` is an `xsd:IDREF`. `<eref target>` is a URI.
+    private static let targetElements: Set<String> = ["xref", "relref", "displayreference"]
     private static let mixedContent: Set<String> = ["li", "dd", "td", "th", "blockquote"]
     private static let inline: Set<String> = [
         "bcp14", "br", "cref", "em", "eref", "iref", "relref", "strong", "sub", "sup", "tt", "u", "xref",
@@ -150,16 +183,18 @@ private final class CauseFinder: NSObject, XMLParserDelegate {
 
         let anchor = attributes["anchor"], partNumber = attributes["pn"]
         if let anchor, anchor == partNumber { found.insert(.anchorEqualsPartNumber) }
-        // Counted once per element, so `anchor == pn` is that cause and not also this one.
-        for id in Set([anchor, partNumber].compactMap(\.self)) where !ids.insert(id).inserted {
+        // Every attribute `v3.rng` types `xsd:ID`. Counted once per element, so
+        // `anchor == pn` is that cause and not also this one.
+        let declared = [anchor, partNumber, attributes["slugifiedName"]].compactMap(\.self)
+        for id in Set(declared) where !ids.insert(id).inserted {
             found.insert(.duplicateID)
         }
-        var references = [anchor, partNumber]
-        if name == "xref", let target = attributes["target"] {
-            references.append(target)
-            targets.insert(target)
-        }
-        if references.contains(where: { $0.map { !Self.isNCName($0) } ?? false }) { found.insert(.idNotNCName) }
+        // And every one it types `xsd:IDREF`.
+        var referenced: [String] = []
+        if Self.targetElements.contains(name), let target = attributes["target"] { referenced.append(target) }
+        if name == "rfc", let extract = attributes["iprExtract"] { referenced.append(extract) }
+        targets.formUnion(referenced)
+        if (declared + referenced).contains(where: { !Self.isNCName($0) }) { found.insert(.idNotNCName) }
 
         stack.append(Open(name: name))
     }

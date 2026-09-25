@@ -28,10 +28,11 @@ build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
 
-## Run the RFCKit test suite
-# The fast loop: no simulator, no Xcode project, well under a second.
+## Run the RFCKit and corpus-build test suites
+# The fast loop: no simulator, no Xcode project.
 test:
 	swift test --package-path $(RFCKIT)
+	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
 # Deliberately without build-app: that one needs Xcode and a Mac, while

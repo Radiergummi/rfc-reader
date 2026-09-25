@@ -262,6 +262,7 @@ enum Convert {
             schema: arguments["schema"].map { URL(fileURLWithPath: $0) }
         )
         try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
+        if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
 
         let files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
             .filter { $0.hasSuffix(".txt") }
@@ -363,8 +364,9 @@ enum Convert {
         if let message = result.firstMessage { entry.warnings.append("schema: \(message)") }
     }
 
-    /// How many documents each cause fails, and how many it is the only cause in:
-    /// the documents fixing that one cause alone would make valid.
+    /// How many documents each cause fails, and how many it is the only cause found in:
+    /// at most the documents fixing that one cause alone would make valid, since a known
+    /// cause can hide an unknown one (`SchemaCheck`).
     static func logSchema(_ reports: [Report]) {
         let checked = reports.compactMap(\.schema)
         log("schema: \(checked.filter(\.isEmpty).count) of \(checked.count) validate")
@@ -372,7 +374,7 @@ enum Convert {
             let documents = checked.filter { $0.contains(cause.rawValue) }.count
             guard documents > 0 else { continue }
             let sole = checked.filter { $0 == [cause.rawValue] }.count
-            log("  \(cause.rawValue): \(documents), the only cause in \(sole)")
+            log("  \(cause.rawValue): \(documents), the only cause found in \(sole)")
         }
     }
 
