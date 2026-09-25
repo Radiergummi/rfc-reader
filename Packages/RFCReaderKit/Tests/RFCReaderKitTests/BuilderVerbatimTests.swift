@@ -77,6 +77,46 @@ struct BuilderVerbatimTests {
         #expect(built.text.string.contains("ABNF"))
     }
 
+    /// The label names the card, so it sits inside it: one decoration run from the
+    /// label through the code, or the renderer draws the card starting below it.
+    @Test func theLanguageLabelSitsInsideItsCard() throws {
+        let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
+        let built = DocumentTextBuilder.build(document(content), style: style)
+        let label = try Fixtures.offset(of: "ABNF", in: built.text)
+        let code = try Fixtures.offset(of: "rule = 1*DIGIT", in: built.text)
+        var run = NSRange(location: 0, length: 0)
+        let value = built.text.attribute(.rfcDecoration, at: label, longestEffectiveRange: &run, in: NSRange(location: 0, length: built.text.length))
+        #expect(RFCDecoration(attributeValue: value) == .artwork)
+        #expect(NSLocationInRange(code, run), "the label and the code must be one card")
+    }
+
+    /// Artwork inside a quote starts an indent step in, so the widest line has to fit
+    /// what is left of the measure — scaled against the whole measure, it overruns
+    /// the column by exactly the indent.
+    @Test func indentedArtworkScalesToFitWhatIsLeftOfTheMeasure() throws {
+        let wide = String(repeating: "#", count: 129)
+        let quoted = Fixtures.document(.blockQuote([.preformatted(Preformatted(kind: .artwork, text: wide, anchor: "art"))]))
+        let built = DocumentTextBuilder.build(quoted, style: style)
+        let offset = try #require(built.anchors.offset(of: "art"))
+        let font = try #require(built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+
+        let rendered = DocumentTextBuilder(style: style).lineWidth(wide, font: font)
+        let available = style.measure - style.indentStep
+        #expect(abs(rendered - available) < 1, "the widest line fills the indented measure: \(rendered) vs \(available)")
+    }
+
+    /// A caption centres under its figure, and an indented figure's card starts at the
+    /// indent — so the caption's paragraph has to start there too.
+    @Test func anIndentedFiguresCaptionIsIndentedWithIt() throws {
+        let figure = Figure(title: "Packet", number: 1, blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))])
+        let built = DocumentTextBuilder.build(Fixtures.document(.blockQuote([.figure(figure)])), style: style)
+        let offset = try Fixtures.offset(of: "Figure 1: Packet", in: built.text)
+        let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+        #expect(paragraph.alignment == .center)
+        #expect(paragraph.headIndent == style.indentStep)
+        #expect(paragraph.firstLineHeadIndent == style.indentStep)
+    }
+
     /// Artwork is scaled so its widest line fills the measure. Inside the abstract —
     /// which is set smaller than the body — that scaling has to be worked out in the
     /// abstract's own style, not applied on top of a full-size answer.
