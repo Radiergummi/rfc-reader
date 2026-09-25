@@ -430,11 +430,13 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// so there is no `updateTrackingAreas` override to keep in sync by hand.
     /// `.mouseEnteredAndExited` is what lets `mouseExited` end a hover when the
     /// pointer leaves the view entirely, rather than only on the next in-view move.
+    /// `.activeInActiveApp` rather than `.activeInKeyWindow`: the popover's window can
+    /// become key, and then the moves and the exit that close it would stop arriving.
     private func setUpHoverTracking() {
         guard let textView, trackingArea == nil else { return }
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
