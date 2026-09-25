@@ -733,6 +733,34 @@ struct LegacyTextCorpusFindingsTests {
         #expect(settled(["ECMA TR 53", "ECMA TR/53"]) == ["ref-ECMA-TR-53", "ref-ECMA-TR-53-2"])
         // And an entry never takes an anchor a section can have.
         #expect(settled(["section-1"], reserved: ["section-1"]) == ["section-1-2"])
+        // A label with nothing of a name in it is a note: RFC 2130's `[*]`, RFC 906's `[**]`.
+        #expect(settled(["*", "**"]) == ["ref-note", "ref-note-2"])
+    }
+
+    /// A heading that repeats is renamed after the prose is linked, so what an entry must
+    /// not take is every anchor a section can be renamed to, not only the ones it starts
+    /// with: an entry settled onto `section-1-2` beside two sections numbered 1 lost it to
+    /// the second, and its citations to a rename. Every suffix a repeat can reach is held,
+    /// past the ones another heading already spells (`name-foo-2`, for `Foo 2`).
+    @Test func aRepeatedHeadingHoldsEveryAnchorItCanBeRenamedTo() {
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1-2"])
+        #expect(LegacyTextParser.reservedAnchors(["name-foo", "name-foo", "name-foo-2"]) == ["name-foo", "name-foo-2", "name-foo-3"])
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-2"]) == ["section-1", "section-2"])
+    }
+
+    /// What `parse` reserves is every anchor its sections end with, and no entry holds one:
+    /// RFC 19 numbers two sections 1, and the second is `section-1-2`.
+    @Test func everySectionAnchorIsReservedAndNoEntryHoldsOne() throws {
+        #expect(try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1-2"))
+        for fixture in try Fixtures.legacyTexts() {
+            let text = try Fixtures.string(fixture)
+            let reserved = LegacyTextParser.reservedAnchors(in: text)
+            let document = LegacyTextParser.parse(text)
+            let unreserved = Set(document.allSections.map(\.anchor)).subtracting(reserved).sorted()
+            #expect(unreserved.isEmpty, "\(fixture): \(unreserved)")
+            let held = Set(document.referenceLists.flatMap(\.entries).map(\.anchor)).intersection(reserved).sorted()
+            #expect(held.isEmpty, "\(fixture): \(held)")
+        }
     }
 
     /// A label listed twice is cited as its first entry, whether that names a document or
