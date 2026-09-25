@@ -878,10 +878,96 @@ public struct LegacyTextParser: Sendable {
 
     nonisolated(unsafe) private static let bulletPattern = #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
     nonisolated(unsafe) private static let numberedItemPattern = #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
-    nonisolated(unsafe) private static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+    nonisolated(unsafe) static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
     /// A run of three or more spaces between two non-space characters, not following
     /// sentence punctuation: a column gap rather than the gap after a full stop.
-    nonisolated(unsafe) private static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+    nonisolated(unsafe) static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+
+    /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
+    /// of every block the prose test sees. Swift's regex engine tries each alternative
+    /// at each character, and `diagnose` was about half of `parse`. On an ASCII line --
+    /// nearly every line of the corpus -- a pass over the trimmed bytes answers the same
+    /// question; any other line goes to the regex. So does a line holding `\r`, because
+    /// the regex reads `\r\n` as one character and would count one space where the
+    /// bytes count two.
+    ///
+    /// The report's count of artwork matches still comes from the regex: which
+    /// alternative claims an overlap decides that count, and it is offline.
+    static func containsArtwork(_ line: String) -> Bool {
+        if let found = withTrimmedASCII(line, { bytes in
+            for index in bytes.indices {
+                let next = index + 1 < bytes.count ? bytes[index + 1] : 0
+                switch bytes[index] {
+                case UInt8(ascii: "+"): if next == UInt8(ascii: "-") { return true }
+                case UInt8(ascii: "-"):
+                    if next == UInt8(ascii: "+") || next == UInt8(ascii: ">") { return true }
+                    if next == UInt8(ascii: "-"), index + 2 < bytes.count, bytes[index + 2] == UInt8(ascii: "-") { return true }
+                case UInt8(ascii: "|"): if isSpace(next) { return true }
+                case UInt8(ascii: "/"), UInt8(ascii: "\\"): if next == UInt8(ascii: "_") { return true }
+                case UInt8(ascii: "_"): if next == UInt8(ascii: "/") || next == UInt8(ascii: "\\") { return true }
+                case UInt8(ascii: "."):
+                    if index + 3 < bytes.count, bytes[index + 1...index + 3].allSatisfy({ $0 == UInt8(ascii: ".") }) { return true }
+                case UInt8(ascii: "="):
+                    if index + 2 < bytes.count, bytes[index + 1...index + 2].allSatisfy({ $0 == UInt8(ascii: "=") }) { return true }
+                case UInt8(ascii: "<"): if next == UInt8(ascii: "-") { return true }
+                case UInt8(ascii: "0")...UInt8(ascii: "9"):
+                    // A digit, a run of two or more spaces, a digit: `1   2` in a table.
+                    var end = index + 1
+                    while end < bytes.count, isSpace(bytes[end]) { end += 1 }
+                    if end - index - 1 >= 2, end < bytes.count, (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[end]) { return true }
+                case let byte where isSpace(byte): if next == UInt8(ascii: "|") { return true }
+                default: continue
+                }
+            }
+            return false
+        }) {
+            return found
+        }
+        return line.trimmingCharacters(in: .whitespaces).contains(artworkPattern)
+    }
+
+    /// Three or more spaces before a non-space, where what precedes the run is not
+    /// sentence punctuation. The regex's `[^.?!:]` also admits a space, so a run of four
+    /// needs nothing before it: its first space is that character.
+    static func hasInternalGap(_ line: String) -> Bool {
+        if let found = withTrimmedASCII(line, { bytes in
+            var index = 0
+            while index < bytes.count {
+                guard isSpace(bytes[index]) else {
+                    index += 1
+                    continue
+                }
+                let start = index
+                while index < bytes.count, isSpace(bytes[index]) { index += 1 }
+                guard index < bytes.count else { return false }
+                let run = index - start
+                if run >= 4 { return true }
+                if run == 3, start > 0, !".?!:".utf8.contains(bytes[start - 1]) { return true }
+            }
+            return false
+        }) {
+            return found
+        }
+        return line.trimmingCharacters(in: .whitespaces).contains(internalGapPattern)
+    }
+
+    /// `line` trimmed as `.whitespaces` trims it -- spaces and tabs, in ASCII -- when every
+    /// byte is ASCII and none is `\r`; nil otherwise, for the caller to use the regex.
+    private static func withTrimmedASCII(_ line: String, _ body: (UnsafeBufferPointer<UInt8>) -> Bool) -> Bool? {
+        var line = line
+        return line.withUTF8 { bytes in
+            guard bytes.allSatisfy({ $0 < 0x80 && $0 != UInt8(ascii: "\r") }) else { return nil }
+            var start = bytes.startIndex, end = bytes.endIndex
+            while start < end, bytes[start] == 0x20 || bytes[start] == 0x09 { start += 1 }
+            while end > start, bytes[end - 1] == 0x20 || bytes[end - 1] == 0x09 { end -= 1 }
+            return body(UnsafeBufferPointer(rebasing: bytes[start..<end]))
+        }
+    }
+
+    /// `\s` over ASCII: space, and tab through carriage return.
+    private static func isSpace(_ byte: UInt8) -> Bool {
+        byte == 0x20 || (0x09...0x0D).contains(byte)
+    }
 
     private static func blocks(from rawBlocks: [RawBlock], linker: InlineLinker) -> [Block] {
         // Re-join paragraphs that a page break cut in half.
@@ -1053,14 +1139,13 @@ public struct LegacyTextParser: Sendable {
                 ragged = true
                 if !thorough { break }
             }
-            let content = line.trimmingCharacters(in: .whitespaces)
             if thorough {
-                diagnosis.artworkMatches += content.matches(of: artworkPattern).count
-            } else if content.contains(artworkPattern) {
+                diagnosis.artworkMatches += line.trimmingCharacters(in: .whitespaces).matches(of: artworkPattern).count
+            } else if containsArtwork(line) {
                 diagnosis.artworkMatches = 1
                 break
             }
-            if !justified, content.contains(internalGapPattern) {
+            if !justified, hasInternalGap(line) {
                 gapped = true
                 if !thorough { break }
             }
@@ -1391,26 +1476,51 @@ struct InlineLinker: Sendable {
         return canonical ? nil : CrossReference.nonBreakingLabel(matched)
     }
 
-    func link(_ text: String) -> [Inline] {
-        // Every pattern below needs one of four literals to match at all, and a
-        // substring scan does not start the regex engine. Most fragments carry no
-        // citation, and the XML parser now runs this over every text node of every
-        // document where it used to run over none.
-        //
-        // The scan is over UTF-8 and over first bytes alone -- `[`, and the letters
-        // `RFC`, `http` and `Section` open with -- because a grapheme-aware substring
-        // search costs an order of magnitude more per fragment, and this was four of
-        // them on exactly the fragments that match nothing. A fragment holding an `R`
-        // and no `RFC` pays one regex pass it did not need, which is the cheaper half
-        // of the trade.
-        guard !text.isEmpty else { return [] }
-        guard text.utf8.contains(where: { $0 == 0x5B || $0 == 0x52 || $0 == 0x68 || $0 == 0x53 }) else {
-            return [.text(text)]
+    /// Which of the literals the patterns open with a fragment holds, byte for byte.
+    /// Each is necessary for its pattern to match -- the patterns are case-sensitive,
+    /// and a grapheme the regex reads as `C` is the byte `C` -- so a pattern whose
+    /// literal is absent is skipped without changing what `link` returns.
+    private struct Literals {
+        var bracket = false, rfc = false, rfcs = false, section = false, http = false
+        var any: Bool { bracket || rfc || section || http }
+
+        init(in text: String) {
+            var text = text
+            text.withUTF8 { bytes in
+                func holds(_ literal: StaticString, at index: Int) -> Bool {
+                    let count = literal.utf8CodeUnitCount
+                    guard index + count <= bytes.count else { return false }
+                    return (0..<count).allSatisfy { bytes[index + $0] == literal.utf8Start[$0] }
+                }
+                for index in bytes.indices {
+                    switch bytes[index] {
+                    case UInt8(ascii: "["): bracket = true
+                    case UInt8(ascii: "R") where holds("RFC", at: index):
+                        rfc = true
+                        if holds("RFCs", at: index) { rfcs = true }
+                    case UInt8(ascii: "S") where holds("Section", at: index): section = true
+                    case UInt8(ascii: "h") where holds("http", at: index): http = true
+                    default: continue
+                    }
+                }
+            }
         }
+    }
+
+    func link(_ text: String) -> [Inline] {
+        // Every pattern below needs a literal to match at all -- `[`, `RFC`, `RFCs`,
+        // `Section`, `http` -- and a pass over the UTF-8 does not start the regex
+        // engine. Most fragments carry no citation, and the XML parser runs this over
+        // every text node of every document. The pass used to test first bytes only,
+        // and one of them was `h`, which nearly every sentence holds: all six patterns
+        // ran on nearly every fragment.
+        guard !text.isEmpty else { return [] }
+        let literals = Literals(in: text)
+        guard literals.any else { return [.text(text)] }
 
         var candidates: [Candidate] = []
 
-        for match in text.matches(of: Self.sectionOfRFCPattern) {
+        for match in literals.rfc && literals.section ? text.matches(of: Self.sectionOfRFCPattern) : [] {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 // The matched prose *is* the label we compose, so it is left to be
@@ -1419,7 +1529,7 @@ struct InlineLinker: Sendable {
                 CrossReference(target: .document(.rfc(number), section: String(match.section)), sectionFormat: .of)
             )))
         }
-        for match in text.matches(of: Self.bracketPattern) {
+        for match in literals.bracket ? text.matches(of: Self.bracketPattern) : [] {
             let anchor = String(match.anchor)
             // Parsed once: the label needs it on every path, so the hit path's is free.
             let parsed = DocumentID(parsing: anchor)
@@ -1435,7 +1545,7 @@ struct InlineLinker: Sendable {
                 CrossReference(target: target, text: Self.label(String(text[match.range]), canonicalFor: parsed))
             )))
         }
-        for match in text.matches(of: Self.bareRFCPattern) {
+        for match in literals.rfc ? text.matches(of: Self.bareRFCPattern) : [] {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 CrossReference(target: .document(.rfc(number), section: nil),
@@ -1443,7 +1553,7 @@ struct InlineLinker: Sendable {
             )))
         }
         // Only the plural opens a list, and this is the dearest of the six patterns.
-        if text.contains("RFCs") {
+        if literals.rfcs {
             for list in text.matches(of: Self.rfcListPattern) {
                 for match in text[list.range].matches(of: Self.listNumberPattern) {
                     guard let number = Int(match.output) else { continue }
@@ -1456,7 +1566,7 @@ struct InlineLinker: Sendable {
         // Skipped outright when there are no section numbers to match, which is how
         // the XML parser runs: `<xref>` is how authored XML points at a section, so
         // every match of this pass would be filtered out again.
-        if !sectionNumbers.isEmpty {
+        if !sectionNumbers.isEmpty, literals.section {
             for match in text.matches(of: Self.sectionPattern)
             where sectionNumbers.contains(String(match.section)) {
                 candidates.append(Candidate(range: match.range, inline: .crossReference(
@@ -1464,7 +1574,7 @@ struct InlineLinker: Sendable {
                 )))
             }
         }
-        for match in text.matches(of: Self.urlPattern) {
+        for match in literals.http ? text.matches(of: Self.urlPattern) : [] {
             let raw = String(match.output).trimmingTrailingPunctuation()
             guard let url = URL(string: raw) else { continue }
             let end = text.index(match.range.lowerBound, offsetBy: raw.count)
