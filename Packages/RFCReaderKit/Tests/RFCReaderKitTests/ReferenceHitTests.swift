@@ -35,6 +35,19 @@ struct ReferenceHitTests {
         #expect(next.box.reference == second)
     }
 
+    /// The same reference twice in a row — "[RFC 9110] [RFC 9110]" — is equal by
+    /// value, so only the box's identity tells the two apart: the hover compares it,
+    /// and the popover would otherwise span both.
+    @Test func twoIdenticalAdjacentReferencesAreTwoHits() throws {
+        let text = Fixtures.inlineRun([.crossReference(chipped), .crossReference(chipped)])
+        let boundary = (Self.chipPrefix + chipped.displayLabel).utf16.count
+        let first = try #require(text.reference(at: boundary - 1))
+        let next = try #require(text.reference(at: boundary))
+        #expect(first.range == NSRange(location: 0, length: boundary))
+        #expect(next.range == NSRange(location: boundary, length: text.length - boundary))
+        #expect(first.box !== next.box)
+    }
+
     @Test func proseAndTheEndOfTheTextAreNoHit() {
         let text = Fixtures.inlineRun([.text("See "), .crossReference(chipped)])
         #expect(text.reference(at: 0) == nil)
