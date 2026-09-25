@@ -97,6 +97,9 @@ public struct RFCXMLSerializer: Sendable {
             if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
             writer.empty("author", attributes)
         }
+        // RFCXML requires `author+`, and an empty one is how the published series says a
+        // front names no one. The parser reads it back as no author at all.
+        if header.authors.isEmpty { writer.empty("author") }
         if let date = header.date {
             var attributes: [(String, String)] = []
             if let month = date.monthName { attributes.append(("month", month)) }
@@ -172,6 +175,7 @@ public struct RFCXMLSerializer: Sendable {
             if isEditor { authorAttributes.append(("role", "editor")) }
             writer.empty("author", authorAttributes)
         }
+        if reference.authors.isEmpty { writer.empty("author") }
         if let date = reference.date {
             var dateAttributes: [(String, String)] = []
             if let month = date.monthName { dateAttributes.append(("month", month)) }
