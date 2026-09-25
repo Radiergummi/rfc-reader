@@ -547,10 +547,14 @@ public struct LegacyTextParser: Sendable {
         func split(_ at: (offset: Int, frontCount: Int)) -> (front: [String], bodyStart: Int) {
             (Array(front.prefix(at.frontCount)), at.offset)
         }
+        // Runs are counted from the one that states the number: RFC 873 opens with an NLS
+        // journal stamp in two runs ahead of its header, and "after the title" counted from
+        // the stamp fell before the number line (#60).
+        let skipped = (numberRun(in: lines) ?? 1) - 1
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
             if string.isBlank {
-                if firstParagraph == nil, let start = runStart, run > 2 {
+                if firstParagraph == nil, let start = runStart, run - skipped > 2 {
                     let runLines = Array(front[start.frontCount...])
                     if runLines.count > 1, looksLikeProse(runLines) { firstParagraph = start }
                 }
@@ -558,12 +562,23 @@ public struct LegacyTextParser: Sendable {
                 front.append("")
                 continue
             }
+            let startsRun = runStart == nil
             let start = runStart ?? (offset, front.count)
-            if runStart == nil {
+            if startsRun {
                 run += 1
                 runStart = start
             }
-            if run > 2 {
+            // RFC 651 sets no blank line after its title, so the title run is the whole
+            // document. The body's first section ends it, unless it is the run's first
+            // line. First means numbered 1: any number would take RFC 551's `251 Mercer
+            // Street` for a section, and an appendix would not do either, since `A
+            // Standard for ...` reads as appendix A.
+            if run - skipped == 2, !startsRun, string.startsAtColumnZero,
+               let heading = heading(from: string), !heading.isAppendix,
+               heading.number?.split(separator: ".").first == "1" {
+                return (front, offset)
+            }
+            if run - skipped > 2 {
                 if afterTitle == nil { afterTitle = start }
                 // Deliberately laxer than the body's rule: the stand-alone test needs the
                 // body's indent, which is not known until this scan has finished. Stopping
@@ -576,6 +591,25 @@ public struct LegacyTextParser: Sendable {
             front.append(string)
         }
         return afterTitle.map(split) ?? (front, lines.count)
+    }
+
+    /// Which run of lines states the document's number, among the first four.
+    private static func numberRun(in lines: [Line]) -> Int? {
+        var run = 0
+        var previousWasBlank = true
+        for case .text(let string) in lines {
+            if string.isBlank {
+                previousWasBlank = true
+                continue
+            }
+            if previousWasBlank {
+                run += 1
+                if run > 4 { return nil }
+            }
+            previousWasBlank = false
+            if statedNumber(in: string) != nil { return run }
+        }
+        return nil
     }
 
     nonisolated(unsafe) private static let monthYearPattern = #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#

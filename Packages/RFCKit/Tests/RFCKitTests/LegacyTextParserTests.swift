@@ -593,6 +593,27 @@ struct LegacyTextCorpusFindingsTests {
         #expect(!document.allSections.contains { $0.titleText.hasPrefix("Network Working Group") })
     }
 
+    /// RFC 651 sets no blank line after its title, so the title run is the whole
+    /// document: `1. Command name and code` and everything after it became the title,
+    /// and the body was empty (#60). A numbered heading at column 0 ends the title run,
+    /// unless it is the run's first line.
+    @Test func aNumberedHeadingEndsTheTitle() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc651.txt"))
+        #expect(document.header.title == "Revised Telnet Status Option")
+        #expect(document.section(number: "1")?.titleText == "Command name and code")
+        #expect(document.section(number: "4")?.titleText == "Motivation for the option")
+    }
+
+    /// RFC 873 opens with an NLS journal stamp in two runs of lines ahead of its header,
+    /// and sets every heading five columns in, so the front matter ends where the
+    /// fallback puts it, after the second run -- which was counted from the stamp, and
+    /// fell before the number line. The runs are counted from the header (#60, #51).
+    @Test func theTitleIsCountedFromTheHeader() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc873.txt"))
+        #expect(document.header.id == .rfc(873))
+        #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
