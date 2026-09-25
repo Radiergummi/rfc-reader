@@ -52,7 +52,8 @@ jobs:
       - name: Pack
         run: |
           apt-get update -qq && apt-get install -y -qq zstd >/dev/null
-          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus xml manifest.json
+          # convert writes xml.noindex (kept out of Spotlight); the pack's directory is xml.
+          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
           ls -la *.tar.zst
 
       - name: Upload report and packs as workflow artifacts
