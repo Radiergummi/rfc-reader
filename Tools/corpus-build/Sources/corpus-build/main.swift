@@ -8,7 +8,7 @@ import FoundationNetworking
 //
 //   corpus-build fetch    --out corpus [--format text|xml] [--index rfc-index.xml] [--limit N] [--concurrency 6]
 //   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
-//                         [--diagnostics corpus/prose.json]
+//                         [--diagnostics corpus/prose.json] [--schema Tools/corpus-build/Schema/v3.rng]
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
 //                         [--limit 4000] [--seed 11] [--min-words 8]
@@ -128,6 +128,9 @@ enum Convert {
         var furniture: Int?
         var overridden: Bool
         var warnings: [String]
+        /// Why the output is not RFCXML: `[]` when it validates, nil when the run was not
+        /// asked to check (`--schema`). See `SchemaCheck.Cause` for what each entry means.
+        var schema: [String]?
     }
 
     /// What the prose test decided across the corpus, and where it decided narrowly.
@@ -237,6 +240,7 @@ enum Convert {
         var overrides: URL?
         var wantsDiagnostics: Bool
         var wantsFurniture: Bool
+        var schema: URL?
     }
 
     /// One converted document, and where it goes in the run's output.
@@ -254,9 +258,11 @@ enum Convert {
             // Diagnosing re-segments every document, which roughly doubles the run. Only pay
             // it when the report is actually asked for.
             wantsDiagnostics: arguments["diagnostics"] != nil,
-            wantsFurniture: arguments["report"] != nil
+            wantsFurniture: arguments["report"] != nil,
+            schema: arguments["schema"].map { URL(fileURLWithPath: $0) }
         )
         try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
+        if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
 
         let files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
             .filter { $0.hasSuffix(".txt") }
@@ -298,6 +304,7 @@ enum Convert {
                 log("  only \(guardName): \(count)")
             }
         }
+        if job.schema != nil { logSchema(reports) }
         let flagged = reports.filter { !$0.warnings.isEmpty }
         log("done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings")
         for entry in flagged.prefix(40) { log("  \(entry.id): \(entry.warnings.joined(separator: "; "))") }
@@ -313,7 +320,9 @@ enum Convert {
             let data = try Data(contentsOf: overrides.appending(path: "\(stem).xml"))
             let document = try RFCXMLParser.parse(data)   // overrides must at least parse
             try data.write(to: outputURL, options: .atomic)
-            return (report(for: document, id: stem, overridden: true), nil)
+            var entry = report(for: document, id: stem, overridden: true)
+            try checkSchema(outputURL, job: job, into: &entry)
+            return (entry, nil)
         }
 
         // 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather than UTF-8 (accented names, curly quotes).
@@ -344,7 +353,29 @@ enum Convert {
         var entry = report(for: document, id: stem, overridden: false)
         if job.wantsFurniture { entry.furniture = LegacyTextParser.recurringFurniture(in: text).count }
         entry.warnings += warnings
+        try checkSchema(outputURL, job: job, into: &entry)
         return (entry, prose)
+    }
+
+    static func checkSchema(_ file: URL, job: Job, into entry: inout Report) throws {
+        guard let schema = job.schema else { return }
+        let result = try SchemaCheck.check(file, schema: schema)
+        entry.schema = result.causes.map(\.rawValue)
+        if let message = result.firstMessage { entry.warnings.append("schema: \(message)") }
+    }
+
+    /// How many documents each cause fails, and how many it is the only cause found in:
+    /// at most the documents fixing that one cause alone would make valid, since a known
+    /// cause can hide an unknown one (`SchemaCheck`).
+    static func logSchema(_ reports: [Report]) {
+        let checked = reports.compactMap(\.schema)
+        log("schema: \(checked.filter(\.isEmpty).count) of \(checked.count) validate")
+        for cause in SchemaCheck.Cause.allCases {
+            let documents = checked.filter { $0.contains(cause.rawValue) }.count
+            guard documents > 0 else { continue }
+            let sole = checked.filter { $0 == [cause.rawValue] }.count
+            log("  \(cause.rawValue): \(documents), the only cause found in \(sole)")
+        }
     }
 
     static func report(for document: RFCDocument, id: String, overridden: Bool) -> Report {

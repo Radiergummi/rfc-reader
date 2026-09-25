@@ -50,8 +50,10 @@ jobs:
 
       - name: Convert to RFCXML
         run: |
+          apt-get update -qq && apt-get install -y -qq libxml2-utils >/dev/null
           Tools/corpus-build/.build/release/corpus-build convert \
-            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json
+            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json \
+            --schema Tools/corpus-build/Schema/v3.rng
 
       - name: Manifest
         run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "$VERSION"
@@ -59,8 +61,9 @@ jobs:
       - name: Pack
         run: |
           apt-get update -qq && apt-get install -y -qq zstd >/dev/null
-          tar --zstd -cf "legacy-xml-$VERSION.tar.zst" -C corpus xml manifest.json
-          ls -la ./*.tar.zst
+          # convert writes xml.noindex (kept out of Spotlight); the pack's directory is xml.
+          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
+          ls -la *.tar.zst
 
       - name: Upload report and packs as workflow artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
