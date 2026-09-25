@@ -51,13 +51,13 @@ struct BuilderVerbatimTests {
 
     @Test func narrowArtworkIsNotScaledDown() {
         let builder = DocumentTextBuilder(style: style)
-        #expect(builder.monospaceScale(for: "short") == 1)
+        #expect(builder.monospaceScale(for: "short", indent: 0) == 1)
     }
 
     @Test func wideArtworkScalesToFitTheMeasure() {
         let builder = DocumentTextBuilder(style: style)
         let wide = String(repeating: "#", count: 129)
-        let scale = builder.monospaceScale(for: wide)
+        let scale = builder.monospaceScale(for: wide, indent: 0)
         #expect(scale < 1)
 
         let font = style.monospacedFont(scale: scale)
@@ -68,7 +68,7 @@ struct BuilderVerbatimTests {
     @Test func theWidestLineDrivesTheScale() {
         let builder = DocumentTextBuilder(style: style)
         let mixed = "short\n" + String(repeating: "#", count: 120) + "\nshort"
-        #expect(builder.monospaceScale(for: mixed) == builder.monospaceScale(for: String(repeating: "#", count: 120)))
+        #expect(builder.monospaceScale(for: mixed, indent: 0) == builder.monospaceScale(for: String(repeating: "#", count: 120), indent: 0))
     }
 
     @Test func sourceCodeShowsItsLanguage() {
