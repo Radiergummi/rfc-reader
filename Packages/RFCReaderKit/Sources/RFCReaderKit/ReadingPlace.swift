@@ -37,7 +37,7 @@ public struct ReadingPlace: Sendable, Equatable {
         } else {
             start = 0
         }
-        let end = index.entries.first { $0.offset > start }?.offset ?? length
+        let end = index.firstOffset(after: start) ?? length
         return max(start, min(start + offset, end - 1))
     }
 
@@ -55,5 +55,20 @@ public struct ReadingPlace: Sendable, Equatable {
             return previous
         }
         return ReadingPlace(at: topLine.location, in: index)
+    }
+}
+
+private extension AnchorIndex {
+    /// The first anchor's offset strictly after `offset`: where the block starting
+    /// there ends. A binary search, like `anchor(at:)`, because tracking runs it on
+    /// every scroll report.
+    func firstOffset(after offset: Int) -> Int? {
+        var low = 0
+        var high = entries.count
+        while low < high {
+            let middle = (low + high) / 2
+            if entries[middle].offset <= offset { low = middle + 1 } else { high = middle }
+        }
+        return low < entries.count ? entries[low].offset : nil
     }
 }

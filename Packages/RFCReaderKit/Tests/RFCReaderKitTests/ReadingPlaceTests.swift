@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import Testing
 @testable import RFCReaderKit
 #if canImport(UIKit)
@@ -85,13 +86,23 @@ struct ReadingPlaceTests {
     }
 
     /// The property the reader relies on: the same text is at the top before and
-    /// after a resize rebuilds the document at another measure.
-    @Test @MainActor
-    func findsTheSameTextInADocumentBuiltAtAnotherMeasure() throws {
-        let document = try Fixtures.rfc8999()
+    /// after a resize rebuilds the document at another measure. A table ahead of
+    /// the needle grids at the wide measure and stacks at the narrow one, so the
+    /// storage genuinely changes length and a carried raw offset would miss.
+    @Test func findsTheSameTextInADocumentBuiltAtAnotherMeasure() throws {
+        let table = RFCKit.Table(
+            title: "Status Codes",
+            number: 1,
+            header: [[[.text("Code")], [.text("Description")], [.text("Ref.")]]],
+            rows: [[[.text("404")], [.text("Not found, which is a short description")], [.text("6.5.4")]]],
+            anchor: "table-1"
+        )
+        let needle = "The needle paragraph follows the table."
+        let document = Fixtures.document(.table(table), .paragraph(Paragraph(text: needle, anchor: "section-1-2")))
         let wide = DocumentTextBuilder.build(document, style: ReadingStyle(measure: 712))
-        let narrow = DocumentTextBuilder.build(document, style: ReadingStyle(measure: 400))
-        let needle = "Only the most significant bit of the first byte"
+        let narrow = DocumentTextBuilder.build(document, style: ReadingStyle(measure: 200))
+        try #require(wide.text.length != narrow.text.length, "the two measures must shape the table differently")
+
         let original = try Fixtures.offset(of: needle, in: wide.text) + 7
         let place = ReadingPlace(at: original, in: wide.anchors)
         let restored = try #require(place.documentOffset(in: narrow.anchors, length: narrow.text.length))
@@ -103,28 +114,42 @@ struct ReadingPlaceTests {
 @Suite("Reading place: line geometry")
 @MainActor
 struct ReadingPlaceLineGeometryTests {
-    private struct Paragraph {
+    private struct Laid {
         let lines: [NSTextLineFragment]
-        let fragmentStart: Int
+        let fragment: NSRange
+        let frameHeight: CGFloat
+        var fragmentStart: Int { fragment.location }
     }
 
     /// One paragraph wrapped over many lines, laid out by TextKit 2, starting past
     /// the document's first character so a fragment-relative slip shows.
-    private func paragraph() throws -> Paragraph {
+    private func paragraph(spacing: CGFloat = 0) throws -> Laid {
         let font = PlatformFont.systemFont(ofSize: 17)
         let prose = (0..<80).map { "word\($0)" }.joined(separator: " ")
+        let style = NSMutableParagraphStyle()
+        style.paragraphSpacing = spacing
         let storage = NSTextContentStorage()
-        storage.attributedString = NSAttributedString(string: "Heading\n" + prose, attributes: [.font: font])
+        storage.attributedString = NSAttributedString(
+            string: "Heading\n" + prose + "\nAfter",
+            attributes: [.font: font, .paragraphStyle: style]
+        )
         let layout = NSTextLayoutManager()
         storage.addTextLayoutManager(layout)
         let container = NSTextContainer(size: CGSize(width: 300, height: 100_000))
         container.lineFragmentPadding = 0
         layout.textContainer = container
         layout.ensureLayout(for: layout.documentRange)
-        var found: Paragraph?
+        var found: Laid?
         layout.enumerateTextLayoutFragments(from: layout.documentRange.location, options: [.ensuresLayout]) { fragment in
             let start = layout.offset(of: fragment.rangeInElement.location)
-            if start > 0 { found = Paragraph(lines: fragment.textLineFragments, fragmentStart: start) }
+            let end = layout.offset(of: fragment.rangeInElement.endLocation)
+            if start > 0 {
+                found = Laid(
+                    lines: fragment.textLineFragments,
+                    fragment: NSRange(location: start, length: end - start),
+                    frameHeight: fragment.layoutFragmentFrame.height
+                )
+            }
             return found == nil
         }
         let paragraph = try #require(found)
@@ -135,14 +160,14 @@ struct ReadingPlaceLineGeometryTests {
     @Test func aPointInsideALineNamesThatLinesCharacters() throws {
         let paragraph = try paragraph()
         for line in paragraph.lines {
-            let range = FragmentGeometry.lineRange(at: line.typographicBounds.midY, in: paragraph.lines, fragmentStart: paragraph.fragmentStart)
+            let range = FragmentGeometry.lineRange(at: line.typographicBounds.midY, in: paragraph.lines, fragment: paragraph.fragment)
             #expect(range == NSRange(location: paragraph.fragmentStart + line.characterRange.location, length: line.characterRange.length))
         }
     }
 
     @Test func aPointAboveTheFirstLineNamesTheFirstLine() throws {
         let paragraph = try paragraph()
-        #expect(FragmentGeometry.lineRange(at: -5, in: paragraph.lines, fragmentStart: paragraph.fragmentStart)?.location == paragraph.fragmentStart)
+        #expect(FragmentGeometry.lineRange(at: -5, in: paragraph.lines, fragment: paragraph.fragment).location == paragraph.fragmentStart)
     }
 
     @Test func anOffsetAnywhereInALineFindsThatLinesTop() throws {
@@ -156,8 +181,20 @@ struct ReadingPlaceLineGeometryTests {
     @Test func theTwoAreInverses() throws {
         let paragraph = try paragraph()
         for line in paragraph.lines {
-            let range = try #require(FragmentGeometry.lineRange(at: line.typographicBounds.minY, in: paragraph.lines, fragmentStart: paragraph.fragmentStart))
+            let range = FragmentGeometry.lineRange(at: line.typographicBounds.minY, in: paragraph.lines, fragment: paragraph.fragment)
             #expect(FragmentGeometry.lineTop(of: range.location, in: paragraph.lines, fragmentStart: paragraph.fragmentStart) == line.typographicBounds.minY)
         }
+    }
+
+    /// A fragment's frame runs on past its last line by the paragraph spacing, and
+    /// a viewport top in that gap has already scrolled past every line of it. The
+    /// line it is reading is the next paragraph's first; naming this paragraph's
+    /// start would send the next rebuild back up by the paragraph's whole height.
+    @Test func aPointInTheSpacingBelowTheLastLineNamesTheNextParagraph() throws {
+        let paragraph = try paragraph(spacing: 20)
+        let lastLine = try #require(paragraph.lines.last).typographicBounds.maxY
+        try #require(paragraph.frameHeight > lastLine + 10, "the frame must carry the spacing below its last line")
+        let range = FragmentGeometry.lineRange(at: lastLine + 10, in: paragraph.lines, fragment: paragraph.fragment)
+        #expect(range == NSRange(location: NSMaxRange(paragraph.fragment), length: 0))
     }
 }

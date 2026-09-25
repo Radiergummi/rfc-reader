@@ -157,6 +157,10 @@ final class RFCTextViewCoordinator: NSObject {
         // the choice between a deep link and the saved reading position to
         // `DocumentView`, and a coordinator never outlives its document.
         let carried = self.built == nil ? nil : place
+        // What section tracking last reported, for a place whose anchor the new
+        // build does not have: its section's heading is the old behaviour, and still
+        // far better than the top of the document.
+        let fallback = self.built == nil ? nil : lastReportedAnchor
         self.built = built
         lastReportedAnchor = nil
         sectionIndex = built.anchors.sections
@@ -175,8 +179,11 @@ final class RFCTextViewCoordinator: NSObject {
             storage.textStorage?.setAttributedString(built.text)
         }
         beginLayout()
-        trackedWidth = textView.textContainerWidth
-        if let carried, let offset = carried.documentOffset(in: built.anchors, length: built.text.length) {
+        // The column `layOut` sized the container to, which is the column this
+        // document was built at. Nil if no layout has run yet; the first one sets it.
+        trackedWidth = laidOutColumn
+        if let offset = carried?.documentOffset(in: built.anchors, length: built.text.length)
+            ?? fallback.flatMap(built.anchors.offset(of:)) {
             scroll(toOffset: offset)
         } else {
             reportVisibleAnchor()
@@ -257,6 +264,7 @@ final class RFCTextViewCoordinator: NSObject {
         let headerHeight = headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height ?? 0
         guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight else { return }
         let columnChanged = column != laidOutColumn
+        let firstColumn = laidOutColumn == nil
         laidOutColumn = column
         laidOutGutter = gutter
         laidOutHeaderHeight = headerHeight
@@ -294,6 +302,9 @@ final class RFCTextViewCoordinator: NSObject {
             layoutTask?.cancel()
             laidOutEnd = nil
             laidOutThrough = 0
+            // A document installed before the first layout was built at the column
+            // this view derives from the same width, so it is this column.
+            if firstColumn, built != nil { trackedWidth = column }
         }
     }
 
@@ -349,8 +360,9 @@ final class RFCTextViewCoordinator: NSObject {
         let offset = layout.offset(of: fragment.rangeInElement.location)
         // A point of slack, so a line put exactly at the top by `scroll(toOffset:)`
         // is read back as that line and not the one above it.
-        let line = FragmentGeometry.lineRange(at: top - fragment.layoutFragmentFrame.minY + 1, in: fragment.textLineFragments, fragmentStart: offset)
-        place = ReadingPlace.tracking(place, topLine: line ?? NSRange(location: offset, length: 0), in: built.anchors, length: built.text.length)
+        let fragmentRange = NSRange(location: offset, length: layout.offset(of: fragment.rangeInElement.endLocation) - offset)
+        let line = FragmentGeometry.lineRange(at: top - fragment.layoutFragmentFrame.minY + 1, in: fragment.textLineFragments, fragment: fragmentRange)
+        place = ReadingPlace.tracking(place, topLine: line, in: built.anchors, length: built.text.length)
         // The abstract is the first prose in the storage and sits ahead of section
         // one, so while it is on screen the reader is, as far as every consumer of
         // this is concerned, in section one — which is what the old view reported too.
