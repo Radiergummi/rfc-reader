@@ -154,25 +154,25 @@ enum Convert {
         /// sample and is named one. A full corpus run puts the near-miss population in
         /// the hundreds of thousands, which is tens of megabytes of JSON nobody reads.
         var sample: [NearMiss] = []
+
+        /// Each document is diagnosed into a report of its own, and they are folded
+        /// together in document order, so the capped sample is the first `sampleLimit`
+        /// near misses of the corpus -- the same ones a single pass over it would keep.
+        mutating func merge(_ other: ProseReport) {
+            documents += other.documents
+            blocks += other.blocks
+            prose += other.prose
+            lists += other.lists
+            nearMisses += other.nearMisses
+            byRejection.merge(other.byRejection, uniquingKeysWith: +)
+            soleRejection.merge(other.soleRejection, uniquingKeysWith: +)
+            justificationDissent.merge(other.justificationDissent, uniquingKeysWith: +)
+            sample += other.sample.prefix(sampleLimit - sample.count)
+        }
     }
 
     /// Enough near misses to see the shape of each guard's population by eye.
     static let sampleLimit = 2000
-
-    /// Each document is diagnosed into a report of its own, and they are folded together
-    /// in document order, so the capped sample is the first `sampleLimit` near misses of
-    /// the corpus -- the same ones a single pass over it would keep.
-    static func merge(_ document: ProseReport, into report: inout ProseReport) {
-        report.documents += document.documents
-        report.blocks += document.blocks
-        report.prose += document.prose
-        report.lists += document.lists
-        report.nearMisses += document.nearMisses
-        report.byRejection.merge(document.byRejection, uniquingKeysWith: +)
-        report.soleRejection.merge(document.soleRejection, uniquingKeysWith: +)
-        report.justificationDissent.merge(document.justificationDissent, uniquingKeysWith: +)
-        report.sample += document.sample.prefix(sampleLimit - report.sample.count)
-    }
 
     struct NearMiss: Codable {
         var document: String
@@ -186,7 +186,8 @@ enum Convert {
         var sentenceRatio: Double
     }
 
-    static func accumulate(_ text: String, id: String, into report: inout ProseReport) {
+    static func proseReport(for text: String, id: String) -> ProseReport {
+        var report = ProseReport()
         report.documents += 1
         for block in LegacyTextParser.proseDiagnostics(for: text) {
             let diagnosis = block.diagnosis
@@ -226,6 +227,7 @@ enum Convert {
                 sentenceRatio: (diagnosis.sentenceRatio * 1000).rounded() / 1000
             ))
         }
+        return report
     }
 
     /// What converting one document asks for; the same for every document in a run.
@@ -258,25 +260,24 @@ enum Convert {
         // that is a pure function of its text -- so they are converted across all cores.
         // Results are put back in document order before anything is written, which keeps
         // the report and the prose sample exactly what a single pass would produce.
-        var results = [(report: Report, prose: ProseReport?)?](repeating: nil, count: files.count)
-        try await withThrowingTaskGroup(of: (Int, Report, ProseReport?).self) { group in
+        var results: [(offset: Int, report: Report, prose: ProseReport?)] = []
+        try await withThrowingTaskGroup(of: (offset: Int, report: Report, prose: ProseReport?).self) { group in
             for (offset, file) in files.enumerated() {
                 group.addTask {
                     let (report, prose) = try convert(file, job: job)
                     return (offset, report, prose)
                 }
             }
-            var finished = 0
-            for try await (offset, report, prose) in group {
-                results[offset] = (report, prose)
-                finished += 1
-                if finished % 500 == 0 { log("\(finished)/\(files.count)") }
+            for try await result in group {
+                results.append(result)
+                if results.count % 500 == 0 { log("\(results.count)/\(files.count)") }
             }
         }
-        let reports = results.map { $0!.report }
+        results.sort { $0.offset < $1.offset }
+        let reports = results.map(\.report)
         var prose = ProseReport()
-        for case let documentProse? in results.map({ $0!.prose }) {
-            merge(documentProse, into: &prose)
+        for case let documentProse? in results.map(\.prose) {
+            prose.merge(documentProse)
         }
 
         if let reportPath = arguments["report"] {
@@ -314,24 +315,19 @@ enum Convert {
             ?? String(data: bytes, encoding: .windowsCP1252)
             ?? String(decoding: bytes, as: UTF8.self)
         let document = LegacyTextParser.parse(text)
-        var prose: ProseReport?
-        if job.wantsDiagnostics {
-            var report = ProseReport()
-            accumulate(text, id: stem, into: &report)
-            prose = report
-        }
+        let prose = job.wantsDiagnostics ? proseReport(for: text, id: stem) : nil
         let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
         let serializer = RFCXMLSerializer(options: .init(
             generatorComment: "Generated by rfc-reader corpus-build from \(file). Structure recovered heuristically from the plain-text RFC; the text itself is unchanged. Corrections: https://github.com/Radiergummi/rfc-reader",
             sourceURL: sourceURL
         ))
-        let xml = serializer.serialize(document)
-        try Data(xml.utf8).write(to: outputURL, options: .atomic)
+        let xml = Data(serializer.serialize(document).utf8)
+        try xml.write(to: outputURL, options: .atomic)
 
         // Round-trip check: the XML must parse back into the same section tree.
         var warnings: [String] = []
         do {
-            let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+            let reparsed = try RFCXMLParser.parse(xml)
             if reparsed.allSections.count != document.allSections.count {
                 warnings.append("round trip changed section count \(document.allSections.count) → \(reparsed.allSections.count)")
             }
