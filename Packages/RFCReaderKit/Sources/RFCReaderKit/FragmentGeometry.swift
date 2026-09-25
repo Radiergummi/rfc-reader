@@ -232,6 +232,39 @@ public enum FragmentGeometry {
         }
     }
 
+    /// `rect` with the edges it shares with a neighbouring fragment moved onto the
+    /// device pixel grid: its top when `top`, its bottom when `bottom`.
+    ///
+    /// `Placement.decorationRect` tiles consecutive fragments exactly in points, but
+    /// a line advance like 29.25pt puts the shared edge inside a device pixel. Each
+    /// fragment then fills that pixel with partial coverage, and two translucent
+    /// partial fills compose to less than one whole one — a darker 1px band at every
+    /// line of a card (#31). On the grid, each fragment owns whole pixels and the
+    /// band is one flat surface.
+    ///
+    /// `toDevice` is the drawing context's `userSpaceToDeviceSpaceTransform`, not its
+    /// `ctm`: inside `NSTextLayoutFragment.draw` the `ctm` is the identity and the
+    /// backing scale lives only in the base transform, so rounding against `ctm`
+    /// rounds to whole points and makes overlaps. This works fragment by fragment
+    /// only because TextKit puts each fragment's local origin on a device pixel —
+    /// measured, the device transform carries no translation — so a neighbour
+    /// rounding the same edge from its own space lands on the same pixel. Rounding
+    /// is `floor(x + 0.5)`, which a whole-pixel shift between those spaces cannot
+    /// change, even at a tie. The transform is assumed axis-aligned.
+    ///
+    /// The run's own first and last edges are left alone: they are rounded and
+    /// antialiased, and shared with nothing.
+    public static func snappingJoins(of rect: CGRect, top: Bool, bottom: Bool, toDevice transform: CGAffineTransform) -> CGRect {
+        let inverse = transform.inverted()
+        func snap(_ y: CGFloat) -> CGFloat {
+            let device = CGPoint(x: 0, y: y).applying(transform)
+            return CGPoint(x: device.x, y: (device.y + 0.5).rounded(.down)).applying(inverse).y
+        }
+        let minY = top ? snap(rect.minY) : rect.minY
+        let maxY = bottom ? snap(rect.maxY) : rect.maxY
+        return CGRect(x: rect.minX, y: min(minY, maxY), width: rect.width, height: abs(maxY - minY))
+    }
+
     /// The document-relative character offset under `pointInFragment`, or nil when
     /// the point falls outside every line. The inverse of `chipRects`' arithmetic,
     /// and the reader's hit test.
