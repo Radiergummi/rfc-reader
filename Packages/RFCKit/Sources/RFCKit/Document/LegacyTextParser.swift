@@ -428,25 +428,41 @@ public struct LegacyTextParser: Sendable {
 
         // Convert raw sections into structured ones.
         var flat: [Section] = []
+        // Text that is not front matter and sits under no heading of its own: kept as an
+        // unnumbered lead-in, one section however many places it comes from.
+        func appendLeadIn(_ rawBlocks: [RawBlock]) {
+            let blocks = Self.blocks(from: rawBlocks, linker: linker)
+            guard !blocks.isEmpty else { return }
+            if flat.last?.anchor == "preamble" {
+                flat[flat.count - 1].blocks += blocks
+            } else {
+                flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
+            }
+        }
+        // Where this is the document's only heading, its section is the whole body: RFC 908
+        // indents every other heading like its prose, and RFC 509 has no other. Dropped as
+        // boilerplate or moved into the header, that section took a 60-page specification
+        // with it (#60), so there the heading owns its first block and no more.
+        let soleHeading = sections.count { $0.heading != nil } == 1
         for raw in sections {
             guard let heading = raw.heading else {
-                // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
-                let blocks = Self.blocks(from: raw.blocks, linker: linker)
-                if !blocks.isEmpty {
-                    flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
-                }
+                appendLeadIn(raw.blocks)
                 continue
             }
             let lowered = heading.title.lowercased()
             if heading.number == nil {
+                let owned = soleHeading ? Array(raw.blocks.prefix(1)) : raw.blocks
+                let rest = soleHeading ? Array(raw.blocks.dropFirst()) : []
                 if lowered == "abstract" {
-                    header.abstract = Self.blocks(from: raw.blocks, linker: linker)
+                    header.abstract = Self.blocks(from: owned, linker: linker)
+                    appendLeadIn(rest)
                     continue
                 }
                 // Boilerplate that the RFCXML path also omits; the original text view still has it.
                 let boilerplate = ["table of contents", "status of this memo", "status of memo", "copyright notice",
                                    "full copyright statement", "intellectual property", "disclaimer of validity"]
                 if boilerplate.contains(where: { lowered.hasPrefix($0) }) {
+                    appendLeadIn(rest)
                     continue
                 }
             }

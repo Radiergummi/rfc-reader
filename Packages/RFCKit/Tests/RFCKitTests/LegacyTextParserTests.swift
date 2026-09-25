@@ -529,6 +529,22 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.header.title == "Statement of Upcoming Move of NIC/NLS Services")
     }
 
+    /// A document whose only column-0 heading is `Status of This Memo` (RFC 908, whose
+    /// own headings are indented like its body) or `ABSTRACT` (RFC 509) had the whole
+    /// body in that one section, and the section is dropped as boilerplate or moved
+    /// into the header: RFC 908 is a 60-page specification that converted empty (#60).
+    @Test func aSoleBoilerplateHeadingDoesNotTakeTheBodyWithIt() throws {
+        let specification = LegacyTextParser.parse(try Fixtures.string("rfc908.txt"))
+        let prose = specification.paragraphs.map(\.plainText)
+        #expect(specification.everyBlock.count > 100, "\(specification.everyBlock.count) blocks")
+        #expect(prose.contains { $0.hasPrefix("The Reliable Data Protocol (RDP) is designed") })
+        #expect(!prose.contains { $0.contains("This RFC specifies a proposed protocol") }, "the status paragraph is still boilerplate")
+
+        let statistics = LegacyTextParser.parse(try Fixtures.string("rfc509.txt"))
+        #expect(statistics.header.abstract.count == 1)
+        #expect(statistics.artworkText.contains { $0.contains("HOST THROUGHPUT SUMMARY") })
+    }
+
     /// The stricter rule applies only to documents whose body is not indented: where the
     /// body *is* indented, a heading followed immediately by text is still a heading.
     @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
