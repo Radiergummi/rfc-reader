@@ -12,7 +12,8 @@ the converter over it, and demotes the headings the converter invents:
 
 1. Every form feed is removed. Between a letter or digit and a letter it joins
    the fragments (`maximumPathSplits`, `originatingL1LSPBufferSize`); anywhere
-   else it becomes a line break.
+   else it becomes a line break. A join the rest of the document spells
+   differently is spelled its way (JOINED_SPELLINGS).
 2. The numbered headings are found in order: a line at column 0 whose number
    follows the previous heading's (`7.2.9` -> `7.2.9.1` or `7.2.10` or `7.3`),
    and whose title, for a clause, opens as the contents list does. That keeps
@@ -42,6 +43,9 @@ CLAUSES = {1: "Scope", 2: "References", 3: "Definitions", 4: "Symbols", 5: "Typo
            10: "System Environment", 11: "System Management", 12: "Conformance"}
 ANNEXES = "ABCD"
 
+# Joins that come out spelled otherwise than the rest of the document spells the word:
+# `manual` FF `area` FF `Addresses` joins lowercase, where it is `manualAreaAddresses` elsewhere.
+JOINED_SPELLINGS = {"manualareaAddresses": "manualAreaAddresses"}
 # Headings whose line the extraction ran into the table beneath it: where the title ends.
 TITLE_ENDS = {"9.10": "Numbers PDU", "A.4.1": "Implementation Identification",
               "A.4.2": "Protocol Summary: ISO 10589:19xx"}
@@ -64,7 +68,10 @@ def join_form_feeds(text):
         before, after = text[match.start() - 1], text[match.end()]
         return "" if before.isalnum() and after.isalpha() else "\n"
 
-    return separator.sub(replace, text)
+    text = separator.sub(replace, text)
+    for joined, spelling in JOINED_SPELLINGS.items():
+        text = text.replace(joined, spelling)
+    return text
 
 
 def parts(number):
