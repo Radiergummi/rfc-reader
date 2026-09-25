@@ -222,6 +222,30 @@ struct LegacyTextParserTests {
         let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
         #expect(!authored.isCanonicalLabel, "an author's own tag must survive verbatim")
     }
+    /// `link` skips a pattern whose opening literal the fragment lacks. That is only
+    /// sound while every match of the pattern holds the literal, so wherever a pattern
+    /// matches -- over every line of every fixture, and the shapes a
+    /// byte test and a grapheme test could disagree on -- its literal must be set.
+    @Test func theLiteralGateSkipsNoMatch() throws {
+        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        var fragments = [
+            "RFC\u{0301} 1", "\u{FEFF}RFC 1", "ＲＦＣ 1", "rfc 1", "section 2", "HTTP://x", "RFC\r\n1",
+            "RFC\u{00A0}1", "Section\u{00A0}2 of RFC 1", "R", "RF", "Sectio", "[", "[RFC1]", "RFCs 1, 2 and 3", "",
+        ]
+        for fixture in try FileManager.default.contentsOfDirectory(atPath: directory.path) where fixture.hasSuffix(".txt") {
+            fragments += try Fixtures.string(fixture).components(separatedBy: "\n")
+        }
+        for fragment in fragments {
+            let literals = InlineLinker.Literals(in: fragment)
+            let label = fragment.prefix(80).debugDescription
+            if fragment.contains(InlineLinker.sectionOfRFCPattern) { #expect(literals.rfc && literals.section, "\(label)") }
+            if fragment.contains(InlineLinker.bracketPattern) { #expect(literals.bracket, "\(label)") }
+            if fragment.contains(InlineLinker.bareRFCPattern) { #expect(literals.rfc, "\(label)") }
+            if fragment.contains(InlineLinker.rfcListPattern) { #expect(literals.rfcs, "\(label)") }
+            if fragment.contains(InlineLinker.sectionPattern) { #expect(literals.section, "\(label)") }
+            if fragment.contains(InlineLinker.urlPattern) { #expect(literals.http, "\(label)") }
+        }
+    }
 }
 
 @Suite("Legacy text parser: corpus findings")
