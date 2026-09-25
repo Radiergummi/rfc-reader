@@ -186,6 +186,20 @@ struct RFCXMLSerializerCorpusFindingsTests {
         })
     }
 
+    /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
+    /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
+    /// anchor is the part number for every numbered section, so it is written once, as the
+    /// `pn` the published series always carries, and read back from there.
+    @Test func anAnchorThatIsThePartNumberIsWrittenOnce() throws {
+        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+        #expect(parsed.allSections.contains { $0.anchor == "section-1" })
+        let xml = RFCXMLSerializer().serialize(parsed)
+        let repeated = xml.matches(of: #/anchor="([^"]*)"[^>]*\bpn="\1"/#).map { String($0.1) }
+        #expect(repeated.isEmpty, "\(repeated)")
+        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+        #expect(reparsed.allSections.map(\.anchor) == parsed.allSections.map(\.anchor))
+    }
+
     @Test func controlCharactersNeverReachTheXML() throws {
         let document = RFCDocument(
             header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
