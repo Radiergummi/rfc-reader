@@ -326,15 +326,11 @@ final class RFCTextViewCoordinator: NSObject {
 
     // MARK: - References
 
-    /// The cross reference tagged on the run at this absolute character offset,
-    /// and the full extent of its run. Shared by the iOS long-press lookup and the
-    /// macOS hover hit test below.
+    /// The cross reference at this absolute character offset, and its whole
+    /// extent. Shared by the iOS long-press lookup and the macOS hover hit test
+    /// below; the lookup itself is `NSAttributedString.reference(at:)`.
     private func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
-        guard let text = textView?.textLayoutManager?.attributedText,
-              offset >= 0, offset < text.length else { return nil }
-        var range = NSRange(location: 0, length: 0)
-        guard let box = text.attribute(.rfcReference, at: offset, effectiveRange: &range) as? ReferenceBox else { return nil }
-        return (box, range)
+        textView?.textLayoutManager?.attributedText?.reference(at: offset)
     }
 }
 

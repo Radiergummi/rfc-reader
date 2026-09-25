@@ -60,3 +60,21 @@ public final class ReferenceBox: Sendable {
     public let reference: CrossReference
     public init(_ reference: CrossReference) { self.reference = reference }
 }
+
+extension NSAttributedString {
+    /// The cross reference at this character offset, and the whole of its extent:
+    /// what the hover popover is anchored to, and what both previews look up.
+    ///
+    /// The extent is the attribute's run, not the storage run. A chip is three
+    /// storage runs — the symbol's attachment, the joiner, the label — so
+    /// `effectiveRange` names only the piece under the pointer, and the popover
+    /// pointed at a third of the chip. `ReferenceBox` compares by identity, one per
+    /// reference, so two adjacent references still come back as two.
+    public func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
+        guard offset >= 0, offset < length else { return nil }
+        var range = NSRange(location: 0, length: 0)
+        let whole = NSRange(location: 0, length: length)
+        guard let box = attribute(.rfcReference, at: offset, longestEffectiveRange: &range, in: whole) as? ReferenceBox else { return nil }
+        return (box, range)
+    }
+}
