@@ -273,17 +273,25 @@ enum Convert {
         // that is a pure function of its text -- so they are converted across all cores.
         // Results are put back in document order before anything is written, which keeps
         // the report and the prose sample exactly what a single pass would produce.
+        //
+        // A document waiting on xmllint holds no thread, so the pool moves on to the next
+        // conversion meanwhile; the bound is what keeps the number of xmllint processes
+        // alive at once from depending on how far the parses outrun them.
         var results: [Converted] = []
         try await withThrowingTaskGroup(of: Converted.self) { group in
-            for (offset, file) in files.enumerated() {
+            var pending = files.enumerated().makeIterator()
+            func startNext() {
+                guard let (offset, file) = pending.next() else { return }
                 group.addTask {
-                    let (report, prose) = try convert(file, job: job)
+                    let (report, prose) = try await convert(file, job: job)
                     return Converted(offset: offset, report: report, prose: prose)
                 }
             }
+            for _ in 0..<ProcessInfo.processInfo.activeProcessorCount * 2 { startNext() }
             for try await result in group {
                 results.append(result)
                 if results.count % 500 == 0 { log("\(results.count)/\(files.count)") }
+                startNext()
             }
         }
         results.sort { $0.offset < $1.offset }
@@ -312,7 +320,7 @@ enum Convert {
 
     /// Converts one document and writes its XML. Overridden documents are hand-corrected,
     /// so they are never diagnosed.
-    static func convert(_ file: String, job: Job) throws -> (Report, ProseReport?) {
+    static func convert(_ file: String, job: Job) async throws -> (Report, ProseReport?) {
         let stem = String(file.dropLast(4))
         let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
@@ -321,7 +329,7 @@ enum Convert {
             let document = try RFCXMLParser.parse(data)   // overrides must at least parse
             try data.write(to: outputURL, options: .atomic)
             var entry = report(for: document, id: stem, overridden: true)
-            try checkSchema(outputURL, job: job, into: &entry)
+            try await checkSchema(outputURL, job: job, into: &entry)
             return (entry, nil)
         }
 
@@ -353,13 +361,13 @@ enum Convert {
         var entry = report(for: document, id: stem, overridden: false)
         if job.wantsFurniture { entry.furniture = LegacyTextParser.recurringFurniture(in: text).count }
         entry.warnings += warnings
-        try checkSchema(outputURL, job: job, into: &entry)
+        try await checkSchema(outputURL, job: job, into: &entry)
         return (entry, prose)
     }
 
-    static func checkSchema(_ file: URL, job: Job, into entry: inout Report) throws {
+    static func checkSchema(_ file: URL, job: Job, into entry: inout Report) async throws {
         guard let schema = job.schema else { return }
-        let result = try SchemaCheck.check(file, schema: schema)
+        let result = try await SchemaCheck.check(file, schema: schema)
         entry.schema = result.causes.map(\.rawValue)
         if let message = result.firstMessage { entry.warnings.append("schema: \(message)") }
     }
