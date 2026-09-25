@@ -43,3 +43,16 @@ jobs:
       - uses: actions/checkout@v4
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
+
+  swift-format:
+    name: swift-format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # 6.3 formats this tree byte for byte as Xcode 27's swift-format does. The image
+    # has no make, and a fresh checkout has no .build to keep --recursive out of.
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: swift format lint --strict --recursive --parallel App Packages Tools

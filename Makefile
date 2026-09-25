@@ -9,19 +9,29 @@ RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
+# Every Swift source we own. Found rather than handed to swift-format's
+# --recursive, which would also walk the SwiftPM build directories and format
+# the files they generate.
+SWIFT_SOURCES = $(shell find App Packages Tools -name '*.swift' -not -path '*/.build/*')
+
 PROJECT := RFCReader.xcodeproj
 SCHEME  := RFCReader
 
 ## Lint all Swift sources
 # --strict because .swiftlint.yml is tuned to the tree as it stands: every rule
 # left enabled holds today, so a warning is something this change introduced
-# rather than backlog to scroll past.
+# rather than backlog to scroll past. swift-format checks layout against its
+# own defaults (.swift-format), which is what `make fmt` produces.
 lint:
 	swiftlint lint --strict
+	swift format lint --strict --parallel $(SWIFT_SOURCES)
 
-## Apply SwiftLint's autocorrections in place
+## Format all Swift sources in place
+# swift-format runs last: it owns layout, and SwiftLint's corrections are
+# not all layout-neutral.
 fmt:
 	swiftlint --fix
+	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
 build:

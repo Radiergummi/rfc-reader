@@ -33,12 +33,23 @@ disabled_rules:
   # handled the same way; the failable initializer the rule prefers buys nothing.
   - optional_data_string_conversion
 
+  # swift-format owns layout. Where it wraps a closure's signature, the
+  # parameters go on the line after the opening brace, which this rule forbids.
+  - closure_parameter_position
+
 line_length:
   warning: 200
   error: 200
   ignores_urls: true
   ignores_comments: true
   ignores_interpolated_strings: true
+
+# swift-format puts the opening brace on a line of its own after a condition,
+# signature or type header that wraps; the brace still opens the same block.
+opening_brace:
+  ignore_multiline_statement_conditions: true
+  ignore_multiline_function_signatures: true
+  ignore_multiline_type_headers: true
 
 # `i`, `n`, `w`, `h` in the layout and scanning loops.
 identifier_name:
