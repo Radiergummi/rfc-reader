@@ -284,6 +284,11 @@ public struct LegacyTextParser: Sendable {
     /// indent, because RFC 793 centres `2.  PHILOSOPHY`; numbered only, because RFC 770
     /// centres an unnumbered `REFERENCES` that is no heading, and its running header is
     /// all it has.
+    ///
+    /// `1:` counts here in every document, not only where `numbersHeadingsWithAColon`
+    /// says so: this runs while the page furniture is found, before the lines that fact is
+    /// judged on exist. A colon title taken wrongly can only drop a running header's first
+    /// copy along with the rest, and over the corpus none does.
     private static func numberedHeadingTitles(_ lines: [Line]) -> Set<String> {
         var titles: Set<String> = []
         for case .text(let line) in lines {
@@ -341,7 +346,7 @@ public struct LegacyTextParser: Sendable {
         var blocks: [RawBlock] = []
     }
 
-    nonisolated(unsafe) private static let numberedHeadingPattern = #/^(?<number>\d+(?:\.\d+)*)\.?\s+(?<title>\S.*)$/#
+    nonisolated(unsafe) private static let numberedHeadingPattern = #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
     nonisolated(unsafe) private static let appendixHeadingPattern = #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
 
     /// Diagnoses every block of a document without building one: what the prose test
@@ -371,8 +376,34 @@ public struct LegacyTextParser: Sendable {
     /// which is the same drift one level up.
     private static func prepared(_ text: String) -> (front: [String], sections: [RawSection]) {
         let lines = collapsingDoubleSpacing(depaginate(text))
-        let (front, bodyStart) = splitFrontMatter(lines)
-        return (front, rawSections(in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented(lines[bodyStart...])))
+        let colonNumbered = numbersHeadingsWithAColon(lines)
+        let (front, bodyStart) = splitFrontMatter(lines, colonNumbered: colonNumbered)
+        let body = bodyIsIndented(lines[bodyStart...])
+        return (front, rawSections(in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered))
+    }
+
+    /// Whether `1:` and `2.4.12:` at column 0 are headings in this document. RFC 2078, 2743
+    /// and 2130 number every heading that way (#71), and 1308, 1309, 1913, 2025 and 2479
+    /// a few among their `1.` ones. But the same shape is a field label (RFC 2301's `10:
+    /// ITU-T Rec. T.43 representation`), a line-numbered listing (RFC 2626 quotes grep
+    /// output as `140:      Chuck Rose`), and a second numbering (RFC 705 lists its
+    /// commands as `1.  BEGIN Command` and describes each again under `1:  BEGIN   4b`,
+    /// `4b` being its own label for that part). A document numbers each section once, so
+    /// the colon form counts only where none of its numbers is also the number of a `1.`
+    /// heading. In 2301, 2626 and 705 some are; in the eight that number headings with a
+    /// colon, none is.
+    private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
+        var colonNumbers: Set<Substring> = []
+        var fullStopNumbers: Set<Substring> = []
+        for case .text(let string) in lines where string.startsAtColumnZero {
+            guard let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+            switch match.separator {
+            case ":": colonNumbers.insert(match.number)
+            case ".": fullStopNumbers.insert(match.number)
+            default: break
+            }
+        }
+        return !colonNumbers.isEmpty && colonNumbers.isDisjoint(with: fullStopNumbers)
     }
 
     /// Splits the body into raw sections at column-0 headings, and each section into
@@ -382,7 +413,7 @@ public struct LegacyTextParser: Sendable {
     /// the blocks the parser classifies. A second segmentation written alongside this
     /// one would drift, and a diagnosis of blocks the parser never saw is worse than
     /// none.
-    private static func rawSections(in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool) -> [RawSection] {
+    private static func rawSections(in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool, colonNumbered: Bool) -> [RawSection] {
         var sections: [RawSection] = [RawSection(heading: nil)]
         var current: [String] = []
         var pendingBreak = false
@@ -408,7 +439,7 @@ public struct LegacyTextParser: Sendable {
             case .text(let string):
                 if string.isBlank {
                     flushBlock()
-                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, startsBlock: current.isEmpty) {
+                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered, startsBlock: current.isEmpty) {
                     flushBlock()
                     sections.append(RawSection(heading: heading))
                 } else {
@@ -569,7 +600,7 @@ public struct LegacyTextParser: Sendable {
     /// paragraph indents its first line and sets its second at the margin, and ending at the
     /// second line left the first behind in the front matter. So the front matter ends where
     /// it used to or sooner, never later.
-    private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
+    private static func splitFrontMatter(_ lines: [Line], colonNumbered: Bool) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
         var run = 0
         // Where the current run starts, and how much front matter there was before it: the
@@ -611,7 +642,7 @@ public struct LegacyTextParser: Sendable {
             // Street` for a section, and an appendix would not do either, since `A
             // Standard for ...` reads as appendix A.
             if run - skipped == 2, !startsRun, string.startsAtColumnZero,
-               let heading = heading(from: string), !heading.isAppendix,
+               let heading = heading(from: string, colonNumbered: colonNumbered), !heading.isAppendix,
                heading.number?.split(separator: ".").first == "1" {
                 return (front, offset)
             }
@@ -621,7 +652,7 @@ public struct LegacyTextParser: Sendable {
                 // body's indent, which is not known until this scan has finished. Stopping
                 // early only leaves a line in the body that turns out not to be a heading;
                 // stopping late would swallow it into the front matter and lose it.
-                if string.startsAtColumnZero, heading(from: string) != nil {
+                if string.startsAtColumnZero, heading(from: string, colonNumbered: colonNumbered) != nil {
                     return split(firstParagraph ?? start)
                 }
             }
@@ -777,10 +808,10 @@ public struct LegacyTextParser: Sendable {
     /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
     /// body starts there too — so that the indent says nothing — it also has to stand alone
     /// between blank lines. `heading(from:)` judges the text; this judges the position.
-    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, startsBlock: Bool) -> HeadingInfo? {
+    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool) -> HeadingInfo? {
         guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
         guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-        return heading(from: string)
+        return heading(from: string, colonNumbered: colonNumbered)
     }
 
     private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
@@ -819,10 +850,11 @@ public struct LegacyTextParser: Sendable {
         return result
     }
 
-    private static func heading(from line: String) -> HeadingInfo? {
+    private static func heading(from line: String, colonNumbered: Bool) -> HeadingInfo? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed.count < 120 else { return nil }
         if let match = trimmed.firstMatch(of: numberedHeadingPattern) {
+            guard colonNumbered || match.separator != ":" else { return nil }
             let number = String(match.number)
             let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
             return HeadingInfo(number: number, title: title, isAppendix: false, anchor: "section-\(number)", depth: number.split(separator: ".").count)
