@@ -477,6 +477,19 @@ struct LegacyTextCorpusFindingsTests {
         }
     }
 
+    /// A section running header belongs to the block that opens its page, directly under
+    /// the document's own header. RFC 6208 registers five media types, and each
+    /// registration's `Additional information:` falls at the head of a page -- but below
+    /// the blank lines the removed `RFC 6208 ... April 2011` leaves, and every copy but
+    /// the first was dropped as the running header of a section.
+    @Test func aLineBelowThePageHeaderIsNotASectionRunningHeader() throws {
+        let text = try Fixtures.string("rfc6208.txt")
+        let body = LegacyTextParser.stripPagination(text)
+        func count(_ text: String) -> Int { text.split(separator: "\n").filter { $0.trimmingCharacters(in: .whitespaces) == "Additional information:" }.count }
+        #expect(count(body) == count(text))
+        #expect(LegacyTextParser.recurringFurniture(in: text).allSatisfy { !$0.contains("Additional information:") })
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number
