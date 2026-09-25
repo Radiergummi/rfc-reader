@@ -238,12 +238,16 @@ struct LegacyTextParserTests {
         for fragment in fragments {
             let literals = InlineLinker.Literals(in: fragment)
             let label = fragment.prefix(80).debugDescription
-            if fragment.contains(InlineLinker.sectionOfRFCPattern) { #expect(literals.rfc && literals.section, "\(label)") }
-            if fragment.contains(InlineLinker.bracketPattern) { #expect(literals.bracket, "\(label)") }
-            if fragment.contains(InlineLinker.bareRFCPattern) { #expect(literals.rfc, "\(label)") }
-            if fragment.contains(InlineLinker.rfcListPattern) { #expect(literals.rfcs, "\(label)") }
-            if fragment.contains(InlineLinker.sectionPattern) { #expect(literals.section, "\(label)") }
-            if fragment.contains(InlineLinker.urlPattern) { #expect(literals.http, "\(label)") }
+            // Each pattern is asked about its own gate: the pairing is the pattern's, not the test's.
+            func check<Output>(_ pattern: InlineLinker.Gated<Output>) {
+                if fragment.contains(pattern.regex) { #expect(literals[keyPath: pattern.gate], "\(label)") }
+            }
+            check(InlineLinker.sectionOfRFCPattern)
+            check(InlineLinker.bracketPattern)
+            check(InlineLinker.bareRFCPattern)
+            check(InlineLinker.rfcListPattern)
+            check(InlineLinker.sectionPattern)
+            check(InlineLinker.urlPattern)
         }
     }
 }
