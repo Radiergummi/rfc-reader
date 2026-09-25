@@ -60,6 +60,29 @@ struct DecorationRunTests {
         #expect(NSLocationInRange(last, run), "all of a stacked table's cells belong to one band")
     }
 
+    /// Two verbatim blocks in a row carry the same `.artwork` value with nothing
+    /// between them, so the decoration alone reads them as one card — and a source
+    /// block's language label then sits mid-card. Each block is its own card.
+    @Test(arguments: [
+        [Preformatted(kind: .artwork, text: "AAAA"), Preformatted(kind: .sourceCode, text: "BBBB", type: "abnf")],
+        [Preformatted(kind: .sourceCode, text: "AAAA", type: "abnf"), Preformatted(kind: .sourceCode, text: "BBBB", type: "abnf")],
+        [Preformatted(kind: .artwork, text: "AAAA"), Preformatted(kind: .artwork, text: "BBBB")],
+    ])
+    func adjacentVerbatimBlocksAreTwoCards(blocks: [Preformatted]) throws {
+        let built = DocumentTextBuilder.build(Fixtures.document(.preformatted(blocks[0]), .preformatted(blocks[1])), style: style)
+        let first = try Fixtures.offset(of: "AAAA", in: built.text)
+        let second = try Fixtures.offset(of: "BBBB", in: built.text)
+        let firstRun = try run(at: first, in: built.text)
+        #expect(!NSLocationInRange(second, firstRun), "the second block must start its own card")
+        let secondRun = try run(at: second, in: built.text)
+        #expect(NSMaxRange(firstRun) == secondRun.location, "the two cards meet with nothing left over")
+        if blocks[1].type != nil {
+            let string = built.text.string as NSString
+            let label = string.range(of: "ABNF", range: NSRange(location: first, length: string.length - first)).location
+            #expect(NSLocationInRange(label, secondRun), "the label opens the card it names")
+        }
+    }
+
     /// Two different decorations must still not merge into each other.
     @Test func differentDecorationsStayDifferentRuns() throws {
         let built = DocumentTextBuilder.build(
