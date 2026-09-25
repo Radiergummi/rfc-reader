@@ -1386,11 +1386,12 @@ public struct LegacyTextParser: Sendable {
     private static func reference(anchor label: String, text: String) -> Reference {
         var seriesInfo: [(name: String, value: String)] = []
         // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
-        // `Request for Comments 796` only when an entry has none: once a bare `[1]` stopped
-        // naming RFC 1, an entry spelled so named nothing at all. Not in one pattern, though,
-        // because a title names RFCs too -- RFC 1494's `[1]` is "Mapping between X.400 and
-        // RFC-822 Message Bodies", RFC 1495 -- and the first match would be the title's.
-        if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) ?? text.firstMatch(of: #/\b(?:RFC|Request for Comments:?)[\s\-]*(\d+)/#) {
+        // `Request for Comments 796`, `Request For Comments 990` and `RFC #189` only when an
+        // entry has none: once a bare `[1]` stopped naming RFC 1, an entry spelled so named
+        // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
+        // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
+        // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
+        if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#) {
             seriesInfo.append((name: "RFC", value: String(match.1)))
         } else if let id = DocumentID(label: label) {
             seriesInfo.append((name: id.series.rawValue, value: String(id.number)))

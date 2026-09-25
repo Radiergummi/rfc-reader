@@ -684,6 +684,23 @@ struct LegacyTextCorpusFindingsTests {
         #expect(mapping.first { $0.displayAnchor == "1" }?.documentID == .rfc(1495))
     }
 
+    /// And in the series' earliest spellings: RFC 338 cites `RFC #189` and `RFC #183`,
+    /// RFC 1275 `Request for Comments 1006`, RFC 1005 `Request For Comments 990`, broken
+    /// across a line.
+    @Test func anEntryNamesAnRFCInTheSeriesEarliestSpellings() throws {
+        let rfc338 = LegacyTextParser.parse(try Fixtures.string("rfc338.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc338.first { $0.displayAnchor == "1" }?.documentID == .rfc(189))
+        #expect(rfc338.first { $0.displayAnchor == "4" }?.documentID == .rfc(183))
+        #expect(rfc338.first { $0.displayAnchor == "2" }?.documentID == nil, "a note names no RFC")
+
+        let rfc1275 = LegacyTextParser.parse(try Fixtures.string("rfc1275.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1275.first { $0.displayAnchor == "RC87" }?.documentID == .rfc(1006))
+
+        let rfc1005 = LegacyTextParser.parse(try Fixtures.string("rfc1005.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1005.first { $0.displayAnchor == "3" }?.documentID == .rfc(990))
+        #expect(rfc1005.first { $0.displayAnchor == "5" }?.documentID == .rfc(796))
+    }
+
     /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
     /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
     /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was
