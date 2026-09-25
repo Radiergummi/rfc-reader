@@ -194,12 +194,11 @@ private struct Representable: NSViewRepresentable {
         // to already be inside one — see where the scroll view is assembled below.
         textView.isIncrementalSearchingEnabled = true
         textView.usesFindBar = true
-        // On by default: every `.link` run gets an implicit tooltip of its URL, and
-        // hovering a reference showed the raw `rfc://8174`. The hover popover is what
-        // a reference shows; nothing in the reader surfaces the app's own scheme.
-        textView.displaysLinkToolTips = false
         textView.textLayoutManager?.delegate = context.coordinator
         textView.delegate = context.coordinator
+        textView.quickLookReference = { [weak coordinator = context.coordinator] event in
+            coordinator?.quickLookReference(with: event) ?? false
+        }
 
         let host = NSHostingController(rootView: inputs.header)
         textView.addSubview(host.view)
@@ -231,9 +230,10 @@ private struct Representable: NSViewRepresentable {
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on
     /// the coordinator means it cannot outlive this view), but a popover already
-    /// on screen would not otherwise close when the view goes away.
+    /// on screen would not otherwise close when the view goes away, and the
+    /// tracking area does not retain the coordinator it reports to.
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
-        coordinator.cancelHover()
+        coordinator.tearDownHoverTracking()
     }
 }
 #endif

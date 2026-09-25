@@ -77,4 +77,13 @@ extension NSAttributedString {
         guard let box = attribute(.rfcReference, at: offset, longestEffectiveRange: &range, in: whole) as? ReferenceBox else { return nil }
         return (box, range)
     }
+
+    /// The tooltip AppKit may show at this character, given the one it proposes —
+    /// for a link, its URL. A reference gets none: it has its preview, and its URL
+    /// is the app's own `rfc://` scheme, which the reader never surfaces. Any other
+    /// link keeps its URL, the one place its destination can be read before it is
+    /// followed.
+    public func linkToolTip(_ proposed: String, at offset: Int) -> String? {
+        reference(at: offset) == nil ? proposed : nil
+    }
 }

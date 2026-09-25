@@ -120,7 +120,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// coordinator that goes away before it fires neither leaks nor crashes.
     private var dwellTimer: Timer?
     /// The reference the pointer is currently over, timing or already previewed.
-    private var hoveredReference: CrossReference?
+    /// The box, compared by identity: there is one per reference, so two adjacent
+    /// references to the same target are still two hovers.
+    private var hoveredBox: ReferenceBox?
     private var popover: NSPopover?
     #endif
 
@@ -144,6 +146,11 @@ final class RFCTextViewCoordinator: NSObject {
         guard let textView,
               let layout = textView.textLayoutManager,
               let storage = layout.textContentManager as? NSTextContentStorage else { return }
+        #if !canImport(UIKit)
+        // A preview timing or shown belongs to the document being replaced, and its
+        // range means nothing in the new one.
+        cancelHover()
+        #endif
         self.built = built
         lastReportedAnchor = nil
         sectionIndex = built.anchors.sections
@@ -370,10 +377,27 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
 #else
 extension RFCTextViewCoordinator: NSTextViewDelegate {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        // Following a reference is what the preview was for; one still timing would
+        // otherwise open over the document the click is leaving.
+        cancelHover()
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
         // Read here rather than passed down from the view: by the time SwiftUI's
         // `openURL` sees the link, the click that carried the modifiers is gone.
         return onLink(url, .current)
+    }
+
+    /// A menu's tracking loop holds the run loop outside `.default` mode, so a dwell
+    /// timer left running would fire the moment the menu closes.
+    func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
+        cancelHover()
+        return menu
+    }
+
+    /// Link tooltips stay on for external links, whose URL is the only place their
+    /// destination can be read; a reference's is suppressed. See
+    /// `NSAttributedString.linkToolTip(_:at:)`.
+    func textView(_ textView: NSTextView, willDisplayToolTip tooltip: String, forCharacterAt characterIndex: Int) -> String? {
+        textView.textLayoutManager?.attributedText?.linkToolTip(tooltip, at: characterIndex) ?? tooltip
     }
 
     /// AppKit has no scroll delegate; the clip view's bounds moving is the signal.
@@ -405,6 +429,14 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         trackingArea = area
     }
 
+    /// A tracking area does not retain its owner, so it must not outlive this
+    /// coordinator on a view that might. Called from `dismantleNSView`.
+    func tearDownHoverTracking() {
+        cancelHover()
+        if let trackingArea { textView?.removeTrackingArea(trackingArea) }
+        trackingArea = nil
+    }
+
     /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
     /// owner `mouseMoved:`, but the selector Swift derives for `mouseMoved(with:)`
     /// on a class that is not an `NSResponder` is `mouseMovedWith:`. AppKit checks
@@ -412,19 +444,40 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// name the tracking area was installed and no hover ever reached this.
     @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
-        guard let textView else { return }
-        let viewPoint = textView.convert(event.locationInWindow, from: nil)
-        let point = CGPoint(x: viewPoint.x - textView.textContainerOrigin.x, y: viewPoint.y - textView.textContainerOrigin.y)
-        guard let (box, range) = reference(at: point) else {
+        guard let (box, range) = reference(under: event) else {
             cancelHover()
             return
         }
-        guard box.reference != hoveredReference else { return }
+        guard box !== hoveredBox else { return }
         cancelHover()
-        hoveredReference = box.reference
+        hoveredBox = box
         dwellTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.showPopover(for: box, range: range) }
+            // A button still held is a click or a drag in progress, not a dwell: the
+            // timer runs in `.default` mode, so a click-tracking loop only delays it
+            // until the button comes up over a document it may already have left.
+            Task { @MainActor in
+                guard NSEvent.pressedMouseButtons == 0 else { return }
+                self?.showPopover(for: box, range: range)
+            }
         }
+    }
+
+    /// Force click on a reference: the same card, without the dwell. Anywhere else
+    /// it returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
+    func quickLookReference(with event: NSEvent) -> Bool {
+        guard let (box, range) = reference(under: event) else { return false }
+        cancelHover()
+        hoveredBox = box
+        showPopover(for: box, range: range)
+        return true
+    }
+
+    /// The reference under the pointer. `textContainerOrigin` is the inset: the
+    /// view is flipped, so subtracting it is all it takes to reach container space.
+    private func reference(under event: NSEvent) -> (box: ReferenceBox, range: NSRange)? {
+        guard let textView else { return nil }
+        let viewPoint = textView.convert(event.locationInWindow, from: nil)
+        return reference(at: CGPoint(x: viewPoint.x - textView.textContainerOrigin.x, y: viewPoint.y - textView.textContainerOrigin.y))
     }
 
     @objc(mouseExited:)
@@ -441,16 +494,16 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     func cancelHover() {
         dwellTimer?.invalidate()
         dwellTimer = nil
-        hoveredReference = nil
+        hoveredBox = nil
         if popover?.isShown == true { popover?.performClose(nil) }
         popover = nil
     }
 
-    /// Checks `hoveredReference` again before showing: a move that changed or
+    /// Checks `hoveredBox` again before showing: a move that changed or
     /// cleared the hover already invalidated this timer, but the guard costs
     /// nothing and keeps this function correct even if that ever stops being true.
     private func showPopover(for box: ReferenceBox, range: NSRange) {
-        guard let textView, let library, hoveredReference == box.reference,
+        guard let textView, let library, hoveredBox === box,
               let rect = referenceRect(for: range) else { return }
         let host = NSHostingController(rootView: ReferencePreview(reference: box.reference, library: library))
         let shown = NSPopover()

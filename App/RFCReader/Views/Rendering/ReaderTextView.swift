@@ -35,6 +35,18 @@ import AppKit
 /// object-replacement character and its brackets do not live there at all, so the
 /// characters under a selection are not the text that selection stands for.
 final class ReaderTextView: NSTextView {
+    /// Force click on a reference previews it; answers whether it did. Set by the
+    /// representable, and a closure rather than the coordinator so this view stays
+    /// about text.
+    var quickLookReference: (NSEvent) -> Bool = { _ in false }
+
+    /// Only a reference is taken over. Everywhere else a force click is AppKit's
+    /// Look Up, which a reader of dense technical prose uses on any word.
+    override func quickLook(with event: NSEvent) {
+        guard !quickLookReference(event) else { return }
+        super.quickLook(with: event)
+    }
+
     /// AppKit asks for each declared type in turn. Only the plain-text flavour is
     /// rewritten -- that is the one a terminal, a mail body or a code editor reads,
     /// and the one the chip's characters are wrong for. The rich flavours stay
