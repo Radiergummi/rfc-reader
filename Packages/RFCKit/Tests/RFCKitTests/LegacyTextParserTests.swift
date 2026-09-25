@@ -677,6 +677,11 @@ struct LegacyTextCorpusFindingsTests {
         #expect(entries.first { $0.displayAnchor == "3" }?.documentID == .rfc(885))
         #expect(entries.first { $0.displayAnchor == "5" }?.documentID == nil, "the IBM manual names no RFC")
         #expect(document.referencedDocuments.contains(.rfc(856)))
+
+        // But a title names RFCs too, and the hyphenated spelling is only the fallback:
+        // RFC 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495.
+        let mapping = LegacyTextParser.parse(try Fixtures.string("rfc1494.txt")).referenceLists.flatMap(\.entries)
+        #expect(mapping.first { $0.displayAnchor == "1" }?.documentID == .rfc(1495))
     }
 
     /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
