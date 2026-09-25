@@ -143,7 +143,7 @@ struct LegacyTextParserTests {
                 return nil
             }
         }
-        #expect(xrefs.contains { $0.target == .anchor("ref-US-ASCII") && $0.text == "[US-ASCII]" })
+        #expect(xrefs.contains { $0.target == .anchor("US-ASCII") && $0.text == "[US-ASCII]" })
         #expect(document.referencedDocuments.contains(.rfc(822)))
     }
 
@@ -257,7 +257,8 @@ struct LegacyTextCorpusFindingsTests {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
         let lists = document.referenceLists
         let list = try #require(lists.first, "the bibliography is lost entirely without this")
-        #expect(list.entries.map(\.anchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
+        #expect(list.entries.map(\.displayAnchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
+        #expect(list.entries.map(\.anchor) == ["RFC1034", "RFC1035", "RFC1591"], "the anchor has to be an XML name")
         #expect(list.entries[0].documentID == .rfc(1034))
         // And the prose citation finds the entry it names, spaces and all.
         #expect(document.referencedDocuments.contains(.rfc(1034)))
@@ -634,13 +635,11 @@ struct LegacyTextCorpusFindingsTests {
     /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
     /// the first keeps its anchor, so every link that landed on it still does.
     @Test func noTwoElementsShareAnAnchor() throws {
-        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        let fixtures = try Fixtures.legacyTexts()
         #expect(fixtures.count > 20)
         for fixture in fixtures {
             let document = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let anchors = document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor)
-            let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+            let repeated = Dictionary(grouping: document.declaredAnchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
             #expect(repeated.isEmpty, "\(fixture): \(repeated)")
         }
 
@@ -650,9 +649,43 @@ struct LegacyTextCorpusFindingsTests {
         #expect(original < second)
         #expect(LegacyTextParser.parse(try Fixtures.string("rfc19.txt")).allSections.map(\.anchor).contains("section-1-2"))
 
-        let entries = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
-        let relabelled = try #require(entries.first { $0.anchor == "2-2" })
-        #expect(relabelled.displayAnchor == "2", "a renamed entry still reads as the label its citations use")
+        let entries = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(\.entries)
+        let relabelled = try #require(entries.first { $0.anchor == "ISO-8859-2" })
+        #expect(relabelled.displayAnchor == "ISO-8859", "a renamed entry still reads as the label its citations use")
+    }
+
+    /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
+    /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
+    /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was
+    /// declared under: RFC 2005 cited `<xref target="ref-MIP-OPTIM">` beside `<reference
+    /// anchor="MIP-OPTIM">`, and 30,368 citations in 3,708 documents linked nowhere (#81).
+    @Test func everyAnchorIsANameAndEveryCitationReachesOne() throws {
+        var cited = 0
+        for fixture in try Fixtures.legacyTexts() {
+            let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+            let unnamed = document.declaredAnchors.filter { $0.wholeMatch(of: #/[A-Za-z_][A-Za-z0-9._-]*/#) == nil }
+            #expect(unnamed.isEmpty, "\(fixture): \(unnamed)")
+            let targets = document.crossReferences.compactMap { if case .anchor(let anchor) = $0.target { anchor } else { nil } }
+            cited += targets.count
+            let dangling = Set(targets).subtracting(document.declaredAnchors).sorted()
+            #expect(dangling.isEmpty, "\(fixture): \(dangling)")
+        }
+        #expect(cited > 0, "the fixtures cite something by anchor, so the check checks something")
+
+        // A label that is a name is the anchor, as the published series has it.
+        let rfc5234 = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc5234.contains { $0.anchor == "US-ASCII" && $0.displayAnchor == "US-ASCII" })
+        // One that is not takes the document it cites, and still reads as its label: RFC 2023
+        // lists RFCs 1883 and 1884 both as `[2]`, and they are two anchors, not one and a `-2`.
+        let rfc2023 = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc2023.filter { $0.displayAnchor == "2" }.map(\.anchor) == ["RFC1883", "RFC1884"])
+        let rfc2347 = LegacyTextParser.parse(try Fixtures.string("rfc2347.txt"))
+        #expect(rfc2347.crossReferences.contains { $0.target == .document(.rfc(2348), section: nil) && $0.text == "[2]" })
+        // And one that cites no document is `ref-` and the label spelled as a name.
+        let rfc1556 = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1556.contains { $0.anchor == "ref-ECMA-TR-53" && $0.displayAnchor == "ECMA TR/53" })
+        let rfc2606 = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc2606.contains { $0.anchor == "RFC1034" && $0.displayAnchor == "RFC 1034" })
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
@@ -902,6 +935,11 @@ extension RFCDocument {
 
     var lists: [ListBlock] {
         everyBlock.compactMap { if case .list(let list) = $0 { return list }; return nil }
+    }
+
+    /// What the XML declares as an ID: every section's anchor and every bibliography entry's.
+    var declaredAnchors: [String] {
+        allSections.map(\.anchor) + referenceLists.flatMap(\.entries).map(\.anchor)
     }
 
     var crossReferences: [CrossReference] {

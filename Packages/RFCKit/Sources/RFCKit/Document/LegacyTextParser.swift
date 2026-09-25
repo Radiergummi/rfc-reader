@@ -427,13 +427,13 @@ public struct LegacyTextParser: Sendable {
         // Collect known section numbers and reference anchors for link resolution.
         let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
         var referenceTargets: [String: CrossReference.Target] = [:]
+        // Keyed by the label, which is what the prose cites; pointing at the anchor, which
+        // is what the entry is declared under. Pointing at `ref-<label>` instead, which no
+        // entry ever was, left 30,368 citations in 3,708 documents linking nowhere (#81).
         for section in sections where section.heading.map(Self.isReferencesHeading) == true {
             for reference in Self.parseReferences(section.blocks) {
-                if let id = reference.documentID {
-                    referenceTargets[reference.anchor] = .document(id, section: nil)
-                } else {
-                    referenceTargets[reference.anchor] = .anchor("ref-\(reference.anchor)")
-                }
+                referenceTargets[reference.displayAnchor] = reference.documentID.map { .document($0, section: nil) }
+                    ?? .anchor(reference.anchor)
             }
         }
         let linker = InlineLinker(sectionNumbers: sectionNumbers, referenceTargets: referenceTargets)
@@ -1319,11 +1319,11 @@ public struct LegacyTextParser: Sendable {
         return references
     }
 
-    private static func reference(anchor: String, text: String) -> Reference {
+    private static func reference(anchor label: String, text: String) -> Reference {
         var seriesInfo: [(name: String, value: String)] = []
         if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) {
             seriesInfo.append((name: "RFC", value: String(match.1)))
-        } else if let id = DocumentID(parsing: anchor) {
+        } else if let id = DocumentID(parsing: label) {
             seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
         }
         if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
@@ -1337,7 +1337,34 @@ public struct LegacyTextParser: Sendable {
             PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
         }
         let url = text.firstMatch(of: #/https?:\/\/[^\s>,]+/#).flatMap { URL(string: String($0.output).trimmingTrailingPunctuation()) }
-        return Reference(anchor: anchor, title: title, date: date, seriesInfo: seriesInfo, url: url, rawText: text)
+        var reference = Reference(anchor: label, title: title, date: date, seriesInfo: seriesInfo, url: url, rawText: text)
+        reference.anchor = entryAnchor(label: label, documentID: reference.documentID)
+        return reference
+    }
+
+    /// What an entry is declared under, which the XML requires to be a name (`NCName`):
+    /// no leading digit, no spaces. `[1]`, `[RFC 2119]` and `[Cheswick and Bellovin,
+    /// 1994]` are not, and gave 2,361 documents an anchor the schema refuses (#65). A
+    /// label that is a name stays the anchor, as `MIP-OPTIM` does in the published
+    /// series; one that is not becomes the document it cites -- the series writes
+    /// `anchor="RFC0791" derivedAnchor="1"` -- or else `ref-` and the label spelled as a
+    /// name. The label itself stays `displayAnchor`, which is what the entry reads as.
+    static func entryAnchor(label: String, documentID: DocumentID?) -> String {
+        func isNameCharacter(_ character: Character) -> Bool {
+            character.isLetter || ("0"..."9").contains(character) || "-._".contains(character)
+        }
+        if let first = label.first, first.isLetter || first == "_", label.allSatisfy(isNameCharacter) { return label }
+        if let documentID { return documentID.description }
+        var name = ""
+        for character in label {
+            if isNameCharacter(character) {
+                name.append(character)
+            } else if !name.isEmpty, !name.hasSuffix("-") {
+                name.append("-")
+            }
+        }
+        while name.hasSuffix("-") { name.removeLast() }
+        return "ref-\(name)"
     }
 }
 
