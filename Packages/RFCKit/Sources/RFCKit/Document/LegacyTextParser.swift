@@ -581,12 +581,37 @@ public struct LegacyTextParser: Sendable {
     nonisolated(unsafe) private static let monthYearPattern = #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
     nonisolated(unsafe) private static let authorPattern = #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#
 
+    /// The line that states the document's number, in any of the spellings the series has
+    /// used (#51): `Request for Comments: 793`, `RFC # 64`, `NWG/RFC# 276`, `NWG RFC 103`, `RFC-811`,
+    /// `Request For Comment: 4801`, the source's own `Request for Commments: 2347`. Tried
+    /// against the whole line, at its start or where a column begins, because the number
+    /// is not always in the left column (RFC 811 sets it on the right) and a label spaced
+    /// widely enough from its number is split from it by the column split
+    /// (`Request for Comments:    50`).
+    nonisolated(unsafe) private static let numberLinePattern =
+        #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#.ignoresCase()
+
     private static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
         var header = DocumentHeader(title: "")
         var index = 0
         while index < lines.count, lines[index].isEmpty { index += 1 }
 
-        // Header block: two-column lines up to the first blank line.
+        // Header block: two-column lines up to the first blank line. Usually the first run
+        // of lines, but a few documents open with something else -- a date (RFC 753), a
+        // title (RFC 609), a report number (RFC 987) -- and state their number in the run
+        // after it. The first run that states a number is the header; with none, the first
+        // run is.
+        var runStart = index
+        while runStart < lines.count {
+            var runEnd = runStart
+            while runEnd < lines.count, !lines[runEnd].isEmpty { runEnd += 1 }
+            if lines[runStart..<runEnd].contains(where: { statedNumber(in: $0) != nil }) {
+                index = runStart
+                break
+            }
+            runStart = runEnd
+            while runStart < lines.count, lines[runStart].isEmpty { runStart += 1 }
+        }
         while index < lines.count, !lines[index].isEmpty {
             let line = lines[index]
             index += 1
@@ -594,14 +619,16 @@ public struct LegacyTextParser: Sendable {
             guard let left = columns.first else { continue }
             let right = columns.count > 1 ? columns.last! : nil
 
-            if left.hasPrefix("Request for Comments:"), let number = Int(left.dropFirst("Request for Comments:".count).trimmingCharacters(in: .whitespaces)) {
-                header.id = .rfc(number)
-            } else if left.hasPrefix("Obsoletes:") {
+            if left.hasPrefix("Obsoletes:") {
                 header.obsoletes = documentIDs(in: left)
             } else if left.hasPrefix("Updates:") {
                 header.updates = documentIDs(in: left)
             } else if left.hasPrefix("Category:") {
                 header.category = left.dropFirst("Category:".count).trimmingCharacters(in: .whitespaces)
+            } else if header.id == nil, let number = statedNumber(in: line) {
+                // The first one wins: a continuation line under `Obsoletes:` is set as
+                // `            RFC #680` (RFC 733), and must not replace the number above it.
+                header.id = .rfc(number)
             }
 
             for candidate in [left, right].compactMap({ $0 }) {
@@ -626,6 +653,10 @@ public struct LegacyTextParser: Sendable {
         }
         header.title = titleLines.joined(separator: " ")
         return header
+    }
+
+    private static func statedNumber(in line: String) -> Int? {
+        line.trimmingCharacters(in: .whitespaces).firstMatch(of: numberLinePattern).flatMap { Int($0.1) }
     }
 
     private static func documentIDs(in text: String) -> [DocumentID] {
