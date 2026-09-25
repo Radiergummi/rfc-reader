@@ -434,6 +434,19 @@ struct LegacyTextCorpusFindingsTests {
         #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
     }
 
+    /// A header that alternates between facing pages is on every other page, so it is
+    /// on half of them at most, and just under half where the last pages carry none.
+    /// RFC 810 sets `RFC 810 ... 1 March 1982` on its even pages, which the running-header
+    /// pattern knows, and `1 March 1982 ... RFC 810` on its odd ones, which it does not:
+    /// on three of eight, that header was read as a section's, and its first copy
+    /// stayed in the body.
+    @Test func aHeaderOnAlternatePagesNamesTheDocument() throws {
+        let text = try Fixtures.string("rfc810.txt")
+        #expect(LegacyTextParser.recurringFurniture(in: text).filter { $0.hasPrefix("1 March 1982") }.count == 3)
+        let body = LegacyTextParser.stripPagination(text).split(separator: "\n")
+        #expect(!body.contains { $0.hasPrefix("1 March 1982") && $0.hasSuffix("RFC 810") })
+    }
+
     /// Only a whole number varies from page to page, so only a whole number is masked
     /// when furniture is compared. RFC 2049 sets one-line anchors in its bibliography
     /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and
@@ -444,6 +457,24 @@ struct LegacyTextCorpusFindingsTests {
         #expect(anchors.contains("RFC-1522"))
         #expect(anchors.contains("RFC-1524"))
         #expect(anchors.count == 42)
+    }
+
+    /// A line that recurs at page edges is furniture only if it is not also the body's.
+    /// RFC 2013 is a MIB module, where every object ends in `STATUS current` and a
+    /// `DESCRIPTION`, and those fall within four lines of the foot of three pages; read
+    /// as a section running header, every copy after the first was dropped from the
+    /// module. A running header sits at the head of its pages, on every page of its
+    /// section, set off by a blank line -- and is rarer anywhere else than at the edge.
+    @Test func aLineTheBodyRepeatsIsNotFurniture() throws {
+        let text = try Fixtures.string("rfc2013.txt")
+        let document = LegacyTextParser.parse(text)
+        func count(_ line: String, in text: String) -> Int {
+            text.split(separator: "\n").filter { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") == line }.count
+        }
+        let artwork = document.artworkText.joined(separator: "\n")
+        for line in ["STATUS current", "DESCRIPTION"] {
+            #expect(count(line, in: artwork) == count(line, in: text), "\(line)")
+        }
     }
 
     /// Furniture recurs in the same place, so a line at the foot of one page and a line

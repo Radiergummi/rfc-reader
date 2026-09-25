@@ -268,6 +268,36 @@ struct RFCXMLParserTests {
         #expect(bcp.url?.absoluteString == "https://www.rfc-editor.org/info/rfc2119")
     }
 
+    static func entries(in name: String) throws -> [Reference] {
+        let document = try RFCXMLParser.parse(try Fixtures.data(name))
+        return document.allSections.flatMap { section in
+            section.blocks.flatMap { block -> [Reference] in
+                if case .references(let list) = block { return list.entries }
+                return []
+            }
+        }
+    }
+
+    /// RFC 9220 renames two of its references with `<displayreference>`, and its prose
+    /// cites them as `[HTTP/2]` and `[HTTP/3]`. The entry has to read the same, or a
+    /// reader cannot find the citation in the bibliography -- while the anchor stays
+    /// what `<xref target>` points at.
+    @Test func anEntryIsLabelledTheWayItsCitationsAre() throws {
+        let entries = try Self.entries(in: "rfc9220.xml")
+        let http2 = try #require(entries.first { $0.anchor == "HTTP2" })
+        #expect(http2.displayAnchor == "HTTP/2")
+        #expect(entries.first { $0.anchor == "HTTP3" }?.displayAnchor == "HTTP/3")
+        #expect(entries.first { $0.anchor == "RFC2119" }?.displayAnchor == "RFC2119")
+    }
+
+    /// RFC 8761 sets `symRefs="false"`: its prose cites `[1]`, `[2]`, and nothing in the
+    /// bibliography says `BT2020-2` anywhere a reader can see.
+    @Test func numberedReferencesAreLabelledByNumber() throws {
+        let entries = try Self.entries(in: "rfc8761.xml")
+        #expect(entries.first?.anchor == "BT2020-2")
+        #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+    }
+
     @Test func rejectsNonRFCDocuments() {
         #expect(throws: RFCXMLParser.ParseError.self) {
             try RFCXMLParser.parse(Data("<html><body/></html>".utf8))

@@ -53,7 +53,23 @@ public struct LegacyTextParser: Sendable {
         return output.joined(separator: "\n")
     }
 
+    /// The lines `parse` drops as recurring page furniture, in document order.
+    ///
+    /// For the corpus report: a dropped line leaves no trace in the block counts, so
+    /// without this a rule that deletes the body's own lines looks like a clean run.
+    public static func recurringFurniture(in text: String) -> [String] {
+        let lines = paginated(text)
+        return recurringFurniture(lines).sorted().compactMap { if case .text(let string) = lines[$0] { return string }; return nil }
+    }
+
     private static func depaginate(_ text: String) -> [Line] {
+        let lines = paginated(text)
+        let furniture = recurringFurniture(lines)
+        guard !furniture.isEmpty else { return lines }
+        return lines.enumerated().compactMap { furniture.contains($0.offset) ? nil : $0.element }
+    }
+
+    private static func paginated(_ text: String) -> [Line] {
         let rawLines = removingControlCharacters(text).replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
         var lines: [Line] = []
         var expectingHeader = false
@@ -89,7 +105,7 @@ public struct LegacyTextParser: Sendable {
             if !trimmed.isEmpty { firstContentSeen = true }
             lines.append(.text(line.trimmingTrailingWhitespace()))
         }
-        return removingRecurringFurniture(lines)
+        return lines
     }
 
     private enum Side { case head, foot }
@@ -98,7 +114,7 @@ public struct LegacyTextParser: Sendable {
     /// implies and the column it sits in. Probed once per block and handed down.
     private typealias ListMarker = (style: ListBlock.Style, indent: Int)
 
-    /// Drops the lines that recur at the edges of the pages (#52). The running-header
+    /// The lines that recur at the edges of the pages (#52). The running-header
     /// pattern knows one shape, `RFC nnnn ... yyyy`; plenty of documents set a header
     /// that names no RFC at all -- RFC 793 opens 62 pages with `September 1981`,
     /// `Transmission Control Protocol`, `Functional Specification` -- and the one
@@ -111,15 +127,28 @@ public struct LegacyTextParser: Sendable {
     /// elsewhere, and never on the first page, where the title block would otherwise
     /// match its own running header.
     ///
+    /// Recurring is not enough on its own, because the body recurs too: a MIB module
+    /// ends every object in `STATUS current`, and some of those land at a page edge.
+    /// Furniture is set off from the body by a blank line on most of the pages it sits
+    /// on, and it is seen at the edges more often than anywhere else in the pages;
+    /// a line that fails either is the body's, and stays. RFC 3591 lost 89
+    /// `DESCRIPTION` clauses to a rule that asked only whether a line recurred.
+    ///
     /// There are two kinds, and they differ in what the first one means. A line at the
-    /// edge of half the pages or more names the document, and every copy goes. A line
-    /// at the edge of three pages, or of two in a row, but fewer than half, names the
-    /// section those pages are in -- RFC 793's `Philosophy` -- and its first copy is
-    /// where that section starts. In RFC 770 it is the only thing that says so, so the
-    /// first copy stays, unless the document heads the section itself somewhere with
+    /// edge of half the pages or more names the document, and every copy goes -- half
+    /// the pages of its parity, for a line on every other page: RFC 821 alternates its
+    /// header between facing pages, the last two carry none, and on 34 of 70 the first
+    /// copy was kept as the start of a section. A line
+    /// at the head of three pages or more, but fewer than half, names the section those
+    /// pages are in -- RFC 793's `Philosophy` -- and its first copy is where that section
+    /// starts. It is on every page of that section, or every other one where headers
+    /// alternate between facing pages, so a line seen with a longer gap is not one;
+    /// nor is one only ever at the foot, which is where a record or a table running
+    /// over a page break ends. In RFC 770 the first copy is the only thing that says
+    /// where its section starts, so the first copy stays, unless the document heads the section itself somewhere with
     /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
     /// at quite well without a second, empty one beside it.
-    private static func removingRecurringFurniture(_ lines: [Line]) -> [Line] {
+    private static func recurringFurniture(_ lines: [Line]) -> Set<Int> {
         var pages: [Range<Int>] = []
         var start = 0
         for (index, line) in lines.enumerated() {
@@ -130,31 +159,37 @@ public struct LegacyTextParser: Sendable {
         }
         pages.append(start..<lines.count)
         let later = pages.dropFirst()
-        guard later.count >= 3 else { return lines }
+        guard later.count >= 3 else { return [] }
 
-        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> [(index: Int, key: String)] {
+        /// The edge's lines, and whether a blank line sets them off from the rest of the
+        /// page -- looking one line past a full edge, because RFC 793's header is three
+        /// lines and a section's running header the fourth.
+        func edge<Indices: Sequence<Int>>(_ indices: Indices) -> (lines: [(index: Int, key: String)], setOff: Bool) {
             var found: [(index: Int, key: String)] = []
             for index in indices {
                 guard case .text(let string) = lines[index] else { continue }
                 if string.isBlank {
-                    if found.isEmpty { continue } else { break }
+                    if found.isEmpty { continue } else { return (found, true) }
                 }
+                if found.count == 4 { return (found, false) }
                 found.append((index, furnitureKey(string)))
-                if found.count == 4 { break }
             }
-            return found
+            return (found, false)
         }
 
         // Keyed by which edge it sits at as well as what it says, because furniture
         // recurs in the same place: a line at the foot of one page and a line at the
         // head of the next are two sightings of two lines, not one of a header.
         struct Sighting: Hashable { let side: Side; let key: String }
-        struct Seen { var lines: [Int] = []; var pages: [Int] = [] }
+        struct Seen { var lines: [Int] = []; var pages: [Int] = []; var setOff = 0 }
         var seen: [Sighting: Seen] = [:]
+        var edgeLines: Set<Int> = []
         for (ordinal, page) in later.enumerated() {
             for (side, edges) in [(Side.head, edge(page)), (Side.foot, edge(page.reversed()))] {
-                for (index, key) in edges {
+                for (index, key) in edges.lines {
+                    edgeLines.insert(index)
                     seen[Sighting(side: side, key: key), default: Seen()].lines.append(index)
+                    if edges.setOff { seen[Sighting(side: side, key: key), default: Seen()].setOff += 1 }
                     // Appended in page order, so a key twice at one page's edge is one
                     // page and two lines.
                     if seen[Sighting(side: side, key: key)]?.pages.last != ordinal {
@@ -164,15 +199,38 @@ public struct LegacyTextParser: Sendable {
             }
         }
 
+        // Two pages in a row are enough only for a line at the edge of half of them.
+        let recurring = seen.filter { _, found in
+            found.pages.count >= 3 || (found.pages.count * 2 >= later.count && zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 })
+        }
+        guard !recurring.isEmpty else { return [] }
+        // How often each recurring line is seen away from the edges, keying the body
+        // only when something recurs and counting only what does.
+        let candidates = Set(recurring.keys.map(\.key))
+        var elsewhere: [String: Int] = [:]
+        for page in later {
+            for index in page where !edgeLines.contains(index) {
+                guard case .text(let string) = lines[index], !string.isBlank else { continue }
+                let key = furnitureKey(string)
+                if candidates.contains(key) { elsewhere[key, default: 0] += 1 }
+            }
+        }
+
         var furniture: Set<Int> = []
         var statedHeadings: Set<String>?
-        for (sighting, found) in seen {
-            let adjacent = zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 }
-            guard found.pages.count >= 3 || adjacent else { continue }
-            if found.pages.count * 2 >= later.count {
+        for (sighting, found) in recurring {
+            guard found.setOff * 2 >= found.lines.count, elsewhere[sighting.key, default: 0] < found.pages.count else { continue }
+            // A line on alternate pages is counted against the pages of its parity. One
+            // break in the rhythm is allowed where it is long enough to be a rhythm:
+            // RFC 908's header skips a page once in 29.
+            let gaps = zip(found.pages, found.pages.dropFirst()).map { $1 - $0 }
+            let breaks = gaps.count { $0 != 2 }
+            let parity = breaks == 0 || (breaks == 1 && gaps.count > 2) ? 2 : 1
+            if found.pages.count * parity * 2 >= later.count {
                 furniture.formUnion(found.lines)
                 continue
             }
+            guard sighting.side == .head, gaps.allSatisfy({ $0 <= 2 }) else { continue }
             let titles = statedHeadings ?? numberedHeadingTitles(lines)
             statedHeadings = titles
             // Against the key, which has its numbers masked, where the titles do not:
@@ -189,8 +247,7 @@ public struct LegacyTextParser: Sendable {
                 furniture.formUnion(found.lines.dropFirst())
             }
         }
-        guard !furniture.isEmpty else { return lines }
-        return lines.enumerated().compactMap { furniture.contains($0.offset) ? nil : $0.element }
+        return furniture
     }
 
     /// What two lines are compared as when asking whether they are the same piece of

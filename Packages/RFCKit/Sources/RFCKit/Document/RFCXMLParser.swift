@@ -274,6 +274,7 @@ public struct RFCXMLParser: Sendable {
             let refContent = element.first("refcontent")?.normalizedText
             return Reference(
                 anchor: element["anchor"] ?? "",
+                displayAnchor: Self.derivedAnchor(of: element),
                 title: front?.first("title")?.normalizedText ?? "",
                 authors: authors,
                 date: front?.first("date").flatMap(Self.parseDate),
@@ -281,6 +282,13 @@ public struct RFCXMLParser: Sendable {
                 url: element["target"].flatMap(URL.init(string:)),
                 rawText: refContent
             )
+        }
+
+        /// The tag the prep tool resolved for this entry -- a `<displayreference>`
+        /// nickname, or a number under `symRefs="false"` -- which is what every
+        /// `<xref>` citing it carries as `derivedContent`.
+        private static func derivedAnchor(of element: XMLElement) -> String? {
+            element["derivedAnchor"].flatMap { $0.isEmpty ? nil : $0 }
         }
 
         private static func parseReferenceGroup(_ element: XMLElement) -> Reference {
@@ -293,6 +301,7 @@ public struct RFCXMLParser: Sendable {
             }
             return Reference(
                 anchor: anchor,
+                displayAnchor: Self.derivedAnchor(of: element),
                 title: members.count == 1 ? members[0].title : "\(anchor) consists of \(memberNames.joined(separator: ", "))",
                 authors: members.count == 1 ? members[0].authors : [],
                 date: members.count == 1 ? members[0].date : nil,

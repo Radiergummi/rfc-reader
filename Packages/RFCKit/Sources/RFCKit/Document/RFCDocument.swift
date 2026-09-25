@@ -354,7 +354,14 @@ public struct ReferenceList: Sendable {
 
 /// One bibliographic entry, e.g. `[RFC7301]`.
 public struct Reference: Sendable, Identifiable {
+    /// What `<xref target>` points at, and the stable key a link to this entry uses.
     public var anchor: String
+    /// The tag the document prints for this entry, which its citations print too.
+    /// Usually the anchor, but RFCXML can rename it -- RFC 9113 cites RFC 9110 as
+    /// `[HTTP]` through `<displayreference>`, and a document that numbers its
+    /// references cites `[1]` -- and the prep tool records the result as
+    /// `derivedAnchor`. Never a link key: anchors are.
+    public var displayAnchor: String
     public var title: String
     public var authors: [String]
     public var date: PublicationDate?
@@ -368,6 +375,7 @@ public struct Reference: Sendable, Identifiable {
 
     public init(
         anchor: String,
+        displayAnchor: String? = nil,
         title: String,
         authors: [String] = [],
         date: PublicationDate? = nil,
@@ -376,6 +384,7 @@ public struct Reference: Sendable, Identifiable {
         rawText: String? = nil
     ) {
         self.anchor = anchor
+        self.displayAnchor = displayAnchor ?? anchor
         self.title = title
         self.authors = authors
         self.date = date
