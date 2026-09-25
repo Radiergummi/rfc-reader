@@ -878,6 +878,8 @@ public struct LegacyTextParser: Sendable {
 
     nonisolated(unsafe) private static let bulletPattern = #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
     nonisolated(unsafe) private static let numberedItemPattern = #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
+    /// `containsArtwork` answers the same question byte by byte; an alternative added
+    /// here has to be added there, and `theByteScansAgreeWithTheRegexes` is the guard.
     nonisolated(unsafe) static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
     /// A run of three or more spaces between two non-space characters, not following
     /// sentence punctuation: a column gap rather than the gap after a full stop.
@@ -907,8 +909,7 @@ public struct LegacyTextParser: Sendable {
                 case "<": bytes.holds("<-", at: index)
                 case "|": index + 1 < bytes.count && isSpace(bytes[index + 1])
                 case "0"..."9": digitGapDigit(bytes, at: index)
-                case let scalar where isSpace(UInt8(scalar.value)): bytes.holds("|", at: index + 1)
-                default: false
+                default: isSpace(bytes[index]) && bytes.holds("|", at: index + 1)
                 }
                 if found { return true }
             }
@@ -1438,14 +1439,14 @@ struct InlineLinker: Sendable {
         var inline: Inline
     }
 
-    nonisolated(unsafe) private static let sectionOfRFCPattern = #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#
+    nonisolated(unsafe) static let sectionOfRFCPattern = #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#
     /// A bracket holding a single citation tag. The tag may carry internal spaces,
     /// because roughly a seventh of the corpus sets its citations as `[RFC 2211]`
     /// rather than `[RFC2211]`; a class that admitted no space left those matching
     /// neither this pattern nor the bare one. Anything that is not a document once
     /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
     /// the bare pattern picks up whatever RFC sits inside it.
-    nonisolated(unsafe) private static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#
+    nonisolated(unsafe) static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#
     /// Deliberately blind to a preceding `[`. A multi-anchor citation
     /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
     /// beside the RFC are the author's -- so its RFC is linked where it stands and
@@ -1456,14 +1457,14 @@ struct InlineLinker: Sendable {
     /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
     /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
     /// larger of the two shapes going unlinked.
-    nonisolated(unsafe) private static let bareRFCPattern = #/\bRFC[\s\-]?(?<number>\d+)\b/#
+    nonisolated(unsafe) static let bareRFCPattern = #/\bRFC[\s\-]?(?<number>\d+)\b/#
     /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
     /// reference but only the first carries the word, so the numbers are linked where
     /// they stand and the sentence is left to read as it was set.
-    nonisolated(unsafe) private static let rfcListPattern = #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#
+    nonisolated(unsafe) static let rfcListPattern = #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#
     nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
-    nonisolated(unsafe) private static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
-    nonisolated(unsafe) private static let urlPattern = #/https?:\/\/[^\s<>"]+/#
+    nonisolated(unsafe) static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
+    nonisolated(unsafe) static let urlPattern = #/https?:\/\/[^\s<>"]+/#
 
     /// What a matched mention reads as: nil when the document spelled the reference
     /// the way the series spells itself, so the label composes back identically, and
@@ -1480,7 +1481,10 @@ struct InlineLinker: Sendable {
     /// Each is necessary for its pattern to match -- the patterns are case-sensitive,
     /// and a grapheme the regex reads as `C` is the byte `C` -- so a pattern whose
     /// literal is absent is skipped without changing what `link` returns.
-    private struct Literals {
+    /// A pattern above that stops needing its literal -- a `(?i)`, a lowercase
+    /// `section`, a `www.` URL -- has to change this too, or its matches are dropped
+    /// without a word; `theLiteralGateSkipsNoMatch` is the guard.
+    struct Literals {
         var bracket = false, rfc = false, rfcs = false, section = false, http = false
         var any: Bool { bracket || rfc || section || http }
 
