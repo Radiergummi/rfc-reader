@@ -42,4 +42,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift test --package-path Packages/RFCKit
-      - run: swift build --package-path Tools/corpus-build
+      - run: swift test --package-path Tools/corpus-build
