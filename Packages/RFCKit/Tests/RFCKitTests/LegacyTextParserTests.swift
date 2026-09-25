@@ -668,6 +668,17 @@ struct LegacyTextCorpusFindingsTests {
         #expect(entries.first { $0.displayAnchor == "2" }?.documentID == .rfc(1902))
     }
 
+    /// An entry names its RFC however the document spells it. RFC 1041 writes every entry
+    /// `[1] RFC-854, ...`; read as no RFC, its numbered entries named nothing at all.
+    @Test func anEntryNamesAnRFCWrittenWithAHyphen() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        #expect(entries.first { $0.displayAnchor == "1" }?.documentID == .rfc(854))
+        #expect(entries.first { $0.displayAnchor == "3" }?.documentID == .rfc(885))
+        #expect(entries.first { $0.displayAnchor == "5" }?.documentID == nil, "the IBM manual names no RFC")
+        #expect(document.referencedDocuments.contains(.rfc(856)))
+    }
+
     /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
     /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
     /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was

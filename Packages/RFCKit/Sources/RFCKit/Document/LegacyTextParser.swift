@@ -1358,7 +1358,10 @@ public struct LegacyTextParser: Sendable {
 
     private static func reference(anchor label: String, text: String) -> Reference {
         var seriesInfo: [(name: String, value: String)] = []
-        if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) {
+        // Spelled the way the prose linker reads it too: the older half of the series
+        // writes `RFC-854`, `RFC- 826` and `Request for Comments 796`. Once a bare `[1]`
+        // stopped naming RFC 1, an entry spelled so named nothing at all.
+        if let match = text.firstMatch(of: #/\b(?:RFC|Request for Comments:?)[\s\-]*(\d+)/#) {
             seriesInfo.append((name: "RFC", value: String(match.1)))
         } else if let id = DocumentID(label: label) {
             seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
