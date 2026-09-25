@@ -222,6 +222,30 @@ struct LegacyTextParserTests {
         let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
         #expect(!authored.isCanonicalLabel, "an author's own tag must survive verbatim")
     }
+    /// `link` skips a pattern whose opening literal the fragment lacks. That is only
+    /// sound while every match of the pattern holds the literal, so wherever a pattern
+    /// matches -- over every line of every fixture, and the shapes a
+    /// byte test and a grapheme test could disagree on -- its literal must be set.
+    @Test func theLiteralGateSkipsNoMatch() throws {
+        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        var fragments = [
+            "RFC\u{0301} 1", "\u{FEFF}RFC 1", "ＲＦＣ 1", "rfc 1", "section 2", "HTTP://x", "RFC\r\n1",
+            "RFC\u{00A0}1", "Section\u{00A0}2 of RFC 1", "R", "RF", "Sectio", "[", "[RFC1]", "RFCs 1, 2 and 3", "",
+        ]
+        for fixture in try FileManager.default.contentsOfDirectory(atPath: directory.path) where fixture.hasSuffix(".txt") {
+            fragments += try Fixtures.string(fixture).components(separatedBy: "\n")
+        }
+        for fragment in fragments {
+            let literals = InlineLinker.Literals(in: fragment)
+            let label = fragment.prefix(80).debugDescription
+            if fragment.contains(InlineLinker.sectionOfRFCPattern) { #expect(literals.rfc && literals.section, "\(label)") }
+            if fragment.contains(InlineLinker.bracketPattern) { #expect(literals.bracket, "\(label)") }
+            if fragment.contains(InlineLinker.bareRFCPattern) { #expect(literals.rfc, "\(label)") }
+            if fragment.contains(InlineLinker.rfcListPattern) { #expect(literals.rfcs, "\(label)") }
+            if fragment.contains(InlineLinker.sectionPattern) { #expect(literals.section, "\(label)") }
+            if fragment.contains(InlineLinker.urlPattern) { #expect(literals.http, "\(label)") }
+        }
+    }
 }
 
 @Suite("Legacy text parser: corpus findings")
@@ -625,6 +649,27 @@ struct LegacyTextCorpusFindingsTests {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc873.txt"))
         #expect(document.header.id == .rfc(873))
         #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
+    }
+
+    /// RFC 2078 numbers its headings `1:` and `2.4.12:`, a shape the heading pattern did
+    /// not know, so the body came out as one untitled run: no table of contents, and
+    /// `Section 2.2.8` resolving to nothing (#71). RFC 2743 and 2130 are set the same way.
+    @Test func headingsNumberedWithAColonAreHeadings() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2078.txt"))
+        #expect(document.allSections.filter { $0.number != nil }.count == 76)
+        #expect(document.section(number: "2.4.12")?.titleText == "GSS_Release_OID call")
+        #expect(document.section(number: "2.2.8")?.anchor == "section-2.2.8")
+        #expect(document.section(number: "2.4")?.subsections.count == 19)
+        #expect(document.crossReferences.contains { $0.target == .anchor("section-2.2.8") })
+    }
+
+    /// The same shape is a second numbering where a document already has the first: RFC
+    /// 705 lists its commands as `1.  BEGIN Command` and describes each again under `1:
+    /// BEGIN   4b`, and the colon form read the descriptions as seven more sections 1-7.
+    @Test func aColonNumberRepeatingAHeadingNumberIsNotAHeading() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc705.txt"))
+        let numbered = document.allSections.filter { $0.number != nil }
+        #expect(numbered.map(\.titleText) == ["BEGIN", "LISTEN", "RESPONSE", "MESSAGE", "INTERRUPT", "END", "REPLY"].map { "\($0) Command" })
     }
 
     /// An anchor is what a deep link, the table of contents and a reading position key off,
