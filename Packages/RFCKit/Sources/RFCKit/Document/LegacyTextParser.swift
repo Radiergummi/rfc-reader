@@ -173,15 +173,18 @@ public struct LegacyTextParser: Sendable {
         func edge<Indices: Sequence<Int>>(_ indices: Indices) -> Edge {
             var found: [(index: Int, key: String)] = []
             var flush = true
+            var setOff = false
             for index in indices {
                 guard case .text(let string) = lines[index] else { continue }
                 if string.isBlank {
-                    if found.isEmpty { flush = false; continue } else { return Edge(lines: found, setOff: true, flush: flush) }
+                    if found.isEmpty { flush = false; continue }
+                    setOff = true
+                    break
                 }
-                if found.count == 4 { return Edge(lines: found, setOff: false, flush: flush) }
+                if found.count == 4 { break }
                 found.append((index, furnitureKey(string)))
             }
-            return Edge(lines: found, setOff: false, flush: flush)
+            return Edge(lines: found, setOff: setOff, flush: flush)
         }
 
         // Keyed by which edge it sits at as well as what it says, because furniture
@@ -195,14 +198,15 @@ public struct LegacyTextParser: Sendable {
             for (side, edges) in [(Side.head, edge(page)), (Side.foot, edge(page.reversed()))] {
                 for (index, key) in edges.lines {
                     edgeLines.insert(index)
-                    seen[Sighting(side: side, key: key), default: Seen()].lines.append(index)
-                    if edges.setOff { seen[Sighting(side: side, key: key), default: Seen()].setOff += 1 }
-                    if edges.flush { seen[Sighting(side: side, key: key), default: Seen()].flush += 1 }
-                    // Appended in page order, so a key twice at one page's edge is one
-                    // page and two lines.
-                    if seen[Sighting(side: side, key: key)]?.pages.last != ordinal {
-                        seen[Sighting(side: side, key: key), default: Seen()].pages.append(ordinal)
+                    func tally(_ found: inout Seen) {
+                        found.lines.append(index)
+                        if edges.setOff { found.setOff += 1 }
+                        if edges.flush { found.flush += 1 }
+                        // Appended in page order, so a key twice at one page's edge is one
+                        // page and two lines.
+                        if found.pages.last != ordinal { found.pages.append(ordinal) }
                     }
+                    tally(&seen[Sighting(side: side, key: key), default: Seen()])
                 }
             }
         }
@@ -450,14 +454,17 @@ public struct LegacyTextParser: Sendable {
                 // Boilerplate that the RFCXML path also omits; the original text view still has it.
                 let boilerplate = ["table of contents", "status of this memo", "status of memo", "copyright notice",
                                    "full copyright statement", "intellectual property", "disclaimer of validity"]
-                if lowered == "abstract" || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
+                let isAbstract = lowered == "abstract"
+                if isAbstract || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
                     let extent = Self.boilerplateExtent(of: raw.blocks, isContents: lowered.hasPrefix("table of contents"))
-                    if lowered == "abstract" {
+                    if isAbstract {
                         header.abstract = Self.blocks(from: Array(raw.blocks.prefix(extent)), linker: linker)
                     }
-                    let body = Self.blocks(from: Array(raw.blocks.dropFirst(extent)), linker: linker)
-                    if !body.isEmpty {
-                        flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
+                    if extent < raw.blocks.count {
+                        let body = Self.blocks(from: Array(raw.blocks.dropFirst(extent)), linker: linker)
+                        if !body.isEmpty {
+                            flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
+                        }
                     }
                     continue
                 }
@@ -506,7 +513,7 @@ public struct LegacyTextParser: Sendable {
             line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..") || line.contains(". .")
         }
         return 1 + blocks.dropFirst().prefix { block in
-            isContents ? block.lines.filter(isEntry).count * 2 >= block.lines.count : block.lines.count > 1 && looksLikeProse(block.lines)
+            isContents ? block.lines.lazy.filter(isEntry).count * 2 >= block.lines.count : block.lines.count > 1 && looksLikeProse(block.lines)
         }.count
     }
 
@@ -528,47 +535,47 @@ public struct LegacyTextParser: Sendable {
     private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
         var run = 0
-        // Where the current run starts, what the front matter was before it, and its lines.
-        var runStart: (offset: Int, front: [String])?
-        var runLines: [String] = []
+        // Where the current run starts, and how much front matter there was before it: the
+        // front matter is only ever appended to, so its length is all a split needs.
+        var runStart: (offset: Int, frontCount: Int)?
         // A few dozen 1970s and 1980s RFCs indent their headings like the body (RFC 775,
         // RFC 1144), so no heading ever arrives. Ending the front matter after the title
         // keeps the prose; swallowing the whole file would leave an empty document.
-        var afterTitle: (front: [String], bodyStart: Int)?
+        var afterTitle: (offset: Int, frontCount: Int)?
         // Noted, not stopped at: with no heading to come, after the title is sooner.
-        var firstParagraph: (front: [String], bodyStart: Int)?
-        func closeRun() {
-            if firstParagraph == nil, let start = runStart, run > 2, runLines.count > 1, looksLikeProse(runLines) {
-                firstParagraph = (start.front, start.offset)
-            }
-            runStart = nil
-            runLines = []
+        var firstParagraph: (offset: Int, frontCount: Int)?
+        func split(_ at: (offset: Int, frontCount: Int)) -> (front: [String], bodyStart: Int) {
+            (Array(front.prefix(at.frontCount)), at.offset)
         }
         for (offset, line) in lines.enumerated() {
             guard case .text(let string) = line else { continue }
             if string.isBlank {
-                closeRun()
+                if firstParagraph == nil, let start = runStart, run > 2 {
+                    let runLines = Array(front[start.frontCount...])
+                    if runLines.count > 1, looksLikeProse(runLines) { firstParagraph = start }
+                }
+                runStart = nil
                 front.append("")
                 continue
             }
+            let start = runStart ?? (offset, front.count)
             if runStart == nil {
                 run += 1
-                runStart = (offset, front)
+                runStart = start
             }
-            if run > 2, let start = runStart {
-                if afterTitle == nil { afterTitle = (start.front, start.offset) }
+            if run > 2 {
+                if afterTitle == nil { afterTitle = start }
                 // Deliberately laxer than the body's rule: the stand-alone test needs the
                 // body's indent, which is not known until this scan has finished. Stopping
                 // early only leaves a line in the body that turns out not to be a heading;
                 // stopping late would swallow it into the front matter and lose it.
                 if string.startsAtColumnZero, heading(from: string) != nil {
-                    return firstParagraph ?? (start.front, start.offset)
+                    return split(firstParagraph ?? start)
                 }
             }
-            runLines.append(string)
             front.append(string)
         }
-        return afterTitle ?? (front, lines.count)
+        return afterTitle.map(split) ?? (front, lines.count)
     }
 
     nonisolated(unsafe) private static let monthYearPattern = #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
