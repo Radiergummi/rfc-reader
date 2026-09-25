@@ -26,6 +26,8 @@ the converter over it, and demotes the headings the converter invents:
    table label standing alone between blank lines -- is demoted to a paragraph
    of the section before it, and the tree is nested again.
 
+Needs Python 3.9 or later (str.removeprefix).
+
 Usage:
   corpus/overrides/rfc1142.py <corpus-build> corpus/text.noindex/rfc1142.txt corpus/overrides/rfc1142.xml
 """

@@ -126,8 +126,9 @@ The full text fetch is about 450 MB and 8,464 requests; at six concurrent connec
 corpus/                      (git-ignored working directory, or a separate data repository)
 ├── rfc-index.xml            snapshot used for this run
 ├── text/rfcNNNN.txt         fetched sources, byte-for-byte as served
-├── overrides/rfcNNNN.xml    hand-corrected documents, committed and reviewed
-│   └── rfcNNNN.py           the script behind a mechanically corrected one
+├── overrides/
+│   ├── rfcNNNN.xml          hand-corrected documents, committed and reviewed
+│   └── rfcNNNN.py           the script behind a mechanically corrected one (Python 3.9+)
 ├── xml/rfcNNNN.xml          generated output
 ├── report.json              per-document counts and warnings
 └── manifest.json
