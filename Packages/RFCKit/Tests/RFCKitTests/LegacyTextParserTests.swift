@@ -477,6 +477,58 @@ struct LegacyTextCorpusFindingsTests {
         }
     }
 
+    /// A section running header belongs to the block that opens its page, directly under
+    /// the document's own header. RFC 6208 registers five media types, and each
+    /// registration's `Additional information:` falls at the head of a page -- but below
+    /// the blank lines the removed `RFC 6208 ... April 2011` leaves, and every copy but
+    /// the first was dropped as the running header of a section.
+    @Test func aLineBelowThePageHeaderIsNotASectionRunningHeader() throws {
+        let text = try Fixtures.string("rfc6208.txt")
+        let body = LegacyTextParser.stripPagination(text)
+        func count(_ text: String) -> Int { text.split(separator: "\n").filter { $0.trimmingCharacters(in: .whitespaces) == "Additional information:" }.count }
+        #expect(count(body) == count(text))
+        #expect(LegacyTextParser.recurringFurniture(in: text).allSatisfy { !$0.contains("Additional information:") })
+    }
+
+    /// A section the reader omits -- the memo's status, its copyright, its contents -- or
+    /// lifts into the header as its abstract is a few paragraphs long, and it ends at the
+    /// next heading. Where the document's own headings are of a shape the parser does not
+    /// know, no heading ever ends it, and the whole body went with it (#60): RFC 1927's
+    /// sections are numbered `1)`, and RFC 509 follows its one-line abstract with two
+    /// pages of traffic tables. RFC 1927 kept 3 of its blocks, RFC 509 none.
+    @Test func anOmittedSectionEndsWhereItsBoilerplateDoes() throws {
+        func middle(_ name: String) throws -> (document: RFCDocument, middle: Substring) {
+            let document = LegacyTextParser.parse(try Fixtures.string(name))
+            let xml = RFCXMLSerializer().serialize(document)
+            let start = try #require(xml.range(of: "<middle>")), end = try #require(xml.range(of: "</middle>"))
+            return (document, xml[start.upperBound..<end.lowerBound])
+        }
+        let staples = try middle("rfc1927.txt")
+        #expect(staples.middle.contains("New MIME Types: Staple"))
+        #expect(!staples.middle.contains("This memo provides information for the Internet community"))
+
+        let traffic = try middle("rfc509.txt")
+        #expect(traffic.middle.contains("HOST THROUGHPUT SUMMARY"))
+        #expect(traffic.document.header.abstract.count == 1)
+    }
+
+    /// Front matter is the header and the title; a paragraph after them is the body's,
+    /// whether or not a heading has come yet. RFC 796 opens with prose under a heading of
+    /// a shape the scan does not stop at, and the first column-0 heading it does stop at is
+    /// `References`: the front matter ran on to it, and everything before it was lost (#60).
+    /// RFC 105 indents the first line of its opening paragraph and sets the second at the
+    /// margin, and the second was taken for a heading that ended the front matter, leaving
+    /// the first line in it.
+    @Test func theFrontMatterEndsAtTheFirstParagraph() throws {
+        let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
+        #expect(addresses.paragraphs.contains { $0.plainText.hasPrefix("This memo describes the relationship between address fields") })
+        #expect(addresses.header.id == .rfc(796))
+
+        let remoteJobs = LegacyTextParser.parse(try Fixtures.string("rfc105.txt"))
+        #expect(remoteJobs.paragraphs.contains { $0.plainText.hasPrefix("In the discussions that follow, 'byte' means 8 bits") })
+        #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
+    }
+
     /// Furniture recurs in the same place, so a line at the foot of one page and a line
     /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
     /// parts 6 and 8 as one anchor each, word for word the same up to the part number
