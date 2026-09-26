@@ -173,6 +173,14 @@ struct ReferenceRow: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       }
+      // What the author added after the entry, most often the commit a living
+      // standard was cited at; its link opens in the browser like any other.
+      if let annotation = entry.annotationText {
+        Text(annotation)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
     .padding(.vertical, 2)
     .contentShape(Rectangle())

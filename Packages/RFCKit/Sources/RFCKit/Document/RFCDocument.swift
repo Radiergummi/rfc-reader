@@ -107,6 +107,11 @@ public struct DocumentHeader: Sendable {
   public var updates: [DocumentID]
   public var category: String?
   public var draftName: String?
+  /// The Internet-Draft this RFC was published from, as the RFC Editor links it
+  /// (`<link rel="prev">`): a Datatracker URL naming the draft and, usually, its
+  /// final revision. The start of the document's lineage, handed over in the source
+  /// rather than looked up.
+  public var precedingDraft: URL?
 
   public init(
     id: DocumentID? = nil,
@@ -121,7 +126,8 @@ public struct DocumentHeader: Sendable {
     obsoletes: [DocumentID] = [],
     updates: [DocumentID] = [],
     category: String? = nil,
-    draftName: String? = nil
+    draftName: String? = nil,
+    precedingDraft: URL? = nil
   ) {
     self.id = id
     self.title = title
@@ -136,6 +142,7 @@ public struct DocumentHeader: Sendable {
     self.updates = updates
     self.category = category
     self.draftName = draftName
+    self.precedingDraft = precedingDraft
   }
 }
 
@@ -226,14 +233,20 @@ public indirect enum Block: Sendable {
 public struct Paragraph: Sendable {
   public var inlines: [Inline]
   public var anchor: String?
+  /// How far the author set this paragraph in, in characters of the 72-column
+  /// text rendering: RFCXML's `<t indent="3">`, which the RFC Editor uses to set
+  /// off quoted text, a continuation or a note belonging to the paragraph above.
+  /// Zero, almost always.
+  public var indent: Int
 
-  public init(_ inlines: [Inline], anchor: String? = nil) {
+  public init(_ inlines: [Inline], anchor: String? = nil, indent: Int = 0) {
     self.inlines = inlines
     self.anchor = anchor
+    self.indent = indent
   }
 
-  public init(text: String, anchor: String? = nil) {
-    self.init([.text(text)], anchor: anchor)
+  public init(text: String, anchor: String? = nil, indent: Int = 0) {
+    self.init([.text(text)], anchor: anchor, indent: indent)
   }
 
   public var plainText: String { inlines.plainText }
@@ -382,6 +395,10 @@ public struct Reference: Sendable, Identifiable {
   public var url: URL?
   /// Free-form fallback when the reference came from legacy text and could not be structured.
   public var rawText: String?
+  /// Prose the author wrote after the entry (RFCXML's `<annotation>`), most often
+  /// pinning a living standard to the commit the RFC was written against. Empty
+  /// when there is none.
+  public var annotation: [Inline]
 
   public var id: String { anchor }
 
@@ -393,7 +410,8 @@ public struct Reference: Sendable, Identifiable {
     date: PublicationDate? = nil,
     seriesInfo: [(name: String, value: String)] = [],
     url: URL? = nil,
-    rawText: String? = nil
+    rawText: String? = nil,
+    annotation: [Inline] = []
   ) {
     self.anchor = anchor
     self.displayAnchor = displayAnchor ?? anchor
@@ -403,6 +421,7 @@ public struct Reference: Sendable, Identifiable {
     self.seriesInfo = seriesInfo
     self.url = url
     self.rawText = rawText
+    self.annotation = annotation
   }
 
   /// The RFC/BCP/STD this reference points at, when it is one.

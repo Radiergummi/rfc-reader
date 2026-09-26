@@ -29,17 +29,17 @@ The split is the point: **RFCKit knows nothing about SwiftUI, and the app knows 
 
 ```
 RFCDocument
-├── header: DocumentHeader          title, id, authors, date, abstract blocks, keywords, obsoletes/updates
+├── header: DocumentHeader          title, id, authors, date, abstract blocks, keywords, obsoletes/updates, precedingDraft
 ├── sections: [Section]             tree; each has anchor, number ("4.2", "A.1"), title: [Inline], blocks, subsections
 └── source: .xml | .text
 
 Block (indirect enum)
-  paragraph(Paragraph)              inlines + optional anchor
+  paragraph(Paragraph)              inlines + optional anchor + author's indent in characters
   list(ListBlock)                   bullet / numbered(format, start) / bare; items hold blocks
   definitionList([DefinitionItem])  term inlines + definition blocks
   preformatted(Preformatted)        artwork or sourceCode, verbatim text, optional language
   figure(Figure) · table(Table) · blockQuote · aside
-  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible
+  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines
 
 Inline (indirect enum)
   text · emphasis · strong · code · superscript · subscript · link(URL) · crossReference · lineBreak
@@ -192,6 +192,16 @@ Verified by measurement rather than by eye, on RFC 9110 in a 1500 pt window with
 ## Decision: a section is a fragment
 
 *Decided September 2026.* The app's own scheme spells a section as a fragment and in the RFC Editor's shape — `rfc://9110#section-4.2`, `rfc://9110#appendix-A.1` — not as a path (`rfc://9110/section/4.2`) and not bare (`rfc://9110#4.2`). A section is a place within a document, not a document of its own, so it belongs in the fragment; and spelling it their way means one section names the same place whether the link points at our reader or at their HTML. `RFCLink.fragment(for:)` builds it and `RFCLink.section(fromFragment:)` parses it, kept together so the two halves cannot drift, and every URL builder in `RFCKit` goes through them. The prefix is required on both schemes: an unprefixed `#4.2` is not a section, and `#page-12` stays unrecognised rather than becoming one.
+
+## Decision: three things RFCXML says that the model now keeps
+
+*Decided September 2026 (issue #66).* Auditing the parser against the RFCXML vocabulary turned up three things a reader has a use for that it dropped. Each is carried as data, not interpreted:
+
+- **`<link rel="prev">` is `DocumentHeader.precedingDraft`**, the Datatracker URL of the draft the RFC was published from. It is in every prepped RFC, beside the `rel="alternate"` links for the DOI and the ISSN, which are not lineage. It is the start of the drafts tier's "what changed between a draft and the RFC it became"; for now the More menu opens it. It is a URL rather than a draft name because that is what the source gives: `docName` already sits in `draftName`, and the link does not always name the same revision.
+- **`<annotation>` is `Reference.annotation`**, inlines, empty when absent. Its usual job is pinning a living standard to the commit the RFC was written against, which the entry otherwise loses, leaving only the moving target. It is prose, so it is read by the builder instance that links prose; `referenceTargets(in:)` still reads entries before there is one, through the static half that knows nothing of it. The contents panel shows it under an entry's provenance line, and `Reference.annotationText` in `RFCReaderKit` keeps its external links as links.
+- **`<t indent="N">` is `Paragraph.indent`**, in characters of the 72-column rendering, as the source counts it. The reader sets it as a head indent — the whole paragraph moves in, no new view and no decoration — at one indent step per three characters: three is the width RFCXML hangs a list item's text at, and a list's text sits one step in, so a note under a list lines up with the items the way it does on paper. The indent is relative to wherever the paragraph already sits. List `indent` is a different attribute and stays ignored: it is on nearly every list, records the default hanging width, and a reflowing reader has its own.
+
+`RFCXMLSerializer` writes all three back, so a native XML document keeps them across a round trip; the legacy text parser produces none of them.
 
 ## Planned engines
 

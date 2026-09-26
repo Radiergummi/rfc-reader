@@ -340,6 +340,49 @@ struct RFCXMLParserTests {
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
   }
 
+  /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,
+  /// beside the `rel="alternate"` links for its DOI and the series ISSN, which are not
+  /// lineage and must not be taken for it.
+  @Test func theDraftAnRFCCameFromIsRead() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml"))
+    #expect(
+      document.header.precedingDraft?.absoluteString
+        == "https://datatracker.ietf.org/doc/draft-ietf-httpbis-compression-dictionary-19")
+  }
+
+  /// RFC 9842 cites two WHATWG living standards and pins each to the commit it was
+  /// written against in an `<annotation>`. Without it the entry names only the moving
+  /// target.
+  @Test func aReferenceKeepsItsAnnotation() throws {
+    let entries = try Self.entries(in: "rfc9842.xml")
+    let fetch = try #require(entries.first { $0.anchor == "FETCH" })
+    let snapshot = try #require(
+      URL(
+        string:
+          "https://fetch.spec.whatwg.org/commit-snapshots/5a9680638ebfc2b3b7f4efb2bef0b579a2663951/"
+      ))
+    #expect(
+      fetch.annotation == [
+        .text("Commit snapshot: "), .link(snapshot, [.text(snapshot.absoluteString)]),
+      ])
+    #expect(fetch.rawText == "WHATWG Living Standard", "the annotation is not the refcontent")
+    #expect(entries.first { $0.anchor == "RFC8792" }?.annotation == [])
+  }
+
+  /// RFC 9601 sets off the reasoning behind a rule as `<t indent="3">` under the list
+  /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
+  @Test func aParagraphKeepsItsIndent() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9601.xml"))
+    let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> Paragraph? in
+      if case .paragraph(let paragraph) = block { return paragraph }
+      return nil
+    }
+    let reasoning = try #require(paragraphs.first { $0.plainText.hasPrefix("Reasoning:") })
+    #expect(reasoning.anchor == "section-5-5")
+    #expect(reasoning.indent == 3)
+    #expect(paragraphs.filter { $0.indent != 0 }.count == 1)
+  }
+
   @Test func rejectsNonRFCDocuments() {
     #expect(throws: RFCXMLParser.ParseError.self) {
       try RFCXMLParser.parse(Data("<html><body/></html>".utf8))

@@ -69,6 +69,46 @@ struct RFCXMLSerializerTests {
     #expect(tags(reparsed) == tags(original))
   }
 
+  static func roundTrip(_ name: String) throws -> (original: RFCDocument, reparsed: RFCDocument) {
+    let original = try RFCXMLParser.parse(try Fixtures.data(name))
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+    return (original, reparsed)
+  }
+
+  @Test func theDraftAnRFCCameFromSurvivesARoundTrip() throws {
+    let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
+    #expect(original.header.precedingDraft != nil)
+    #expect(reparsed.header.precedingDraft == original.header.precedingDraft)
+  }
+
+  @Test func aReferenceAnnotationSurvivesARoundTrip() throws {
+    let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
+    func annotations(_ document: RFCDocument) -> [String: [Inline]] {
+      var result: [String: [Inline]] = [:]
+      for block in document.allSections.flatMap(\.blocks) {
+        guard case .references(let list) = block else { continue }
+        for entry in list.entries where !entry.annotation.isEmpty {
+          result[entry.anchor] = entry.annotation
+        }
+      }
+      return result
+    }
+    #expect(annotations(original).keys.sorted() == ["FETCH", "URLPATTERN"])
+    #expect(annotations(reparsed) == annotations(original))
+  }
+
+  @Test func aParagraphIndentSurvivesARoundTrip() throws {
+    let (original, reparsed) = try Self.roundTrip("rfc9601.xml")
+    func indents(_ document: RFCDocument) -> [Int] {
+      document.allSections.flatMap(\.blocks).compactMap { block -> Int? in
+        if case .paragraph(let paragraph) = block { return paragraph.indent }
+        return nil
+      }
+    }
+    #expect(indents(original).contains(3))
+    #expect(indents(reparsed) == indents(original))
+  }
+
   @Test func roundTripsLegacyText() throws {
     let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let xml = RFCXMLSerializer(
