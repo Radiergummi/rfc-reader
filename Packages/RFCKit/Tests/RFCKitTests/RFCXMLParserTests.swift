@@ -15,7 +15,12 @@ struct RFCXMLParserTests {
     #expect(document.header.id == .rfc(8999))
     #expect(document.header.title == "Version-Independent Properties of QUIC")
     #expect(document.header.abbreviatedTitle == "QUIC Invariants")
-    #expect(document.header.authors == [Author(name: "Martin Thomson")])
+    #expect(
+      document.header.authors == [
+        Author(
+          name: "Martin Thomson",
+          contact: AuthorContact(organization: "Mozilla", emails: ["mt@lowentropy.net"]))
+      ])
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
     #expect(document.header.keywords.count == 7)
@@ -338,6 +343,23 @@ struct RFCXMLParserTests {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+  }
+
+  /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
+  /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
+  /// Reading only the first kept the six counters and dropped the rest.
+  @Test func everyTableBodyIsRead() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
+    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
+      if case .table(let table) = block { return table }
+      return nil
+    }
+    let table = try #require(tables.first { $0.anchor == "T1" })
+    #expect(table.header.count == 1)
+    #expect(table.rows.count == 32)
+    #expect(table.rows.first?.first?.plainText == "counter32")
+    #expect(table.rows[6].first?.plainText == "object-identifier")
+    #expect(table.rows.last?.first?.plainText == "yang-identifier")
   }
 
   /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,
