@@ -261,7 +261,10 @@ final class LibraryModel {
   ///
   /// A link can arrive before any scene has registered -- a URL or the Open RFC
   /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
-  /// `pendingSceneLink` instead, for `register(_:)` to hand to the first scene.
+  /// `pendingSceneLink` instead, for `register(_:)` to hand to the first scene. One
+  /// slot, so of two links routed before then the later wins: the first scene can
+  /// show one document, and the later link is the more recent ask. It cannot race
+  /// `openInNewScene`, which is only ever reached from a scene that already exists.
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
