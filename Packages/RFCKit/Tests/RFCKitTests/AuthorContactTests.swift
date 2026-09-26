@@ -140,7 +140,10 @@ struct AuthorContactTests {
   @Test func aMailtoLinkEscapesTheAddress() throws {
     let url = try #require(RFCXMLParser.mailto("a?b#c%d@example.com"))
     #expect(url.absoluteString == "mailto:a%3Fb%23c%25d@example.com")
-    #expect(url.path(percentEncoded: false) == "a?b#c%d@example.com")
+    // `URL.path` is empty for a URL with no authority on Apple's Foundation, so the
+    // address is read back through the components that built it.
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    #expect(components.path == "a?b#c%d@example.com")
   }
 
   /// A web address `URL` cannot read is shown as text, not dropped.
