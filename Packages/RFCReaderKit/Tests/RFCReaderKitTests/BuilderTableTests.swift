@@ -1,118 +1,125 @@
 import Foundation
 import RFCKit
 import Testing
+
 @testable import RFCReaderKit
+
 #if canImport(UIKit)
-import UIKit
+  import UIKit
 #else
-import AppKit
+  import AppKit
 #endif
 
 @Suite("Builder: tables")
 @MainActor
 struct BuilderTableTests {
-    private func cells(_ strings: [String]) -> [[Inline]] {
-        strings.map { [Inline.text($0)] }
-    }
+  private func cells(_ strings: [String]) -> [[Inline]] {
+    strings.map { [Inline.text($0)] }
+  }
 
-    private func document(_ table: RFCKit.Table) -> RFCDocument {
-        Fixtures.document(.table(table))
-    }
+  private func document(_ table: RFCKit.Table) -> RFCDocument {
+    Fixtures.document(.table(table))
+  }
 
-    private var narrow: RFCKit.Table {
-        RFCKit.Table(
-            title: "Methods",
-            number: 1,
-            header: [cells(["Method", "Safe", "Idempotent"])],
-            rows: [cells(["GET", "yes", "yes"]), cells(["POST", "no", "no"])],
-            anchor: "table-1"
-        )
-    }
+  private var narrow: RFCKit.Table {
+    RFCKit.Table(
+      title: "Methods",
+      number: 1,
+      header: [cells(["Method", "Safe", "Idempotent"])],
+      rows: [cells(["GET", "yes", "yes"]), cells(["POST", "no", "no"])],
+      anchor: "table-1"
+    )
+  }
 
-    /// The shape RFC 9110 keeps producing: two short columns and one prose column of
-    /// about ninety characters.
-    private var prose: RFCKit.Table {
-        RFCKit.Table(
-            title: "Status Codes",
-            number: 2,
-            header: [cells(["Code", "Description", "Ref."])],
-            rows: [cells(["404", String(repeating: "a long prose description ", count: 4), "6.5.4"])],
-            anchor: "table-2"
-        )
-    }
+  /// The shape RFC 9110 keeps producing: two short columns and one prose column of
+  /// about ninety characters.
+  private var prose: RFCKit.Table {
+    RFCKit.Table(
+      title: "Status Codes",
+      number: 2,
+      header: [cells(["Code", "Description", "Ref."])],
+      rows: [cells(["404", String(repeating: "a long prose description ", count: 4), "6.5.4"])],
+      anchor: "table-2"
+    )
+  }
 
-    /// The production path: measure the columns, then let the widths decide.
-    private func shape(_ table: RFCKit.Table, measure: CGFloat = ReadingStyle().measure) -> TableShape {
-        let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
-        return builder.tableShape(widths: builder.naturalColumnWidths(table))
-    }
+  /// The production path: measure the columns, then let the widths decide.
+  private func shape(
+    _ table: RFCKit.Table,
+    measure: CGFloat = ReadingStyle().measure
+  ) -> TableShape {
+    let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
+    return builder.tableShape(widths: builder.naturalColumnWidths(table))
+  }
 
-    @Test func aNarrowTableUsesTheGrid() {
-        #expect(shape(narrow) == .grid)
-    }
+  @Test func aNarrowTableUsesTheGrid() {
+    #expect(shape(narrow) == .grid)
+  }
 
-    @Test func aTableWithAProseColumnStacks() {
-        #expect(shape(prose) == .stacked)
-    }
+  @Test func aTableWithAProseColumnStacks() {
+    #expect(shape(prose) == .stacked)
+  }
 
-    /// The brief's phone-measure test asserted `narrow` stacks at measure 320, but its
-    /// three columns total roughly 207 pt including gutters — comfortably under 320,
-    /// so it grids. Replaced with a threshold test derived from the table's own
-    /// natural widths, so it cannot rot when fonts or fixtures change.
-    @Test func theMeasureDecidesTheShape() {
-        let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
-        let widths = wide.naturalColumnWidths(narrow)
-        let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
+  /// The brief's phone-measure test asserted `narrow` stacks at measure 320, but its
+  /// three columns total roughly 207 pt including gutters — comfortably under 320,
+  /// so it grids. Replaced with a threshold test derived from the table's own
+  /// natural widths, so it cannot rot when fonts or fixtures change.
+  @Test func theMeasureDecidesTheShape() {
+    let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
+    let widths = wide.naturalColumnWidths(narrow)
+    let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
 
-        #expect(shape(narrow, measure: total + 1) == .grid)
-        #expect(shape(narrow, measure: total - 1) == .stacked)
-    }
+    #expect(shape(narrow, measure: total + 1) == .grid)
+    #expect(shape(narrow, measure: total - 1) == .stacked)
+  }
 
-    @Test func gridRowsAreTabSeparatedAndCarryTabStops() throws {
-        let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
-        #expect(built.text.string.contains("GET\tyes\tyes"))
-        let offset = try #require(built.anchors.offset(of: "table-1"))
-        let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
-        #expect(paragraph.tabStops.count >= 2)
-        #expect(paragraph.lineBreakMode == .byClipping)
-    }
+  @Test func gridRowsAreTabSeparatedAndCarryTabStops() throws {
+    let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
+    #expect(built.text.string.contains("GET\tyes\tyes"))
+    let offset = try #require(built.anchors.offset(of: "table-1"))
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.tabStops.count >= 2)
+    #expect(paragraph.lineBreakMode == .byClipping)
+  }
 
-    @Test func stackedRowsLeadWithTheirColumnHeader() throws {
-        #expect(shape(prose) == .stacked)
+  @Test func stackedRowsLeadWithTheirColumnHeader() throws {
+    #expect(shape(prose) == .stacked)
 
-        let built = DocumentTextBuilder.build(document(prose), style: ReadingStyle())
-        // "Code  404" (bold label, two spaces, cell) only appears in the stacked
-        // shape; the grid shape would emit "Code\tDescription\tRef." on one line
-        // and "404\t…" on another, never this adjacency.
-        #expect(built.text.string.contains("Code  404"))
+    let built = DocumentTextBuilder.build(document(prose), style: ReadingStyle())
+    // "Code  404" (bold label, two spaces, cell) only appears in the stacked
+    // shape; the grid shape would emit "Code\tDescription\tRef." on one line
+    // and "404\t…" on another, never this adjacency.
+    #expect(built.text.string.contains("Code  404"))
 
-        let offset = try Fixtures.offset(of: "404", in: built.text)
-        let paragraph = try #require(built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
-        // Stacked cells wrap, so they must not be clipped.
-        #expect(paragraph.lineBreakMode != .byClipping)
-    }
+    let offset = try Fixtures.offset(of: "404", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    // Stacked cells wrap, so they must not be clipped.
+    #expect(paragraph.lineBreakMode != .byClipping)
+  }
 
-    @Test func cellInlinesKeepTheirCrossReferences() throws {
-        let xref = CrossReference(target: .document(.rfc(9110), section: "6.5.4"), text: "[RFC 9110]")
-        let table = RFCKit.Table(
-            title: nil,
-            header: [cells(["Ref."])],
-            rows: [[[.crossReference(xref)]]],
-            anchor: "table-3"
-        )
-        let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
-        let offset = try Fixtures.offset(of: "[RFC 9110]", in: built.text)
-        #expect(built.text.attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox)
-        #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
-    }
+  @Test func cellInlinesKeepTheirCrossReferences() throws {
+    let xref = CrossReference(target: .document(.rfc(9110), section: "6.5.4"), text: "[RFC 9110]")
+    let table = RFCKit.Table(
+      title: nil,
+      header: [cells(["Ref."])],
+      rows: [[[.crossReference(xref)]]],
+      anchor: "table-3"
+    )
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let offset = try Fixtures.offset(of: "[RFC 9110]", in: built.text)
+    #expect(built.text.attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox)
+    #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
+  }
 
-    @Test func theCaptionIsText() {
-        let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
-        #expect(built.text.string.contains("Table 1: Methods"))
-    }
+  @Test func theCaptionIsText() {
+    let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
+    #expect(built.text.string.contains("Table 1: Methods"))
+  }
 
-    @Test func theAnchorIsIndexed() {
-        let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
-        #expect(built.anchors.offset(of: "table-1") != nil)
-    }
+  @Test func theAnchorIsIndexed() {
+    let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
+    #expect(built.anchors.offset(of: "table-1") != nil)
+  }
 }

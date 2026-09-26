@@ -1,10 +1,11 @@
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 import Foundation
 import RFCKit
+
+#if canImport(UIKit)
+  import UIKit
+#elseif canImport(AppKit)
+  import AppKit
+#endif
 
 /// What a copied selection puts on the pasteboard.
 ///
@@ -24,32 +25,32 @@ import RFCKit
 /// same string `RFCXMLSerializer` writes out. The screen shows `display.text`; the
 /// pasteboard gets `label`. One model, two renderings, neither guessing at the other.
 public enum SelectionText {
-    /// The plain text for `attributed`, which is expected to be a selection taken out
-    /// of the reader's storage.
-    public static func plainText(of attributed: NSAttributedString) -> String {
-        var result = ""
-        let whole = NSRange(location: 0, length: attributed.length)
-        attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
-            guard let box = value as? ReferenceBox else {
-                result += attributed.attributedSubstring(from: range).string
-                return
-            }
-            // The whole reference, even when only part of it was selected: a chip is
-            // one thing on screen and there is no half of it that means anything. It
-            // is also the only way a run that begins after the symbol still yields a
-            // label rather than a fragment of one.
-            result += pasteboardLabel(for: box.reference)
-        }
-        return result
+  /// The plain text for `attributed`, which is expected to be a selection taken out
+  /// of the reader's storage.
+  public static func plainText(of attributed: NSAttributedString) -> String {
+    var result = ""
+    let whole = NSRange(location: 0, length: attributed.length)
+    attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
+      guard let box = value as? ReferenceBox else {
+        result += attributed.attributedSubstring(from: range).string
+        return
+      }
+      // The whole reference, even when only part of it was selected: a chip is
+      // one thing on screen and there is no half of it that means anything. It
+      // is also the only way a run that begins after the symbol still yields a
+      // label rather than a fragment of one.
+      result += pasteboardLabel(for: box.reference)
     }
+    return result
+  }
 
-    /// A label with its typesetting taken back out.
-    ///
-    /// The non-breaking spaces are there to stop a reference wrapping mid-label in a
-    /// narrow column, which is a fact about a text view and about nowhere else. What
-    /// gets pasted into a mail or a terminal should be the ordinary spaces the RFC
-    /// Editor's own text uses.
-    private static func pasteboardLabel(for reference: CrossReference) -> String {
-        reference.label.replacingOccurrences(of: "\u{00A0}", with: " ")
-    }
+  /// A label with its typesetting taken back out.
+  ///
+  /// The non-breaking spaces are there to stop a reference wrapping mid-label in a
+  /// narrow column, which is a fact about a text view and about nowhere else. What
+  /// gets pasted into a mail or a terminal should be the ordinary spaces the RFC
+  /// Editor's own text uses.
+  private static func pasteboardLabel(for reference: CrossReference) -> String {
+    reference.label.replacingOccurrences(of: "\u{00A0}", with: " ")
+  }
 }

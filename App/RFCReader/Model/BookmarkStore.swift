@@ -16,33 +16,33 @@ import SwiftData
 /// often to ask a store here.
 @MainActor
 enum BookmarkStore {
-    static func isBookmarked(_ id: DocumentID, in context: ModelContext) -> Bool {
-        bookmark(for: id, in: context) != nil
-    }
+  static func isBookmarked(_ id: DocumentID, in context: ModelContext) -> Bool {
+    bookmark(for: id, in: context) != nil
+  }
 
-    /// Adds the bookmark, or removes the one already there. Answers with the state it
-    /// leaves behind, so a caller that displays it need not go back and ask.
-    @discardableResult
-    static func toggle(_ id: DocumentID, title: String, in context: ModelContext) -> Bool {
-        let bookmarked: Bool
-        if let existing = bookmark(for: id, in: context) {
-            context.delete(existing)
-            bookmarked = false
-        } else {
-            context.insert(Bookmark(number: id.number, title: title))
-            bookmarked = true
-        }
-        // Explicitly, rather than leaving it to autosave on one platform and not the
-        // other: on macOS the sidebar's list and the reader's toolbar are separate
-        // hosting roots reading the same store, and the glyph should not be able to
-        // disagree with the list behind it while a save is still pending.
-        try? context.save()
-        return bookmarked
+  /// Adds the bookmark, or removes the one already there. Answers with the state it
+  /// leaves behind, so a caller that displays it need not go back and ask.
+  @discardableResult
+  static func toggle(_ id: DocumentID, title: String, in context: ModelContext) -> Bool {
+    let bookmarked: Bool
+    if let existing = bookmark(for: id, in: context) {
+      context.delete(existing)
+      bookmarked = false
+    } else {
+      context.insert(Bookmark(number: id.number, title: title))
+      bookmarked = true
     }
+    // Explicitly, rather than leaving it to autosave on one platform and not the
+    // other: on macOS the sidebar's list and the reader's toolbar are separate
+    // hosting roots reading the same store, and the glyph should not be able to
+    // disagree with the list behind it while a save is still pending.
+    try? context.save()
+    return bookmarked
+  }
 
-    private static func bookmark(for id: DocumentID, in context: ModelContext) -> Bookmark? {
-        let number = id.number
-        let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
-        return try? context.fetch(descriptor).first
-    }
+  private static func bookmark(for id: DocumentID, in context: ModelContext) -> Bookmark? {
+    let number = id.number
+    let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
+    return try? context.fetch(descriptor).first
+  }
 }

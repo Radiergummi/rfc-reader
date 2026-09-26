@@ -1,27 +1,27 @@
 #if os(macOS)
-import AppKit
-import RFCKit
-import RFCReaderKit
-import SwiftData
-import SwiftUI
+  import AppKit
+  import RFCKit
+  import RFCReaderKit
+  import SwiftData
+  import SwiftUI
 
-/// One window — which is one tab — and everything in it.
-///
-/// The window is ours from the moment it is made, and that is the point. Window
-/// chrome (the inspector's glass, the titlebar section an item owns, and the tab bar
-/// that follows it) only engages for a split view controller that *is* the window's
-/// root, so the contents panel can only confine the tab bar if AppKit sees it as a
-/// real `NSSplitViewItem` in the window's own controller.
-///
-/// `WindowGroup` cannot be talked into this. Adding an item to SwiftUI's split view
-/// controller is reconciled away (issue #34), and replacing a `WindowGroup` window's
-/// `contentViewController` makes SwiftUI destroy the window and open a replacement —
-/// measured at 24 windows in 0.9 s, in
-/// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`. The menu bar
-/// is still SwiftUI's: a `Settings`-only scene keeps `.commands` working, so only
-/// window creation moved to AppKit.
-@MainActor
-final class ReaderWindowController: NSWindowController, NSWindowDelegate {
+  /// One window — which is one tab — and everything in it.
+  ///
+  /// The window is ours from the moment it is made, and that is the point. Window
+  /// chrome (the inspector's glass, the titlebar section an item owns, and the tab bar
+  /// that follows it) only engages for a split view controller that *is* the window's
+  /// root, so the contents panel can only confine the tab bar if AppKit sees it as a
+  /// real `NSSplitViewItem` in the window's own controller.
+  ///
+  /// `WindowGroup` cannot be talked into this. Adding an item to SwiftUI's split view
+  /// controller is reconciled away (issue #34), and replacing a `WindowGroup` window's
+  /// `contentViewController` makes SwiftUI destroy the window and open a replacement —
+  /// measured at 24 windows in 0.9 s, in
+  /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`. The menu bar
+  /// is still SwiftUI's: a `Settings`-only scene keeps `.commands` working, so only
+  /// window creation moved to AppKit.
+  @MainActor
+  final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// This window's own navigation: which document, which filter, what was searched
     /// for, and the back/forward stack that got here. `ContentView` held it as
     /// `@State`, which is what made a tab a tab; now the window holds it, and every
@@ -50,130 +50,130 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// AppKit already keeps this mapping; a registry of our own would only be a
     /// second copy to prune, keyed by an address a later window can be handed again.
     static func controller(for window: NSWindow?) -> ReaderWindowController? {
-        window?.windowController as? ReaderWindowController
+      window?.windowController as? ReaderWindowController
     }
 
     init(library: LibraryModel) {
-        self.library = library
-        let window = ReaderWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        // Everything in this app is the same kind of window, so a new one joins the
-        // front window's tab group rather than opening beside it.
-        window.tabbingIdentifier = "org.rfc-editor.reader"
-        window.tabbingMode = .preferred
-        // No frame autosave name here. It is one name per window, and giving every
-        // window the same one made opening a tab collapse the window from 950 pt tall
-        // to 307 and leave the new tab's split view laid out for the old width. The
-        // first window of the session takes the name, in `AppDelegate`; a tab inherits
-        // its sibling's frame from `addTabbedWindow(_:ordered:)`.
-        super.init(window: window)
-        window.delegate = self
-        build(in: window)
+      self.library = library
+      let window = ReaderWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
+        styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+        backing: .buffered,
+        defer: false
+      )
+      // Everything in this app is the same kind of window, so a new one joins the
+      // front window's tab group rather than opening beside it.
+      window.tabbingIdentifier = "org.rfc-editor.reader"
+      window.tabbingMode = .preferred
+      // No frame autosave name here. It is one name per window, and giving every
+      // window the same one made opening a tab collapse the window from 950 pt tall
+      // to 307 and leave the new tab's split view laid out for the old width. The
+      // first window of the session takes the name, in `AppDelegate`; a tab inherits
+      // its sibling's frame from `addTabbedWindow(_:ordered:)`.
+      super.init(window: window)
+      window.delegate = self
+      build(in: window)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not used: windows are made in code")
+      fatalError("init(coder:) is not used: windows are made in code")
     }
 
     private func build(in window: NSWindow) {
-        let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
-        sidebar.minimumThickness = Self.sidebarMinimum
-        sidebar.maximumThickness = 320
+      let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
+      sidebar.minimumThickness = Self.sidebarMinimum
+      sidebar.maximumThickness = 320
 
-        let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
-        list.minimumThickness = Self.listMinimum
-        listItem = list
+      let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
+      list.minimumThickness = Self.listMinimum
+      listItem = list
 
-        // The panel's width arrives as a right safe-area inset, and honouring it
-        // would take 320 pt off the reader the moment the panel opened — which
-        // re-wraps the text, rebuilds the document and loses the reader's place.
-        // What the panel overlaps, it covers.
-        //
-        // Two layers have to refuse it, because they are two different measurements
-        // of two different things. This one is SwiftUI's: the width `DocumentView`
-        // derives its column from comes from a `GeometryReader` in this hosted root,
-        // and a root that honours the inset reports 919 pt shut and 599 pt open.
-        // Clearing `safeAreaRegions` holds it at 919 both ways — measured, with the
-        // view's own frame unchanged at 919 and the inset still arriving as 320.
-        // `ignoresSafeArea` inside `NavigationSplitView`'s detail column did not do
-        // this; on the hosted root of a split item it does (issue #34).
-        //
-        // It reaches no further down than SwiftUI, though. Underneath, AppKit hands
-        // the same inset to the scroll view, which turns it into content insets the
-        // text view tracks — 1019 → 699 pt there, separately measured. That one is
-        // `ReaderScrollView`'s to refuse.
-        let readerHost = host(ReaderHost())
-        readerHost.safeAreaRegions = []
-        let reader = NSSplitViewItem(viewController: readerHost)
-        // On the *content* item, never on the panel: this is what makes the reader's
-        // frame span the panel and hands the panel's width back as a right safe-area
-        // inset instead of taking the width away. The reader then ignores that inset
-        // in the representable, which is what keeps the text from re-wrapping.
-        reader.automaticallyAdjustsSafeAreaInsets = true
-        // Deliberately no `minimumThickness`. AppKit adds up the minimum thickness of
-        // every uncollapsed item to get the window's own minimum width, and the
-        // inspector counts even though it overlays rather than displaces — so a
-        // 420 pt floor here plus the panel's 320 grew the window from 901 to 1222 pt
-        // the moment the panel opened. Measured. The floor is the window's instead,
-        // below, where the panel is not part of the sum.
-        readerItem = reader
+      // The panel's width arrives as a right safe-area inset, and honouring it
+      // would take 320 pt off the reader the moment the panel opened — which
+      // re-wraps the text, rebuilds the document and loses the reader's place.
+      // What the panel overlaps, it covers.
+      //
+      // Two layers have to refuse it, because they are two different measurements
+      // of two different things. This one is SwiftUI's: the width `DocumentView`
+      // derives its column from comes from a `GeometryReader` in this hosted root,
+      // and a root that honours the inset reports 919 pt shut and 599 pt open.
+      // Clearing `safeAreaRegions` holds it at 919 both ways — measured, with the
+      // view's own frame unchanged at 919 and the inset still arriving as 320.
+      // `ignoresSafeArea` inside `NavigationSplitView`'s detail column did not do
+      // this; on the hosted root of a split item it does (issue #34).
+      //
+      // It reaches no further down than SwiftUI, though. Underneath, AppKit hands
+      // the same inset to the scroll view, which turns it into content insets the
+      // text view tracks — 1019 → 699 pt there, separately measured. That one is
+      // `ReaderScrollView`'s to refuse.
+      let readerHost = host(ReaderHost())
+      readerHost.safeAreaRegions = []
+      let reader = NSSplitViewItem(viewController: readerHost)
+      // On the *content* item, never on the panel: this is what makes the reader's
+      // frame span the panel and hands the panel's width back as a right safe-area
+      // inset instead of taking the width away. The reader then ignores that inset
+      // in the representable, which is what keeps the text from re-wrapping.
+      reader.automaticallyAdjustsSafeAreaInsets = true
+      // Deliberately no `minimumThickness`. AppKit adds up the minimum thickness of
+      // every uncollapsed item to get the window's own minimum width, and the
+      // inspector counts even though it overlays rather than displaces — so a
+      // 420 pt floor here plus the panel's 320 grew the window from 901 to 1222 pt
+      // the moment the panel opened. Measured. The floor is the window's instead,
+      // below, where the panel is not part of the sum.
+      readerItem = reader
 
-        // The glass is the window's business, not the panel's: without this the list
-        // draws its own opaque sidebar background over the inspector and the panel
-        // stops being translucent at all. Applied here rather than inside
-        // `PanelHost`, which iOS presents in a sheet that wants its own background.
-        let panel = NSSplitViewItem(
-            inspectorWithViewController: host(PanelHost().scrollContentBackground(.hidden))
-        )
-        panel.allowsFullHeightLayout = true
-        // The window must not grow when the panel opens. By default an inspector
-        // widens the window by its own thickness to keep its siblings' widths —
-        // measured at 900 → 1222 pt, which re-wraps the text and loses the reader's
-        // place. This keeps the window fixed and lets the siblings take the change;
-        // the reader's own frame spans the panel regardless, so what it loses is
-        // covered, not removed.
-        panel.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
-        panel.minimumThickness = Self.panelWidth
-        panel.maximumThickness = Self.panelWidth
-        panel.isCollapsed = true
-        panelItem = panel
+      // The glass is the window's business, not the panel's: without this the list
+      // draws its own opaque sidebar background over the inspector and the panel
+      // stops being translucent at all. Applied here rather than inside
+      // `PanelHost`, which iOS presents in a sheet that wants its own background.
+      let panel = NSSplitViewItem(
+        inspectorWithViewController: host(PanelHost().scrollContentBackground(.hidden))
+      )
+      panel.allowsFullHeightLayout = true
+      // The window must not grow when the panel opens. By default an inspector
+      // widens the window by its own thickness to keep its siblings' widths —
+      // measured at 900 → 1222 pt, which re-wraps the text and loses the reader's
+      // place. This keeps the window fixed and lets the siblings take the change;
+      // the reader's own frame spans the panel regardless, so what it loses is
+      // covered, not removed.
+      panel.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
+      panel.minimumThickness = Self.panelWidth
+      panel.maximumThickness = Self.panelWidth
+      panel.isCollapsed = true
+      panelItem = panel
 
-        for item in [sidebar, list, reader, panel] {
-            splitController.addSplitViewItem(item)
-        }
+      for item in [sidebar, list, reader, panel] {
+        splitController.addSplitViewItem(item)
+      }
 
-        window.contentViewController = splitController
-        applyMinimumWidth(to: window)
+      window.contentViewController = splitController
+      applyMinimumWidth(to: window)
 
-        let toolbar = ReaderToolbar(controller: self)
-        // The title is capped to the column it sits over, so it has to be told when
-        // that column is dragged.
-        splitController.didResizeSubviews = { [weak self] in self?.toolbar?.capTitleToList() }
-        window.toolbar = toolbar.makeToolbar()
-        window.toolbarStyle = .unified
-        // The title is the toolbar's own item, not AppKit's.
-        //
-        // A window that draws its own title puts it in a block at the start of the
-        // document's toolbar section, and that block expands to fill — measured, it
-        // pushed Back and Forward from 204 pt out to 1199 on a 1500 pt window, with
-        // and without a subtitle. The expanded style gives the title a row of its
-        // own and costs a second row of titlebar; a leading titlebar accessory is
-        // laid out over the sidebar and pushes the sidebar's toggle into the
-        // overflow menu. An ordinary toolbar item is none of those things: it sits
-        // where it is declared and takes the width it needs.
-        window.titleVisibility = .hidden
+      let toolbar = ReaderToolbar(controller: self)
+      // The title is capped to the column it sits over, so it has to be told when
+      // that column is dragged.
+      splitController.didResizeSubviews = { [weak self] in self?.toolbar?.capTitleToList() }
+      window.toolbar = toolbar.makeToolbar()
+      window.toolbarStyle = .unified
+      // The title is the toolbar's own item, not AppKit's.
+      //
+      // A window that draws its own title puts it in a block at the start of the
+      // document's toolbar section, and that block expands to fill — measured, it
+      // pushed Back and Forward from 204 pt out to 1199 on a 1500 pt window, with
+      // and without a subtitle. The expanded style gives the title a row of its
+      // own and costs a second row of titlebar; a leading titlebar accessory is
+      // laid out over the sidebar and pushes the sidebar's toggle into the
+      // overflow menu. An ordinary toolbar item is none of those things: it sits
+      // where it is declared and takes the width it needs.
+      window.titleVisibility = .hidden
 
-        self.toolbar = toolbar
+      self.toolbar = toolbar
 
-        // Takes the link a new tab was opened for, if it was opened for one.
-        library.register(navigation)
-        observeTitle()
-        observeDocument()
+      // Takes the link a new tab was opened for, if it was opened for one.
+      library.register(navigation)
+      observeTitle()
+      observeDocument()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -188,26 +188,27 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// it updates on every section crossing while scrolling — and an erased root
     /// gives SwiftUI nothing to diff against.
     private func host(_ view: some View) -> NSHostingController<some View> {
-        let controller = NSHostingController(
-            rootView: view
-                .environment(library)
-                .environment(navigation)
-                .environment(reader)
-                .modelContainer(AppData.container)
-        )
-        // The hosted view must not size the window. By default a hosting controller
-        // reports its content's preferred size, and as a split view item that reaches
-        // the window: measured, it pinned the window at 219 pt tall and left the
-        // split laid out for a width it no longer had. The window's size is the
-        // window's business; these views fill whatever they are given.
-        controller.sizingOptions = []
-        return controller
+      let controller = NSHostingController(
+        rootView:
+          view
+          .environment(library)
+          .environment(navigation)
+          .environment(reader)
+          .modelContainer(AppData.container)
+      )
+      // The hosted view must not size the window. By default a hosting controller
+      // reports its content's preferred size, and as a split view item that reaches
+      // the window: measured, it pinned the window at 219 pt tall and left the
+      // split laid out for a width it no longer had. The window's size is the
+      // window's business; these views fill whatever they are given.
+      controller.sizingOptions = []
+      return controller
     }
 
     /// How wide the list column is right now. The title drawn over it is capped to
     /// this, and the column is draggable, so it is read rather than remembered.
     var listWidth: CGFloat {
-        listItem.viewController.view.frame.width
+      listItem.viewController.view.frame.width
     }
 
     // MARK: - Title
@@ -218,24 +219,25 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// any more, so the window is titled directly. `withObservationTracking` fires
     /// once, which is why it re-arms itself.
     private func observeTitle() {
-        withObservationTracking {
-            // Still set on the window, because the tab bar reads it from there.
-            let title = navigation.selection?.displayName ?? navigation.filter.title
-            // The prose title, where macOS has room for it — truncated, because a tab
-            // is far narrower than the window and clips rather than eliding.
-            let subtitle = navigation.selection
-                .flatMap { library.metadata($0)?.title }?
-                .truncated(to: Self.subtitleLimit) ?? ""
-            window?.title = title
-            window?.subtitle = subtitle
-            toolbar?.showTitle(title, subtitle: subtitle)
-            // Here because this is already the one place that re-fires when the
-            // selection changes, and the fetch must not be on the toolbar's
-            // validation path; see `isBookmarked`.
-            refreshBookmarked()
-        } onChange: { [weak self] in
-            Task { @MainActor in self?.observeTitle() }
-        }
+      withObservationTracking {
+        // Still set on the window, because the tab bar reads it from there.
+        let title = navigation.selection?.displayName ?? navigation.filter.title
+        // The prose title, where macOS has room for it — truncated, because a tab
+        // is far narrower than the window and clips rather than eliding.
+        let subtitle =
+          navigation.selection
+          .flatMap { library.metadata($0)?.title }?
+          .truncated(to: Self.subtitleLimit) ?? ""
+        window?.title = title
+        window?.subtitle = subtitle
+        toolbar?.showTitle(title, subtitle: subtitle)
+        // Here because this is already the one place that re-fires when the
+        // selection changes, and the fetch must not be on the toolbar's
+        // validation path; see `isBookmarked`.
+        refreshBookmarked()
+      } onChange: { [weak self] in
+        Task { @MainActor in self?.observeTitle() }
+      }
     }
 
     /// Long enough that most RFC titles survive whole, short enough that the series'
@@ -248,7 +250,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// The narrowest the window may be: the two fixed columns plus a readable
     /// measure. Named rather than restated, so dragging a column's floor cannot leave
     /// the window's behind. Nothing here for the panel — deliberately.
-    private static let minimumContentWidth: CGFloat = sidebarMinimum + listMinimum + ReaderLayout.minimumPaneWidth
+    private static let minimumContentWidth: CGFloat =
+      sidebarMinimum + listMinimum + ReaderLayout.minimumPaneWidth
 
     /// Holds the window's minimum *constant* as the panel opens and closes.
     ///
@@ -259,27 +262,27 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// to avoid. Taking the panel's width off the minimum while it is showing leaves
     /// the effective floor where it was, and the window never moves.
     private func applyMinimumWidth(to window: NSWindow) {
-        let panelAllowance = panelItem.isCollapsed ? 0 : Self.panelWidth
-        window.contentMinSize = NSSize(width: Self.minimumContentWidth - panelAllowance, height: 480)
-        // A restored frame is not re-checked against the minimum, so a window saved
-        // narrower than the floor comes back narrower than the floor.
-        var frame = window.frame
-        frame.size.width = max(frame.width, window.contentMinSize.width)
-        frame.size.height = max(frame.height, window.contentMinSize.height)
-        if frame != window.frame { window.setFrame(frame, display: false) }
+      let panelAllowance = panelItem.isCollapsed ? 0 : Self.panelWidth
+      window.contentMinSize = NSSize(width: Self.minimumContentWidth - panelAllowance, height: 480)
+      // A restored frame is not re-checked against the minimum, so a window saved
+      // narrower than the floor comes back narrower than the floor.
+      var frame = window.frame
+      frame.size.width = max(frame.width, window.contentMinSize.width)
+      frame.size.height = max(frame.height, window.contentMinSize.height)
+      if frame != window.frame { window.setFrame(frame, display: false) }
     }
 
     /// Keeps the panel shut while there is nothing for it to describe: an inspector's
     /// glass over a tab with no document in it is a strip of nothing.
     private func observeDocument() {
-        withObservationTracking {
-            _ = reader.hasDocument
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                self?.closePanelWithoutDocument()
-                self?.observeDocument()
-            }
+      withObservationTracking {
+        _ = reader.hasDocument
+      } onChange: { [weak self] in
+        Task { @MainActor in
+          self?.closePanelWithoutDocument()
+          self?.observeDocument()
         }
+      }
     }
 
     /// The same rule, applied from outside for the one case the observation cannot
@@ -296,8 +299,8 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// second later. `AppDelegate` makes it there, which is why nothing here has to
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
-        guard !reader.hasDocument, !panelItem.isCollapsed else { return }
-        panelItem.isCollapsed = true
+      guard !reader.hasDocument, !panelItem.isCollapsed else { return }
+      panelItem.isCollapsed = true
     }
 
     // MARK: - The panel
@@ -306,30 +309,30 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// is what `.inspector` did for the overlay, and an ordinary `isCollapsed`
     /// assignment does not.
     func togglePanel() {
-        NSAnimationContext.runAnimationGroup { context in
-            context.allowsImplicitAnimation = true
-            panelItem.animator().isCollapsed.toggle()
-        }
-        // Before AppKit gets a chance to enforce the old minimum against the new
-        // arrangement.
-        if let window { applyMinimumWidth(to: window) }
+      NSAnimationContext.runAnimationGroup { context in
+        context.allowsImplicitAnimation = true
+        panelItem.animator().isCollapsed.toggle()
+      }
+      // Before AppKit gets a chance to enforce the old minimum against the new
+      // arrangement.
+      if let window { applyMinimumWidth(to: window) }
     }
 
     #if DEBUG
-    /// Called from the debugger when a geometry claim needs re-checking: the reader's
-    /// own frame must not change when the panel opens, and the panel's width must
-    /// come back as a safe-area inset rather than as lost width. The readings this
-    /// produced are written up in
-    /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`.
-    func logGeometry(_ label: String) {
+      /// Called from the debugger when a geometry claim needs re-checking: the reader's
+      /// own frame must not change when the panel opens, and the panel's width must
+      /// come back as a safe-area inset rather than as lost width. The readings this
+      /// produced are written up in
+      /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`.
+      func logGeometry(_ label: String) {
         guard let window else { return }
         let readerView = readerItem.viewController.view
         NSLog(
-            "RFCGEOM \(label) number=\(window.windowNumber) title=\(window.title) window=\(window.frame.width) reader=\(readerView.frame.width) "
-                + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(panelItem.isCollapsed) "
-                + "toolbarItems=\(window.toolbar?.items.count ?? -1)"
+          "RFCGEOM \(label) number=\(window.windowNumber) title=\(window.title) window=\(window.frame.width) reader=\(readerView.frame.width) "
+            + "safeR=\(readerView.safeAreaInsets.right) panelCollapsed=\(panelItem.isCollapsed) "
+            + "toolbarItems=\(window.toolbar?.items.count ?? -1)"
         )
-    }
+      }
     #endif
 
     // MARK: - The document's actions
@@ -344,26 +347,29 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     private(set) var isBookmarked = false
 
     private func refreshBookmarked() {
-        isBookmarked = navigation.selection.map { BookmarkStore.isBookmarked($0, in: AppData.container.mainContext) } ?? false
+      isBookmarked =
+        navigation.selection.map {
+          BookmarkStore.isBookmarked($0, in: AppData.container.mainContext)
+        } ?? false
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
-        guard let id = navigation.selection else { return }
-        let title = DocumentActions.bookmarkTitle(
-            metadata: library.metadata(id),
-            documentTitle: reader.documentTitle,
-            id: id
-        )
-        isBookmarked = BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      guard let id = navigation.selection else { return }
+      let title = DocumentActions.bookmarkTitle(
+        metadata: library.metadata(id),
+        documentTitle: reader.documentTitle,
+        id: id
+      )
+      isBookmarked = BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     }
 
     // MARK: - Lifetime
 
     func windowDidBecomeKey(_ notification: Notification) {
-        ActiveReaderWindow.shared.becameKey(self)
-        placeInitialFocus()
+      ActiveReaderWindow.shared.becameKey(self)
+      placeInitialFocus()
     }
 
     /// Hands the list first responder the first time this window comes up, so the
@@ -372,14 +378,14 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// Once per window rather than once per activation: coming back to the app after
     /// reading should leave focus wherever the reader left it.
     private func placeInitialFocus() {
-        guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
-        hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
+      guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
+      hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
     }
 
     func windowWillClose(_ notification: Notification) {
-        ActiveReaderWindow.shared.willClose(self)
-        library.unregister(navigation)
-        AppDelegate.shared?.forget(self)
+      ActiveReaderWindow.shared.willClose(self)
+      library.unregister(navigation)
+      AppDelegate.shared?.forget(self)
     }
 
     // MARK: - Tabs
@@ -389,45 +395,45 @@ final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// Nothing else answers this now: it was SwiftUI's `WindowGroup` that implemented
     /// it, and there is no `WindowGroup` on macOS any more.
     @objc override func newWindowForTab(_ sender: Any?) {
-        AppDelegate.shared?.openWindow(tabbedWith: self, inBackground: false)
+      AppDelegate.shared?.openWindow(tabbedWith: self, inBackground: false)
     }
-}
+  }
 
-/// Reports a column being dragged, so the toolbar can cap the title to the list it
-/// sits over.
-@MainActor
-final class ReaderSplitViewController: NSSplitViewController {
+  /// Reports a column being dragged, so the toolbar can cap the title to the list it
+  /// sits over.
+  @MainActor
+  final class ReaderSplitViewController: NSSplitViewController {
     var didResizeSubviews: (() -> Void)?
 
     override func splitViewDidResizeSubviews(_ notification: Notification) {
-        super.splitViewDidResizeSubviews(notification)
-        didResizeSubviews?()
+      super.splitViewDidResizeSubviews(notification)
+      didResizeSubviews?()
     }
-}
+  }
 
-/// What the detail column of `NavigationSplitView` used to hold.
-///
-/// The sheet is declared here rather than on the scene, because a presentation has to
-/// be declared by a view that is actually in the window.
-struct ReaderHost: View {
+  /// What the detail column of `NavigationSplitView` used to hold.
+  ///
+  /// The sheet is declared here rather than on the scene, because a presentation has to
+  /// be declared by a view that is actually in the window.
+  struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
 
     var body: some View {
-        @Bindable var navigation = navigation
-        Group {
-            if let selection = navigation.selection {
-                DocumentView(id: selection)
-                    .id(selection)
-            } else {
-                EmptyDetailView()
-            }
+      @Bindable var navigation = navigation
+      Group {
+        if let selection = navigation.selection {
+          DocumentView(id: selection)
+            .id(selection)
+        } else {
+          EmptyDetailView()
         }
-        // Any navigation in this tab makes it the one an untargeted deep link lands in.
-        .onChange(of: navigation.selection) { library.activate(navigation) }
-        .sheet(isPresented: $navigation.isShowingGoToSheet) {
-            GoToDocumentSheet()
-        }
+      }
+      // Any navigation in this tab makes it the one an untargeted deep link lands in.
+      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .sheet(isPresented: $navigation.isShowingGoToSheet) {
+        GoToDocumentSheet()
+      }
     }
-}
+  }
 #endif

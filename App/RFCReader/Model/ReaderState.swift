@@ -17,40 +17,40 @@ import RFCReaderKit
 @Observable
 @MainActor
 final class ReaderState {
-    /// Only the sections the storage actually holds; see `DocumentView.rebuild()`.
-    var sections: [RFCKit.Section] = []
-    var groups: [ReferenceGroup] = []
-    /// Which of the two the panel is showing. Both are ways of navigating the
-    /// document, so they share one panel rather than competing for the toolbar.
-    var tab: InspectorTab = .contents
+  /// Only the sections the storage actually holds; see `DocumentView.rebuild()`.
+  var sections: [RFCKit.Section] = []
+  var groups: [ReferenceGroup] = []
+  /// Which of the two the panel is showing. Both are ways of navigating the
+  /// document, so they share one panel rather than competing for the toolbar.
+  var tab: InspectorTab = .contents
 
-    /// The anchor the reader is looking at: the contents' highlight.
-    var currentAnchor: String?
-    /// The same place as a section number, for the citation and the section link.
-    /// Resolved by `DocumentView`, which has the document — rather than handing the
-    /// document itself to a toolbar item that needs one string from it.
-    var currentSection: String?
+  /// The anchor the reader is looking at: the contents' highlight.
+  var currentAnchor: String?
+  /// The same place as a section number, for the citation and the section link.
+  /// Resolved by `DocumentView`, which has the document — rather than handing the
+  /// document itself to a toolbar item that needs one string from it.
+  var currentSection: String?
 
-    /// Whether there is anything to describe. The panel draws nothing without it.
-    var hasDocument = false
+  /// Whether there is anything to describe. The panel draws nothing without it.
+  var hasDocument = false
 
-    /// The title the document gives itself, for the one caller the index cannot
-    /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
-    /// Here for the same reason `currentSection` is — the toolbar needs one string
-    /// out of a document it is not inside, and handing it the document instead would
-    /// be a far larger thing to share for it.
-    var documentTitle: String?
+  /// The title the document gives itself, for the one caller the index cannot
+  /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
+  /// Here for the same reason `currentSection` is — the toolbar needs one string
+  /// out of a document it is not inside, and handing it the document instead would
+  /// be a far larger thing to share for it.
+  var documentTitle: String?
 
-    /// The 72-column original instead of the rendered document. Toolbar state, read
-    /// by the reader.
-    var showOriginal = false
+  /// The 72-column original instead of the rendered document. Toolbar state, read
+  /// by the reader.
+  var showOriginal = false
 
-    func clear() {
-        sections = []
-        groups = []
-        currentAnchor = nil
-        currentSection = nil
-        hasDocument = false
-        documentTitle = nil
-    }
+  func clear() {
+    sections = []
+    groups = []
+    currentAnchor = nil
+    currentSection = nil
+    hasDocument = false
+    documentTitle = nil
+  }
 }
