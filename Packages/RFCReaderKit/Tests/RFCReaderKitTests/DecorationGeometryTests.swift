@@ -91,13 +91,13 @@ struct DecorationGeometryTests {
   }
 
   @Test func theColumnLeftIgnoresHowWideTheFragmentIs() {
-    let a = FragmentGeometry.Placement(
+    let narrow = FragmentGeometry.Placement(
       origin: CGPoint(x: 24, y: 0), frame: narrowLine, containerWidth: column, indent: 0
     ).columnLeft
-    let b = FragmentGeometry.Placement(
+    let wide = FragmentGeometry.Placement(
       origin: CGPoint(x: 24, y: 0), frame: wideLine, containerWidth: column, indent: 0
     ).columnLeft
-    #expect(a == b)
+    #expect(narrow == wide)
   }
 
   /// A block that mixes indents -- an authors' block alternating affiliation and

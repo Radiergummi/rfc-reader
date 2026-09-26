@@ -127,8 +127,8 @@ final class XMLTreeBuilder: NSObject, XMLParserDelegate {
     pendingText.append(string)
   }
 
-  func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
-    pendingText.append(String(decoding: CDATABlock, as: UTF8.self))
+  func parser(_ parser: XMLParser, foundCDATA cdataBlock: Data) {
+    pendingText.append(String(decoding: cdataBlock, as: UTF8.self))
   }
 
   func parser(_ parser: XMLParser, parseErrorOccurred parseError: any Error) {

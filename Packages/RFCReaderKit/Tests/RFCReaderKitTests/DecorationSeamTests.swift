@@ -113,8 +113,8 @@ struct DecorationSeamTests {
   @Test(arguments: [1, 2] as [CGFloat], LayerGrid.allCases)
   func aJoinMovesByAtMostHalfADevicePixel(scale: CGFloat, grid: LayerGrid) {
     for origins in LayerOrigin.allCases {
-      for (index, card) in cards(scale: scale, grid: grid, origins: origins).enumerated().dropLast()
-      {
+      let drawn = cards(scale: scale, grid: grid, origins: origins)
+      for (index, card) in drawn.enumerated().dropLast() {
         let exact = fragmentTops[index] + advance
         #expect(abs(card.maxY - exact) <= 0.5 / scale + 1e-6)
       }

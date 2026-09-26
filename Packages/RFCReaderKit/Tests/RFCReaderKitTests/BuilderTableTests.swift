@@ -44,8 +44,10 @@ struct BuilderTableTests {
   }
 
   /// The production path: measure the columns, then let the widths decide.
-  private func shape(_ table: RFCKit.Table, measure: CGFloat = ReadingStyle().measure) -> TableShape
-  {
+  private func shape(
+    _ table: RFCKit.Table,
+    measure: CGFloat = ReadingStyle().measure
+  ) -> TableShape {
     let builder = DocumentTextBuilder(style: ReadingStyle(measure: measure))
     return builder.tableShape(widths: builder.naturalColumnWidths(table))
   }

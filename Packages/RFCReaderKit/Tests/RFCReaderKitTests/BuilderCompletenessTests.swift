@@ -156,8 +156,14 @@ struct BuilderCompletenessTests {
           if let anchor = figure.anchor { expected.insert(anchor) }
           visit(figure.blocks)
         case .table(let table): if let anchor = table.anchor { expected.insert(anchor) }
-        case .list(let list): list.items.forEach { visit($0.blocks) }
-        case .definitionList(let items): items.forEach { visit($0.definition) }
+        case .list(let list):
+          for item in list.items {
+            visit(item.blocks)
+          }
+        case .definitionList(let items):
+          for item in items {
+            visit(item.definition)
+          }
         case .blockQuote(let inner), .aside(let inner): visit(inner)
         // Bibliography entries are not in the body; they are the panel's.
         case .references: break
