@@ -221,9 +221,16 @@ extension DocumentTextBuilder {
     }
   }
 
+  /// How many characters of an author's `<t indent>` make one of our indent steps.
+  /// Three is the width RFCXML hangs a list item's text at, and a list's text sits
+  /// one step in, so a note set in by three under a list lines up with the items'
+  /// text here the way it does in the 72-column rendering.
+  static let charactersPerIndentStep = 3
+
   func appendParagraph(_ paragraph: Paragraph, indent: CGFloat) {
     mark(paragraph.anchor)
-    let attributes = bodyAttributes(indent: indent)
+    let authoredSteps = CGFloat(paragraph.indent) / CGFloat(Self.charactersPerIndentStep)
+    let attributes = bodyAttributes(indent: indent + authoredSteps * style.indentStep)
     output.append(inlineRuns(paragraph.inlines, base: attributes))
     append("\n", attributes)
   }

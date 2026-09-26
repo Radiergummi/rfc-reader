@@ -137,6 +137,8 @@ public struct RFCXMLParser: Sendable {
       header.updates = parseDocumentList(rfc["updates"])
       header.category = rfc["category"].flatMap(categoryName)
       header.draftName = rfc["docName"]
+      header.precedingDraft = rfc.all("link").first { $0["rel"] == "prev" }?["href"]
+        .flatMap(URL.init(string:))
       return header
     }
 
@@ -248,7 +250,7 @@ public struct RFCXMLParser: Sendable {
       for child in element.elements {
         switch child.name {
         case "reference":
-          entries.append(Self.parseReference(child))
+          entries.append(parseReference(child))
         case "referencegroup":
           entries.append(Self.parseReferenceGroup(child))
         case "references":
@@ -269,6 +271,17 @@ public struct RFCXMLParser: Sendable {
       )
     }
 
+    func parseReference(_ element: XMLElement) -> Reference {
+      var reference = Self.parseReference(element)
+      if let annotation = element.first("annotation") {
+        reference.annotation = normalize(parseInlines(annotation.children))
+      }
+      return reference
+    }
+
+    /// Everything about an entry that is not prose. Static because
+    /// `referenceTargets(in:)` needs it before there is a builder to link prose
+    /// with; the annotation, which is prose, is read by the instance method.
     static func parseReference(_ element: XMLElement) -> Reference {
       let front = element.first("front")
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
@@ -366,7 +379,12 @@ public struct RFCXMLParser: Sendable {
       case "t":
         let inlines = normalize(parseInlines(element.children))
         guard !inlines.isEmpty else { return nil }
-        return .paragraph(Paragraph(inlines, anchor: element["anchor"] ?? element["pn"]))
+        return .paragraph(
+          Paragraph(
+            inlines,
+            anchor: element["anchor"] ?? element["pn"],
+            indent: element["indent"].flatMap(Int.init).map { max($0, 0) } ?? 0
+          ))
       case "ul":
         let style: ListBlock.Style = element["empty"] == "true" ? .bare : .bullet
         return .list(

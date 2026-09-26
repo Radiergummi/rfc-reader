@@ -56,6 +56,9 @@ public struct RFCXMLSerializer: Sendable {
     rfcAttributes.append(("xml:lang", "en"))
 
     writer.open("rfc", rfcAttributes)
+    if let draft = document.header.precedingDraft {
+      writer.empty("link", [("href", draft.absoluteString), ("rel", "prev")])
+    }
     if let source = options.sourceURL {
       writer.empty("link", [("href", source.absoluteString), ("rel", "alternate")])
     }
@@ -160,7 +163,9 @@ public struct RFCXMLSerializer: Sendable {
           "dropped non-reference block in references section \(section.anchor)")
         continue
       }
-      for reference in list.entries { writeReference(reference, writer: &writer) }
+      for reference in list.entries {
+        writeReference(reference, writer: &writer, context: &context)
+      }
     }
     for subsection in section.subsections {
       writeReferences(subsection, writer: &writer, context: &context)
@@ -168,7 +173,9 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("references")
   }
 
-  private func writeReference(_ reference: Reference, writer: inout Writer) {
+  private func writeReference(
+    _ reference: Reference, writer: inout Writer, context: inout Context
+  ) {
     var attributes: [(String, String)] = [("anchor", reference.anchor)]
     if let url = reference.url { attributes.append(("target", url.absoluteString)) }
     if reference.displayAnchor != reference.anchor {
@@ -201,6 +208,10 @@ public struct RFCXMLSerializer: Sendable {
     if let raw = reference.rawText, !reference.title.isEmpty {
       writer.element("refcontent", text: raw)
     }
+    if !reference.annotation.isEmpty {
+      writer.line(
+        "<annotation>\(inlineXML(reference.annotation, context: &context))</annotation>")
+    }
     writer.close("reference")
   }
 
@@ -211,6 +222,7 @@ public struct RFCXMLSerializer: Sendable {
     case .paragraph(let paragraph):
       var attributes: [(String, String)] = []
       if let anchor = paragraph.anchor { attributes.append(("pn", anchor)) }
+      if paragraph.indent > 0 { attributes.append(("indent", String(paragraph.indent))) }
       writer.line(
         "<t\(Writer.attributeString(attributes))>\(inlineXML(paragraph.inlines, context: &context))</t>"
       )
@@ -303,7 +315,9 @@ public struct RFCXMLSerializer: Sendable {
       // A reference list outside a references section: wrap it so it stays valid.
       writer.open("references", [("anchor", "refs-\(context.nextAutoAnchor())")])
       writer.element("name", text: list.title)
-      for reference in list.entries { writeReference(reference, writer: &writer) }
+      for reference in list.entries {
+        writeReference(reference, writer: &writer, context: &context)
+      }
       writer.close("references")
     }
   }

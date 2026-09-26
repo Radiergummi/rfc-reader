@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import RFCKit
 import RFCReaderKit
@@ -41,6 +42,10 @@ final class ReaderState {
   /// be a far larger thing to share for it.
   var documentTitle: String?
 
+  /// The Internet-Draft the document was published from, for the More menu. Here
+  /// for the same reason `documentTitle` is.
+  var precedingDraft: URL?
+
   /// The 72-column original instead of the rendered document. Toolbar state, read
   /// by the reader.
   var showOriginal = false
@@ -52,5 +57,6 @@ final class ReaderState {
     currentSection = nil
     hasDocument = false
     documentTitle = nil
+    precedingDraft = nil
   }
 }

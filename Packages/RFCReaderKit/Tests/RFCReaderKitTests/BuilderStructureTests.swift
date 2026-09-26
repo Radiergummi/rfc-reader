@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Builder: document structure")
 @MainActor
 struct BuilderStructureTests {
@@ -316,5 +322,51 @@ struct BuilderStructureTests {
       "a parent of bibliography subsections goes too")
     #expect(
       !DocumentTextBuilder.holdsOnlyReferences(empty), "an empty section is not a bibliography")
+  }
+
+  private func paragraphStyle(of needle: String, in built: BuiltDocument) throws
+    -> NSParagraphStyle
+  {
+    let offset = try Fixtures.offset(of: needle, in: built.text)
+    return try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+  }
+
+  /// `<t indent="3">` is three characters of the 72-column rendering, which is the
+  /// width RFCXML hangs a list item's text at -- so it is one of our indent steps,
+  /// and a note under a list lines up with the items' text the way it does on paper.
+  /// The whole paragraph moves in, not only its first line.
+  @Test func anIndentedParagraphIsSetInByWholeSteps() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "flush")),
+      .paragraph(Paragraph(text: "one step", indent: 3)),
+      .paragraph(Paragraph(text: "two steps", indent: 6))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let flush = try paragraphStyle(of: "flush", in: built)
+    #expect(flush.headIndent == 0)
+
+    let oneStep = try paragraphStyle(of: "one step", in: built)
+    #expect(oneStep.headIndent == style.indentStep)
+    #expect(oneStep.firstLineHeadIndent == style.indentStep)
+
+    let twoSteps = try paragraphStyle(of: "two steps", in: built)
+    #expect(twoSteps.headIndent == style.indentStep * 2)
+    #expect(twoSteps.firstLineHeadIndent == style.indentStep * 2)
+  }
+
+  /// The author's indent is relative to wherever the paragraph already sits.
+  @Test func anIndentedParagraphInAListIsSetInFromTheItemsText() throws {
+    let item = ListItem(blocks: [
+      .paragraph(Paragraph(text: "item")),
+      .paragraph(Paragraph(text: "note", indent: 3)),
+    ])
+    let document = Fixtures.document(.list(ListBlock(style: .bullet, items: [item])))
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let itemText = try paragraphStyle(of: "item", in: built)
+    let note = try paragraphStyle(of: "note", in: built)
+    #expect(note.headIndent == itemText.headIndent + style.indentStep)
   }
 }
