@@ -392,18 +392,46 @@ public struct LegacyTextParser: Sendable {
     /// the colon form counts only where none of its numbers is also the number of a `1.`
     /// heading. In 2301, 2626 and 705 some are; in the eight that number headings with a
     /// colon, none is.
+    ///
+    /// That alone passes a document with a single colon number and nothing to repeat:
+    /// RFC 526's agenda sets a time as `11: 00   Group discussion continuation`, and it
+    /// is no heading there only because the line after it is not blank. So each colon
+    /// number also has to follow from one: the number before it (`2.4.11` for `2.4.12`,
+    /// `10` for `11`) or one it is under (`2.4`) must be a heading number too, however it
+    /// is set. Only `0` and `1` open a numbering on their own.
     private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
+        numbersHeadingsWithAColon(lines.compactMap { line in
+            guard case .text(let string) = line else { return nil }
+            return string
+        })
+    }
+
+    static func numbersHeadingsWithAColon(_ lines: [String]) -> Bool {
         var colonNumbers: Set<Substring> = []
         var fullStopNumbers: Set<Substring> = []
-        for case .text(let string) in lines where string.startsAtColumnZero {
+        var numbers: Set<Substring> = []
+        for string in lines where string.startsAtColumnZero {
             guard let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+            numbers.insert(match.number)
             switch match.separator {
             case ":": colonNumbers.insert(match.number)
             case ".": fullStopNumbers.insert(match.number)
             default: break
             }
         }
-        return !colonNumbers.isEmpty && colonNumbers.isDisjoint(with: fullStopNumbers)
+        guard !colonNumbers.isEmpty, colonNumbers.isDisjoint(with: fullStopNumbers) else { return false }
+        return colonNumbers.allSatisfy { follows($0, in: numbers) }
+    }
+
+    /// Whether heading `number` follows from one of `numbers`: the one before it at its
+    /// own level, or any it is under. RFC 2130 skips a level, `3.1:` to `3.1.1.1:`, and
+    /// RFC 1309 numbers `2  MODELS` with no separator before `3: THE X.500 MODEL`.
+    private static func follows(_ number: Substring, in numbers: Set<Substring>) -> Bool {
+        var parts = number.split(separator: ".")
+        guard let last = parts.popLast().flatMap({ Int($0) }) else { return false }
+        if parts.isEmpty, last <= 1 { return true }
+        if last >= 1, numbers.contains(Substring((parts + ["\(last - 1)"]).joined(separator: "."))) { return true }
+        return parts.indices.contains { numbers.contains(Substring(parts[...$0].joined(separator: "."))) }
     }
 
     /// Splits the body into raw sections at column-0 headings, and each section into
