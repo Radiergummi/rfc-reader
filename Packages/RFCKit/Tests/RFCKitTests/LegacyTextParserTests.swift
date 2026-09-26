@@ -611,6 +611,45 @@ struct LegacyTextCorpusFindingsTests {
     #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
   }
 
+  /// Since the front matter ends at the first paragraph (#74), whatever the title page
+  /// leaves between it and the body reaches the lead-in, and is taken out of it by what
+  /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
+  /// after its title; RFC 757's phone number; RFC 1441's centred `Status of this Memo`
+  /// and its paragraph, and its contents. The body after them stays.
+  @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
+    func leadIn(_ fixture: String) throws -> [Block] {
+      LegacyTextParser.parse(try Fixtures.string(fixture)).sections.first {
+        $0.anchor == "preamble"
+      }?.blocks ?? []
+    }
+    func text(_ block: Block) -> String {
+      switch block {
+      case .paragraph(let paragraph): paragraph.plainText
+      case .preformatted(let artwork): artwork.text
+      case .list(let list):
+        list.items.flatMap(\.blocks).map(text).joined(separator: "\n")
+      default: ""
+      }
+    }
+
+    let procedureCall = try leadIn("rfc674.txt").map(text)
+    #expect(!procedureCall.contains { $0.contains("Request for Comments 674") })
+    #expect(!procedureCall.contains("1"))
+    #expect(procedureCall.first?.hasPrefix("Procedure Call Protocol Documents") == true)
+    #expect(procedureCall.contains { $0.hasPrefix("As many of you may know SRI") })
+
+    #expect(try leadIn("rfc757.txt").isEmpty, "a phone number alone is not a lead-in")
+
+    let management = try leadIn("rfc1441.txt").map(text)
+    #expect(!management.contains { $0.localizedCaseInsensitiveContains("status of this memo") })
+    #expect(!management.contains { $0.contains("requests discussion and suggestions") })
+    #expect(!management.contains { $0.contains("Table of Contents") || $0.contains("......") })
+    #expect(
+      management.contains {
+        $0.hasPrefix("The purpose of this document is to provide an overview of version 2")
+      })
+  }
+
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
   /// specification as an appendix, abstract and all, and each `Abstract` heading was
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
@@ -1198,6 +1237,39 @@ struct LegacyTextCorpusFindingsTests {
         // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
         == "The current ARPAnet message handling scheme has evolved from rather informal, decentralized beginnings. Early developers took advantage of pre-existing tools -- TECO, FTP -- in order to implement their first systems. Later, protocols were developed to codify the conventions already in use. While these conventions have been able to support an amazing variety and amount of service, they have a number of shortcomings."
     )
+  }
+
+  /// The prose cap was six columns everywhere: a body at column 3, plus three. RFC 1178
+  /// sets its headings at 6 and its body at 9, so every paragraph it has failed the cap
+  /// and was kept as artwork, and none of it was linked (#55). The cap follows the
+  /// body now, and nothing in the document is artwork.
+  @Test func aBodySetDeeperThanColumnThreeIsStillProse() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1178.txt"))
+    #expect(document.artworkText.isEmpty, "\(document.artworkText.count) blocks kept as artwork")
+    #expect(
+      document.paragraphs.contains {
+        $0.plainText.hasPrefix(
+          "Using a word that has strong semantic implications in the current context will cause confusion."
+        )
+      })
+  }
+
+  /// A paragraph cut by a page break is rejoined when the next page opens lower case,
+  /// as the rest of a sentence does. An `o` bullet opens lower case too: RFC 1581's
+  /// `it is assumed that:` ends a page, the list under it starts the next, and its
+  /// first item was read into the sentence as `that: o The most recently ...`.
+  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1581.txt"))
+    #expect(
+      document.paragraphs.contains {
+        $0.plainText.hasSuffix(
+          "if no routing information is (being) received on a circuit it is assumed that:")
+      })
+    #expect(
+      document.lists.contains {
+        guard case .paragraph(let first)? = $0.items.first?.blocks.first else { return false }
+        return first.plainText == "The most recently received information is accurate."
+      })
   }
 
   @Test func overstrikesAndControlBytesAreRemoved() {

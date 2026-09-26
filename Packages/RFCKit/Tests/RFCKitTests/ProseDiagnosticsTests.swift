@@ -35,6 +35,21 @@ struct ProseDiagnosticsTests {
     #expect(diagnosis.indent == 7, "one column past the limit, which is what makes it a near miss")
   }
 
+  /// Past the classic cap of six, a document whose body sits deeper excuses the indent
+  /// (#55) -- for sentences only. The same document sets its one-line code at that
+  /// depth, and a single line has no other guard to keep it artwork.
+  @Test func aDeeperCapExcusesSentencesButNotCode() {
+    let sentences = [
+      "         Using a word that has strong semantic implications in the",
+      "         current context will cause confusion.",
+    ]
+    #expect(LegacyTextParser.diagnose(sentences).rejections == [.indentTooDeep])
+    #expect(LegacyTextParser.diagnose(sentences, maxIndent: 12).isProse)
+
+    let code = ["         ::= { ifMauEntry 4 }"]
+    #expect(LegacyTextParser.diagnose(code, maxIndent: 12).rejections == [.indentTooDeep])
+  }
+
   @Test func firstLineIndentOutOfRangeIsDistinctFromIndent() {
     let lines = [
       "                The opening line is set far too deep relative to the body",
