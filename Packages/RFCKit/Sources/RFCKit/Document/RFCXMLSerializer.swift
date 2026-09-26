@@ -130,7 +130,13 @@ public struct RFCXMLSerializer: Sendable {
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
       if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
-      writer.empty("author", attributes)
+      if let contact = author.contact {
+        writer.open("author", attributes)
+        writeContact(contact, writer: &writer)
+        writer.close("author")
+      } else {
+        writer.empty("author", attributes)
+      }
     }
     // RFCXML requires `author+`, and `<author/>` satisfies the schema; the parser reads
     // it back as no author at all. Unlike a reference's, a document's own front always
@@ -153,6 +159,41 @@ public struct RFCXMLSerializer: Sendable {
       writer.close("abstract")
     }
     writer.close("front")
+  }
+
+  /// In the schema's order: `organization`, then `address` holding `postal`,
+  /// `phone`, `facsimile`, each `email` and `uri`.
+  private func writeContact(_ contact: AuthorContact, writer: inout Writer) {
+    if let organization = contact.organization {
+      writer.element("organization", text: organization)
+    }
+    let hasAddress =
+      contact.postal != nil || contact.phone != nil || contact.facsimile != nil
+      || !contact.emails.isEmpty || contact.uri != nil
+    guard hasAddress else { return }
+    writer.open("address")
+    if let postal = contact.postal {
+      writer.open("postal")
+      // The schema's choice: the author's lines, or the fields, never both.
+      if postal.postalLines.isEmpty {
+        for street in postal.street { writer.element("street", text: street) }
+        for line in postal.extendedAddress { writer.element("extaddr", text: line) }
+        let fields = [
+          ("pobox", postal.postOfficeBox), ("cityarea", postal.cityArea), ("city", postal.city),
+          ("region", postal.region), ("code", postal.code), ("sortingcode", postal.sortingCode),
+          ("country", postal.country),
+        ]
+        for case (let name, let value?) in fields { writer.element(name, text: value) }
+      } else {
+        for line in postal.postalLines { writer.element("postalLine", text: line) }
+      }
+      writer.close("postal")
+    }
+    if let phone = contact.phone { writer.element("phone", text: phone) }
+    if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
+    for email in contact.emails { writer.element("email", text: email) }
+    if let uri = contact.uri { writer.element("uri", text: uri) }
+    writer.close("address")
   }
 
   // MARK: - Sections

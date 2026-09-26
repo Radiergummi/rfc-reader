@@ -3,8 +3,8 @@ import Testing
 
 @testable import RFCKit
 
-/// `<u>` spelled out (issue #63). Through the parser, RFC 8771 and RFC 9682 are
-/// checked against the RFC Editor's own plain-text renderings of them. At the
+/// `<u>` spelled out (issue #63). Through the parser, RFC 8771, RFC 9682 and RFC
+/// 9290 are checked against the RFC Editor's own plain-text renderings of them. At the
 /// guard, `UnicodeNotation.expand` is a pure function of one element's text and
 /// attributes, so those tests hand it exactly that: the formats the prepped corpus
 /// uses (`lit-name-num` 34 times, then `num-name`, `num-lit-name`, `num-name-lit`
@@ -39,6 +39,19 @@ struct UnicodeNotationTests {
         "no need to escape the \"🁳\" (DOMINO TILE VERTICAL-02-02, U+1F073) or \"⌘\" (PLACE OF INTEREST SIGN, U+2318); however"
       ))
     #expect(paragraph.inlines.contains(.code("🁳")), "the literal is set apart from the prose")
+  }
+
+  /// The case #63 was filed for: RFC 9290 spells out the four letters of a
+  /// Hebrew word, and the reader showed only the letters.
+  @Test func rfc9290SpellsOutEachLetter() throws {
+    let paragraph = try #require(
+      try Self.paragraphs(in: "rfc9290.xml").first {
+        $0.plainText.contains("the sequence of characters is")
+      })
+    #expect(
+      paragraph.plainText.contains(
+        "the sequence of characters is: \"ש\" (HEBREW LETTER SHIN, U+05E9), \"ל\" (HEBREW LETTER LAMED, U+05DC), \"ו\" (HEBREW LETTER VAV, U+05D5), \"ם\" (HEBREW LETTER FINAL MEM, U+05DD). Note"
+      ))
   }
 
   @Test func aNumberAloneReplacesTheCharacter() throws {

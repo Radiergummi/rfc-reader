@@ -176,7 +176,49 @@ public struct RFCXMLParser: Sendable {
       }
       guard let name, !name.isEmpty else { return nil }
       let role = element["role"] == "editor" ? "Editor" : nil
-      return Author(name: name, role: role)
+      return Author(name: name, role: role, contact: parseContact(element))
+    }
+
+    /// `<organization>` and `<address>`, when the author has either. Every element
+    /// is optional in the schema, and empty ones are common in the published
+    /// series (`<organization/>`), so an empty one counts as absent.
+    private static func parseContact(_ element: XMLElement) -> AuthorContact? {
+      let address = element.first("address")
+      let contact = AuthorContact(
+        organization: nonEmpty(element.first("organization")),
+        postal: address?.first("postal").flatMap(parsePostal),
+        phone: nonEmpty(address?.first("phone")),
+        facsimile: nonEmpty(address?.first("facsimile")),
+        emails: (address?.all("email") ?? []).compactMap(nonEmpty),
+        uri: nonEmpty(address?.first("uri"))
+      )
+      return contact.isEmpty ? nil : contact
+    }
+
+    /// Structured fields where the author gave them, or the author's own lines.
+    /// A field given twice is given once and left empty once in the published
+    /// series (RFC 9269's `<city/><city>Munich</city>`), so the first with text
+    /// is the one kept.
+    private static func parsePostal(_ element: XMLElement) -> PostalAddress? {
+      func values(_ name: String) -> [String] { element.all(name).compactMap(nonEmpty) }
+      let postal = PostalAddress(
+        street: values("street"),
+        extendedAddress: values("extaddr"),
+        postOfficeBox: values("pobox").first,
+        cityArea: values("cityarea").first,
+        city: values("city").first,
+        region: values("region").first,
+        code: values("code").first,
+        sortingCode: values("sortingcode").first,
+        country: values("country").first,
+        postalLines: values("postalLine")
+      )
+      return postal.lines.isEmpty ? nil : postal
+    }
+
+    private static func nonEmpty(_ element: XMLElement?) -> String? {
+      guard let text = element?.normalizedText, !text.isEmpty else { return nil }
+      return text
     }
 
     private static func parseDate(_ element: XMLElement) -> PublicationDate? {
@@ -332,6 +374,13 @@ public struct RFCXMLParser: Sendable {
       "spanx", "cref", "iref", "contact", "relref",
     ]
 
+    /// `<contact>` is inline in prose ("thanks to <contact fullname=…/>") and a
+    /// block of its own directly in a section, where a Contributors section lists
+    /// people with their addresses. The schema allows it as a block nowhere else.
+    private static func isBlockContact(_ child: XMLElement, in parent: XMLElement) -> Bool {
+      child.name == "contact" && parent.name == "section"
+    }
+
     /// Converts the children of a container element into blocks. Runs of loose text
     /// and inline elements (as found inside `<li>` or `<dd>`) become implicit paragraphs.
     func parseBlocks(in element: XMLElement) -> [Block] {
@@ -352,7 +401,7 @@ public struct RFCXMLParser: Sendable {
         case .text:
           pendingInline.append(node)
         case .element(let child):
-          if Self.inlineElements.contains(child.name) {
+          if Self.inlineElements.contains(child.name), !Self.isBlockContact(child, in: element) {
             pendingInline.append(node)
             continue
           }
@@ -430,15 +479,33 @@ public struct RFCXMLParser: Sendable {
         return .blockQuote(parseBlocks(in: element))
       case "aside":
         return .aside(parseBlocks(in: element))
+      case "author", "contact":
+        // Prep's "Authors' Addresses" section is made of `<author>`s, and a
+        // Contributors section of `<contact>`s, which the schema gives the same
+        // content. Read as the person's details, one paragraph each, rather than as
+        // unknown containers, which nested an aside per level of
+        // `<author><address><postal>` (#113).
+        return Self.parseAuthor(element).map {
+          .paragraph(Paragraph(RFCXMLParser.addressInlines($0)))
+        }
       case "name", "section", "references", "toc", "boilerplate":
         return nil
       case "texttable", "list", "vspace", "preamble", "postamble", "ttcol", "c":
         // RFCXML v2 leftovers; the prepped RFC Editor output does not contain them.
         return nil
       default:
-        // Unknown container: keep its content rather than dropping text.
+        // Unknown container: keep its content rather than dropping text, and set
+        // more than one block apart as an aside. That aside is the parser's, so an
+        // aside inside it is spliced in, because an aside may not hold another
+        // (#113); content that is a single block, an authored aside too, is kept
+        // as it is.
         let blocks = parseBlocks(in: element)
-        return blocks.count == 1 ? blocks[0] : (blocks.isEmpty ? nil : .aside(blocks))
+        guard blocks.count > 1 else { return blocks.first }
+        return .aside(
+          blocks.flatMap { block -> [Block] in
+            if case .aside(let inner) = block { return inner }
+            return [block]
+          })
       }
     }
 
@@ -672,5 +739,51 @@ public struct RFCXMLParser: Sendable {
       }
       return result
     }
+  }
+}
+
+extension RFCXMLParser {
+  /// An author as the RFC Editor's rendering of an Authors' Addresses entry
+  /// sets it, one detail per line, with the email and web addresses as links.
+  static func addressInlines(_ author: Author) -> [Inline] {
+    var lines: [[Inline]] = [
+      [.text(author.role == "Editor" ? "\(author.name) (editor)" : author.name)]
+    ]
+    if let contact = author.contact {
+      // An organization's own entry names it already: `parseAuthor` falls back to
+      // the organization for a name when there is no person's.
+      if let organization = contact.organization, organization != author.name {
+        lines.append([.text(organization)])
+      }
+      for line in contact.postal?.lines ?? [] { lines.append([.text(line)]) }
+      if let phone = contact.phone { lines.append([.text("Phone: \(phone)")]) }
+      if let facsimile = contact.facsimile { lines.append([.text("Fax: \(facsimile)")]) }
+      for email in contact.emails {
+        lines.append([.text("Email: "), link(mailto(email), email)])
+      }
+      // A URI without a scheme (RFC 9517's `ddialliance.org`) would be a relative
+      // link, to nowhere; it and one `URL` cannot read are shown as written.
+      if let uri = contact.uri {
+        lines.append([
+          .text("URI: "), link(URL(string: uri).flatMap { $0.scheme == nil ? nil : $0 }, uri),
+        ])
+      }
+    }
+    return Array(lines.joined(separator: [Inline.lineBreak]))
+  }
+
+  private static func link(_ url: URL?, _ text: String) -> Inline {
+    url.map { .link($0, [.text(text)]) } ?? .text(text)
+  }
+
+  /// A `mailto:` URL for an address as written. The address is the URL's path,
+  /// so the characters a path may not hold are escaped: an address with a `?`,
+  /// `#` or `%` in it would otherwise begin a query or a fragment, or be read as
+  /// an escape, and link somewhere else.
+  static func mailto(_ address: String) -> URL? {
+    var components = URLComponents()
+    components.scheme = "mailto"
+    components.path = address
+    return components.url
   }
 }
