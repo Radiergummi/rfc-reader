@@ -186,6 +186,28 @@ struct RFCXMLSerializerCorpusFindingsTests {
         })
     }
 
+    /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
+    /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
+    /// anchor is the part number for every numbered section, so it is written once, as the
+    /// `pn` the published series always carries, and read back from there.
+    @Test func anAnchorThatIsThePartNumberIsWrittenOnce() throws {
+        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+        #expect(parsed.allSections.contains { $0.anchor == "section-1" })
+        let xml = RFCXMLSerializer().serialize(parsed)
+        // Per tag, whichever order the two attributes come in.
+        let repeated = xml.matches(of: #/<[a-z]+\s[^>]*>/#).compactMap { tag -> String? in
+            let anchor = tag.output.firstMatch(of: #/\banchor="([^"]*)"/#)?.1
+            return anchor != nil && anchor == tag.output.firstMatch(of: #/\bpn="([^"]*)"/#)?.1 ? String(tag.output) : nil
+        }
+        #expect(repeated.isEmpty, "\(repeated)")
+        // The anchor reads back from the `pn`, and the number and kind the `pn` also carries
+        // still read back from it.
+        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+        #expect(reparsed.allSections.map(\.anchor) == parsed.allSections.map(\.anchor))
+        #expect(reparsed.allSections.map(\.number) == parsed.allSections.map(\.number))
+        #expect(reparsed.allSections.map(\.isAppendix) == parsed.allSections.map(\.isAppendix))
+    }
+
     @Test func controlCharactersNeverReachTheXML() throws {
         let document = RFCDocument(
             header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
