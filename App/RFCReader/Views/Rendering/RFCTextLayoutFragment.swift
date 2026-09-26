@@ -12,7 +12,7 @@ import AppKit
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
 final class RFCTextLayoutFragment: NSTextLayoutFragment {
-    static let cardPadding: CGFloat = 10
+    static let cardPadding = FragmentGeometry.cardPadding
     static let rulePadding: CGFloat = 8
     static let ruleWidth: CGFloat = 3
 
@@ -29,7 +29,10 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
         var bounds = super.renderingSurfaceBounds
         if let span = decorationSpan {
             let placement = placement(at: .zero, span: span)
-            bounds = bounds.union(placement.decorationRect(padding: Self.cardPadding, capTop: true, capBottom: true))
+            // A point of slack above and below: a join snapped onto the pixel grid can
+            // move outwards by up to half a pixel.
+            let card = placement.decorationRect(padding: Self.cardPadding, capTop: true, capBottom: true)
+            bounds = bounds.union(card.insetBy(dx: 0, dy: -1))
             if span.decoration == .blockQuote {
                 // A point of slack on each side: the rule is drawn with rounded ends,
                 // and antialiasing puts ink just outside the rect it is filled from.
@@ -134,14 +137,17 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
 
     /// The card's outer padding is only added on the run's own top and/or bottom
-    /// edge — a middle fragment sits flush against its neighbours, so consecutive
+    /// edge, and not even there where the run meets another card (`Placement.cardRect`)
+    /// — a middle fragment sits flush against its neighbours, so consecutive
     /// fragments' cards tile into one continuous band instead of overlapping (and
-    /// darkening, since the fill is translucent) at every line boundary.
+    /// darkening, since the fill is translucent) at every line boundary. The joins
+    /// are then moved onto the device pixel grid, or both neighbours half-cover the
+    /// pixel they share and the band shows a darker line at every seam.
     private func drawCard(at point: CGPoint, span: FragmentGeometry.DecorationSpan, alpha: CGFloat, in context: CGContext) {
-        let card = placement(at: point, span: span)
-            .decorationRect(padding: Self.cardPadding, capTop: span.isFirst, capBottom: span.isLast)
+        let placement = placement(at: point, span: span)
+        let card = placement.cardRect(padding: Self.cardPadding, span: span)
         fill(
-            card,
+            joined(card, placement: placement, span: span, in: context),
             radius: 8,
             corners: Corners(first: span.isFirst, last: span.isLast),
             color: RFCColors.quaternaryFill.withAlphaComponent(alpha).cgColor,
@@ -151,12 +157,30 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
     /// Where the rule goes is `Placement.ruleRect`; this only fills it.
     private func drawRule(at point: CGPoint, span: FragmentGeometry.DecorationSpan, in context: CGContext) {
+        let placement = placement(at: point, span: span)
+        let rule = placement.ruleRect(padding: Self.rulePadding, width: Self.ruleWidth)
         fill(
-            placement(at: point, span: span).ruleRect(padding: Self.rulePadding, width: Self.ruleWidth),
+            joined(rule, placement: placement, span: span, in: context),
             radius: 1.5,
             corners: Corners(first: span.isFirst, last: span.isLast),
             color: RFCColors.quaternaryFill.cgColor,
             in: context
+        )
+    }
+
+    /// `rect` with the edges it shares with the run's other fragments on the device
+    /// pixel grid; `Placement.snappingJoins` says where they go.
+    private func joined(
+        _ rect: CGRect,
+        placement: FragmentGeometry.Placement,
+        span: FragmentGeometry.DecorationSpan,
+        in context: CGContext
+    ) -> CGRect {
+        placement.snappingJoins(
+            of: rect,
+            top: !span.isFirst,
+            bottom: !span.isLast,
+            toDevice: context.userSpaceToDeviceSpaceTransform
         )
     }
 
