@@ -21,6 +21,16 @@ struct DocumentIDTests {
         #expect(DocumentID(parsing: input) == nil)
     }
 
+    /// A bare number is an RFC when a reader types it, and only a position when a
+    /// bibliography prints it: `[2]` is the second entry, not RFC 2.
+    @Test func aLabelNamesADocumentOnlyWhenItSaysWhichSeries() {
+        #expect(DocumentID(label: "2") == nil)
+        #expect(DocumentID(label: " 791") == nil)
+        #expect(DocumentID(label: "RFC 2119") == .rfc(2119))
+        #expect(DocumentID(label: "BCP14") == DocumentID(series: .bcp, number: 14))
+        #expect(DocumentID(label: "MIP-OPTIM") == nil)
+    }
+
     @Test func formatting() {
         let id = DocumentID.rfc(9110)
         #expect(id.description == "RFC9110")
