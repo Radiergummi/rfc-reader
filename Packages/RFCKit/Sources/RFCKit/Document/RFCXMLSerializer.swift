@@ -99,7 +99,13 @@ public struct RFCXMLSerializer: Sendable {
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
       if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
-      writer.empty("author", attributes)
+      if let contact = author.contact {
+        writer.open("author", attributes)
+        writeContact(contact, writer: &writer)
+        writer.close("author")
+      } else {
+        writer.empty("author", attributes)
+      }
     }
     // RFCXML requires `author+`, and `<author/>` satisfies the schema; the parser reads
     // it back as no author at all. Unlike a reference's, a document's own front always
@@ -125,6 +131,33 @@ public struct RFCXMLSerializer: Sendable {
   }
 
   // MARK: - Sections
+
+  /// In the schema's order: `organization`, then `address` holding `postal`,
+  /// `phone`, `facsimile`, each `email` and `uri`.
+  private func writeContact(_ contact: AuthorContact, writer: inout Writer) {
+    if let organization = contact.organization {
+      writer.element("organization", text: organization)
+    }
+    let hasAddress =
+      contact.postal != nil || contact.phone != nil || contact.facsimile != nil
+      || !contact.emails.isEmpty || contact.uri != nil
+    guard hasAddress else { return }
+    writer.open("address")
+    if let postal = contact.postal {
+      writer.open("postal")
+      for street in postal.street { writer.element("street", text: street) }
+      if let city = postal.city { writer.element("city", text: city) }
+      if let region = postal.region { writer.element("region", text: region) }
+      if let code = postal.code { writer.element("code", text: code) }
+      if let country = postal.country { writer.element("country", text: country) }
+      writer.close("postal")
+    }
+    if let phone = contact.phone { writer.element("phone", text: phone) }
+    if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
+    for email in contact.emails { writer.element("email", text: email) }
+    if let uri = contact.uri { writer.element("uri", text: uri.absoluteString) }
+    writer.close("address")
+  }
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }

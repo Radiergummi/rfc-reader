@@ -77,10 +77,75 @@ public struct Author: Hashable, Sendable, Codable {
   public var name: String
   /// Role such as `Editor`, when present.
   public var role: String?
+  /// What the document itself publishes about the author beyond the name: RFCXML's
+  /// `<organization>` and `<address>`. Nil when it publishes nothing, which is
+  /// every author the RFC index or a legacy header names. Nothing here is looked
+  /// up or inferred (#19).
+  public var contact: AuthorContact?
 
-  public init(name: String, role: String? = nil) {
+  public init(name: String, role: String? = nil, contact: AuthorContact? = nil) {
     self.name = name
     self.role = role
+    self.contact = contact
+  }
+}
+
+/// An author's affiliation and address, as RFCXML's `<author>` states them.
+public struct AuthorContact: Hashable, Sendable, Codable {
+  public var organization: String?
+  public var postal: PostalAddress?
+  public var phone: String?
+  public var facsimile: String?
+  /// In the document's order; the schema allows several.
+  public var emails: [String]
+  public var uri: URL?
+
+  public init(
+    organization: String? = nil, postal: PostalAddress? = nil, phone: String? = nil,
+    facsimile: String? = nil, emails: [String] = [], uri: URL? = nil
+  ) {
+    self.organization = organization
+    self.postal = postal
+    self.phone = phone
+    self.facsimile = facsimile
+    self.emails = emails
+    self.uri = uri
+  }
+
+  /// Whether there is anything to show.
+  public var isEmpty: Bool {
+    organization == nil && postal == nil && phone == nil && facsimile == nil && emails.isEmpty
+      && uri == nil
+  }
+}
+
+/// A postal address as RFCXML's `<postal>` gives it: either structured, as the
+/// fields a contact card has, or as the author's own lines (`<postalLine>`), which
+/// have no structure to recover and are kept as written in `street`.
+public struct PostalAddress: Hashable, Sendable, Codable {
+  /// `<street>`, `<extaddr>` and `<pobox>` lines in order, or every `<postalLine>`.
+  public var street: [String]
+  public var city: String?
+  public var region: String?
+  public var code: String?
+  public var country: String?
+
+  public init(
+    street: [String] = [], city: String? = nil, region: String? = nil, code: String? = nil,
+    country: String? = nil
+  ) {
+    self.street = street
+    self.city = city
+    self.region = region
+    self.code = code
+    self.country = country
+  }
+
+  /// The address as lines, the way the RFC Editor's plain-text rendering sets it:
+  /// the street lines, then city, region and code on one line, then the country.
+  public var lines: [String] {
+    let locality = [city, region, code].compactMap { $0 }.joined(separator: " ")
+    return street + [locality, country ?? ""].filter { !$0.isEmpty }
   }
 }
 
