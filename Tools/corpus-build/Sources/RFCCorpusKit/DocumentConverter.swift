@@ -48,21 +48,19 @@ public struct DocumentConverter: Sendable {
       ))
     let xml = Data(serializer.serialize(document).utf8)
 
+    var report = DocumentReport(document: document, id: stem, overridden: false)
+    if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
     // Round-trip check: the XML must parse back into the same section tree.
-    var warnings: [String] = []
     do {
       let reparsed = try RFCXMLParser.parse(xml)
       if reparsed.allSections.count != document.allSections.count {
-        warnings.append(
+        report.warnings.append(
           "round trip changed section count \(document.allSections.count) → \(reparsed.allSections.count)"
         )
       }
     } catch {
-      warnings.append("generated XML does not parse: \(error)")
+      report.warnings.append("generated XML does not parse: \(error)")
     }
-    var report = DocumentReport(document: document, id: stem, overridden: false)
-    if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
-    report.warnings += warnings
     return Conversion(xml: xml, report: report, prose: prose)
   }
 

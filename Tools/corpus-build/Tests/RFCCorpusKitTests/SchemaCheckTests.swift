@@ -70,29 +70,21 @@ struct SchemaCheckTests {
 
   @Test(arguments: ["rfc8999.xml", "rfc9220.xml"])
   func publishedRFCsHaveNoCause(fixture: String) throws {
-    let url = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent().appending(
-        path: "../../../../Packages/RFCKit/Tests/RFCKitTests/Fixtures/\(fixture)")
-    #expect(SchemaCheck.causes(in: try Data(contentsOf: url)) == [])
+    #expect(SchemaCheck.causes(in: try Data(contentsOf: Fixtures.url(fixture))) == [])
   }
 
   /// What a run compares itself with, read from the report it is about to replace. A
   /// report from a run that did not check says nothing about validity, so it is no
   /// baseline, rather than one in which nothing validated.
-  @Test func thePreviousReportSaysWhichDocumentsValidated() throws {
-    func entry(_ id: String, schema: [String]?) -> DocumentReport {
-      DocumentReport(
-        id: id, title: "", sections: 0, paragraphs: 0, lists: 0, artwork: 0, references: 0,
-        resolvedDocuments: 0, overridden: false, warnings: [], schema: schema)
+  @Test func thePreviousReportSaysWhichDocumentsValidated() {
+    func valid(_ json: String) -> Set<String>? {
+      DocumentReport.validDocuments(inReport: Data(json.utf8))
     }
-    func report(_ entries: [DocumentReport]) throws -> Data {
-      try JSONEncoder().encode(entries)
-    }
-
-    #expect(DocumentReport.validDocuments(inReport: Data()) == nil, "not a report")
-    let checked = try report([entry("rfc1", schema: []), entry("rfc2", schema: ["empty-middle"])])
-    #expect(DocumentReport.validDocuments(inReport: checked) == ["rfc1"])
-    let unchecked = try report([entry("rfc1", schema: nil)])
-    #expect(DocumentReport.validDocuments(inReport: unchecked) == nil, "a run without --schema")
+    #expect(valid("") == nil, "not a report")
+    #expect(
+      valid(#"[{"id": "rfc1", "schema": []}, {"id": "rfc2", "schema": ["empty-middle"]}]"#) == [
+        "rfc1"
+      ])
+    #expect(valid(#"[{"id": "rfc1"}]"#) == nil, "a run without --schema")
   }
 }

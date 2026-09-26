@@ -29,13 +29,10 @@ struct CorpusBuild: AsyncParsableCommand {
 
 enum PipelineError: Error, CustomStringConvertible {
   case http(Int, URL)
-  case missingInput([Int])
 
   var description: String {
     switch self {
     case .http(let status, let url): "HTTP \(status) for \(url)"
-    case .missingInput(let numbers):
-      "no text in --in for \(numbers.map { "rfc\($0)" }.joined(separator: ", "))"
     }
   }
 }

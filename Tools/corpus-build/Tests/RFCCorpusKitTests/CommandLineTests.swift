@@ -3,14 +3,11 @@ import RFCCorpusKit
 import Testing
 
 /// The corpus-build binary, run as `make` and the corpus workflow run it. What is
-/// tested here is the command line itself: which flags it accepts, and which documents
-/// `convert --only` picks from `--in`. What a conversion produces is `DocumentConverter`.
+/// tested here is the command line itself: which flags it accepts, and that `--only`
+/// reaches the conversion. Which files it picks is `ConversionPlan`, and what a
+/// conversion produces is `DocumentConverter`.
 @Suite("Command line")
 struct CommandLineTests {
-  private static let fixtures = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent().appending(
-      path: "../../../../Packages/RFCKit/Tests/RFCKitTests/Fixtures")
-
   /// SwiftPM builds corpus-build beside the test bundle, because the test target depends
   /// on it. On Linux the bundle is the directory itself.
   private static let binary: URL = {
@@ -46,7 +43,8 @@ struct CommandLineTests {
     defer { try? FileManager.default.removeItem(at: out) }
 
     let result = try Self.run([
-      "convert", "--in", Self.fixtures.path, "--out", out.path, "--overides", "corpus/overrides",
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--overides",
+      "corpus/overrides",
     ])
     #expect(result.status == 64, "EX_USAGE")
     #expect(result.standardError.contains("--overides"), "\(result.standardError)")
@@ -58,29 +56,15 @@ struct CommandLineTests {
     defer { try? FileManager.default.removeItem(at: out) }
 
     let result = try Self.run([
-      "convert", "--in", Self.fixtures.path, "--out", out.path, "--only", "2119", "1149",
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119", "1149",
     ])
     #expect(result.status == 0, "\(result.standardError)")
     let written = try FileManager.default.contentsOfDirectory(atPath: out.path).sorted()
     #expect(written == ["rfc1149.xml", "rfc2119.xml"])
 
     let text = DocumentConverter.text(
-      decoding: try Data(contentsOf: Self.fixtures.appending(path: "rfc2119.txt")))
+      decoding: try Data(contentsOf: Fixtures.url("rfc2119.txt")))
     let expected = DocumentConverter().convert(text: text, stem: "rfc2119", metadata: nil).xml
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)
-  }
-
-  /// A number asked for by name is expected to be converted; one with no text in
-  /// `--in` fails the run rather than being skipped.
-  @Test func onlyFailsOnANumberWithNoText() throws {
-    let out = Self.temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: out) }
-
-    let result = try Self.run([
-      "convert", "--in", Self.fixtures.path, "--out", out.path, "--only", "2119", "99999",
-    ])
-    #expect(result.status != 0)
-    #expect(result.standardError.contains("rfc99999"), "\(result.standardError)")
-    #expect(!FileManager.default.fileExists(atPath: out.appending(path: "rfc2119.xml").path))
   }
 }

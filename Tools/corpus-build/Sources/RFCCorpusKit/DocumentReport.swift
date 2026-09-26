@@ -21,25 +21,6 @@ public struct DocumentReport: Codable, Sendable {
   /// asked to check (`--schema`). See `SchemaCheck.Cause` for what each entry means.
   public var schema: [String]?
 
-  public init(
-    id: String, title: String, sections: Int, paragraphs: Int, lists: Int, artwork: Int,
-    references: Int, resolvedDocuments: Int, furniture: Int? = nil, overridden: Bool,
-    warnings: [String], schema: [String]? = nil
-  ) {
-    self.id = id
-    self.title = title
-    self.sections = sections
-    self.paragraphs = paragraphs
-    self.lists = lists
-    self.artwork = artwork
-    self.references = references
-    self.resolvedDocuments = resolvedDocuments
-    self.furniture = furniture
-    self.overridden = overridden
-    self.warnings = warnings
-    self.schema = schema
-  }
-
   /// Counts the blocks of `document`, and warns about the shapes a failed conversion
   /// leaves: no number, no title, no sections, no prose, more artwork than prose.
   public init(document: RFCDocument, id: String, overridden: Bool) {
@@ -81,12 +62,16 @@ public struct DocumentReport: Codable, Sendable {
       warnings.append("more artwork than prose (\(artwork) vs \(paragraphs)); check classification")
     }
 
-    self.init(
-      id: id, title: document.header.title, sections: document.allSections.count,
-      paragraphs: paragraphs, lists: lists, artwork: artwork, references: references,
-      resolvedDocuments: document.referencedDocuments.count, overridden: overridden,
-      warnings: warnings
-    )
+    self.id = id
+    self.title = document.header.title
+    self.sections = document.allSections.count
+    self.paragraphs = paragraphs
+    self.lists = lists
+    self.artwork = artwork
+    self.references = references
+    self.resolvedDocuments = document.referencedDocuments.count
+    self.overridden = overridden
+    self.warnings = warnings
   }
 
   /// The documents that validated in a `report.json`; nil when it does not decode as

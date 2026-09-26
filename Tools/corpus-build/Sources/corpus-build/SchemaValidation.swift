@@ -1,13 +1,14 @@
 import Foundation
 import RFCCorpusKit
 
-/// Running xmllint for `SchemaCheck`: the half of the check that needs a process. What
-/// a refused document contains is `SchemaCheck.causes(in:)`, in RFCCorpusKit.
-extension SchemaCheck {
+/// Whether a converted document is RFCXML, by xmllint's verdict: the half of the schema
+/// check that needs a process. Why a refused document fails is `SchemaCheck`, in
+/// RFCCorpusKit, which also says why validity is decided this way.
+enum SchemaValidation {
   /// Where it failed, when it did. `firstMessage` is only read for an unexplained
   /// failure, where libxml2's first line is the one lead there is.
   struct Result: Sendable {
-    var causes: [Cause]
+    var causes: [SchemaCheck.Cause]
     var firstMessage: String?
   }
 
@@ -30,7 +31,7 @@ extension SchemaCheck {
 
   static func check(_ file: URL, schema: URL) async throws -> Result {
     guard try await !validates(file, schema: schema) else { return Result(causes: []) }
-    let found = causes(in: try Data(contentsOf: file))
+    let found = SchemaCheck.causes(in: try Data(contentsOf: file))
     guard found.isEmpty else { return Result(causes: found) }
     return Result(
       causes: [.unexplained], firstMessage: try await firstMessage(file, schema: schema))

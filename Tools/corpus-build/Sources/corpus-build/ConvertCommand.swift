@@ -68,20 +68,16 @@ struct ConvertCommand: AsyncParsableCommand {
       }
     )
     try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
-    if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
-    // Read before this run overwrites it.
-    let previouslyValid = job.schema == nil ? nil : report.flatMap(Self.validDocuments(inReportAt:))
-
-    var files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
-      .filter { $0.hasSuffix(".txt") }
-      .sorted { ($0.rfcNumber ?? 0) < ($1.rfcNumber ?? 0) }
-    if !only.isEmpty {
-      let wanted = Set(only)
-      files = files.filter { $0.rfcNumber.map(wanted.contains) ?? false }
-      let found = Set(files.compactMap(\.rfcNumber))
-      let missing = wanted.subtracting(found).sorted()
-      guard missing.isEmpty else { throw PipelineError.missingInput(missing) }
+    if let schema = job.schema { try SchemaValidation.preflight(schema: schema) }
+    // Read before this run overwrites it. A report from a run that did not check is no
+    // baseline (`DocumentReport.validDocuments(inReport:)`).
+    var previouslyValid: Set<String>?
+    if job.schema != nil, let report, let data = FileManager.default.contents(atPath: report) {
+      previouslyValid = DocumentReport.validDocuments(inReport: data)
     }
+
+    let files = try ConversionPlan.files(
+      in: try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path), only: only)
     log("converting \(files.count) documents")
 
     // Every document is independent -- its own input, its own output file, and a parse
@@ -97,10 +93,7 @@ struct ConvertCommand: AsyncParsableCommand {
       var pending = files.enumerated().makeIterator()
       func startNext() {
         guard let (offset, file) = pending.next() else { return }
-        group.addTask {
-          let (report, prose) = try await Self.convert(file, job: job)
-          return Converted(offset: offset, report: report, prose: prose)
-        }
+        group.addTask { try await Self.convert(file, offset: offset, job: job) }
       }
       for _ in 0..<ProcessInfo.processInfo.activeProcessorCount * 2 { startNext() }
       for try await result in group {
@@ -141,7 +134,7 @@ struct ConvertCommand: AsyncParsableCommand {
 
   /// Converts one document and writes its XML. Overridden documents are hand-corrected,
   /// so they are never diagnosed.
-  static func convert(_ file: String, job: Job) async throws -> (DocumentReport, ProseReport?) {
+  static func convert(_ file: String, offset: Int, job: Job) async throws -> Converted {
     let stem = String(file.dropLast(4))
     let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
@@ -153,22 +146,22 @@ struct ConvertCommand: AsyncParsableCommand {
       try data.write(to: outputURL, options: .atomic)
       var entry = DocumentReport(document: document, id: stem, overridden: true)
       try await checkSchema(outputURL, job: job, into: &entry)
-      return (entry, nil)
+      return Converted(offset: offset, report: entry, prose: nil)
     }
 
     let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
     let text = DocumentConverter.text(decoding: bytes)
-    let metadata = stem.rfcNumber.flatMap { job.index?[$0] }
+    let metadata = ConversionPlan.rfcNumber(of: stem).flatMap { job.index?[$0] }
     let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
     try conversion.xml.write(to: outputURL, options: .atomic)
     var entry = conversion.report
     try await checkSchema(outputURL, job: job, into: &entry)
-    return (entry, conversion.prose)
+    return Converted(offset: offset, report: entry, prose: conversion.prose)
   }
 
   static func checkSchema(_ file: URL, job: Job, into entry: inout DocumentReport) async throws {
     guard let schema = job.schema else { return }
-    let result = try await SchemaCheck.check(file, schema: schema)
+    let result = try await SchemaValidation.check(file, schema: schema)
     entry.schema = result.causes.map(\.rawValue)
     if let message = result.firstMessage { entry.warnings.append("schema: \(message)") }
   }
@@ -197,18 +190,5 @@ struct ConvertCommand: AsyncParsableCommand {
       "schema: against the previous report, \(started) started validating and \(stopped.count) stopped"
     )
     for id in stopped.prefix(40) { log("  stopped validating: \(id)") }
-  }
-
-  /// The documents that validated in the report at `path`; nil when there is none, or
-  /// when it is no baseline (`DocumentReport.validDocuments(inReport:)`).
-  static func validDocuments(inReportAt path: String) -> Set<String>? {
-    FileManager.default.contents(atPath: path).flatMap(DocumentReport.validDocuments(inReport:))
-  }
-}
-
-extension String {
-  /// The RFC number of a corpus file name: 2119 for `rfc2119.txt`.
-  var rfcNumber: Int? {
-    DocumentID(parsing: String(split(separator: ".").first ?? ""))?.number
   }
 }
