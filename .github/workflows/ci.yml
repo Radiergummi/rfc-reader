@@ -5,14 +5,69 @@ on:
     branches: [main]
   pull_request:
 
+# Every job only checks out and builds; none writes to the repository.
+permissions:
+  contents: read
+
+# A new push to a pull request supersedes the run before it; runs on main all finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Same version as `make lint` locally; --strict is clean on the whole tree.
+    container: ghcr.io/realm/swiftlint:0.65.1@sha256:f47e083201e47a136cda5ae847595bfe00226c444ca226fa74fa5dc648a9b057
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swiftlint lint --strict
+
+  workflows:
+    name: Workflow lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # reviewdog reports actionlint's findings as a check run.
+      checks: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
+        with:
+          # Every finding in every workflow fails the job, not only those in lines
+          # a pull request touches.
+          reporter: github-check
+          filter_mode: nofilter
+          fail_level: error
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          inputs: .github/workflows
+          # Findings fail the job instead of going to code scanning. Online audits
+          # (whether each pinned commit really belongs to its action) are on by default.
+          advanced-security: false
+
   rfckit-macos:
     name: RFCKit tests (macOS)
+    # Xcode 16 on purpose, not the app's Xcode 26: both packages declare
+    # swift-tools-version 6.0 and macOS 15, and this is what holds them to it.
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | tail -1)"
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(printf '%s\n' /Applications/Xcode_16*.app | tail -1)"
       - run: swift --version
       - run: swift test --package-path Packages/RFCKit
       - run: make test-app
@@ -23,23 +78,47 @@ jobs:
     # which is what project.yml's deployment targets need. Pinned rather than
     # -latest so a runner rollover cannot silently drop the toolchain.
     runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/compilation-cache.xcconfig
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
+      # The newest cache any earlier run saved: entries are keyed on their inputs,
+      # so a stale one is never used, only not hit.
+      - name: Restore the compilation cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-compilation-cache-${{ github.sha }}
+          restore-keys: xcode-compilation-cache-
       # Compiling is the point, so both builds go unsigned; project.yml ships
       # without a DEVELOPMENT_TEAM and the Makefile turns signing off without one.
       - name: Build for macOS
         run: make build-app
       - name: Build for the iOS Simulator
         run: make build-ios
+      # Saved from main only: a pull request restores main's newest cache, and
+      # one saved per pull request would only crowd main's out of the quota.
+      - name: Save the compilation cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-compilation-cache-${{ github.sha }}
 
   rfckit-linux:
     name: RFCKit tests (Linux)
     runs-on: ubuntu-24.04
-    container: swift:6.1
+    timeout-minutes: 20
+    container: swift:6.1@sha256:3991e5dd5c40b04580c1e56f1ad6042f3173829b1995ffa53b84957371c25876
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: swift test --package-path Packages/RFCKit
-      - run: swift build --package-path Tools/corpus-build
+      - run: swift test --package-path Tools/corpus-build

@@ -14,6 +14,10 @@ let package = Package(
             name: "corpus-build",
             dependencies: [.product(name: "RFCKit", package: "RFCKit")]
         ),
+        .testTarget(
+            name: "corpus-buildTests",
+            dependencies: ["corpus-build"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

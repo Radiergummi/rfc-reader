@@ -20,12 +20,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    container: swift:6.1
+    # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
+    timeout-minutes: 180
+    container: swift:6.1@sha256:3991e5dd5c40b04580c1e56f1ad6042f3173829b1995ffa53b84957371c25876
+    # write only for the optional `gh release create` in the last step.
+    permissions:
+      contents: write
+    # Inputs reach the scripts as environment variables, never spliced into their text.
+    env:
+      VERSION: ${{ inputs.version }}
+      LIMIT: ${{ inputs.limit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Restore fetched text
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: corpus/text.noindex
           key: corpus-text-${{ github.run_id }}
@@ -35,26 +46,27 @@ jobs:
         run: swift build -c release --package-path Tools/corpus-build
 
       - name: Fetch legacy RFCs
-        run: |
-          LIMIT="${{ inputs.limit }}"
-          Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit $LIMIT}
+        run: Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit "$LIMIT"}
 
       - name: Convert to RFCXML
         run: |
+          apt-get update -qq && apt-get install -y -qq libxml2-utils >/dev/null
           Tools/corpus-build/.build/release/corpus-build convert \
-            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json
+            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json \
+            --schema Tools/corpus-build/Schema/v3.rng
 
       - name: Manifest
-        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "${{ inputs.version }}"
+        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "$VERSION"
 
       - name: Pack
         run: |
           apt-get update -qq && apt-get install -y -qq zstd >/dev/null
-          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus xml manifest.json
-          ls -la *.tar.zst
+          # convert writes xml.noindex (kept out of Spotlight); the pack's directory is xml.
+          tar --zstd -cf "legacy-xml-$VERSION.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
+          ls -la ./*.tar.zst
 
       - name: Upload report and packs as workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: corpus-${{ inputs.version }}
           path: |
@@ -67,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get install -y -qq gh >/dev/null || true
-          gh release create "corpus-${{ inputs.version }}" legacy-xml-*.tar.zst corpus/manifest.json \
-            --title "Corpus packs ${{ inputs.version }}" \
+          apt-get install -y -qq gh >/dev/null
+          gh release create "corpus-$VERSION" legacy-xml-*.tar.zst corpus/manifest.json \
+            --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

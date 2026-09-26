@@ -92,7 +92,7 @@ public struct RFCXMLParser: Sendable {
                             targets[anchor] = id
                         }
                     case "referencegroup":
-                        if let anchor = child["anchor"], let id = DocumentID(parsing: anchor) {
+                        if let anchor = child["anchor"], let id = DocumentID(label: anchor) {
                             targets[anchor] = id
                         }
                         walk(child)
@@ -296,7 +296,7 @@ public struct RFCXMLParser: Sendable {
             let members = element.all("reference").map(parseReference)
             let memberNames = members.compactMap { $0.documentID?.displayName }
             var seriesInfo: [(name: String, value: String)] = []
-            if let id = DocumentID(parsing: anchor) {
+            if let id = DocumentID(label: anchor) {
                 seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
             }
             return Reference(
