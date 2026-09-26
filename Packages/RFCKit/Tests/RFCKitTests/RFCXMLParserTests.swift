@@ -15,7 +15,12 @@ struct RFCXMLParserTests {
     #expect(document.header.id == .rfc(8999))
     #expect(document.header.title == "Version-Independent Properties of QUIC")
     #expect(document.header.abbreviatedTitle == "QUIC Invariants")
-    #expect(document.header.authors == [Author(name: "Martin Thomson")])
+    #expect(
+      document.header.authors == [
+        Author(
+          name: "Martin Thomson",
+          contact: AuthorContact(organization: "Mozilla", emails: ["mt@lowentropy.net"]))
+      ])
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
     #expect(document.header.keywords.count == 7)

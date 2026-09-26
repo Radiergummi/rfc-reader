@@ -173,7 +173,47 @@ public struct RFCXMLParser: Sendable {
       }
       guard let name, !name.isEmpty else { return nil }
       let role = element["role"] == "editor" ? "Editor" : nil
-      return Author(name: name, role: role)
+      return Author(name: name, role: role, contact: parseContact(element))
+    }
+
+    /// `<organization>` and `<address>`, when the author has either. Every element
+    /// is optional in the schema, and empty ones are common in the published
+    /// series (`<organization/>`), so an empty one counts as absent.
+    private static func parseContact(_ element: XMLElement) -> AuthorContact? {
+      func value(_ element: XMLElement?) -> String? {
+        guard let text = element?.normalizedText, !text.isEmpty else { return nil }
+        return text
+      }
+      let address = element.first("address")
+      let contact = AuthorContact(
+        organization: value(element.first("organization")),
+        postal: address?.first("postal").flatMap(parsePostal),
+        phone: value(address?.first("phone")),
+        facsimile: value(address?.first("facsimile")),
+        emails: (address?.all("email") ?? []).compactMap(value),
+        uri: value(address?.first("uri")).flatMap(URL.init(string:))
+      )
+      return contact.isEmpty ? nil : contact
+    }
+
+    /// Structured fields where the author gave them, or the author's own lines.
+    private static func parsePostal(_ element: XMLElement) -> PostalAddress? {
+      func value(_ name: String) -> String? {
+        guard let text = element.first(name)?.normalizedText, !text.isEmpty else { return nil }
+        return text
+      }
+      let lines = element.all("postalLine").map(\.normalizedText).filter { !$0.isEmpty }
+      let street = element.elements
+        .filter { ["street", "extaddr", "pobox"].contains($0.name) }
+        .map(\.normalizedText).filter { !$0.isEmpty }
+      let postal = PostalAddress(
+        street: lines.isEmpty ? street : lines,
+        city: value("city") ?? value("cityarea"),
+        region: value("region"),
+        code: value("code") ?? value("sortingcode"),
+        country: value("country")
+      )
+      return postal.lines.isEmpty ? nil : postal
     }
 
     private static func parseDate(_ element: XMLElement) -> PublicationDate? {
@@ -427,16 +467,48 @@ public struct RFCXMLParser: Sendable {
         return .blockQuote(parseBlocks(in: element))
       case "aside":
         return .aside(parseBlocks(in: element))
+      case "author":
+        // Prep's "Authors' Addresses" section is made of these. Read as the
+        // author's details, one paragraph each, rather than as unknown containers,
+        // which nested an aside per level of `<author><address><postal>` (#113).
+        return Self.parseAuthor(element).map { .paragraph(Paragraph(Self.addressInlines($0))) }
       case "name", "section", "references", "toc", "boilerplate":
         return nil
       case "texttable", "list", "vspace", "preamble", "postamble", "ttcol", "c":
         // RFCXML v2 leftovers; the prepped RFC Editor output does not contain them.
         return nil
       default:
-        // Unknown container: keep its content rather than dropping text.
-        let blocks = parseBlocks(in: element)
+        // Unknown container: keep its content rather than dropping text. An aside
+        // inside it is spliced in, because an aside may not hold another (#113).
+        let blocks = parseBlocks(in: element).flatMap { block -> [Block] in
+          if case .aside(let inner) = block { return inner }
+          return [block]
+        }
         return blocks.count == 1 ? blocks[0] : (blocks.isEmpty ? nil : .aside(blocks))
       }
+    }
+
+    /// An author as the RFC Editor's rendering of an Authors' Addresses entry
+    /// sets it, one detail per line, with the email and web addresses as links.
+    static func addressInlines(_ author: Author) -> [Inline] {
+      var lines: [[Inline]] = [
+        [.text(author.role == "Editor" ? "\(author.name) (editor)" : author.name)]
+      ]
+      if let contact = author.contact {
+        if let organization = contact.organization { lines.append([.text(organization)]) }
+        for line in contact.postal?.lines ?? [] { lines.append([.text(line)]) }
+        if let phone = contact.phone { lines.append([.text("Phone: \(phone)")]) }
+        if let facsimile = contact.facsimile { lines.append([.text("Fax: \(facsimile)")]) }
+        for email in contact.emails {
+          let address: Inline = .text(email)
+          let mail = URL(string: "mailto:\(email)").map { Inline.link($0, [address]) }
+          lines.append([.text("Email: "), mail ?? address])
+        }
+        if let uri = contact.uri {
+          lines.append([.text("URI: "), .link(uri, [.text(uri.absoluteString)])])
+        }
+      }
+      return Array(lines.joined(separator: [Inline.lineBreak]))
     }
 
     private func parseListItems(_ element: XMLElement) -> [ListItem] {
