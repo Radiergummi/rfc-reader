@@ -263,6 +263,8 @@ enum Convert {
         )
         try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
         if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
+        // Read before this run overwrites it.
+        let previouslyValid = job.schema == nil ? nil : arguments["report"].flatMap(validDocuments(inReportAt:))
 
         let files = try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path)
             .filter { $0.hasSuffix(".txt") }
@@ -273,17 +275,25 @@ enum Convert {
         // that is a pure function of its text -- so they are converted across all cores.
         // Results are put back in document order before anything is written, which keeps
         // the report and the prose sample exactly what a single pass would produce.
+        //
+        // A document waiting on xmllint holds no thread, so the pool moves on to the next
+        // conversion meanwhile; the bound is what keeps the number of xmllint processes
+        // alive at once from depending on how far the parses outrun them.
         var results: [Converted] = []
         try await withThrowingTaskGroup(of: Converted.self) { group in
-            for (offset, file) in files.enumerated() {
+            var pending = files.enumerated().makeIterator()
+            func startNext() {
+                guard let (offset, file) = pending.next() else { return }
                 group.addTask {
-                    let (report, prose) = try convert(file, job: job)
+                    let (report, prose) = try await convert(file, job: job)
                     return Converted(offset: offset, report: report, prose: prose)
                 }
             }
+            for _ in 0..<ProcessInfo.processInfo.activeProcessorCount * 2 { startNext() }
             for try await result in group {
                 results.append(result)
                 if results.count % 500 == 0 { log("\(results.count)/\(files.count)") }
+                startNext()
             }
         }
         results.sort { $0.offset < $1.offset }
@@ -304,7 +314,7 @@ enum Convert {
                 log("  only \(guardName): \(count)")
             }
         }
-        if job.schema != nil { logSchema(reports) }
+        if job.schema != nil { logSchema(reports, previouslyValid: previouslyValid) }
         let flagged = reports.filter { !$0.warnings.isEmpty }
         log("done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings")
         for entry in flagged.prefix(40) { log("  \(entry.id): \(entry.warnings.joined(separator: "; "))") }
@@ -312,7 +322,7 @@ enum Convert {
 
     /// Converts one document and writes its XML. Overridden documents are hand-corrected,
     /// so they are never diagnosed.
-    static func convert(_ file: String, job: Job) throws -> (Report, ProseReport?) {
+    static func convert(_ file: String, job: Job) async throws -> (Report, ProseReport?) {
         let stem = String(file.dropLast(4))
         let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
@@ -321,7 +331,7 @@ enum Convert {
             let document = try RFCXMLParser.parse(data)   // overrides must at least parse
             try data.write(to: outputURL, options: .atomic)
             var entry = report(for: document, id: stem, overridden: true)
-            try checkSchema(outputURL, job: job, into: &entry)
+            try await checkSchema(outputURL, job: job, into: &entry)
             return (entry, nil)
         }
 
@@ -353,13 +363,13 @@ enum Convert {
         var entry = report(for: document, id: stem, overridden: false)
         if job.wantsFurniture { entry.furniture = LegacyTextParser.recurringFurniture(in: text).count }
         entry.warnings += warnings
-        try checkSchema(outputURL, job: job, into: &entry)
+        try await checkSchema(outputURL, job: job, into: &entry)
         return (entry, prose)
     }
 
-    static func checkSchema(_ file: URL, job: Job, into entry: inout Report) throws {
+    static func checkSchema(_ file: URL, job: Job, into entry: inout Report) async throws {
         guard let schema = job.schema else { return }
-        let result = try SchemaCheck.check(file, schema: schema)
+        let result = try await SchemaCheck.check(file, schema: schema)
         entry.schema = result.causes.map(\.rawValue)
         if let message = result.firstMessage { entry.warnings.append("schema: \(message)") }
     }
@@ -367,7 +377,11 @@ enum Convert {
     /// How many documents each cause fails, and how many it is the only cause found in:
     /// at most the documents fixing that one cause alone would make valid, since a known
     /// cause can hide an unknown one (`SchemaCheck`).
-    static func logSchema(_ reports: [Report]) {
+    ///
+    /// Then, against the report this run replaced, the documents that stopped validating,
+    /// by name: those are the regressions, and a count that nets them against documents
+    /// that started would hide them.
+    static func logSchema(_ reports: [Report], previouslyValid: Set<String>?) {
         let checked = reports.compactMap(\.schema)
         log("schema: \(checked.filter(\.isEmpty).count) of \(checked.count) validate")
         for cause in SchemaCheck.Cause.allCases {
@@ -376,6 +390,25 @@ enum Convert {
             let sole = checked.filter { $0 == [cause.rawValue] }.count
             log("  \(cause.rawValue): \(documents), the only cause found in \(sole)")
         }
+        guard let previouslyValid else { return }
+        let valid = reports.filter { $0.schema == [] }.map(\.id)
+        let stopped = reports.filter { previouslyValid.contains($0.id) && $0.schema != [] }.map(\.id)
+        let started = valid.filter { !previouslyValid.contains($0) }.count
+        log("schema: against the previous report, \(started) started validating and \(stopped.count) stopped")
+        for id in stopped.prefix(40) { log("  stopped validating: \(id)") }
+    }
+
+    /// The documents that validated in the report at `path`; nil when there is none, or
+    /// when it comes from a run that did not check, which is no baseline.
+    static func validDocuments(inReportAt path: String) -> Set<String>? {
+        struct Entry: Decodable {
+            var id: String
+            var schema: [String]?
+        }
+        guard let data = FileManager.default.contents(atPath: path),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data),
+              entries.contains(where: { $0.schema != nil }) else { return nil }
+        return Set(entries.filter { $0.schema == [] }.map(\.id))
     }
 
     static func report(for document: RFCDocument, id: String, overridden: Bool) -> Report {

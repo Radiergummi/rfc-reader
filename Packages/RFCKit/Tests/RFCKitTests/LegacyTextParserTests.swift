@@ -143,7 +143,7 @@ struct LegacyTextParserTests {
                 return nil
             }
         }
-        #expect(xrefs.contains { $0.target == .anchor("ref-US-ASCII") && $0.text == "[US-ASCII]" })
+        #expect(xrefs.contains { $0.target == .anchor("US-ASCII") && $0.text == "[US-ASCII]" })
         #expect(document.referencedDocuments.contains(.rfc(822)))
     }
 
@@ -285,7 +285,8 @@ struct LegacyTextCorpusFindingsTests {
         let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
         let lists = document.referenceLists
         let list = try #require(lists.first, "the bibliography is lost entirely without this")
-        #expect(list.entries.map(\.anchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
+        #expect(list.entries.map(\.displayAnchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
+        #expect(list.entries.map(\.anchor) == ["RFC1034", "RFC1035", "RFC1591"], "the anchor has to be an XML name")
         #expect(list.entries[0].documentID == .rfc(1034))
         // And the prose citation finds the entry it names, spaces and all.
         #expect(document.referencedDocuments.contains(.rfc(1034)))
@@ -676,6 +677,25 @@ struct LegacyTextCorpusFindingsTests {
         #expect(numbered.map(\.titleText) == ["BEGIN", "LISTEN", "RESPONSE", "MESSAGE", "INTERRUPT", "END", "REPLY"].map { "\($0) Command" })
     }
 
+    /// A colon number counts only where the number before it, or the one it is under, is
+    /// a heading number too: without that, a document with one stray `11:` and no `11.`
+    /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the
+    /// next line not being blank kept it from becoming section 11.
+    @Test func aColonNumberHasToFollowFromAnother() throws {
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(try Fixtures.string("rfc526.txt").components(separatedBy: "\n")))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(try Fixtures.string("rfc2078.txt").components(separatedBy: "\n")))
+
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["0: Summary"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1: One", "2: Two"]))
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(["2: Two"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1. One", "2: Two"]), "a predecessor of either kind")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2. Two", "2.1: Under it"]), "or a parent")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2.4. Calls", "2.4.11. One", "2.4.12: Next"]))
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["1: Model", "1.1: Segments", "1.1.1.1: Layout"]), "a level skipped, as in RFC 2130")
+        #expect(LegacyTextParser.numbersHeadingsWithAColon(["2  Models", "3: X.500"]), "no separator, as in RFC 1309")
+        #expect(!LegacyTextParser.numbersHeadingsWithAColon(["3. Three", "2.4.12: Orphan"]))
+    }
+
     /// An anchor is what a deep link, the table of contents and a reading position key off,
     /// and the XML declares each one as an ID. Headings that repeat gave two sections one
     /// anchor -- RFC 1 has two `Introduction`s, RFC 19 two sections numbered 1 -- and a
@@ -683,13 +703,11 @@ struct LegacyTextCorpusFindingsTests {
     /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
     /// the first keeps its anchor, so every link that landed on it still does.
     @Test func noTwoElementsShareAnAnchor() throws {
-        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
-        let fixtures = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".txt") }
+        let fixtures = try Fixtures.legacyTexts()
         #expect(fixtures.count > 20)
         for fixture in fixtures {
             let document = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let anchors = document.allSections.map(\.anchor) + document.referenceLists.flatMap(\.entries).map(\.anchor)
-            let repeated = Dictionary(grouping: anchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+            let repeated = Dictionary(grouping: document.declaredAnchors, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
             #expect(repeated.isEmpty, "\(fixture): \(repeated)")
         }
 
@@ -699,9 +717,144 @@ struct LegacyTextCorpusFindingsTests {
         #expect(original < second)
         #expect(LegacyTextParser.parse(try Fixtures.string("rfc19.txt")).allSections.map(\.anchor).contains("section-1-2"))
 
-        let entries = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
-        let relabelled = try #require(entries.first { $0.anchor == "2-2" })
-        #expect(relabelled.displayAnchor == "2", "a renamed entry still reads as the label its citations use")
+        let entries = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(\.entries)
+        let relabelled = try #require(entries.first { $0.anchor == "ISO-8859-2" })
+        #expect(relabelled.displayAnchor == "ISO-8859", "a renamed entry still reads as the label its citations use")
+    }
+
+    /// A numbered entry whose text names no RFC was recorded as the RFC its number
+    /// happened to be: RFC 2013's `[1]` is ISO 8824, and it and its citation became RFC 1.
+    /// 6,887 entries in 1,381 converted documents. `[2]`, which says RFC 1902, still is.
+    @Test func aNumberedEntryIsNotTheRFCOfItsNumber() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        let asn1 = try #require(entries.first { $0.displayAnchor == "1" })
+        #expect(asn1.documentID == nil)
+        #expect(asn1.anchor == "ref-1")
+        #expect(document.crossReferences.contains { $0.target == .anchor("ref-1") && $0.text == "[1]" })
+        #expect(!document.referencedDocuments.contains(.rfc(1)))
+        #expect(entries.first { $0.displayAnchor == "2" }?.documentID == .rfc(1902))
+    }
+
+    /// An entry names its RFC however the document spells it. RFC 1041 writes every entry
+    /// `[1] RFC-854, ...`; read as no RFC, its numbered entries named nothing at all.
+    @Test func anEntryNamesAnRFCWrittenWithAHyphen() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        #expect(entries.first { $0.displayAnchor == "1" }?.documentID == .rfc(854))
+        #expect(entries.first { $0.displayAnchor == "3" }?.documentID == .rfc(885))
+        #expect(entries.first { $0.displayAnchor == "5" }?.documentID == nil, "the IBM manual names no RFC")
+        #expect(document.referencedDocuments.contains(.rfc(856)))
+
+        // But a title names RFCs too, and the hyphenated spelling is only the fallback:
+        // RFC 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495.
+        let mapping = LegacyTextParser.parse(try Fixtures.string("rfc1494.txt")).referenceLists.flatMap(\.entries)
+        #expect(mapping.first { $0.displayAnchor == "1" }?.documentID == .rfc(1495))
+    }
+
+    /// And in the series' earliest spellings: RFC 338 cites `RFC #189` and `RFC #183`,
+    /// RFC 1275 `Request for Comments 1006`, RFC 1005 `Request For Comments 990`, broken
+    /// across a line.
+    @Test func anEntryNamesAnRFCInTheSeriesEarliestSpellings() throws {
+        let rfc338 = LegacyTextParser.parse(try Fixtures.string("rfc338.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc338.first { $0.displayAnchor == "1" }?.documentID == .rfc(189))
+        #expect(rfc338.first { $0.displayAnchor == "4" }?.documentID == .rfc(183))
+        #expect(rfc338.first { $0.displayAnchor == "2" }?.documentID == nil, "a note names no RFC")
+
+        let rfc1275 = LegacyTextParser.parse(try Fixtures.string("rfc1275.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1275.first { $0.displayAnchor == "RC87" }?.documentID == .rfc(1006))
+
+        let rfc1005 = LegacyTextParser.parse(try Fixtures.string("rfc1005.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1005.first { $0.displayAnchor == "3" }?.documentID == .rfc(990))
+        #expect(rfc1005.first { $0.displayAnchor == "5" }?.documentID == .rfc(796))
+    }
+
+    /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
+    /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
+    /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was
+    /// declared under: RFC 2005 cited `<xref target="ref-MIP-OPTIM">` beside `<reference
+    /// anchor="MIP-OPTIM">`, and 30,368 citations in 3,708 documents linked nowhere (#81).
+    @Test func everyAnchorIsANameAndEveryCitationReachesOne() throws {
+        var cited = 0
+        for fixture in try Fixtures.legacyTexts() {
+            let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+            // An NCName, closely enough: a letter or underscore, then letters, digits, `.`, `-`, `_`.
+            let unnamed = document.declaredAnchors.filter { $0.wholeMatch(of: #/[\p{L}_][\p{L}0-9._-]*/#) == nil }
+            #expect(unnamed.isEmpty, "\(fixture): \(unnamed)")
+            let targets = document.everyCrossReference.compactMap { if case .anchor(let anchor) = $0.target { anchor } else { nil } }
+            cited += targets.count
+            let dangling = Set(targets).subtracting(document.declaredAnchors).sorted()
+            #expect(dangling.isEmpty, "\(fixture): \(dangling)")
+        }
+        #expect(cited > 0, "the fixtures cite something by anchor, so the check checks something")
+
+        // A label that is a name is the anchor, as the published series has it.
+        let rfc5234 = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc5234.contains { $0.anchor == "US-ASCII" && $0.displayAnchor == "US-ASCII" })
+        // One that is not takes the document it cites, and still reads as its label: RFC 2023
+        // lists RFCs 1883 and 1884 both as `[2]`, and they are two anchors, not one and a `-2`.
+        let rfc2023 = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc2023.filter { $0.displayAnchor == "2" }.map(\.anchor) == ["RFC1883", "RFC1884"])
+        let rfc2347 = LegacyTextParser.parse(try Fixtures.string("rfc2347.txt"))
+        #expect(rfc2347.crossReferences.contains { $0.target == .document(.rfc(2348), section: nil) && $0.text == "[2]" })
+        // And one that cites no document is `ref-` and the label spelled as a name.
+        let rfc1556 = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1556.contains { $0.anchor == "ref-ECMA-TR-53" && $0.displayAnchor == "ECMA TR/53" })
+        let rfc2606 = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc2606.contains { $0.anchor == "RFC1034" && $0.displayAnchor == "RFC 1034" })
+    }
+
+    /// Entry anchors are settled before the prose is linked, so a citation points at the
+    /// anchor its entry ends with rather than one a later rename moves. None of these
+    /// shapes is in the corpus, so they are pinned at the guard, on entries by hand.
+    @Test func anEntryIsRenamedOnlyOntoAnAnchorNothingElseHolds() {
+        func settled(_ labels: [String], reserved: Set<String> = []) -> [String] {
+            let entries = labels.map { Reference(anchor: LegacyTextParser.entryAnchor(label: $0, documentID: nil), displayAnchor: $0, title: $0) }
+            return LegacyTextParser.settlingEntryAnchors([0: entries], reserved: reserved)[0]?.map(\.anchor) ?? []
+        }
+        // `[X-2]` keeps its own anchor, so the repeat of `[X]` does not take it from under it.
+        #expect(settled(["X", "X", "X-2"]) == ["X", "X-3", "X-2"])
+        // Two labels that spell one name are two anchors.
+        #expect(settled(["ECMA TR 53", "ECMA TR/53"]) == ["ref-ECMA-TR-53", "ref-ECMA-TR-53-2"])
+        // And an entry never takes an anchor a section can have.
+        #expect(settled(["section-1"], reserved: ["section-1"]) == ["section-1-2"])
+        // A label with nothing of a name in it is a note: RFC 2130's `[*]`, RFC 906's `[**]`.
+        #expect(settled(["*", "**"]) == ["ref-note", "ref-note-2"])
+    }
+
+    /// A heading that repeats is renamed after the prose is linked, so what an entry must
+    /// not take is every anchor a section can be renamed to, not only the ones it starts
+    /// with: an entry settled onto `section-1-2` beside two sections numbered 1 lost it to
+    /// the second, and its citations to a rename. Every suffix a repeat can reach is held,
+    /// past the ones another heading already spells (`name-foo-2`, for `Foo 2`).
+    @Test func aRepeatedHeadingHoldsEveryAnchorItCanBeRenamedTo() {
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1-2"])
+        #expect(LegacyTextParser.reservedAnchors(["name-foo", "name-foo", "name-foo-2"]) == ["name-foo", "name-foo-2", "name-foo-3"])
+        #expect(LegacyTextParser.reservedAnchors(["section-1", "section-2"]) == ["section-1", "section-2"])
+    }
+
+    /// What `parse` reserves is every anchor its sections end with, and no entry holds one:
+    /// RFC 19 numbers two sections 1, and the second is `section-1-2`.
+    @Test func everySectionAnchorIsReservedAndNoEntryHoldsOne() throws {
+        #expect(try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1-2"))
+        for fixture in try Fixtures.legacyTexts() {
+            let text = try Fixtures.string(fixture)
+            let reserved = LegacyTextParser.reservedAnchors(in: text)
+            let document = LegacyTextParser.parse(text)
+            let unreserved = Set(document.allSections.map(\.anchor)).subtracting(reserved).sorted()
+            #expect(unreserved.isEmpty, "\(fixture): \(unreserved)")
+            let held = Set(document.referenceLists.flatMap(\.entries).map(\.anchor)).intersection(reserved).sorted()
+            #expect(held.isEmpty, "\(fixture): \(held)")
+        }
+    }
+
+    /// A label listed twice is cited as its first entry, whether that names a document or
+    /// not: RFC 2023 lists RFCs 1883 and 1884 both as `[2]`.
+    @Test func aRepeatedLabelIsCitedAsItsFirstEntry() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt"))
+        let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(\.target)
+        #expect(!cited.isEmpty)
+        #expect(cited.allSatisfy { $0 == .document(.rfc(1883), section: nil) }, "\(cited)")
     }
 
     /// The stricter rule applies only to documents whose body is not indented: where the
@@ -953,7 +1106,40 @@ extension RFCDocument {
         everyBlock.compactMap { if case .list(let list) = $0 { return list }; return nil }
     }
 
+    /// What the XML declares as an ID: every section's anchor and every bibliography entry's.
+    var declaredAnchors: [String] {
+        allSections.map(\.anchor) + referenceLists.flatMap(\.entries).map(\.anchor)
+    }
+
     var crossReferences: [CrossReference] {
         paragraphs.flatMap { $0.inlines.compactMap { if case .crossReference(let xref) = $0 { return xref }; return nil } }
+    }
+
+    /// Every citation anywhere the linker runs: headings, the abstract, and prose at any
+    /// depth -- lists, definitions, tables, quotes -- not only top-level paragraphs.
+    var everyCrossReference: [CrossReference] {
+        func fromInlines(_ inlines: [Inline]) -> [CrossReference] {
+            inlines.flatMap { inline -> [CrossReference] in
+                switch inline {
+                case .crossReference(let xref): [xref]
+                case .emphasis(let inner), .strong(let inner), .link(_, let inner): fromInlines(inner)
+                default: []
+                }
+            }
+        }
+        func fromBlocks(_ blocks: [Block]) -> [CrossReference] {
+            blocks.flatMap { block -> [CrossReference] in
+                switch block {
+                case .paragraph(let paragraph): fromInlines(paragraph.inlines)
+                case .list(let list): list.items.flatMap { fromBlocks($0.blocks) }
+                case .definitionList(let items): items.flatMap { fromInlines($0.term) + fromBlocks($0.definition) }
+                case .figure(let figure): fromBlocks(figure.blocks)
+                case .table(let table): (table.header + table.rows).flatMap { $0.flatMap(fromInlines) }
+                case .blockQuote(let inner), .aside(let inner): fromBlocks(inner)
+                case .references, .preformatted: []
+                }
+            }
+        }
+        return fromBlocks(header.abstract) + allSections.flatMap { fromInlines($0.title) + fromBlocks($0.blocks) }
     }
 }
