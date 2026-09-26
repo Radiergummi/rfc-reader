@@ -31,6 +31,27 @@ struct BuilderVerbatimTests {
       "artwork must survive as one contiguous block, newlines included")
   }
 
+  /// Every line of a verbatim block ends in a newline, and each newline ends a
+  /// paragraph, so the block's paragraph spacing landed after every line of it:
+  /// RFC 9000's Figure 13 advanced 29.25 pt per line and read double spaced (#31).
+  /// The spacing belongs after the block, once.
+  @Test func artworkIsSpacedAfterTheBlockNotAfterEveryLine() throws {
+    // Three distinct lines, so each is found where it is.
+    let art = "+-A-+\n| B |\n+-C-+"
+    let built = DocumentTextBuilder.build(
+      document(Preformatted(kind: .artwork, text: art)), style: style)
+    let lines = art.split(separator: "\n")
+    let spacings = try lines.map { line in
+      let offset = try Fixtures.offset(of: String(line), in: built.text)
+      let paragraph = try #require(
+        built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil)
+          as? NSParagraphStyle)
+      return paragraph.paragraphSpacing
+    }
+    #expect(spacings.dropLast().allSatisfy { $0 == 0 }, "no spacing between a block's lines")
+    #expect(spacings.last == style.paragraphSpacing, "the block is spaced from what follows it")
+  }
+
   @Test func artworkIsMonospacedAndNeverWraps() throws {
     let art = "GET / HTTP/1.1"
     let built = DocumentTextBuilder.build(
