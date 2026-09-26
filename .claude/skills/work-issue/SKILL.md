@@ -55,7 +55,7 @@ Make a worktree off the latest `origin/main` with `EnterWorktree` (name `issue-N
 
 ## 4. Test first, and open the draft right away
 
-1. Write the test that shows the bug, or pins the new behaviour, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: a test that calls `parse` uses a real RFC from `Fixtures`, and a fixture goes in with the test.
+1. Write the test that shows the bug, or pins the new behaviour, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: a test that calls `parse` uses a real RFC that is already in `Fixtures`. Never commit a new RFC text. Where no fixture has the shape, test at guard level with line arrays, and let a corpus run show the effect.
 2. Commit it, push, and open a **draft** pull request at once: `gh pr create --draft`. Its body says `Closes #N`, and the plan as you understand it. Add `agent-pr` to the issue.
 3. Keep the pull request a draft for as long as you are working on it.
 

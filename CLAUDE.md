@@ -52,7 +52,7 @@ Standing constraints those documents establish, which are easy to violate by acc
 
 `LegacyTextParser` recovers structure from plain text by indentation and shape, so every change risks a regression across 8,464 documents. The workflow:
 
-1. Add the minimal input as a fixture in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` and a test first. Findings from full corpus runs live in the `Legacy text parser: corpus findings` suite.
+1. Write the test first. If an existing fixture in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` has the shape, test through `parse` on it. If none does, test the guard with line arrays (below) and let the corpus run in step 3 show the effect. Findings from full corpus runs live in the `Legacy text parser: corpus findings` suite.
 2. Fix the heuristic when a class of documents is wrong; add a hand-corrected `corpus/overrides/rfcNNNN.xml` when exactly one document is.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 
@@ -63,6 +63,8 @@ The rule is about what a **document-shaped** input has to be. Anything fed to `p
 A **guard-level** test of a pure function is the exception, and may take a hand-written `[String]`: `LegacyTextParser.diagnose` over three lines pinning "indent 7 yields exactly `[.indentTooDeep]`" is testing the guard, and routing it through a whole document would test the pipeline instead, needing a fixture file per threshold to say less. Keep those beside the fixture-driven tests that cover the same code through `parse` — `ProseDiagnosticsTests` is the pattern: the guards get line arrays, the invariants get `rfc757`, `rfc1245`, `rfc2119`, `rfc1149`.
 
 The line is the entry point, not the size of the input. If a test calls `parse`, it uses a fixture.
+
+**No RFC text is ever added to the repository**, fixtures included: the texts are copyrighted, and their licensing is an open question with the IETF Trust. The fixtures already committed predate this and may be reused. A check that needs any other RFC fetches it into the gitignored `corpus/` at run time. A fix with no fixture of its shape is tested at guard level instead, which may mean making a private classifier `static` to reach it, as `numbersHeadingsWithAColon` is.
 
 ## Generated files
 
