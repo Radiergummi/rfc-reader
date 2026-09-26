@@ -157,6 +157,35 @@ struct RFCXMLSerializerCorpusFindingsTests {
         #expect(reparsed.referencedDocuments == [.rfc(2119)])
     }
 
+    /// RFCXML requires `author+` in every `<front>`, the document's and each reference's.
+    /// A legacy reference never has structured authors, and a header can name none --
+    /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
+    @Test func everyFrontHasAnAuthorEvenWhenNoneIsKnown() throws {
+        for fixture in ["rfc1.txt", "rfc5234.txt"] {
+            let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
+            let xml = RFCXMLSerializer().serialize(parsed)
+            let authors = { (document: RFCDocument) in
+                document.allSections.flatMap(\.blocks).flatMap { block -> [[String]] in
+                    guard case .references(let list) = block else { return [] }
+                    return list.entries.map(\.authors)
+                }
+            }
+            let fronts = xml.components(separatedBy: "<front>").dropFirst().map { $0.components(separatedBy: "</front>")[0] }
+            #expect(fronts.count == 1 + authors(parsed).count, "\(fixture): the document's front and one per entry")
+            #expect(fronts.allSatisfy { $0.contains("<author") }, "\(fixture)")
+
+            // An empty `<author/>` says no author is given, and must not read back as one.
+            let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+            #expect(reparsed.header.authors.map(\.name) == parsed.header.authors.map(\.name))
+            #expect(authors(reparsed) == authors(parsed))
+        }
+        // The two cases this pins: a header naming no author, and entries naming none.
+        #expect(LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).header.authors.isEmpty)
+        #expect(LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).allSections.contains { section in
+            section.blocks.contains { if case .references(let list) = $0 { list.entries.contains { $0.authors.isEmpty } } else { false } }
+        })
+    }
+
     @Test func controlCharactersNeverReachTheXML() throws {
         let document = RFCDocument(
             header: DocumentHeader(title: "T\u{00}itle\u{1B}"),

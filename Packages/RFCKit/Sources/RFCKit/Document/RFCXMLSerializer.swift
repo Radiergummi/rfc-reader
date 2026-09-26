@@ -97,6 +97,11 @@ public struct RFCXMLSerializer: Sendable {
             if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
             writer.empty("author", attributes)
         }
+        // RFCXML requires `author+`, and `<author/>` satisfies the schema; the parser reads
+        // it back as no author at all. Unlike a reference's, a document's own front always
+        // names someone in the published series, and xml2rfc's prep step refuses an empty
+        // one here -- the schema is the bar this output is held to, not prep.
+        if header.authors.isEmpty { writer.empty("author") }
         if let date = header.date {
             var attributes: [(String, String)] = []
             if let month = date.monthName { attributes.append(("month", month)) }
@@ -172,6 +177,8 @@ public struct RFCXMLSerializer: Sendable {
             if isEditor { authorAttributes.append(("role", "editor")) }
             writer.empty("author", authorAttributes)
         }
+        // The published series' own spelling of an entry naming no one (RFC 9293's `offload`).
+        if reference.authors.isEmpty { writer.empty("author") }
         if let date = reference.date {
             var dateAttributes: [(String, String)] = []
             if let month = date.monthName { dateAttributes.append(("month", month)) }
