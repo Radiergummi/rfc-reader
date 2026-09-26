@@ -97,6 +97,11 @@ public struct RFCXMLSerializer: Sendable {
             if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
             writer.empty("author", attributes)
         }
+        // RFCXML requires `author+`, and `<author/>` satisfies the schema; the parser reads
+        // it back as no author at all. Unlike a reference's, a document's own front always
+        // names someone in the published series, and xml2rfc's prep step refuses an empty
+        // one here -- the schema is the bar this output is held to, not prep.
+        if header.authors.isEmpty { writer.empty("author") }
         if let date = header.date {
             var attributes: [(String, String)] = []
             if let month = date.monthName { attributes.append(("month", month)) }
@@ -118,10 +123,11 @@ public struct RFCXMLSerializer: Sendable {
     // MARK: - Sections
 
     private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
-        var attributes: [(String, String)] = [("anchor", section.anchor)]
-        if let number = section.number {
+        let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+        var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
+        if let partNumber {
             attributes.append(("numbered", "true"))
-            attributes.append(("pn", Self.partNumber(number, isAppendix: section.isAppendix)))
+            attributes.append(("pn", partNumber))
         } else {
             attributes.append(("numbered", "false"))
         }
@@ -139,10 +145,9 @@ public struct RFCXMLSerializer: Sendable {
     }
 
     private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
-        var attributes: [(String, String)] = [("anchor", section.anchor)]
-        if let number = section.number {
-            attributes.append(("pn", Self.partNumber(number, isAppendix: section.isAppendix)))
-        }
+        let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+        var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
+        if let partNumber { attributes.append(("pn", partNumber)) }
         writer.open("references", attributes)
         writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
         for block in section.blocks {
@@ -172,6 +177,8 @@ public struct RFCXMLSerializer: Sendable {
             if isEditor { authorAttributes.append(("role", "editor")) }
             writer.empty("author", authorAttributes)
         }
+        // The published series' own spelling of an entry naming no one (RFC 9293's `offload`).
+        if reference.authors.isEmpty { writer.empty("author") }
         if let date = reference.date {
             var dateAttributes: [(String, String)] = []
             if let month = date.monthName { dateAttributes.append(("month", month)) }
@@ -377,6 +384,13 @@ public struct RFCXMLSerializer: Sendable {
     static func isReferences(_ section: Section) -> Bool {
         if section.blocks.contains(where: { if case .references = $0 { return true } else { return false } }) { return true }
         return !section.subsections.isEmpty && section.blocks.isEmpty && section.subsections.allSatisfy(isReferences)
+    }
+
+    /// `anchor` and `pn` are both `xsd:ID`, so an anchor that is the part number would
+    /// declare that ID twice. The part number is written either way, as the published
+    /// series always does, and the parser reads the anchor back from it.
+    private static func anchorAttribute(_ anchor: String, partNumber: String?) -> [(String, String)] {
+        anchor == partNumber ? [] : [("anchor", anchor)]
     }
 
     /// `4.2` → `section-4.2`; appendix `A.1` → `section-appendix.a.1`.
