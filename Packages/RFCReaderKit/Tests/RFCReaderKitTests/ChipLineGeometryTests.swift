@@ -125,6 +125,45 @@ struct ChipLineGeometryTests {
     }
   }
 
+  /// A chip is its symbol's attachment, a word joiner and its label, and the
+  /// attachment is a storage run of its own. Asked for with `effectiveRange`, the
+  /// chip's extent on its first line was that one character, so the first line
+  /// rounded its trailing end as if the chip ended there, and a wrapped chip drew
+  /// as a whole pill followed by a half one (#122).
+  @Test func aWrappedChipRoundsOnlyItsOuterEnds() throws {
+    let font = PlatformFont.systemFont(ofSize: 17)
+    let text = NSMutableAttributedString(
+      string: "As described in ", attributes: [.font: font])
+    let chip: [NSAttributedString.Key: Any] = [.font: font, .rfcChip: 1]
+    let symbol = NSMutableAttributedString(attachment: NSTextAttachment())
+    symbol.addAttributes(chip, range: NSRange(location: 0, length: symbol.length))
+    text.append(symbol)
+    text.append(NSAttributedString(string: "\u{2060}Section 4.2 of RFC 9110", attributes: chip))
+    text.append(NSAttributedString(string: " and elsewhere.", attributes: [.font: font]))
+
+    let (storage, layout) = layOut(text, width: 200)
+    defer { withExtendedLifetime(storage) {} }
+    var fragment: NSTextLayoutFragment?
+    layout.enumerateTextLayoutFragments(
+      from: layout.documentRange.location, options: [.ensuresLayout]
+    ) {
+      fragment = $0
+      return false
+    }
+    let paragraph = try #require(fragment)
+    let chips = FragmentGeometry.chipRects(
+      in: text,
+      lines: paragraph.textLineFragments,
+      fragment: NSRange(location: 0, length: text.length),
+      origin: .zero
+    )
+    try #require(chips.count >= 2, "the chip must wrap for this to test anything")
+    #expect(chips.first?.roundsLeading == true)
+    #expect(chips.first?.roundsTrailing == false, "the chip goes on past its first line")
+    #expect(chips.last?.roundsLeading == false, "the chip began on an earlier line")
+    #expect(chips.last?.roundsTrailing == true)
+  }
+
   @Test func everyChipRectSitsOverItsOwnGlyphs() throws {
     let fixture = try fixture()
     let chips = FragmentGeometry.chipRects(
