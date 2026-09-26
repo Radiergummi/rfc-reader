@@ -47,4 +47,16 @@ struct CitationFormatterTests {
     #expect(entry.contains("    author = {R. Fielding and M. Nottingham and J. Reschke},"))
     #expect(entry.hasSuffix("}"))
   }
+
+  /// A brace ends a BibTeX field early, `%` starts a comment and `&` is LaTeX's
+  /// alignment character, so a title holding any of them made the entry invalid
+  /// (#150). They are escaped the way LaTeX expects.
+  @Test func bibtexEscapesItsSpecialCharacters() {
+    let rfc = RFCMetadata(
+      id: .rfc(1), title: "Sets {A & B} at 100%", date: PublicationDate(year: 1969),
+      abstract: "Uses % and {braces}.")
+    let entry = formatter.cite(rfc, style: .bibtex)
+    #expect(entry.contains(#"    title = {{Sets \{A \& B\} at 100\%}},"#))
+    #expect(entry.contains(#"    abstract = {Uses \% and \{braces\}.},"#))
+  }
 }
