@@ -46,5 +46,33 @@ final class ReaderTextView: NSTextView {
         pboard.setString(SelectionText.plainText(of: selection), forType: .string)
         return true
     }
+
+    /// "Copy Figure" for the figure under the click, or else the one the selection
+    /// holds (issue #15). First in the menu, because on a figure it is what the
+    /// menu was opened for. Which figure and what it copies are `FigureCopy`'s.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let standard = super.menu(for: event)
+        let text = attributedString()
+        let clicked = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+        guard let figure = FigureCopy.figure(at: clicked, in: text) ?? FigureCopy.figure(in: selectedRange(), of: text) else {
+            return standard
+        }
+        // A copy, so the item is never left behind in a menu AppKit hands out again.
+        let result = (standard?.copy() as? NSMenu) ?? NSMenu()
+        let item = NSMenuItem(title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = FigureCopy.pasteboardText(for: figure)
+        if !result.items.isEmpty {
+            result.insertItem(.separator(), at: 0)
+        }
+        result.insertItem(item, at: 0)
+        return result
+    }
+
+    @objc private func copyFigure(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 }
 #endif
