@@ -10,13 +10,13 @@ import Testing
 /// corpus's schema check named for it, through the parser and the serializer.
 @Suite("Serializer: schema shape")
 struct SerializerSchemaShapeTests {
-  private static func converted(_ name: String) throws -> (RFCDocument, XMLElement) {
+  private static func converted(_ name: String) throws -> (RFCDocument, RFCKit.XMLElement) {
     let document = LegacyTextParser.parse(try Fixtures.data(name))
     let xml = RFCXMLSerializer().serialize(document)
     return (document, try XMLTreeBuilder.parse(Data(xml.utf8)))
   }
 
-  private static func partNumbers(in element: XMLElement) -> [String] {
+  private static func partNumbers(in element: RFCKit.XMLElement) -> [String] {
     element.elements.flatMap { child -> [String] in
       let own =
         ["section", "references"].contains(child.name) ? [child["pn"]].compactMap { $0 } : []
