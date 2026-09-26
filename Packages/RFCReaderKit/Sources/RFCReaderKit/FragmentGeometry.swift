@@ -360,6 +360,59 @@ public enum FragmentGeometry {
         return nil
     }
 
+    /// The document-relative characters of the line at `y`, in fragment coordinates
+    /// — or of the next line, if `y` falls in the space above one. What the reader
+    /// records as the line at the top of the viewport.
+    ///
+    /// Below the last line is the paragraph spacing, which the fragment's frame
+    /// includes: every line of it is scrolled past, and the next line is the next
+    /// fragment's first, so the answer is an empty range where that one starts.
+    public static func lineRange(at y: CGFloat, in lines: [NSTextLineFragment], fragment: NSRange) -> NSRange {
+        guard let line = lines.first(where: { y < $0.typographicBounds.maxY }) else {
+            return NSRange(location: lines.isEmpty ? fragment.location : NSMaxRange(fragment), length: 0)
+        }
+        return NSRange(location: fragment.location + line.characterRange.location, length: line.characterRange.length)
+    }
+
+    /// The top of the line holding `documentOffset`, in fragment coordinates: where
+    /// the reader scrolls to put that line at the top of the viewport. The inverse
+    /// of `lineRange(at:in:fragment:)`. `characterRange` is element-relative,
+    /// like every other line index here.
+    public static func lineTop(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat? {
+        let index = elementIndex(of: documentOffset, fragmentStart: fragmentStart)
+        let line = lines.first { index < NSMaxRange($0.characterRange) } ?? lines.last
+        return line?.typographicBounds.minY
+    }
+
+    /// Where to scroll, in fragment coordinates, to put the line holding
+    /// `documentOffset` at the top of the viewport: the fragment's own top for its
+    /// first character — the spacing above it included, which is where an anchor has
+    /// always landed — and the line's top for any other. A place carried across a
+    /// rebuild can be any line.
+    public static func scrollTarget(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat {
+        guard documentOffset != fragmentStart else { return 0 }
+        return lineTop(of: documentOffset, in: lines, fragmentStart: fragmentStart) ?? 0
+    }
+
+    /// The line at the top of the viewport, `top` and `fragmentTop` both in container
+    /// coordinates: what the reader records as its place.
+    ///
+    /// Read a point below the top, so a line put exactly there by `scrollTarget` is
+    /// read back as that line even once the scroll view has rounded the offset down
+    /// to a pixel, rather than as the line above it.
+    public static func topLine(
+        atViewportTop top: CGFloat,
+        fragmentTop: CGFloat,
+        in lines: [NSTextLineFragment],
+        fragmentStart: Int,
+        fragmentEnd: Int
+    ) -> NSRange {
+        let fragment = NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart)
+        return lineRange(at: top - fragmentTop + readBackSlack, in: lines, fragment: fragment)
+    }
+
+    private static let readBackSlack: CGFloat = 1
+
     /// A document-relative offset as the index `NSTextLineFragment` wants.
     ///
     /// `locationForCharacter(at:)` and `characterIndex(for:)` are both indexed

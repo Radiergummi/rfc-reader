@@ -4,7 +4,7 @@ import UIKit
 import AppKit
 #endif
 
-/// The five things the reader asks of a scrolling text view, spelled once per
+/// The things the reader asks of a scrolling text view, spelled once per
 /// platform here so that the parts with real reasoning in them — where an anchor
 /// lands, and why an unknown document end must not clamp to the top — are written
 /// once, not twice inside interleaved `#if` blocks.
