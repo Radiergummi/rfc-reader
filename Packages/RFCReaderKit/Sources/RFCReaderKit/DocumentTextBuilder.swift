@@ -227,9 +227,28 @@ extension DocumentTextBuilder {
   /// text here the way it does in the 72-column rendering.
   static let charactersPerIndentStep = 3
 
+  /// The deepest an author's indent sets a paragraph in, in steps. Nine characters
+  /// is the most any RFC from 8650 to 10050 asks for, and it is three steps; an
+  /// indent past that is kept at three, because every step comes off the column,
+  /// and a phone's column is not wide enough to give away more of it.
+  static let maximumAuthoredIndentSteps = 3
+
+  /// An author's indent, in whole steps. Characters are the 72-column rendering's
+  /// unit and mean nothing in a proportional font; what an indent says here is that
+  /// a paragraph belongs under what precedes it, and our lists, definitions and
+  /// quotes all say that in whole steps. A fraction of one would sit just off the
+  /// text of the list it belongs to -- RFC 8907 sets its status explanations in by
+  /// four -- so the count rounds to the nearest step, and any indent at all is at
+  /// least one, or `indent="1"` would be dropped on the way.
+  static func authoredIndentSteps(forCharacters characters: Int) -> Int {
+    guard characters > 0 else { return 0 }
+    let nearest = (characters + charactersPerIndentStep / 2) / charactersPerIndentStep
+    return min(max(nearest, 1), maximumAuthoredIndentSteps)
+  }
+
   func appendParagraph(_ paragraph: Paragraph, indent: CGFloat) {
     mark(paragraph.anchor)
-    let authoredSteps = CGFloat(paragraph.indent) / CGFloat(Self.charactersPerIndentStep)
+    let authoredSteps = CGFloat(Self.authoredIndentSteps(forCharacters: paragraph.indent))
     let attributes = bodyAttributes(indent: indent + authoredSteps * style.indentStep)
     output.append(inlineRuns(paragraph.inlines, base: attributes))
     append("\n", attributes)

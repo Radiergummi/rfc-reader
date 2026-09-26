@@ -356,6 +356,47 @@ struct BuilderStructureTests {
     #expect(twoSteps.firstLineHeadIndent == style.indentStep * 2)
   }
 
+  /// An indent that is not a multiple of three still lands on a whole step: the
+  /// nearest one, and never none. RFC 8907's `indent="4"` is one step, not a third
+  /// past it.
+  @Test func anIndentOffTheStepRoundsToTheNearestWholeStep() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "one character", indent: 1)),
+      .paragraph(Paragraph(text: "four characters", indent: 4)),
+      .paragraph(Paragraph(text: "five characters", indent: 5))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let one = try paragraphStyle(of: "one character", in: built)
+    #expect(one.headIndent == style.indentStep)
+    #expect(one.firstLineHeadIndent == style.indentStep)
+
+    let four = try paragraphStyle(of: "four characters", in: built)
+    #expect(four.headIndent == style.indentStep)
+    #expect(four.firstLineHeadIndent == style.indentStep)
+
+    let five = try paragraphStyle(of: "five characters", in: built)
+    #expect(five.headIndent == style.indentStep * 2)
+    #expect(five.firstLineHeadIndent == style.indentStep * 2)
+  }
+
+  /// Every step comes off the column, so an author's indent stops at three of them.
+  @Test func anIndentIsCappedSoTheColumnKeepsItsWidth() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "nine characters", indent: 9)),
+      .paragraph(Paragraph(text: "twenty-four characters", indent: 24))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+    let deepest = style.indentStep * CGFloat(DocumentTextBuilder.maximumAuthoredIndentSteps)
+
+    let nine = try paragraphStyle(of: "nine characters", in: built)
+    #expect(nine.headIndent == deepest)
+
+    let twentyFour = try paragraphStyle(of: "twenty-four characters", in: built)
+    #expect(twentyFour.headIndent == deepest)
+    #expect(twentyFour.firstLineHeadIndent == deepest)
+  }
+
   /// The author's indent is relative to wherever the paragraph already sits.
   @Test func anIndentedParagraphInAListIsSetInFromTheItemsText() throws {
     let item = ListItem(blocks: [

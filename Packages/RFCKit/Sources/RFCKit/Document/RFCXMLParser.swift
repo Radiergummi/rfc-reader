@@ -55,6 +55,18 @@ public struct RFCXMLParser: Sendable {
     return RFCDocument(header: header, sections: sections, source: .xml)
   }
 
+  /// Whether a `<link rel>` names `token`. RFCXML takes `rel` from HTML, where it is a
+  /// set of space-separated keywords compared without regard to ASCII case, so
+  /// `rel="Prev"` and `rel="prev alternate"` both name the preceding draft. The prep
+  /// tool writes exactly `prev` today; this is what the attribute means, not a
+  /// guess at what it might write.
+  static func relation(_ rel: String?, includes token: String) -> Bool {
+    guard let rel else { return false }
+    return rel.split(whereSeparator: \.isWhitespace).contains {
+      $0.lowercased() == token.lowercased()
+    }
+  }
+
   // MARK: - Builder
 
   private struct Builder {
@@ -137,7 +149,8 @@ public struct RFCXMLParser: Sendable {
       header.updates = parseDocumentList(rfc["updates"])
       header.category = rfc["category"].flatMap(categoryName)
       header.draftName = rfc["docName"]
-      header.precedingDraft = rfc.all("link").first { $0["rel"] == "prev" }?["href"]
+      header.precedingDraft =
+        rfc.all("link").first { RFCXMLParser.relation($0["rel"], includes: "prev") }?["href"]
         .flatMap(URL.init(string:))
       return header
     }
@@ -330,8 +343,23 @@ public struct RFCXMLParser: Sendable {
         date: members.count == 1 ? members[0].date : nil,
         seriesInfo: seriesInfo,
         url: element["target"].flatMap(URL.init(string:)),
-        annotation: members.count == 1 ? members[0].annotation : []
+        annotation: groupAnnotation(of: members)
       )
+    }
+
+    /// The schema gives `<referencegroup>` no annotation of its own; its members each
+    /// may have one. A group of one is its member, annotation and all. A group of
+    /// several is one entry in the panel, so every member's annotation is kept on it,
+    /// each on its own line after the name of the member it belongs to -- a commit
+    /// snapshot is no use unless it says which standard it pins.
+    private func groupAnnotation(of members: [Reference]) -> [Inline] {
+      if members.count == 1 { return members[0].annotation }
+      let named = members.filter { !$0.annotation.isEmpty }.enumerated().flatMap {
+        index, member -> [Inline] in
+        let name = member.documentID?.displayName ?? member.displayAnchor
+        return (index == 0 ? [] : [.lineBreak]) + [.text("\(name): ")] + member.annotation
+      }
+      return normalize(named)
     }
 
     // MARK: Blocks

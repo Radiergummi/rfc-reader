@@ -369,6 +369,56 @@ struct RFCXMLParserTests {
     #expect(entries.first { $0.anchor == "RFC8792" }?.annotation == [])
   }
 
+  /// A `<referencegroup>` is one entry, and the schema lets only its members carry an
+  /// annotation. No published RFC annotates a grouped member yet -- none from 8650 to
+  /// 10050 -- so this is the smallest document that does, rather than a fixture. A
+  /// group of one keeps its member's annotation as is; a group of several keeps every
+  /// member's, each after the name of the member it belongs to.
+  @Test func aGroupKeepsItsMembersAnnotations() throws {
+    let xml = """
+      <rfc number="9999"><front><title>Grouped</title></front>
+      <back><references>
+      <referencegroup anchor="BCP14">
+      <reference anchor="RFC2119"><front><title>Key words</title>
+      <seriesInfo name="RFC" value="2119"/></front><annotation>The original.</annotation></reference>
+      <reference anchor="RFC8174"><front><title>Ambiguity</title>
+      <seriesInfo name="RFC" value="8174"/></front></reference>
+      <reference anchor="LIVING"><front><title>A Living Standard</title></front>
+      <annotation>Commit <eref target="https://example.com/abc">abc</eref>.</annotation></reference>
+      </referencegroup>
+      <referencegroup anchor="STD1"><reference anchor="RFC9999"><front><title>One</title>
+      <seriesInfo name="RFC" value="9999"/></front><annotation>Only member.</annotation></reference>
+      </referencegroup>
+      </references></back>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let entries = document.allSections.flatMap { section in
+      section.blocks.flatMap { block -> [Reference] in
+        if case .references(let list) = block { return list.entries }
+        return []
+      }
+    }
+    let commit = try #require(URL(string: "https://example.com/abc"))
+    #expect(
+      entries.first { $0.anchor == "BCP14" }?.annotation == [
+        .text("RFC 2119: The original."), .lineBreak,
+        .text("LIVING: Commit "), .link(commit, [.text("abc")]), .text("."),
+      ])
+    #expect(entries.first { $0.anchor == "STD1" }?.annotation == [.text("Only member.")])
+  }
+
+  /// `rel` is HTML's: space-separated keywords, compared without regard to case.
+  @Test func aLinkRelationIsATokenList() {
+    #expect(RFCXMLParser.relation("prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("Prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("alternate  prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("\tprev\n", includes: "prev"))
+    #expect(!RFCXMLParser.relation("alternate", includes: "prev"))
+    #expect(!RFCXMLParser.relation("preview", includes: "prev"))
+    #expect(!RFCXMLParser.relation(nil, includes: "prev"))
+  }
+
   /// RFC 9601 sets off the reasoning behind a rule as `<t indent="3">` under the list
   /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
   @Test func aParagraphKeepsItsIndent() throws {
