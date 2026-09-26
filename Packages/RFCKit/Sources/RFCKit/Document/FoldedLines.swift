@@ -1,3 +1,5 @@
+import Foundation
+
 /// Lines an RFC folded to fit a figure, per RFC 8792, and the text they fold.
 ///
 /// A plain-text RFC holds at most 69 columns of artwork or code, and RFC 8792 is how
@@ -76,10 +78,8 @@ public enum FoldedLines {
     guard let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }) else {
       return nil
     }
-    var note = lines[index].trimmingWhitespace()
-    while note.first == "=" { note.removeFirst() }
-    while note.last == "=" { note.removeLast() }
-    switch note.trimmingWhitespace() {
+    let padding = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "="))
+    switch lines[index].trimmingCharacters(in: padding) {
     case #"NOTE: '\' line wrapping per RFC 8792"#: return (index, .singleBackslash)
     case #"NOTE: '\\' line wrapping per RFC 8792"#: return (index, .doubleBackslash)
     default: return nil
@@ -92,14 +92,5 @@ extension Preformatted {
   /// plain-text page, and `text` itself everywhere else. What a copy should yield.
   public var unfoldedText: String {
     FoldedLines.unfold(text) ?? text
-  }
-}
-
-extension Substring {
-  fileprivate func trimmingWhitespace() -> Substring {
-    var trimmed = self
-    while trimmed.first?.isWhitespace == true { trimmed.removeFirst() }
-    while trimmed.last?.isWhitespace == true { trimmed.removeLast() }
-    return trimmed
   }
 }

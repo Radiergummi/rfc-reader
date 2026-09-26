@@ -10,12 +10,11 @@
     func textView(
       _ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]
     ) -> UIMenu? {
-      guard let figure = FigureCopy.figure(in: range, of: textView.attributedText) else {
+      guard let figure = FigureCopy.figure(in: range, of: textView.textStorage) else {
         return nil
       }
-      let text = FigureCopy.pasteboardText(for: figure)
       let copy = UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
-        UIPasteboard.general.string = text
+        UIPasteboard.general.string = FigureCopy.pasteboardText(for: figure)
       }
       return UIMenu(children: suggestedActions + [copy])
     }

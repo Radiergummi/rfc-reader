@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 
 #if canImport(UIKit)
@@ -69,7 +70,7 @@ import RFCReaderKit
       let item = NSMenuItem(
         title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
       item.target = self
-      item.representedObject = FigureCopy.pasteboardText(for: figure)
+      item.representedObject = figure
       if !result.items.isEmpty {
         result.insertItem(.separator(), at: 0)
       }
@@ -78,9 +79,9 @@ import RFCReaderKit
     }
 
     @objc private func copyFigure(_ sender: NSMenuItem) {
-      guard let text = sender.representedObject as? String else { return }
+      guard let figure = sender.representedObject as? Preformatted else { return }
       NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
+      NSPasteboard.general.setString(FigureCopy.pasteboardText(for: figure), forType: .string)
     }
   }
 #endif
