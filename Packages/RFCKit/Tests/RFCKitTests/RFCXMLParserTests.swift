@@ -345,6 +345,23 @@ struct RFCXMLParserTests {
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
   }
 
+  /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
+  /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
+  /// Reading only the first kept the six counters and dropped the rest.
+  @Test func everyTableBodyIsRead() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
+    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
+      if case .table(let table) = block { return table }
+      return nil
+    }
+    let table = try #require(tables.first { $0.anchor == "T1" })
+    #expect(table.header.count == 1)
+    #expect(table.rows.count == 32)
+    #expect(table.rows.first?.first?.plainText == "counter32")
+    #expect(table.rows[6].first?.plainText == "object-identifier")
+    #expect(table.rows.last?.first?.plainText == "yang-identifier")
+  }
+
   @Test func rejectsNonRFCDocuments() {
     #expect(throws: RFCXMLParser.ParseError.self) {
       try RFCXMLParser.parse(Data("<html><body/></html>".utf8))
