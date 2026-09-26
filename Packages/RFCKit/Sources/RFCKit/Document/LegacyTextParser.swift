@@ -627,7 +627,9 @@ public struct LegacyTextParser: Sendable {
     for (index, raw) in sections.enumerated() {
       guard let heading = raw.heading else {
         // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
-        let blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
+        let blocks = Self.blocks(
+          from: Self.leadInWithoutFrontMatter(raw.blocks, proseIndent: proseIndent),
+          proseIndent: proseIndent, linker: linker)
         if !blocks.isEmpty {
           flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
         }
@@ -635,13 +637,8 @@ public struct LegacyTextParser: Sendable {
       }
       let lowered = heading.title.lowercased()
       if heading.number == nil {
-        // Boilerplate that the RFCXML path also omits; the original text view still has it.
-        let boilerplate = [
-          "table of contents", "status of this memo", "status of memo", "copyright notice",
-          "full copyright statement", "intellectual property", "disclaimer of validity",
-        ]
         let isAbstract = lowered == "abstract" && !abstractTaken
-        if isAbstract || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
+        if isAbstract || Self.isBoilerplateTitle(lowered) {
           let extent = Self.boilerplateExtent(
             of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
             proseIndent: proseIndent)
@@ -809,7 +806,121 @@ public struct LegacyTextParser: Sendable {
       }.count
   }
 
+  /// Headings of boilerplate that the RFCXML path also omits; the original text view
+  /// still has it.
+  private static let boilerplateTitles = [
+    "table of contents", "status of this memo", "status of memo", "copyright notice",
+    "full copyright statement", "intellectual property", "disclaimer of validity",
+  ]
+
+  private static func isBoilerplateTitle(_ lowered: String) -> Bool {
+    boilerplateTitles.contains { lowered.hasPrefix($0) }
+  }
+
   // MARK: Front matter
+
+  /// The lead-in with the title page's leftovers taken out of its start (#76).
+  ///
+  /// The front matter ends at the first paragraph, or at the start of the run a heading
+  /// sits in, so neither is lost (#74); what the title page has left between it and the
+  /// body reaches the lead-in instead of being dropped. Whether a block is prose does
+  /// not separate the two -- RFC 817 opens with a paragraph, RFC 783 with a justified
+  /// summary the prose test refuses, RFC 394 with an underlined heading -- so it is what
+  /// the block *is* that decides:
+  ///
+  /// - contents entries, a dot leader and a page number: RFC 780 and 821 leave the
+  ///   last one, `REFERENCES ....... 42`, and RFC 1441 the whole listing;
+  /// - a header block, which states the document's number in two columns: RFC 780
+  ///   and 821 repeat theirs on the first page of the body, and RFC 674 sets its
+  ///   under an NLS journal stamp. RFC 84's catalogue states a number on every
+  ///   entry, but indents the entry's lines under it, and stays;
+  /// - a line with no letters in it, a phone number (RFC 757) or a page number
+  ///   (RFC 674);
+  /// - boilerplate under a heading set off column 0, as a centred `Status of this
+  ///   Memo` is in RFC 1441 to 1452: the heading, and its paragraphs up to the next
+  ///   heading-shaped line. A contents title goes alone, its entries after it.
+  ///
+  /// Only up to the first paragraph or list the lead-in keeps, which is where the
+  /// body has begun; past it, a line of those shapes is the body's.
+  private static func leadInWithoutFrontMatter(_ blocks: [RawBlock], proseIndent: Int)
+    -> [RawBlock]
+  {
+    var kept: [RawBlock] = []
+    var index = blocks.startIndex
+    while index < blocks.endIndex {
+      let block = blocks[index]
+      if let title = standaloneTitle(block), isBoilerplateTitle(title.lowercased()) {
+        index += 1
+        guard !title.lowercased().hasPrefix("table of contents") else { continue }
+        // Status paragraphs run to one or two, the copyright statement to three, and
+        // they are paragraphs: RFC 1144's author's note after its status is artwork.
+        var paragraphs = 0
+        while index < blocks.endIndex, paragraphs < 3, standaloneTitle(blocks[index]) == nil,
+          looksLikeProse(blocks[index].lines, maxIndent: proseIndent)
+        {
+          index += 1
+          paragraphs += 1
+        }
+        continue
+      }
+      if isContentsEntries(block.lines) || isHeaderBlock(block.lines)
+        || (block.lines.count <= 2 && !block.lines.contains { $0.contains(where: \.isLetter) })
+      {
+        index += 1
+        continue
+      }
+      kept.append(block)
+      index += 1
+      if listMarker(of: block.lines) != nil
+        || (block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent))
+      {
+        break
+      }
+    }
+    return kept + blocks[index...]
+  }
+
+  /// A one-line block that reads as a heading, trimmed of a trailing colon: short,
+  /// and not the end of a sentence. What ends a run of boilerplate paragraphs.
+  private static func standaloneTitle(_ block: RawBlock) -> String? {
+    guard block.lines.count == 1 else { return nil }
+    var title = block.lines[0].trimmingCharacters(in: .whitespaces)
+    if title.hasSuffix(":") { title.removeLast() }
+    guard !title.isEmpty, title.count <= 60, title.last != "." else { return nil }
+    return title
+  }
+
+  /// Half the lines or more are contents entries: a dot leader, then a page number in
+  /// arabic or lower-case roman numerals (RFC 822's `PREFACE .......   ii`).
+  private static func isContentsEntries(_ lines: [String]) -> Bool {
+    let entries = lines.count { line in
+      guard line.contains("...") || line.contains(". . ."),
+        let page = line.split(separator: " ").last
+      else { return false }
+      return page.allSatisfy(\.isNumber) || page.allSatisfy { "ivxlc".contains($0) }
+    }
+    return entries > 0 && entries * 2 >= lines.count
+  }
+
+  /// A block of a title page's header: some line states the document's number or has a
+  /// header line's left column (RFC 821's is `Request for Comments: DRAFT`), and every
+  /// line is two columns, or one column set flush right. The whole column, because RFC
+  /// 160's catalogue lists `Network Working Group Meeting`. Two lines to a handful: a
+  /// line of RFC 84's catalogue is `NWG/RFC 14    (never issued)` on its own.
+  private static func isHeaderBlock(_ lines: [String]) -> Bool {
+    guard (2...8).contains(lines.count),
+      lines.contains(where: { line in
+        let left = line.trimmingCharacters(in: .whitespaces).lowercased()
+          .components(separatedBy: "   ")[0]
+        return statedNumber(in: line) != nil
+          || headerLinePrefixes.contains { $0.hasSuffix(":") ? left.hasPrefix($0) : left == $0 }
+      })
+    else { return false }
+    return lines.allSatisfy { line in
+      let indent = line.leadingSpaceCount
+      return line.dropFirst(indent).contains("   ") || (indent >= 40 && line.count >= 64)
+    }
+  }
 
   /// Front matter is the header block (first run of lines), the title (second run, which
   /// may start at column 0 when it fills the line), and the runs after it up to the first

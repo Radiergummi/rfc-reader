@@ -611,6 +611,45 @@ struct LegacyTextCorpusFindingsTests {
     #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
   }
 
+  /// Since the front matter ends at the first paragraph (#74), whatever the title page
+  /// leaves between it and the body reaches the lead-in, and is taken out of it by what
+  /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
+  /// after its title; RFC 757's phone number; RFC 1441's centred `Status of this Memo`
+  /// and its paragraph, and its contents. The body after them stays.
+  @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
+    func leadIn(_ fixture: String) throws -> [Block] {
+      LegacyTextParser.parse(try Fixtures.string(fixture)).sections.first {
+        $0.anchor == "preamble"
+      }?.blocks ?? []
+    }
+    func text(_ block: Block) -> String {
+      switch block {
+      case .paragraph(let paragraph): paragraph.plainText
+      case .preformatted(let artwork): artwork.text
+      case .list(let list):
+        list.items.flatMap(\.blocks).map(text).joined(separator: "\n")
+      default: ""
+      }
+    }
+
+    let procedureCall = try leadIn("rfc674.txt").map(text)
+    #expect(!procedureCall.contains { $0.contains("Request for Comments 674") })
+    #expect(!procedureCall.contains("1"))
+    #expect(procedureCall.first?.hasPrefix("Procedure Call Protocol Documents") == true)
+    #expect(procedureCall.contains { $0.hasPrefix("As many of you may know SRI") })
+
+    #expect(try leadIn("rfc757.txt").isEmpty, "a phone number alone is not a lead-in")
+
+    let management = try leadIn("rfc1441.txt").map(text)
+    #expect(!management.contains { $0.localizedCaseInsensitiveContains("status of this memo") })
+    #expect(!management.contains { $0.contains("requests discussion and suggestions") })
+    #expect(!management.contains { $0.contains("Table of Contents") || $0.contains("......") })
+    #expect(
+      management.contains {
+        $0.hasPrefix("The purpose of this document is to provide an overview of version 2")
+      })
+  }
+
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
   /// specification as an appendix, abstract and all, and each `Abstract` heading was
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
