@@ -28,6 +28,8 @@ struct FoldedLinesTests {
         case .preformatted(let content): [content]
         case .figure(let figure): preformatted(in: figure.blocks)
         case .list(let list): list.items.flatMap { preformatted(in: $0.blocks) }
+        case .definitionList(let items): items.flatMap { preformatted(in: $0.definition) }
+        case .blockQuote(let blocks), .aside(let blocks): preformatted(in: blocks)
         default: []
         }
       }

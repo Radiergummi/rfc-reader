@@ -3,8 +3,8 @@ import Testing
 
 @testable import RFCKit
 
-/// `<u>` spelled out (issue #63). Through the parser, RFC 8771 and RFC 9682 are
-/// checked against the RFC Editor's own plain-text renderings of them. At the
+/// `<u>` spelled out (issue #63). Through the parser, RFC 8771, RFC 9682 and RFC
+/// 9290 are checked against the RFC Editor's own plain-text renderings of them. At the
 /// guard, `UnicodeNotation.expand` is a pure function of one element's text and
 /// attributes, so those tests hand it exactly that: the formats the prepped corpus
 /// uses (`lit-name-num` 34 times, then `num-name`, `num-lit-name`, `num-name-lit`
