@@ -188,9 +188,14 @@ public enum FragmentGeometry {
 
         // The piece `enumerateAttribute` hands back is already clipped to
         // this line; the run's own full extent — which may start before or
-        // end after this line — decides which ends round.
+        // end after this line — decides which ends round. The longest range,
+        // not the storage run: the chip's symbol is an attachment, a storage
+        // run of its own, and ending the chip there rounded the trailing end
+        // of every wrapped chip's first line (#122).
         var runRange = NSRange(location: 0, length: 0)
-        _ = text.attribute(.rfcChip, at: piece.location, effectiveRange: &runRange)
+        _ = text.attribute(
+          .rfcChip, at: piece.location, longestEffectiveRange: &runRange,
+          in: NSRange(location: 0, length: text.length))
         let roundsLeading = runRange.location >= lineRange.location
         let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
 
