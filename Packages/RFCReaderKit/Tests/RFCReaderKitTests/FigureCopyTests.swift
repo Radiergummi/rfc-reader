@@ -68,13 +68,14 @@ struct FigureCopyTests {
         == Self.diagram.text)
   }
 
-  /// The reader lays the block out as the page printed it, header and all; the
-  /// pasteboard gets what the author wrote (issue #64).
+  /// The pasteboard gets what the author wrote (issue #64), read from the box
+  /// rather than from the storage, so it does not depend on how the block is
+  /// shown. This one fits the column, so it is shown unfolded too.
   @Test func aFoldedFigureIsCopiedUnfolded() throws {
     let text = built().text
     #expect(
-      text.string.contains("NOTE: '\\' line wrapping"),
-      "the reader still shows the block as published")
+      !text.string.contains("NOTE: '\\' line wrapping"),
+      "a folded block that fits is shown without its header")
     let figure = try #require(
       FigureCopy.figure(at: try Fixtures.offset(of: "a long", in: text), in: text))
     #expect(FigureCopy.pasteboardText(for: figure) == "{\"key\": \"a long value\"}")
