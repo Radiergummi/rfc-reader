@@ -392,7 +392,8 @@ public struct LegacyTextParser: Sendable {
   /// Shares `rawSections` with `parse`, so the blocks reported here are exactly the
   /// blocks the parser classifies — not a re-segmentation that might disagree.
   public static func proseDiagnostics(for text: String) -> [BlockDiagnostics] {
-    prepared(text).sections.flatMap { section in
+    let prepared = prepared(text)
+    return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in
         BlockDiagnostics(
@@ -400,7 +401,7 @@ public struct LegacyTextParser: Sendable {
           firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
           lineCount: block.lines.count,
           claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil,
-          diagnosis: diagnose(block.lines)
+          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
         )
       }
     }
@@ -411,15 +412,69 @@ public struct LegacyTextParser: Sendable {
   /// Both entry points go through here so neither can normalise the text differently
   /// from the other. Extracting only `rawSections` left this prelude written twice,
   /// which is the same drift one level up.
-  private static func prepared(_ text: String) -> (front: [String], sections: [RawSection]) {
+  private static func prepared(_ text: String) -> Prepared {
     let lines = collapsingDoubleSpacing(depaginate(text))
     let colonNumbered = numbersHeadingsWithAColon(lines)
-    let (front, bodyStart) = splitFrontMatter(lines, colonNumbered: colonNumbered)
+    let proseIndent = proseIndent(lines)
+    let (front, bodyStart) = splitFrontMatter(
+      lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
     let body = bodyIsIndented(lines[bodyStart...])
-    return (
-      front,
-      rawSections(in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
+    return Prepared(
+      front: front,
+      sections: rawSections(
+        in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered),
+      proseIndent: proseIndent
     )
+  }
+
+  /// What `prepared` hands both entry points.
+  private struct Prepared {
+    var front: [String]
+    var sections: [RawSection]
+    /// The document's prose cap, which every prose test in it is asked against.
+    var proseIndent: Int
+  }
+
+  /// The prose cap for a body at column 3: the three columns a paragraph may indent
+  /// past it, as a first-line indent or a nested paragraph.
+  static let classicProseIndent = 6
+
+  /// The deepest a paragraph may start in this document and still read as prose: three
+  /// columns past its body, and never less than `classicProseIndent`.
+  ///
+  /// The cap used to be six everywhere, which is right for a body at column 3 and wrong
+  /// for the few hundred documents set deeper (#55). RFC 1178 sets its body at 9 under
+  /// headings at 6, and every one of its paragraphs failed the cap and was kept as
+  /// artwork, which is never linked; RFC 1122 lost most of its requirements text the
+  /// same way. The floor keeps every body at column 3 or less exactly where it was.
+  ///
+  /// The body is where the sentences are, so only a line that reads as one is counted:
+  /// four words or more, three fifths of them ordinary. Counting every line put the
+  /// body wherever the document keeps most of its code -- RFC 5545's iCalendar
+  /// examples, a MIB module's `::= { ifMauEntry 4 }`.
+  ///
+  /// And the body is the outermost of them, so it is the indent a quarter of those
+  /// lines sit at or left of, rather than the commonest. A MIB module's `DESCRIPTION`
+  /// clauses read as sentences too: RFC 3635 has 632 such lines at column 23 against
+  /// 354 of body at 3, and the commonest indent put its cap at 26.
+  ///
+  /// Over the whole document rather than the body, because the front matter's own
+  /// prose test runs before the body's start is known. The front matter is a few
+  /// dozen lines against the hundreds the indent is taken from.
+  private static func proseIndent(_ lines: [Line]) -> Int {
+    var counts: [Int: Int] = [:]
+    for case .text(let string) in lines {
+      let counted = sentenceWords([string])
+      guard counted.total >= 4, counted.ordinary * 5 >= counted.total * 3 else { continue }
+      counts[string.leadingSpaceCount, default: 0] += 1
+    }
+    let total = counts.values.reduce(0, +)
+    var seen = 0
+    for indent in counts.keys.sorted() {
+      seen += counts[indent] ?? 0
+      if seen * 4 >= total { return max(classicProseIndent, indent + 3) }
+    }
+    return classicProseIndent
   }
 
   /// Whether `1:` and `2.4.12:` at column 0 are headings in this document. RFC 2078, 2743
@@ -533,8 +588,9 @@ public struct LegacyTextParser: Sendable {
   }
 
   public func parse(_ text: String) -> RFCDocument {
-    let (frontLines, sections) = Self.prepared(text)
-    var header = Self.parseFrontMatter(frontLines)
+    let prepared = Self.prepared(text)
+    let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
+    var header = Self.parseFrontMatter(prepared.front)
 
     // Collect known section numbers and reference anchors for link resolution.
     let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
@@ -571,7 +627,7 @@ public struct LegacyTextParser: Sendable {
     for (index, raw) in sections.enumerated() {
       guard let heading = raw.heading else {
         // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
-        let blocks = Self.blocks(from: raw.blocks, linker: linker)
+        let blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
         if !blocks.isEmpty {
           flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
         }
@@ -587,13 +643,16 @@ public struct LegacyTextParser: Sendable {
         let isAbstract = lowered == "abstract" && !abstractTaken
         if isAbstract || boilerplate.contains(where: { lowered.hasPrefix($0) }) {
           let extent = Self.boilerplateExtent(
-            of: raw.blocks, isContents: lowered.hasPrefix("table of contents"))
+            of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
+            proseIndent: proseIndent)
           if isAbstract {
-            header.abstract = Self.blocks(from: Array(raw.blocks.prefix(extent)), linker: linker)
+            header.abstract = Self.blocks(
+              from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
             abstractTaken = true
           }
           if extent < raw.blocks.count {
-            let body = Self.blocks(from: Array(raw.blocks.dropFirst(extent)), linker: linker)
+            let body = Self.blocks(
+              from: Array(raw.blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
             if !body.isEmpty {
               flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
             }
@@ -616,10 +675,10 @@ public struct LegacyTextParser: Sendable {
         if !references.isEmpty {
           section.blocks = [.references(ReferenceList(title: heading.title, entries: references))]
         } else {
-          section.blocks = Self.blocks(from: raw.blocks, linker: linker)
+          section.blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
         }
       } else {
-        section.blocks = Self.blocks(from: raw.blocks, linker: linker)
+        section.blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
       }
       flat.append(section)
     }
@@ -734,7 +793,9 @@ public struct LegacyTextParser: Sendable {
   /// that is boilerplate is more than 16, and every one that swallowed its body is 22 or
   /// more. Past the gap a single line ends it, because boilerplate is paragraphs and a
   /// lone line is where the body's own unrecognised heading sits.
-  private static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool) -> Int {
+  private static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
+    -> Int
+  {
     guard blocks.count > 20 else { return blocks.count }
     func isEntry(_ line: String) -> Bool {
       line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..")
@@ -744,7 +805,7 @@ public struct LegacyTextParser: Sendable {
       + blocks.dropFirst().prefix { block in
         isContents
           ? block.lines.count(where: isEntry) * 2 >= block.lines.count
-          : block.lines.count > 1 && looksLikeProse(block.lines)
+          : block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent)
       }.count
   }
 
@@ -763,9 +824,9 @@ public struct LegacyTextParser: Sendable {
   /// paragraph indents its first line and sets its second at the margin, and ending at the
   /// second line left the first behind in the front matter. So the front matter ends where
   /// it used to or sooner, never later.
-  private static func splitFrontMatter(_ lines: [Line], colonNumbered: Bool) -> (
-    front: [String], bodyStart: Int
-  ) {
+  private static func splitFrontMatter(_ lines: [Line], colonNumbered: Bool, proseIndent: Int)
+    -> (front: [String], bodyStart: Int)
+  {
     var front: [String] = []
     var run = 0
     // Where the current run starts, and how much front matter there was before it: the
@@ -789,7 +850,9 @@ public struct LegacyTextParser: Sendable {
       if string.isBlank {
         if firstParagraph == nil, let start = runStart, run - skipped > 2 {
           let runLines = Array(front[start.frontCount...])
-          if runLines.count > 1, looksLikeProse(runLines) { firstParagraph = start }
+          if runLines.count > 1, looksLikeProse(runLines, maxIndent: proseIndent) {
+            firstParagraph = start
+          }
         }
         runStart = nil
         front.append("")
@@ -1210,14 +1273,16 @@ public struct LegacyTextParser: Sendable {
     byte == 0x20 || (0x09...0x0D).contains(byte)
   }
 
-  private static func blocks(from rawBlocks: [RawBlock], linker: InlineLinker) -> [Block] {
+  private static func blocks(from rawBlocks: [RawBlock], proseIndent: Int, linker: InlineLinker)
+    -> [Block]
+  {
     // Re-join paragraphs that a page break cut in half.
     var merged: [RawBlock] = []
     var index = 0
     while index < rawBlocks.count {
       var block = rawBlocks[index]
       while block.followedByPageBreak, index + 1 < rawBlocks.count,
-        shouldJoinAcrossPage(block, rawBlocks[index + 1])
+        shouldJoinAcrossPage(block, rawBlocks[index + 1], proseIndent: proseIndent)
       {
         block.lines += rawBlocks[index + 1].lines
         block.followedByPageBreak = rawBlocks[index + 1].followedByPageBreak
@@ -1239,7 +1304,7 @@ public struct LegacyTextParser: Sendable {
       {
         continue
       }
-      for parsed in classify(block, marker: marker, linker: linker) {
+      for parsed in classify(block, marker: marker, proseIndent: proseIndent, linker: linker) {
         // Merge adjacent list blocks of the same style into one list.
         if case .list(let list) = parsed, case .list(var previous)? = result.last,
           previous.style == list.style
@@ -1261,7 +1326,7 @@ public struct LegacyTextParser: Sendable {
   /// thousand others).
   ///
   /// It arrives as its own block because a blank line separates it, and it is
-  /// indented past the six columns `looksLikeProse` allows a paragraph, so it used
+  /// indented past the columns `looksLikeProse` allows a paragraph, so it used
   /// to be preserved as artwork: the item lost its prose, the list was cut into one
   /// single-item list per item, and every reference in the continuation went
   /// unlinked, because artwork is never linkified.
@@ -1325,20 +1390,27 @@ public struct LegacyTextParser: Sendable {
     return nil
   }
 
-  private static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock) -> Bool {
-    guard looksLikeProse(first.lines), looksLikeProse(second.lines) else { return false }
+  private static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock, proseIndent: Int)
+    -> Bool
+  {
+    guard looksLikeProse(first.lines, maxIndent: proseIndent),
+      looksLikeProse(second.lines, maxIndent: proseIndent)
+    else { return false }
     guard first.indent == second.indent else { return false }
     let lastLine = first.lines.last?.trimmingCharacters(in: .whitespaces) ?? ""
     let nextLine = second.lines.first?.trimmingCharacters(in: .whitespaces) ?? ""
-    if nextLine.first?.isLowercase == true { return true }
+    // Lower case continues a sentence, but an `o` bullet opens lower case too: RFC
+    // 1251's `o Funding` at the top of a page was read as the rest of the sentence
+    // that ended above it.
+    if nextLine.first?.isLowercase == true, listMarker(of: second.lines) == nil { return true }
     if let last = lastLine.last, ".:!?".contains(last) { return false }
     return true
   }
 
-  /// `maxIndent` is the deepest a paragraph may start and still read as prose.
-  /// Six columns by default: body text sits at three or four, and anything set
-  /// deeper than that with no list above it to explain the indent is an example.
-  private static func looksLikeProse(_ lines: [String], maxIndent: Int = 6) -> Bool {
+  /// `maxIndent` is the deepest a paragraph may start and still read as prose: the
+  /// document's `proseIndent`, three columns past its body. Anything set deeper than
+  /// that with no list above it to explain the indent is an example.
+  private static func looksLikeProse(_ lines: [String], maxIndent: Int) -> Bool {
     // `thorough: false` stops at the first guard that refuses, exactly as the guards
     // used to when they were written as early returns. The verdict is identical — a
     // conjunction of absolute vetoes cannot change once one has fired — and it is
@@ -1358,7 +1430,11 @@ public struct LegacyTextParser: Sendable {
   /// Unlike the predicate it backs, this evaluates every guard rather than returning
   /// at the first failure: a block refused on its indent still has an artwork count
   /// and a sentence ratio worth knowing.
-  static func diagnose(_ lines: [String], maxIndent: Int = 6, thorough: Bool = true)
+  ///
+  /// `maxIndent` defaults to the floor `proseIndent` never goes below, a body at column 3.
+  static func diagnose(
+    _ lines: [String], maxIndent: Int = classicProseIndent, thorough: Bool = true
+  )
     -> ProseDiagnostics
   {
     var diagnosis = ProseDiagnostics()
@@ -1372,7 +1448,14 @@ public struct LegacyTextParser: Sendable {
     diagnosis.indent = indent
     diagnosis.firstLineIndent = first.leadingSpaceCount - indent
 
-    if indent > maxIndent { diagnosis.rejections.append(.indentTooDeep) }
+    // Past the classic cap the indent is excused only for sentences, as it is under a
+    // list item: a document whose body sits deeper sets its one-line code there too
+    // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard.
+    if indent > maxIndent
+      || (indent > classicProseIndent && !readsLikeSentences(lines, share: (of: 1, in: 2)))
+    {
+      diagnosis.rejections.append(.indentTooDeep)
+    }
     if !(0...8).contains(diagnosis.firstLineIndent) {
       diagnosis.rejections.append(.firstLineIndentOutOfRange)
     }
@@ -1513,9 +1596,9 @@ public struct LegacyTextParser: Sendable {
     return (ordinary, words.count)
   }
 
-  private static func classify(_ block: RawBlock, marker: ListMarker?, linker: InlineLinker)
-    -> [Block]
-  {
+  private static func classify(
+    _ block: RawBlock, marker: ListMarker?, proseIndent: Int, linker: InlineLinker
+  ) -> [Block] {
     let lines = block.lines
     guard !lines.isEmpty else { return [] }
 
@@ -1524,7 +1607,7 @@ public struct LegacyTextParser: Sendable {
       return [.list(list)]
     }
 
-    if looksLikeProse(lines) {
+    if looksLikeProse(lines, maxIndent: proseIndent) {
       let inlines = linker.link(Self.joinWrappedLines(lines))
       return inlines.isEmpty ? [] : [.paragraph(Paragraph(inlines))]
     }

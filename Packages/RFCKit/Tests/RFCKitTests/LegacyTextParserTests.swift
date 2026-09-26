@@ -1200,6 +1200,39 @@ struct LegacyTextCorpusFindingsTests {
     )
   }
 
+  /// The prose cap was six columns everywhere: a body at column 3, plus three. RFC 1178
+  /// sets its headings at 6 and its body at 9, so every paragraph it has failed the cap
+  /// and was kept as artwork, and none of it was linked (#55). The cap follows the
+  /// body now, and nothing in the document is artwork.
+  @Test func aBodySetDeeperThanColumnThreeIsStillProse() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1178.txt"))
+    #expect(document.artworkText.isEmpty, "\(document.artworkText.count) blocks kept as artwork")
+    #expect(
+      document.paragraphs.contains {
+        $0.plainText.hasPrefix(
+          "Using a word that has strong semantic implications in the current context will cause confusion."
+        )
+      })
+  }
+
+  /// A paragraph cut by a page break is rejoined when the next page opens lower case,
+  /// as the rest of a sentence does. An `o` bullet opens lower case too: RFC 1581's
+  /// `it is assumed that:` ends a page, the list under it starts the next, and its
+  /// first item was read into the sentence as `that: o The most recently ...`.
+  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1581.txt"))
+    #expect(
+      document.paragraphs.contains {
+        $0.plainText.hasSuffix(
+          "if no routing information is (being) received on a circuit it is assumed that:")
+      })
+    #expect(
+      document.lists.contains {
+        guard case .paragraph(let first)? = $0.items.first?.blocks.first else { return false }
+        return first.plainText == "The most recently received information is accurate."
+      })
+  }
+
   @Test func overstrikesAndControlBytesAreRemoved() {
     let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
     let underlined = "_\u{08}R_\u{08}F_\u{08}C"
