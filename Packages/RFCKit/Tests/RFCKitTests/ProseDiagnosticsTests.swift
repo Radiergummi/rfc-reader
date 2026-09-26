@@ -191,4 +191,29 @@ struct ProseDiagnosticsTests {
         let diagnosis = LegacyTextParser.diagnose([])
         #expect(diagnosis.rejections == [.noLines])
     }
+
+    // MARK: The byte scans answer what the regexes answer
+
+    /// The prose test asks `artworkPattern` and `internalGapPattern` of every line through
+    /// a byte scan, because the regexes were half of `parse`. Each scan has to answer
+    /// exactly what its regex would, over every line of every fixture and over the shapes
+    /// the scans treat specially: the gap's punctuation rule, runs at the trimmed edges,
+    /// `\r\n`, and lines that are not ASCII.
+    @Test func theByteScansAgreeWithTheRegexes() throws {
+        let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        var lines = [
+            "a.   b", "a    b", "a   b", "a  \tb", "    four leading", "x\u{0B}\u{0C} y",
+            "1  2", "1 2", "1\t\t2", "x|", "| x", "x |", "a\r\n\r\nb", "1\r\n 2",
+            "café   au lait", "α +- β", "\u{00A0}\u{00A0}\u{00A0}x", "...", "....", "==", "===", "--", "---",
+            "<-", "->", "-+", "+-", "/_", "\\_", "_/", "_\\", "", "   ", "\t",
+        ]
+        for fixture in try FileManager.default.contentsOfDirectory(atPath: directory.path) where fixture.hasSuffix(".txt") {
+            lines += try Fixtures.string(fixture).components(separatedBy: "\n")
+        }
+        for line in lines {
+            let content = line.trimmingCharacters(in: .whitespaces)
+            #expect(LegacyTextParser.containsArtwork(line) == content.contains(LegacyTextParser.artworkPattern), "\(line.debugDescription)")
+            #expect(LegacyTextParser.hasInternalGap(line) == content.contains(LegacyTextParser.internalGapPattern), "\(line.debugDescription)")
+        }
+    }
 }

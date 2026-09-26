@@ -284,6 +284,11 @@ public struct LegacyTextParser: Sendable {
     /// indent, because RFC 793 centres `2.  PHILOSOPHY`; numbered only, because RFC 770
     /// centres an unnumbered `REFERENCES` that is no heading, and its running header is
     /// all it has.
+    ///
+    /// `1:` counts here in every document, not only where `numbersHeadingsWithAColon`
+    /// says so: this runs while the page furniture is found, before the lines that fact is
+    /// judged on exist. A colon title taken wrongly can only drop a running header's first
+    /// copy along with the rest, and over the corpus none does.
     private static func numberedHeadingTitles(_ lines: [Line]) -> Set<String> {
         var titles: Set<String> = []
         for case .text(let line) in lines {
@@ -341,7 +346,7 @@ public struct LegacyTextParser: Sendable {
         var blocks: [RawBlock] = []
     }
 
-    nonisolated(unsafe) private static let numberedHeadingPattern = #/^(?<number>\d+(?:\.\d+)*)\.?\s+(?<title>\S.*)$/#
+    nonisolated(unsafe) private static let numberedHeadingPattern = #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
     nonisolated(unsafe) private static let appendixHeadingPattern = #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
 
     /// Diagnoses every block of a document without building one: what the prose test
@@ -371,8 +376,34 @@ public struct LegacyTextParser: Sendable {
     /// which is the same drift one level up.
     private static func prepared(_ text: String) -> (front: [String], sections: [RawSection]) {
         let lines = collapsingDoubleSpacing(depaginate(text))
-        let (front, bodyStart) = splitFrontMatter(lines)
-        return (front, rawSections(in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented(lines[bodyStart...])))
+        let colonNumbered = numbersHeadingsWithAColon(lines)
+        let (front, bodyStart) = splitFrontMatter(lines, colonNumbered: colonNumbered)
+        let body = bodyIsIndented(lines[bodyStart...])
+        return (front, rawSections(in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered))
+    }
+
+    /// Whether `1:` and `2.4.12:` at column 0 are headings in this document. RFC 2078, 2743
+    /// and 2130 number every heading that way (#71), and 1308, 1309, 1913, 2025 and 2479
+    /// a few among their `1.` ones. But the same shape is a field label (RFC 2301's `10:
+    /// ITU-T Rec. T.43 representation`), a line-numbered listing (RFC 2626 quotes grep
+    /// output as `140:      Chuck Rose`), and a second numbering (RFC 705 lists its
+    /// commands as `1.  BEGIN Command` and describes each again under `1:  BEGIN   4b`,
+    /// `4b` being its own label for that part). A document numbers each section once, so
+    /// the colon form counts only where none of its numbers is also the number of a `1.`
+    /// heading. In 2301, 2626 and 705 some are; in the eight that number headings with a
+    /// colon, none is.
+    private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
+        var colonNumbers: Set<Substring> = []
+        var fullStopNumbers: Set<Substring> = []
+        for case .text(let string) in lines where string.startsAtColumnZero {
+            guard let match = string.firstMatch(of: numberedHeadingPattern) else { continue }
+            switch match.separator {
+            case ":": colonNumbers.insert(match.number)
+            case ".": fullStopNumbers.insert(match.number)
+            default: break
+            }
+        }
+        return !colonNumbers.isEmpty && colonNumbers.isDisjoint(with: fullStopNumbers)
     }
 
     /// Splits the body into raw sections at column-0 headings, and each section into
@@ -382,7 +413,7 @@ public struct LegacyTextParser: Sendable {
     /// the blocks the parser classifies. A second segmentation written alongside this
     /// one would drift, and a diagnosis of blocks the parser never saw is worse than
     /// none.
-    private static func rawSections(in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool) -> [RawSection] {
+    private static func rawSections(in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool, colonNumbered: Bool) -> [RawSection] {
         var sections: [RawSection] = [RawSection(heading: nil)]
         var current: [String] = []
         var pendingBreak = false
@@ -408,7 +439,7 @@ public struct LegacyTextParser: Sendable {
             case .text(let string):
                 if string.isBlank {
                     flushBlock()
-                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, startsBlock: current.isEmpty) {
+                } else if let heading = Self.heading(at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered, startsBlock: current.isEmpty) {
                     flushBlock()
                     sections.append(RawSection(heading: heading))
                 } else {
@@ -426,14 +457,22 @@ public struct LegacyTextParser: Sendable {
 
         // Collect known section numbers and reference anchors for link resolution.
         let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
+        let bibliographies = Self.settlingEntryAnchors(
+            sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
+                guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else { return }
+                lists[index] = Self.parseReferences(sections[index].blocks)
+            },
+            reserved: Self.reservedAnchors(Self.sectionAnchorCandidates(sections))
+        )
         var referenceTargets: [String: CrossReference.Target] = [:]
-        for section in sections where section.heading.map(Self.isReferencesHeading) == true {
-            for reference in Self.parseReferences(section.blocks) {
-                if let id = reference.documentID {
-                    referenceTargets[reference.anchor] = .document(id, section: nil)
-                } else {
-                    referenceTargets[reference.anchor] = .anchor("ref-\(reference.anchor)")
-                }
+        // Keyed by the label, which is what the prose cites; pointing at the anchor, which
+        // is what the entry is declared under. Pointing at `ref-<label>` instead, which no
+        // entry ever was, left 30,368 citations in 3,708 documents linking nowhere (#81).
+        // A label listed twice is cited as its first entry, whichever kind of target it is.
+        for index in bibliographies.keys.sorted() {
+            for reference in bibliographies[index] ?? [] where referenceTargets[reference.displayAnchor] == nil {
+                referenceTargets[reference.displayAnchor] = reference.documentID.map { .document($0, section: nil) }
+                    ?? .anchor(reference.anchor)
             }
         }
         let linker = InlineLinker(sectionNumbers: sectionNumbers, referenceTargets: referenceTargets)
@@ -444,7 +483,7 @@ public struct LegacyTextParser: Sendable {
         // protocol's, and a catalogue (RFC 1292, 1632, 2116) gives every entry one (#72).
         // A later one is the body's, and stays where it is.
         var abstractTaken = false
-        for raw in sections {
+        for (index, raw) in sections.enumerated() {
             guard let heading = raw.heading else {
                 // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
                 let blocks = Self.blocks(from: raw.blocks, linker: linker)
@@ -485,8 +524,7 @@ public struct LegacyTextParser: Sendable {
                 title: linker.link(heading.title),
                 isAppendix: heading.isAppendix
             )
-            if Self.isReferencesHeading(heading) {
-                let references = Self.parseReferences(raw.blocks)
+            if let references = bibliographies[index] {
                 if !references.isEmpty {
                     section.blocks = [.references(ReferenceList(title: heading.title, entries: references))]
                 } else {
@@ -501,13 +539,70 @@ public struct LegacyTextParser: Sendable {
         return RFCDocument(header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
     }
 
+    /// Every anchor a section can be declared under, so no entry is: each a section can start
+    /// with, and each `makingAnchorsUnique` can rename a repeat to. That rename runs after
+    /// the prose is linked, and an entry settled onto `section-1-2` beside two sections
+    /// numbered 1 was renamed off it, away from its citations. A repeat takes the first free
+    /// `-n`, and what can hold one before it is an earlier repeat or another heading
+    /// spelled so (`name-foo-2`, for `Foo 2`), so for an anchor that can appear `c` times,
+    /// with `r` headings spelling `-n` of it, the rename lands within `-2` to `-(c + r)`.
+    static func reservedAnchors(_ candidates: [String]) -> Set<String> {
+        let counts = candidates.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        var reserved = Set(candidates)
+        for (anchor, count) in counts where count > 1 {
+            let spelled = counts.keys.count { $0.hasPrefix("\(anchor)-") && $0.dropFirst(anchor.count + 1).allSatisfy(\.isNumber) }
+            for suffix in 2...(count + spelled) { reserved.insert("\(anchor)-\(suffix)") }
+        }
+        return reserved
+    }
+
+    /// `reservedAnchors` for the sections `parse` would read from `text`.
+    static func reservedAnchors(in text: String) -> Set<String> {
+        reservedAnchors(sectionAnchorCandidates(prepared(text).sections))
+    }
+
+    /// Every anchor a section can start with, in document order: the lead-in, then each
+    /// heading's own and the one its body after the boilerplate takes.
+    private static func sectionAnchorCandidates(_ sections: [RawSection]) -> [String] {
+        ["preamble"] + sections.compactMap(\.heading).flatMap { [$0.anchor, "after-\($0.anchor)"] }
+    }
+
+    /// Each entry's anchor as it will be declared, settled before any prose is linked so a
+    /// citation points at the anchor its entry ends with. Renaming repeats afterwards, as
+    /// `makingAnchorsUnique` does sections, moved entries out from under the citations
+    /// already pointing at them: `[X]`, `[X]`, `[X-2]` made the second `X-2` and the third
+    /// `X-2-2`, so `[X-2]` opened the second `[X]`; `[ECMA TR 53]` and `[ECMA TR/53]` spell
+    /// one name, and one of them is renamed. The first holder of an anchor keeps it; a
+    /// repeat takes the first `-2`, `-3` that no entry is declared under and no section can
+    /// take, so none is renamed again.
+    static func settlingEntryAnchors(_ lists: [Int: [Reference]], reserved: Set<String>) -> [Int: [Reference]] {
+        var lists = lists
+        let declared = Set(lists.values.joined().map(\.anchor))
+        var taken = reserved
+        for index in lists.keys.sorted() {
+            var list = lists[index] ?? []
+            for entry in list.indices {
+                let anchor = list[entry].anchor
+                if taken.insert(anchor).inserted { continue }
+                var suffix = 2
+                while taken.contains("\(anchor)-\(suffix)") || declared.contains("\(anchor)-\(suffix)") { suffix += 1 }
+                list[entry].anchor = "\(anchor)-\(suffix)"
+                taken.insert(list[entry].anchor)
+            }
+            lists[index] = list
+        }
+        return lists
+    }
+
     /// An anchor is what a deep link, the table of contents and a reading position key off,
     /// and the XML declares each one as an ID, sections and bibliography entries alike.
     /// Headings that repeat -- two `Introduction`s in RFC 1, two sections numbered 1 in RFC
     /// 19 -- and a bibliography listing one label twice gave two elements one anchor in 526
     /// documents (#65), and a link landed on whichever came first. A repeat takes the next
     /// free `-2`, `-3`, the way xml2rfc numbers them; the first keeps its anchor, so every
-    /// link that landed on it still does. An entry keeps its label as `displayAnchor`.
+    /// link that landed on it still does. An entry keeps its label as `displayAnchor`, and
+    /// arrives here unique already (`settlingEntryAnchors`), clear of every anchor a
+    /// section's repeat can be renamed to (`reservedAnchors`).
     private static func makingAnchorsUnique(_ sections: [Section]) -> [Section] {
         var taken: Set<String> = []
         func unique(_ anchor: String) -> String {
@@ -569,7 +664,7 @@ public struct LegacyTextParser: Sendable {
     /// paragraph indents its first line and sets its second at the margin, and ending at the
     /// second line left the first behind in the front matter. So the front matter ends where
     /// it used to or sooner, never later.
-    private static func splitFrontMatter(_ lines: [Line]) -> (front: [String], bodyStart: Int) {
+    private static func splitFrontMatter(_ lines: [Line], colonNumbered: Bool) -> (front: [String], bodyStart: Int) {
         var front: [String] = []
         var run = 0
         // Where the current run starts, and how much front matter there was before it: the
@@ -611,7 +706,7 @@ public struct LegacyTextParser: Sendable {
             // Street` for a section, and an appendix would not do either, since `A
             // Standard for ...` reads as appendix A.
             if run - skipped == 2, !startsRun, string.startsAtColumnZero,
-               let heading = heading(from: string), !heading.isAppendix,
+               let heading = heading(from: string, colonNumbered: colonNumbered), !heading.isAppendix,
                heading.number?.split(separator: ".").first == "1" {
                 return (front, offset)
             }
@@ -621,7 +716,7 @@ public struct LegacyTextParser: Sendable {
                 // body's indent, which is not known until this scan has finished. Stopping
                 // early only leaves a line in the body that turns out not to be a heading;
                 // stopping late would swallow it into the front matter and lose it.
-                if string.startsAtColumnZero, heading(from: string) != nil {
+                if string.startsAtColumnZero, heading(from: string, colonNumbered: colonNumbered) != nil {
                     return split(firstParagraph ?? start)
                 }
             }
@@ -777,10 +872,10 @@ public struct LegacyTextParser: Sendable {
     /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
     /// body starts there too — so that the indent says nothing — it also has to stand alone
     /// between blank lines. `heading(from:)` judges the text; this judges the position.
-    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, startsBlock: Bool) -> HeadingInfo? {
+    private static func heading(at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool) -> HeadingInfo? {
         guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
         guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-        return heading(from: string)
+        return heading(from: string, colonNumbered: colonNumbered)
     }
 
     private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
@@ -819,10 +914,11 @@ public struct LegacyTextParser: Sendable {
         return result
     }
 
-    private static func heading(from line: String) -> HeadingInfo? {
+    private static func heading(from line: String, colonNumbered: Bool) -> HeadingInfo? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed.count < 120 else { return nil }
         if let match = trimmed.firstMatch(of: numberedHeadingPattern) {
+            guard colonNumbered || match.separator != ":" else { return nil }
             let number = String(match.number)
             let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
             return HeadingInfo(number: number, title: title, isAppendix: false, anchor: "section-\(number)", depth: number.split(separator: ".").count)
@@ -878,10 +974,97 @@ public struct LegacyTextParser: Sendable {
 
     nonisolated(unsafe) private static let bulletPattern = #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
     nonisolated(unsafe) private static let numberedItemPattern = #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
-    nonisolated(unsafe) private static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+    /// `containsArtwork` answers the same question byte by byte; an alternative added
+    /// here has to be added there, and `theByteScansAgreeWithTheRegexes` is the guard.
+    nonisolated(unsafe) static let artworkPattern = #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
     /// A run of three or more spaces between two non-space characters, not following
     /// sentence punctuation: a column gap rather than the gap after a full stop.
-    nonisolated(unsafe) private static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+    nonisolated(unsafe) static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+
+    /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
+    /// of every block the prose test sees. Swift's regex engine tries each alternative
+    /// at each character, and `diagnose` was about half of `parse`. On an ASCII line --
+    /// nearly every line of the corpus -- a pass over the trimmed bytes answers the same
+    /// question; any other line goes to the regex. So does a line holding `\r`, because
+    /// the regex reads `\r\n` as one character and would count one space where the
+    /// bytes count two.
+    ///
+    /// The report's count of artwork matches still comes from the regex: which
+    /// alternative claims an overlap decides that count, and it is offline.
+    static func containsArtwork(_ line: String) -> Bool {
+        if let found = withTrimmedASCII(line, { bytes in
+            for index in bytes.indices {
+                let found = switch Unicode.Scalar(bytes[index]) {
+                case "+": bytes.holds("+-", at: index)
+                case "-": bytes.holds("-+", at: index) || bytes.holds("->", at: index) || bytes.holds("---", at: index)
+                case "/": bytes.holds("/_", at: index)
+                case "\\": bytes.holds("\\_", at: index)
+                case "_": bytes.holds("_/", at: index) || bytes.holds("_\\", at: index)
+                case ".": bytes.holds("....", at: index)
+                case "=": bytes.holds("===", at: index)
+                case "<": bytes.holds("<-", at: index)
+                case "|": index + 1 < bytes.count && isSpace(bytes[index + 1])
+                case "0"..."9": digitGapDigit(bytes, at: index)
+                default: isSpace(bytes[index]) && bytes.holds("|", at: index + 1)
+                }
+                if found { return true }
+            }
+            return false
+        }) {
+            return found
+        }
+        return line.trimmingCharacters(in: .whitespaces).contains(artworkPattern)
+    }
+
+    /// A digit, a run of two or more spaces, a digit: `1   2` in a table.
+    private static func digitGapDigit(_ bytes: UnsafeBufferPointer<UInt8>, at index: Int) -> Bool {
+        var end = index + 1
+        while end < bytes.count, isSpace(bytes[end]) { end += 1 }
+        return end - index - 1 >= 2 && end < bytes.count && (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(bytes[end])
+    }
+
+    /// Three or more spaces before a non-space, where what precedes the run is not
+    /// sentence punctuation. The regex's `[^.?!:]` also admits a space, so a run of four
+    /// needs nothing before it: its first space is that character.
+    static func hasInternalGap(_ line: String) -> Bool {
+        if let found = withTrimmedASCII(line, { bytes in
+            var index = 0
+            while index < bytes.count {
+                guard isSpace(bytes[index]) else {
+                    index += 1
+                    continue
+                }
+                let start = index
+                while index < bytes.count, isSpace(bytes[index]) { index += 1 }
+                guard index < bytes.count else { return false }
+                let run = index - start
+                if run >= 4 { return true }
+                if run == 3, start > 0, !".?!:".utf8.contains(bytes[start - 1]) { return true }
+            }
+            return false
+        }) {
+            return found
+        }
+        return line.trimmingCharacters(in: .whitespaces).contains(internalGapPattern)
+    }
+
+    /// `line` trimmed as `.whitespaces` trims it -- spaces and tabs, in ASCII -- when every
+    /// byte is ASCII and none is `\r`; nil otherwise, for the caller to use the regex.
+    private static func withTrimmedASCII(_ line: String, _ body: (UnsafeBufferPointer<UInt8>) -> Bool) -> Bool? {
+        var line = line
+        return line.withUTF8 { bytes in
+            guard bytes.allSatisfy({ $0 < 0x80 && $0 != UInt8(ascii: "\r") }) else { return nil }
+            var start = bytes.startIndex, end = bytes.endIndex
+            while start < end, bytes[start] == 0x20 || bytes[start] == 0x09 { start += 1 }
+            while end > start, bytes[end - 1] == 0x20 || bytes[end - 1] == 0x09 { end -= 1 }
+            return body(UnsafeBufferPointer(rebasing: bytes[start..<end]))
+        }
+    }
+
+    /// `\s` over ASCII: space, and tab through carriage return.
+    private static func isSpace(_ byte: UInt8) -> Bool {
+        byte == 0x20 || (0x09...0x0D).contains(byte)
+    }
 
     private static func blocks(from rawBlocks: [RawBlock], linker: InlineLinker) -> [Block] {
         // Re-join paragraphs that a page break cut in half.
@@ -1053,14 +1236,13 @@ public struct LegacyTextParser: Sendable {
                 ragged = true
                 if !thorough { break }
             }
-            let content = line.trimmingCharacters(in: .whitespaces)
             if thorough {
-                diagnosis.artworkMatches += content.matches(of: artworkPattern).count
-            } else if content.contains(artworkPattern) {
+                diagnosis.artworkMatches += line.trimmingCharacters(in: .whitespaces).matches(of: artworkPattern).count
+            } else if containsArtwork(line) {
                 diagnosis.artworkMatches = 1
                 break
             }
-            if !justified, content.contains(internalGapPattern) {
+            if !justified, hasInternalGap(line) {
                 gapped = true
                 if !thorough { break }
             }
@@ -1319,11 +1501,17 @@ public struct LegacyTextParser: Sendable {
         return references
     }
 
-    private static func reference(anchor: String, text: String) -> Reference {
+    private static func reference(anchor label: String, text: String) -> Reference {
         var seriesInfo: [(name: String, value: String)] = []
-        if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) {
+        // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
+        // `Request for Comments 796`, `Request For Comments 990` and `RFC #189` only when an
+        // entry has none: once a bare `[1]` stopped naming RFC 1, an entry spelled so named
+        // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
+        // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
+        // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
+        if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#) ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#) {
             seriesInfo.append((name: "RFC", value: String(match.1)))
-        } else if let id = DocumentID(parsing: anchor) {
+        } else if let id = DocumentID(label: label) {
             seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
         }
         if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
@@ -1337,7 +1525,36 @@ public struct LegacyTextParser: Sendable {
             PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
         }
         let url = text.firstMatch(of: #/https?:\/\/[^\s>,]+/#).flatMap { URL(string: String($0.output).trimmingTrailingPunctuation()) }
-        return Reference(anchor: anchor, title: title, date: date, seriesInfo: seriesInfo, url: url, rawText: text)
+        var reference = Reference(anchor: label, title: title, date: date, seriesInfo: seriesInfo, url: url, rawText: text)
+        reference.anchor = entryAnchor(label: label, documentID: reference.documentID)
+        return reference
+    }
+
+    /// What an entry is declared under, which the XML requires to be a name (`NCName`):
+    /// no leading digit, no spaces. `[1]`, `[RFC 2119]` and `[Cheswick and Bellovin,
+    /// 1994]` are not, and gave 2,361 documents an anchor the schema refuses (#65). A
+    /// label that is a name stays the anchor, as `MIP-OPTIM` does in the published
+    /// series; one that is not becomes the document it cites -- the series writes
+    /// `anchor="RFC0791" derivedAnchor="1"` -- or else `ref-` and the label spelled as a
+    /// name. The label itself stays `displayAnchor`, which is what the entry reads as.
+    static func entryAnchor(label: String, documentID: DocumentID?) -> String {
+        func isNameCharacter(_ character: Character) -> Bool {
+            character.isLetter || ("0"..."9").contains(character) || "-._".contains(character)
+        }
+        if let first = label.first, first.isLetter || first == "_", label.allSatisfy(isNameCharacter) { return label }
+        if let documentID { return documentID.description }
+        var name = ""
+        for character in label {
+            if isNameCharacter(character) {
+                name.append(character)
+            } else if !name.isEmpty, !name.hasSuffix("-") {
+                name.append("-")
+            }
+        }
+        while name.hasSuffix("-") { name.removeLast() }
+        // `[*]` and `[**]` mark notes (RFC 2130, RFC 906) and spell no name at all; they
+        // were `ref-`, and a second one `ref--2`.
+        return "ref-\(name.isEmpty ? "note" : name)"
     }
 }
 
@@ -1353,14 +1570,14 @@ struct InlineLinker: Sendable {
         var inline: Inline
     }
 
-    nonisolated(unsafe) private static let sectionOfRFCPattern = #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#
+    nonisolated(unsafe) static let sectionOfRFCPattern = #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#
     /// A bracket holding a single citation tag. The tag may carry internal spaces,
     /// because roughly a seventh of the corpus sets its citations as `[RFC 2211]`
     /// rather than `[RFC2211]`; a class that admitted no space left those matching
     /// neither this pattern nor the bare one. Anything that is not a document once
     /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
     /// the bare pattern picks up whatever RFC sits inside it.
-    nonisolated(unsafe) private static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#
+    nonisolated(unsafe) static let bracketPattern = #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#
     /// Deliberately blind to a preceding `[`. A multi-anchor citation
     /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
     /// beside the RFC are the author's -- so its RFC is linked where it stands and
@@ -1371,14 +1588,14 @@ struct InlineLinker: Sendable {
     /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
     /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
     /// larger of the two shapes going unlinked.
-    nonisolated(unsafe) private static let bareRFCPattern = #/\bRFC[\s\-]?(?<number>\d+)\b/#
+    nonisolated(unsafe) static let bareRFCPattern = #/\bRFC[\s\-]?(?<number>\d+)\b/#
     /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
     /// reference but only the first carries the word, so the numbers are linked where
     /// they stand and the sentence is left to read as it was set.
-    nonisolated(unsafe) private static let rfcListPattern = #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#
+    nonisolated(unsafe) static let rfcListPattern = #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#
     nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
-    nonisolated(unsafe) private static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
-    nonisolated(unsafe) private static let urlPattern = #/https?:\/\/[^\s<>"]+/#
+    nonisolated(unsafe) static let sectionPattern = #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#
+    nonisolated(unsafe) static let urlPattern = #/https?:\/\/[^\s<>"]+/#
 
     /// What a matched mention reads as: nil when the document spelled the reference
     /// the way the series spells itself, so the label composes back identically, and
@@ -1391,26 +1608,49 @@ struct InlineLinker: Sendable {
         return canonical ? nil : CrossReference.nonBreakingLabel(matched)
     }
 
-    func link(_ text: String) -> [Inline] {
-        // Every pattern below needs one of four literals to match at all, and a
-        // substring scan does not start the regex engine. Most fragments carry no
-        // citation, and the XML parser now runs this over every text node of every
-        // document where it used to run over none.
-        //
-        // The scan is over UTF-8 and over first bytes alone -- `[`, and the letters
-        // `RFC`, `http` and `Section` open with -- because a grapheme-aware substring
-        // search costs an order of magnitude more per fragment, and this was four of
-        // them on exactly the fragments that match nothing. A fragment holding an `R`
-        // and no `RFC` pays one regex pass it did not need, which is the cheaper half
-        // of the trade.
-        guard !text.isEmpty else { return [] }
-        guard text.utf8.contains(where: { $0 == 0x5B || $0 == 0x52 || $0 == 0x68 || $0 == 0x53 }) else {
-            return [.text(text)]
+    /// Which of the literals the patterns open with a fragment holds, byte for byte.
+    /// Each is necessary for its pattern to match -- the patterns are case-sensitive,
+    /// and a grapheme the regex reads as `C` is the byte `C` -- so a pattern whose
+    /// literal is absent is skipped without changing what `link` returns.
+    /// A pattern above that stops needing its literal -- a `(?i)`, a lowercase
+    /// `section`, a `www.` URL -- has to change this too, or its matches are dropped
+    /// without a word; `theLiteralGateSkipsNoMatch` is the guard.
+    struct Literals {
+        var bracket = false, rfc = false, rfcs = false, section = false, http = false
+        var any: Bool { bracket || rfc || section || http }
+
+        init(in text: String) {
+            var text = text
+            text.withUTF8 { bytes in
+                for index in bytes.indices {
+                    switch Unicode.Scalar(bytes[index]) {
+                    case "[": bracket = true
+                    case "R" where bytes.holds("RFC", at: index):
+                        rfc = true
+                        if bytes.holds("RFCs", at: index) { rfcs = true }
+                    case "S" where bytes.holds("Section", at: index): section = true
+                    case "h" where bytes.holds("http", at: index): http = true
+                    default: continue
+                    }
+                }
+            }
         }
+    }
+
+    func link(_ text: String) -> [Inline] {
+        // Every pattern below needs a literal to match at all -- `[`, `RFC`, `RFCs`,
+        // `Section`, `http` -- and a pass over the UTF-8 does not start the regex
+        // engine. Most fragments carry no citation, and the XML parser runs this over
+        // every text node of every document. The pass used to test first bytes only,
+        // and one of them was `h`, which nearly every sentence holds: all six patterns
+        // ran on nearly every fragment.
+        guard !text.isEmpty else { return [] }
+        let literals = Literals(in: text)
+        guard literals.any else { return [.text(text)] }
 
         var candidates: [Candidate] = []
 
-        for match in text.matches(of: Self.sectionOfRFCPattern) {
+        for match in literals.rfc && literals.section ? text.matches(of: Self.sectionOfRFCPattern) : [] {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 // The matched prose *is* the label we compose, so it is left to be
@@ -1419,7 +1659,7 @@ struct InlineLinker: Sendable {
                 CrossReference(target: .document(.rfc(number), section: String(match.section)), sectionFormat: .of)
             )))
         }
-        for match in text.matches(of: Self.bracketPattern) {
+        for match in literals.bracket ? text.matches(of: Self.bracketPattern) : [] {
             let anchor = String(match.anchor)
             // Parsed once: the label needs it on every path, so the hit path's is free.
             let parsed = DocumentID(parsing: anchor)
@@ -1435,7 +1675,7 @@ struct InlineLinker: Sendable {
                 CrossReference(target: target, text: Self.label(String(text[match.range]), canonicalFor: parsed))
             )))
         }
-        for match in text.matches(of: Self.bareRFCPattern) {
+        for match in literals.rfc ? text.matches(of: Self.bareRFCPattern) : [] {
             guard let number = Int(match.number) else { continue }
             candidates.append(Candidate(range: match.range, inline: .crossReference(
                 CrossReference(target: .document(.rfc(number), section: nil),
@@ -1443,7 +1683,7 @@ struct InlineLinker: Sendable {
             )))
         }
         // Only the plural opens a list, and this is the dearest of the six patterns.
-        if text.contains("RFCs") {
+        if literals.rfcs {
             for list in text.matches(of: Self.rfcListPattern) {
                 for match in text[list.range].matches(of: Self.listNumberPattern) {
                     guard let number = Int(match.output) else { continue }
@@ -1456,7 +1696,7 @@ struct InlineLinker: Sendable {
         // Skipped outright when there are no section numbers to match, which is how
         // the XML parser runs: `<xref>` is how authored XML points at a section, so
         // every match of this pass would be filtered out again.
-        if !sectionNumbers.isEmpty {
+        if !sectionNumbers.isEmpty, literals.section {
             for match in text.matches(of: Self.sectionPattern)
             where sectionNumbers.contains(String(match.section)) {
                 candidates.append(Candidate(range: match.range, inline: .crossReference(
@@ -1464,7 +1704,7 @@ struct InlineLinker: Sendable {
                 )))
             }
         }
-        for match in text.matches(of: Self.urlPattern) {
+        for match in literals.http ? text.matches(of: Self.urlPattern) : [] {
             let raw = String(match.output).trimmingTrailingPunctuation()
             guard let url = URL(string: raw) else { continue }
             let end = text.index(match.range.lowerBound, offsetBy: raw.count)
@@ -1493,6 +1733,16 @@ struct InlineLinker: Sendable {
 }
 
 // MARK: - String helpers
+
+extension UnsafeBufferPointer<UInt8> {
+    /// Whether `literal`'s bytes start at `index`: a substring test that does not start
+    /// the regex engine or break graphemes, for literals the caller knows are ASCII.
+    func holds(_ literal: StaticString, at index: Int) -> Bool {
+        let count = literal.utf8CodeUnitCount
+        guard index >= 0, index + count <= self.count else { return false }
+        return (0..<count).allSatisfy { self[index + $0] == literal.utf8Start[$0] }
+    }
+}
 
 extension String {
     var isBlank: Bool { allSatisfy(\.isWhitespace) }
