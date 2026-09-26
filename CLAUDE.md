@@ -9,7 +9,7 @@ Everything goes through the `Makefile`:
 | Command | What |
 |---|---|
 | `make check` | `lint build test` — the gate before committing |
-| `make test` | RFCKit test suite (~60 tests, ~0.1 s, no simulator) |
+| `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK, not part of `make check`) |
 | `swift test --package-path Packages/RFCKit --filter <testName>` | one test or suite |
 | `make lint` / `make fmt` | `swiftlint lint --strict` / `swiftlint --fix` |
