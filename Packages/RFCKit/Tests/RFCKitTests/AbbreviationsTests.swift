@@ -124,4 +124,154 @@ struct AbbreviationsTests {
     let prose: [Block] = [.paragraph(Paragraph(text: "The round-trip time of a probe."))]
     #expect(Abbreviations.glossaryEntry(term: "RTT", definition: prose) == nil)
   }
+
+  // MARK: Precision, from the full corpus
+
+  /// The match takes the nearest word with the right initial, so a lowercase
+  /// function word in the expansion stole the start. Measured over the corpus,
+  /// 69 expansions began that way; the earlier word with the initial is the start.
+  @Test func anExpansionDoesNotStartOnAFunctionWord() {
+    #expect(
+      pairs("the Abstraction and Control of TE Networks (ACTN) framework")
+        == ["ACTN=Abstraction and Control of TE Networks"])
+    #expect(
+      pairs("the Access Network Discovery and Selection Function (ANDSF) server")
+        == ["ANDSF=Access Network Discovery and Selection Function"])
+    #expect(
+      pairs("Functional Requirements for Bibliographic Records (FRBR)")
+        == ["FRBR=Functional Requirements for Bibliographic Records"])
+  }
+
+  /// With no earlier word to start on, the words are not an expansion.
+  @Test func withNoContentWordToStartOnThereIsNone() {
+    #expect(pairs("Dial the dialed directory number (TN) now").isEmpty)
+  }
+
+  /// Moving back is only safe when the words it takes in are the short form's
+  /// own. `routers` has no letter of `ABN`, so `all routers in a Border Network`
+  /// is not its expansion, and neither is `a Border Network`. (With `AN`, the
+  /// window of four words already stops short of `all`.)
+  @Test func movingBackDoesNotTakeInWordsTheShortFormLacks() {
+    #expect(pairs("applies to all routers in a Border Network (ABN) that").isEmpty)
+    #expect(pairs("applies to all routers in a Network (AN) that").isEmpty)
+  }
+
+  /// Nor does it land on a function word that opens the sentence: `A` is no
+  /// better a start for being capitalised. The first `A` of `ANN` is the `a` of
+  /// `and`.
+  @Test func movingBackDoesNotLandOnACapitalisedFunctionWord() {
+    #expect(pairs("A Network and a Node (ANN) are").isEmpty)
+  }
+
+  @Test func moreFunctionWordsDoNotStartAnExpansion() {
+    #expect(pairs("support for this Protocol (TP) is optional").isEmpty)
+    #expect(pairs("a label is used within Multiprotocol Networks (WMN)").isEmpty)
+  }
+
+  /// A hyphenated word is one word, so `on-path` is not the function word `on`.
+  @Test func aHyphenatedWordIsOneWord() {
+    #expect(pairs("from on-path attackers (OPAs) that") == ["OPAs=on-path attackers"])
+  }
+
+  /// Nor does a match start partway into one: `peer` inside `peer-to-peer` is
+  /// not a word of its own.
+  @Test func aMatchDoesNotStartInsideAHyphenatedWord() {
+    #expect(pairs("uses a peer-to-peer Transport (PT) for") == ["PT=peer-to-peer Transport"])
+    #expect(pairs("a peer-to-peer Overlay (TO) is").isEmpty)
+  }
+
+  private func glossary(_ term: String, _ definition: String) -> String? {
+    Abbreviations.glossaryEntry(
+      term: term, definition: [.paragraph(Paragraph(text: definition))])?.long
+  }
+
+  /// An IANA registration's `URI:` field is a value, not an expansion; 115 of them
+  /// were read as one across the corpus. The glossary phrase ends at its first `:`,
+  /// and what is left, `urn`, does not hold the letters.
+  @Test func aURNIsNotAnExpansion() {
+    #expect(glossary("URI:", "urn:ietf:params:xml:ns:yang:ietf-bfd-types") == nil)
+  }
+
+  /// Letters matched across an `=`, an `@` or a `<` are code, an address or
+  /// markup, not words.
+  @Test func codeIsNotAnExpansion() {
+    #expect(pairs("the attribute Hash=Algorithm Name (HAN) is").isEmpty)
+    #expect(pairs("the From header's user@Host (UH) part").isEmpty)
+    #expect(pairs("encoded as Type <Length> Value (TLV) triples").isEmpty)
+  }
+
+  /// The citations a definition ends with are its sources.
+  @Test func trailingCitationsAreNotPartOfTheExpansion() {
+    #expect(glossary("PCE", "Path Computation Element RFC 4655") == "Path Computation Element")
+    #expect(
+      glossary("NVC", "Number of Virtual Components RFC 4328 RFC 4606")
+        == "Number of Virtual Components")
+    #expect(glossary("PCE", "Path Computation Element RFC-4655") == "Path Computation Element")
+    #expect(glossary("DS", "Differentiated Services BCP 38") == "Differentiated Services")
+    #expect(glossary("IP", "Internet Protocol STD 5") == "Internet Protocol")
+    #expect(glossary("PCE", "Path Computation Element I-D") == "Path Computation Element")
+  }
+
+  /// A citation the parser linked reads `RFC 4655` with a no-break space, which
+  /// `CrossReference.nonBreakingLabel` puts there so the label never wraps.
+  @Test func aLinkedCitationIsNotPartOfTheExpansion() {
+    func definition(_ section: String?) -> [Block] {
+      [
+        .paragraph(
+          Paragraph([
+            .text("Path Computation Element "),
+            .crossReference(CrossReference(target: .document(.rfc(4655), section: section))),
+          ]))
+      ]
+    }
+    #expect(
+      Abbreviations.glossaryEntry(term: "PCE", definition: definition(nil))?.long
+        == "Path Computation Element")
+    #expect(
+      Abbreviations.glossaryEntry(term: "PCE", definition: definition("4.2"))?.long
+        == "Path Computation Element")
+  }
+
+  @Test func aGlossaryPhraseEndsAtAColonOrADash() {
+    #expect(
+      glossary("SR-DB", "Segment Routing Database: the collection of SRGBs")
+        == "Segment Routing Database")
+    #expect(
+      glossary("ASBR", "Autonomous System Border Router -- a router used to connect ASes")
+        == "Autonomous System Border Router")
+    #expect(
+      glossary("ASBR", "Autonomous System Border Router - a router used to connect ASes")
+        == "Autonomous System Border Router")
+    #expect(
+      glossary("ASBR", "Autonomous System Border Router\u{2014}a router used to connect ASes")
+        == "Autonomous System Border Router")
+  }
+
+  /// A dash with no space around it joins a word, and the phrase keeps it.
+  @Test func aHyphenatedTermKeepsItsHyphen() {
+    #expect(glossary("OPA", "On-Path Attacker - an attacker on the path") == "On-Path Attacker")
+    #expect(glossary("AI", "All-Intra - every picture is intra-coded") == "All-Intra")
+  }
+
+  /// A definition that is a sentence holding the letters is not their expansion.
+  /// The letters do match the whole of it; what rules it out is its length, one
+  /// word past the cap here and far past it in the second.
+  @Test func aSentenceIsNotAGlossaryExpansion() {
+    let sentence =
+      "The legacy Route definition lacks the option to cater for packet-dependent routing"
+    #expect(Abbreviations.longForm(of: "Type-P", in: sentence) == sentence)
+    #expect(glossary("Type-P", sentence) == nil)
+    let long =
+      "Round trip time measured by each sender between sending a segment and seeing its acknowledgment"
+    #expect(Abbreviations.longForm(of: "RTT", in: long) == long)
+    #expect(glossary("RTT", long) == nil)
+  }
+
+  /// A first use is not held to a word count: its expansion can have more words
+  /// than letters, as long as they fit Schwartz and Hearst's window.
+  @Test func aLongFirstUseIsKept() {
+    #expect(
+      pairs("uses Bottleneck Bandwidth and Round-trip propagation time (BBR) to")
+        == ["BBR=Bottleneck Bandwidth and Round-trip propagation time"])
+  }
 }
