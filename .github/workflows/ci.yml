@@ -103,7 +103,11 @@ jobs:
       - name: Build for the iOS Simulator
         run: make build-ios
       - name: Compilation cache size
-        run: du -sh ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+        run: |
+          du -sh ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          for log in ~/Library/Developer/Xcode/DerivedData/RFCReader-*/Logs/Build/*.xcactivitylog; do
+            gunzip -c "$log" | strings | grep -E 'hits / [0-9]+ cacheable' || true
+          done
       - name: Save the compilation cache
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
