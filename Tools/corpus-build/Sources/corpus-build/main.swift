@@ -417,8 +417,15 @@ enum Convert {
             for block in blocks {
                 switch block {
                 case .paragraph: paragraphs += 1
-                case .list(let list): lists += 1; list.items.forEach { count($0.blocks) }
-                case .definitionList(let items): items.forEach { count($0.definition) }
+                case .list(let list):
+                    lists += 1
+                    for item in list.items {
+                        count(item.blocks)
+                    }
+                case .definitionList(let items):
+                    for item in items {
+                        count(item.definition)
+                    }
                 case .preformatted: artwork += 1
                 case .figure(let figure): count(figure.blocks)
                 case .blockQuote(let inner), .aside(let inner): count(inner)
@@ -427,7 +434,9 @@ enum Convert {
                 }
             }
         }
-        document.allSections.forEach { count($0.blocks) }
+        for section in document.allSections {
+            count(section.blocks)
+        }
 
         var warnings: [String] = []
         if document.header.id == nil { warnings.append("no RFC number recognised in front matter") }

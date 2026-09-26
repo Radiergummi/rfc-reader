@@ -62,7 +62,10 @@ public struct RFCDocument: Sendable {
             for block in blocks {
                 switch block {
                 case .paragraph(let paragraph): visitInlines(paragraph.inlines)
-                case .list(let list): list.items.forEach { visitBlocks($0.blocks) }
+                case .list(let list):
+                    for item in list.items {
+                        visitBlocks(item.blocks)
+                    }
                 case .definitionList(let items):
                     for item in items {
                         visitInlines(item.term)
@@ -70,7 +73,11 @@ public struct RFCDocument: Sendable {
                     }
                 case .figure(let figure): visitBlocks(figure.blocks)
                 case .table(let table):
-                    (table.header + table.rows).forEach { row in row.forEach { visitInlines($0) } }
+                    for row in table.header + table.rows {
+                        for cell in row {
+                            visitInlines(cell)
+                        }
+                    }
                 case .blockQuote(let inner), .aside(let inner): visitBlocks(inner)
                 case .references(let list):
                     for reference in list.entries {
