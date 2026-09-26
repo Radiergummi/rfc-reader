@@ -9,17 +9,21 @@ public struct AnchorIndex: Sendable, Equatable {
     public struct Entry: Sendable, Equatable {
         public let anchor: String
         public let offset: Int
-        /// True when the anchor names a `Section`, which the builder knows and
-        /// nothing downstream can tell by looking. See `DocumentTextBuilder.mark`.
-        public let isSection: Bool
         /// A section's heading as the reader draws it, which is what an in-document
-        /// reference's preview names; nil for any other anchor.
+        /// reference's preview names; nil for any other anchor. Only a section has
+        /// one, which the builder knows and nothing downstream can tell by looking.
+        /// See `DocumentTextBuilder.mark`.
         public let heading: String?
 
-        public init(anchor: String, offset: Int, isSection: Bool = false, heading: String? = nil) {
+        /// True when the anchor names a `Section`. Derived from `heading`, so the
+        /// two cannot disagree: a section without a heading would have no card.
+        public var isSection: Bool {
+            heading != nil
+        }
+
+        public init(anchor: String, offset: Int, heading: String? = nil) {
             self.anchor = anchor
             self.offset = offset
-            self.isSection = isSection
             self.heading = heading
         }
     }

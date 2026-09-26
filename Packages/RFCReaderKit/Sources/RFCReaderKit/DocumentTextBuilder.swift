@@ -70,15 +70,15 @@ public final class DocumentTextBuilder {
 
     /// Records where an anchor lands. Called immediately before the run it names.
     ///
-    /// `isSection` marks the anchors section tracking may report. The index covers
+    /// A `heading` marks the anchors section tracking may report. The index covers
     /// every anchor — paragraphs, figures, tables, reference rows — because
     /// `scroll(to:)` has to reach all of them, but every consumer of the reader's
     /// visible anchor resolves it with `RFCDocument.section(anchor:)`, so reporting a
     /// paragraph anchor would silently break all of them. Only `appendSection` passes
-    /// true, which is the one place that knows, and the heading with it.
-    func mark(_ anchor: String?, isSection: Bool = false, heading: String? = nil) {
+    /// one, which is the one place that knows.
+    func mark(_ anchor: String?, heading: String? = nil) {
         guard let anchor, !anchor.isEmpty else { return }
-        entries.append(AnchorIndex.Entry(anchor: anchor, offset: output.length, isSection: isSection, heading: heading))
+        entries.append(AnchorIndex.Entry(anchor: anchor, offset: output.length, heading: heading))
     }
 
     func append(_ string: String, _ attributes: [NSAttributedString.Key: Any]) {
@@ -118,7 +118,7 @@ extension DocumentTextBuilder {
 
     private func appendAbstract(_ blocks: [Block]) {
         guard !blocks.isEmpty else { return }
-        mark(Self.abstractAnchor, isSection: false)
+        mark(Self.abstractAnchor)
         append("Abstract\n", [
             .font: style.headingFont(depth: 1),
             .foregroundColor: RFCColors.label,
@@ -157,7 +157,7 @@ extension DocumentTextBuilder {
         // instead — see `ReferencesPanel` in the app — and is skipped here, heading
         // and all, rather than left behind as an empty "9. References".
         guard !Self.holdsOnlyReferences(section) else { return }
-        mark(section.anchor, isSection: true, heading: section.displayTitle)
+        mark(section.anchor, heading: section.displayTitle)
         // Through the same inline path as prose, because a heading cites documents
         // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
         // is in `base`, so the anchor, the font and the spacing carry across the

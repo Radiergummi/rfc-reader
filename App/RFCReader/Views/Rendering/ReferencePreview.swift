@@ -17,6 +17,9 @@ struct ReferencePreview: View {
     /// anchor.
     var heading: String?
 
+    /// The card's fixed width, which the iOS preview is also sized at.
+    static let width: CGFloat = 280
+
     private var documentID: DocumentID? {
         guard case .document(let id, _) = reference.target else { return nil }
         return id
@@ -45,6 +48,6 @@ struct ReferencePreview: View {
             }
         }
         .padding(12)
-        .frame(width: 280, alignment: .leading)
+        .frame(width: Self.width, alignment: .leading)
     }
 }

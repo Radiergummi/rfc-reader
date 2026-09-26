@@ -128,6 +128,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// follow it: see `clickedOnLink`. The next mouse-down starts a click of its
     /// own, and forgets it.
     private var forceClickedBox: ReferenceBox?
+    /// Where the pointer was, in screen coordinates, when it followed a link. Until
+    /// it moves from there, a scroll does not look for a reference under it: the
+    /// jump the click caused is not the reader resting on whatever it landed on.
+    private var linkClickPointer: NSPoint?
     #endif
 
     // MARK: - Storage
@@ -376,7 +380,7 @@ extension RFCTextViewCoordinator: UITextViewDelegate {
         // Sized here, the way the header host is in `layOut`: the preview is shown
         // at its view's own size, and a hosting controller's view is not sized to
         // its content until something lays it out.
-        host.view.frame.size = host.sizeThatFits(in: CGSize(width: 280, height: CGFloat.greatestFiniteMagnitude))
+        host.view.frame.size = host.sizeThatFits(in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
         // Opaque, as a context-menu preview's view is expected to be: the card has no
         // background of its own, because on macOS the popover supplies one.
         host.view.backgroundColor = .systemBackground
@@ -411,6 +415,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         // Following a reference is what the preview was for; one still timing would
         // otherwise open over the document the click is leaving.
         cancelHover()
+        linkClickPointer = NSEvent.mouseLocation
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
         // Read here rather than passed down from the view: by the time SwiftUI's
         // `openURL` sees the link, the click that carried the modifiers is gone.
@@ -430,21 +435,35 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// character rect that scrolling has just moved out from under it — and then
     /// hit-tests again where the pointer is, because the text moved and the pointer
     /// may not have. Every further scroll restarts that dwell, so a reference
-    /// scrolled under a resting pointer previews once scrolling stops.
+    /// scrolled under a resting pointer previews once scrolling stops. The hit test
+    /// waits for the dwell to end rather than running on every tick: a fling posts
+    /// a notification per frame, and only where the text comes to rest matters.
+    /// A scroll caused by following a link does neither; see `linkClickPointer`.
     @objc
     func viewportDidScroll(_ notification: Notification) {
         reportVisibleAnchor()
         cancelHover()
-        guard NSApp.isActive, let textView, let window = textView.window else { return }
-        let point = window.mouseLocationOutsideOfEventStream
-        if textView.visibleRect.contains(textView.convert(point, from: nil)) {
-            hover(atWindowPoint: point)
+        guard linkClickPointer == nil else { return }
+        dwellTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.previewUnderRestingPointer() }
         }
     }
 
-    /// The next click is a click of its own, not the tail of a force click.
+    private func previewUnderRestingPointer() {
+        guard NSApp.isActive, NSEvent.pressedMouseButtons == 0, let textView, let window = textView.window else { return }
+        let point = window.mouseLocationOutsideOfEventStream
+        guard textView.visibleRect.contains(textView.convert(point, from: nil)),
+              let (box, range) = reference(atWindowPoint: point) else { return }
+        hoveredBox = box
+        showPopover(for: box, range: range)
+    }
+
+    /// The next click is a click of its own, not the tail of a force click, and it
+    /// ends any dwell: the timer runs in `.default` mode, so a click or a drag's
+    /// tracking loop only delays it until the button is up again, and a drag that
+    /// began on a reference would otherwise open its card wherever the drag ended.
     func mouseDownInText() {
-        forceClickedBox = nil
+        cancelHover()
     }
 
     // MARK: - Hover preview
@@ -483,6 +502,11 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
     /// name the tracking area was installed and no hover ever reached this.
     @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
+        // Compared, not just cleared: a move event is not proof the pointer moved.
+        if let linkClickPointer {
+            guard NSEvent.mouseLocation != linkClickPointer else { return }
+            self.linkClickPointer = nil
+        }
         hover(atWindowPoint: event.locationInWindow)
     }
 
@@ -495,9 +519,8 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         cancelHover()
         hoveredBox = box
         dwellTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-            // A button still held is a click or a drag in progress, not a dwell: the
-            // timer runs in `.default` mode, so a click-tracking loop only delays it
-            // until the button comes up over a document it may already have left.
+            // A button still held is a click or a drag in progress, not a dwell. One
+            // in the text view has already cancelled this in `mouseDownInText`.
             Task { @MainActor in
                 guard NSEvent.pressedMouseButtons == 0 else { return }
                 self?.showPopover(for: box, range: range)
@@ -505,12 +528,18 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         }
     }
 
-    /// Force click on a reference: the same card, without the dwell. Anywhere else
-    /// it returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
+    /// Force click on a reference: the same card, without the dwell. Anywhere else,
+    /// and on a reference that has no card, it returns false and `ReaderTextView`
+    /// hands the event on to AppKit's Look Up.
     /// So does Look Up from the keyboard, which means the selection, not whatever
     /// the pointer happens to rest on — and a key event has no location to test.
+    /// So does an event from any other window, such as a menu's: its location is
+    /// in that window's coordinates, not the text view's.
     func quickLookReference(with event: NSEvent) -> Bool {
-        guard event.type != .keyDown, let (box, range) = reference(atWindowPoint: event.locationInWindow) else { return false }
+        guard event.type != .keyDown,
+              let textView, event.window === textView.window,
+              let (box, range) = reference(atWindowPoint: event.locationInWindow),
+              preview(for: box.reference) != nil else { return false }
         if hoveredBox === box, popover?.isShown == true {
             forceClickedBox = box
             return true
@@ -558,6 +587,7 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
         let host = NSHostingController(rootView: preview)
         let shown = NSPopover()
         shown.behavior = .transient
+        shown.delegate = self
         shown.contentViewController = host
         let anchor = rect.offsetBy(dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
         shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
@@ -599,6 +629,19 @@ extension RFCTextViewCoordinator: NSTextViewDelegate {
             return true
         }
         return union
+    }
+}
+
+extension RFCTextViewCoordinator: NSPopoverDelegate {
+    /// A transient popover also closes on its own — Esc, a click elsewhere, the app
+    /// going to the background — and then the hover it belonged to is over too, or
+    /// the same reference could not preview again until the pointer left it. Only
+    /// for the popover still current: one `cancelHover` closed has been replaced or
+    /// dropped already, and its close may land after the next hover began.
+    func popoverDidClose(_ notification: Notification) {
+        guard let closed = notification.object as? NSPopover, closed === popover else { return }
+        popover = nil
+        hoveredBox = nil
     }
 }
 #endif
