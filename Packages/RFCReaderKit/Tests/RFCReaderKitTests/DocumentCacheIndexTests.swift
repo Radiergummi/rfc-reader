@@ -52,6 +52,19 @@ struct DocumentCacheIndexTests {
     #expect(index.rfcNumbers.isEmpty)
   }
 
+  /// `rfc0791` parses as RFC 791, but the store names it `rfc791.txt`, so a zero-padded
+  /// file is not one of its bodies: counting it would answer for a file `remove` never
+  /// deletes.
+  @Test func aZeroPaddedNumberIsNotTheStoresName() throws {
+    let directory = try temporaryDirectory(containing: ["rfc0791.txt", "rfc9110.xml"])
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let index = DocumentCacheIndex(scanning: directory)
+
+    #expect(!index.contains(.rfc(791)))
+    #expect(index.rfcNumbers == [9110])
+  }
+
   @Test func otherSeriesAreCachedButAreNotRFCNumbers() throws {
     let directory = try temporaryDirectory(containing: ["bcp14.txt", "rfc2119.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
