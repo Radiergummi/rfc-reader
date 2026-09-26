@@ -41,6 +41,19 @@ struct UnicodeNotationTests {
     #expect(paragraph.inlines.contains(.code("🁳")), "the literal is set apart from the prose")
   }
 
+  /// The case #63 was filed for: RFC 9290 spells out the four letters of a
+  /// Hebrew word, and the reader showed only the letters.
+  @Test func rfc9290SpellsOutEachLetter() throws {
+    let paragraph = try #require(
+      try Self.paragraphs(in: "rfc9290.xml").first {
+        $0.plainText.contains("the sequence of characters is")
+      })
+    #expect(
+      paragraph.plainText.contains(
+        "the sequence of characters is: \"ש\" (HEBREW LETTER SHIN, U+05E9), \"ל\" (HEBREW LETTER LAMED, U+05DC), \"ו\" (HEBREW LETTER VAV, U+05D5), \"ם\" (HEBREW LETTER FINAL MEM, U+05DD). Note"
+      ))
+  }
+
   @Test func aNumberAloneReplacesTheCharacter() throws {
     let paragraph = try #require(
       try Self.paragraphs(in: "rfc8771.xml").first {

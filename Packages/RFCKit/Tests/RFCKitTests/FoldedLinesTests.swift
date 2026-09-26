@@ -1,9 +1,12 @@
+import Foundation
 import Testing
 
 @testable import RFCKit
 
-/// RFC 8792 unfolding, tested at the guard: `FoldedLines.unfold` is a pure function
-/// of one block's text, so these hand it lines rather than a whole document.
+/// RFC 8792 unfolding. Through the parser, on the two strategies as published:
+/// RFC 9985's YANG example (`'\'`, the one #64 was filed with) and RFC 9783's JSON
+/// Web Key (`'\\'`). At the guard, `FoldedLines.unfold` is a pure function of one
+/// block's text, so those tests hand it lines rather than a whole document.
 @Suite("Folded lines (RFC 8792)")
 struct FoldedLinesTests {
   private static let single =
@@ -13,6 +16,49 @@ struct FoldedLinesTests {
 
   private func block(_ lines: String...) -> String {
     lines.joined(separator: "\n")
+  }
+
+  // MARK: - Through the parser
+
+  /// Every verbatim block the document folds, in document order.
+  private static func foldedBlocks(in name: String) throws -> [Preformatted] {
+    func preformatted(in blocks: [Block]) -> [Preformatted] {
+      blocks.flatMap { block -> [Preformatted] in
+        switch block {
+        case .preformatted(let content): [content]
+        case .figure(let figure): preformatted(in: figure.blocks)
+        case .list(let list): list.items.flatMap { preformatted(in: $0.blocks) }
+        default: []
+        }
+      }
+    }
+    let document = try RFCXMLParser.parse(try Fixtures.data(name))
+    return document.allSections.flatMap { preformatted(in: $0.blocks) }
+      .filter { FoldedLines.strategy(of: $0.text) != nil }
+  }
+
+  /// A `'\'` continuation's leading spaces are indentation, so they go.
+  @Test func rfc9985UnfoldsItsYANGExample() throws {
+    let folded = try #require(try Self.foldedBlocks(in: "rfc9985.xml").first)
+    #expect(FoldedLines.strategy(of: folded.text) == .singleBackslash)
+    let unfolded = folded.unfoldedText
+    #expect(
+      unfolded.contains(
+        "    xmlns:bfd-mki=\"urn:ietf:params:xml:ns:yang:ietf-bfd-met-keyed-isaac\">"))
+    #expect(!unfolded.contains("line wrapping per RFC 8792"))
+    #expect(!unfolded.contains("\\\n"), "no fold is left")
+  }
+
+  /// A `'\\'` continuation marks the fold with its own `\`, so the spaces before
+  /// it go and the key reads as one unbroken value.
+  @Test func rfc9783UnfoldsItsKey() throws {
+    let folded = try #require(try Self.foldedBlocks(in: "rfc9783.xml").first)
+    #expect(FoldedLines.strategy(of: folded.text) == .doubleBackslash)
+    #expect(
+      folded.unfoldedText.contains(
+        "\"k\": \"3gOLNKyhJXaMXjNXq40Gs2e5qw1-i-Ek7cpH_gM6W7epPTB_8imqNv8kbBKVlk-s9xq3qm7E_WECt7OYMlWtkg\""
+      ))
+    #expect(!folded.unfoldedText.contains("line wrapping per RFC 8792"))
   }
 
   // MARK: - The header
