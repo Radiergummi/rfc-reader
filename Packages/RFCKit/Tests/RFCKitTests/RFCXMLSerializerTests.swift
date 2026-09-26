@@ -1,226 +1,292 @@
 import Foundation
 import Testing
+
 @testable import RFCKit
 
 @Suite("RFCXML serializer")
 struct RFCXMLSerializerTests {
-    /// A structural fingerprint: section tree, block kinds and paragraph text.
-    static func signature(_ document: RFCDocument) -> [String] {
-        var lines: [String] = []
-        func blockKind(_ block: Block) -> String {
-            switch block {
-            case .paragraph(let p): "P:" + p.plainText
-            case .list(let l): "L\(l.items.count):" + l.items.map { $0.blocks.map(blockKind).joined(separator: "|") }.joined(separator: "||")
-            case .definitionList(let d): "D\(d.count):" + d.map { $0.term.plainText }.joined(separator: "|")
-            case .preformatted(let a): "A:" + a.text
-            case .figure(let f): "F:\(f.title ?? "")" + f.blocks.map(blockKind).joined(separator: "|")
-            case .table(let t): "T:\(t.header.count)x\(t.rows.count)"
-            case .blockQuote(let b): "Q:" + b.map(blockKind).joined(separator: "|")
-            case .aside(let b): "S:" + b.map(blockKind).joined(separator: "|")
-            case .references(let r): "R:" + r.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(separator: ",")
-            }
+  /// A structural fingerprint: section tree, block kinds and paragraph text.
+  static func signature(_ document: RFCDocument) -> [String] {
+    var lines: [String] = []
+    func blockKind(_ block: Block) -> String {
+      switch block {
+      case .paragraph(let paragraph): "P:" + paragraph.plainText
+      case .list(let list):
+        "L\(list.items.count):"
+          + list.items.map { $0.blocks.map(blockKind).joined(separator: "|") }.joined(
+            separator: "||")
+      case .definitionList(let items):
+        "D\(items.count):" + items.map { $0.term.plainText }.joined(separator: "|")
+      case .preformatted(let artwork): "A:" + artwork.text
+      case .figure(let figure):
+        "F:\(figure.title ?? "")" + figure.blocks.map(blockKind).joined(separator: "|")
+      case .table(let table): "T:\(table.header.count)x\(table.rows.count)"
+      case .blockQuote(let blocks): "Q:" + blocks.map(blockKind).joined(separator: "|")
+      case .aside(let blocks): "S:" + blocks.map(blockKind).joined(separator: "|")
+      case .references(let list):
+        "R:"
+          + list.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(
+            separator: ",")
+      }
+    }
+    func visit(_ section: Section, depth: Int) {
+      lines.append(
+        "\(depth) \(section.anchor) [\(section.number ?? "-")] \(section.isAppendix ? "appendix " : "")\(section.title)"
+      )
+      for block in section.blocks { lines.append("  " + blockKind(block)) }
+      for sub in section.subsections { visit(sub, depth: depth + 1) }
+    }
+    lines.append(
+      "title=\(document.header.title) id=\(document.header.id?.description ?? "-") authors=\(document.header.authors.map(\.name))"
+    )
+    for block in document.header.abstract { lines.append("abstract " + blockKind(block)) }
+    for section in document.sections { visit(section, depth: 1) }
+    return lines
+  }
+
+  @Test func roundTripsRFCXML() throws {
+    let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let xml = RFCXMLSerializer().serialize(original)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(Self.signature(reparsed) == Self.signature(original))
+    #expect(reparsed.referencedDocuments == original.referencedDocuments)
+    #expect(reparsed.header.date == original.header.date)
+    #expect(reparsed.header.keywords == original.header.keywords)
+  }
+
+  @Test func anEntrysPrintedTagSurvivesARoundTrip() throws {
+    let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+    func tags(_ document: RFCDocument) -> [String] {
+      document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
+        if case .references(let list) = block {
+          return list.entries.map { "\($0.anchor)=\($0.displayAnchor)" }
         }
-        func visit(_ section: Section, depth: Int) {
-            lines.append("\(depth) \(section.anchor) [\(section.number ?? "-")] \(section.isAppendix ? "appendix " : "")\(section.title)")
-            for block in section.blocks { lines.append("  " + blockKind(block)) }
-            for sub in section.subsections { visit(sub, depth: depth + 1) }
-        }
-        lines.append("title=\(document.header.title) id=\(document.header.id?.description ?? "-") authors=\(document.header.authors.map(\.name))")
-        for block in document.header.abstract { lines.append("abstract " + blockKind(block)) }
-        for section in document.sections { visit(section, depth: 1) }
-        return lines
+        return []
+      }
+    }
+    #expect(tags(original).contains("HTTP2=HTTP/2"))
+    #expect(tags(reparsed) == tags(original))
+  }
+
+  @Test func roundTripsLegacyText() throws {
+    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let xml = RFCXMLSerializer(
+      options: .init(
+        generatorComment: "test",
+        sourceURL: RFCEditorEndpoints.document(.rfc(5234), format: .text)
+      )
+    ).serialize(parsed)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(reparsed.source == .xml)
+    #expect(Self.signature(reparsed) == Self.signature(parsed))
+    #expect(reparsed.referencedDocuments == parsed.referencedDocuments)
+    #expect(reparsed.header.obsoletes == [.rfc(4234)])
+    #expect(reparsed.header.category == "Standards Track")
+    #expect(xml.contains("<!-- test -->"))
+    #expect(xml.contains("rel=\"alternate\""))
+  }
+
+  @Test func canonicalLabelsSurviveLegacyRoundTrip() throws {
+    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let xml = RFCXMLSerializer().serialize(parsed)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+
+    let xrefs = reparsed.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
+      guard case .paragraph(let paragraph) = block else { return [] }
+      return paragraph.inlines.compactMap { inline in
+        if case .crossReference(let xref) = inline { return xref }
+        return nil
+      }
     }
 
-    @Test func roundTripsRFCXML() throws {
-        let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
-        let xml = RFCXMLSerializer().serialize(original)
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-        #expect(Self.signature(reparsed) == Self.signature(original))
-        #expect(reparsed.referencedDocuments == original.referencedDocuments)
-        #expect(reparsed.header.date == original.header.date)
-        #expect(reparsed.header.keywords == original.header.keywords)
+    let canonical = try #require(
+      xrefs.first { xref in
+        guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+        return xref.isCanonicalLabel
+      }, "round trip must preserve canonical RFC refs")
+    #expect(
+      canonical.text == nil,
+      "a composed label must survive LegacyTextParser → Serializer → XMLParser composed")
+    #expect(canonical.label.hasPrefix("[RFC"))
+
+    let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
+    #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
+  }
+
+  @Test func unresolvedDocumentReferencesSurviveAsLinks() throws {
+    // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
+    let document = RFCDocument(
+      header: DocumentHeader(
+        id: .rfc(99999), title: "Test", date: PublicationDate(year: 2030, month: 1)),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Intro",
+          blocks: [
+            .paragraph(
+              Paragraph([
+                .text("See "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of RFC 9110")),
+                .text(" and "),
+                .link(URL(string: "https://example.com/")!, [.text("example")]),
+                .text(" & <tags>."),
+              ]))
+          ])
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("&amp; &lt;tags&gt;."))
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
+      Issue.record("expected paragraph")
+      return
     }
+    #expect(
+      paragraph.inlines.contains(
+        .crossReference(
+          CrossReference(
+            target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of RFC 9110"))))
+    #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
+  }
 
-    @Test func anEntrysPrintedTagSurvivesARoundTrip() throws {
-        let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
-        let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
-        func tags(_ document: RFCDocument) -> [String] {
-            document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
-                if case .references(let list) = block { return list.entries.map { "\($0.anchor)=\($0.displayAnchor)" } }
-                return []
-            }
-        }
-        #expect(tags(original).contains("HTTP2=HTTP/2"))
-        #expect(tags(reparsed) == tags(original))
+  @Test func artworkIsPreservedByteForByte() throws {
+    let art = "  +---+\n  | a |  <-- & <\n  +---+"
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Art"),
+      sections: [
+        Section(
+          anchor: "s", number: "1", title: "S",
+          blocks: [.preformatted(Preformatted(kind: .artwork, text: art))])
+      ],
+      source: .text
+    )
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
+    guard case .preformatted(let back)? = reparsed.sections.first?.blocks.first else {
+      Issue.record("expected artwork")
+      return
     }
-
-    @Test func roundTripsLegacyText() throws {
-        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-        let xml = RFCXMLSerializer(options: .init(
-            generatorComment: "test",
-            sourceURL: RFCEditorEndpoints.document(.rfc(5234), format: .text)
-        )).serialize(parsed)
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-        #expect(reparsed.source == .xml)
-        #expect(Self.signature(reparsed) == Self.signature(parsed))
-        #expect(reparsed.referencedDocuments == parsed.referencedDocuments)
-        #expect(reparsed.header.obsoletes == [.rfc(4234)])
-        #expect(reparsed.header.category == "Standards Track")
-        #expect(xml.contains("<!-- test -->"))
-        #expect(xml.contains("rel=\"alternate\""))
-    }
-
-    @Test func canonicalLabelsSurviveLegacyRoundTrip() throws {
-        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-        let xml = RFCXMLSerializer().serialize(parsed)
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-
-        let xrefs = reparsed.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
-            guard case .paragraph(let paragraph) = block else { return [] }
-            return paragraph.inlines.compactMap { inline in
-                if case .crossReference(let xref) = inline { return xref }
-                return nil
-            }
-        }
-
-        let canonical = try #require(xrefs.first { xref in
-            guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
-            return xref.isCanonicalLabel
-        }, "round trip must preserve canonical RFC refs")
-        #expect(canonical.text == nil, "a composed label must survive LegacyTextParser → Serializer → XMLParser composed")
-        #expect(canonical.label.hasPrefix("[RFC"))
-
-        let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
-        #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
-    }
-
-    @Test func unresolvedDocumentReferencesSurviveAsLinks() throws {
-        // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
-        let document = RFCDocument(
-            header: DocumentHeader(id: .rfc(99999), title: "Test", date: PublicationDate(year: 2030, month: 1)),
-            sections: [Section(anchor: "section-1", number: "1", title: "Intro", blocks: [
-                .paragraph(Paragraph([
-                    .text("See "),
-                    .crossReference(CrossReference(target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of RFC 9110")),
-                    .text(" and "),
-                    .link(URL(string: "https://example.com/")!, [.text("example")]),
-                    .text(" & <tags>."),
-                ])),
-            ])],
-            source: .text
-        )
-        let xml = RFCXMLSerializer().serialize(document)
-        #expect(xml.contains("&amp; &lt;tags&gt;."))
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-        guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-            Issue.record("expected paragraph")
-            return
-        }
-        #expect(paragraph.inlines.contains(.crossReference(CrossReference(target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of RFC 9110"))))
-        #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
-    }
-
-    @Test func artworkIsPreservedByteForByte() throws {
-        let art = "  +---+\n  | a |  <-- & <\n  +---+"
-        let document = RFCDocument(
-            header: DocumentHeader(title: "Art"),
-            sections: [Section(anchor: "s", number: "1", title: "S", blocks: [.preformatted(Preformatted(kind: .artwork, text: art))])],
-            source: .text
-        )
-        let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
-        guard case .preformatted(let back)? = reparsed.sections.first?.blocks.first else {
-            Issue.record("expected artwork")
-            return
-        }
-        #expect(back.text == art)
-    }
+    #expect(back.text == art)
+  }
 }
 
 @Suite("RFCXML serializer: corpus findings")
 struct RFCXMLSerializerCorpusFindingsTests {
-    @Test func referencesSubsectionUnderMixedParentSurvives() throws {
-        // "10. References" whose 10.1 parsed to plain prose (no entries) and 10.2 to entries.
-        let document = RFCDocument(
-            header: DocumentHeader(id: .rfc(7019), title: "T"),
-            sections: [Section(anchor: "section-10", number: "10", title: "References", subsections: [
-                Section(anchor: "section-10.1", number: "10.1", title: "Normative References", blocks: [.paragraph(Paragraph(text: "None."))]),
-                Section(anchor: "section-10.2", number: "10.2", title: "Informative References", blocks: [
-                    .references(ReferenceList(title: "Informative References", entries: [
-                        Reference(anchor: "RFC2119", title: "Key words", seriesInfo: [(name: "RFC", value: "2119")]),
-                    ])),
-                ]),
-            ])],
-            source: .text
+  @Test func referencesSubsectionUnderMixedParentSurvives() throws {
+    // "10. References" whose 10.1 parsed to plain prose (no entries) and 10.2 to entries.
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(7019), title: "T"),
+      sections: [
+        Section(
+          anchor: "section-10", number: "10", title: "References",
+          subsections: [
+            Section(
+              anchor: "section-10.1", number: "10.1", title: "Normative References",
+              blocks: [.paragraph(Paragraph(text: "None."))]),
+            Section(
+              anchor: "section-10.2", number: "10.2", title: "Informative References",
+              blocks: [
+                .references(
+                  ReferenceList(
+                    title: "Informative References",
+                    entries: [
+                      Reference(
+                        anchor: "RFC2119", title: "Key words",
+                        seriesInfo: [(name: "RFC", value: "2119")])
+                    ]))
+              ]),
+          ])
+      ],
+      source: .text
+    )
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
+    #expect(reparsed.allSections.map(\.number) == ["10", "10.1", "10.2"])
+    #expect(reparsed.referencedDocuments == [.rfc(2119)])
+  }
+
+  /// RFCXML requires `author+` in every `<front>`, the document's and each reference's.
+  /// A legacy reference never has structured authors, and a header can name none --
+  /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
+  @Test func everyFrontHasAnAuthorEvenWhenNoneIsKnown() throws {
+    for fixture in ["rfc1.txt", "rfc5234.txt"] {
+      let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let xml = RFCXMLSerializer().serialize(parsed)
+      let authors = { (document: RFCDocument) in
+        document.allSections.flatMap(\.blocks).flatMap { block -> [[String]] in
+          guard case .references(let list) = block else { return [] }
+          return list.entries.map(\.authors)
+        }
+      }
+      let fronts = xml.components(separatedBy: "<front>").dropFirst().map {
+        $0.components(separatedBy: "</front>")[0]
+      }
+      #expect(
+        fronts.count == 1 + authors(parsed).count,
+        "\(fixture): the document's front and one per entry")
+      #expect(fronts.allSatisfy { $0.contains("<author") }, "\(fixture)")
+
+      // An empty `<author/>` says no author is given, and must not read back as one.
+      let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+      #expect(reparsed.header.authors.map(\.name) == parsed.header.authors.map(\.name))
+      #expect(authors(reparsed) == authors(parsed))
+    }
+    // The two cases this pins: a header naming no author, and entries naming none.
+    #expect(LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).header.authors.isEmpty)
+    #expect(
+      LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).allSections.contains { section in
+        section.blocks.contains {
+          if case .references(let list) = $0 {
+            list.entries.contains { $0.authors.isEmpty }
+          } else {
+            false
+          }
+        }
+      })
+  }
+
+  /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
+  /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
+  /// anchor is the part number for every numbered section, so it is written once, as the
+  /// `pn` the published series always carries, and read back from there.
+  @Test func anAnchorThatIsThePartNumberIsWrittenOnce() throws {
+    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    #expect(parsed.allSections.contains { $0.anchor == "section-1" })
+    let xml = RFCXMLSerializer().serialize(parsed)
+    // Per tag, whichever order the two attributes come in.
+    let repeated = xml.matches(of: #/<[a-z]+\s[^>]*>/#).compactMap { tag -> String? in
+      let anchor = tag.output.firstMatch(of: #/\banchor="([^"]*)"/#)?.1
+      return anchor != nil && anchor == tag.output.firstMatch(of: #/\bpn="([^"]*)"/#)?.1
+        ? String(tag.output) : nil
+    }
+    #expect(repeated.isEmpty, "\(repeated)")
+    // The anchor reads back from the `pn`, and the number and kind the `pn` also carries
+    // still read back from it.
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(reparsed.allSections.map(\.anchor) == parsed.allSections.map(\.anchor))
+    #expect(reparsed.allSections.map(\.number) == parsed.allSections.map(\.number))
+    #expect(reparsed.allSections.map(\.isAppendix) == parsed.allSections.map(\.isAppendix))
+  }
+
+  @Test func controlCharactersNeverReachTheXML() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
+      sections: [
+        Section(
+          anchor: "s", number: "1", title: "S", blocks: [.paragraph(Paragraph(text: "a\u{01}b\tc"))]
         )
-        let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
-        #expect(reparsed.allSections.map(\.number) == ["10", "10.1", "10.2"])
-        #expect(reparsed.referencedDocuments == [.rfc(2119)])
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(reparsed.header.title == "Title")
+    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
+      Issue.record("expected paragraph")
+      return
     }
-
-    /// RFCXML requires `author+` in every `<front>`, the document's and each reference's.
-    /// A legacy reference never has structured authors, and a header can name none --
-    /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
-    @Test func everyFrontHasAnAuthorEvenWhenNoneIsKnown() throws {
-        for fixture in ["rfc1.txt", "rfc5234.txt"] {
-            let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
-            let xml = RFCXMLSerializer().serialize(parsed)
-            let authors = { (document: RFCDocument) in
-                document.allSections.flatMap(\.blocks).flatMap { block -> [[String]] in
-                    guard case .references(let list) = block else { return [] }
-                    return list.entries.map(\.authors)
-                }
-            }
-            let fronts = xml.components(separatedBy: "<front>").dropFirst().map { $0.components(separatedBy: "</front>")[0] }
-            #expect(fronts.count == 1 + authors(parsed).count, "\(fixture): the document's front and one per entry")
-            #expect(fronts.allSatisfy { $0.contains("<author") }, "\(fixture)")
-
-            // An empty `<author/>` says no author is given, and must not read back as one.
-            let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-            #expect(reparsed.header.authors.map(\.name) == parsed.header.authors.map(\.name))
-            #expect(authors(reparsed) == authors(parsed))
-        }
-        // The two cases this pins: a header naming no author, and entries naming none.
-        #expect(LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).header.authors.isEmpty)
-        #expect(LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).allSections.contains { section in
-            section.blocks.contains { if case .references(let list) = $0 { list.entries.contains { $0.authors.isEmpty } } else { false } }
-        })
-    }
-
-    /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
-    /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
-    /// anchor is the part number for every numbered section, so it is written once, as the
-    /// `pn` the published series always carries, and read back from there.
-    @Test func anAnchorThatIsThePartNumberIsWrittenOnce() throws {
-        let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-        #expect(parsed.allSections.contains { $0.anchor == "section-1" })
-        let xml = RFCXMLSerializer().serialize(parsed)
-        // Per tag, whichever order the two attributes come in.
-        let repeated = xml.matches(of: #/<[a-z]+\s[^>]*>/#).compactMap { tag -> String? in
-            let anchor = tag.output.firstMatch(of: #/\banchor="([^"]*)"/#)?.1
-            return anchor != nil && anchor == tag.output.firstMatch(of: #/\bpn="([^"]*)"/#)?.1 ? String(tag.output) : nil
-        }
-        #expect(repeated.isEmpty, "\(repeated)")
-        // The anchor reads back from the `pn`, and the number and kind the `pn` also carries
-        // still read back from it.
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-        #expect(reparsed.allSections.map(\.anchor) == parsed.allSections.map(\.anchor))
-        #expect(reparsed.allSections.map(\.number) == parsed.allSections.map(\.number))
-        #expect(reparsed.allSections.map(\.isAppendix) == parsed.allSections.map(\.isAppendix))
-    }
-
-    @Test func controlCharactersNeverReachTheXML() throws {
-        let document = RFCDocument(
-            header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
-            sections: [Section(anchor: "s", number: "1", title: "S", blocks: [.paragraph(Paragraph(text: "a\u{01}b\tc"))])],
-            source: .text
-        )
-        let xml = RFCXMLSerializer().serialize(document)
-        let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-        #expect(reparsed.header.title == "Title")
-        guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-            Issue.record("expected paragraph")
-            return
-        }
-        #expect(paragraph.plainText == "ab c", "tab survives escaping and is collapsed like other whitespace")
-    }
+    #expect(
+      paragraph.plainText == "ab c", "tab survives escaping and is collapsed like other whitespace")
+  }
 }

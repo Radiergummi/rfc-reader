@@ -33,6 +33,10 @@ disabled_rules:
   # handled the same way; the failable initializer the rule prefers buys nothing.
   - optional_data_string_conversion
 
+  # swift-format owns layout. Where it wraps a closure's signature, the
+  # parameters go on the line after the opening brace, which this rule forbids.
+  - closure_parameter_position
+
 line_length:
   warning: 200
   error: 200
@@ -40,8 +44,20 @@ line_length:
   ignores_comments: true
   ignores_interpolated_strings: true
 
-# `i`, `n`, `w`, `h` in the layout and scanning loops.
+# SwiftLint's default lengths, so a name says what it holds. Excepted: `id`;
+# `x` and `y`, which are coordinates as CGPoint spells them; and `of`, one of
+# RFCXML's own sectionFormat values.
 identifier_name:
-  min_length:
-    warning: 1
-    error: 1
+  excluded:
+    - id
+    - x
+    - y
+    - of
+
+# swift-format puts the opening brace on a line of its own after a condition,
+# signature or type header that wraps; the brace still opens the same block.
+opening_brace:
+  ignore_multiline_statement_conditions: true
+  ignore_multiline_function_signatures: true
+  ignore_multiline_type_headers: true
+
