@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import RFCReaderKit
 
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
 ///
@@ -8,6 +9,10 @@ import RFCKit
 actor DocumentStore {
   private let directory: URL
   private var parsed: [DocumentID: RFCDocument] = [:]
+
+  /// Which bodies are on disk, scanned once on first use and kept current by
+  /// every write and removal below, so asking does not enumerate the directory.
+  private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
 
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
@@ -48,19 +53,12 @@ actor DocumentStore {
   }
 
   func isCached(_ id: DocumentID) -> Bool {
-    FileManager.default.fileExists(atPath: fileURL(id, format: .xml).path)
-      || FileManager.default.fileExists(atPath: fileURL(id, format: .text).path)
+    cachedDocuments.contains(id)
   }
 
   /// Numbers of every RFC with a cached body.
   func cachedNumbers() -> Set<Int> {
-    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-    return Set(
-      names.compactMap { name in
-        let stem = (name as NSString).deletingPathExtension
-        guard stem.hasPrefix("rfc"), let id = DocumentID(parsing: stem) else { return nil }
-        return id.number
-      })
+    cachedDocuments.rfcNumbers
   }
 
   func remove(_ id: DocumentID) {
@@ -68,6 +66,7 @@ actor DocumentStore {
     for format in [FileFormat.xml, .text] {
       try? FileManager.default.removeItem(at: fileURL(id, format: format))
     }
+    cachedDocuments.remove(id)
   }
 
   func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient) async throws
@@ -93,12 +92,14 @@ actor DocumentStore {
         let document = try? RFCXMLParser.parse(data)
       {
         try data.write(to: xmlURL, options: .atomic)
+        cachedDocuments.insert(id)
         parsed[id] = document
         return document
       }
     }
     let data = try await client.fetchDocumentData(id, format: .text)
     try data.write(to: textURL, options: .atomic)
+    cachedDocuments.insert(id)
     let document = LegacyTextParser.parse(data)
     parsed[id] = document
     return document
@@ -111,6 +112,7 @@ actor DocumentStore {
     }
     let data = try await client.fetchDocumentData(id, format: .text)
     try data.write(to: textURL, options: .atomic)
+    cachedDocuments.insert(id)
     return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
   }
 }
