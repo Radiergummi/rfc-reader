@@ -552,6 +552,9 @@ public struct RFCXMLParser: Sendable {
         return [.subscript(element.text)]
       case "br":
         return [.lineBreak]
+      case "u":
+        return UnicodeElementExpansion.inlines(
+          for: element.text, format: element["format"], ascii: element["ascii"])
       case "spanx":
         switch element["style"] {
         case "verb": return [.code(element.text)]
@@ -629,6 +632,11 @@ public struct RFCXMLParser: Sendable {
             continue
           }
           if case .text(let previous)? = result.last {
+            // An element that yields nothing (an empty `<u>`, a `<cref>`) leaves
+            // the spaces on either side of it meeting here.
+            if previous.hasSuffix(" "), collapsed.hasPrefix(" ") {
+              collapsed.removeFirst()
+            }
             result[result.count - 1] = .text(previous + collapsed)
           } else {
             result.append(.text(collapsed))
