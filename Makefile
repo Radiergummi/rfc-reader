@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
@@ -174,6 +174,22 @@ corpus-convert: corpus-tool
 # anything until it is fixed.
 corpus-schema-control:
 	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+
+## Check that each scripted override is still what its script makes
+# An override corrected by a script (corpus/overrides/rfcNNNN.py) is a snapshot of
+# the converter's output, so a converter change can leave it stale without anything
+# failing. This reruns every script against the current converter and compares.
+# Not part of `check`: it needs the source text, fetched here when it is missing,
+# and Python 3.9 or later. On a difference, commit the script's output.
+corpus-overrides-check: corpus-tool
+	@status=0; for script in $(CORPUS)/overrides/rfc*.py; do \
+	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
+	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
+	    curl -fsS -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
+	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
+	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
+	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
+	done; exit $$status
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

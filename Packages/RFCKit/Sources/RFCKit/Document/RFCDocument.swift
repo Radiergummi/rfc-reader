@@ -400,7 +400,7 @@ public struct Reference: Sendable, Identifiable {
             return DocumentID(series: series, number: number)
         }
         // A BCP or STD reference usually also names its RFC; the RFC is the thing to open.
-        return ids.first { $0.series == .rfc } ?? ids.first ?? DocumentID(parsing: anchor)
+        return ids.first { $0.series == .rfc } ?? ids.first ?? DocumentID(label: anchor)
     }
 }
 

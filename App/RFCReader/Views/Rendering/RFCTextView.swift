@@ -148,7 +148,8 @@ private struct Representable: UIViewRepresentable {
         // which is what the anchor arithmetic is expressed in.
         textView.contentInsetAdjustmentBehavior = .never
         textView.textContainer.lineFragmentPadding = 0
-        textView.textContainer.widthTracksTextView = true
+        // The coordinator sizes the container to the column; see `layOut(width:)`.
+        textView.textContainer.widthTracksTextView = false
         // Find-in-document, which is half of why the reader is a text view at all.
         textView.isFindInteractionEnabled = true
         textView.textLayoutManager?.delegate = context.coordinator
@@ -189,7 +190,8 @@ private struct Representable: NSViewRepresentable {
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = true
+        // The coordinator sizes the container to the column; see `layOut(width:)`.
+        textView.textContainer?.widthTracksTextView = false
         // The find bar lives in the scroll view, so `usesFindBar` needs the text view
         // to already be inside one — see where the scroll view is assembled below.
         textView.isIncrementalSearchingEnabled = true
