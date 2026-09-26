@@ -552,6 +552,9 @@ public struct RFCXMLParser: Sendable {
         return [.subscript(element.text)]
       case "br":
         return [.lineBreak]
+      case "u":
+        let format = element["format"]
+        return UnicodeNotation.expand(element.text, format: format, ascii: element["ascii"])
       case "spanx":
         switch element["style"] {
         case "verb": return [.code(element.text)]
