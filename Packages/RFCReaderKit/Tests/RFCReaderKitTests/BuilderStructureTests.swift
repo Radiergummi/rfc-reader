@@ -36,6 +36,20 @@ struct BuilderStructureTests {
     }
   }
 
+  /// What an in-document reference's preview names: the heading of the section
+  /// it points at, as the reader draws it. "Section 4.2" says where, not what. A
+  /// figure is anchored too, but has no heading to name.
+  @Test func aSectionAnchorNamesItsHeading() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      #expect(built.anchors.heading(of: section.anchor) == section.displayTitle)
+    }
+    #expect(built.anchors.offset(of: "fig-long") != nil)
+    #expect(built.anchors.heading(of: "fig-long") == nil)
+    #expect(built.anchors.heading(of: "no-such-anchor") == nil)
+  }
+
   @Test func theBuilderRecordsAnchorsInDocumentOrder() throws {
     let builder = DocumentTextBuilder(style: style)
     builder.appendDocument(try Fixtures.rfc8999())

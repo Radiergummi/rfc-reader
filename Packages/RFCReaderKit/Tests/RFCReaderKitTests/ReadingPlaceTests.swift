@@ -13,9 +13,9 @@ import Testing
 @Suite("Reading place")
 struct ReadingPlaceTests {
   private let index = AnchorIndex([
-    .init(anchor: "section-1", offset: 100, isSection: true),
+    .init(anchor: "section-1", offset: 100, heading: "1. Section"),
     .init(anchor: "section-1-1", offset: 130),
-    .init(anchor: "section-2", offset: 400, isSection: true),
+    .init(anchor: "section-2", offset: 400, heading: "2. Section"),
   ])
 
   @Test func recordsTheNearestAnchorOfAnyKindAndTheDistanceIntoIt() {
@@ -38,9 +38,9 @@ struct ReadingPlaceTests {
 
   @Test func followsItsAnchorToWhereverTheRebuildPutIt() {
     let rebuilt = AnchorIndex([
-      .init(anchor: "section-1", offset: 100, isSection: true),
+      .init(anchor: "section-1", offset: 100, heading: "1. Section"),
       .init(anchor: "section-1-1", offset: 180),
-      .init(anchor: "section-2", offset: 460, isSection: true),
+      .init(anchor: "section-2", offset: 460, heading: "2. Section"),
     ])
     #expect(
       ReadingPlace(anchor: "section-1-1", offset: 120).documentOffset(in: rebuilt, length: 600)
@@ -52,7 +52,7 @@ struct ReadingPlaceTests {
     // place must not spill into whatever follows it.
     let rebuilt = AnchorIndex([
       .init(anchor: "section-1-1", offset: 130),
-      .init(anchor: "section-2", offset: 200, isSection: true),
+      .init(anchor: "section-2", offset: 200, heading: "2. Section"),
     ])
     #expect(
       ReadingPlace(anchor: "section-1-1", offset: 120).documentOffset(in: rebuilt, length: 600)
@@ -282,9 +282,9 @@ struct ReadingPlaceLineGeometryTests {
 @Suite("Reading place tracker")
 struct ReadingPlaceTrackerTests {
   private let index = AnchorIndex([
-    .init(anchor: "section-1", offset: 100, isSection: true),
+    .init(anchor: "section-1", offset: 100, heading: "1. Section"),
     .init(anchor: "section-1-1", offset: 130),
-    .init(anchor: "section-2", offset: 400, isSection: true),
+    .init(anchor: "section-2", offset: 400, heading: "2. Section"),
   ])
   private let wide: CGFloat = 712
   private let narrow: CGFloat = 480

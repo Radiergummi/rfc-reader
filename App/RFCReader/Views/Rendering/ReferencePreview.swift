@@ -12,6 +12,13 @@ import SwiftUI
 struct ReferencePreview: View {
   let reference: CrossReference
   let library: LibraryModel
+  /// The section heading an in-document reference points at. The coordinator
+  /// shows no card for one without, so this is set exactly when the target is an
+  /// anchor.
+  var heading: String?
+
+  /// The card's fixed width, which the iOS preview is also sized at.
+  static let width: CGFloat = 280
 
   private var documentID: DocumentID? {
     guard case .document(let id, _) = reference.target else { return nil }
@@ -34,12 +41,13 @@ struct ReferencePreview: View {
         // or a corpus gap. Never a blank card: name what we do know.
         Text(documentID.displayName).font(.headline)
         Text("Not available in the library.").font(.callout).foregroundStyle(.secondary)
-      } else {
-        // An in-document anchor, or a reference with no resolvable target.
-        Text(reference.text ?? "Reference").font(.headline)
+      } else if let heading {
+        // A section of this document: "Section 4.2" says where, the heading
+        // says what.
+        Text(heading).font(.headline)
       }
     }
     .padding(12)
-    .frame(width: 280, alignment: .leading)
+    .frame(width: Self.width, alignment: .leading)
   }
 }

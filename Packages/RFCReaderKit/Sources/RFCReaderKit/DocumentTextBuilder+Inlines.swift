@@ -50,6 +50,14 @@ extension DocumentTextBuilder {
     case .link(let url, let inner):
       let result = NSMutableAttributedString(attributedString: inlineRuns(inner, base: base))
       result.addAttribute(.link, value: url, range: NSRange(location: 0, length: result.length))
+      #if !canImport(UIKit)
+        // Explicit, because the reader turns `displaysLinkToolTips` off: the
+        // implicit tooltip gave every reference its raw `rfc://` URL. Only an
+        // external link carries one — its URL is the one place its destination
+        // can be read before it is followed.
+        result.addAttribute(
+          .toolTip, value: url.absoluteString, range: NSRange(location: 0, length: result.length))
+      #endif
       return result
 
     case .crossReference(let xref):

@@ -197,8 +197,18 @@ struct ReaderInputs {
       // to already be inside one — see where the scroll view is assembled below.
       textView.isIncrementalSearchingEnabled = true
       textView.usesFindBar = true
+      // Off: the implicit tooltip gave every reference its raw `rfc://` URL. The
+      // builder gives an external link an explicit `.toolTip` of its own URL
+      // instead, so only a reference goes without — it has its preview.
+      textView.displaysLinkToolTips = false
       textView.textLayoutManager?.delegate = context.coordinator
       textView.delegate = context.coordinator
+      textView.quickLookReference = { [weak coordinator = context.coordinator] event in
+        coordinator?.quickLookReference(with: event) ?? false
+      }
+      textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
+        coordinator?.mouseDownInText()
+      }
 
       let host = NSHostingController(rootView: inputs.header)
       textView.addSubview(host.view)
@@ -230,9 +240,10 @@ struct ReaderInputs {
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on
     /// the coordinator means it cannot outlive this view), but a popover already
-    /// on screen would not otherwise close when the view goes away.
+    /// on screen would not otherwise close when the view goes away, and the
+    /// tracking area does not retain the coordinator it reports to.
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
-      coordinator.cancelHover()
+      coordinator.tearDownHoverTracking()
     }
   }
 #endif
