@@ -11,85 +11,28 @@ import Testing
 struct AnchorResolutionTests {
   /// Every anchor the model holds, anywhere in the document.
   static func anchors(in document: RFCDocument) -> Set<String> {
-    var anchors: Set<String> = []
-    func insert(_ anchor: String?) {
-      if let anchor { anchors.insert(anchor) }
-    }
-    func visit(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .paragraph(let paragraph): insert(paragraph.anchor)
-        case .list(let list):
-          for item in list.items {
-            insert(item.anchor)
-            visit(item.blocks)
-          }
-        case .definitionList(let items):
-          for item in items {
-            insert(item.anchor)
-            insert(item.definitionAnchor)
-            visit(item.definition)
-          }
-        case .preformatted(let content): insert(content.anchor)
-        case .figure(let figure):
-          insert(figure.anchor)
-          visit(figure.blocks)
-        case .table(let table):
-          insert(table.anchor)
-          table.rowAnchors.forEach(insert)
-        case .blockQuote(let inner), .aside(let inner): visit(inner)
-        case .references(let list):
-          for entry in list.entries { insert(entry.anchor) }
-        }
-      }
-    }
-    visit(document.header.abstract)
-    for section in document.allSections {
-      insert(section.anchor)
-      visit(section.blocks)
-    }
-    return anchors
+    let blocks = (document.header.abstract + document.allSections.flatMap(\.blocks)).flattened
+    return Set(document.allSections.map(\.anchor) + blocks.flatMap(\.anchors))
   }
 
   /// Every anchor a cross reference in the document's prose points at.
   static func citedAnchors(in document: RFCDocument) -> Set<String> {
-    var cited: Set<String> = []
-    func visit(_ inlines: [Inline]) {
-      for inline in inlines {
-        switch inline {
-        case .crossReference(let xref):
-          if case .anchor(let anchor) = xref.target { cited.insert(anchor) }
-        case .emphasis(let inner), .strong(let inner), .link(_, let inner): visit(inner)
-        default: break
-        }
-      }
-    }
-    func visit(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .paragraph(let paragraph): visit(paragraph.inlines)
-        case .list(let list):
-          for item in list.items { visit(item.blocks) }
-        case .definitionList(let items):
-          for item in items {
-            visit(item.term)
-            visit(item.definition)
-          }
-        case .figure(let figure): visit(figure.blocks)
-        case .table(let table): (table.header + table.rows).joined().forEach(visit)
-        case .blockQuote(let inner), .aside(let inner): visit(inner)
-        case .preformatted, .references: break
-        }
-      }
-    }
-    visit(document.header.abstract)
-    for section in document.allSections {
-      visit(section.title)
-      visit(section.blocks)
-    }
-    return cited
+    let blocks = (document.header.abstract + document.allSections.flatMap(\.blocks)).flattened
+    let prose = document.allSections.map(\.title) + blocks.flatMap(\.proseRuns)
+    return Set(
+      prose.flatMap(\.flattened).compactMap { inline in
+        guard case .crossReference(let xref) = inline, case .anchor(let anchor) = xref.target
+        else { return nil }
+        return anchor
+      })
   }
 
+  /// The prepped XML also cites every section by its `pn` and by its heading's
+  /// `slugifiedName` -- `section-4.2`, `name-introduction` -- which no part of the
+  /// model holds for a section with an anchor of its own. Those links all sit in
+  /// the pre-rendered `<toc>`, which the parser does not read: the reader builds
+  /// its contents from the sections. Prose cites a section by its `anchor`, which
+  /// the section keeps, so the invariant holds without an exception for either.
   @Test(arguments: [
     "rfc8761.xml", "rfc8771.xml", "rfc8999.xml", "rfc9197.xml", "rfc9220.xml", "rfc9271.xml",
     "rfc9682.xml",
@@ -110,6 +53,39 @@ struct AnchorResolutionTests {
   @Test func aRowKeepsItsAnchor() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
     #expect(Self.anchors(in: document).contains("EventFSD"))
+  }
+
+  /// No RFC yet anchors a `<thead>` row, but the schema lets one, and a link to it
+  /// should land as surely as a link to a body row. So RFC 9271's first table with
+  /// a header is given one, and the anchor has to come back through the serializer
+  /// and the parser on the header row, not on a body row.
+  @Test func aHeaderRowKeepsItsAnchor() throws {
+    var document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
+    func anchorFirstHeaderRow(in sections: inout [Section]) -> Bool {
+      for section in sections.indices {
+        for index in sections[section].blocks.indices {
+          guard case .table(var table) = sections[section].blocks[index], !table.header.isEmpty
+          else { continue }
+          table.headerRowAnchors = ["cited-header"]
+          sections[section].blocks[index] = .table(table)
+          return true
+        }
+        if anchorFirstHeaderRow(in: &sections[section].subsections) { return true }
+      }
+      return false
+    }
+    try #require(anchorFirstHeaderRow(in: &document.sections))
+
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    let tables = reparsed.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
+      if case .table(let table) = block { return table }
+      return nil
+    }
+    let table = try #require(tables.first { $0.anchor(ofHeaderRow: 0) == "cited-header" })
+    #expect(table.headerRowAnchors == ["cited-header"])
+    #expect(!table.rowAnchors.contains("cited-header"))
+    #expect(Self.anchors(in: reparsed).contains("cited-header"))
   }
 
   /// The serializer writes both back, so a round trip keeps the links whole.

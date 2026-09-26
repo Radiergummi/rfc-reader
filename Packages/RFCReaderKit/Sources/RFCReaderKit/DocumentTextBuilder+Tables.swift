@@ -77,7 +77,8 @@ extension DocumentTextBuilder {
     for (index, row) in (table.header + table.rows).enumerated() {
       let isHeader = index < table.header.count
       let attributes = isHeader ? headerAttributes : dataAttributes
-      if !isHeader { mark(table.anchor(ofRow: index - table.header.count)) }
+      let bodyIndex = index - table.header.count
+      mark(isHeader ? table.anchor(ofHeaderRow: index) : table.anchor(ofRow: bodyIndex))
       for (column, cell) in row.enumerated() {
         if column > 0 { append("\t", attributes) }
         output.append(inlineRuns(cell, base: attributes))
@@ -102,6 +103,9 @@ extension DocumentTextBuilder {
     labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
     let separatorAttributes = bodyAttributes(indent: indent)
 
+    // The header has no row of its own here: it labels every cell instead. A link
+    // to a header row lands at the top of the table, where the first label is.
+    for index in table.header.indices { mark(table.anchor(ofHeaderRow: index)) }
     for (index, row) in table.rows.enumerated() {
       mark(table.anchor(ofRow: index))
       for (column, cell) in row.enumerated() {

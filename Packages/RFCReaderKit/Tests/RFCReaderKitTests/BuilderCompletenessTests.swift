@@ -148,36 +148,13 @@ struct BuilderCompletenessTests {
     let built = DocumentTextBuilder.build(document, style: style)
 
     var expected: Set<String> = []
-    func visit(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .preformatted(let content): if let anchor = content.anchor { expected.insert(anchor) }
-        case .figure(let figure):
-          if let anchor = figure.anchor { expected.insert(anchor) }
-          visit(figure.blocks)
-        case .table(let table):
-          if let anchor = table.anchor { expected.insert(anchor) }
-          expected.formUnion(table.rowAnchors.compactMap { $0 })
-        case .list(let list):
-          for item in list.items {
-            visit(item.blocks)
-          }
-        case .definitionList(let items):
-          for item in items {
-            // A definition's own anchor can be cited apart from its term's (#166).
-            if let anchor = item.definitionAnchor { expected.insert(anchor) }
-            visit(item.definition)
-          }
-        case .blockQuote(let inner), .aside(let inner): visit(inner)
-        // Bibliography entries are not in the body; they are the panel's.
-        case .references: break
-        case .paragraph(let paragraph): if let anchor = paragraph.anchor { expected.insert(anchor) }
-        }
-      }
-    }
     for section in document.allSections where !DocumentTextBuilder.holdsOnlyReferences(section) {
       expected.insert(section.anchor)
-      visit(section.blocks)
+      for block in section.blocks.flattened {
+        // Bibliography entries are not in the body; they are the panel's.
+        if case .references = block { continue }
+        expected.formUnion(block.anchors)
+      }
     }
 
     for anchor in expected {

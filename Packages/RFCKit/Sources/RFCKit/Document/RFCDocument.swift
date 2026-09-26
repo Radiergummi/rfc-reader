@@ -50,49 +50,16 @@ public struct RFCDocument: Sendable {
   /// Every RFC referenced anywhere in the document, deduplicated and sorted.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
-    func visitInlines(_ inlines: [Inline]) {
-      for inline in inlines {
-        switch inline {
-        case .crossReference(let xref):
-          if case .document(let id, _) = xref.target { seen.insert(id) }
-        case .emphasis(let inner), .strong(let inner), .link(_, let inner):
-          visitInlines(inner)
-        default:
-          break
+    for block in allSections.flatMap(\.blocks).flattened {
+      for inline in block.proseRuns.flatMap(\.flattened) {
+        if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
+          seen.insert(id)
         }
       }
-    }
-    func visitBlocks(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .paragraph(let paragraph): visitInlines(paragraph.inlines)
-        case .list(let list):
-          for item in list.items {
-            visitBlocks(item.blocks)
-          }
-        case .definitionList(let items):
-          for item in items {
-            visitInlines(item.term)
-            visitBlocks(item.definition)
-          }
-        case .figure(let figure): visitBlocks(figure.blocks)
-        case .table(let table):
-          for row in table.header + table.rows {
-            for cell in row {
-              visitInlines(cell)
-            }
-          }
-        case .blockQuote(let inner), .aside(let inner): visitBlocks(inner)
-        case .references(let list):
-          for reference in list.entries {
-            if let id = reference.documentID { seen.insert(id) }
-          }
-        case .preformatted:
-          break
-        }
+      if case .references(let list) = block {
+        seen.formUnion(list.entries.compactMap(\.documentID))
       }
     }
-    for section in allSections { visitBlocks(section.blocks) }
     return seen.sorted()
   }
 }
@@ -345,10 +312,14 @@ public struct Table: Sendable {
   /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
   /// `EventFSD` (#166).
   public var rowAnchors: [String?]
+  /// The same for the header rows, by index into `header`. The schema lets a
+  /// `<thead>` row carry an anchor just as a body row can, and a link to one
+  /// should land as surely.
+  public var headerRowAnchors: [String?]
 
   public init(
     title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil, rowAnchors: [String?] = []
+    anchor: String? = nil, rowAnchors: [String?] = [], headerRowAnchors: [String?] = []
   ) {
     self.title = title
     self.number = number
@@ -356,11 +327,17 @@ public struct Table: Sendable {
     self.rows = rows
     self.anchor = anchor
     self.rowAnchors = rowAnchors
+    self.headerRowAnchors = headerRowAnchors
   }
 
   /// The anchor of body row `index`, if it has one.
   public func anchor(ofRow index: Int) -> String? {
     rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
+  }
+
+  /// The anchor of header row `index`, if it has one.
+  public func anchor(ofHeaderRow index: Int) -> String? {
+    headerRowAnchors.indices.contains(index) ? headerRowAnchors[index] : nil
   }
 }
 

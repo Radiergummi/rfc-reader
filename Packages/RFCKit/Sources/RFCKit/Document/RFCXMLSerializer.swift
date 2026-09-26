@@ -278,8 +278,8 @@ public struct RFCXMLSerializer: Sendable {
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for row in table.header {
-          writer.open("tr")
+        for (index, row) in table.header.enumerated() {
+          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
           for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
