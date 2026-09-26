@@ -37,7 +37,9 @@ struct ProseDiagnosticsTests {
 
   /// Past the classic cap of six, a document whose body sits deeper excuses the indent
   /// (#55) -- for sentences only. The same document sets its one-line code at that
-  /// depth, and a single line has no other guard to keep it artwork.
+  /// depth, and a single line has no other guard to keep it artwork. Refused within
+  /// the cap, it is refused for what it says rather than for its indent, and the
+  /// report names that apart: an indent of 9 is not too deep in such a document.
   @Test func aDeeperCapExcusesSentencesButNotCode() {
     let sentences = [
       "         Using a word that has strong semantic implications in the",
@@ -47,7 +49,8 @@ struct ProseDiagnosticsTests {
     #expect(LegacyTextParser.diagnose(sentences, maxIndent: 12).isProse)
 
     let code = ["         ::= { ifMauEntry 4 }"]
-    #expect(LegacyTextParser.diagnose(code, maxIndent: 12).rejections == [.indentTooDeep])
+    #expect(LegacyTextParser.diagnose(code, maxIndent: 12).rejections == [.deepIndentNotSentences])
+    #expect(LegacyTextParser.diagnose(code, maxIndent: 6).rejections == [.indentTooDeep])
   }
 
   @Test func firstLineIndentOutOfRangeIsDistinctFromIndent() {
@@ -152,6 +155,18 @@ struct ProseDiagnosticsTests {
 
   private static func blockCount(_ sections: [Section]) -> Int {
     sections.reduce(0) { $0 + $1.blocks.count + blockCount($1.subsections) }
+  }
+
+  /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
+  /// report does not diagnose it either: RFC 1441's centred status paragraph and its
+  /// contents listing are refused by the prose test, and were counted as its refusals.
+  @Test func theTitlePagesLeftoversAreNotDiagnosed() throws {
+    let leadIn = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc1441.txt"))
+      .filter { $0.section.isEmpty }.map(\.firstLine)
+    #expect(!leadIn.contains("Status of this Memo"))
+    #expect(!leadIn.contains { $0.hasPrefix("This RFC specifes an IAB standards track") })
+    #expect(!leadIn.contains { $0.hasPrefix("1 Introduction .....") })
+    #expect(leadIn.first?.hasPrefix("1.  Introduction") == true)
   }
 
   /// `classify` offers a block to the list parser before it asks the prose test, so a

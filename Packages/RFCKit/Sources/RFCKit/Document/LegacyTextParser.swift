@@ -419,17 +419,22 @@ public struct LegacyTextParser: Sendable {
     let (front, bodyStart) = splitFrontMatter(
       lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
     let body = bodyIsIndented(lines[bodyStart...])
-    return Prepared(
-      front: front,
-      sections: rawSections(
-        in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered),
-      proseIndent: proseIndent
-    )
+    let header = parseFrontMatter(front)
+    var sections = rawSections(
+      in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
+    // The lead-in, which is the only section with no heading, loses what the title page
+    // left in it here rather than in `parse`, so the diagnosis never sees it either: a
+    // report of blocks the parser dropped unread would count refusals it never made.
+    if sections.first?.heading == nil {
+      sections[0].blocks = leadInWithoutFrontMatter(
+        sections[0].blocks, proseIndent: proseIndent, number: header.id?.number)
+    }
+    return Prepared(header: header, sections: sections, proseIndent: proseIndent)
   }
 
   /// What `prepared` hands both entry points.
   private struct Prepared {
-    var front: [String]
+    var header: DocumentHeader
     var sections: [RawSection]
     /// The document's prose cap, which every prose test in it is asked against.
     var proseIndent: Int
@@ -463,9 +468,7 @@ public struct LegacyTextParser: Sendable {
   /// dozen lines against the hundreds the indent is taken from.
   private static func proseIndent(_ lines: [Line]) -> Int {
     var counts: [Int: Int] = [:]
-    for case .text(let string) in lines {
-      let counted = sentenceWords([string])
-      guard counted.total >= 4, counted.ordinary * 5 >= counted.total * 3 else { continue }
+    for case .text(let string) in lines where readsLikeSentences([string], minimumWords: 4) {
       counts[string.leadingSpaceCount, default: 0] += 1
     }
     let total = counts.values.reduce(0, +)
@@ -590,7 +593,7 @@ public struct LegacyTextParser: Sendable {
   public func parse(_ text: String) -> RFCDocument {
     let prepared = Self.prepared(text)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
-    var header = Self.parseFrontMatter(prepared.front)
+    var header = prepared.header
 
     // Collect known section numbers and reference anchors for link resolution.
     let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
@@ -627,9 +630,7 @@ public struct LegacyTextParser: Sendable {
     for (index, raw) in sections.enumerated() {
       guard let heading = raw.heading else {
         // Text before the first heading that is not front matter: keep as an unnumbered lead-in.
-        let blocks = Self.blocks(
-          from: Self.leadInWithoutFrontMatter(raw.blocks, proseIndent: proseIndent),
-          proseIndent: proseIndent, linker: linker)
+        let blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
         if !blocks.isEmpty {
           flat.append(Section(anchor: "preamble", title: "", blocks: blocks))
         }
@@ -794,14 +795,10 @@ public struct LegacyTextParser: Sendable {
     -> Int
   {
     guard blocks.count > 20 else { return blocks.count }
-    func isEntry(_ line: String) -> Bool {
-      line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..")
-        || line.contains(". .")
-    }
     return 1
       + blocks.dropFirst().prefix { block in
         isContents
-          ? block.lines.count(where: isEntry) * 2 >= block.lines.count
+          ? isContentsEntries(block.lines)
           : block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent)
       }.count
   }
@@ -837,33 +834,39 @@ public struct LegacyTextParser: Sendable {
   /// - a line with no letters in it, a phone number (RFC 757) or a page number
   ///   (RFC 674);
   /// - boilerplate under a heading set off column 0, as a centred `Status of this
-  ///   Memo` is in RFC 1441 to 1452: the heading, and its paragraphs up to the next
-  ///   heading-shaped line. A contents title goes alone, its entries after it.
+  ///   Memo` is in RFC 1441 to 1452: the heading, and up to three paragraphs after it
+  ///   that say what boilerplate says. A contents title goes alone, its entries after
+  ///   it.
   ///
   /// Only up to the first paragraph or list the lead-in keeps, which is where the
   /// body has begun; past it, a line of those shapes is the body's.
-  private static func leadInWithoutFrontMatter(_ blocks: [RawBlock], proseIndent: Int)
-    -> [RawBlock]
-  {
+  private static func leadInWithoutFrontMatter(
+    _ blocks: [RawBlock], proseIndent: Int, number: Int?
+  ) -> [RawBlock] {
     var kept: [RawBlock] = []
     var index = blocks.startIndex
     while index < blocks.endIndex {
       let block = blocks[index]
-      if let title = standaloneTitle(block), isBoilerplateTitle(title.lowercased()) {
+      if let title = standaloneTitle(block)?.lowercased(), isBoilerplateTitle(title) {
         index += 1
-        guard !title.lowercased().hasPrefix("table of contents") else { continue }
+        guard !title.hasPrefix("table of contents") else { continue }
         // Status paragraphs run to one or two, the copyright statement to three, and
         // they are paragraphs: RFC 1144's author's note after its status is artwork.
+        // And they say what boilerplate says, because otherwise only a heading ends the
+        // run, and a short document can open its body straight after its status with
+        // none. No legacy RFC is known to, but every paragraph the lead-in loses here
+        // across the corpus says what boilerplate says.
         var paragraphs = 0
         while index < blocks.endIndex, paragraphs < 3, standaloneTitle(blocks[index]) == nil,
-          looksLikeProse(blocks[index].lines, maxIndent: proseIndent)
+          looksLikeProse(blocks[index].lines, maxIndent: proseIndent),
+          readsAsBoilerplate(blocks[index].lines)
         {
           index += 1
           paragraphs += 1
         }
         continue
       }
-      if isContentsEntries(block.lines) || isHeaderBlock(block.lines)
+      if isContentsEntries(block.lines) || isHeaderBlock(block.lines, number: number)
         || (block.lines.count <= 2 && !block.lines.contains { $0.contains(where: \.isLetter) })
       {
         index += 1
@@ -880,6 +883,23 @@ public struct LegacyTextParser: Sendable {
     return kept + blocks[index...]
   }
 
+  /// What a status, copyright or IPR paragraph says and a body's opening does not: RFC
+  /// 1441 to 1452 are `for the Internet community`, RFC 1147 `this memo`, RFC 905 `does
+  /// not specify a standard`.
+  private static let boilerplateWording = [
+    "this memo", "distribution of this", "internet community", "standards track",
+    "official protocol standards", "specify a standard", "specify an internet standard",
+    "for information only", "copyright", "rights reserved", "internet society",
+    "intellectual property",
+  ]
+
+  /// Whether a paragraph under a boilerplate heading says what boilerplate says.
+  static func readsAsBoilerplate(_ lines: [String]) -> Bool {
+    let text = lines.joined(separator: " ").lowercased()
+      .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    return boilerplateWording.contains { text.contains($0) }
+  }
+
   /// A one-line block that reads as a heading, trimmed of a trailing colon: short,
   /// and not the end of a sentence. What ends a run of boilerplate paragraphs.
   private static func standaloneTitle(_ block: RawBlock) -> String? {
@@ -891,28 +911,41 @@ public struct LegacyTextParser: Sendable {
   }
 
   /// Half the lines or more are contents entries: a dot leader, then a page number in
-  /// arabic or lower-case roman numerals (RFC 822's `PREFACE .......   ii`).
+  /// arabic or lower-case roman numerals (RFC 822's `PREFACE .......   ii`), which may
+  /// run straight on from the leader (RFC 2295's `Terminology.......5`). Half, because
+  /// an entry too long for its line wraps, and only its last line has both.
   private static func isContentsEntries(_ lines: [String]) -> Bool {
     let entries = lines.count { line in
-      guard line.contains("...") || line.contains(". . ."),
-        let page = line.split(separator: " ").last
+      guard line.contains("..") || line.contains(". ."),
+        let page = line.split(whereSeparator: { $0 == " " || $0 == "." }).last
       else { return false }
-      return page.allSatisfy(\.isNumber) || page.allSatisfy { "ivxlc".contains($0) }
+      return page.allSatisfy(\.isNumber) || isRomanPageNumber(page)
     }
     return entries > 0 && entries * 2 >= lines.count
   }
 
-  /// A block of a title page's header: some line states the document's number or has a
-  /// header line's left column (RFC 821's is `Request for Comments: DRAFT`), and every
-  /// line is two columns, or one column set flush right. The whole column, because RFC
-  /// 160's catalogue lists `Network Working Group Meeting`. Two lines to a handful: a
-  /// line of RFC 84's catalogue is `NWG/RFC 14    (never issued)` on its own.
-  private static func isHeaderBlock(_ lines: [String]) -> Bool {
+  nonisolated(unsafe) private static let romanPageNumberPattern = #/x{0,3}(?:ix|iv|v?i{0,3})/#
+
+  /// A lower-case roman numeral up to `xxxix`, further than any front section's pages
+  /// run. Spelt out rather than taken as any run of the letters, because `ill` and
+  /// `civil` are made of them too.
+  static func isRomanPageNumber(_ word: Substring) -> Bool {
+    !word.isEmpty && word.wholeMatch(of: romanPageNumberPattern) != nil
+  }
+
+  /// A block of a title page's header: some line states the document's own number or
+  /// has a header line's left column (RFC 821's is `Request for Comments: DRAFT`), and
+  /// every line is two columns, or one column set flush right. The document's own
+  /// number, because a table of RFCs is two columns stating numbers too. The whole
+  /// column, because RFC 160's catalogue lists `Network Working Group Meeting`. Two
+  /// lines to a handful: a line of RFC 84's catalogue is `NWG/RFC 14    (never issued)`
+  /// on its own.
+  static func isHeaderBlock(_ lines: [String], number: Int?) -> Bool {
     guard (2...8).contains(lines.count),
       lines.contains(where: { line in
         let left = line.trimmingCharacters(in: .whitespaces).lowercased()
           .components(separatedBy: "   ")[0]
-        return statedNumber(in: line) != nil
+        return (number != nil && statedNumber(in: line) == number)
           || headerLinePrefixes.contains { $0.hasSuffix(":") ? left.hasPrefix($0) : left == $0 }
       })
     else { return false }
@@ -1576,10 +1609,10 @@ public struct LegacyTextParser: Sendable {
     // Past the classic cap the indent is excused only for sentences, as it is under a
     // list item: a document whose body sits deeper sets its one-line code there too
     // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard.
-    if indent > maxIndent
-      || (indent > classicProseIndent && !readsLikeSentences(lines, share: (of: 1, in: 2)))
-    {
+    if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
+    } else if indent > classicProseIndent, !readsLikeSentences(lines, share: (of: 1, in: 2)) {
+      diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {
       diagnosis.rejections.append(.firstLineIndentOutOfRange)
@@ -1694,11 +1727,14 @@ public struct LegacyTextParser: Sendable {
   /// RandomInteger (0, n-1)`) or a stray page number, and everything above it
   /// reads as sentences. RFC 3712's own paragraph sits at 0.56, held down by
   /// `UTF-8`, `IRI` and `[W3C-IRI]`, which is why three fifths was too strict.
+  ///
+  /// `minimumWords` is how many words it takes to say: a line of three says nothing
+  /// about where a document's sentences are.
   private static func readsLikeSentences(
-    _ lines: [String], share: (of: Int, in: Int) = (of: 3, in: 5)
+    _ lines: [String], share: (of: Int, in: Int) = (of: 3, in: 5), minimumWords: Int = 1
   ) -> Bool {
     let counted = sentenceWords(lines)
-    guard counted.total > 0 else { return false }
+    guard counted.total >= minimumWords, counted.total > 0 else { return false }
     // Kept as an exact integer comparison rather than a threshold on `sentenceRatio`:
     // the two agree everywhere, but only this one is free of rounding at the boundary.
     return counted.ordinary * share.in >= counted.total * share.of

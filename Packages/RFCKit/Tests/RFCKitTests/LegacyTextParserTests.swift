@@ -650,6 +650,58 @@ struct LegacyTextCorpusFindingsTests {
       })
   }
 
+  /// A contents entry's page number may be roman (RFC 822's `PREFACE .......   ii`),
+  /// but a word made of the same letters is not one.
+  @Test func aRomanPageNumberIsANumeral() {
+    for page in ["i", "ii", "iv", "vi", "ix", "xiv", "xxxix"] {
+      #expect(LegacyTextParser.isRomanPageNumber(Substring(page)), "\(page)")
+    }
+    for word in ["", "ill", "civil", "vix", "iiii", "c", "I"] {
+      #expect(!LegacyTextParser.isRomanPageNumber(Substring(word)), "\(word)")
+    }
+  }
+
+  /// A header block states the document's own number: RFC 674's, under its journal
+  /// stamp, goes from the lead-in. A table of other RFCs is two columns stating numbers
+  /// too, and stays.
+  @Test func aHeaderBlockStatesTheDocumentsOwnNumber() {
+    let header = [
+      "Request for Comments 674                                    Jon Postel",
+      "NIC 31484                                                    Jim White",
+      "                                                               SRI-ARC",
+      "                                                      12 December 1974",
+    ]
+    #expect(LegacyTextParser.isHeaderBlock(header, number: 674))
+    #expect(!LegacyTextParser.isHeaderBlock(header, number: 675))
+    let table = [
+      "   RFC 791      Internet Protocol",
+      "   RFC 792      Internet Control Message Protocol",
+      "   RFC 793      Transmission Control Protocol",
+    ]
+    #expect(!LegacyTextParser.isHeaderBlock(table, number: 1000))
+  }
+
+  /// The lead-in drops the paragraphs under a status heading only while they say what
+  /// a status paragraph says, so a body that follows with no heading of its own stays.
+  @Test func onlyBoilerplateWordingIsTakenForBoilerplate() {
+    #expect(
+      LegacyTextParser.readsAsBoilerplate([
+        "   This document is distributed as an RFC for information only.  It",
+        "   does not specify a standard for the ARPA-Internet.",
+      ]))
+    #expect(
+      LegacyTextParser.readsAsBoilerplate([
+        "   This memo provides information for the Internet community.  It does",
+        "   not specify an Internet standard.  Distribution of this memo is",
+        "   unlimited.",
+      ]))
+    #expect(
+      !LegacyTextParser.readsAsBoilerplate([
+        "   The purpose of this document is to provide an overview of version 2",
+        "   of the Internet-standard Network Management Framework.",
+      ]))
+  }
+
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
   /// specification as an appendix, abstract and all, and each `Abstract` heading was
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
