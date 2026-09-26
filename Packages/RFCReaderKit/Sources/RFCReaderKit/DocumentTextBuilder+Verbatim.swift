@@ -34,16 +34,26 @@ extension DocumentTextBuilder {
         ])
     }
 
-    let body = text.hasSuffix("\n") ? text : text + "\n"
-    append(
-      body,
-      [
-        .font: style.monospacedFont(scale: scale),
-        .foregroundColor: bodyColour,
-        .rfcVerbatim: box,
-        .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: style.paragraphSpacing, wraps: false),
-      ])
+    // Every line ends a paragraph, so the spacing that separates the block from what
+    // follows goes on its last line alone. On all of them, a figure read double
+    // spaced (#31).
+    let body = text.hasSuffix("\n") ? String(text.dropLast()) : text
+    var lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+    let last = lines.removeLast()
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: style.monospacedFont(scale: scale),
+      .foregroundColor: bodyColour,
+      .rfcVerbatim: box,
+    ]
+    if !lines.isEmpty {
+      var between = attributes
+      between[.paragraphStyle] = paragraphStyle(indent: indent, spacingAfter: 0, wraps: false)
+      append(lines.joined(separator: "\n") + "\n", between)
+    }
+    var after = attributes
+    after[.paragraphStyle] = paragraphStyle(
+      indent: indent, spacingAfter: style.paragraphSpacing, wraps: false)
+    append(last + "\n", after)
     decorate(from: start, with: .artwork)
   }
 
