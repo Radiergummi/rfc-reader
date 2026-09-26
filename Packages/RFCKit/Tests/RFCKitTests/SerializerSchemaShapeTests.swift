@@ -36,6 +36,31 @@ struct SerializerSchemaShapeTests {
     #expect(!kinds[firstSection...].contains("references"), "\(kinds)")
   }
 
+  /// RFC 2511's `9. References` is followed by its acknowledgements, its authors and
+  /// its appendices, one of which holds references of its own, so the back begins
+  /// after it and it is written in the middle. The `[HMAC]` its prose cites is RFC
+  /// 2104 only while the parser reads reference lists wherever they sit, and the
+  /// section reads back as the one references section it was, not as a section
+  /// holding a second one.
+  @Test func aReferencesSectionAheadOfTheBackStillResolves() throws {
+    let (document, rfc) = try Self.converted("rfc2511.txt")
+    let middle = try #require(rfc.first("middle"))
+    #expect(middle.elements.contains { $0.name == "references" && $0["pn"] == "section-9" })
+
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
+    let cited = { (document: RFCDocument) in
+      document.everyCrossReference.compactMap { xref -> DocumentID? in
+        if case .document(let id, _) = xref.target { id } else { nil }
+      }
+    }
+    #expect(cited(document).contains(.rfc(2104)))
+    #expect(cited(reparsed) == cited(document))
+    let outline = { (document: RFCDocument) in
+      document.allSections.map { "\($0.anchor) \($0.number ?? "-") \($0.subsections.count)" }
+    }
+    #expect(outline(reparsed) == outline(document))
+  }
+
   /// RFC 338's first chapter, `I.`, reads as an appendix, which left the middle
   /// empty.
   @Test(arguments: ["rfc338.txt", "rfc2023.txt", "rfc1.txt", "rfc391.txt"])

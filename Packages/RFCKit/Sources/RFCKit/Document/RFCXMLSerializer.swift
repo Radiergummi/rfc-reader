@@ -74,18 +74,14 @@ public struct RFCXMLSerializer: Sendable {
       writeSection(abstract, writer: &writer, context: &context)
     }
     for section in document.sections[..<backStart] {
-      writeSection(section, writer: &writer, context: &context)
+      writeTopLevel(section, writer: &writer, context: &context)
     }
     writer.close("middle")
 
     if backStart < document.sections.count {
       writer.open("back")
       for section in document.sections[backStart...] {
-        if Self.isReferences(section) {
-          writeReferences(section, writer: &writer, context: &context)
-        } else {
-          writeSection(section, writer: &writer, context: &context)
-        }
+        writeTopLevel(section, writer: &writer, context: &context)
       }
       writer.close("back")
     }
@@ -161,6 +157,19 @@ public struct RFCXMLSerializer: Sendable {
   }
 
   // MARK: - Sections
+
+  /// A chapter, in `<middle>` or `<back>`. A references section is `<references>`
+  /// wherever it sits: one ahead of the back (RFC 2511's `9. References`, before its
+  /// appendices and theirs) is no more valid in `<middle>` than inside a `<section>`,
+  /// but written as a section it would wrap its list in a second, unnumbered
+  /// `<references>`, and read back as a section holding a subsection it never had.
+  private func writeTopLevel(_ section: Section, writer: inout Writer, context: inout Context) {
+    if Self.isReferences(section) {
+      writeReferences(section, writer: &writer, context: &context)
+    } else {
+      writeSection(section, writer: &writer, context: &context)
+    }
+  }
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,

@@ -32,8 +32,11 @@ public struct RFCXMLParser: Sendable {
     guard root.name == "rfc" else { throw ParseError.notAnRFC(rootElement: root.name) }
 
     // References first, so cross references in the body resolve to RFC numbers.
+    // Every list, not only the back's: a converted legacy document can hold one in
+    // `<middle>` (RFC 2511's `9. References`, ahead of its appendices), or in a
+    // chapter, and a citation into it is as much a link as one into the back.
     let back = root.first("back")
-    let builder = Builder(referenceTargets: back.map(Builder.referenceTargets(in:)) ?? [:])
+    let builder = Builder(referenceTargets: Builder.referenceTargets(in: root))
 
     let header = builder.parseHeader(root)
     var sections: [Section] = []
@@ -98,7 +101,7 @@ public struct RFCXMLParser: Sendable {
               targets[anchor] = id
             }
             walk(child)
-          case "references":
+          case "middle", "back", "section", "references":
             walk(child)
           default:
             break
