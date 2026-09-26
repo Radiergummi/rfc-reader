@@ -31,21 +31,30 @@ jobs:
     name: Workflow lint
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # reviewdog reports actionlint's findings as a check run.
+      checks: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: actionlint
-        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
         with:
-          args: -color
+          # Every finding in every workflow fails the job, not only those in lines
+          # a pull request touches.
+          reporter: github-check
+          filter_mode: nofilter
+          fail_level: error
       - name: zizmor
-        uses: docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
-        env:
-          # Online audits: whether each pinned commit really belongs to its action.
-          GH_TOKEN: ${{ github.token }}
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
-          args: .github/workflows
+          version: 1.30.1
+          inputs: .github/workflows
+          # Findings fail the job instead of going to code scanning. Online audits
+          # (whether each pinned commit really belongs to its action) are on by default.
+          advanced-security: false
 
   rfckit-macos:
     name: RFCKit tests (macOS)
@@ -70,6 +79,8 @@ jobs:
     # -latest so a runner rollover cannot silently drop the toolchain.
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/compilation-cache.xcconfig
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,12 +88,28 @@ jobs:
       - run: xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
+      # The newest cache any earlier run saved: entries are keyed on their inputs,
+      # so a stale one is never used, only not hit.
+      - name: Restore the compilation cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-compilation-cache-${{ github.sha }}
+          restore-keys: xcode-compilation-cache-
       # Compiling is the point, so both builds go unsigned; project.yml ships
       # without a DEVELOPMENT_TEAM and the Makefile turns signing off without one.
       - name: Build for macOS
         run: make build-app
       - name: Build for the iOS Simulator
         run: make build-ios
+      # Saved from main only: a pull request restores main's newest cache, and
+      # one saved per pull request would only crowd main's out of the quota.
+      - name: Save the compilation cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-compilation-cache-${{ github.sha }}
 
   rfckit-linux:
     name: RFCKit tests (Linux)

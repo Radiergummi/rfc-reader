@@ -1,0 +1,6 @@
+// Applied to CI's app builds through XCODE_XCCONFIG_FILE, so project.yml and
+// local builds are unchanged. Xcode keys its compilation cache on what goes into
+// each compile, not on file dates, so it still hits after a fresh checkout.
+// The cache lives at the default COMPILATION_CACHE_CAS_PATH, which ci.yml saves
+// and restores.
+COMPILATION_CACHE_ENABLE_CACHING = YES

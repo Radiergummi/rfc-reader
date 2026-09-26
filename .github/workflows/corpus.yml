@@ -62,8 +62,8 @@ jobs:
         run: |
           apt-get update -qq && apt-get install -y -qq zstd >/dev/null
           # convert writes xml.noindex (kept out of Spotlight); the pack's directory is xml.
-          tar --zstd -cf "legacy-xml-${{ inputs.version }}.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
-          ls -la *.tar.zst
+          tar --zstd -cf "legacy-xml-$VERSION.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
+          ls -la ./*.tar.zst
 
       - name: Upload report and packs as workflow artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

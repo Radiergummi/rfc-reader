@@ -58,4 +58,22 @@ struct SchemaCheckTests {
             .deletingLastPathComponent().appending(path: "../../../../Packages/RFCKit/Tests/RFCKitTests/Fixtures/\(fixture)")
         #expect(SchemaCheck.causes(in: try Data(contentsOf: url)) == [])
     }
+
+    /// What a run compares itself with, read from the report it is about to replace. A
+    /// report from a run that did not check says nothing about validity, so it is no
+    /// baseline, rather than one in which nothing validated.
+    @Test func thePreviousReportSaysWhichDocumentsValidated() throws {
+        func entry(_ id: String, schema: [String]?) -> Convert.Report {
+            Convert.Report(id: id, title: "", sections: 0, paragraphs: 0, lists: 0, artwork: 0, references: 0,
+                           resolvedDocuments: 0, overridden: false, warnings: [], schema: schema)
+        }
+        let path = FileManager.default.temporaryDirectory.appending(path: "report-\(UUID().uuidString).json").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        #expect(Convert.validDocuments(inReportAt: path) == nil, "no report")
+        try writeJSON([entry("rfc1", schema: []), entry("rfc2", schema: ["empty-middle"])], to: path)
+        #expect(Convert.validDocuments(inReportAt: path) == ["rfc1"])
+        try writeJSON([entry("rfc1", schema: nil)], to: path)
+        #expect(Convert.validDocuments(inReportAt: path) == nil, "a run without --schema")
+    }
 }
