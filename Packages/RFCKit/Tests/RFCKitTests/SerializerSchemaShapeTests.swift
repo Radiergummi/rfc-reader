@@ -16,11 +16,12 @@ struct SerializerSchemaShapeTests {
     return (document, try XMLTreeBuilder.parse(Data(xml.utf8)))
   }
 
-  private static func partNumbers(in element: RFCKit.XMLElement) -> [String] {
+  /// Every ID the schema declares below `element`, as `SchemaCheck` counts them: each
+  /// element's `anchor`, `pn` and `slugifiedName`, once per element.
+  private static func declaredIDs(in element: RFCKit.XMLElement) -> [String] {
     element.elements.flatMap { child -> [String] in
-      let own =
-        ["section", "references"].contains(child.name) ? [child["pn"]].compactMap { $0 } : []
-      return own + partNumbers(in: child)
+      let own = Set([child["anchor"], child["pn"], child["slugifiedName"]].compactMap { $0 })
+      return own.sorted() + declaredIDs(in: child)
     }
   }
 
@@ -74,8 +75,8 @@ struct SerializerSchemaShapeTests {
   /// in its name, so no `pn` is declared twice and it reads the same.
   @Test func noTwoSectionsShareAPartNumber() throws {
     let (document, rfc) = try Self.converted("rfc1.txt")
-    let partNumbers = Self.partNumbers(in: rfc)
-    #expect(partNumbers.count == Set(partNumbers).count)
+    let ids = Self.declaredIDs(in: rfc)
+    #expect(ids.count == Set(ids).count)
 
     // Whitespace inside a title collapses on the way back in, as it always has, so
     // compare what reads, not the spacing.
@@ -97,12 +98,59 @@ struct SerializerSchemaShapeTests {
     #expect(rfc.first("front")?.first("abstract") == nil)
     let first = try #require(rfc.first("middle")?.first("section"))
     #expect(first["anchor"] == "abstract")
-    #expect(first.all("artwork").count > 0)
+    #expect(!first.all("artwork").isEmpty)
   }
 
   /// A document whose abstract fits keeps it where it was.
   @Test func anAbstractThatFitsStaysInTheFront() throws {
     let (_, rfc) = try Self.converted("rfc2119.txt")
     #expect(rfc.first("front")?.first("abstract") != nil)
+  }
+
+  // MARK: Where the back starts
+
+  private static func chapter(_ number: String) -> Section {
+    Section(anchor: "section-\(number)", number: number, title: "Chapter")
+  }
+
+  private static func appendix(_ number: String) -> Section {
+    Section(anchor: "appendix-\(number)", number: number, title: "Appendix", isAppendix: true)
+  }
+
+  private static func references(_ number: String) -> Section {
+    Section(
+      anchor: "section-\(number)", number: number, title: "References",
+      blocks: [.references(ReferenceList(title: "References", entries: []))])
+  }
+
+  /// The back is the last run of references sections and everything after it.
+  /// Whatever comes before that run stays in the middle, an appendix or an earlier
+  /// references section among it.
+  @Test func theBackStartsAtTheLastRunOfReferences() {
+    #expect(RFCXMLSerializer.backStart([Self.chapter("1"), Self.references("2")]) == 1)
+    #expect(
+      RFCXMLSerializer.backStart([
+        Self.chapter("1"), Self.references("2"), Self.references("3"),
+      ]) == 1)
+    #expect(
+      RFCXMLSerializer.backStart([
+        Self.chapter("1"), Self.references("2"), Self.appendix("A"), Self.appendix("B"),
+      ]) == 1)
+    #expect(
+      RFCXMLSerializer.backStart([
+        Self.chapter("1"), Self.references("2"), Self.appendix("A"), Self.references("B"),
+      ]) == 3)
+  }
+
+  /// With no references, the back is the appendices the document ends with, and
+  /// there is none when they are all it has, or it has nothing.
+  @Test func withoutReferencesTheBackIsTheTrailingAppendices() {
+    #expect(
+      RFCXMLSerializer.backStart([
+        Self.chapter("1"), Self.appendix("A"), Self.chapter("2"), Self.appendix("B"),
+      ]) == 3)
+    #expect(RFCXMLSerializer.backStart([Self.chapter("1"), Self.chapter("2")]) == 2)
+    #expect(RFCXMLSerializer.backStart([Self.appendix("A"), Self.appendix("B")]) == 2)
+    #expect(RFCXMLSerializer.backStart([]) == 0)
   }
 }

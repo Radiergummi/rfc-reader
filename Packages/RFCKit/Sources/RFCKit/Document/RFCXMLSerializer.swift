@@ -69,8 +69,7 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("middle")
     if !abstractFits {
       let abstract = Section(
-        anchor: "abstract", number: nil, title: [.text("Abstract")],
-        blocks: document.header.abstract)
+        anchor: "abstract", title: "Abstract", blocks: document.header.abstract)
       writeSection(abstract, writer: &writer, context: &context)
     }
     for section in document.sections[..<backStart] {
