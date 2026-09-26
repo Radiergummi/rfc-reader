@@ -28,7 +28,9 @@ struct PreparedIndexTests {
   }
 
   @Test func theSearchIsOverTheSameIndex() {
-    let index = RFCIndex(rfcs: [rfc(9110, title: "HTTP Semantics"), rfc(791, title: "Internet Protocol")])
+    let index = RFCIndex(rfcs: [
+      rfc(9110, title: "HTTP Semantics"), rfc(791, title: "Internet Protocol"),
+    ])
 
     let prepared = PreparedIndex(index: index)
 
