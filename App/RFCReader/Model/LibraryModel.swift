@@ -161,7 +161,11 @@ final class LibraryModel {
   /// with one slot, two tabs listing different things evict each other on every pass
   /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
   /// -- this is a cache, so losing an entry costs time, never correctness.
-  private var listCache: [ListKey: [RFCMetadata]] = [:]
+  ///
+  /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
+  /// a property the running body read invalidated that body, so every miss rendered
+  /// the list twice (#126). It is a memo of state that is observed, not state itself.
+  @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
   func list(
