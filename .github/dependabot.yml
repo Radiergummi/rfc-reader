@@ -1,0 +1,28 @@
+version: 2
+
+# One grouped pull request per ecosystem per week, for releases at least three days old.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: swift
+    directories:
+      - /Packages/RFCKit
+      - /Packages/RFCReaderKit
+      - /Tools/corpus-build
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    groups:
+      swift:
+        patterns: ["*"]

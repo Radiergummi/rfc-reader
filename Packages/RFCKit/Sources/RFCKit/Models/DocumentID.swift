@@ -47,6 +47,17 @@ public struct DocumentID: Hashable, Sendable, Codable, Comparable, CustomStringC
         DocumentID(series: .rfc, number: number)
     }
 
+    /// The document a bibliography label names, when it names one: `RFC 2119`, `BCP14`.
+    ///
+    /// Stricter than `init(parsing:)` in one way. A bare number is an RFC number when a
+    /// reader types it, but as a label it is only a position in the list: RFC 1004's
+    /// `[2]` is the EGP specification, not RFC 2, and reading it as RFC 2 recorded 6,887
+    /// entries in 1,381 converted documents as the RFC their number happened to be.
+    public init?(label: String) {
+        guard label.trimmingCharacters(in: .whitespaces).first?.isLetter == true else { return nil }
+        self.init(parsing: label)
+    }
+
     /// Parses loose user or document input such as `RFC9110`, `rfc 9110`, `RFC-9110`,
     /// `BCP 14`, or a bare number (which is treated as an RFC number).
     public init?(parsing input: String) {
