@@ -12,6 +12,8 @@ actor DocumentStore {
 
   /// Which bodies are on disk, scanned once on first use and kept current by
   /// every write and removal below, so asking does not enumerate the directory.
+  /// Each question revalidates it first, which scans again only if the directory
+  /// changed some other way, such as a file deleted in Finder.
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
 
   init() {
@@ -49,24 +51,30 @@ actor DocumentStore {
   // MARK: - Documents
 
   private func fileURL(_ id: DocumentID, format: FileFormat) -> URL {
-    directory.appending(path: "\(id.fileStem).\(format.pathExtension)")
+    directory.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
   }
 
   func isCached(_ id: DocumentID) -> Bool {
-    cachedDocuments.contains(id)
+    cachedDocuments.revalidate()
+    return cachedDocuments.contains(id)
   }
 
   /// Numbers of every RFC with a cached body.
   func cachedNumbers() -> Set<Int> {
-    cachedDocuments.rfcNumbers
+    cachedDocuments.revalidate()
+    return cachedDocuments.rfcNumbers
   }
 
+  /// A body that cannot be deleted is left where it is, and stays cached: the
+  /// index records what the removal left on disk, not what it set out to do.
   func remove(_ id: DocumentID) {
     parsed[id] = nil
-    for format in [FileFormat.xml, .text] {
-      try? FileManager.default.removeItem(at: fileURL(id, format: format))
+    let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
+    cachedDocuments.update(id) {
+      for url in urls {
+        try? FileManager.default.removeItem(at: url)
+      }
     }
-    cachedDocuments.remove(id)
   }
 
   func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient) async throws
@@ -91,15 +99,13 @@ actor DocumentStore {
       if let data = try? await client.fetchDocumentData(id, format: .xml),
         let document = try? RFCXMLParser.parse(data)
       {
-        try data.write(to: xmlURL, options: .atomic)
-        cachedDocuments.insert(id)
+        try cachedDocuments.update(id) { try data.write(to: xmlURL, options: .atomic) }
         parsed[id] = document
         return document
       }
     }
     let data = try await client.fetchDocumentData(id, format: .text)
-    try data.write(to: textURL, options: .atomic)
-    cachedDocuments.insert(id)
+    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
     let document = LegacyTextParser.parse(data)
     parsed[id] = document
     return document
@@ -111,8 +117,7 @@ actor DocumentStore {
       return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
     }
     let data = try await client.fetchDocumentData(id, format: .text)
-    try data.write(to: textURL, options: .atomic)
-    cachedDocuments.insert(id)
+    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
     return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
   }
 }

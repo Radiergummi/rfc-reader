@@ -5,8 +5,9 @@ import Testing
 @testable import RFCReaderKit
 
 /// The in-memory record of which documents the on-disk cache holds (#39). Seeded
-/// from one directory scan, then kept current by the store's writes and removals,
-/// so the Downloaded filter no longer enumerates the directory on every change.
+/// from one directory scan, then kept current by the store's writes and removals
+/// and scanned again only when the directory's date says something else changed
+/// it, so the Downloaded filter no longer enumerates the directory on every change.
 @Suite("Document cache index")
 struct DocumentCacheIndexTests {
   private func temporaryDirectory(containing names: [String]) throws -> URL {
@@ -89,7 +90,9 @@ struct DocumentCacheIndexTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
 
-    index.insert(.rfc(9110))
+    try index.update(.rfc(9110)) {
+      try Data().write(to: directory.appending(path: "rfc9110.xml"), options: .atomic)
+    }
 
     #expect(index.contains(.rfc(9110)))
     #expect(index.rfcNumbers == [791, 9110])
@@ -100,9 +103,84 @@ struct DocumentCacheIndexTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
 
-    index.remove(.rfc(791))
+    try index.update(.rfc(791)) {
+      try FileManager.default.removeItem(at: directory.appending(path: "rfc791.txt"))
+    }
 
     #expect(!index.contains(.rfc(791)))
     #expect(index.rfcNumbers == [9110])
+  }
+
+  /// The store removes both formats and ignores a failure, so a body that could not
+  /// be deleted — only the XML went here — is still on disk and still cached.
+  @Test func aRemovalThatLeavesABodyKeepsTheDocument() throws {
+    let directory = try temporaryDirectory(containing: ["rfc9110.xml", "rfc9110.txt"])
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var index = DocumentCacheIndex(scanning: directory)
+
+    try index.update(.rfc(9110)) {
+      try FileManager.default.removeItem(at: directory.appending(path: "rfc9110.xml"))
+    }
+
+    #expect(index.contains(.rfc(9110)))
+
+    try index.update(.rfc(9110)) {
+      try FileManager.default.removeItem(at: directory.appending(path: "rfc9110.txt"))
+    }
+
+    #expect(!index.contains(.rfc(9110)))
+  }
+
+  /// A file deleted in Finder. The directory's date is set by hand because two
+  /// changes inside one tick of the file system's clock would share a date.
+  @Test func aChangeMadeBehindTheStoreIsSeenOnRevalidation() throws {
+    let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var index = DocumentCacheIndex(scanning: directory)
+
+    try FileManager.default.removeItem(at: directory.appending(path: "rfc791.txt"))
+    try setModificationDate(Date(timeIntervalSince1970: 1_000_000_000), of: directory)
+    index.revalidate()
+
+    #expect(index.rfcNumbers == [9110])
+  }
+
+  /// The point of the index: a directory whose date has not moved is not read
+  /// again. Putting the date back after deleting a file hides the deletion, which
+  /// is how the test can tell no scan happened. The date is a whole second because
+  /// setting one is not guaranteed to keep the nanoseconds reading it returns.
+  @Test func anUnchangedDirectoryIsNotScannedAgain() throws {
+    let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let date = Date(timeIntervalSince1970: 1_000_000_000)
+    try setModificationDate(date, of: directory)
+    var index = DocumentCacheIndex(scanning: directory)
+
+    try FileManager.default.removeItem(at: directory.appending(path: "rfc791.txt"))
+    try setModificationDate(date, of: directory)
+    index.revalidate()
+
+    #expect(index.rfcNumbers == [791, 9110])
+  }
+
+  /// The store's own write records the directory's new date, and must not absorb
+  /// a deletion made behind its back before it.
+  @Test func aWriteDoesNotHideAnEarlierChange() throws {
+    let directory = try temporaryDirectory(containing: ["rfc791.txt"])
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var index = DocumentCacheIndex(scanning: directory)
+
+    try FileManager.default.removeItem(at: directory.appending(path: "rfc791.txt"))
+    try setModificationDate(Date(timeIntervalSince1970: 1_000_000_000), of: directory)
+    try index.update(.rfc(9110)) {
+      try Data().write(to: directory.appending(path: "rfc9110.xml"), options: .atomic)
+    }
+    index.revalidate()
+
+    #expect(index.rfcNumbers == [9110])
+  }
+
+  private func setModificationDate(_ date: Date, of directory: URL) throws {
+    try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: directory.path)
   }
 }
