@@ -309,6 +309,9 @@
           add(to: menu, "Errata", #selector(openErrata))
         }
         add(to: menu, "Datatracker", #selector(openDatatracker))
+        if reader.precedingDraft != nil {
+          add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
+        }
 
       default:
         break
@@ -379,6 +382,11 @@
     @objc private func openDatatracker() {
       guard let id else { return }
       NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
+    }
+
+    @objc private func openPrecedingDraft() {
+      guard let draft = reader.precedingDraft else { return }
+      NSWorkspace.shared.open(draft)
     }
   }
 

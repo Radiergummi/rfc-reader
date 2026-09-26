@@ -60,6 +60,18 @@ public struct RFCXMLParser: Sendable {
     return document
   }
 
+  /// Whether a `<link rel>` names `token`. RFCXML takes `rel` from HTML, where it is a
+  /// set of space-separated keywords compared without regard to ASCII case, so
+  /// `rel="Prev"` and `rel="prev alternate"` both name the preceding draft. The prep
+  /// tool writes exactly `prev` today; this is what the attribute means, not a
+  /// guess at what it might write.
+  static func relation(_ rel: String?, includes token: String) -> Bool {
+    guard let rel else { return false }
+    return rel.split(whereSeparator: \.isWhitespace).contains {
+      $0.lowercased() == token.lowercased()
+    }
+  }
+
   // MARK: - Builder
 
   private struct Builder {
@@ -93,7 +105,7 @@ public struct RFCXMLParser: Sendable {
         for child in element.elements {
           switch child.name {
           case "reference":
-            if let anchor = child["anchor"], let id = parseReference(child).documentID {
+            if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
               targets[anchor] = id
             }
           case "referencegroup":
@@ -142,6 +154,9 @@ public struct RFCXMLParser: Sendable {
       header.updates = parseDocumentList(rfc["updates"])
       header.category = rfc["category"].flatMap(categoryName)
       header.draftName = rfc["docName"]
+      header.precedingDraft =
+        rfc.all("link").first { RFCXMLParser.relation($0["rel"], includes: "prev") }?["href"]
+        .flatMap(URL.init(string:))
       return header
     }
 
@@ -295,9 +310,9 @@ public struct RFCXMLParser: Sendable {
       for child in element.elements {
         switch child.name {
         case "reference":
-          entries.append(Self.parseReference(child))
+          entries.append(parseReference(child))
         case "referencegroup":
-          entries.append(Self.parseReferenceGroup(child))
+          entries.append(parseReferenceGroup(child))
         case "references":
           subsections.append(parseReferencesSection(child))
         default:
@@ -316,7 +331,18 @@ public struct RFCXMLParser: Sendable {
       )
     }
 
-    static func parseReference(_ element: XMLElement) -> Reference {
+    func parseReference(_ element: XMLElement) -> Reference {
+      var reference = Self.parseEntryMetadata(element)
+      if let annotation = element.first("annotation") {
+        reference.annotation = normalize(parseInlines(annotation.children))
+      }
+      return reference
+    }
+
+    /// Everything about an entry that is not prose. Static because
+    /// `referenceTargets(in:)` needs it before there is a builder to link prose
+    /// with; the annotation, which is prose, is read by the instance method.
+    static func parseEntryMetadata(_ element: XMLElement) -> Reference {
       let front = element.first("front")
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
         author.role == nil ? author.name : "\(author.name), Ed."
@@ -347,7 +373,7 @@ public struct RFCXMLParser: Sendable {
       element["derivedAnchor"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private static func parseReferenceGroup(_ element: XMLElement) -> Reference {
+    private func parseReferenceGroup(_ element: XMLElement) -> Reference {
       let anchor = element["anchor"] ?? ""
       let members = element.all("reference").map(parseReference)
       let memberNames = members.compactMap { $0.documentID?.displayName }
@@ -363,8 +389,24 @@ public struct RFCXMLParser: Sendable {
         authors: members.count == 1 ? members[0].authors : [],
         date: members.count == 1 ? members[0].date : nil,
         seriesInfo: seriesInfo,
-        url: element["target"].flatMap(URL.init(string:))
+        url: element["target"].flatMap(URL.init(string:)),
+        annotation: groupAnnotation(of: members)
       )
+    }
+
+    /// The schema gives `<referencegroup>` no annotation of its own; its members each
+    /// may have one. A group of one is its member, annotation and all. A group of
+    /// several is one entry in the panel, so every member's annotation is kept on it,
+    /// each on its own line after the name of the member it belongs to -- a commit
+    /// snapshot is no use unless it says which standard it pins.
+    private func groupAnnotation(of members: [Reference]) -> [Inline] {
+      if members.count == 1 { return members[0].annotation }
+      let named = members.filter { !$0.annotation.isEmpty }.enumerated().flatMap {
+        index, member -> [Inline] in
+        let name = member.documentID?.displayName ?? member.displayAnchor
+        return (index == 0 ? [] : [.lineBreak]) + [.text("\(name): ")] + member.annotation
+      }
+      return normalize(named)
     }
 
     // MARK: Blocks
@@ -420,7 +462,12 @@ public struct RFCXMLParser: Sendable {
       case "t":
         let inlines = normalize(parseInlines(element.children))
         guard !inlines.isEmpty else { return nil }
-        return .paragraph(Paragraph(inlines, anchor: element["anchor"] ?? element["pn"]))
+        return .paragraph(
+          Paragraph(
+            inlines,
+            anchor: element["anchor"] ?? element["pn"],
+            indent: element["indent"].flatMap(Int.init).map { max($0, 0) } ?? 0
+          ))
       case "ul":
         let style: ListBlock.Style = element["empty"] == "true" ? .bare : .bullet
         return .list(
