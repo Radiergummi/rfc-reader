@@ -93,18 +93,18 @@ extension DocumentTextBuilder {
     }
   }
 
-  private static func letter(_ n: Int, upper: Bool) -> String {
+  private static func letter(_ number: Int, upper: Bool) -> String {
     let letters = "abcdefghijklmnopqrstuvwxyz"
-    let character = String(letters[letters.index(letters.startIndex, offsetBy: (n - 1) % 26)])
+    let character = String(letters[letters.index(letters.startIndex, offsetBy: (number - 1) % 26)])
     return upper ? character.uppercased() : character
   }
 
-  private static func roman(_ n: Int) -> String {
+  private static func roman(_ number: Int) -> String {
     let table: [(Int, String)] = [
       (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
       (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
     ]
-    var remaining = n
+    var remaining = number
     var result = ""
     for (arabic, symbol) in table {
       while remaining >= arabic {

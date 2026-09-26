@@ -578,7 +578,11 @@ extension String {
   }
 }
 
+// swiftlint:disable identifier_name
 /// Minimal SHA-256 so the manifest needs no crypto dependency on Linux.
+///
+/// The names are FIPS 180-4's own (`a` to `h`, `w`, `k`, `s0`, `ch`, `t1`), so the
+/// code can be read against the standard line by line.
 enum SHA256 {
   private static let k: [UInt32] = [
     0x428a_2f98, 0x7137_4491, 0xb5c0_fbcf, 0xe9b5_dba5, 0x3956_c25b, 0x59f1_11f1, 0x923f_82a4,
@@ -665,6 +669,7 @@ enum SHA256 {
     (value >> amount) | (value << (32 - amount))
   }
 }
+// swiftlint:enable identifier_name
 
 // MARK: - Query set extraction
 
@@ -706,6 +711,8 @@ enum Queries {
   }
 
   struct Row: Encodable {
+    // The committed query sets spell the query `q`.
+    // swiftlint:disable:next identifier_name
     let q: String
     let kind: String
     let primary: String
@@ -888,9 +895,9 @@ struct SplitMix64: RandomNumberGenerator {
   init(seed: UInt64) { state = seed }
   mutating func next() -> UInt64 {
     state &+= 0x9E37_79B9_7F4A_7C15
-    var z = state
-    z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-    return z ^ (z >> 31)
+    var mixed = state
+    mixed = (mixed ^ (mixed >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    mixed = (mixed ^ (mixed >> 27)) &* 0x94D0_49BB_1331_11EB
+    return mixed ^ (mixed >> 31)
   }
 }

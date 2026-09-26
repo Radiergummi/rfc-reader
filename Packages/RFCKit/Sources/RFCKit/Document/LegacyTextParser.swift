@@ -777,8 +777,8 @@ public struct LegacyTextParser: Sendable {
     var afterTitle: (offset: Int, frontCount: Int)?
     // Noted, not stopped at: with no heading to come, after the title is sooner.
     var firstParagraph: (offset: Int, frontCount: Int)?
-    func split(_ at: (offset: Int, frontCount: Int)) -> (front: [String], bodyStart: Int) {
-      (Array(front.prefix(at.frontCount)), at.offset)
+    func split(_ boundary: (offset: Int, frontCount: Int)) -> (front: [String], bodyStart: Int) {
+      (Array(front.prefix(boundary.frontCount)), boundary.offset)
     }
     // Runs are counted from the one that states the number: RFC 873 opens with an NLS
     // journal stamp in two runs ahead of its header, and "after the title" counted from

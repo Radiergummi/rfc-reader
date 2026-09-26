@@ -10,20 +10,22 @@ struct RFCXMLSerializerTests {
     var lines: [String] = []
     func blockKind(_ block: Block) -> String {
       switch block {
-      case .paragraph(let p): "P:" + p.plainText
-      case .list(let l):
-        "L\(l.items.count):"
-          + l.items.map { $0.blocks.map(blockKind).joined(separator: "|") }.joined(separator: "||")
-      case .definitionList(let d):
-        "D\(d.count):" + d.map { $0.term.plainText }.joined(separator: "|")
-      case .preformatted(let a): "A:" + a.text
-      case .figure(let f): "F:\(f.title ?? "")" + f.blocks.map(blockKind).joined(separator: "|")
-      case .table(let t): "T:\(t.header.count)x\(t.rows.count)"
-      case .blockQuote(let b): "Q:" + b.map(blockKind).joined(separator: "|")
-      case .aside(let b): "S:" + b.map(blockKind).joined(separator: "|")
-      case .references(let r):
+      case .paragraph(let paragraph): "P:" + paragraph.plainText
+      case .list(let list):
+        "L\(list.items.count):"
+          + list.items.map { $0.blocks.map(blockKind).joined(separator: "|") }.joined(
+            separator: "||")
+      case .definitionList(let items):
+        "D\(items.count):" + items.map { $0.term.plainText }.joined(separator: "|")
+      case .preformatted(let artwork): "A:" + artwork.text
+      case .figure(let figure):
+        "F:\(figure.title ?? "")" + figure.blocks.map(blockKind).joined(separator: "|")
+      case .table(let table): "T:\(table.header.count)x\(table.rows.count)"
+      case .blockQuote(let blocks): "Q:" + blocks.map(blockKind).joined(separator: "|")
+      case .aside(let blocks): "S:" + blocks.map(blockKind).joined(separator: "|")
+      case .references(let list):
         "R:"
-          + r.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(
+          + list.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(
             separator: ",")
       }
     }
