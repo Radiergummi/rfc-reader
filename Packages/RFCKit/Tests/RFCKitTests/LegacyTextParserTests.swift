@@ -1272,6 +1272,27 @@ struct LegacyTextCorpusFindingsTests {
       })
   }
 
+  /// Nor is it the rest of a sentence when the line above it has no final punctuation,
+  /// which is the other reason a page join is made: RFC 6614's `For example, they send`
+  /// ends a page, and its list of packet types, which starts the next, was read into it
+  /// as `they send o Access-Request o Accounting-Request ...`.
+  @Test func aBulletAfterAnUnfinishedSentenceIsNotItsRest() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc6614.txt"))
+    #expect(
+      document.paragraphs.contains {
+        $0.plainText.hasPrefix("RADIUS/TLS clients transmit the same packet types")
+          && $0.plainText.hasSuffix("For example, they send")
+      })
+    #expect(
+      document.lists.contains { list in
+        let items = list.items.compactMap { item -> String? in
+          guard case .paragraph(let text)? = item.blocks.first else { return nil }
+          return text.plainText
+        }
+        return items.starts(with: ["Access-Request", "Accounting-Request", "Status-Server"])
+      })
+  }
+
   @Test func overstrikesAndControlBytesAreRemoved() {
     let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
     let underlined = "_\u{08}R_\u{08}F_\u{08}C"

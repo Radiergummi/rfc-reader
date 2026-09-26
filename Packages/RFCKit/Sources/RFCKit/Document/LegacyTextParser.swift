@@ -1510,10 +1510,24 @@ public struct LegacyTextParser: Sendable {
     guard first.indent == second.indent else { return false }
     let lastLine = first.lines.last?.trimmingCharacters(in: .whitespaces) ?? ""
     let nextLine = second.lines.first?.trimmingCharacters(in: .whitespaces) ?? ""
-    // Lower case continues a sentence, but an `o` bullet opens lower case too: RFC
-    // 1251's `o Funding` at the top of a page was read as the rest of the sentence
-    // that ended above it.
-    if nextLine.first?.isLowercase == true, listMarker(of: second.lines) == nil { return true }
+    // A bullet opens an item, whatever the line above it ends with. RFC 1581's `o The
+    // most recently ...` opens lower case, as the rest of a sentence does, and was read
+    // into the `it is assumed that:` ending the page before it; RFC 6614's `o
+    // Access-Request` into the unpunctuated `they send` before its own.
+    //
+    // A dash is the exception, because it can be the rest of a sentence: RFC 2123's
+    // `- e.g. its SourcePeerAddress - is one of ...` continues the page above, as RFC
+    // 1345's and 3860's do. It is refused only the lower-case shortcut, as a number is
+    // (`... 2) develop ...`), unless the block above opens with a bullet of its own:
+    // then it is a list that runs across the page (RFC 1943, 2421, 6258).
+    if let marker = listMarker(of: second.lines) {
+      let dash = nextLine.first == "-"
+      if marker.style == .bullet, !dash || listMarker(of: first.lines)?.style == .bullet {
+        return false
+      }
+    } else if nextLine.first?.isLowercase == true {
+      return true
+    }
     if let last = lastLine.last, ".:!?".contains(last) { return false }
     return true
   }
