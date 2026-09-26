@@ -59,13 +59,20 @@ public struct RFCXMLSerializer: Sendable {
     if let source = options.sourceURL {
       writer.empty("link", [("href", source.absoluteString), ("rel", "alternate")])
     }
-    writeFront(document.header, writer: &writer, context: &context)
+    // `<abstract>` holds paragraphs and lists only. One holding anything else
+    // (RFC 391's has artwork) is written as the body's first section instead, so
+    // nothing in it is dropped.
+    let abstractFits = document.header.abstract.allSatisfy(Self.fitsInAbstract)
+    writeFront(document.header, writer: &writer, context: &context, abstract: abstractFits)
 
-    // Everything up to the first references section or appendix is the middle.
-    let backStart =
-      document.sections.firstIndex { Self.isReferences($0) || $0.isAppendix }
-      ?? document.sections.count
+    let backStart = Self.backStart(document.sections)
     writer.open("middle")
+    if !abstractFits {
+      let abstract = Section(
+        anchor: "abstract", number: nil, title: [.text("Abstract")],
+        blocks: document.header.abstract)
+      writeSection(abstract, writer: &writer, context: &context)
+    }
     for section in document.sections[..<backStart] {
       writeSection(section, writer: &writer, context: &context)
     }
@@ -86,9 +93,38 @@ public struct RFCXMLSerializer: Sendable {
     return writer.output
   }
 
+  /// Where `<back>` starts. The schema orders it as its `<references>`, then its
+  /// sections, and requires `<middle>` to hold at least one section (#65). So the back
+  /// is the run of references sections that ends at the last one, and whatever
+  /// follows; everything before that run is the middle, an appendix among it too,
+  /// whose `pn` still names it one. With no references, the back is the appendices
+  /// the document ends with, and when that would leave the middle empty, as in the
+  /// legacy documents whose first chapter, `I.`, reads as an appendix, there is no
+  /// back.
+  static func backStart(_ sections: [Section]) -> Int {
+    if let last = sections.lastIndex(where: isReferences) {
+      var first = last
+      while first > 0, isReferences(sections[first - 1]) { first -= 1 }
+      return first
+    }
+    var first = sections.count
+    while first > 0, sections[first - 1].isAppendix { first -= 1 }
+    return first == 0 ? sections.count : first
+  }
+
+  /// `<abstract>` holds `t`, `dl`, `ol` and `ul`, and nothing else.
+  private static func fitsInAbstract(_ block: Block) -> Bool {
+    switch block {
+    case .paragraph, .list, .definitionList: true
+    default: false
+    }
+  }
+
   // MARK: - Front
 
-  private func writeFront(_ header: DocumentHeader, writer: inout Writer, context: inout Context) {
+  private func writeFront(
+    _ header: DocumentHeader, writer: inout Writer, context: inout Context, abstract: Bool
+  ) {
     writer.open("front")
     var titleAttributes: [(String, String)] = []
     if let abbrev = header.abbreviatedTitle { titleAttributes.append(("abbrev", abbrev)) }
@@ -116,7 +152,7 @@ public struct RFCXMLSerializer: Sendable {
     if let area = header.area { writer.element("area", text: area) }
     if let group = header.workingGroup { writer.element("workgroup", text: group) }
     for keyword in header.keywords { writer.element("keyword", text: keyword) }
-    if !header.abstract.isEmpty {
+    if abstract, !header.abstract.isEmpty {
       writer.open("abstract")
       for block in header.abstract { writeBlock(block, writer: &writer, context: &context) }
       writer.close("abstract")
@@ -127,7 +163,12 @@ public struct RFCXMLSerializer: Sendable {
   // MARK: - Sections
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
+    // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,
+    // which is an ID. The second is written unnumbered, its number in its name, so it
+    // reads the same and names nothing twice (#65).
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+      .flatMap { context.claim($0) ? $0 : nil }
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -136,7 +177,7 @@ public struct RFCXMLSerializer: Sendable {
       attributes.append(("numbered", "false"))
     }
     writer.open("section", attributes)
-    writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+    writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
     for subsection in section.subsections {
       if Self.isReferences(subsection) {
@@ -150,10 +191,12 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+      .flatMap { context.claim($0) ? $0 : nil }
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
-    writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+    writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks {
       guard case .references(let list) = block else {
         context.warnings.append(
@@ -370,6 +413,12 @@ public struct RFCXMLSerializer: Sendable {
     var referenceAnchors: [DocumentID: String]
     var warnings: [String] = []
     private var autoAnchor = 0
+    private var claimedPartNumbers: Set<String> = []
+
+    /// Whether `partNumber` is still free, taking it if it is.
+    mutating func claim(_ partNumber: String) -> Bool {
+      claimedPartNumbers.insert(partNumber).inserted
+    }
 
     init(referenceAnchors: [DocumentID: String]) {
       self.referenceAnchors = referenceAnchors
