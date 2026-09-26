@@ -145,17 +145,25 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("address")
     if let postal = contact.postal {
       writer.open("postal")
-      for street in postal.street { writer.element("street", text: street) }
-      if let city = postal.city { writer.element("city", text: city) }
-      if let region = postal.region { writer.element("region", text: region) }
-      if let code = postal.code { writer.element("code", text: code) }
-      if let country = postal.country { writer.element("country", text: country) }
+      // The schema's choice: the author's lines, or the fields, never both.
+      if postal.postalLines.isEmpty {
+        for street in postal.street { writer.element("street", text: street) }
+        for line in postal.extendedAddress { writer.element("extaddr", text: line) }
+        let fields = [
+          ("pobox", postal.postOfficeBox), ("cityarea", postal.cityArea), ("city", postal.city),
+          ("region", postal.region), ("code", postal.code), ("sortingcode", postal.sortingCode),
+          ("country", postal.country),
+        ]
+        for case (let name, let value?) in fields { writer.element(name, text: value) }
+      } else {
+        for line in postal.postalLines { writer.element("postalLine", text: line) }
+      }
       writer.close("postal")
     }
     if let phone = contact.phone { writer.element("phone", text: phone) }
     if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
     for email in contact.emails { writer.element("email", text: email) }
-    if let uri = contact.uri { writer.element("uri", text: uri.absoluteString) }
+    if let uri = contact.uri { writer.element("uri", text: uri) }
     writer.close("address")
   }
 

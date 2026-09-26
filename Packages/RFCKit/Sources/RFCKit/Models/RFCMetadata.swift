@@ -91,6 +91,11 @@ public struct Author: Hashable, Sendable, Codable {
 }
 
 /// An author's affiliation and address, as RFCXML's `<author>` states them.
+///
+/// The `ascii` attributes RFCXML allows beside these (and `asciiFullname` beside the
+/// name) are not kept. They transliterate what the document already gives in its
+/// own script, for renderings limited to ASCII, and the reader shows the document's
+/// own; the schema makes them optional, so a round trip without them still validates.
 public struct AuthorContact: Hashable, Sendable, Codable {
   public var organization: String?
   public var postal: PostalAddress?
@@ -98,11 +103,13 @@ public struct AuthorContact: Hashable, Sendable, Codable {
   public var facsimile: String?
   /// In the document's order; the schema allows several.
   public var emails: [String]
-  public var uri: URL?
+  /// As written, not as a `URL`: one that `URL(string:)` refuses is still the
+  /// author's, and is shown and written back as text rather than lost.
+  public var uri: String?
 
   public init(
     organization: String? = nil, postal: PostalAddress? = nil, phone: String? = nil,
-    facsimile: String? = nil, emails: [String] = [], uri: URL? = nil
+    facsimile: String? = nil, emails: [String] = [], uri: String? = nil
   ) {
     self.organization = organization
     self.postal = postal
@@ -119,33 +126,56 @@ public struct AuthorContact: Hashable, Sendable, Codable {
   }
 }
 
-/// A postal address as RFCXML's `<postal>` gives it: either structured, as the
-/// fields a contact card has, or as the author's own lines (`<postalLine>`), which
-/// have no structure to recover and are kept as written in `street`.
+/// A postal address as RFCXML's `<postal>` gives it. The schema offers a choice:
+/// the fields a contact card has, one per element, or the author's own lines
+/// (`<postalLine>`), which have no structure to recover. Whichever the author chose
+/// is kept, so the other is empty, and a round trip writes the same form back.
 public struct PostalAddress: Hashable, Sendable, Codable {
-  /// `<street>`, `<extaddr>` and `<pobox>` lines in order, or every `<postalLine>`.
+  /// `<street>`, in order.
   public var street: [String]
+  /// `<extaddr>`: a building, a floor or a suite, in order.
+  public var extendedAddress: [String]
+  /// `<pobox>`.
+  public var postOfficeBox: String?
+  /// `<cityarea>`: a district within the city.
+  public var cityArea: String?
   public var city: String?
   public var region: String?
+  /// `<code>`, the postal code.
   public var code: String?
+  /// `<sortingcode>`, which some countries use beside the postal code.
+  public var sortingCode: String?
   public var country: String?
+  /// Every `<postalLine>`, when the author wrote the address as lines.
+  public var postalLines: [String]
 
   public init(
-    street: [String] = [], city: String? = nil, region: String? = nil, code: String? = nil,
-    country: String? = nil
+    street: [String] = [], extendedAddress: [String] = [], postOfficeBox: String? = nil,
+    cityArea: String? = nil, city: String? = nil, region: String? = nil, code: String? = nil,
+    sortingCode: String? = nil, country: String? = nil, postalLines: [String] = []
   ) {
     self.street = street
+    self.extendedAddress = extendedAddress
+    self.postOfficeBox = postOfficeBox
+    self.cityArea = cityArea
     self.city = city
     self.region = region
     self.code = code
+    self.sortingCode = sortingCode
     self.country = country
+    self.postalLines = postalLines
   }
 
-  /// The address as lines, the way the RFC Editor's plain-text rendering sets it:
-  /// the street lines, then city, region and code on one line, then the country.
+  /// The address as lines: the author's own, or the fields in the order the RFC
+  /// Editor's plain-text rendering commonly sets them: the building before the
+  /// street (RFC 9283's "School of Computer Science", then "PB 92019"), the city,
+  /// region and code on one line, the country last. That rendering follows each
+  /// country's conventions beyond this; the reader does not try to.
   public var lines: [String] {
+    guard postalLines.isEmpty else { return postalLines }
     let locality = [city, region, code].compactMap { $0 }.joined(separator: " ")
-    return street + [locality, country ?? ""].filter { !$0.isEmpty }
+    let rest = [postOfficeBox, cityArea, locality, sortingCode, country].compactMap { $0 }
+    return extendedAddress + street + rest.filter { !$0.isEmpty }
   }
 }
 
