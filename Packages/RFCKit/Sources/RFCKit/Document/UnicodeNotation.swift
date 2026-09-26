@@ -8,7 +8,9 @@
 /// out at parse time, like a cross reference, rather than left to the view.
 ///
 /// The literal becomes a `.code` inline, so nothing can link or reflow it. The
-/// name, the code point and the ASCII spelling are ordinary text.
+/// name, the code point and the ASCII spelling are ordinary text, spelled as the
+/// RFC Editor's renderer spells them, so a published plain-text RFC is the
+/// reference for what this produces.
 enum UnicodeNotation {
   /// `lit-name-num`, the vocabulary's default: `"ש" (HEBREW LETTER SHIN, U+05E9)`.
   static let defaultFormat = "lit-name-num"
@@ -19,8 +21,11 @@ enum UnicodeNotation {
   /// alone and the rest follow in parentheses, comma-separated, or a template whose
   /// `{keyword}` placeholders are replaced in place. A keyword the vocabulary does
   /// not define is skipped, and so is `ascii` when the element has no `ascii`
-  /// attribute. A format that leaves nothing falls back to the default.
+  /// attribute. A format that leaves nothing falls back to the default. An empty
+  /// element yields nothing: RFC 8771 has one, for a form feed XML cannot hold,
+  /// with the code point typed beside it.
   static func expand(_ text: String, format: String?, ascii: String?) -> [Inline] {
+    guard !text.isEmpty else { return [] }
     let format = format.flatMap { $0.isEmpty ? nil : $0 } ?? defaultFormat
     if format.contains("{") {
       return template(format, text: text, ascii: ascii)
@@ -73,16 +78,17 @@ enum UnicodeNotation {
     case "char": [.code(text)]
     case "name": [.text(text.unicodeScalars.map(name).joined(separator: ", "))]
     case "num": [.text(text.unicodeScalars.map(codePoint).joined(separator: " "))]
-    case "ascii": ascii.flatMap { $0.isEmpty ? nil : [Inline.text($0)] }
+    case "ascii": ascii.flatMap { $0.isEmpty ? nil : [Inline.text("\"\($0)\"")] }
     default: nil
     }
   }
 
   /// The character's Unicode name, as the standard library knows it; a scalar
   /// with none (a control character, an unassigned code point) is named by its
-  /// code point rather than left out.
+  /// code point rather than left out. Not by its alias (`DELETE` for U+007F):
+  /// the RFC Editor's renderer does not use aliases either.
   static func name(_ scalar: Unicode.Scalar) -> String {
-    scalar.properties.name ?? scalar.properties.nameAlias ?? codePoint(scalar)
+    scalar.properties.name ?? codePoint(scalar)
   }
 
   /// `U+05E9`: at least four hex digits, upper case, as the Unicode Standard

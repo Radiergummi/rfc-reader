@@ -632,6 +632,11 @@ public struct RFCXMLParser: Sendable {
             continue
           }
           if case .text(let previous)? = result.last {
+            // An element that yields nothing (an empty `<u>`, a `<cref>`) leaves
+            // the spaces on either side of it meeting here.
+            if previous.hasSuffix(" "), collapsed.hasPrefix(" ") {
+              collapsed.removeFirst()
+            }
             result[result.count - 1] = .text(previous + collapsed)
           } else {
             result.append(.text(collapsed))
