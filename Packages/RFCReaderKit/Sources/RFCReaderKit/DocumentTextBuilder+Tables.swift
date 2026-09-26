@@ -75,7 +75,9 @@ extension DocumentTextBuilder {
     headerAttributes[.font] = style.boldBodyFont
 
     for (index, row) in (table.header + table.rows).enumerated() {
-      let attributes = index < table.header.count ? headerAttributes : dataAttributes
+      let isHeader = index < table.header.count
+      let attributes = isHeader ? headerAttributes : dataAttributes
+      if !isHeader { mark(table.anchor(ofRow: index - table.header.count)) }
       for (column, cell) in row.enumerated() {
         if column > 0 { append("\t", attributes) }
         output.append(inlineRuns(cell, base: attributes))
@@ -100,7 +102,8 @@ extension DocumentTextBuilder {
     labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
     let separatorAttributes = bodyAttributes(indent: indent)
 
-    for row in table.rows {
+    for (index, row) in table.rows.enumerated() {
+      mark(table.anchor(ofRow: index))
       for (column, cell) in row.enumerated() {
         if column < headers.count {
           output.append(inlineRuns(headers[column], base: labelAttributes))

@@ -61,6 +61,7 @@ extension DocumentTextBuilder {
       mark(item.anchor)
       output.append(inlineRuns(item.term, base: termAttributes))
       append("\n", termAttributes)
+      mark(item.definitionAnchor)
       appendBlocks(item.definition, indent: indent + style.indentStep)
     }
   }

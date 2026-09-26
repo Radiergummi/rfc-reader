@@ -122,4 +122,16 @@ struct BuilderTableTests {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.anchors.offset(of: "table-1") != nil)
   }
+
+  /// A row a document cites is indexed where the row starts, in either shape (#166).
+  @Test(arguments: [TableShape.grid, .stacked])
+  func aRowsAnchorIsIndexedAtTheRow(shape expected: TableShape) throws {
+    var table = expected == .grid ? narrow : prose
+    table.rowAnchors = ["cited-row"]
+    #expect(shape(table) == expected)
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let offset = try #require(built.anchors.offset(of: "cited-row"))
+    let firstCell = expected == .grid ? "GET" : "Code"
+    #expect(try Fixtures.offset(of: firstCell, in: built.text) == offset)
+  }
 }

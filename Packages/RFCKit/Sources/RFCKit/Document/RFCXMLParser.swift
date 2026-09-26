@@ -459,7 +459,8 @@ public struct RFCXMLParser: Sendable {
             DefinitionItem(
               term: pendingTerm ?? [],
               definition: parseBlocks(in: child),
-              anchor: pendingAnchor
+              anchor: pendingAnchor,
+              definitionAnchor: child["anchor"] ?? child["pn"]
             ))
           pendingTerm = nil
           pendingAnchor = nil
@@ -491,6 +492,7 @@ public struct RFCXMLParser: Sendable {
             .map { normalize(parseInlines($0.children)) }
         }
       }
+      let bodyRows = ["tbody", "tfoot"].flatMap { element.first($0)?.all("tr") ?? [] }
       let number = element["pn"].flatMap { partNumber -> Int? in
         guard partNumber.hasPrefix("table-") else { return nil }
         return Int(partNumber.dropFirst("table-".count))
@@ -500,7 +502,8 @@ public struct RFCXMLParser: Sendable {
         number: number,
         header: rows(in: element.first("thead")),
         rows: rows(in: element.first("tbody")) + rows(in: element.first("tfoot")),
-        anchor: element["anchor"]
+        anchor: element["anchor"],
+        rowAnchors: bodyRows.contains { $0["anchor"] != nil } ? bodyRows.map { $0["anchor"] } : []
       )
     }
 

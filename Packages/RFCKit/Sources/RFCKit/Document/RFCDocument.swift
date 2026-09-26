@@ -280,12 +280,19 @@ public struct ListItem: Sendable {
 public struct DefinitionItem: Sendable {
   public var term: [Inline]
   public var definition: [Block]
+  /// The term's anchor (`<dt>`).
   public var anchor: String?
+  /// The definition's own anchor (`<dd>`), which a document can cite apart from
+  /// the term's: RFC 9113's `PROTOCOL_ERROR` is a `<dd anchor>` (#166).
+  public var definitionAnchor: String?
 
-  public init(term: [Inline], definition: [Block], anchor: String? = nil) {
+  public init(
+    term: [Inline], definition: [Block], anchor: String? = nil, definitionAnchor: String? = nil
+  ) {
     self.term = term
     self.definition = definition
     self.anchor = anchor
+    self.definitionAnchor = definitionAnchor
   }
 }
 
@@ -334,16 +341,26 @@ public struct Table: Sendable {
   public var header: [[[Inline]]]
   public var rows: [[[Inline]]]
   public var anchor: String?
+  /// Each body row's anchor (`<tr anchor>`), by index into `rows`; shorter than
+  /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
+  /// `EventFSD` (#166).
+  public var rowAnchors: [String?]
 
   public init(
     title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil
+    anchor: String? = nil, rowAnchors: [String?] = []
   ) {
     self.title = title
     self.number = number
     self.header = header
     self.rows = rows
     self.anchor = anchor
+    self.rowAnchors = rowAnchors
+  }
+
+  /// The anchor of body row `index`, if it has one.
+  public func anchor(ofRow index: Int) -> String? {
+    rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
   }
 }
 
