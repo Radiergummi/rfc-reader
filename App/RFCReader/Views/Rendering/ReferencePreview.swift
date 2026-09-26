@@ -10,44 +10,44 @@ import SwiftUI
 /// Clicking the chip itself already opens the document, through `clickedOnLink`
 /// on macOS and `primaryActionFor` on iOS.
 struct ReferencePreview: View {
-    let reference: CrossReference
-    let library: LibraryModel
-    /// The section heading an in-document reference points at. The coordinator
-    /// shows no card for one without, so this is set exactly when the target is an
-    /// anchor.
-    var heading: String?
+  let reference: CrossReference
+  let library: LibraryModel
+  /// The section heading an in-document reference points at. The coordinator
+  /// shows no card for one without, so this is set exactly when the target is an
+  /// anchor.
+  var heading: String?
 
-    /// The card's fixed width, which the iOS preview is also sized at.
-    static let width: CGFloat = 280
+  /// The card's fixed width, which the iOS preview is also sized at.
+  static let width: CGFloat = 280
 
-    private var documentID: DocumentID? {
-        guard case .document(let id, _) = reference.target else { return nil }
-        return id
-    }
+  private var documentID: DocumentID? {
+    guard case .document(let id, _) = reference.target else { return nil }
+    return id
+  }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let metadata = documentID.flatMap(library.metadata) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(metadata.title).font(.headline).lineLimit(2)
-                    Spacer()
-                    StatusBadge(status: metadata.currentStatus)
-                }
-                if let abstract = metadata.abstract {
-                    Text(abstract).font(.callout).foregroundStyle(.secondary).lineLimit(4)
-                }
-            } else if let documentID {
-                // Referenced but not in the library's index — an unpublished draft,
-                // or a corpus gap. Never a blank card: name what we do know.
-                Text(documentID.displayName).font(.headline)
-                Text("Not available in the library.").font(.callout).foregroundStyle(.secondary)
-            } else if let heading {
-                // A section of this document: "Section 4.2" says where, the heading
-                // says what.
-                Text(heading).font(.headline)
-            }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      if let metadata = documentID.flatMap(library.metadata) {
+        HStack(alignment: .firstTextBaseline) {
+          Text(metadata.title).font(.headline).lineLimit(2)
+          Spacer()
+          StatusBadge(status: metadata.currentStatus)
         }
-        .padding(12)
-        .frame(width: Self.width, alignment: .leading)
+        if let abstract = metadata.abstract {
+          Text(abstract).font(.callout).foregroundStyle(.secondary).lineLimit(4)
+        }
+      } else if let documentID {
+        // Referenced but not in the library's index — an unpublished draft,
+        // or a corpus gap. Never a blank card: name what we do know.
+        Text(documentID.displayName).font(.headline)
+        Text("Not available in the library.").font(.callout).foregroundStyle(.secondary)
+      } else if let heading {
+        // A section of this document: "Section 4.2" says where, the heading
+        // says what.
+        Text(heading).font(.headline)
+      }
     }
+    .padding(12)
+    .frame(width: Self.width, alignment: .leading)
+  }
 }

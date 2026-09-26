@@ -9,11 +9,11 @@ import Foundation
 /// `AnchorIndex` is a `Sendable` value. Nothing mutates a `BuiltDocument` after it
 /// is constructed; the text view only reads it.
 public struct BuiltDocument: @unchecked Sendable {
-    public let text: NSAttributedString
-    public let anchors: AnchorIndex
+  public let text: NSAttributedString
+  public let anchors: AnchorIndex
 
-    public init(text: NSAttributedString, anchors: AnchorIndex) {
-        self.text = text
-        self.anchors = anchors
-    }
+  public init(text: NSAttributedString, anchors: AnchorIndex) {
+    self.text = text
+    self.anchors = anchors
+  }
 }

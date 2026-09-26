@@ -10,11 +10,11 @@ import SwiftData
 /// scene and every hosted root.
 @MainActor
 enum AppData {
-    static let container: ModelContainer = {
-        do {
-            return try ModelContainer(for: Bookmark.self, ReadingPosition.self)
-        } catch {
-            fatalError("Could not open the user data store: \(error)")
-        }
-    }()
+  static let container: ModelContainer = {
+    do {
+      return try ModelContainer(for: Bookmark.self, ReadingPosition.self)
+    } catch {
+      fatalError("Could not open the user data store: \(error)")
+    }
+  }()
 }
