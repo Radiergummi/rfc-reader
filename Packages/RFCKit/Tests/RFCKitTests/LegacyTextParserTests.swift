@@ -699,6 +699,53 @@ struct LegacyTextCorpusFindingsTests {
         #expect(relabelled.displayAnchor == "ISO-8859", "a renamed entry still reads as the label its citations use")
     }
 
+    /// A numbered entry whose text names no RFC was recorded as the RFC its number
+    /// happened to be: RFC 2013's `[1]` is ISO 8824, and it and its citation became RFC 1.
+    /// 6,887 entries in 1,381 converted documents. `[2]`, which says RFC 1902, still is.
+    @Test func aNumberedEntryIsNotTheRFCOfItsNumber() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        let asn1 = try #require(entries.first { $0.displayAnchor == "1" })
+        #expect(asn1.documentID == nil)
+        #expect(asn1.anchor == "ref-1")
+        #expect(document.crossReferences.contains { $0.target == .anchor("ref-1") && $0.text == "[1]" })
+        #expect(!document.referencedDocuments.contains(.rfc(1)))
+        #expect(entries.first { $0.displayAnchor == "2" }?.documentID == .rfc(1902))
+    }
+
+    /// An entry names its RFC however the document spells it. RFC 1041 writes every entry
+    /// `[1] RFC-854, ...`; read as no RFC, its numbered entries named nothing at all.
+    @Test func anEntryNamesAnRFCWrittenWithAHyphen() throws {
+        let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+        let entries = document.referenceLists.flatMap(\.entries)
+        #expect(entries.first { $0.displayAnchor == "1" }?.documentID == .rfc(854))
+        #expect(entries.first { $0.displayAnchor == "3" }?.documentID == .rfc(885))
+        #expect(entries.first { $0.displayAnchor == "5" }?.documentID == nil, "the IBM manual names no RFC")
+        #expect(document.referencedDocuments.contains(.rfc(856)))
+
+        // But a title names RFCs too, and the hyphenated spelling is only the fallback:
+        // RFC 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495.
+        let mapping = LegacyTextParser.parse(try Fixtures.string("rfc1494.txt")).referenceLists.flatMap(\.entries)
+        #expect(mapping.first { $0.displayAnchor == "1" }?.documentID == .rfc(1495))
+    }
+
+    /// And in the series' earliest spellings: RFC 338 cites `RFC #189` and `RFC #183`,
+    /// RFC 1275 `Request for Comments 1006`, RFC 1005 `Request For Comments 990`, broken
+    /// across a line.
+    @Test func anEntryNamesAnRFCInTheSeriesEarliestSpellings() throws {
+        let rfc338 = LegacyTextParser.parse(try Fixtures.string("rfc338.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc338.first { $0.displayAnchor == "1" }?.documentID == .rfc(189))
+        #expect(rfc338.first { $0.displayAnchor == "4" }?.documentID == .rfc(183))
+        #expect(rfc338.first { $0.displayAnchor == "2" }?.documentID == nil, "a note names no RFC")
+
+        let rfc1275 = LegacyTextParser.parse(try Fixtures.string("rfc1275.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1275.first { $0.displayAnchor == "RC87" }?.documentID == .rfc(1006))
+
+        let rfc1005 = LegacyTextParser.parse(try Fixtures.string("rfc1005.txt")).referenceLists.flatMap(\.entries)
+        #expect(rfc1005.first { $0.displayAnchor == "3" }?.documentID == .rfc(990))
+        #expect(rfc1005.first { $0.displayAnchor == "5" }?.documentID == .rfc(796))
+    }
+
     /// The XML declares each anchor as an ID, which has to be a name: `[1]`, `[RFC 2119]`
     /// and `[Cheswick and Bellovin, 1994]` are not, in 2,361 documents (#65). And a
     /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was
