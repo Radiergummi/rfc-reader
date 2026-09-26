@@ -60,8 +60,13 @@ extension DocumentTextBuilder {
     for item in items {
       mark(item.anchor)
       output.append(inlineRuns(item.term, base: termAttributes))
+      // A definition's own anchor goes where its text starts. An empty `<dd>`
+      // has no text, and marking it after the term's newline would put it at the
+      // next item's term, so a link to it would land one item late; the end of
+      // its own term keeps it on the item it belongs to.
+      if item.definition.isEmpty { mark(item.definitionAnchor) }
       append("\n", termAttributes)
-      mark(item.definitionAnchor)
+      if !item.definition.isEmpty { mark(item.definitionAnchor) }
       appendBlocks(item.definition, indent: indent + style.indentStep)
     }
   }
