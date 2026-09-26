@@ -21,6 +21,10 @@ public enum FragmentGeometry {
     /// The padding a chip's tint extends past its glyphs, on the ends that round.
     public static let chipPadding: CGFloat = 5
 
+    /// The padding a card extends past its column on either side, and half of it
+    /// past its run's own first and last line.
+    public static let cardPadding: CGFloat = 10
+
     /// A decoration a fragment's own range carries, plus whether it is the first
     /// and/or last fragment of that decoration's run.
     public struct DecorationSpan: Equatable, Sendable {
@@ -34,6 +38,10 @@ public enum FragmentGeometry {
         /// starts. Computed with the span because it is a scan over the run, and
         /// the drawing path asks for it on every draw.
         public let indent: CGFloat
+        /// Whether the run starts directly below another card, and ends directly
+        /// above one: the ends `Placement.cardRect` cuts rather than caps.
+        public let meetsCardAbove: Bool
+        public let meetsCardBelow: Bool
     }
 
     /// A chip's fill and rounding, worked out per *line* fragment.
@@ -78,13 +86,48 @@ public enum FragmentGeometry {
         )) else {
             return nil
         }
+        effective = verbatimBlock(in: text, at: fragment.location, within: effective)
         return DecorationSpan(
             decoration: decoration,
             isFirst: fragment.location <= effective.location,
             isLast: NSMaxRange(fragment) >= NSMaxRange(effective),
             runRange: effective,
-            indent: indent(in: text, over: effective)
+            indent: indent(in: text, over: effective),
+            meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
+            meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective))
         )
+    }
+
+    /// Whether the character at `location` belongs to a block drawn as a card. A
+    /// quote is decorated too, but draws a rule beside its text, which no card's cap
+    /// can stack on.
+    private static func drawsCard(in text: NSAttributedString, at location: Int) -> Bool {
+        guard location >= 0, location < text.length else { return false }
+        let decoration = RFCDecoration(attributeValue: text.attribute(.rfcDecoration, at: location, effectiveRange: nil))
+        return decoration != nil && decoration != .blockQuote
+    }
+
+    /// `run` cut down to the one verbatim block at `location`, when there is one.
+    ///
+    /// Two verbatim blocks in a row carry the same `.artwork` value with nothing
+    /// between them, so the decoration's run alone reads them as one card, and a
+    /// source block's language label lands mid-card. What tells them apart is the
+    /// block's own `VerbatimBox`, compared by identity: `longestEffectiveRange` on a
+    /// boxed value is at the mercy of how the box bridges to `isEqual`.
+    private static func verbatimBlock(in text: NSAttributedString, at location: Int, within run: NSRange) -> NSRange {
+        guard let box = text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox else { return run }
+        var start = run.location
+        var end = NSMaxRange(run)
+        text.enumerateAttribute(.rfcVerbatim, in: run) { value, piece, stop in
+            guard (value as? VerbatimBox) !== box else { return }
+            if NSMaxRange(piece) <= location {
+                start = NSMaxRange(piece)
+            } else {
+                end = piece.location
+                stop.pointee = true
+            }
+        }
+        return NSRange(location: start, length: end - start)
     }
 
     /// One probe over a whole fragment, so a chipless paragraph — which is most of
@@ -221,6 +264,25 @@ public enum FragmentGeometry {
             )
         }
 
+        /// The card `span`'s fragment fills: `decorationRect`, capped at the run's own
+        /// first and last fragment — except an end where the run meets another card.
+        ///
+        /// Two blocks with nothing between them — one verbatim block after another,
+        /// a table directly followed by artwork — lay out with touching frames, so
+        /// the upper card's bottom cap and the lower card's top cap would cover the
+        /// same `padding`-high strip, and two translucent fills stack there with
+        /// their rounded corners cutting in. At such a cut neither card caps; each
+        /// gives up a quarter of the padding of its own frame instead, so the two meet
+        /// with a gap of half the padding and no text moves.
+        public func cardRect(padding: CGFloat, span: DecorationSpan) -> CGRect {
+            let cutAbove = span.isFirst && span.meetsCardAbove
+            let cutBelow = span.isLast && span.meetsCardBelow
+            let rect = decorationRect(padding: padding, capTop: span.isFirst && !cutAbove, capBottom: span.isLast && !cutBelow)
+            let top = cutAbove ? padding / 4 : 0
+            let bottom = cutBelow ? padding / 4 : 0
+            return CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(0, rect.height - top - bottom))
+        }
+
         /// The rule a block quote hangs beside its text.
         ///
         /// Left of the decorated text's own edge, not the fragment's: a short line
@@ -229,6 +291,48 @@ public enum FragmentGeometry {
         /// meet end to end.
         public func ruleRect(padding: CGFloat, width: CGFloat) -> CGRect {
             CGRect(x: columnLeft - padding - width, y: origin.y, width: width, height: frame.height)
+        }
+
+        /// `rect`, in the drawing space, with the edges it shares with a neighbouring
+        /// fragment moved onto the device pixel grid: its top when `top`, its bottom
+        /// when `bottom`.
+        ///
+        /// `decorationRect` tiles consecutive fragments exactly in points, but a line
+        /// advance like 29.25pt puts the shared edge inside a device pixel. Each
+        /// fragment then fills that pixel with partial coverage, and two translucent
+        /// partial fills compose to less than one whole one — a darker 1px band at
+        /// every line of a card (#31). On the grid, each fragment owns whole pixels
+        /// and the band is one flat surface.
+        ///
+        /// The edge is rounded in *device* space, through the whole of `toDevice` —
+        /// its translation as well as its scale — and mapped back. Where a device
+        /// pixel falls in the drawing space depends on everything between the
+        /// document and the backing store: the scroll offset, the header's top inset,
+        /// the text view's own origin, a fragment view's position. Rounding against
+        /// the scale alone assumed all of those were whole pixels; the translation
+        /// carries them, so nothing has to be. Two neighbours drawn into one context
+        /// map the same edge to the same device coordinate whatever local space each
+        /// is drawn in, so they round it to the same pixel; drawn into two layers,
+        /// each rounds to the pixels of the layer its fill is rasterised into. Rounding
+        /// is `floor(y + 0.5)`, so a tie goes one way from both sides.
+        ///
+        /// `toDevice` is the context's `userSpaceToDeviceSpaceTransform`, not its
+        /// `ctm`: inside `NSTextLayoutFragment.draw` the `ctm` is the identity and the
+        /// backing scale lives only in the base transform — measured, `(2, -2)`
+        /// against an identity `ctm` — so rounding against `ctm` rounds to whole
+        /// points and makes overlaps. A transform that rotates leaves the rect alone:
+        /// a horizontal edge is then not on one device row.
+        ///
+        /// The run's own first and last edges are left alone: they are rounded and
+        /// antialiased, and shared with nothing.
+        public func snappingJoins(of rect: CGRect, top: Bool, bottom: Bool, toDevice transform: CGAffineTransform) -> CGRect {
+            guard transform.b == 0, transform.d != 0 else { return rect }
+            func snap(_ y: CGFloat) -> CGFloat {
+                ((y * transform.d + transform.ty + 0.5).rounded(.down) - transform.ty) / transform.d
+            }
+            let minY = top ? snap(rect.minY) : rect.minY
+            let maxY = bottom ? snap(rect.maxY) : rect.maxY
+            return CGRect(x: rect.minX, y: minY, width: rect.width, height: maxY - minY)
         }
     }
 
@@ -262,6 +366,59 @@ public enum FragmentGeometry {
         }
         return nil
     }
+
+    /// The document-relative characters of the line at `y`, in fragment coordinates
+    /// — or of the next line, if `y` falls in the space above one. What the reader
+    /// records as the line at the top of the viewport.
+    ///
+    /// Below the last line is the paragraph spacing, which the fragment's frame
+    /// includes: every line of it is scrolled past, and the next line is the next
+    /// fragment's first, so the answer is an empty range where that one starts.
+    public static func lineRange(at y: CGFloat, in lines: [NSTextLineFragment], fragment: NSRange) -> NSRange {
+        guard let line = lines.first(where: { y < $0.typographicBounds.maxY }) else {
+            return NSRange(location: lines.isEmpty ? fragment.location : NSMaxRange(fragment), length: 0)
+        }
+        return NSRange(location: fragment.location + line.characterRange.location, length: line.characterRange.length)
+    }
+
+    /// The top of the line holding `documentOffset`, in fragment coordinates: where
+    /// the reader scrolls to put that line at the top of the viewport. The inverse
+    /// of `lineRange(at:in:fragment:)`. `characterRange` is element-relative,
+    /// like every other line index here.
+    public static func lineTop(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat? {
+        let index = elementIndex(of: documentOffset, fragmentStart: fragmentStart)
+        let line = lines.first { index < NSMaxRange($0.characterRange) } ?? lines.last
+        return line?.typographicBounds.minY
+    }
+
+    /// Where to scroll, in fragment coordinates, to put the line holding
+    /// `documentOffset` at the top of the viewport: the fragment's own top for its
+    /// first character — the spacing above it included, which is where an anchor has
+    /// always landed — and the line's top for any other. A place carried across a
+    /// rebuild can be any line.
+    public static func scrollTarget(of documentOffset: Int, in lines: [NSTextLineFragment], fragmentStart: Int) -> CGFloat {
+        guard documentOffset != fragmentStart else { return 0 }
+        return lineTop(of: documentOffset, in: lines, fragmentStart: fragmentStart) ?? 0
+    }
+
+    /// The line at the top of the viewport, `top` and `fragmentTop` both in container
+    /// coordinates: what the reader records as its place.
+    ///
+    /// Read a point below the top, so a line put exactly there by `scrollTarget` is
+    /// read back as that line even once the scroll view has rounded the offset down
+    /// to a pixel, rather than as the line above it.
+    public static func topLine(
+        atViewportTop top: CGFloat,
+        fragmentTop: CGFloat,
+        in lines: [NSTextLineFragment],
+        fragmentStart: Int,
+        fragmentEnd: Int
+    ) -> NSRange {
+        let fragment = NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart)
+        return lineRange(at: top - fragmentTop + readBackSlack, in: lines, fragment: fragment)
+    }
+
+    private static let readBackSlack: CGFloat = 1
 
     /// A document-relative offset as the index `NSTextLineFragment` wants.
     ///

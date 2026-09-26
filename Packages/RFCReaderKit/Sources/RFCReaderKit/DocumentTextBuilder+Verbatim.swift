@@ -16,9 +16,11 @@ extension DocumentTextBuilder {
     /// is 129 columns, in RFC 2124.
     func appendVerbatim(_ content: Preformatted, indent: CGFloat) {
         mark(content.anchor)
-        let scale = monospaceScale(for: content.text)
+        let scale = monospaceScale(for: content.text, indent: indent)
         let box = VerbatimBox(content)
 
+        // Before the label, so the label is inside the card it names.
+        let start = output.length
         if content.kind == .sourceCode, let type = content.type, !type.isEmpty {
             append(type.uppercased() + "\n", [
                 .font: style.captionFont,
@@ -29,7 +31,6 @@ extension DocumentTextBuilder {
         }
 
         let body = content.text.hasSuffix("\n") ? content.text : content.text + "\n"
-        let start = output.length
         append(body, [
             .font: style.monospacedFont(scale: scale),
             .foregroundColor: bodyColour,
@@ -40,10 +41,11 @@ extension DocumentTextBuilder {
     }
 
     /// 1 when the block already fits, otherwise the factor that makes its widest line
-    /// fit the measure.
-    func monospaceScale(for text: String) -> CGFloat {
+    /// fit what the measure leaves after `indent` — never less than one indent step,
+    /// or a block nested deep enough to eat the measure would scale to nothing.
+    func monospaceScale(for text: String, indent: CGFloat) -> CGFloat {
         let columns = text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
         guard columns > 0, monospaceAdvance > 0 else { return 1 }
-        return min(1, style.measure / (CGFloat(columns) * monospaceAdvance))
+        return min(1, max(style.indentStep, style.measure - indent) / (CGFloat(columns) * monospaceAdvance))
     }
 }

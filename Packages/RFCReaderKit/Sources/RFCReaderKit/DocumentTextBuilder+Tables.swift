@@ -124,7 +124,7 @@ extension DocumentTextBuilder {
         append(caption + "\n", [
             .font: style.captionFont,
             .foregroundColor: RFCColors.secondaryLabel,
-            .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing, alignment: .center),
+            .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center),
         ])
     }
 }
