@@ -17,96 +17,96 @@ import SwiftUI
 @Observable
 @MainActor
 final class NavigationModel: Identifiable {
-    /// A request to scroll somewhere, carrying its own identity.
-    ///
-    /// Not a bare `String?`: a reader can navigate to the same section twice in a row
-    /// — back, then forward again, or the same contents row clicked twice — and an
-    /// `onChange` watching the section alone would see no change and never scroll.
-    struct ScrollRequest: Equatable {
-        let section: String
-        private let issue = UUID()
+  /// A request to scroll somewhere, carrying its own identity.
+  ///
+  /// Not a bare `String?`: a reader can navigate to the same section twice in a row
+  /// — back, then forward again, or the same contents row clicked twice — and an
+  /// `onChange` watching the section alone would see no change and never scroll.
+  struct ScrollRequest: Equatable {
+    let section: String
+    private let issue = UUID()
+  }
+
+  nonisolated let id = UUID()
+
+  private var history = NavigationHistory()
+
+  /// Where the reader has scrolled to in the current document, mirrored here so
+  /// that navigating away can record it on the entry being left. `DocumentView`
+  /// writes it as the reader scrolls; nothing reads it but the navigation methods.
+  var visiblePosition: String?
+
+  var filter: LibraryFilter = .all
+  var searchText = ""
+  var isShowingGoToSheet = false
+
+  var selection: DocumentID? { history.current?.id }
+  private(set) var scrollRequest: ScrollRequest?
+
+  var canGoBack: Bool { history.canGoBack }
+  var canGoForward: Bool { history.canGoForward }
+
+  // MARK: - Navigation
+
+  /// A link from outside the current document: the sidebar, a deep link, a citation
+  /// in the prose, or the Go to RFC sheet.
+  func open(_ link: RFCLink, in index: RFCIndex?) {
+    var id = link.id
+    // BCP/STD links open their first member RFC.
+    if id.series != .rfc, let first = index?.series(id)?.members.first {
+      id = first
     }
+    go(to: Place(id: id, section: link.section))
+    // As before the split: an explicit open reveals the document in the list,
+    // which a narrowed filter may be hiding.
+    filter = .all
+  }
 
-    nonisolated let id = UUID()
+  func open(_ id: DocumentID, section: String? = nil, in index: RFCIndex?) {
+    open(RFCLink(id: id, section: section), in: index)
+  }
 
-    private var history = NavigationHistory()
+  /// A row picked in the document list.
+  ///
+  /// Unlike `open`, it leaves the filter alone. The row is in the list the reader
+  /// is looking at by construction, so a narrowed filter cannot be hiding it, and
+  /// resetting to `.all` would swap the Bookmarks list they were working in for
+  /// the whole library with that one row highlighted somewhere inside it.
+  ///
+  /// It also skips the BCP/STD resolution `open` does, because every row the list
+  /// can emit is already an RFC: `LibraryModel.list` draws from `index.rfcs` and,
+  /// for `.series`, from the members those entries resolve to. A list that could
+  /// show a series row would have to come back through `open`.
+  func select(_ id: DocumentID) {
+    go(to: Place(id: id))
+  }
 
-    /// Where the reader has scrolled to in the current document, mirrored here so
-    /// that navigating away can record it on the entry being left. `DocumentView`
-    /// writes it as the reader scrolls; nothing reads it but the navigation methods.
-    var visiblePosition: String?
+  /// A jump within the document already open — a section link in the prose, or a
+  /// row in the table of contents. Its own history entry, so Back undoes it.
+  func jump(toSection section: String) {
+    guard let id = selection else { return }
+    go(to: Place(id: id, section: section))
+  }
 
-    var filter: LibraryFilter = .all
-    var searchText = ""
-    var isShowingGoToSheet = false
+  func goBack() {
+    guard let place = history.goBack(leaving: visiblePosition) else { return }
+    arrive(at: place)
+  }
 
-    var selection: DocumentID? { history.current?.id }
-    private(set) var scrollRequest: ScrollRequest?
+  func goForward() {
+    guard let place = history.goForward(leaving: visiblePosition) else { return }
+    arrive(at: place)
+  }
 
-    var canGoBack: Bool { history.canGoBack }
-    var canGoForward: Bool { history.canGoForward }
+  private func go(to place: Place) {
+    let before = history.current
+    history.go(to: place, leaving: visiblePosition)
+    guard history.current != before else { return }
+    arrive(at: place)
+  }
 
-    // MARK: - Navigation
-
-    /// A link from outside the current document: the sidebar, a deep link, a citation
-    /// in the prose, or the Go to RFC sheet.
-    func open(_ link: RFCLink, in index: RFCIndex?) {
-        var id = link.id
-        // BCP/STD links open their first member RFC.
-        if id.series != .rfc, let first = index?.series(id)?.members.first {
-            id = first
-        }
-        go(to: Place(id: id, section: link.section))
-        // As before the split: an explicit open reveals the document in the list,
-        // which a narrowed filter may be hiding.
-        filter = .all
-    }
-
-    func open(_ id: DocumentID, section: String? = nil, in index: RFCIndex?) {
-        open(RFCLink(id: id, section: section), in: index)
-    }
-
-    /// A row picked in the document list.
-    ///
-    /// Unlike `open`, it leaves the filter alone. The row is in the list the reader
-    /// is looking at by construction, so a narrowed filter cannot be hiding it, and
-    /// resetting to `.all` would swap the Bookmarks list they were working in for
-    /// the whole library with that one row highlighted somewhere inside it.
-    ///
-    /// It also skips the BCP/STD resolution `open` does, because every row the list
-    /// can emit is already an RFC: `LibraryModel.list` draws from `index.rfcs` and,
-    /// for `.series`, from the members those entries resolve to. A list that could
-    /// show a series row would have to come back through `open`.
-    func select(_ id: DocumentID) {
-        go(to: Place(id: id))
-    }
-
-    /// A jump within the document already open — a section link in the prose, or a
-    /// row in the table of contents. Its own history entry, so Back undoes it.
-    func jump(toSection section: String) {
-        guard let id = selection else { return }
-        go(to: Place(id: id, section: section))
-    }
-
-    func goBack() {
-        guard let place = history.goBack(leaving: visiblePosition) else { return }
-        arrive(at: place)
-    }
-
-    func goForward() {
-        guard let place = history.goForward(leaving: visiblePosition) else { return }
-        arrive(at: place)
-    }
-
-    private func go(to place: Place) {
-        let before = history.current
-        history.go(to: place, leaving: visiblePosition)
-        guard history.current != before else { return }
-        arrive(at: place)
-    }
-
-    private func arrive(at place: Place) {
-        scrollRequest = place.section.map { ScrollRequest(section: $0) }
-        visiblePosition = place.section
-    }
+  private func arrive(at place: Place) {
+    scrollRequest = place.section.map { ScrollRequest(section: $0) }
+    visiblePosition = place.section
+  }
 }
