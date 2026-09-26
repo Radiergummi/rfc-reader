@@ -100,10 +100,7 @@ struct RFCXMLSerializerTests {
   @Test func aParagraphIndentSurvivesARoundTrip() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9601.xml")
     func indents(_ document: RFCDocument) -> [Int] {
-      document.allSections.flatMap(\.blocks).compactMap { block -> Int? in
-        if case .paragraph(let paragraph) = block { return paragraph.indent }
-        return nil
-      }
+      document.nestedParagraphs.map(\.indent)
     }
     #expect(indents(original).contains(3))
     #expect(indents(reparsed) == indents(original))

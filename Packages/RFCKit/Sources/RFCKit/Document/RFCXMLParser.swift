@@ -88,7 +88,7 @@ public struct RFCXMLParser: Sendable {
         for child in element.elements {
           switch child.name {
           case "reference":
-            if let anchor = child["anchor"], let id = parseReference(child).documentID {
+            if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
               targets[anchor] = id
             }
           case "referencegroup":
@@ -252,7 +252,7 @@ public struct RFCXMLParser: Sendable {
         case "reference":
           entries.append(parseReference(child))
         case "referencegroup":
-          entries.append(Self.parseReferenceGroup(child))
+          entries.append(parseReferenceGroup(child))
         case "references":
           subsections.append(parseReferencesSection(child))
         default:
@@ -272,7 +272,7 @@ public struct RFCXMLParser: Sendable {
     }
 
     func parseReference(_ element: XMLElement) -> Reference {
-      var reference = Self.parseReference(element)
+      var reference = Self.parseEntryMetadata(element)
       if let annotation = element.first("annotation") {
         reference.annotation = normalize(parseInlines(annotation.children))
       }
@@ -282,7 +282,7 @@ public struct RFCXMLParser: Sendable {
     /// Everything about an entry that is not prose. Static because
     /// `referenceTargets(in:)` needs it before there is a builder to link prose
     /// with; the annotation, which is prose, is read by the instance method.
-    static func parseReference(_ element: XMLElement) -> Reference {
+    static func parseEntryMetadata(_ element: XMLElement) -> Reference {
       let front = element.first("front")
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
         author.role == nil ? author.name : "\(author.name), Ed."
@@ -313,7 +313,7 @@ public struct RFCXMLParser: Sendable {
       element["derivedAnchor"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private static func parseReferenceGroup(_ element: XMLElement) -> Reference {
+    private func parseReferenceGroup(_ element: XMLElement) -> Reference {
       let anchor = element["anchor"] ?? ""
       let members = element.all("reference").map(parseReference)
       let memberNames = members.compactMap { $0.documentID?.displayName }
@@ -329,7 +329,8 @@ public struct RFCXMLParser: Sendable {
         authors: members.count == 1 ? members[0].authors : [],
         date: members.count == 1 ? members[0].date : nil,
         seriesInfo: seriesInfo,
-        url: element["target"].flatMap(URL.init(string:))
+        url: element["target"].flatMap(URL.init(string:)),
+        annotation: members.count == 1 ? members[0].annotation : []
       )
     }
 

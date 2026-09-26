@@ -373,10 +373,7 @@ struct RFCXMLParserTests {
   /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
   @Test func aParagraphKeepsItsIndent() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9601.xml"))
-    let paragraphs = document.allSections.flatMap(\.blocks).compactMap { block -> Paragraph? in
-      if case .paragraph(let paragraph) = block { return paragraph }
-      return nil
-    }
+    let paragraphs = document.nestedParagraphs
     let reasoning = try #require(paragraphs.first { $0.plainText.hasPrefix("Reasoning:") })
     #expect(reasoning.anchor == "section-5-5")
     #expect(reasoning.indent == 3)

@@ -149,6 +149,24 @@ struct ReferenceRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
+      entryDescription
+        .contentShape(Rectangle())
+        .onTapGesture { if let id = entry.documentID { open(id) } }
+      // What the author added after the entry, most often the commit a living
+      // standard was cited at; its link opens in the browser like any other.
+      // Outside the tap gesture, which would otherwise take the link's click.
+      if let annotation = entry.annotationText {
+        Text(annotation)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .padding(.vertical, 2)
+  }
+
+  private var entryDescription: some View {
+    VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if entry.documentID != nil {
           Image(systemName: "doc.text").foregroundStyle(.tint).imageScale(.small)
@@ -173,17 +191,7 @@ struct ReferenceRow: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       }
-      // What the author added after the entry, most often the commit a living
-      // standard was cited at; its link opens in the browser like any other.
-      if let annotation = entry.annotationText {
-        Text(annotation)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
     }
-    .padding(.vertical, 2)
-    .contentShape(Rectangle())
-    .onTapGesture { if let id = entry.documentID { open(id) } }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
