@@ -165,7 +165,7 @@ corpus-fetch-xml: corpus-tool
 # RFCXML; `[]` is a document that validates. A regression is one that stops.
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
-	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json \
+	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
 
 ## Check the schema check: three RFCs as the RFC Editor published them must validate

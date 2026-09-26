@@ -10,8 +10,8 @@ import Foundation
 public struct LegacyTextParser: Sendable {
   public init() {}
 
-  public static func parse(_ text: String) -> RFCDocument {
-    LegacyTextParser().parse(text)
+  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
+    LegacyTextParser().parse(text, title: title)
   }
 
   public static func parse(_ data: Data) -> RFCDocument {
@@ -412,14 +412,20 @@ public struct LegacyTextParser: Sendable {
   /// Both entry points go through here so neither can normalise the text differently
   /// from the other. Extracting only `rawSections` left this prelude written twice,
   /// which is the same drift one level up.
-  private static func prepared(_ text: String) -> Prepared {
+  private static func prepared(_ text: String, title: String? = nil) -> Prepared {
     let lines = collapsingDoubleSpacing(depaginate(text))
     let colonNumbered = numbersHeadingsWithAColon(lines)
     let proseIndent = proseIndent(lines)
     let (front, bodyStart) = splitFrontMatter(
       lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
     let body = bodyIsIndented(lines[bodyStart...])
-    let header = parseFrontMatter(front)
+    var header = parseFrontMatter(front)
+    if let title, !title.isEmpty,
+      titleWords(header.title) != titleWords(title)
+        || !header.title.contains(where: \.isLowercase)
+    {
+      header.title = title
+    }
     var sections = rawSections(
       in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
     // The lead-in, which is the only section with no heading, loses what the title page
@@ -427,7 +433,8 @@ public struct LegacyTextParser: Sendable {
     // report of blocks the parser dropped unread would count refusals it never made.
     if sections.first?.heading == nil {
       sections[0].blocks = leadInWithoutFrontMatter(
-        sections[0].blocks, proseIndent: proseIndent, number: header.id?.number)
+        sections[0].blocks, title: header.title, proseIndent: proseIndent,
+        number: header.id?.number)
     }
     return Prepared(header: header, sections: sections, proseIndent: proseIndent)
   }
@@ -590,8 +597,21 @@ public struct LegacyTextParser: Sendable {
     return sections
   }
 
-  public func parse(_ text: String) -> RFCDocument {
-    let prepared = Self.prepared(text)
+  /// `title` is the document's title as the RFC index gives it, where the caller has
+  /// it. The run of lines front matter takes for the title is a guess: in RFC 822 it
+  /// is `Obsoletes:  RFC #733`, in RFC 1144 the first of the title's two lines (#170,
+  /// #171), in RFC 5323 the author and date. Where the guess has other words than the
+  /// index's, the index's title replaces it -- in 698 of the 8,457 legacy documents --
+  /// and the rest of the title the page sets is recognised in the lead-in and kept out
+  /// of it.
+  ///
+  /// Where the two have the same words, the page's own title stays: the index sets
+  /// older titles in sentence case and drops their article (`Note on Reconnection
+  /// Protocol` for RFC 671's `A Note on Reconnection Protocol`), and the page is what
+  /// the author wrote. Unless the page sets it in capitals, which is a typewriter's
+  /// emphasis rather than a spelling.
+  public func parse(_ text: String, title: String? = nil) -> RFCDocument {
+    let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header
 
@@ -841,8 +861,9 @@ public struct LegacyTextParser: Sendable {
   /// Only up to the first paragraph or list the lead-in keeps, which is where the
   /// body has begun; past it, a line of those shapes is the body's.
   private static func leadInWithoutFrontMatter(
-    _ blocks: [RawBlock], proseIndent: Int, number: Int?
+    _ blocks: [RawBlock], title: String, proseIndent: Int, number: Int?
   ) -> [RawBlock] {
+    let titleWords = words(title)
     var kept: [RawBlock] = []
     var index = blocks.startIndex
     while index < blocks.endIndex {
@@ -868,6 +889,7 @@ public struct LegacyTextParser: Sendable {
       }
       if isContentsEntries(block.lines) || isHeaderBlock(block.lines, number: number)
         || (block.lines.count <= 2 && !block.lines.contains { $0.contains(where: \.isLetter) })
+        || repeatsTitle(block.lines, titleWords) || isDateLine(block.lines)
       {
         index += 1
         continue
@@ -898,6 +920,40 @@ public struct LegacyTextParser: Sendable {
     let text = lines.joined(separator: " ").lowercased()
       .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     return boilerplateWording.contains { text.contains($0) }
+  }
+
+  /// A short block whose words run, in order, somewhere inside the title: a title page
+  /// sets a long title over several runs -- RFC 1144's `for Low-Speed Serial Links`,
+  /// RFC 822's `ARPA INTERNET TEXT MESSAGES` -- and the front matter holds only one.
+  /// Compared as words, because the page sets the title in capitals, with its own
+  /// punctuation, and the index does not.
+  private static func repeatsTitle(_ lines: [String], _ titleWords: [Substring]) -> Bool {
+    guard lines.count <= 3 else { return false }
+    let blockWords = words(lines.joined(separator: " "))
+    guard !blockWords.isEmpty, blockWords.count <= titleWords.count else { return false }
+    return (0...(titleWords.count - blockWords.count)).contains {
+      titleWords[$0..<($0 + blockWords.count)].elementsEqual(blockWords)
+    }
+  }
+
+  private static func words(_ text: String) -> [Substring] {
+    text.lowercased().split { !$0.isLetter && !$0.isNumber }
+  }
+
+  /// A title's words without a leading article, which the index drops.
+  private static func titleWords(_ title: String) -> ArraySlice<Substring> {
+    let all = words(title)
+    return ["a", "an", "the"].contains(all.first) ? all.dropFirst() : all[...]
+  }
+
+  nonisolated(unsafe) private static let dateLinePattern =
+    #/(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+(?:\d{1,2},?\s+)?\d{4}/#
+
+  /// A line that is a date and nothing else, as a title page sets its publication date:
+  /// RFC 822's `August 13, 1982`, RFC 907's `July 1984`.
+  private static func isDateLine(_ lines: [String]) -> Bool {
+    lines.count == 1
+      && lines[0].trimmingCharacters(in: .whitespaces).wholeMatch(of: dateLinePattern) != nil
   }
 
   /// A one-line block that reads as a heading, trimmed of a trailing colon: short,

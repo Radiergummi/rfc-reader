@@ -702,6 +702,54 @@ struct LegacyTextCorpusFindingsTests {
       ]))
   }
 
+  /// A title page sets a long title over several runs of lines, and the front matter
+  /// takes one of them for the title. Given the title the RFC index has, the parser uses
+  /// it, and the run the front matter left behind leaves the lead-in: RFC 1343's
+  /// `For Multimedia Mail Format Information` opened the body as artwork (#170).
+  @Test func theIndexTitleReplacesAPartialOneAndTheRestLeavesTheLeadIn() throws {
+    let title = "A User Agent Configuration Mechanism for Multimedia Mail Format Information"
+    let text = try Fixtures.string("rfc1343.txt")
+    #expect(LegacyTextParser.parse(text).header.title == "A User Agent Configuration Mechanism")
+
+    let document = LegacyTextParser.parse(text, title: title)
+    #expect(document.header.title == title)
+    let leadIn = document.sections.first { $0.anchor == "preamble" }?.blocks ?? []
+    #expect(
+      !leadIn.contains {
+        if case .preformatted(let artwork) = $0 {
+          return artwork.text.contains("For Multimedia Mail")
+        }
+        return false
+      })
+  }
+
+  /// The index sets older titles in sentence case and drops their article, so where its
+  /// words are the page's, the page's own title stays -- unless the page sets it in
+  /// capitals, which is emphasis rather than spelling.
+  @Test func thePageTitleStaysWhereTheIndexOnlyRecasesIt() throws {
+    let avian = LegacyTextParser.parse(
+      try Fixtures.string("rfc1149.txt"),
+      title: "Standard for the transmission of IP datagrams on avian carriers")
+    #expect(
+      avian.header.title == "A Standard for the Transmission of IP Datagrams on Avian Carriers")
+
+    let tcp = LegacyTextParser.parse(
+      try Fixtures.string("rfc793.txt"), title: "Transmission Control Protocol")
+    #expect(tcp.header.title == "Transmission Control Protocol")
+  }
+
+  /// A date alone on a line is the title page's, like the author above it: RFC 355's
+  /// `June 9, 1972` was the lead-in's second block (#170).
+  @Test func aDateAloneOnALineIsTheTitlePages() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc355.txt"))
+    let leadIn = document.sections.first { $0.anchor == "preamble" }?.blocks ?? []
+    #expect(
+      !leadIn.contains {
+        if case .preformatted(let artwork) = $0 { return artwork.text.contains("June 9, 1972") }
+        return false
+      })
+  }
+
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
   /// specification as an appendix, abstract and all, and each `Abstract` heading was
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
