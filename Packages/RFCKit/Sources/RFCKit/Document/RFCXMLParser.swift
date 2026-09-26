@@ -52,7 +52,9 @@ public struct RFCXMLParser: Sendable {
         }
       }
     }
-    return RFCDocument(header: header, sections: sections, source: .xml)
+    var document = RFCDocument(header: header, sections: sections, source: .xml)
+    document.abbreviations = Abbreviations.defined(in: document)
+    return document
   }
 
   // MARK: - Builder

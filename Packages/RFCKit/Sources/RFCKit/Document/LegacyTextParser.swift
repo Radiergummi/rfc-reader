@@ -624,8 +624,10 @@ public struct LegacyTextParser: Sendable {
       flat.append(section)
     }
 
-    return RFCDocument(
+    var document = RFCDocument(
       header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
+    document.abbreviations = Abbreviations.defined(in: document)
+    return document
   }
 
   /// Every anchor a section can be declared under, so no entry is: each a section can start

@@ -17,6 +17,10 @@ public struct RFCDocument: Sendable {
   /// Sections of the body (`<middle>` in RFCXML) and back matter (references, appendices).
   public var sections: [Section]
   public var source: DocumentSource
+  /// The abbreviations the document expands itself, keyed by the short form as
+  /// written (issue #67). Both parsers collect them as their last step, so the
+  /// expansion is read from the document the reader is shown.
+  public var abbreviations: [String: Abbreviation] = [:]
 
   public init(header: DocumentHeader, sections: [Section], source: DocumentSource) {
     self.header = header
