@@ -115,10 +115,16 @@ enum Abbreviations {
     var short = term.trimmingCharacters(in: .whitespacesAndNewlines)
     if short.hasSuffix(":") { short.removeLast() }
     guard isShortForm(short), case .paragraph(let first)? = definition.first else { return nil }
-    let text = first.inlines.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-    let phrase = String(text.prefix { !".;,([".contains($0) }).trimmingCharacters(
-      in: .whitespacesAndNewlines)
-    guard let long = longForm(of: short, in: phrase), long == phrase else { return nil }
+    var text = first.inlines.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let dash = text.range(of: " -- ") { text = String(text[..<dash.lowerBound]) }
+    var phrase = String(text.prefix { !".;,([:".contains($0) })
+    // Citations the definition ends with are the entry's sources, not its words:
+    // `PCE: Path Computation Element [RFC4655]`, which reads as `RFC 4655`.
+    phrase = phrase.replacing(#/(\s+RFC\s?\d+)+\s*$/#, with: "")
+    phrase = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let long = longForm(of: short, in: phrase), long == phrase,
+      contentWords(in: long) <= letters(in: short) + 2
+    else { return nil }
     return (short, long)
   }
 
@@ -176,10 +182,64 @@ enum Abbreviations {
       longIndex -= 1
       shortIndex -= 1
     }
-    let result = String(Array(long)[(longIndex + 1)...]).trimmingCharacters(
-      in: .whitespacesAndNewlines)
-    guard result.count > short.count else { return nil }
+    let start = startingOnAContentWord(Array(long), at: longIndex + 1)
+    guard let start else { return nil }
+    let result = String(Array(long)[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard result.count > short.count, isPlausible(result) else { return nil }
     return result
+  }
+
+  /// Lowercase words an expansion does not start with. The match takes the nearest
+  /// word with the right initial, so `Abstraction and Control of TE Networks
+  /// (ACTN)` matched from `and`.
+  private static let functionWords: Set<String> = [
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to",
+    "via", "with",
+  ]
+
+  /// Where the long form starts: the matched word, unless it is a lowercase function
+  /// word, in which case the nearest earlier word with the same initial that is not
+  /// one. With none, there is no expansion. A hyphenated word is one word, so
+  /// `on-path attackers (OPAs)` starts on `on-path`, not on `on`.
+  private static func startingOnAContentWord(_ long: [Character], at start: Int) -> Int? {
+    func word(at index: Int) -> String {
+      String(long[index...].prefix { $0.isLetter || $0.isNumber || $0 == "-" })
+    }
+    guard functionWords.contains(word(at: start)) else { return start }
+    let initial = folded(long[start])
+    var index = start - 1
+    while index >= 0 {
+      let startsWord = index == 0 || !(long[index - 1].isLetter || long[index - 1].isNumber)
+      if startsWord, folded(long[index]) == initial, !functionWords.contains(word(at: index)) {
+        return index
+      }
+      index -= 1
+    }
+    return nil
+  }
+
+  /// A URN or URL in a definition list is the value of a field, not an expansion
+  /// (`URI: urn:ietf:params:xml:ns:…`), and neither is anything holding code.
+  static func isPlausible(_ long: String) -> Bool {
+    !long.contains(where: { ":=@<".contains($0) })
+  }
+
+  /// How many words of `long` are not function words. A glossary definition is
+  /// held to about one per letter of what it expands, two more at most, because a
+  /// definition can be a sentence that happens to hold the letters: `Type-P: The
+  /// legacy Route definition lacks the option to cater for packet-dependent
+  /// routing`. A first use needs no such bound: its window is already bounded,
+  /// and an expansion there can have more words than letters, `Bottleneck
+  /// Bandwidth and Round-trip propagation time (BBR)`.
+  static func contentWords(in long: String) -> Int {
+    long.split(whereSeparator: { $0.isWhitespace })
+      .map { $0.trimmingCharacters(in: .punctuationCharacters) }
+      .filter { !$0.isEmpty && !functionWords.contains($0.lowercased()) }
+      .count
+  }
+
+  private static func letters(in short: String) -> Int {
+    short.filter { $0.isLetter || $0.isNumber }.count
   }
 
   private static func folded(_ character: Character) -> Character {
