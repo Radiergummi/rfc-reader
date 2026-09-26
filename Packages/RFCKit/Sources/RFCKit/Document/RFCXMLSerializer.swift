@@ -132,6 +132,33 @@ public struct RFCXMLSerializer: Sendable {
 
   // MARK: - Sections
 
+  /// In the schema's order: `organization`, then `address` holding `postal`,
+  /// `phone`, `facsimile`, each `email` and `uri`.
+  private func writeContact(_ contact: AuthorContact, writer: inout Writer) {
+    if let organization = contact.organization {
+      writer.element("organization", text: organization)
+    }
+    let hasAddress =
+      contact.postal != nil || contact.phone != nil || contact.facsimile != nil
+      || !contact.emails.isEmpty || contact.uri != nil
+    guard hasAddress else { return }
+    writer.open("address")
+    if let postal = contact.postal {
+      writer.open("postal")
+      for street in postal.street { writer.element("street", text: street) }
+      if let city = postal.city { writer.element("city", text: city) }
+      if let region = postal.region { writer.element("region", text: region) }
+      if let code = postal.code { writer.element("code", text: code) }
+      if let country = postal.country { writer.element("country", text: country) }
+      writer.close("postal")
+    }
+    if let phone = contact.phone { writer.element("phone", text: phone) }
+    if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
+    for email in contact.emails { writer.element("email", text: email) }
+    if let uri = contact.uri { writer.element("uri", text: uri.absoluteString) }
+    writer.close("address")
+  }
+
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
@@ -172,33 +199,6 @@ public struct RFCXMLSerializer: Sendable {
       writeReferences(subsection, writer: &writer, context: &context)
     }
     writer.close("references")
-  }
-
-  /// In the schema's order: `organization`, then `address` holding `postal`,
-  /// `phone`, `facsimile`, each `email` and `uri`.
-  private func writeContact(_ contact: AuthorContact, writer: inout Writer) {
-    if let organization = contact.organization {
-      writer.element("organization", text: organization)
-    }
-    let hasAddress =
-      contact.postal != nil || contact.phone != nil || contact.facsimile != nil
-      || !contact.emails.isEmpty || contact.uri != nil
-    guard hasAddress else { return }
-    writer.open("address")
-    if let postal = contact.postal {
-      writer.open("postal")
-      for street in postal.street { writer.element("street", text: street) }
-      if let city = postal.city { writer.element("city", text: city) }
-      if let region = postal.region { writer.element("region", text: region) }
-      if let code = postal.code { writer.element("code", text: code) }
-      if let country = postal.country { writer.element("country", text: country) }
-      writer.close("postal")
-    }
-    if let phone = contact.phone { writer.element("phone", text: phone) }
-    if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
-    for email in contact.emails { writer.element("email", text: email) }
-    if let uri = contact.uri { writer.element("uri", text: uri.absoluteString) }
-    writer.close("address")
   }
 
   private func writeReference(_ reference: Reference, writer: inout Writer) {
