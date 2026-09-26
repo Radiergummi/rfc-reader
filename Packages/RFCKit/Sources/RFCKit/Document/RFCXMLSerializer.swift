@@ -287,7 +287,9 @@ public struct RFCXMLSerializer: Sendable {
         writer.line(
           "<dt\(Writer.attributeString(termAttributes))>\(inlineXML(item.term, context: &context))</dt>"
         )
-        writer.open("dd")
+        var definitionAttributes: [(String, String)] = []
+        if let anchor = item.definitionAnchor { definitionAttributes.append(("pn", anchor)) }
+        writer.open("dd", definitionAttributes)
         for inner in item.definition { writeBlock(inner, writer: &writer, context: &context) }
         writer.close("dd")
       }
@@ -317,16 +319,16 @@ public struct RFCXMLSerializer: Sendable {
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for row in table.header {
-          writer.open("tr")
+        for (index, row) in table.header.enumerated() {
+          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
           for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
         writer.close("thead")
       }
       writer.open("tbody")
-      for row in table.rows {
-        writer.open("tr")
+      for (index, row) in table.rows.enumerated() {
+        writer.open("tr", table.anchor(ofRow: index).map { [("anchor", $0)] } ?? [])
         for cell in row { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
         writer.close("tr")
       }
