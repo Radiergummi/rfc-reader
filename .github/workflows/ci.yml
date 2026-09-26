@@ -102,13 +102,10 @@ jobs:
         run: make build-app
       - name: Build for the iOS Simulator
         run: make build-ios
-      - name: Compilation cache size
-        run: |
-          du -sh ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          for log in ~/Library/Developer/Xcode/DerivedData/RFCReader-*/Logs/Build/*.xcactivitylog; do
-            gunzip -c "$log" | strings | grep -E 'hits / [0-9]+ cacheable' || true
-          done
+      # Saved from main only: a pull request restores main's newest cache, and
+      # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache
+        if: github.event_name == 'push'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
