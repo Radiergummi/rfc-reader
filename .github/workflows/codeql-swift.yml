@@ -1,0 +1,59 @@
+name: CodeQL (Swift)
+
+# Swift is extracted from a traced build on macOS, which takes long enough that
+# pull requests do not wait for it: it runs once a change is on main, and weekly
+# for new queries. Only a change to what gets compiled starts it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.swift"
+      - "**/Package.resolved"
+      - project.yml
+      - Makefile
+      - .github/workflows/codeql-swift.yml
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+# Only main's newest commit needs analysing: a run a later push supersedes is
+# cancelled, and the later one covers its changes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (swift)
+    # Same runner as CI's app build, for the Xcode that project.yml needs.
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Before init, not in the build: everything after init runs under CodeQL's
+      # tracer, which Homebrew sees as Rosetta and refuses to install under.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: swift
+          build-mode: manual
+
+      # One build, so each file is extracted once: the app compiles RFCKit and
+      # RFCReaderKit with it. corpus-build, an offline tool the app does not
+      # depend on, is not analysed.
+      - name: Build
+        run: make build-app
+
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:swift
