@@ -1,7 +1,6 @@
 import Foundation
+import RFCCorpusKit
 import Testing
-
-@testable import corpus_build
 
 /// What `SchemaCheck.causes(in:)` finds, one cause at a time. The cause finder is a
 /// guard over a document's shape, not a parser of RFCs, so each case is the smallest
@@ -81,20 +80,19 @@ struct SchemaCheckTests {
   /// report from a run that did not check says nothing about validity, so it is no
   /// baseline, rather than one in which nothing validated.
   @Test func thePreviousReportSaysWhichDocumentsValidated() throws {
-    func entry(_ id: String, schema: [String]?) -> Convert.Report {
-      Convert.Report(
+    func entry(_ id: String, schema: [String]?) -> DocumentReport {
+      DocumentReport(
         id: id, title: "", sections: 0, paragraphs: 0, lists: 0, artwork: 0, references: 0,
         resolvedDocuments: 0, overridden: false, warnings: [], schema: schema)
     }
-    let path = FileManager.default.temporaryDirectory.appending(
-      path: "report-\(UUID().uuidString).json"
-    ).path
-    defer { try? FileManager.default.removeItem(atPath: path) }
+    func report(_ entries: [DocumentReport]) throws -> Data {
+      try JSONEncoder().encode(entries)
+    }
 
-    #expect(Convert.validDocuments(inReportAt: path) == nil, "no report")
-    try writeJSON([entry("rfc1", schema: []), entry("rfc2", schema: ["empty-middle"])], to: path)
-    #expect(Convert.validDocuments(inReportAt: path) == ["rfc1"])
-    try writeJSON([entry("rfc1", schema: nil)], to: path)
-    #expect(Convert.validDocuments(inReportAt: path) == nil, "a run without --schema")
+    #expect(DocumentReport.validDocuments(inReport: Data()) == nil, "not a report")
+    let checked = try report([entry("rfc1", schema: []), entry("rfc2", schema: ["empty-middle"])])
+    #expect(DocumentReport.validDocuments(inReport: checked) == ["rfc1"])
+    let unchecked = try report([entry("rfc1", schema: nil)])
+    #expect(DocumentReport.validDocuments(inReport: unchecked) == nil, "a run without --schema")
   }
 }
