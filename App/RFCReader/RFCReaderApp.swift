@@ -91,8 +91,8 @@ struct DocumentCommands: Commands {
     private var navigation: NavigationModel? { active.controller?.navigation }
     private var reader: ReaderState? { active.controller?.reader }
     /// A document is on screen, not just selected: a selection is also showing while
-    /// it loads and when it failed to. The toolbar's Contents button validates on
-    /// the same `hasDocument`.
+    /// it loads and when it failed to, and `hasDocument` stays true after the
+    /// selection is cleared.
     private var showsDocument: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
@@ -153,7 +153,9 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("i", modifiers: [.command, .option])
             // As the toolbar's button is: opened with no document, the panel is an
             // empty strip, and nothing closes it again until a document arrives.
-            .disabled(!showsDocument)
+            // Not `showsDocument`: clearing the selection leaves `hasDocument` set
+            // and the panel open, and the chord has to be able to close it.
+            .disabled(reader?.hasDocument != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }
