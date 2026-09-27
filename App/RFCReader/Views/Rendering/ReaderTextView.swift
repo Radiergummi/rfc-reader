@@ -135,27 +135,46 @@ import RFCReaderKit
     /// its length is the character count every range VoiceOver asks for is measured
     /// in.
     override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
+      read(
+        range,
+        text: { super.accessibilityAttributedString(for: $0) },
+        label: { NSAttributedString(string: $0) },
+        join: { parts in
+          let joined = NSMutableAttributedString()
+          parts.forEach(joined.append)
+          return joined
+        })
+    }
+
+    /// Each accessor asks its own `super` for the text, never the other override:
+    /// whether AppKit builds one from the other is not ours to know, and if it did,
+    /// the two overrides would call each other forever.
+    override func accessibilityString(for range: NSRange) -> String? {
+      read(
+        range,
+        text: { super.accessibilityString(for: $0) },
+        label: { $0 },
+        join: { $0.joined() })
+    }
+
+    private func read<Reading>(
+      _ range: NSRange,
+      text: (NSRange) -> Reading?,
+      label: (String) -> Reading,
+      join: ([Reading]) -> Reading
+    ) -> Reading? {
       let pieces = AccessibleReading.pieces(of: range, in: attributedString())
       // All of it text: the common case, prose, left entirely to AppKit. Not "no
       // label": a range over a diagram's later lines has none, and must still be
       // silent rather than read out.
-      if pieces == [.text(range)] {
-        return super.accessibilityAttributedString(for: range)
-      }
-      let result = NSMutableAttributedString()
-      for piece in pieces {
-        switch piece {
-        case .text(let range):
-          if let text = super.accessibilityAttributedString(for: range) { result.append(text) }
-        case .label(let label):
-          result.append(NSAttributedString(string: label))
-        }
-      }
-      return result
-    }
-
-    override func accessibilityString(for range: NSRange) -> String? {
-      accessibilityAttributedString(for: range)?.string
+      if pieces == [.text(range)] { return text(range) }
+      return join(
+        pieces.compactMap { piece in
+          switch piece {
+          case .text(let range): text(range)
+          case .label(let spoken): label(spoken)
+          }
+        })
     }
   }
 #endif
