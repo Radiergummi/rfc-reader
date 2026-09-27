@@ -1523,9 +1523,12 @@ struct LegacyTextCorpusFindingsTests {
 }
 
 extension RFCDocument {
-  /// The extractions the assertions here open with. Every one of them is a walk of
-  /// the same flattened block list, and written out at each call site the filter --
-  /// which is the part that differs -- is the line you have to read four lines to find.
+  /// The extractions the assertions here open with. Every one of them is a filter
+  /// of the same block list, and written out at each call site the filter -- which
+  /// is the part that differs -- is the line you have to read four lines to find.
+  ///
+  /// The blocks directly in a section, not the nested ones and not the abstract:
+  /// what these tests count. `RFCDocument.blocks` is every block (#131).
   var everyBlock: [Block] { allSections.flatMap(\.blocks) }
 
   /// The unnumbered text before the first heading, which the parser keeps as `preamble`.
@@ -1548,19 +1551,10 @@ extension RFCDocument {
   /// Every paragraph at any depth: inside list items, definitions, figures, block
   /// quotes and asides as well as directly in a section.
   var nestedParagraphs: [Paragraph] {
-    func paragraphs(in blocks: [Block]) -> [Paragraph] {
-      blocks.flatMap { block -> [Paragraph] in
-        switch block {
-        case .paragraph(let paragraph): [paragraph]
-        case .list(let list): list.items.flatMap { paragraphs(in: $0.blocks) }
-        case .definitionList(let items): items.flatMap { paragraphs(in: $0.definition) }
-        case .figure(let figure): paragraphs(in: figure.blocks)
-        case .blockQuote(let inner), .aside(let inner): paragraphs(in: inner)
-        case .preformatted, .table, .references: []
-        }
-      }
+    everyBlock.flattened.compactMap {
+      if case .paragraph(let paragraph) = $0 { return paragraph }
+      return nil
     }
-    return paragraphs(in: everyBlock)
   }
 
   var artworkText: [String] {
@@ -1592,32 +1586,12 @@ extension RFCDocument {
   }
 
   /// Every citation anywhere the linker runs: headings, the abstract, and prose at any
-  /// depth -- lists, definitions, tables, quotes -- not only top-level paragraphs.
+  /// depth -- lists, definitions, tables, quotes, a reference's annotation -- not only
+  /// top-level paragraphs.
   var everyCrossReference: [CrossReference] {
-    func fromInlines(_ inlines: [Inline]) -> [CrossReference] {
-      inlines.flatMap { inline -> [CrossReference] in
-        switch inline {
-        case .crossReference(let xref): [xref]
-        case .emphasis(let inner), .strong(let inner), .link(_, let inner): fromInlines(inner)
-        default: []
-        }
-      }
+    proseInlines.compactMap {
+      if case .crossReference(let xref) = $0 { return xref }
+      return nil
     }
-    func fromBlocks(_ blocks: [Block]) -> [CrossReference] {
-      blocks.flatMap { block -> [CrossReference] in
-        switch block {
-        case .paragraph(let paragraph): fromInlines(paragraph.inlines)
-        case .list(let list): list.items.flatMap { fromBlocks($0.blocks) }
-        case .definitionList(let items):
-          items.flatMap { fromInlines($0.term) + fromBlocks($0.definition) }
-        case .figure(let figure): fromBlocks(figure.blocks)
-        case .table(let table): (table.header + table.rows).flatMap { $0.flatMap(fromInlines) }
-        case .blockQuote(let inner), .aside(let inner): fromBlocks(inner)
-        case .references, .preformatted: []
-        }
-      }
-    }
-    return fromBlocks(header.abstract)
-      + allSections.flatMap { fromInlines($0.title) + fromBlocks($0.blocks) }
   }
 }
