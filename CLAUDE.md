@@ -58,7 +58,7 @@ Standing constraints those documents establish, which are easy to violate by acc
    3. a corpus-backed test.
 
    Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and CI skip them. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
-2. Fix the heuristic when a class of documents is wrong. When exactly one document is, write a `corpus/overrides/rfcNNNN.py` script that corrects it. `make corpus-overrides` runs each script against the fetched text and writes `rfcNNNN.xml` into the gitignored `corpus/overrides.noindex/`; `make corpus-convert` depends on it and passes `--overrides corpus/overrides.noindex`. The corrected XML is never committed, because it is RFC text. A one-document correction that no script can make waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which replaces snapshots with RFC 5261 patches.
+2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 
 Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
@@ -73,7 +73,7 @@ The line is the entry point, not the size of the input. If a test calls `parse`,
 
 ## Generated files
 
-`RFCReader.xcodeproj`, `App/RFCReader/Info.plist` and `App/RFCReader/RFCReader.entitlements` are produced by XcodeGen from `project.yml` and are gitignored — edit `project.yml`, never the generated project. `corpus/` is a working directory; only `corpus/overrides/` is committed, and it holds only the `rfcNNNN.py` scripts and a README. The overrides they produce are generated into `corpus/overrides.noindex/`.
+`RFCReader.xcodeproj`, `App/RFCReader/Info.plist` and `App/RFCReader/RFCReader.entitlements` are produced by XcodeGen from `project.yml` and are gitignored — edit `project.yml`, never the generated project. `corpus/` is a working directory; only `corpus/overrides/` is committed.
 
 `.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; the handful of test lines asserting a whole reflowed paragraph carry a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
 
