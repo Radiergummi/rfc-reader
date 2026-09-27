@@ -14,6 +14,67 @@ struct NavigationHistoryTests {
     Place(id: .rfc(number), section: section)
   }
 
+  // MARK: - Returning from a jump within a document (#254)
+
+  @Test func aJumpWithinTheDocumentOffersTheWayBack() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    #expect(history.returnOffer == place(9110, "section-4.2"))
+  }
+
+  /// The system back button already leaves the document; the offer is for
+  /// returning within it.
+  @Test func aJumpToAnotherDocumentOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    #expect(history.returnOffer == nil)
+  }
+
+  @Test func theFirstPlaceOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-4.2"))
+    #expect(history.returnOffer == nil)
+  }
+
+  /// Stepping through the history is not a jump to undo, even when the step lands
+  /// next to another place in the same document.
+  @Test func steppingBackOrForwardOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-4"))
+    history.go(to: place(9110, "section-15"))
+    _ = history.goBack()
+    #expect(history.returnOffer == nil)
+    _ = history.goForward()
+    #expect(history.returnOffer == nil)
+  }
+
+  /// Settled is a fact about the history, not about the place offered: the same
+  /// jump taken again, after going back, offers again.
+  @Test func aSettledOfferStaysSettledUntilTheNextJump() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    history.settleReturnOffer()
+    #expect(history.returnOffer == nil)
+    #expect(history.current == place(9110, "section-15"), "settling does not move")
+
+    _ = history.goBack()
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    #expect(history.returnOffer == place(9110, "section-4"))
+  }
+
+  @Test func aNewJumpAfterSteppingBackOffersAgain() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-4"))
+    _ = history.goBack()
+    history.go(to: place(9110, "section-9"), leaving: "section-2")
+    #expect(history.returnOffer == place(9110, "section-2"))
+  }
+
   @Test func aFreshHistoryGoesNowhere() {
     let history = NavigationHistory()
     #expect(history.current == nil)

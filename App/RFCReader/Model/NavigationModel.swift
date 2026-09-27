@@ -45,6 +45,12 @@ final class NavigationModel: Identifiable {
 
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
+  /// Where Back returns to, straight after a jump within the document on screen.
+  var returnOffer: Place? { history.returnOffer }
+
+  func settleReturnOffer() {
+    history.settleReturnOffer()
+  }
 
   // MARK: - Navigation
 

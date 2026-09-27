@@ -28,11 +28,31 @@ public struct NavigationHistory: Sendable {
   public private(set) var current: Place?
   private var backward: [Place] = []
   private var forward: [Place] = []
+  /// Whether the last move struck out somewhere new, rather than stepping back or
+  /// forward through what was already here.
+  private var arrivedByGoing = false
 
   public init() {}
 
   public var canGoBack: Bool { !backward.isEmpty }
   public var canGoForward: Bool { !forward.isEmpty }
+
+  /// Where Back would return to, straight after a jump within the document on
+  /// screen (#254): the place left behind, when it is in the same document.
+  ///
+  /// Nil when Back would leave the document, after stepping back or forward, and
+  /// once the offer is settled: it is for undoing a jump just made, not for
+  /// walking the history.
+  public var returnOffer: Place? {
+    guard arrivedByGoing, let current, let previous = backward.last, previous.id == current.id
+    else { return nil }
+    return previous
+  }
+
+  /// Withdraws the return offer until the next jump, without moving.
+  public mutating func settleReturnOffer() {
+    arrivedByGoing = false
+  }
 
   /// Go to `place`, recording `position` as the spot being left behind.
   ///
@@ -48,6 +68,7 @@ public struct NavigationHistory: Sendable {
     }
     forward.removeAll()
     current = place
+    arrivedByGoing = true
   }
 
   /// Step back, recording `position` as the spot being left behind so that going
@@ -60,6 +81,7 @@ public struct NavigationHistory: Sendable {
       forward.append(leaving)
     }
     current = previous
+    arrivedByGoing = false
     return previous
   }
 
@@ -72,6 +94,7 @@ public struct NavigationHistory: Sendable {
       backward.append(leaving)
     }
     current = next
+    arrivedByGoing = false
     return next
   }
 }

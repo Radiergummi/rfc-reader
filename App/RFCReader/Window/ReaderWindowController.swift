@@ -226,7 +226,10 @@
         // is far narrower than the window and clips rather than eliding.
         let subtitle =
           navigation.selection
-          .flatMap { library.metadata($0)?.title }?
+          .flatMap {
+            DocumentActions.subtitle(
+              metadata: library.metadata($0), documentTitle: reader.documentTitle)
+          }?
           .truncated(to: Self.subtitleLimit) ?? ""
         window?.title = title
         window?.subtitle = subtitle

@@ -35,6 +35,24 @@ struct DocumentActionsTests {
     #expect(DocumentActions.bookmarkTitle(metadata: nil, documentTitle: nil, id: id) == "RFC 9110")
   }
 
+  // MARK: - The reader's subtitle
+
+  /// One rule for both platforms: macOS used the index alone, iOS fell back to
+  /// the document, so an RFC missing from the index was named on one and not on
+  /// the other.
+  @Test func theSubtitleFollowsTheBookmarksSources() {
+    #expect(
+      DocumentActions.subtitle(metadata: metadata(title: "HTTP Semantics"), documentTitle: "Other")
+        == "HTTP Semantics")
+    #expect(
+      DocumentActions.subtitle(metadata: nil, documentTitle: "HTTP Semantics") == "HTTP Semantics")
+  }
+
+  /// The designation is the title above it, so the subtitle has no last resort.
+  @Test func theSubtitleIsEmptyRatherThanTheNumberAgain() {
+    #expect(DocumentActions.subtitle(metadata: nil, documentTitle: nil) == nil)
+  }
+
   // MARK: - The citation
 
   @Test func aCitationCarriesTheSectionBeingRead() {

@@ -4,6 +4,11 @@ import SwiftUI
 struct SidebarView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
+  #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The filter a collapsed split view has pushed. See `collapsedSelection`.
+    @State private var pushedFilter: LibraryFilter?
+  #endif
 
   var body: some View {
     List(selection: selection) {
@@ -42,6 +47,15 @@ struct SidebarView: View {
           }
         }
       }
+      #if !os(macOS)
+        // The list's last footer, scrolling with it (#251). As a bar on the bottom
+        // edge it sat under iOS 26's floating search field in a strip of old bar
+        // material of its own.
+        Section {
+        } footer: {
+          IndexStatusView()
+        }
+      #endif
     }
     .navigationTitle("RFCs")
     // Search lives on the sidebar, not on the list it filters, and not in the
@@ -59,15 +73,30 @@ struct SidebarView: View {
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
     #endif
     .labelStyle(SidebarLabelStyle())
-    .safeAreaInset(edge: .bottom) {
-      IndexStatusView()
-    }
+    #if os(macOS)
+      .safeAreaInset(edge: .bottom) {
+        IndexStatusView()
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+      }
+    #else
+      // Collapsing shows the filter that was open, not the sidebar above it.
+      .onChange(of: horizontalSizeClass) {
+        pushedFilter = navigation.filter
+      }
+    #endif
   }
 
   /// iOS only offers `List(selection:)` with an optional binding, and deselecting
   /// should leave the current filter in place rather than clear it.
   private var selection: Binding<LibraryFilter?> {
-    Binding(
+    #if !os(macOS)
+      if horizontalSizeClass == .compact {
+        return collapsedSelection(pushed: $pushedFilter) { navigation.filter = $0 }
+      }
+    #endif
+    return Binding(
       get: { navigation.filter },
       set: { if let new = $0 { navigation.filter = new } }
     )
@@ -163,8 +192,5 @@ struct IndexStatusView: View {
     }
     .font(.caption)
     .foregroundStyle(.secondary)
-    .padding(8)
-    .frame(maxWidth: .infinity)
-    .background(.bar)
   }
 }
