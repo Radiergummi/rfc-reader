@@ -203,6 +203,12 @@ The trade-off is staleness. An index is a copy, and the store is not the only th
 
 What is left: two changes within one tick of the file system's clock share a date, so a deletion in the same instant as the store's own write can go unnoticed until the next change or launch. A file-system watcher would close that and report changes sooner, and was not worth a live source kept for a list nobody may be looking at.
 
+## Decision: a removal during a download shows the document and does not keep it
+
+*Decided September 2026 (issue #116).* `DocumentStore.document` suspends in the network fetch, and the actor runs other calls meanwhile, so a Remove Download made during that suspension finished first and the fetch then wrote the body back. The removal was silently undone, and with the in-memory cache index it stayed undone for the session. A removal does not cancel the fetch: one is only ever started by opening the document, so a reader is waiting for it, and cancelling would turn "don't keep this offline" into an error in front of them. Instead the reader gets the document and the disk does not. `InFlightDownloads` (in `RFCReaderKit`, for its tests) keeps a removal generation per document, which a fetch notes before it suspends and checks before it writes; a removal bumps it. It also keeps the running fetch per document, so a second open joins it rather than fetching twice. Original Text's own `.txt` fetch goes through a second instance.
+
+The fetch and its parse run in a task of their own, off the actor, and that task outlives the reader that started it: leaving a document while it loads no longer cancels the request, and the result is kept. Cancelling on the first reader's way out would fail any other reader joined to the same fetch, and a document that finished loading a moment before the reader left was always kept. Eviction (#39) is what bounds what that adds up to. If a document left mid-load should not be kept, the way there is counting the readers waiting on a fetch and cancelling when the last one leaves.
+
 ## Decision: three things RFCXML says that the model now keeps
 
 *Decided September 2026 (issue #66).* Auditing the parser against the RFCXML vocabulary turned up three things a reader has a use for that it dropped. Each is carried as data, not interpreted:
