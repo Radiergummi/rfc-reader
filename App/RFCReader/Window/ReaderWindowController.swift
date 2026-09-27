@@ -351,8 +351,9 @@
     /// The token for `observeStoreSaves()`, removed when the window closes.
     private var storeSaves: (any NSObjectProtocol)?
 
-    /// Refreshes `isBookmarked` on every save of the store, whoever made it. A save
-    /// is rare — a bookmark toggled, a reading position recorded — so the fetch
+    /// Refreshes `isBookmarked` on every save of the store, whoever made it. Saves
+    /// follow what the reader does — a bookmark toggled, a document opened or left,
+    /// which records its reading position — not every event cycle, so the fetch
     /// stays off the toolbar's validation path, where the comment above wants it.
     private func observeStoreSaves() {
       storeSaves = NotificationCenter.default.addObserver(
