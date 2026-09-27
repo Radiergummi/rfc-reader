@@ -75,7 +75,8 @@ struct BuilderHandoverTests {
   /// without comparing attachments, which are equal only to themselves.
   private static func runs(of text: NSAttributedString) -> [String] {
     var runs: [String] = []
-    text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attributes, range, _ in
+    text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) {
+      attributes, range, _ in
       let keys = attributes.keys.map(\.rawValue).sorted().joined(separator: ",")
       runs.append("\(range.location)+\(range.length):\(keys)")
     }
