@@ -71,7 +71,6 @@ public struct RFCDocument: Sendable {
       block.proseRuns.forEach(visit)
       if case .references(let list) = block {
         seen.formUnion(list.entries.compactMap(\.documentID))
-        list.entries.map(\.annotation).forEach(visit)
       }
     }
     return seen.sorted()
