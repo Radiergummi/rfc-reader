@@ -57,25 +57,28 @@ private struct AuthorChip: View {
 }
 
 /// Two initials on a tint of their own, the way Contacts draws a person with no
-/// photo.
+/// photo. The colours are `AuthorMonogram`'s, which hold the initials to 4.5:1
+/// against every tint. The fill is flat rather than the system `gradient`, which
+/// would lighten part of the circle away from the value that was measured.
 private struct Monogram: View {
   let name: String
   @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 20
 
-  private static let palette: [Color] = [
-    .red, .orange, .yellow, .green, .mint, .teal, .blue, .indigo,
-  ]
-
   var body: some View {
     Text(AuthorMonogram.initials(for: name))
       .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-      .foregroundStyle(.white)
+      .foregroundStyle(Color(AuthorMonogram.initialsColour))
       .frame(width: size, height: size)
-      .background(
-        Self.palette[AuthorMonogram.tint(for: name, among: Self.palette.count)].gradient,
-        in: .circle
-      )
+      .background(Color(AuthorMonogram.tintColour(for: name)), in: .circle)
       .accessibilityHidden(true)
+  }
+}
+
+extension Color {
+  /// A colour whose contrast RFCReaderKit has measured, drawn as exactly those sRGB
+  /// values in every appearance.
+  fileprivate init(_ colour: SRGBColour) {
+    self.init(.sRGB, red: colour.red, green: colour.green, blue: colour.blue)
   }
 }
 
