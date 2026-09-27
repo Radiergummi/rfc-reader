@@ -95,7 +95,14 @@ public actor RFCEditorClient {
         // No XML: the text is all there is.
       }
     }
-    let data = try await fetchDocumentData(id, format: .text)
+    let data: Data
+    do {
+      data = try await fetchDocumentData(id, format: .text)
+    } catch ClientError.notFound where xmlParseFailure != nil {
+      // No text to fall back to: the XML that would not parse is why the document
+      // cannot be read, and the text's 404 would hide the parser bug.
+      throw xmlParseFailure ?? ClientError.notFound(id)
+    }
     return FetchedDocument(
       data: data, format: .text, document: LegacyTextParser.parse(data),
       xmlParseFailure: xmlParseFailure)

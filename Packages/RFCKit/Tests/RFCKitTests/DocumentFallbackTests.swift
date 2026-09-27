@@ -116,6 +116,20 @@ struct DocumentFallbackTests {
     #expect(transport.requested == ["xml", "txt"])
   }
 
+  /// Unparseable XML and no text: the parse failure is the reason the document
+  /// cannot be read, not the text's 404, which would hide the parser bug.
+  @Test func `unparseable XML with no text fails with the parse error`() async throws {
+    let transport = Transport(xml: .body(Data("<rfc><front>".utf8)), text: .status(404))
+    do {
+      _ = try await RFCEditorClient(transport: transport).fetchPreferredDocument(.rfc(9110))
+      Issue.record("expected the parse failure")
+    } catch let error as RFCEditorClient.ClientError {
+      Issue.record("the text's \(error), not the parse failure")
+    } catch {
+      // The parser's own error.
+    }
+  }
+
   @Test func `the index is fetched through the client`() async throws {
     let transport = Transport(xml: .body(Data("<rfc-index/>".utf8)))
     #expect(
