@@ -37,7 +37,9 @@ struct AuthorCardTests {
     let tint = AuthorMonogram.tint(for: "Mark Nottingham", among: 8)
     #expect(tint == AuthorMonogram.tint(for: "Mark Nottingham", among: 8))
     #expect((0..<8).contains(tint))
-    #expect(AuthorMonogram.tint(for: "Mark Nottingham", among: 8) == 5)
+    // Pinned, so a change to the hash — which would recolour everyone — is a
+    // deliberate one. FNV-1a 64 of the name, modulo 8.
+    #expect(AuthorMonogram.tint(for: "Mark Nottingham", among: 8) == 1)
   }
 
   @Test func `different names spread across the palette`() {
