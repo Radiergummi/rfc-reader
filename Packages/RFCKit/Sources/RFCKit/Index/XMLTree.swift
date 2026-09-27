@@ -1,141 +1,109 @@
 import Foundation
 
-#if canImport(FoundationXML)
-  import FoundationXML
-#endif
-
 /// A minimal in-memory XML tree. RFC documents are small enough (a few MB at most)
 /// that building a tree and walking it is far simpler than a streaming state machine.
-struct XMLElement: Sendable {
-  var name: String
-  var attributes: [String: String]
-  var children: [XMLNode]
+///
+/// A namespace rather than bare `XMLElement` and `XMLNode`, which shadowed
+/// FoundationXML's classes of the same names (#133).
+enum XMLTree {
+  struct Element: Sendable {
+    var name: String
+    var attributes: [String: String]
+    var children: [Node]
 
-  init(name: String, attributes: [String: String] = [:], children: [XMLNode] = []) {
-    self.name = name
-    self.attributes = attributes
-    self.children = children
-  }
-
-  subscript(attribute: String) -> String? { attributes[attribute] }
-
-  var elements: [XMLElement] {
-    children.compactMap {
-      if case .element(let element) = $0 { return element }
-      return nil
+    init(name: String, attributes: [String: String] = [:], children: [Node] = []) {
+      self.name = name
+      self.attributes = attributes
+      self.children = children
     }
-  }
 
-  func first(_ name: String) -> XMLElement? {
-    elements.first { $0.name == name }
-  }
+    subscript(attribute: String) -> String? { attributes[attribute] }
 
-  func all(_ name: String) -> [XMLElement] {
-    elements.filter { $0.name == name }
-  }
-
-  /// Concatenated text of this element and all descendants.
-  var text: String {
-    var result = ""
-    appendText(to: &result)
-    return result
-  }
-
-  private func appendText(to result: inout String) {
-    for child in children {
-      switch child {
-      case .text(let text): result.append(text)
-      case .element(let element): element.appendText(to: &result)
+    var elements: [Element] {
+      children.compactMap {
+        if case .element(let element) = $0 { return element }
+        return nil
       }
     }
-  }
 
-  /// Text with runs of whitespace collapsed, as a browser would render it.
-  var normalizedText: String {
-    text.collapsingWhitespace()
-  }
-}
-
-enum XMLNode: Sendable {
-  case element(XMLElement)
-  case text(String)
-}
-
-enum XMLTreeError: Error, Sendable {
-  case malformed(line: Int, column: Int, message: String)
-  case empty
-}
-
-/// Builds an `XMLElement` tree from data using Foundation's `XMLParser`.
-final class XMLTreeBuilder: NSObject, XMLParserDelegate {
-  private var stack: [XMLElement] = []
-  private var root: XMLElement?
-  private var pendingText = ""
-  private var failure: XMLTreeError?
-
-  static func parse(_ data: Data) throws -> XMLElement {
-    let builder = XMLTreeBuilder()
-    let parser = XMLParser(data: data)
-    parser.delegate = builder
-    parser.shouldProcessNamespaces = false
-    parser.shouldResolveExternalEntities = false
-    _ = parser.parse()
-    // A completed root element is a complete document; errors reported after it are
-    // a swift-corelibs-foundation artefact on large inputs, not malformed XML.
-    if let root = builder.root { return root }
-    if let failure = builder.failure { throw failure }
-    if let error = parser.parserError {
-      throw XMLTreeError.malformed(
-        line: parser.lineNumber, column: parser.columnNumber,
-        message: error.localizedDescription
-      )
+    func first(_ name: String) -> Element? {
+      elements.first { $0.name == name }
     }
-    throw XMLTreeError.empty
+
+    func all(_ name: String) -> [Element] {
+      elements.filter { $0.name == name }
+    }
+
+    /// Concatenated text of this element and all descendants.
+    var text: String {
+      var result = ""
+      appendText(to: &result)
+      return result
+    }
+
+    private func appendText(to result: inout String) {
+      for child in children {
+        switch child {
+        case .text(let text): result.append(text)
+        case .element(let element): element.appendText(to: &result)
+        }
+      }
+    }
+
+    /// Text with runs of whitespace collapsed, as a browser would render it.
+    var normalizedText: String {
+      text.collapsingWhitespace()
+    }
   }
 
-  private func flushText() {
-    guard !pendingText.isEmpty, !stack.isEmpty else {
+  enum Node: Sendable {
+    case element(Element)
+    case text(String)
+  }
+
+  /// The document's root element, built from `XMLDriver`'s events.
+  static func parse(_ data: Data) throws(XMLSyntaxError) -> Element {
+    let builder = Builder()
+    try XMLDriver.run(data, into: builder)
+    // The driver returns only once the root has closed, which is when it is set.
+    guard let root = builder.root else {
+      throw XMLSyntaxError(line: 0, column: 0, message: "empty document")
+    }
+    return root
+  }
+
+  private final class Builder: XMLEvents {
+    private var stack: [Element] = []
+    private(set) var root: Element?
+    private var pendingText = ""
+
+    func start(_ name: String, attributes: [String: String]) {
+      flushText()
+      stack.append(Element(name: name, attributes: attributes))
+    }
+
+    func end(_ name: String) {
+      flushText()
+      guard let finished = stack.popLast() else { return }
+      if stack.isEmpty {
+        root = finished
+      } else {
+        stack[stack.count - 1].children.append(.element(finished))
+      }
+    }
+
+    func text(_ text: String) {
+      pendingText.append(text)
+    }
+
+    private func flushText() {
+      guard !pendingText.isEmpty, !stack.isEmpty else {
+        pendingText = ""
+        return
+      }
+      stack[stack.count - 1].children.append(.text(pendingText))
       pendingText = ""
-      return
     }
-    stack[stack.count - 1].children.append(.text(pendingText))
-    pendingText = ""
-  }
-
-  func parser(
-    _ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
-    qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]
-  ) {
-    flushText()
-    stack.append(XMLElement(name: elementName, attributes: attributeDict))
-  }
-
-  func parser(
-    _ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
-    qualifiedName qName: String?
-  ) {
-    flushText()
-    guard let finished = stack.popLast() else { return }
-    if stack.isEmpty {
-      root = finished
-    } else {
-      stack[stack.count - 1].children.append(.element(finished))
-    }
-  }
-
-  func parser(_ parser: XMLParser, foundCharacters string: String) {
-    pendingText.append(string)
-  }
-
-  func parser(_ parser: XMLParser, foundCDATA cdataBlock: Data) {
-    pendingText.append(String(decoding: cdataBlock, as: UTF8.self))
-  }
-
-  func parser(_ parser: XMLParser, parseErrorOccurred parseError: any Error) {
-    failure = .malformed(
-      line: parser.lineNumber, column: parser.columnNumber,
-      message: parseError.localizedDescription
-    )
   }
 }
 
