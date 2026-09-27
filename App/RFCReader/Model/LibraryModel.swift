@@ -76,15 +76,15 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
-  /// Every bookmarked RFC's number, for the Bookmarks list and the glyph on a row.
-  ///
-  /// One observable set for the process rather than a `@Query` in each list: the
-  /// list is computed here now, for whoever asks — the list itself, the toolbar's
-  /// count, a script — and none of those but a SwiftUI view could hold a query.
-  /// Fetched again on every save of the store, whoever made it, which is when a
-  /// bookmark can have changed.
+  /// Every bookmarked RFC's number, fetched again on every save of the store: one
+  /// set for the lists, the toolbars and scripts alike.
   private(set) var bookmarkedNumbers: Set<Int> = []
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
+
+  /// Every RFC with a cached body: the Available Offline list. Kept here, and
+  /// refreshed whenever the cache can have changed, so a tab can take it the moment
+  /// it enters that filter rather than waiting on the store's actor.
+  private(set) var downloadedNumbers: Set<Int> = []
 
   private init() {
     refreshBookmarkedNumbers()
@@ -96,11 +96,16 @@ final class LibraryModel {
   }
 
   private func refreshBookmarkedNumbers() {
-    let bookmarks = (try? AppData.container.mainContext.fetch(FetchDescriptor<Bookmark>())) ?? []
-    let numbers = Set(bookmarks.map(\.number))
+    let numbers = BookmarkStore.bookmarkedNumbers(in: AppData.container.mainContext)
     // Only a change is news: most saves record a reading position, not a bookmark.
     guard numbers != bookmarkedNumbers else { return }
     bookmarkedNumbers = numbers
+  }
+
+  private func refreshDownloadedNumbers() async {
+    let numbers = await store.cachedNumbers()
+    guard numbers != downloadedNumbers else { return }
+    downloadedNumbers = numbers
   }
 
   private let client = RFCEditorClient()
@@ -112,6 +117,7 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    await refreshDownloadedNumbers()
     do {
       if let cached = try await store.cachedIndex() {
         // The store parses the cached index on its own actor; the search and the
@@ -182,8 +188,9 @@ final class LibraryModel {
 
   /// Answers remembered against their inputs.
   ///
-  /// `list` is read from `RFCListView.body`, which SwiftUI evaluates far more often
-  /// than any of these inputs change -- twice per pass, several passes per click.
+  /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
+  /// scripts — and SwiftUI evaluates that body far more often than any of these
+  /// inputs change -- twice per pass, several passes per click.
   /// Uncached, one filter change ran the full-text scan a dozen times over, and that
   /// scan measures 107 ms against the real index.
   ///
@@ -192,7 +199,7 @@ final class LibraryModel {
   /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
   /// -- this is a cache, so losing an entry costs time, never correctness.
   ///
-  /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
+  /// Not observed: `list` writes it from a view's body on a miss, and a write to
   /// a property the running body read invalidated that body, so every miss rendered
   /// the list twice (#126). It is a memo of state that is observed, not state itself.
   /// That makes a hit read nothing observable, though, so `list` reads `index`
@@ -201,40 +208,36 @@ final class LibraryModel {
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
-  /// What `scene`'s list shows: its filter and search, over the inputs it took
-  /// on entering the filter and the bookmarks as they stand.
+  /// What `scene`'s list shows: its filter and search, over the inputs it took on
+  /// entering the filter and the bookmarks as they stand.
   func list(for scene: NavigationModel) -> [RFCMetadata] {
-    list(
-      filter: scene.filter,
-      searchText: scene.searchText,
-      bookmarked: bookmarkedNumbers,
-      recentlyRead: scene.recentOrder,
-      downloaded: scene.downloaded
-    )
-  }
-
-  func list(
-    filter: LibraryFilter,
-    searchText: String,
-    bookmarked: Set<Int>,
-    recentlyRead: [Int],
-    downloaded: Set<Int>
-  ) -> [RFCMetadata] {
     // Observed on every call, hit or miss: this is what re-renders the list when
     // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
     guard let index else { return [] }
+    // Only the inputs this filter reads: in the key, the rest would make a list
+    // that cannot have changed miss the cache — every tab's search re-run for a
+    // bookmark toggled, and an order hashed on every lookup for a filter that
+    // ignores it.
+    let filter = scene.filter
     let key = ListKey(
       filter: filter,
-      query: searchText.trimmingCharacters(in: .whitespaces),
-      bookmarked: bookmarked,
-      recentlyRead: recentlyRead,
-      downloaded: downloaded
+      query: scene.searchText.trimmingCharacters(in: .whitespaces),
+      bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
+      recentlyRead: filter == .recent ? scene.recentOrder : [],
+      downloaded: filter == .downloaded ? scene.downloaded : []
     )
     if let hit = listCache[key] { return hit }
     let computed = computeList(key, in: index)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
+  }
+
+  /// The subtitle under the list's title: how many documents it shows. Empty while
+  /// the index loads — "0 Documents" would be a claim about the library, not about a
+  /// list that has not arrived yet.
+  func listSubtitle(for scene: NavigationModel) -> String {
+    indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
   }
 
   /// Reads every input off the key, so the cache cannot go stale against something
@@ -389,20 +392,21 @@ final class LibraryModel {
 
   // MARK: - Documents
 
+  /// Fetching a document caches it, so the offline set is refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
-    try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    await refreshDownloadedNumbers()
+    return document
   }
 
   func originalText(for id: DocumentID) async throws -> String {
-    try await store.originalText(id, client: client)
+    let text = try await store.originalText(id, client: client)
+    await refreshDownloadedNumbers()
+    return text
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
     await store.isCached(id)
-  }
-
-  func downloadedNumbers() async -> Set<Int> {
-    await store.cachedNumbers()
   }
 
   /// The documents the reader has opened, most recent first.
@@ -410,7 +414,7 @@ final class LibraryModel {
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
   /// re-sorted it under the click that was reading it. `NavigationModel` takes one
-  /// of these when its filter changes, exactly as it takes `downloadedNumbers()`.
+  /// of these when its filter changes, exactly as it takes `downloadedNumbers`.
   func recentlyReadNumbers() -> [Int] {
     let descriptor = FetchDescriptor<ReadingPosition>(
       sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
@@ -425,6 +429,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    await refreshDownloadedNumbers()
   }
 }
 

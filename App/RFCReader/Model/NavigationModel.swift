@@ -47,6 +47,14 @@ final class NavigationModel: Identifiable {
   var searchText = ""
   var isShowingGoToSheet = false
 
+  /// The library the list is computed from, and which the inputs below are taken
+  /// from on entering a filter.
+  @ObservationIgnored private let library: LibraryModel
+
+  init(library: LibraryModel) {
+    self.library = library
+  }
+
   /// The Recently Read order, taken once when the filter is entered.
   ///
   /// Not live: opening or leaving a document writes its `updatedAt`, so an order
@@ -55,34 +63,14 @@ final class NavigationModel: Identifiable {
   /// entering instead, the order is whatever it was on arrival and stays put while
   /// it is being read through; coming back to the filter takes a fresh one, the
   /// same way `downloaded` beside it does.
-  ///
-  /// Here, with the filter, rather than in the list view: the list is
-  /// `LibraryModel.list(for:)`, which anything showing or counting this tab's list
-  /// asks, not only a view that is on screen.
   private(set) var recentOrder: [Int] = []
   /// The RFCs available offline, as of entering the filter.
   private(set) var downloaded: Set<Int> = []
-  /// Fetching `downloaded`, which the store does off the main actor.
-  @ObservationIgnored private var listInputs: Task<Void, Never>?
 
-  /// Takes the inputs a list is computed from on entering a filter. Not on making
-  /// the model: it starts on All RFCs, which reads neither, and iOS makes one in a
-  /// `@State` initializer that SwiftUI may run and discard.
+  /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
-    let library = LibraryModel.shared
     recentOrder = library.recentlyReadNumbers()
-    listInputs?.cancel()
-    listInputs = Task { [weak self] in
-      let downloaded = await library.downloadedNumbers()
-      guard !Task.isCancelled else { return }
-      self?.downloaded = downloaded
-    }
-  }
-
-  /// Returns once the inputs taken on entering the current filter have all
-  /// arrived, for whoever needs the list as it will stand rather than as it does.
-  func listInputsSettled() async {
-    await listInputs?.value
+    downloaded = library.downloadedNumbers
   }
 
   /// What the list lists: the last filter chosen, whether or not the sidebar still

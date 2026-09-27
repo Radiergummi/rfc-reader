@@ -16,7 +16,7 @@ import SwiftUI
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
     /// selection, filter, search text and back/forward stack. Shared library state —
     /// the index, the cache — stays on the environment's `LibraryModel`.
-    @State private var navigation = NavigationModel()
+    @State private var navigation = NavigationModel(library: .shared)
     /// What the reader is showing, shared with the panel. One per scene, for the same
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()

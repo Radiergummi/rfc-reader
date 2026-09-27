@@ -60,10 +60,7 @@ struct RFCListView: View {
         ContentUnavailableView.search(text: navigation.searchText)
       }
     }
-    .task(id: navigation.filter) {
-      // After the inputs the filter takes, not before: they are inputs to the list
-      // the window is being measured against.
-      await navigation.listInputsSettled()
+    .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.searchText) {
@@ -79,9 +76,7 @@ struct RFCListView: View {
     }
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
-      // Empty while the index loads: "0 Documents" would be a claim about the
-      // library, not about a list that has not arrived yet.
-      .navigationSubtitle(library.indexState.isReady ? DocumentCount.label(rows.count) : "")
+      .navigationSubtitle(library.listSubtitle(for: navigation))
     #endif
   }
 
