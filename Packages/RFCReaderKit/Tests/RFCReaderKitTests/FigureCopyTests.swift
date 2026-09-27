@@ -29,7 +29,7 @@ struct FigureCopyTests {
     )
   }
 
-  @Test func aMenuOnAFigureFindsIt() throws {
+  @Test func `a menu on a figure finds it`() throws {
     let text = built().text
     let figure = try #require(
       FigureCopy.figure(at: try Fixtures.offset(of: "| A |", in: text), in: text))
@@ -38,14 +38,14 @@ struct FigureCopyTests {
 
   /// The language label is drawn inside the card, so it is part of the figure a
   /// click on it means.
-  @Test func theLanguageLabelBelongsToItsFigure() throws {
+  @Test func `the language label belongs to its figure`() throws {
     let text = built().text
     let figure = try #require(
       FigureCopy.figure(at: try Fixtures.offset(of: "JSON", in: text), in: text))
     #expect(figure.type == "json")
   }
 
-  @Test func proseIsNoFigure() throws {
+  @Test func `prose is no figure`() throws {
     let text = built().text
     #expect(FigureCopy.figure(at: try Fixtures.offset(of: "Between", in: text), in: text) == nil)
     #expect(FigureCopy.figure(at: -1, in: text) == nil)
@@ -54,7 +54,7 @@ struct FigureCopyTests {
 
   /// A selection that strays into the prose around one figure still means that
   /// figure; one across two cannot say which.
-  @Test func aSelectionMeansAFigureOnlyWhenItTouchesExactlyOne() throws {
+  @Test func `a selection means a figure only when it touches exactly one`() throws {
     let text = built().text
     let between = try Fixtures.offset(of: "Between", in: text)
     let diagram = try Fixtures.offset(of: "| A |", in: text)
@@ -71,7 +71,7 @@ struct FigureCopyTests {
   /// The pasteboard gets what the author wrote (issue #64), read from the box
   /// rather than from the storage, so it does not depend on how the block is
   /// shown. This one fits the column, so it is shown unfolded too.
-  @Test func aFoldedFigureIsCopiedUnfolded() throws {
+  @Test func `a folded figure is copied unfolded`() throws {
     let text = built().text
     #expect(
       !text.string.contains("NOTE: '\\' line wrapping"),
@@ -81,7 +81,7 @@ struct FigureCopyTests {
     #expect(FigureCopy.pasteboardText(for: figure) == "{\"key\": \"a long value\"}")
   }
 
-  @Test func anUnfoldedFigureIsCopiedAsItIs() {
+  @Test func `an unfolded figure is copied as it is`() {
     #expect(FigureCopy.pasteboardText(for: Self.diagram) == Self.diagram.text)
   }
 }

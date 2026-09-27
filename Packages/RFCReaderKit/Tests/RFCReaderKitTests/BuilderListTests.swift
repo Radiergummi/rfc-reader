@@ -15,29 +15,29 @@ import Testing
 struct BuilderListTests {
   private let style = ReadingStyle()
 
-  @Test func bulletMarkers() {
+  @Test func `bullet markers`() {
     #expect(DocumentTextBuilder.marker(for: .bullet, at: 0) == "•")
     #expect(DocumentTextBuilder.marker(for: .bare, at: 3) == "")
   }
 
-  @Test func decimalMarkersRespectTheStart() {
+  @Test func `decimal markers respect the start`() {
     #expect(DocumentTextBuilder.marker(for: .numbered(format: nil, start: 1), at: 0) == "1.")
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "1", start: 5), at: 2) == "7.")
   }
 
-  @Test func letterAndRomanMarkers() {
+  @Test func `letter and roman markers`() {
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "a", start: 1), at: 0) == "a.")
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "A", start: 1), at: 25) == "Z.")
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "i", start: 1), at: 3) == "iv.")
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "I", start: 1), at: 8) == "IX.")
   }
 
-  @Test func templateMarkers() {
+  @Test func `template markers`() {
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "(%c)", start: 1), at: 1) == "(b)")
     #expect(DocumentTextBuilder.marker(for: .numbered(format: "%d)", start: 1), at: 2) == "3)")
   }
 
-  @Test func listItemsAppearAsTextWithTheirMarkers() {
+  @Test func `list items appear as text with their markers`() {
     let list = ListBlock(
       style: .bullet,
       items: [
@@ -50,7 +50,7 @@ struct BuilderListTests {
     #expect(built.text.string.contains("•\tsecond"))
   }
 
-  @Test func definitionTermsAreBoldAndDefinitionsAreIndented() throws {
+  @Test func `definition terms are bold and definitions are indented`() throws {
     let item = DefinitionItem(
       term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))])
     let document = Fixtures.document(.definitionList([item]))
@@ -69,7 +69,7 @@ struct BuilderListTests {
   /// A definition's own anchor is indexed where its text starts, and an empty
   /// definition's at the end of its own term: after the newline would be the next
   /// item's term, and a link to it would land one item late (#166).
-  @Test func aDefinitionsAnchorIsIndexedOnItsOwnItem() throws {
+  @Test func `a definitions anchor is indexed on its own item`() throws {
     let items = [
       DefinitionItem(
         term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))],
@@ -89,7 +89,7 @@ struct BuilderListTests {
     #expect(try Fixtures.offset(of: "SHOULD", in: built.text) > empty)
   }
 
-  @Test func aListItemHangsItsMarkerLeftOfItsText() throws {
+  @Test func `a list item hangs its marker left of its text`() throws {
     let list = ListBlock(style: .bullet, items: [ListItem(text: "first")])
     let document = Fixtures.document(.list(list))
     let built = DocumentTextBuilder.build(document, style: style)

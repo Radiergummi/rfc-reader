@@ -1,6 +1,10 @@
 import Foundation
 import RFCKit
 import RFCReaderKit
+import os
+
+private let storeLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "store")
 
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
 ///
@@ -94,21 +98,19 @@ actor DocumentStore {
       return document
     }
 
-    // Not cached: fetch XML when the index says it exists, otherwise text.
-    if formats.isEmpty || formats.contains(.xml) {
-      if let data = try? await client.fetchDocumentData(id, format: .xml),
-        let document = try? RFCXMLParser.parse(data)
-      {
-        try cachedDocuments.update(id) { try data.write(to: xmlURL, options: .atomic) }
-        parsed[id] = document
-        return document
-      }
+    // Not cached: the XML when the index says it exists, otherwise the text, and
+    // the text only when there is no XML (#125).
+    let fetched = try await client.fetchPreferredDocument(
+      id, availableFormats: formats.isEmpty ? nil : formats)
+    if let failure = fetched.xmlParseFailure {
+      storeLog.error(
+        "\(id.displayName, privacy: .public): XML did not parse, shown from the text: \(String(describing: failure), privacy: .public)"
+      )
     }
-    let data = try await client.fetchDocumentData(id, format: .text)
-    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
-    let document = LegacyTextParser.parse(data)
-    parsed[id] = document
-    return document
+    let url = fetched.format == .xml ? xmlURL : textURL
+    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
+    parsed[id] = fetched.document
+    return fetched.document
   }
 
   func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {

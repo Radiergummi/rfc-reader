@@ -30,20 +30,20 @@
       }
     }
 
-    @Test func aClickOnACellFocusesTheListAroundIt() {
+    @Test func `a click on a cell focuses the list around it`() {
       let views = Tree()
       let found = FirstResponderSearch.target(from: views.cell, upTo: views.root, skipping: nil)
       #expect(found === views.list)
     }
 
-    @Test func aClickInsideWhatAlreadyHasFocusChangesNothing() {
+    @Test func `a click inside what already has focus changes nothing`() {
       let views = Tree()
       let found = FirstResponderSearch.target(
         from: views.cell, upTo: views.root, skipping: views.list)
       #expect(found == nil)
     }
 
-    @Test func aClickWithNothingAboveItThatTakesFocusIsRefused() {
+    @Test func `a click with nothing above it that takes focus is refused`() {
       let root = NSView()
       let column = NSView()
       let cell = NSView()
@@ -54,7 +54,7 @@
 
     /// The walk stops at the root rather than escaping into whatever contains it,
     /// which on a real window is the titlebar's sibling and then the window itself.
-    @Test func theWalkStopsAtTheRootEvenWhenSomethingAboveItWouldTakeFocus() {
+    @Test func `the walk stops at the root even when something above it would take focus`() {
       let outside = Taker()
       let root = NSView()
       let cell = NSView()
@@ -63,13 +63,13 @@
       #expect(FirstResponderSearch.target(from: cell, upTo: root, skipping: nil) == nil)
     }
 
-    @Test func aHitThatItselfTakesFocusIsTheAnswer() {
+    @Test func `a hit that itself takes focus is the answer`() {
       let views = Tree()
       let found = FirstResponderSearch.target(from: views.list, upTo: views.root, skipping: nil)
       #expect(found === views.list)
     }
 
-    @Test func theInnermostSearchReachesPastAContainerThatWouldTakeItFirst() {
+    @Test func `the innermost search reaches past a container that would take it first`() {
       let column = Taker()
       let list = Taker()
       column.addSubview(list)
@@ -78,7 +78,7 @@
       #expect(FirstResponderSearch.innermostTarget(in: column) === list)
     }
 
-    @Test func theInnermostSearchFallsBackToTheRootItself() {
+    @Test func `the innermost search falls back to the root itself`() {
       let column = Taker()
       column.addSubview(NSView())
       #expect(FirstResponderSearch.innermostTarget(in: column) === column)
@@ -86,7 +86,7 @@
 
     /// The case `placeInitialFocus` retries for: a column whose list SwiftUI has not
     /// built yet has nothing to focus, and the caller must be able to tell.
-    @Test func anEmptyColumnHasNothingToFocus() {
+    @Test func `an empty column has nothing to focus`() {
       let column = NSView()
       column.addSubview(NSView())
       #expect(FirstResponderSearch.innermostTarget(in: column) == nil)

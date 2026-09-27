@@ -103,7 +103,7 @@ struct ChipLineGeometryTests {
     return try #require(fixture, "fixture must wrap a chip onto a line after its fragment's first")
   }
 
-  @Test func aChipOnALaterLineDrawsBehindItsOwnText() throws {
+  @Test func `a chip on a later line draws behind its own text`() throws {
     let fixture = try fixture()
     let chips = FragmentGeometry.chipRects(
       in: fixture.text,
@@ -136,7 +136,7 @@ struct ChipLineGeometryTests {
   /// is bound with no-break spaces, so it wraps only where a column is too narrow
   /// to hold it at all, and that is the width it is laid out at here: narrow enough
   /// for three lines, so there is a middle one that rounds neither end.
-  @Test func aWrappedChipRoundsOnlyItsOuterEnds() throws {
+  @Test func `a wrapped chip rounds only its outer ends`() throws {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
     let text = Fixtures.inlineRun([
       .text("As described in "), .crossReference(xref), .text(" and elsewhere."),
@@ -168,7 +168,7 @@ struct ChipLineGeometryTests {
     }
   }
 
-  @Test func everyChipRectSitsOverItsOwnGlyphs() throws {
+  @Test func `every chip rect sits over its own glyphs`() throws {
     let fixture = try fixture()
     let chips = FragmentGeometry.chipRects(
       in: fixture.text,
@@ -182,7 +182,7 @@ struct ChipLineGeometryTests {
     }
   }
 
-  @Test func hitTestingResolvesInsideTheChipItPointsAt() throws {
+  @Test func `hit testing resolves inside the chip it points at`() throws {
     let fixture = try fixture()
     let line = fixture.laterLine
     let piece = fixture.laterPiece
@@ -206,7 +206,7 @@ struct ChipLineGeometryTests {
       "must resolve inside the chip under the pointer, not past it")
   }
 
-  @Test func aPointOutsideEveryLineResolvesToNothing() throws {
+  @Test func `a point outside every line resolves to nothing`() throws {
     let fixture = try fixture()
     let below = CGPoint(
       x: 10, y: fixture.lines.map(\.typographicBounds.maxY).max().map { $0 + 100 } ?? 1000)
@@ -219,7 +219,7 @@ struct ChipLineGeometryTests {
   /// the left of any line, are not over a character. `characterIndex(for:)` answers
   /// `NSNotFound` past a single line's end, and adding a nonzero fragment start to
   /// that trapped: hovering beside any heading below the first line crashed.
-  @Test func aPointBesideALinesTextResolvesToNothing() throws {
+  @Test func `a point beside a lines text resolves to nothing`() throws {
     let (storage, layout) = layOut(
       NSAttributedString(
         string: "A first paragraph.\nA heading\n",

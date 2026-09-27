@@ -21,7 +21,7 @@ struct BuilderStructureTests {
     document.allSections.filter { !DocumentTextBuilder.holdsOnlyReferences($0) }
   }
 
-  @Test func everySectionAnchorIsIndexed() throws {
+  @Test func `every section anchor is indexed`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     for section in bodySections(of: document) {
@@ -29,7 +29,7 @@ struct BuilderStructureTests {
     }
   }
 
-  @Test func eachSectionAnchorPointsAtItsHeading() throws {
+  @Test func `each section anchor points at its heading`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let text = built.text.string as NSString
@@ -45,7 +45,7 @@ struct BuilderStructureTests {
   /// What an in-document reference's preview names: the heading of the section
   /// it points at, as the reader draws it. "Section 4.2" says where, not what. A
   /// figure is anchored too, but has no heading to name.
-  @Test func aSectionAnchorNamesItsHeading() throws {
+  @Test func `a section anchor names its heading`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     for section in bodySections(of: document) {
@@ -56,7 +56,7 @@ struct BuilderStructureTests {
     #expect(built.anchors.heading(of: "no-such-anchor") == nil)
   }
 
-  @Test func theBuilderRecordsAnchorsInDocumentOrder() throws {
+  @Test func `the builder records anchors in document order`() throws {
     let builder = DocumentTextBuilder(style: style)
     builder.appendDocument(try Fixtures.rfc8999())
     let offsets = builder.entries.map(\.offset)
@@ -65,14 +65,14 @@ struct BuilderStructureTests {
       "mark() must be called in document order, before the run it names")
   }
 
-  @Test func anchorOffsetsAreInsideTheString() throws {
+  @Test func `anchor offsets are inside the string`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     for entry in built.anchors.entries {
       #expect(entry.offset >= 0 && entry.offset <= built.text.length)
     }
   }
 
-  @Test func headingsCarryTheirAnchorForTheVoiceOverRotor() throws {
+  @Test func `headings carry their anchor for the voice over rotor`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let first = try #require(document.sections.first)
@@ -81,7 +81,7 @@ struct BuilderStructureTests {
       built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String == first.anchor)
   }
 
-  @Test func theAbstractComesBeforeTheFirstSection() throws {
+  @Test func `the abstract comes before the first section`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let abstract = document.header.abstract.compactMap { block -> String? in
@@ -100,7 +100,7 @@ struct BuilderStructureTests {
 
   /// Neither parser keeps "Abstract" as a block, and the reader's header view no
   /// longer draws it, so the builder is the only thing left that can.
-  @Test func theAbstractIsLabelled() throws {
+  @Test func `the abstract is labelled`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let text = built.text.string
@@ -134,14 +134,14 @@ struct BuilderStructureTests {
       "the abstract is not a section")
   }
 
-  @Test func aDocumentWithNoAbstractGetsNoHeading() throws {
+  @Test func `a document with no abstract gets no heading`() throws {
     var document = try Fixtures.rfc8999()
     document.header.abstract = []
     let built = DocumentTextBuilder.build(document, style: style)
     #expect(!built.text.string.hasPrefix("Abstract"))
   }
 
-  @Test func headingTextIsTheSectionDisplayTitle() throws {
+  @Test func `heading text is the section display title`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     for section in bodySections(of: document) {
@@ -158,7 +158,7 @@ struct BuilderStructureTests {
   /// A heading names a document as readily as a paragraph does. Now that
   /// `Section.title` carries inlines, the heading has to be built through the same
   /// inline path as prose, or the reference is drawn as words again.
-  @Test func headingsDrawTheirCrossReferences() throws {
+  @Test func `headings draw their cross references`() throws {
     let document = RFCDocument(
       header: DocumentHeader(title: "T"),
       sections: [
@@ -193,7 +193,7 @@ struct BuilderStructureTests {
       "a chip in a heading is set at heading size")
   }
 
-  @Test func noParagraphTextIsLost() throws {
+  @Test func `no paragraph text is lost`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     for section in document.allSections {
@@ -237,7 +237,7 @@ struct BuilderStructureTests {
     }.joined()
   }
 
-  @Test func theLegacyPathBuildsToo() throws {
+  @Test func `the legacy path builds too`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc2119(), style: style)
     #expect(built.text.length > 0)
     #expect(!built.anchors.entries.isEmpty)
@@ -245,7 +245,7 @@ struct BuilderStructureTests {
 
   /// The abstract introduces the document rather than being part of it, so it is
   /// set smaller and quieter than the body prose that follows.
-  @Test func theAbstractIsSetAsAStandfirst() throws {
+  @Test func `the abstract is set as a standfirst`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     let abstract = try #require(
       try Fixtures.rfc8999().header.abstract.compactMap { block -> String? in
@@ -272,7 +272,7 @@ struct BuilderStructureTests {
   }
 
   /// The heading stays a heading: full size, anchored, and in the rotor.
-  @Test func theAbstractHeadingIsNotDimmed() throws {
+  @Test func `the abstract heading is not dimmed`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
     let offset = try Fixtures.offset(of: "Abstract", in: built.text)
     #expect(
@@ -285,7 +285,7 @@ struct BuilderStructureTests {
 
   /// The bibliography leaves the body entirely — heading and all, so no empty
   /// "9. References" is left behind where the rows used to be.
-  @Test func theBibliographyIsNotInTheBody() throws {
+  @Test func `the bibliography is not in the body`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let skipped = document.allSections.filter { DocumentTextBuilder.holdsOnlyReferences($0) }
@@ -299,7 +299,7 @@ struct BuilderStructureTests {
   }
 
   /// A section that merely *contains* references alongside prose is still prose.
-  @Test func onlyAPureBibliographySectionIsSkipped() {
+  @Test func `only a pure bibliography section is skipped`() {
     let entry = Reference(anchor: "RFC2119", title: "Key words")
     let pure = Section(
       anchor: "s1", title: "References",
@@ -336,7 +336,7 @@ struct BuilderStructureTests {
   /// width RFCXML hangs a list item's text at -- so it is one of our indent steps,
   /// and a note under a list lines up with the items' text the way it does on paper.
   /// The whole paragraph moves in, not only its first line.
-  @Test func anIndentedParagraphIsSetInByWholeSteps() throws {
+  @Test func `an indented paragraph is set in by whole steps`() throws {
     let document = Fixtures.document(
       .paragraph(Paragraph(text: "flush")),
       .paragraph(Paragraph(text: "one step", indent: 3)),
@@ -359,7 +359,7 @@ struct BuilderStructureTests {
   /// An indent that is not a multiple of three still lands on a whole step: the
   /// nearest one, and never none. RFC 8907's `indent="4"` is one step, not a third
   /// past it.
-  @Test func anIndentOffTheStepRoundsToTheNearestWholeStep() throws {
+  @Test func `an indent off the step rounds to the nearest whole step`() throws {
     let document = Fixtures.document(
       .paragraph(Paragraph(text: "one character", indent: 1)),
       .paragraph(Paragraph(text: "four characters", indent: 4)),
@@ -381,7 +381,7 @@ struct BuilderStructureTests {
   }
 
   /// Every step comes off the column, so an author's indent stops at three of them.
-  @Test func anIndentIsCappedSoTheColumnKeepsItsWidth() throws {
+  @Test func `an indent is capped so the column keeps its width`() throws {
     let document = Fixtures.document(
       .paragraph(Paragraph(text: "nine characters", indent: 9)),
       .paragraph(Paragraph(text: "twenty-four characters", indent: 24))
@@ -398,7 +398,7 @@ struct BuilderStructureTests {
   }
 
   /// The author's indent is relative to wherever the paragraph already sits.
-  @Test func anIndentedParagraphInAListIsSetInFromTheItemsText() throws {
+  @Test func `an indented paragraph in a list is set in from the items text`() throws {
     let item = ListItem(blocks: [
       .paragraph(Paragraph(text: "item")),
       .paragraph(Paragraph(text: "note", indent: 3)),

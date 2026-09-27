@@ -52,11 +52,11 @@ struct BuilderTableTests {
     return builder.tableShape(widths: builder.naturalColumnWidths(table))
   }
 
-  @Test func aNarrowTableUsesTheGrid() {
+  @Test func `a narrow table uses the grid`() {
     #expect(shape(narrow) == .grid)
   }
 
-  @Test func aTableWithAProseColumnStacks() {
+  @Test func `a table with a prose column stacks`() {
     #expect(shape(prose) == .stacked)
   }
 
@@ -64,7 +64,7 @@ struct BuilderTableTests {
   /// three columns total roughly 207 pt including gutters — comfortably under 320,
   /// so it grids. Replaced with a threshold test derived from the table's own
   /// natural widths, so it cannot rot when fonts or fixtures change.
-  @Test func theMeasureDecidesTheShape() {
+  @Test func `the measure decides the shape`() {
     let wide = DocumentTextBuilder(style: ReadingStyle(measure: 10_000))
     let widths = wide.naturalColumnWidths(narrow)
     let total = widths.reduce(0, +) + DocumentTextBuilder.columnGutter * CGFloat(widths.count - 1)
@@ -73,7 +73,7 @@ struct BuilderTableTests {
     #expect(shape(narrow, measure: total - 1) == .stacked)
   }
 
-  @Test func gridRowsAreTabSeparatedAndCarryTabStops() throws {
+  @Test func `grid rows are tab separated and carry tab stops`() throws {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("GET\tyes\tyes"))
     let offset = try #require(built.anchors.offset(of: "table-1"))
@@ -83,7 +83,7 @@ struct BuilderTableTests {
     #expect(paragraph.lineBreakMode == .byClipping)
   }
 
-  @Test func stackedRowsLeadWithTheirColumnHeader() throws {
+  @Test func `stacked rows lead with their column header`() throws {
     #expect(shape(prose) == .stacked)
 
     let built = DocumentTextBuilder.build(document(prose), style: ReadingStyle())
@@ -99,7 +99,7 @@ struct BuilderTableTests {
     #expect(paragraph.lineBreakMode != .byClipping)
   }
 
-  @Test func cellInlinesKeepTheirCrossReferences() throws {
+  @Test func `cell inlines keep their cross references`() throws {
     let xref = CrossReference(target: .document(.rfc(9110), section: "6.5.4"), text: "[RFC 9110]")
     let table = RFCKit.Table(
       title: nil,
@@ -113,12 +113,12 @@ struct BuilderTableTests {
     #expect(built.text.attribute(.link, at: offset, effectiveRange: nil) is URL)
   }
 
-  @Test func theCaptionIsText() {
+  @Test func `the caption is text`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("Table 1: Methods"))
   }
 
-  @Test func theAnchorIsIndexed() {
+  @Test func `the anchor is indexed`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.anchors.offset(of: "table-1") != nil)
   }
@@ -127,7 +127,7 @@ struct BuilderTableTests {
   /// The cited row is the second, so the grid's step past its header row is pinned
   /// too: the header and the body share one enumeration there.
   @Test(arguments: [TableShape.grid, .stacked])
-  func aRowsAnchorIsIndexedAtTheRow(shape expected: TableShape) throws {
+  func `a rows anchor is indexed at the row`(shape expected: TableShape) throws {
     var table = expected == .grid ? narrow : prose
     if expected == .stacked { table.rows.append(cells(["410", "gone", "6.5.9"])) }
     table.rowAnchors = [nil, "cited-row"]
@@ -142,7 +142,7 @@ struct BuilderTableTests {
   /// the first label in the stacked shape, where the header labels every cell
   /// instead of standing as a row.
   @Test(arguments: [TableShape.grid, .stacked])
-  func aHeaderRowsAnchorIsIndexedAtTheHeader(shape expected: TableShape) throws {
+  func `a header rows anchor is indexed at the header`(shape expected: TableShape) throws {
     var table = expected == .grid ? narrow : prose
     table.headerRowAnchors = ["cited-header"]
     #expect(shape(table) == expected)

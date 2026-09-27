@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// What the list in the middle column shows.

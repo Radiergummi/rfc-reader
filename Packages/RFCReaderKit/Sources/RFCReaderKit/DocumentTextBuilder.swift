@@ -59,14 +59,11 @@ public final class DocumentTextBuilder {
   public static func build(_ document: RFCDocument, style: ReadingStyle) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style)
     builder.appendDocument(document)
-    // Copied, not handed over: `output` is an `NSMutableAttributedString`, and
-    // `BuiltDocument`'s `@unchecked Sendable` rests on its text being genuinely
-    // immutable. Typing the same instance as `NSAttributedString` would only
-    // hide the mutable object, not retire it.
-    return BuiltDocument(
-      text: NSAttributedString(attributedString: builder.output),
-      anchors: AnchorIndex(builder.entries)
-    )
+    // Handed over, not copied: `builder` ends here, so nothing is left that could
+    // write `output` once the result leaves this function. A copy would also be
+    // shallow, sharing every attribute value with the original, so it protected
+    // nothing and cost a pass over the whole text. See `BuiltDocument`.
+    return BuiltDocument(text: builder.output, anchors: AnchorIndex(builder.entries))
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -284,6 +281,12 @@ extension DocumentTextBuilder {
       paragraph.tabStops = tabStops
       paragraph.defaultTabInterval = style.indentStep
     }
-    return paragraph
+    // An immutable copy, not the mutable object typed as immutable: Foundation
+    // uniques equal attribute dictionaries across every string in the process, so
+    // this object may end up shared with another build's text — one being read on
+    // the main actor while this build runs. That is only safe if nothing can write
+    // it. See `BuiltDocument`.
+    // swiftlint:disable:next force_cast
+    return paragraph.copy() as! NSParagraphStyle
   }
 }
