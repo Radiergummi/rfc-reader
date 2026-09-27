@@ -34,10 +34,11 @@ struct BuilderVerbatimTests {
   /// Every line of a verbatim block ends in a newline, and each newline ends a
   /// paragraph, so the block's paragraph spacing landed after every line of it:
   /// RFC 9000's Figure 13 advanced 29.25 pt per line and read double spaced (#31).
-  /// The spacing belongs after the block, once.
-  @Test func artworkIsSpacedAfterTheBlockNotAfterEveryLine() throws {
-    // Three distinct lines, so each is found where it is.
-    let art = "+-A-+\n| B |\n+-C-+"
+  /// The spacing belongs after the block, once — also when the block is a single
+  /// line, or its text already ends in a newline.
+  @Test(arguments: ["+-A-+\n| B |\n+-C-+", "+-A-+\n| B |\n+-C-+\n", "+-A-+"])
+  func artworkIsSpacedAfterTheBlockNotAfterEveryLine(art: String) throws {
+    // Distinct lines, so each is found where it is.
     let built = DocumentTextBuilder.build(
       document(Preformatted(kind: .artwork, text: art)), style: style)
     let lines = art.split(separator: "\n")
