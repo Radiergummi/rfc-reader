@@ -10,6 +10,8 @@ import SwiftUI
 #if !os(macOS)
   struct ContentView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
@@ -46,14 +48,9 @@ import SwiftUI
           EmptyDetailView()
         }
       }
-      // The window's title, and therefore the tab's.
-      //
-      // Only one `navigationTitle` in a `NavigationSplitView` reaches the window,
-      // and the list column's was winning it — so every tab read "All RFCs"
-      // whatever it was showing, while the subtitle set here came through
-      // untouched because nothing competed for it. The list column no longer sets
-      // one: the sidebar already shows which filter is active, so that title was
-      // spending the window's only title slot on something said elsewhere.
+      // The scene's title, for the app switcher and iPad's window controls. It
+      // reaches no column's bar: each column titles itself, the list included
+      // (#246).
       .navigationTitle(windowTitle)
       // On the split view rather than on `DocumentView`: macOS gives the detail
       // column no leading toolbar slot — a `.navigation` item declared down there is
@@ -62,24 +59,32 @@ import SwiftUI
       //
       // Always present, dimmed when there is nowhere to go, as Safari does. A pair
       // that appears and vanishes with the history shifts everything beside it.
+      //
+      // Except on an iPhone in portrait, where it sat beside the system back button
+      // and took the room the reader's title needed (#245). The system button
+      // leaves the document there, and the reader's More menu holds the pair.
       .toolbar {
-        ToolbarItem(placement: .navigation) {
-          ControlGroup {
-            Button {
-              navigation.goBack()
-            } label: {
-              Label("Back", systemImage: "chevron.backward")
-            }
-            .disabled(!navigation.canGoBack)
+        if DocumentView.hasRoomyToolbar(
+          horizontal: horizontalSizeClass, vertical: verticalSizeClass)
+        {
+          ToolbarItem(placement: .navigation) {
+            ControlGroup {
+              Button {
+                navigation.goBack()
+              } label: {
+                Label("Back", systemImage: "chevron.backward")
+              }
+              .disabled(!navigation.canGoBack)
 
-            Button {
-              navigation.goForward()
-            } label: {
-              Label("Forward", systemImage: "chevron.forward")
+              Button {
+                navigation.goForward()
+              } label: {
+                Label("Forward", systemImage: "chevron.forward")
+              }
+              .disabled(!navigation.canGoForward)
             }
-            .disabled(!navigation.canGoForward)
+            .controlGroupStyle(.navigation)
           }
-          .controlGroupStyle(.navigation)
         }
       }
       .onAppear { library.register(navigation) }

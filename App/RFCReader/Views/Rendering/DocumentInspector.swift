@@ -25,19 +25,46 @@ struct DocumentInspector: View {
   let openDocument: (DocumentID) -> Void
 
   var body: some View {
-    VStack(spacing: 0) {
-      InspectorTabBar(tab: $tab)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+    #if os(macOS)
+      VStack(spacing: 0) {
+        InspectorTabBar(tab: $tab)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 8)
 
-      switch tab {
-      case .contents:
-        TableOfContentsView(sections: sections, current: current, select: selectSection)
-      case .references:
-        // A document with no bibliography says so here rather than being
-        // steered away from the tab.
-        ReferencesView(groups: groups, open: openDocument)
+        selectedTab
       }
+    #else
+      // The system's segmented control, in the panel's own bar (#247). The
+      // inspector tab bar is macOS's idiom, and its insets were sized for the
+      // inspector column: in an iPhone's sheet they left it pressed against the
+      // sheet's top edge, its capsule ends inside the sheet's rounded corners. The
+      // bar places the control clear of both, as every other iOS sheet does.
+      NavigationStack {
+        selectedTab
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+            ToolbarItem(placement: .principal) {
+              Picker("Panel", selection: $tab) {
+                Text("Contents").tag(InspectorTab.contents)
+                Text("References").tag(InspectorTab.references)
+              }
+              .pickerStyle(.segmented)
+              .fixedSize()
+            }
+          }
+      }
+    #endif
+  }
+
+  @ViewBuilder
+  private var selectedTab: some View {
+    switch tab {
+    case .contents:
+      TableOfContentsView(sections: sections, current: current, select: selectSection)
+    case .references:
+      // A document with no bibliography says so here rather than being steered
+      // away from the tab.
+      ReferencesView(groups: groups, open: openDocument)
     }
   }
 }
@@ -52,6 +79,14 @@ struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  /// Called after a choice in the panel has navigated, which is when iOS closes the
+  /// panel's sheet. Nil on macOS, where the panel is a split item beside the text
+  /// and collapses through AppKit, not through a SwiftUI presentation.
+  private let didNavigate: (() -> Void)?
+
+  init(didNavigate: (() -> Void)? = nil) {
+    self.didNavigate = didNavigate
+  }
 
   var body: some View {
     @Bindable var reader = reader
@@ -61,8 +96,14 @@ struct PanelHost: View {
         groups: reader.groups,
         tab: $reader.tab,
         current: reader.currentAnchor,
-        selectSection: { navigation.jump(toSection: $0) },
-        openDocument: { library.open($0, activation: .current, in: navigation) }
+        selectSection: {
+          navigation.jump(toSection: $0)
+          didNavigate?()
+        },
+        openDocument: {
+          library.open($0, activation: .current, in: navigation)
+          didNavigate?()
+        }
       )
     } else {
       Color.clear
@@ -132,6 +173,11 @@ struct ReferencesView: View {
           Section(group.title) {
             ForEach(group.entries) { entry in
               ReferenceRow(entry: entry, open: open)
+                #if !os(macOS)
+                  // Room between entries of three lines each (#248). The row's
+                  // own spacing is sized for the denser macOS inspector.
+                  .padding(.vertical, 6)
+                #endif
             }
           }
         }

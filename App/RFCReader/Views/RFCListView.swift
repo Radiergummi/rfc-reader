@@ -21,6 +21,11 @@ struct RFCListView: View {
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
+  #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The row a collapsed split view has pushed. See `selectionBinding`.
+    @State private var pushedSelection: DocumentID?
+  #endif
 
   /// Built once per body pass and shared by every row: `RFCRow` used to scan the
   /// whole bookmark list itself, which is a linear search per row over a list that
@@ -42,7 +47,23 @@ struct RFCListView: View {
   /// Selecting a row is a navigation, so it goes through the history rather than
   /// assigning the selection behind its back.
   private var selectionBinding: Binding<DocumentID?> {
-    Binding(
+    #if !os(macOS)
+      // In a collapsed split view a row is a push, not a selection, and popping
+      // back writes nil. The history has no "no document" to take it, so the
+      // binding below refused it and the row stayed highlighted for good (#250).
+      // Here the pushed row is kept on its own and cleared by the pop; the history
+      // keeps the document, and the reader keeps what it loaded.
+      if horizontalSizeClass == .compact {
+        return Binding(
+          get: { pushedSelection },
+          set: {
+            pushedSelection = $0
+            if let id = $0 { navigation.select(id) }
+          }
+        )
+      }
+    #endif
+    return Binding(
       get: { navigation.selection },
       // Not `library.open(_:activation:in:)` like every other open: a selection
       // binding is handed the outcome, not the click, and Command-click on a
@@ -95,7 +116,19 @@ struct RFCListView: View {
     // already scrolled down through.
     .onChange(of: navigation.selection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
+      #if !os(macOS)
+        // A document opened from elsewhere — a citation, Back in the reader's
+        // menu, a deep link — is pushed like a tapped row.
+        pushedSelection = navigation.selection
+      #endif
     }
+    #if !os(macOS)
+      .navigationTitle(navigation.filter.title)
+      // Collapsing shows what was open, not the list above it.
+      .onChange(of: horizontalSizeClass) {
+        pushedSelection = navigation.selection
+      }
+    #endif
   }
 
   /// Where the selected document sits in the list, if it is in it at all.
