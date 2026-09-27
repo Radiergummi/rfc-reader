@@ -36,7 +36,7 @@ struct RFCLinkTests {
   /// string: `appURL` force-unwrapped `URL(string:)` over it, and the web builders
   /// fell back to the page without its fragment (#150). Set as a fragment through
   /// `URLComponents`, it is percent-encoded, and it survives the way back.
-  @Test func aSectionWithReservedCharactersMakesEveryURL() throws {
+  @Test func aSectionWithReservedCharactersMakesEveryURL() {
     let link = RFCLink(id: .rfc(9110), section: "4.2 draft#1")
     #expect(link.appURL.absoluteString == "rfc://9110#section-4.2%20draft%231")
     #expect(RFCLink(url: link.appURL) == link)
