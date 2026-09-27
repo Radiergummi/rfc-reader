@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 import RFCCorpusKit
 
 struct ManifestCommand: ParsableCommand {
@@ -7,6 +8,8 @@ struct ManifestCommand: ParsableCommand {
     commandName: "manifest",
     abstract: "Write the size and SHA-256 of every file in --dir to a manifest."
   )
+
+  private static let logger = Logger(command: "manifest")
 
   @Option(help: "The directory of files the manifest lists.")
   var dir: String
@@ -30,6 +33,7 @@ struct ManifestCommand: ParsableCommand {
     let manifest = Manifest(
       version: version, generatedAt: ISO8601DateFormatter().string(from: .now), files: entries)
     try writeJSON(manifest, to: output.path)
-    log("wrote \(entries.count) entries to \(output.path)")
+    Self.logger.info(
+      "wrote manifest", metadata: ["entries": "\(entries.count)", "path": "\(output.path)"])
   }
 }

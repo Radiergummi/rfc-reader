@@ -7,13 +7,14 @@ import PackageDescription
 // RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
 // the report and manifest types, the schema check's causes -- so tests call it rather
 // than re-implement it. corpus-build is the command line around it: arguments, files,
-// concurrency, logging and xmllint.
+// concurrency, logging (swift-log) and xmllint.
 let package = Package(
   name: "corpus-build",
   platforms: [.macOS(.v15)],
   dependencies: [
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
+    .package(url: "https://github.com/apple/swift-log", exact: "1.15.1"),
   ],
   targets: [
     .target(
@@ -26,6 +27,7 @@ let package = Package(
         "RFCCorpusKit",
         .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "Logging", package: "swift-log"),
       ]
     ),
     .testTarget(

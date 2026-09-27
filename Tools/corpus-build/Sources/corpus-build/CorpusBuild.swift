@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 
 // corpus-build: the offline half of RFC Reader's data pipeline.
 //
@@ -45,6 +46,14 @@ func writeJSON(_ value: some Encodable, to path: String) throws {
   try encoder.encode(value).write(to: URL(fileURLWithPath: path), options: .atomic)
 }
 
-func log(_ message: String) {
-  FileHandle.standardError.write(Data("\(message)\n".utf8))
+extension Logger {
+  /// The logger of one command, labelled `corpus-build.<command>`. It writes to standard
+  /// error, where progress and diagnostics have always gone, and is made with its handler
+  /// rather than through `LoggingSystem.bootstrap`, whose default writes to standard
+  /// output. Values go in metadata, so a message is the same text from run to run.
+  init(command: String) {
+    self.init(label: "corpus-build.\(command)") { label in
+      StreamLogHandler.standardError(label: label)
+    }
+  }
 }

@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 import RFCCorpusKit
 import RFCKit
 
@@ -35,6 +36,8 @@ struct FetchCommand: AsyncParsableCommand {
     }
   }
 
+  private static let logger = Logger(command: "fetch")
+
   @Option(help: "The corpus directory. Documents land in text.noindex or xml.noindex inside it.")
   var out: String
 
@@ -58,10 +61,10 @@ struct FetchCommand: AsyncParsableCommand {
 
     let index: RFCIndex
     if let path = self.index {
-      log("reading index from \(path)")
+      Self.logger.info("reading index", metadata: ["path": "\(path)"])
       index = try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path))
     } else {
-      log("downloading index")
+      Self.logger.info("downloading index", metadata: ["url": "\(RFCEditorEndpoints.index)"])
       let data = try await Self.download(RFCEditorEndpoints.index)
       try data.write(to: outDirectory.appending(path: "rfc-index.xml"), options: .atomic)
       index = try RFCIndexParser.parse(data)
@@ -73,9 +76,14 @@ struct FetchCommand: AsyncParsableCommand {
       !FileManager.default.fileExists(
         atPath: directory.appending(path: "\($0.fileStem).\(suffix)").path)
     }
-    log("\(wanted.count) \(format == .xml ? "RFCXML" : "legacy") RFCs, \(missing.count) to fetch")
+    Self.logger.info(
+      "planned",
+      metadata: [
+        "format": "\(self.format.rawValue)", "wanted": "\(wanted.count)",
+        "missing": "\(missing.count)",
+      ])
 
-    var failures: [String] = []
+    var failures = 0
     var completed = 0
     try await withThrowingTaskGroup(of: (DocumentID, Result<Data, any Error>).self) { group in
       var iterator = missing.makeIterator()
@@ -97,16 +105,20 @@ struct FetchCommand: AsyncParsableCommand {
           try data.write(
             to: directory.appending(path: "\(id.fileStem).\(suffix)"), options: .atomic)
         case .failure(let error):
-          failures.append("\(id): \(error)")
+          failures += 1
+          Self.logger.error("download failed", error: error, metadata: ["document": "\(id)"])
         }
         completed += 1
-        if completed % 250 == 0 { log("\(completed)/\(missing.count)") }
+        if completed % 250 == 0 {
+          Self.logger.info(
+            "progress", metadata: ["completed": "\(completed)", "total": "\(missing.count)"])
+        }
         enqueue()
       }
     }
-    log("done, \(failures.count) failures")
-    for failure in failures { log("  \(failure)") }
-    if !failures.isEmpty { throw ExitCode.failure }
+    Self.logger.info(
+      "done", metadata: ["fetched": "\(completed - failures)", "failures": "\(failures)"])
+    if failures > 0 { throw ExitCode.failure }
   }
 
   static func download(_ url: URL) async throws -> Data {

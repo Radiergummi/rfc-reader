@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 import RFCCorpusKit
 import RFCKit
 
@@ -8,6 +9,8 @@ struct ConvertCommand: AsyncParsableCommand {
     commandName: "convert",
     abstract: "Convert every legacy plain-text RFC in --in to RFCXML in --out."
   )
+
+  private static let logger = Logger(command: "convert")
 
   @Option(name: .customLong("in"), help: "The directory of rfcNNNN.txt files to convert.")
   var input: String
@@ -91,7 +94,7 @@ struct ConvertCommand: AsyncParsableCommand {
 
     let files = try ConversionPlan.files(
       in: try FileManager.default.contentsOfDirectory(atPath: job.inDirectory.path), only: only)
-    log("converting \(files.count) documents")
+    Self.logger.info("converting", metadata: ["documents": "\(files.count)"])
 
     // Every document is independent -- its own input, its own output file, and a parse
     // that is a pure function of its text -- so they are converted across all cores.
@@ -111,7 +114,10 @@ struct ConvertCommand: AsyncParsableCommand {
       for _ in 0..<ProcessInfo.processInfo.activeProcessorCount * 2 { startNext() }
       for try await result in group {
         results.append(result)
-        if results.count % 500 == 0 { log("\(results.count)/\(files.count)") }
+        if results.count % 500 == 0 {
+          Self.logger.info(
+            "progress", metadata: ["completed": "\(results.count)", "total": "\(files.count)"])
+        }
         startNext()
       }
     }
@@ -128,20 +134,31 @@ struct ConvertCommand: AsyncParsableCommand {
     if let diagnostics {
       try writeJSON(prose, to: diagnostics)
       let rejected = prose.blocks - prose.prose - prose.lists
-      log(
-        "prose: \(prose.blocks) blocks, \(prose.lists) lists, \(prose.prose) prose, \(rejected) rejected, \(prose.nearMisses) by one guard only"
-      )
+      Self.logger.info(
+        "prose",
+        metadata: [
+          "blocks": "\(prose.blocks)", "lists": "\(prose.lists)", "prose": "\(prose.prose)",
+          "rejected": "\(rejected)", "nearMisses": "\(prose.nearMisses)",
+        ])
       for (guardName, count) in prose.soleRejection.sorted(by: { $0.value > $1.value }) {
-        log("  only \(guardName): \(count)")
+        Self.logger.info(
+          "refused by one guard only", metadata: ["guard": "\(guardName)", "blocks": "\(count)"])
       }
     }
     if job.schema != nil { Self.logSchema(reports, previouslyValid: previouslyValid) }
     let flagged = reports.filter { !$0.warnings.isEmpty }
-    log(
-      "done: \(reports.count) converted, \(reports.filter(\.overridden).count) overridden, \(flagged.count) with warnings"
-    )
+    Self.logger.info(
+      "done",
+      metadata: [
+        "converted": "\(reports.count)", "overridden": "\(reports.filter(\.overridden).count)",
+        "withWarnings": "\(flagged.count)",
+      ])
     for entry in flagged.prefix(40) {
-      log("  \(entry.id): \(entry.warnings.joined(separator: "; "))")
+      Self.logger.warning(
+        "document has warnings",
+        metadata: [
+          "document": "\(entry.id)", "warnings": .array(entry.warnings.map { .string($0) }),
+        ])
     }
   }
 
@@ -188,20 +205,28 @@ struct ConvertCommand: AsyncParsableCommand {
   /// that started would hide them.
   static func logSchema(_ reports: [DocumentReport], previouslyValid: Set<String>?) {
     let checked = reports.compactMap(\.schema)
-    log("schema: \(checked.filter(\.isEmpty).count) of \(checked.count) validate")
+    Self.logger.info(
+      "schema",
+      metadata: ["validating": "\(checked.filter(\.isEmpty).count)", "checked": "\(checked.count)"])
     for cause in SchemaCheck.Cause.allCases {
       let documents = checked.filter { $0.contains(cause.rawValue) }.count
       guard documents > 0 else { continue }
       let sole = checked.filter { $0 == [cause.rawValue] }.count
-      log("  \(cause.rawValue): \(documents), the only cause found in \(sole)")
+      Self.logger.info(
+        "schema cause",
+        metadata: [
+          "cause": "\(cause.rawValue)", "documents": "\(documents)", "onlyCause": "\(sole)",
+        ])
     }
     guard let previouslyValid else { return }
     let valid = reports.filter { $0.schema == [] }.map(\.id)
     let stopped = reports.filter { previouslyValid.contains($0.id) && $0.schema != [] }.map(\.id)
     let started = valid.filter { !previouslyValid.contains($0) }.count
-    log(
-      "schema: against the previous report, \(started) started validating and \(stopped.count) stopped"
-    )
-    for id in stopped.prefix(40) { log("  stopped validating: \(id)") }
+    Self.logger.info(
+      "schema against the previous report",
+      metadata: ["startedValidating": "\(started)", "stoppedValidating": "\(stopped.count)"])
+    for id in stopped.prefix(40) {
+      Self.logger.warning("stopped validating", metadata: ["document": "\(id)"])
+    }
   }
 }

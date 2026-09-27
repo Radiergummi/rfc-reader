@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 import RFCCorpusKit
 import RFCKit
 
@@ -10,6 +11,8 @@ struct QueriesCommand: ParsableCommand {
     commandName: "queries",
     abstract: "Extract the cross-reference query set from the converted corpus."
   )
+
+  private static let logger = Logger(command: "queries")
 
   @Option(name: .customLong("in"), help: "The directory of converted rfcNNNN.xml files.")
   var input: String
@@ -32,7 +35,7 @@ struct QueriesCommand: ParsableCommand {
     )
     .filter { $0.pathExtension == "xml" }
     .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    log("reading \(files.count) documents")
+    Self.logger.info("reading", metadata: ["documents": "\(files.count)"])
 
     var querySet = QuerySet()
     var unparseable = 0
@@ -44,22 +47,26 @@ struct QueriesCommand: ParsableCommand {
       }
       let id = document.header.id?.description ?? file.deletingPathExtension().lastPathComponent
       querySet.collect(document, id: id)
-      if (index + 1) % 2000 == 0 { log("  \(index + 1)/\(files.count)") }
+      if (index + 1) % 2000 == 0 {
+        Self.logger.info(
+          "progress", metadata: ["completed": "\(index + 1)", "total": "\(files.count)"])
+      }
     }
-    log(
-      "\(querySet.citingSentences) citing sentences recovered (\(unparseable) documents unparseable)"
-    )
+    Self.logger.info(
+      "recovered citing sentences",
+      metadata: ["sentences": "\(querySet.citingSentences)", "unparseable": "\(unparseable)"])
 
     let selection = querySet.select(limit: limit, seed: seed, minimumWords: minWords)
     for (reason, count) in selection.dropped.sorted(by: { $0.value > $1.value }) {
-      log("  dropped \(count) \(reason)")
+      Self.logger.info("dropped", metadata: ["reason": "\(reason)", "candidates": "\(count)"])
     }
-    log("\(selection.usable) usable")
+    Self.logger.info("usable", metadata: ["candidates": "\(selection.usable)"])
 
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     let output = URL(fileURLWithPath: out)
     try encoder.encode(selection.rows).write(to: output, options: .atomic)
-    log("wrote \(selection.rows.count) queries to \(output.path)")
+    Self.logger.info(
+      "wrote queries", metadata: ["queries": "\(selection.rows.count)", "path": "\(output.path)"])
   }
 }
