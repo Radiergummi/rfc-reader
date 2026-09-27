@@ -34,6 +34,12 @@ targets:
     supportedDestinations: [iOS, macOS]
     sources:
       - path: App/RFCReader
+        excludes:
+          - Scripting/RFCReader.sdef
+      # The scripting dictionary is a Mac's alone; iOS has App Intents.
+      - path: App/RFCReader/Scripting/RFCReader.sdef
+        destinationFilters: [macOS]
+        buildPhase: resources
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit
@@ -44,6 +50,9 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.reference
+        # Read by macOS only; see App/RFCReader/Scripting.
+        NSAppleScriptEnabled: true
+        OSAScriptingDefinition: RFCReader.sdef
         CFBundleURLTypes:
           - CFBundleURLName: org.rfc-editor.document
             CFBundleURLSchemes: [rfc]

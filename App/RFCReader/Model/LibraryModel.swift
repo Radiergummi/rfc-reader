@@ -8,50 +8,6 @@ import SwiftData
   import AppKit
 #endif
 
-/// What the list in the middle column shows.
-/// `nonisolated`: plain data, compared and hashed wherever SwiftUI likes.
-nonisolated enum LibraryFilter: Hashable, Identifiable {
-  case all
-  case recent
-  case bookmarks
-  case downloaded
-  case standards
-  case bestCurrentPractice
-  case stream(RFCKit.Stream)
-  case workingGroup(String)
-  case series(DocumentID)
-
-  var id: Self { self }
-
-  var title: String {
-    switch self {
-    case .all: "All RFCs"
-    case .recent: "Recently Read"
-    case .bookmarks: "Bookmarks"
-    case .downloaded: "Available Offline"
-    case .standards: "Internet Standards"
-    case .bestCurrentPractice: "Best Current Practices"
-    case .stream(let stream): stream.displayName
-    case .workingGroup(let group): group.uppercased()
-    case .series(let id): id.displayName
-    }
-  }
-
-  var systemImage: String {
-    switch self {
-    case .all: "books.vertical"
-    case .recent: "clock"
-    case .bookmarks: "bookmark"
-    case .downloaded: "arrow.down.circle"
-    case .standards: "checkmark.seal"
-    case .bestCurrentPractice: "hand.thumbsup"
-    case .stream: "tray"
-    case .workingGroup: "person.2"
-    case .series: "square.stack"
-    }
-  }
-}
-
 /// Application state: the index, navigation, and the document cache.
 ///
 /// One observable object keeps the SwiftUI surface small; SwiftData holds the
@@ -76,6 +32,38 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
+  /// Every bookmarked RFC's number, fetched again on every save of the store: one
+  /// set for the lists, the toolbars and scripts alike.
+  private(set) var bookmarkedNumbers: Set<Int> = []
+  @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
+
+  /// Every RFC with a cached body: the Available Offline list. Kept here, and
+  /// refreshed whenever the cache can have changed, so a tab can take it the moment
+  /// it enters that filter rather than waiting on the store's actor.
+  private(set) var downloadedNumbers: Set<Int> = []
+
+  private init() {
+    refreshBookmarkedNumbers()
+    storeSaves = NotificationCenter.default.addObserver(
+      forName: ModelContext.didSave, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.refreshBookmarkedNumbers() }
+    }
+  }
+
+  private func refreshBookmarkedNumbers() {
+    let numbers = BookmarkStore.bookmarkedNumbers(in: AppData.container.mainContext)
+    // Only a change is news: most saves record a reading position, not a bookmark.
+    guard numbers != bookmarkedNumbers else { return }
+    bookmarkedNumbers = numbers
+  }
+
+  private func refreshDownloadedNumbers() async {
+    let numbers = await store.cachedNumbers()
+    guard numbers != downloadedNumbers else { return }
+    downloadedNumbers = numbers
+  }
+
   private let client = RFCEditorClient()
   private let store = DocumentStore()
   private var search: IndexSearch?
@@ -85,6 +73,7 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    await refreshDownloadedNumbers()
     do {
       if let cached = try await store.cachedIndex() {
         // The store parses the cached index on its own actor; the search and the
@@ -166,8 +155,9 @@ final class LibraryModel {
 
   /// Answers remembered against their inputs.
   ///
-  /// `list` is read from `RFCListView.body`, which SwiftUI evaluates far more often
-  /// than any of these inputs change -- twice per pass, several passes per click.
+  /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
+  /// scripts — and SwiftUI evaluates that body far more often than any of these
+  /// inputs change -- twice per pass, several passes per click.
   /// Uncached, one filter change ran the full-text scan a dozen times over, and that
   /// scan measures 107 ms against the real index.
   ///
@@ -176,7 +166,7 @@ final class LibraryModel {
   /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
   /// -- this is a cache, so losing an entry costs time, never correctness.
   ///
-  /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
+  /// Not observed: `list` writes it from a view's body on a miss, and a write to
   /// a property the running body read invalidated that body, so every miss rendered
   /// the list twice (#126). It is a memo of state that is observed, not state itself.
   /// That makes a hit read nothing observable, though, so `list` reads `index`
@@ -185,28 +175,36 @@ final class LibraryModel {
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
-  func list(
-    filter: LibraryFilter,
-    searchText: String,
-    bookmarked: Set<Int>,
-    recentlyRead: [Int],
-    downloaded: Set<Int>
-  ) -> [RFCMetadata] {
+  /// What `scene`'s list shows: its filter and search, over the inputs it took on
+  /// entering the filter and the bookmarks as they stand.
+  func list(for scene: NavigationModel) -> [RFCMetadata] {
     // Observed on every call, hit or miss: this is what re-renders the list when
     // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
     guard let index else { return [] }
+    // Only the inputs this filter reads: in the key, the rest would make a list
+    // that cannot have changed miss the cache — every tab's search re-run for a
+    // bookmark toggled, and an order hashed on every lookup for a filter that
+    // ignores it.
+    let filter = scene.filter
     let key = ListKey(
       filter: filter,
-      query: searchText.trimmingCharacters(in: .whitespaces),
-      bookmarked: bookmarked,
-      recentlyRead: recentlyRead,
-      downloaded: downloaded
+      query: scene.searchText.trimmingCharacters(in: .whitespaces),
+      bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
+      recentlyRead: filter == .recent ? scene.recentOrder : [],
+      downloaded: filter == .downloaded ? scene.downloaded : []
     )
     if let hit = listCache[key] { return hit }
     let computed = computeList(key, in: index)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
+  }
+
+  /// The subtitle under the list's title: how many documents it shows. Empty while
+  /// the index loads — "0 Documents" would be a claim about the library, not about a
+  /// list that has not arrived yet.
+  func listSubtitle(for scene: NavigationModel) -> String {
+    indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
   }
 
   /// Reads every input off the key, so the cache cannot go stale against something
@@ -309,19 +307,29 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil }
     let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
     guard let target else {
-      pendingSceneLink = link
-      #if os(macOS)
-        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
-      #endif
+      openInNewWindow(link)
       return
     }
-    target.open(link, in: index)
+    deliver(link, to: target)
+  }
+
+  /// Opens `link` in `scene` and makes that the tab in use.
+  private func deliver(_ link: RFCLink, to scene: NavigationModel) {
+    scene.open(link, in: index)
     // The tab that took the link is the most recently used one now, and where the
     // next untargeted link belongs -- even when it already showed that document, so
     // its selection did not change and `activate` was not called for it.
-    activate(target)
+    activate(scene)
     #if os(macOS)
-      AppDelegate.shared?.bringForward(target)
+      AppDelegate.shared?.bringForward(scene)
+    #endif
+  }
+
+  /// Opens a window for `link`, which it takes in `register(_:)`.
+  private func openInNewWindow(_ link: RFCLink) {
+    pendingSceneLink = link
+    #if os(macOS)
+      AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
     #endif
   }
 
@@ -359,30 +367,61 @@ final class LibraryModel {
     #endif
   }
 
+  #if os(macOS)
+    /// Where a document asked for by name opens.
+    enum Placement {
+      case frontTab
+      case newTab
+      case newWindow
+    }
+
+    /// Opens `link` where `placement` says.
+    ///
+    /// The front tab is the one the menu acts on (`AppDelegate.activeController`),
+    /// not whichever tab `route(_:)` would pick: a script that says "open this"
+    /// means the window it is looking at. With no window open there is no front
+    /// tab, and the link is routed the way one from outside is, which opens one.
+    func open(_ link: RFCLink, placement: Placement) {
+      switch placement {
+      case .frontTab:
+        if let scene = AppDelegate.shared?.activeController?.navigation {
+          deliver(link, to: scene)
+        } else {
+          route(link)
+        }
+      case .newTab:
+        openInNewScene(link, inBackground: false)
+      case .newWindow:
+        openInNewWindow(link)
+      }
+    }
+  #endif
+
   // MARK: - Documents
 
+  /// Fetching a document caches it, so the offline set is refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
-    try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    await refreshDownloadedNumbers()
+    return document
   }
 
   func originalText(for id: DocumentID) async throws -> String {
-    try await store.originalText(id, client: client)
+    let text = try await store.originalText(id, client: client)
+    await refreshDownloadedNumbers()
+    return text
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
     await store.isCached(id)
   }
 
-  func downloadedNumbers() async -> Set<Int> {
-    await store.cachedNumbers()
-  }
-
   /// The documents the reader has opened, most recent first.
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
-  /// re-sorted it under the click that was reading it. `RFCListView` takes one of
-  /// these when its filter changes, exactly as it takes `downloadedNumbers()`.
+  /// re-sorted it under the click that was reading it. `NavigationModel` takes one
+  /// of these when its filter changes, exactly as it takes `downloadedNumbers`.
   func recentlyReadNumbers() -> [Int] {
     let descriptor = FetchDescriptor<ReadingPosition>(
       sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
@@ -397,6 +436,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    await refreshDownloadedNumbers()
   }
 }
 

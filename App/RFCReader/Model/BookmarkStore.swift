@@ -15,8 +15,12 @@ import SwiftData
 /// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
 /// often to ask a store here.
 enum BookmarkStore {
-  static func isBookmarked(_ id: DocumentID, in context: ModelContext) -> Bool {
-    bookmark(for: id, in: context) != nil
+  /// Every bookmarked RFC's number. Only the numbers are fetched: this runs on
+  /// every save of the store, and most of those record a reading position.
+  static func bookmarkedNumbers(in context: ModelContext) -> Set<Int> {
+    var descriptor = FetchDescriptor<Bookmark>()
+    descriptor.propertiesToFetch = [\.number]
+    return Set(((try? context.fetch(descriptor)) ?? []).map(\.number))
   }
 
   /// Adds the bookmark, or removes the one already there. Answers with the state it

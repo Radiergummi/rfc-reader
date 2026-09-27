@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<!--
+  RFC Reader's scripting dictionary. Every command and property here calls the
+  app's own models; see the Swift files beside this one. Codes: the suite and its
+  events use 'RFCr'; classes, properties and enumerations begin with 'R'.
+-->
+<dictionary title="RFC Reader Terminology" xmlns:xi="http://www.w3.org/2003/XInclude">
+  <xi:include href="file:///System/Library/ScriptingDefinitions/CocoaStandard.sdef" xpointer="xpointer(/dictionary/suite)"/>
+
+  <suite name="RFC Reader Suite" code="RFCr" description="Opening, finding and reading RFCs.">
+
+    <enumeration name="placement" code="RPlc">
+      <enumerator name="front tab" code="RPfT" description="The tab in front, which the menu acts on."/>
+      <enumerator name="new tab" code="RPnT" description="A new tab of the front window."/>
+      <enumerator name="new window" code="RPnW" description="A window of its own."/>
+    </enumeration>
+
+    <enumeration name="inspector pane" code="RIpn">
+      <enumerator name="contents" code="RIpC" description="The table of contents."/>
+      <enumerator name="references" code="RIpR" description="The documents the RFC cites."/>
+    </enumeration>
+
+    <class name="rfc" code="RFCd" plural="rfcs" description="An RFC in the index.">
+      <cocoa class="ScriptableRFC"/>
+      <property name="id" code="ID  " type="integer" access="r" description="The RFC's number.">
+        <cocoa key="number"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The RFC's name, such as “RFC 9110”."/>
+      <property name="title" code="RFCt" type="text" access="r" description="The RFC's title."/>
+      <property name="status" code="RFCs" type="text" access="r" description="The RFC's current status, such as “Internet Standard”."/>
+      <property name="year" code="RFCy" type="integer" access="r" description="The year the RFC was published."/>
+      <property name="working group" code="RFCg" type="text" access="r" description="The working group that produced the RFC; missing value if none."/>
+      <property name="obsolete" code="RFCo" type="boolean" access="r" description="Whether a later RFC obsoletes this one.">
+        <cocoa key="isObsolete"/>
+      </property>
+      <property name="bookmarked" code="RFCb" type="boolean" description="Whether the RFC is bookmarked. Set it to bookmark or unbookmark the RFC.">
+        <cocoa key="isBookmarked"/>
+      </property>
+    </class>
+
+    <class-extension extends="application" description="RFC Reader's top-level scripting object.">
+      <element type="rfc" access="r" description="Every RFC in the index; ask for one by its number, as in rfc id 9110."/>
+    </class-extension>
+
+    <class-extension extends="window" description="A reader window or tab.">
+      <property name="current rfc" code="RWcr" type="rfc" access="r" description="The RFC the window shows; missing value if none.">
+        <cocoa key="scriptCurrentRFC"/>
+      </property>
+      <property name="current section" code="RWcs" type="text" access="r" description="The number of the section being read; missing value if none.">
+        <cocoa key="scriptCurrentSection"/>
+      </property>
+      <property name="collection" code="RWco" type="text" description="The collection the list shows, by its name in the sidebar: “All RFCs”, “Bookmarks”, “Recently Read”, “Available Offline”, “Internet Standards”, “Best Current Practices”, a stream such as “IETF”, a working group such as “HTTPBIS”, or a series such as “BCP 14”.">
+        <cocoa key="scriptCollection"/>
+      </property>
+      <property name="search text" code="RWst" type="text" description="What the list is filtered by; empty for no search.">
+        <cocoa key="scriptSearchText"/>
+      </property>
+      <property name="listed rfcs" code="RWlr" access="r" description="The RFCs the list shows, after the collection and the search, in the list's order.">
+        <type type="rfc" list="yes"/>
+        <cocoa key="scriptListedRFCs"/>
+      </property>
+      <property name="inspector visible" code="RWiv" type="boolean" description="Whether the inspector is showing. It can only be shown over an RFC.">
+        <cocoa key="scriptInspectorVisible"/>
+      </property>
+      <property name="inspector pane" code="RWip" type="inspector pane" description="What the inspector shows.">
+        <cocoa key="scriptInspectorPane"/>
+      </property>
+      <!-- So that `tell front window to go back` reaches the window, not an error. -->
+      <responds-to command="go back"><cocoa method="handleReaderCommand:"/></responds-to>
+      <responds-to command="go forward"><cocoa method="handleReaderCommand:"/></responds-to>
+      <responds-to command="jump to section"><cocoa method="handleReaderCommand:"/></responds-to>
+    </class-extension>
+
+    <command name="open rfc" code="RFCrOpRF" description="Open an RFC.">
+      <cocoa class="RFCOpenCommand"/>
+      <direct-parameter description="The RFC: a number such as 9110, a name such as “RFC 9110” or “BCP 14”, or a link such as “rfc://9110#section-4.2”.">
+        <type type="integer"/>
+        <type type="text"/>
+      </direct-parameter>
+      <parameter name="at section" code="RFsc" type="text" optional="yes" description="The section to open at, such as “4.2” or “A.1”.">
+        <cocoa key="section"/>
+      </parameter>
+      <parameter name="placement" code="RFpl" type="placement" optional="yes" description="Where to open it; the front tab if omitted."/>
+    </command>
+
+    <command name="go back" code="RFCrGoBk" description="Go back to where the window was before.">
+      <cocoa class="RFCGoBackCommand"/>
+      <direct-parameter type="window" optional="yes" description="The window; the front one if omitted."/>
+    </command>
+
+    <command name="go forward" code="RFCrGoFw" description="Go forward again after going back.">
+      <cocoa class="RFCGoForwardCommand"/>
+      <direct-parameter type="window" optional="yes" description="The window; the front one if omitted."/>
+    </command>
+
+    <command name="jump to section" code="RFCrJmpS" description="Jump to a section of the RFC a window shows.">
+      <cocoa class="RFCJumpToSectionCommand"/>
+      <direct-parameter type="text" description="The section, such as “4.2” or “A.1”."/>
+      <parameter name="in" code="RFwn" type="window" optional="yes" description="The window; the front one if omitted.">
+        <cocoa key="window"/>
+      </parameter>
+    </command>
+
+  </suite>
+</dictionary>
