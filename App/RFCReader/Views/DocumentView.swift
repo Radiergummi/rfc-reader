@@ -168,12 +168,8 @@ struct DocumentView: View {
         // swallows an iPhone, and in compact width the inspector already presents
         // itself as a sheet.
         .inspector(isPresented: $showTableOfContents) {
-          // In compact width the panel is a sheet over the text, so choosing a
-          // section closes it: what was chosen is behind it (#249). As a column
-          // beside the text it stays open.
-          PanelHost(didNavigate: {
-            if horizontalSizeClass == .compact { showTableOfContents = false }
-          })
+          // Closes itself after a choice in compact width; see `isPresented`.
+          PanelHost(isPresented: $showTableOfContents)
           .inspectorColumnWidth(min: 260, ideal: 320)
         }
       #endif

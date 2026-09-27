@@ -87,10 +87,18 @@ struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
-  /// Called after a choice in the panel has navigated, which is when iOS closes the
-  /// panel's sheet. Nothing on macOS, where the panel is a split item beside the
-  /// text and collapses through AppKit, not through a SwiftUI presentation.
-  var didNavigate: () -> Void = {}
+  #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  #endif
+  /// The panel's presentation on iOS, which a choice that navigates closes in
+  /// compact width: the panel is a sheet over the text there, and what was chosen
+  /// is behind it (#249). Beside the text, as a column, it stays open. Nil on
+  /// macOS, where the panel is a split item that collapses through AppKit.
+  ///
+  /// A binding rather than a closure, because a binding compares equal to itself
+  /// and a closure never does: with a closure, every pass of the reader's body
+  /// drew the panel and its whole table of contents again (#259).
+  var isPresented: Binding<Bool>?
 
   var body: some View {
     @Bindable var reader = reader
@@ -112,6 +120,12 @@ struct PanelHost: View {
     } else {
       Color.clear
     }
+  }
+
+  private func didNavigate() {
+    #if !os(macOS)
+      if horizontalSizeClass == .compact { isPresented?.wrappedValue = false }
+    #endif
   }
 }
 
