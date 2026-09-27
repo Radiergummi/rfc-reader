@@ -75,6 +75,14 @@ public enum RFCTraits {
       .bold
     #endif
   }
+
+  public static var monospace: PlatformFontDescriptor.SymbolicTraits {
+    #if canImport(UIKit)
+      .traitMonoSpace
+    #else
+      .monoSpace
+    #endif
+  }
 }
 
 extension PlatformImage {

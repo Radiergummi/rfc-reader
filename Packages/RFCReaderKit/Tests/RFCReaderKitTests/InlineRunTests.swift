@@ -34,6 +34,31 @@ struct InlineRunTests {
     #expect(font == style.codeFont)
   }
 
+  /// Code, superscript and subscript each replaced the font with one sized from the
+  /// body, whatever surrounded them: `code` in a heading dropped to body size, and a
+  /// superscript inside strong text lost its weight (#154). Each is now made from the
+  /// font in effect.
+  @Test func codeInAHeadingIsScaledFromTheHeading() throws {
+    let heading = style.headingFont(depth: 1)
+    let run = DocumentTextBuilder(style: style).inlineRuns(
+      [.text("Changes to "), .code("foo")], base: [.font: heading])
+    let offset = try Fixtures.offset(of: "foo", in: run)
+    let font = try #require(run.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.pointSize == heading.pointSize * 0.92)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+  }
+
+  @Test func aSuperscriptOrSubscriptKeepsTheTraitsAroundIt() throws {
+    let strong = run([.strong([.text("x"), .superscript("2"), .subscript("i")])])
+    for script in ["2", "i"] {
+      let offset = try Fixtures.offset(of: script, in: strong)
+      let font = try #require(
+        strong.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+      #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(script) lost bold")
+      #expect(font.pointSize == style.bodySize * 0.75)
+    }
+  }
+
   @Test func linksCarryTheirURL() throws {
     let url = try #require(URL(string: "https://example.org"))
     let link = run([.link(url, [.text("example")])])
