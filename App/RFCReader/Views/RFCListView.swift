@@ -107,7 +107,8 @@ struct IndexStatusView: View {
       case .failed(let message):
         Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
         Text(message).lineLimit(2)
-        Button("Retry") { Task { await library.refreshIndex() } }.buttonStyle(.borderless)
+        Button("Retry") { Task(name: "Refresh index") { await library.refreshIndex() } }
+          .buttonStyle(.borderless)
       }
     }
     .font(.caption)

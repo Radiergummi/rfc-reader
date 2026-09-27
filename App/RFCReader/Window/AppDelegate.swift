@@ -9,7 +9,6 @@
   /// everything `.commands` declares — measured — but contributes no windows. Every
   /// reader window is created here and kept here: an `NSWindowController` with no owner
   /// is deallocated the moment the call that made it returns.
-  @MainActor
   final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) static weak var shared: AppDelegate?
 
@@ -18,7 +17,7 @@
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self
       // The scene's `.task` did this; there is no scene on macOS any more.
-      Task { await LibraryModel.shared.bootstrap() }
+      Task(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
     }
 
@@ -118,7 +117,6 @@
   /// by a notification observer: a `Notification` cannot cross an isolation boundary
   /// under strict concurrency, and the delegate is already on the main actor.
   @Observable
-  @MainActor
   final class ActiveReaderWindow {
     static let shared = ActiveReaderWindow()
 

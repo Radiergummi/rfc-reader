@@ -11,7 +11,10 @@ import RFCReaderKit
 ///
 /// Drawing only. Every "where does it go" question is `FragmentGeometry`, in
 /// RFCReaderKit, where it is under test.
-final class RFCTextLayoutFragment: NSTextLayoutFragment {
+///
+/// `nonisolated`, as its superclass is: TextKit 2 may lay out and draw off the
+/// main thread.
+nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   static let cardPadding = FragmentGeometry.cardPadding
   static let rulePadding: CGFloat = 8
   static let ruleWidth: CGFloat = 3
@@ -252,7 +255,7 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
   }
 }
 
-extension RFCTextLayoutFragment.Corners {
+nonisolated extension RFCTextLayoutFragment.Corners {
   /// A band that runs down the page: rounded where the run starts and ends,
   /// square where it continues into the next fragment.
   init(first: Bool, last: Bool) {

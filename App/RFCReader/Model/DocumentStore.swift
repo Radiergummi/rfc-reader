@@ -3,7 +3,7 @@ import RFCKit
 import RFCReaderKit
 import os
 
-private let storeLog = Logger(
+nonisolated private let storeLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "store")
 
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
