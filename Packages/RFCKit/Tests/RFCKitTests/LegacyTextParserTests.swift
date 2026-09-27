@@ -613,39 +613,74 @@ struct LegacyTextCorpusFindingsTests {
 
   /// Since the front matter ends at the first paragraph (#74), whatever the title page
   /// leaves between it and the body reaches the lead-in, and is taken out of it by what
-  /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
-  /// after its title; RFC 757's phone number; RFC 1441's centred `Status of this Memo`
-  /// and its paragraph, and its contents. The body after them stays.
+  /// it is (#76): RFC 757's phone number, and with it the whole lead-in; RFC 674's
+  /// header block, under its journal stamp, and the page number after its title; RFC
+  /// 1441's centred `Status of this Memo` and its paragraph, and its contents. The
+  /// body after them stays.
   @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
-    func leadIn(_ fixture: String) throws -> [Block] {
-      LegacyTextParser.parse(try Fixtures.string(fixture)).leadIn
-    }
-    func text(_ block: Block) -> String {
-      switch block {
-      case .paragraph(let paragraph): paragraph.plainText
-      case .preformatted(let artwork): artwork.text
-      case .list(let list):
-        list.items.flatMap(\.blocks).map(text).joined(separator: "\n")
-      default: ""
-      }
-    }
-
-    let procedureCall = try leadIn("rfc674.txt").map(text)
-    #expect(!procedureCall.contains { $0.contains("Request for Comments 674") })
-    #expect(!procedureCall.contains("1"))
-    #expect(procedureCall.first?.hasPrefix("Procedure Call Protocol Documents") == true)
-    #expect(procedureCall.contains { $0.hasPrefix("As many of you may know SRI") })
-
-    #expect(try leadIn("rfc757.txt").isEmpty, "a phone number alone is not a lead-in")
-
-    let management = try leadIn("rfc1441.txt").map(text)
-    #expect(!management.contains { $0.localizedCaseInsensitiveContains("status of this memo") })
-    #expect(!management.contains { $0.contains("requests discussion and suggestions") })
-    #expect(!management.contains { $0.contains("Table of Contents") || $0.contains("......") })
     #expect(
-      management.contains {
-        $0.hasPrefix("The purpose of this document is to provide an overview of version 2")
-      })
+      LegacyTextParser.parse(try Fixtures.string("rfc757.txt")).leadIn.isEmpty,
+      "a phone number alone is not a lead-in")
+
+    let procedureCallTitle = [
+      "                  Procedure Call Protocol Documents",
+      "                              Version 2",
+    ]
+    let procedureCallBody = [
+      "As many of you may know SRI is part of a team working on the National",
+      "Software Works project. In the course of our work we have developed a",
+      "Procedure Call Protocol to be used between the modules which make up",
+      "the NSW. We are interested in your comments on this protocol.",
+    ]
+    let procedureCall = LegacyTextParser.leadInWithoutFrontMatter(
+      [
+        LegacyTextParser.RawBlock(lines: [
+          "Request for Comments 674                                    Jon Postel",
+          "NIC 31484                                                    Jim White",
+          "                                                               SRI-ARC",
+          "                                                      12 December 1974",
+        ]),
+        LegacyTextParser.RawBlock(lines: procedureCallTitle),
+        LegacyTextParser.RawBlock(lines: [
+          "                                                                           1"
+        ]),
+        LegacyTextParser.RawBlock(lines: procedureCallBody),
+      ],
+      title: "Procedure Call Protocol Documents",
+      proseIndent: 6,
+      number: 674)
+    #expect(procedureCall.map(\.lines) == [procedureCallTitle, procedureCallBody])
+
+    let introduction = ["          1.  Introduction"]
+    let managementBody = [
+      "          The purpose of this document is to provide an overview of",
+      "          version 2 of the Internet-standard Network Management",
+      "          Framework, termed the SNMP version 2 framework (SNMPv2).",
+    ]
+    let management = LegacyTextParser.leadInWithoutFrontMatter(
+      [
+        LegacyTextParser.RawBlock(lines: ["          Status of this Memo"]),
+        LegacyTextParser.RawBlock(lines: [
+          "          This RFC specifes an IAB standards track protocol for the",
+          "          Internet community, and requests discussion and suggestions",
+          "          for improvements.  Please refer to the current edition of the",
+          "          \"IAB Official Protocol Standards\" for the standardization",
+          "          state and status of this protocol.  Distribution of this memo",
+          "          is unlimited.",
+        ]),
+        LegacyTextParser.RawBlock(lines: ["          Table of Contents"]),
+        LegacyTextParser.RawBlock(lines: [
+          "          1 Introduction ..........................................    2",
+          "          2 Components of the SNMPv2 Framework ....................    3",
+          "          2.1 Structure of Management Information .................    3",
+        ]),
+        LegacyTextParser.RawBlock(lines: introduction),
+        LegacyTextParser.RawBlock(lines: managementBody),
+      ],
+      title: "Introduction to version 2 of the Internet-standard Network Management Framework",
+      proseIndent: 13,
+      number: 1441)
+    #expect(management.map(\.lines) == [introduction, managementBody])
   }
 
   /// A contents entry's page number may be roman (RFC 822's `PREFACE .......   ii`),
@@ -702,22 +737,31 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A title page sets a long title over several runs of lines, and the front matter
   /// takes one of them for the title. Given the title the RFC index has, the parser uses
-  /// it, and the run the front matter left behind leaves the lead-in: RFC 1343's
-  /// `For Multimedia Mail Format Information` opened the body as artwork (#170).
+  /// it where its words are not the page's, and the run the front matter left behind
+  /// leaves the lead-in: RFC 1343's `For Multimedia Mail Format Information` opened the
+  /// body as artwork (#170).
   @Test func theIndexTitleReplacesAPartialOneAndTheRestLeavesTheLeadIn() throws {
-    let title = "A User Agent Configuration Mechanism for Multimedia Mail Format Information"
-    let text = try Fixtures.string("rfc1343.txt")
-    #expect(LegacyTextParser.parse(text).header.title == "A User Agent Configuration Mechanism")
+    let replaced = LegacyTextParser.parse(
+      try Fixtures.string("rfc1149.txt"), title: "Carrier Pigeons for Internet Datagrams")
+    #expect(replaced.header.title == "Carrier Pigeons for Internet Datagrams")
 
-    let document = LegacyTextParser.parse(text, title: title)
-    #expect(document.header.title == title)
-    #expect(
-      !document.leadIn.contains {
-        if case .preformatted(let artwork) = $0 {
-          return artwork.text.contains("For Multimedia Mail")
-        }
-        return false
-      })
+    let abstract = [
+      "            This memo suggests a  file  format  to  be  used  to  inform",
+      "            multiple   mail   reading  user  agent  programs  about  the",
+      "            locally-installed facilities for handling  mail  in  various",
+      "            formats.",
+    ]
+    let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
+      [
+        LegacyTextParser.RawBlock(lines: [
+          "                       For Multimedia Mail Format Information"
+        ]),
+        LegacyTextParser.RawBlock(lines: abstract),
+      ],
+      title: "A User Agent Configuration Mechanism for Multimedia Mail Format Information",
+      proseIndent: 15,
+      number: 1343)
+    #expect(leadIn.map(\.lines) == [abstract])
   }
 
   /// The index sets older titles in sentence case and drops their article, so where its
@@ -737,13 +781,21 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A date alone on a line is the title page's, like the author above it: RFC 355's
   /// `June 9, 1972` was the lead-in's second block (#170).
-  @Test func aDateAloneOnALineIsTheTitlePages() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc355.txt"))
-    #expect(
-      !document.leadIn.contains {
-        if case .preformatted(let artwork) = $0 { return artwork.text.contains("June 9, 1972") }
-        return false
-      })
+  @Test func aDateAloneOnALineIsTheTitlePages() {
+    let body = [
+      "   Long transmission delays such as those inherent in satellite",
+      "   communication are most certainly a cause for concern among users of",
+      "   remote interactive systems.",
+    ]
+    let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
+      [
+        LegacyTextParser.RawBlock(lines: ["                              June 9, 1972"]),
+        LegacyTextParser.RawBlock(lines: body),
+      ],
+      title: "Response to NWG/RFC 346",
+      proseIndent: 6,
+      number: 355)
+    #expect(leadIn.map(\.lines) == [body])
   }
 
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
@@ -1338,55 +1390,66 @@ struct LegacyTextCorpusFindingsTests {
   /// The prose cap was six columns everywhere: a body at column 3, plus three. RFC 1178
   /// sets its headings at 6 and its body at 9, so every paragraph it has failed the cap
   /// and was kept as artwork, and none of it was linked (#55). The cap follows the
-  /// body now, and nothing in the document is artwork.
-  @Test func aBodySetDeeperThanColumnThreeIsStillProse() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1178.txt"))
-    #expect(document.artworkText.isEmpty, "\(document.artworkText.count) blocks kept as artwork")
-    #expect(
-      document.paragraphs.contains {
-        $0.plainText.hasPrefix(
-          "Using a word that has strong semantic implications in the current context will cause confusion."
-        )
-      })
+  /// body now, and a body at column 3 keeps the classic one.
+  @Test func aBodySetDeeperThanColumnThreeIsStillProse() {
+    let paragraph = [
+      "         Using a word that has strong semantic implications in the",
+      "         current context will cause confusion.  This is especially true",
+      "         in conversation where punctuation is not obvious and grammar is",
+      "         often incorrect.",
+    ]
+    let deeper = (["      Don't overload other terms already in common use.", ""] + paragraph)
+      .map(LegacyTextParser.Line.text)
+    let cap = LegacyTextParser.proseIndent(deeper)
+    #expect(cap == 9)
+    #expect(LegacyTextParser.diagnose(paragraph, maxIndent: cap).isProse)
+
+    let classic = [
+      "   As soon as you deal with more than one computer, you need to",
+      "   distinguish between them.  For example, to tell your system",
+      "   administrator that your computer is busted, you might say, \"Hey Ken.",
+    ].map(LegacyTextParser.Line.text)
+    #expect(LegacyTextParser.proseIndent(classic) == LegacyTextParser.classicProseIndent)
   }
 
   /// A paragraph cut by a page break is rejoined when the next page opens lower case,
   /// as the rest of a sentence does. An `o` bullet opens lower case too: RFC 1581's
   /// `it is assumed that:` ends a page, the list under it starts the next, and its
   /// first item was read into the sentence as `that: o The most recently ...`.
-  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1581.txt"))
-    #expect(
-      document.paragraphs.contains {
-        $0.plainText.hasSuffix(
-          "if no routing information is (being) received on a circuit it is assumed that:")
-      })
-    #expect(
-      document.lists.contains {
-        guard case .paragraph(let first)? = $0.items.first?.blocks.first else { return false }
-        return first.plainText == "The most recently received information is accurate."
-      })
+  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() {
+    let endOfPage = LegacyTextParser.RawBlock(lines: [
+      "   In a stable network there is no requirement to propagate routing",
+      "   information on a circuit, so if no routing information is (being)",
+      "   received on a circuit it is assumed that:",
+    ])
+    let bullet = LegacyTextParser.RawBlock(lines: [
+      "   o  The most recently received information is accurate."
+    ])
+    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
+
+    let restOfSentence = LegacyTextParser.RawBlock(lines: [
+      "   operational routing information previously received on that circuit"
+    ])
+    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
 
   /// Nor is it the rest of a sentence when the line above it has no final punctuation,
   /// which is the other reason a page join is made: RFC 6614's `For example, they send`
   /// ends a page, and its list of packet types, which starts the next, was read into it
   /// as `they send o Access-Request o Accounting-Request ...`.
-  @Test func aBulletAfterAnUnfinishedSentenceIsNotItsRest() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc6614.txt"))
-    #expect(
-      document.paragraphs.contains {
-        $0.plainText.hasPrefix("RADIUS/TLS clients transmit the same packet types")
-          && $0.plainText.hasSuffix("For example, they send")
-      })
-    #expect(
-      document.lists.contains { list in
-        let items = list.items.compactMap { item -> String? in
-          guard case .paragraph(let text)? = item.blocks.first else { return nil }
-          return text.plainText
-        }
-        return items.starts(with: ["Access-Request", "Accounting-Request", "Status-Server"])
-      })
+  @Test func aBulletAfterAnUnfinishedSentenceIsNotItsRest() {
+    let endOfPage = LegacyTextParser.RawBlock(lines: [
+      "   RADIUS/TLS clients transmit the same packet types on the connection",
+      "   they initiated as a RADIUS/UDP client would (see Section 3.4 (3) and",
+      "   (4)).  For example, they send",
+    ])
+    let bullet = LegacyTextParser.RawBlock(lines: ["   o  Access-Request"])
+    #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
+
+    let restOfSentence = LegacyTextParser.RawBlock(lines: [
+      "   Access-Request, Accounting-Request and Status-Server packets."
+    ])
+    #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
 
   @Test func overstrikesAndControlBytesAreRemoved() {
