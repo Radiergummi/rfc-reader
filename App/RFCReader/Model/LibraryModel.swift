@@ -165,6 +165,9 @@ final class LibraryModel {
   /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
   /// a property the running body read invalidated that body, so every miss rendered
   /// the list twice (#126). It is a memo of state that is observed, not state itself.
+  /// That makes a hit read nothing observable, though, so `list` reads `index`
+  /// before looking here: the key carries every other input, and those the caller
+  /// reads for itself.
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
@@ -175,6 +178,9 @@ final class LibraryModel {
     recentlyRead: [Int],
     downloaded: Set<Int>
   ) -> [RFCMetadata] {
+    // Observed on every call, hit or miss: this is what re-renders the list when
+    // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
+    guard index != nil else { return [] }
     let key = ListKey(
       filter: filter,
       query: searchText.trimmingCharacters(in: .whitespaces),
@@ -191,7 +197,9 @@ final class LibraryModel {
 
   /// Reads every input off the key, so the cache cannot go stale against something
   /// this consults but the key does not carry. The one input not in the key is
-  /// `index`, which is why `apply` empties the cache.
+  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
+  /// empties the cache: that keeps the cache correct, and the read of `index` at the
+  /// top of `list` is what gets the view to ask again.
   private func computeList(_ key: ListKey) -> [RFCMetadata] {
     let filter = key.filter
     guard let index else { return [] }
