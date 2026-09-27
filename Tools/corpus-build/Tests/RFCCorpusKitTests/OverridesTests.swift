@@ -21,12 +21,12 @@ struct OverridesTests {
     try RFCXMLParser.parse(try Data(contentsOf: directory.appending(path: name)))
   }
 
-  @Test func thereAreOverrides() {
+  @Test func `there are overrides`() {
     #expect(!Self.overrides.isEmpty)
   }
 
   @Test(arguments: overrides)
-  func eachParsesWithNoKnownSchemaCause(name: String) throws {
+  func `each parses with no known schema cause`(name: String) throws {
     let data = try Data(contentsOf: Self.directory.appending(path: name))
     #expect(try !RFCXMLParser.parse(data).allSections.isEmpty)
     #expect(SchemaCheck.causes(in: data) == [])
@@ -34,7 +34,7 @@ struct OverridesTests {
 
   /// RFC 1142's headings are recovered by `rfc1142.py`: every numbered heading of the
   /// standard, and none of the fragments a form feed used to cut a title into.
-  @Test func rfc1142HasEveryNumberedHeading() throws {
+  @Test func `rfc1142 has every numbered heading`() throws {
     let sections = try Self.document("rfc1142.xml").allSections
     #expect(sections.count { $0.number != nil } == 255)
     let short = sections.map(\.titleText).filter { $0.count < 4 }

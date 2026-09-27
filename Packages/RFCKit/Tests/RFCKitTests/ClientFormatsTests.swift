@@ -9,7 +9,7 @@ import Testing
 
 @Suite("RFC Editor formats")
 struct ClientFormatsTests {
-  @Test func perDocumentJSON() throws {
+  @Test func `per document JSON`() throws {
     let record = try JSONDecoder().decode(
       RFCEditorMetadataRecord.self, from: try Fixtures.data("rfc9110.json"))
     #expect(record.id == .rfc(9110))
@@ -19,7 +19,7 @@ struct ClientFormatsTests {
     #expect(record.errataURL == "https://www.rfc-editor.org/errata/rfc9110")
   }
 
-  @Test func recentFeed() throws {
+  @Test func `recent feed`() throws {
     let recent = try RecentFeedParser.parse(try Fixtures.data("rfcrss.xml"))
     #expect(recent.count > 5)
     let first = try #require(recent.first)
@@ -30,7 +30,7 @@ struct ClientFormatsTests {
     #expect(first.summary.hasPrefix("This document defines"))
   }
 
-  @Test func endpoints() {
+  @Test func `endpoints`() {
     let id = DocumentID.rfc(9110)
     #expect(
       RFCEditorEndpoints.document(id, format: .xml).absoluteString
@@ -45,7 +45,7 @@ struct ClientFormatsTests {
         == "https://datatracker.ietf.org/doc/html/rfc9110#section-4.2")
   }
 
-  @Test func clientFallsBackToText() async throws {
+  @Test func `client falls back to text`() async throws {
     struct FakeTransport: HTTPTransport {
       let text: Data
       func data(for url: URL) async throws -> (Data, HTTPURLResponse) {

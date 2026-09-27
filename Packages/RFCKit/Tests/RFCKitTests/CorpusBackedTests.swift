@@ -30,7 +30,7 @@ struct CorpusBackedProseCapTests {
   /// sets its headings at 6 and its body at 9, so every paragraph it has failed the cap
   /// and was kept as artwork, and none of it was linked (#55). The cap follows the
   /// body now, and nothing in the document is artwork.
-  @Test func aBodySetDeeperThanColumnThreeIsStillProse() throws {
+  @Test func `a body set deeper than column three is still prose`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1178"))
     #expect(document.artworkText.isEmpty, "\(document.artworkText.count) blocks kept as artwork")
     #expect(document.paragraphs.contains { $0.plainText.hasPrefix("Using a word that has strong") })
@@ -41,7 +41,7 @@ struct CorpusBackedProseCapTests {
 struct CorpusBackedPageJoinTests {
   /// RFC 1581's `it is assumed that:` ends a page, the list under it starts the next,
   /// and its first item was read into the sentence as `that: o The most recently ...`.
-  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() throws {
+  @Test func `a bullet at the top of a page is not the rest of a sentence`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1581"))
     #expect(
       document.paragraphs.contains {
@@ -56,7 +56,7 @@ struct CorpusBackedPageJoinTests {
 
   /// RFC 6614's `For example, they send` ends a page, and its list of packet types,
   /// which starts the next, was read into it as `they send o Access-Request ...`.
-  @Test func aBulletAfterAnUnfinishedSentenceIsNotItsRest() throws {
+  @Test func `a bullet after an unfinished sentence is not its rest`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc6614"))
     #expect(document.paragraphs.contains { $0.plainText.hasSuffix("For example, they send") })
     #expect(
@@ -77,7 +77,7 @@ struct CorpusBackedTitlePageTests {
   /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
   /// after its title; RFC 1441's centred `Status of this Memo` and its paragraph, and
   /// its contents. The body after them stays.
-  @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
+  @Test func `the title pages leftovers are not the lead in`() throws {
     let procedureCall = leadInText(LegacyTextParser.parse(try CorpusText.text("rfc674")))
     #expect(!procedureCall.contains { $0.contains("Request for Comments 674") })
     #expect(!procedureCall.contains("1"))
@@ -94,7 +94,7 @@ struct CorpusBackedTitlePageTests {
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
   /// report does not diagnose it either: RFC 1441's centred status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
-  @Test func theTitlePagesLeftoversAreNotDiagnosed() throws {
+  @Test func `the title pages leftovers are not diagnosed`() throws {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try CorpusText.text("rfc1441"))
       .filter { $0.section.isEmpty }.map(\.firstLine)
     #expect(!leadIn.contains("Status of this Memo"))
@@ -107,7 +107,7 @@ struct CorpusBackedTitlePageTests {
   /// takes one of them for the title. Given the title the RFC index has, the parser uses
   /// it, and the run the front matter left behind leaves the lead-in: RFC 1343's
   /// `For Multimedia Mail Format Information` opened the body as artwork (#170).
-  @Test func theIndexTitleReplacesAPartialOneAndTheRestLeavesTheLeadIn() throws {
+  @Test func `the index title replaces a partial one and the rest leaves the lead in`() throws {
     let title = "A User Agent Configuration Mechanism for Multimedia Mail Format Information"
     let text = try CorpusText.text("rfc1343")
     #expect(LegacyTextParser.parse(text).header.title == "A User Agent Configuration Mechanism")
@@ -119,7 +119,7 @@ struct CorpusBackedTitlePageTests {
 
   /// A date alone on a line is the title page's, like the author above it: RFC 355's
   /// `June 9, 1972` was the lead-in's second block (#170).
-  @Test func aDateAloneOnALineIsTheTitlePages() throws {
+  @Test func `a date alone on a line is the title pages`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc355"))
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }

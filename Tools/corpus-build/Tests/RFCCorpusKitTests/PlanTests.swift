@@ -11,7 +11,7 @@ struct PlanTests {
   }
 
   /// The two formats partition the index, so the two fetches never write the same file.
-  @Test func fetchSplitsTheIndexByWhetherAnRFCHasXML() throws {
+  @Test func `fetch splits the index by whether an RFC has XML`() throws {
     let index = try Self.index()
     let text = FetchPlan.wanted(in: index, format: .text, limit: nil).map(\.number)
     let xml = FetchPlan.wanted(in: index, format: .xml, limit: nil).map(\.number)
@@ -19,25 +19,25 @@ struct PlanTests {
     #expect(xml == [8999, 9000, 9110])
   }
 
-  @Test func fetchTakesTheFirstDocumentsUpToTheLimit() throws {
+  @Test func `fetch takes the first documents up to the limit`() throws {
     let text = FetchPlan.wanted(in: try Self.index(), format: .text, limit: 2).map(\.number)
     #expect(text == [1149, 2119])
   }
 
   /// In document order, not the directory's: rfc10 after rfc9, not after rfc1.
-  @Test func conversionTakesTheTextFilesInDocumentOrder() throws {
+  @Test func `conversion takes the text files in document order`() throws {
     let names = ["rfc10.txt", "rfc9.txt", "rfc1.txt", "rfc2.xml", ".DS_Store"]
     #expect(try ConversionPlan.files(in: names) == ["rfc1.txt", "rfc9.txt", "rfc10.txt"])
   }
 
-  @Test func onlyTakesTheNamedNumbers() throws {
+  @Test func `only takes the named numbers`() throws {
     let names = ["rfc10.txt", "rfc9.txt", "rfc1.txt"]
     #expect(try ConversionPlan.files(in: names, only: [10, 1]) == ["rfc1.txt", "rfc10.txt"])
   }
 
   /// A number asked for by name is expected to be converted; one with no text fails the
   /// run rather than being skipped.
-  @Test func onlyFailsOnANumberWithNoText() {
+  @Test func `only fails on a number with no text`() {
     #expect {
       try ConversionPlan.files(in: ["rfc1.txt"], only: [1, 99999, 5])
     } throws: { error in
