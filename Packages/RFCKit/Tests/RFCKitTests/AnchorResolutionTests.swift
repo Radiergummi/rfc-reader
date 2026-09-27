@@ -11,16 +11,13 @@ import Testing
 struct AnchorResolutionTests {
   /// Every anchor the model holds, anywhere in the document.
   static func anchors(in document: RFCDocument) -> Set<String> {
-    let blocks = (document.header.abstract + document.allSections.flatMap(\.blocks)).flattened
-    return Set(document.allSections.map(\.anchor) + blocks.flatMap(\.anchors))
+    Set(document.allSections.map(\.anchor) + document.blocks.flatMap(\.anchors))
   }
 
   /// Every anchor a cross reference in the document's prose points at.
   static func citedAnchors(in document: RFCDocument) -> Set<String> {
-    let blocks = (document.header.abstract + document.allSections.flatMap(\.blocks)).flattened
-    let prose = document.allSections.map(\.title) + blocks.flatMap(\.proseRuns)
-    return Set(
-      prose.flatMap(\.flattened).compactMap { inline in
+    Set(
+      document.proseInlines.compactMap { inline in
         guard case .crossReference(let xref) = inline, case .anchor(let anchor) = xref.target
         else { return nil }
         return anchor

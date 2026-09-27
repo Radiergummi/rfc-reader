@@ -34,7 +34,8 @@ struct DocumentTraversalTests {
                 definition: [.paragraph(Paragraph(text: "definition"))])
             ]),
             .figure(
-              Figure(title: "F", blocks: [.preformatted(Preformatted(kind: .artwork, text: "+-+"))])),
+              Figure(title: "F", blocks: [.preformatted(Preformatted(kind: .artwork, text: "+-+"))])
+            ),
           ],
           subsections: [
             Section(
@@ -59,7 +60,11 @@ struct DocumentTraversalTests {
 
   private func label(_ block: Block) -> String {
     switch block {
-    case .paragraph(let paragraph): "p:\(paragraph.inlines.plainText)"
+    // The literal words only: a cross reference's label is not the test's to spell.
+    case .paragraph(let paragraph):
+      "p:"
+        + paragraph.inlines.compactMap { if case .text(let text) = $0 { text } else { nil } }
+        .joined()
     case .list: "list"
     case .definitionList: "definitions"
     case .preformatted: "artwork"
