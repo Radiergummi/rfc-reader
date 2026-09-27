@@ -160,7 +160,14 @@ final class LibraryModel {
   /// with one slot, two tabs listing different things evict each other on every pass
   /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
   /// -- this is a cache, so losing an entry costs time, never correctness.
-  private var listCache: [ListKey: [RFCMetadata]] = [:]
+  ///
+  /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
+  /// a property the running body read invalidated that body, so every miss rendered
+  /// the list twice (#126). It is a memo of state that is observed, not state itself.
+  /// That makes a hit read nothing observable, though, so `list` reads `index`
+  /// before looking here: the key carries every other input, and those the caller
+  /// reads for itself.
+  @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
   func list(
@@ -170,6 +177,9 @@ final class LibraryModel {
     recentlyRead: [Int],
     downloaded: Set<Int>
   ) -> [RFCMetadata] {
+    // Observed on every call, hit or miss: this is what re-renders the list when
+    // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
+    guard let index else { return [] }
     let key = ListKey(
       filter: filter,
       query: searchText.trimmingCharacters(in: .whitespaces),
@@ -178,7 +188,7 @@ final class LibraryModel {
       downloaded: downloaded
     )
     if let hit = listCache[key] { return hit }
-    let computed = computeList(key)
+    let computed = computeList(key, in: index)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
@@ -186,10 +196,12 @@ final class LibraryModel {
 
   /// Reads every input off the key, so the cache cannot go stale against something
   /// this consults but the key does not carry. The one input not in the key is
-  /// `index`, which is why `apply` empties the cache.
-  private func computeList(_ key: ListKey) -> [RFCMetadata] {
+  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
+  /// empties the cache: that keeps the cache correct, and the read of `index` at the
+  /// top of `list` is what gets the view to ask again. The index is handed in from
+  /// that read rather than read again here, so the observed read is the only one.
+  private func computeList(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     let filter = key.filter
-    guard let index else { return [] }
     let base: [RFCMetadata]
     switch filter {
     case .all: base = index.rfcs.reversed()
