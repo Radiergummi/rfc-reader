@@ -29,9 +29,9 @@ public enum RFCIndexParser {
 
 /// The index's state machine, fed by `XMLDriver`.
 private final class Reader: XMLEvents {
-  fileprivate private(set) var rfcs: [RFCMetadata] = []
-  fileprivate private(set) var series: [SeriesEntry] = []
-  fileprivate private(set) var notIssued: [Int] = []
+  private(set) var rfcs: [RFCMetadata] = []
+  private(set) var series: [SeriesEntry] = []
+  private(set) var notIssued: [Int] = []
 
   private var path: [String] = []
   private var text = ""

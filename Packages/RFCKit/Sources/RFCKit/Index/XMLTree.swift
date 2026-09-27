@@ -65,9 +65,8 @@ enum XMLTree {
   static func parse(_ data: Data) throws(XMLSyntaxError) -> Element {
     let builder = Builder()
     try XMLDriver.run(data, into: builder)
-    // The driver returns only once the root has closed, which is when it is set.
     guard let root = builder.root else {
-      throw XMLSyntaxError(line: 0, column: 0, message: "empty document")
+      preconditionFailure("XMLDriver returns only once the root has closed, which sets it")
     }
     return root
   }

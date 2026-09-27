@@ -25,15 +25,13 @@ struct XMLDriverTests {
     #expect(index.rfcs.isEmpty)
   }
 
-  @Test func `a document that ends before its root closes is malformed, with where`() {
-    do {
+  @Test func `a document that ends before its root closes is malformed, with where`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
       _ = try XMLTree.parse(Data("<a>\n<b>".utf8))
-      Issue.record("expected a syntax error")
-    } catch {
-      #expect(error.line >= 1)
-      #expect(!error.message.isEmpty)
-      #expect(error.errorDescription?.contains("line \(error.line)") == true)
     }
+    #expect(error.line >= 1)
+    #expect(!error.message.isEmpty)
+    #expect(error.errorDescription?.contains("line \(error.line)") == true)
   }
 
   @Test func `an empty document is malformed`() {
@@ -42,50 +40,27 @@ struct XMLDriverTests {
     }
   }
 
+  /// The same truncated input through each parser: each wraps exactly the error the
+  /// driver reports for it, line, column and message.
   @Test func `every parser reports malformed XML as the same error`() throws {
-    let truncated = Data("<rfc><front>".utf8)
-    do {
+    let truncated = Data("<rfc>\n<front>".utf8)
+    let expected = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(truncated)
+    }
+    #expect(throws: RFCXMLParser.ParseError.malformed(expected)) {
       _ = try RFCXMLParser.parse(truncated)
-      Issue.record("expected malformed")
-    } catch {
-      guard case .malformed(let syntax) = error else {
-        Issue.record("\(error) is not malformed")
-        return
-      }
-      #expect(!syntax.message.isEmpty)
     }
-
-    do {
-      _ = try RFCIndexParser.parse(Data("<rfc-index><rfc-entry>".utf8))
-      Issue.record("expected malformed")
-    } catch {
-      guard case .malformed = error else {
-        Issue.record("\(error) is not malformed")
-        return
-      }
+    #expect(throws: RFCIndexParser.ParseError.malformed(expected)) {
+      _ = try RFCIndexParser.parse(truncated)
     }
-
-    do {
-      _ = try RecentFeedParser.parse(Data("<rss><channel>".utf8))
-      Issue.record("expected malformed")
-    } catch {
-      guard case .malformed = error else {
-        Issue.record("\(error) is not malformed")
-        return
-      }
+    #expect(throws: RecentFeedParser.ParseError.malformed(expected)) {
+      _ = try RecentFeedParser.parse(truncated)
     }
   }
 
   @Test func `a well-formed document that is not an RFC says so`() {
-    do {
+    #expect(throws: RFCXMLParser.ParseError.notAnRFC(rootElement: "html")) {
       _ = try RFCXMLParser.parse(Data("<html/>".utf8))
-      Issue.record("expected notAnRFC")
-    } catch {
-      guard case .notAnRFC(let root) = error else {
-        Issue.record("\(error) is not notAnRFC")
-        return
-      }
-      #expect(root == "html")
     }
   }
 }

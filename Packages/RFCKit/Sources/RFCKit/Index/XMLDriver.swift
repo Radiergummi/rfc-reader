@@ -30,7 +30,7 @@ protocol XMLEvents: AnyObject {
   func text(_ text: String)
 }
 
-/// The one owner of `XMLParser` (#133). The tree builder and the streaming index
+/// RFCKit's one owner of `XMLParser` (#133). The tree builder and the streaming index
 /// parser both run on it, so they share one reading of the rule that matters most:
 ///
 /// **A document whose root element has closed is complete.** swift-corelibs-foundation
@@ -38,7 +38,7 @@ protocol XMLEvents: AnyObject {
 /// deliberately ignored, not a bug to fix. Anything that goes wrong before the root
 /// closes is an `XMLSyntaxError`.
 enum XMLDriver {
-  static func run(_ data: Data, into events: some XMLEvents) throws(XMLSyntaxError) {
+  static func run(_ data: Data, into events: any XMLEvents) throws(XMLSyntaxError) {
     let delegate = Delegate(events: events)
     let parser = XMLParser(data: data)
     parser.delegate = delegate
@@ -91,8 +91,8 @@ enum XMLDriver {
     }
 
     func parser(_ parser: XMLParser, parseErrorOccurred parseError: any Error) {
-      // Only the first, and only before the root closes: after it, see `run`.
-      guard !rootClosed, failure == nil else { return }
+      // Only the first. One reported after the root closes is ignored by `run`.
+      guard failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
         message: parseError.localizedDescription)
