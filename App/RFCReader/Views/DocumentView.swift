@@ -233,6 +233,13 @@ struct DocumentView: View {
             .padding(.bottom, 12)
         }
       )
+      #if !os(macOS)
+        // To the bottom edge of the screen, under the home indicator, rather than
+        // stopping above it at a hard edge with a blank strip below. The text view
+        // makes that strip room to scroll the last line clear of it. Vertical
+        // only: the column is derived from the width, which this leaves alone.
+        .ignoresSafeArea(.container, edges: .bottom)
+      #endif
       .onAppear {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {

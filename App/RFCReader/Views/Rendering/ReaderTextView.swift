@@ -10,6 +10,20 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
+    /// The reader runs under the home indicator (`DocumentView` lets it into the
+    /// bottom safe area), so the strip that area covers becomes room to scroll the
+    /// last line clear of it rather than a place the text stops at.
+    ///
+    /// By hand, because `contentInsetAdjustmentBehavior` is `.never`: automatic
+    /// adjustment would move `contentOffset`'s origin away from the top of the
+    /// content, which is what the anchor arithmetic is expressed in. Only the
+    /// bottom is set here, and a bottom inset leaves that origin where it is.
+    override func safeAreaInsetsDidChange() {
+      super.safeAreaInsetsDidChange()
+      contentInset.bottom = safeAreaInsets.bottom
+      verticalScrollIndicatorInsets.bottom = safeAreaInsets.bottom
+    }
+
     override func copy(_ sender: Any?) {
       guard let attributed = attributedText, let range = selectedTextRange, !range.isEmpty else {
         super.copy(sender)
