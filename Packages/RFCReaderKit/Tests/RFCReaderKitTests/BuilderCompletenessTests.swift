@@ -20,7 +20,7 @@ struct BuilderCompletenessTests {
   /// in the storage this design exists to avoid; the chip's leading doc.text
   /// symbol is the one sanctioned exception, and only inside its own `.rfcChip` run.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
-  func nothingBecomesAnAttachment(fixture: String) throws {
+  func `nothing becomes an attachment`(fixture: String) throws {
     let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
     let built = DocumentTextBuilder.build(document, style: style)
     // Walked as UTF-16, which is what `attribute(at:)` is indexed by; a
@@ -40,7 +40,7 @@ struct BuilderCompletenessTests {
     }
   }
 
-  @Test func aFigureContributesArtworkAndACaptionAsText() {
+  @Test func `a figure contributes artwork and a caption as text`() {
     let figure = Figure(
       title: "Packet layout",
       number: 3,
@@ -54,7 +54,7 @@ struct BuilderCompletenessTests {
     #expect(built.anchors.offset(of: "figure-3") != nil)
   }
 
-  @Test func aCaptionedFigureTagsItsArtworkWithTheCaption() throws {
+  @Test func `a captioned figure tags its artwork with the caption`() throws {
     let figure = Figure(
       title: "Packet layout",
       number: 3,
@@ -69,7 +69,7 @@ struct BuilderCompletenessTests {
         == "Figure 3: Packet layout")
   }
 
-  @Test func blockQuotesAndAsidesAreIndentedTextWithADecoration() throws {
+  @Test func `block quotes and asides are indented text with a decoration`() throws {
     let document = Fixtures.document(
       .blockQuote([.paragraph(Paragraph(text: "quoted"))]),
       .aside([.paragraph(Paragraph(text: "noted"))]))
@@ -93,7 +93,7 @@ struct BuilderCompletenessTests {
   /// unrecognised element inside a `<blockquote>` nests an aside inside a quote for
   /// real documents, not just hypothetically. The more specific, inner decoration
   /// must survive; the outer one only fills what the inner call left unset.
-  @Test func aNestedAsideInsideABlockQuoteKeepsItsOwnDecoration() throws {
+  @Test func `a nested aside inside a block quote keeps its own decoration`() throws {
     let document = Fixtures.document(
       .blockQuote([
         .paragraph(Paragraph(text: "quoted")),
@@ -115,7 +115,7 @@ struct BuilderCompletenessTests {
   /// The bibliography is the panel's, not the body's. Its rows used to be four
   /// stacked indented paragraphs per entry; keeping them out is the point, so the
   /// assertion is that none of it reaches the storage.
-  @Test func aBibliographySectionContributesNothingToTheBody() {
+  @Test func `a bibliography section contributes nothing to the body`() {
     let reference = Reference(
       anchor: "RFC9110",
       title: "HTTP Semantics",
@@ -143,7 +143,7 @@ struct BuilderCompletenessTests {
     #expect(built.anchors.offset(of: "ref-RFC9110") == nil)
   }
 
-  @Test func everyAnchorInTheDocumentIsIndexed() throws {
+  @Test func `every anchor in the document is indexed`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
 

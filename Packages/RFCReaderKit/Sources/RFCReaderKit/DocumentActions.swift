@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// What the reader's toolbars *say* when they act on the document on screen.

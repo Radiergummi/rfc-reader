@@ -1,6 +1,14 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
+// One set of language settings for every target, tests included (#129).
+let swiftSettings: [SwiftSetting] = [
+  .enableUpcomingFeature("ExistentialAny"),
+  .enableUpcomingFeature("MemberImportVisibility"),
+  .enableUpcomingFeature("InferIsolatedConformances"),
+  .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+]
+
 // Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
 // RFCKit's parsers, and writes a signed manifest for the data packs the app downloads.
 //
@@ -10,7 +18,8 @@ import PackageDescription
 // concurrency, logging (swift-log) and xmllint.
 let package = Package(
   name: "corpus-build",
-  platforms: [.macOS(.v15)],
+  // RFCKit's floor.
+  platforms: [.macOS(.v26)],
   dependencies: [
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
@@ -19,7 +28,8 @@ let package = Package(
   targets: [
     .target(
       name: "RFCCorpusKit",
-      dependencies: [.product(name: "RFCKit", package: "RFCKit")]
+      dependencies: [.product(name: "RFCKit", package: "RFCKit")],
+      swiftSettings: swiftSettings
     ),
     .executableTarget(
       name: "corpus-build",
@@ -28,13 +38,15 @@ let package = Package(
         .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "Logging", package: "swift-log"),
-      ]
+      ],
+      swiftSettings: swiftSettings
     ),
     .testTarget(
       name: "RFCCorpusKitTests",
       // corpus-build is here to be built, not imported: the command-line tests run
       // the binary, as `make` does.
-      dependencies: ["RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit")]
+      dependencies: ["RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit")],
+      swiftSettings: swiftSettings
     ),
   ],
   swiftLanguageModes: [.v6]

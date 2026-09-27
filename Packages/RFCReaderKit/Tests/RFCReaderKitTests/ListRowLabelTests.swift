@@ -5,7 +5,7 @@ import Testing
 
 @Suite("List row label")
 struct ListRowLabelTests {
-  @Test func theDocumentComesFirstAndTheYearLast() {
+  @Test func `the document comes first and the year last`() {
     let metadata = RFCMetadata(
       id: DocumentID(series: .rfc, number: 9110),
       title: "HTTP Semantics",
@@ -18,7 +18,7 @@ struct ListRowLabelTests {
   }
 
   /// What the row shows only as a badge, a group name or a glyph is spoken too.
-  @Test func obsolescenceTheGroupAndTheBookmarkAreSpoken() {
+  @Test func `obsolescence the group and the bookmark are spoken`() {
     let metadata = RFCMetadata(
       id: DocumentID(series: .rfc, number: 2616),
       title: "Hypertext Transfer Protocol -- HTTP/1.1",
@@ -34,7 +34,7 @@ struct ListRowLabelTests {
   }
 
   /// The index's placeholder for "no group" is not a group's name.
-  @Test func theIndexPlaceholderForNoGroupIsNotSpokenAsAGroup() {
+  @Test func `the index placeholder for no group is not spoken as a group`() {
     let metadata = RFCMetadata(
       id: DocumentID(series: .rfc, number: 2119),
       title: "Key words for use in RFCs to Indicate Requirement Levels",

@@ -20,7 +20,7 @@ struct DocumentCacheIndexTests {
     return directory
   }
 
-  @Test func aScanFindsEveryCachedBody() throws {
+  @Test func `a scan finds every cached body`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -32,7 +32,7 @@ struct DocumentCacheIndexTests {
     #expect(!index.contains(.rfc(2119)))
   }
 
-  @Test func aDocumentCachedInBothFormatsIsOneDocument() throws {
+  @Test func `a document cached in both formats is one document`() throws {
     let directory = try temporaryDirectory(containing: ["rfc9110.xml", "rfc9110.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -43,7 +43,7 @@ struct DocumentCacheIndexTests {
 
   /// The store keeps the RFC index beside the documents, and `rfc-index` starts with
   /// the same three letters as every cached body.
-  @Test func filesTheStoreDidNotNameAreIgnored() throws {
+  @Test func `files the store did not name are ignored`() throws {
     let directory = try temporaryDirectory(
       containing: ["rfc-index.xml", "RFC 2119.txt", "rfc2119.pdf", "notes.txt", "rfc8174"])
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -56,7 +56,7 @@ struct DocumentCacheIndexTests {
   /// `rfc0791` parses as RFC 791, but the store names it `rfc791.txt`, so a zero-padded
   /// file is not one of its bodies: counting it would answer for a file `remove` never
   /// deletes.
-  @Test func aZeroPaddedNumberIsNotTheStoresName() throws {
+  @Test func `a zero padded number is not the stores name`() throws {
     let directory = try temporaryDirectory(containing: ["rfc0791.txt", "rfc9110.xml"])
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -66,7 +66,7 @@ struct DocumentCacheIndexTests {
     #expect(index.rfcNumbers == [9110])
   }
 
-  @Test func otherSeriesAreCachedButAreNotRFCNumbers() throws {
+  @Test func `other series are cached but are not RFC numbers`() throws {
     let directory = try temporaryDirectory(containing: ["bcp14.txt", "rfc2119.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -76,7 +76,7 @@ struct DocumentCacheIndexTests {
     #expect(index.rfcNumbers == [2119])
   }
 
-  @Test func aMissingDirectoryIsAnEmptyCache() {
+  @Test func `a missing directory is an empty cache`() {
     let directory = FileManager.default.temporaryDirectory
       .appending(path: "DocumentCacheIndexTests-missing-\(UUID().uuidString)")
 
@@ -85,7 +85,7 @@ struct DocumentCacheIndexTests {
     #expect(index.rfcNumbers.isEmpty)
   }
 
-  @Test func aWriteAddsTheDocument() throws {
+  @Test func `a write adds the document`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
@@ -98,7 +98,7 @@ struct DocumentCacheIndexTests {
     #expect(index.rfcNumbers == [791, 9110])
   }
 
-  @Test func aRemovalRemovesTheDocument() throws {
+  @Test func `a removal removes the document`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
@@ -113,7 +113,7 @@ struct DocumentCacheIndexTests {
 
   /// The store removes both formats and ignores a failure, so a body that could not
   /// be deleted — only the XML went here — is still on disk and still cached.
-  @Test func aRemovalThatLeavesABodyKeepsTheDocument() throws {
+  @Test func `a removal that leaves a body keeps the document`() throws {
     let directory = try temporaryDirectory(containing: ["rfc9110.xml", "rfc9110.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
@@ -133,7 +133,7 @@ struct DocumentCacheIndexTests {
 
   /// A file deleted in Finder. The directory's date is set by hand because two
   /// changes inside one tick of the file system's clock would share a date.
-  @Test func aChangeMadeBehindTheStoreIsSeenOnRevalidation() throws {
+  @Test func `a change made behind the store is seen on revalidation`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)
@@ -149,7 +149,7 @@ struct DocumentCacheIndexTests {
   /// again. Putting the date back after deleting a file hides the deletion, which
   /// is how the test can tell no scan happened. The date is a whole second because
   /// setting one is not guaranteed to keep the nanoseconds reading it returns.
-  @Test func anUnchangedDirectoryIsNotScannedAgain() throws {
+  @Test func `an unchanged directory is not scanned again`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt", "rfc9110.xml"])
     defer { try? FileManager.default.removeItem(at: directory) }
     let date = Date(timeIntervalSince1970: 1_000_000_000)
@@ -165,7 +165,7 @@ struct DocumentCacheIndexTests {
 
   /// The store's own write records the directory's new date, and must not absorb
   /// a deletion made behind its back before it.
-  @Test func aWriteDoesNotHideAnEarlierChange() throws {
+  @Test func `a write does not hide an earlier change`() throws {
     let directory = try temporaryDirectory(containing: ["rfc791.txt"])
     defer { try? FileManager.default.removeItem(at: directory) }
     var index = DocumentCacheIndex(scanning: directory)

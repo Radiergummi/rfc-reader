@@ -81,7 +81,7 @@ struct AdjacentCardTests {
       .preformatted(Preformatted(kind: .artwork, text: "BBBB")),
     ],
   ])
-  func adjacentCardsMeetWithAGap(blocks: [Block]) throws {
+  func `adjacent cards meet with a gap`(blocks: [Block]) throws {
     let drawn = cards(Fixtures.document(blocks[0], blocks[1]))
     try #require(drawn.count == 2, "two blocks, two cards")
     let upper = drawn[0]
@@ -96,7 +96,7 @@ struct AdjacentCardTests {
 
   /// The gap is taken from the two cards' own frames, not by moving their text:
   /// a card's outer ends still reach past it as before.
-  @Test func aCutLeavesTheOuterEndsCapped() throws {
+  @Test func `a cut leaves the outer ends capped`() throws {
     let drawn = cards(
       Fixtures.document(
         .preformatted(Preformatted(kind: .artwork, text: "AAAA")),
@@ -112,7 +112,7 @@ struct AdjacentCardTests {
 
   /// A quote draws a rule, not a card, so artwork inside one is not cut against
   /// it: its card keeps its cap, as it would anywhere else.
-  @Test func aQuoteIsNotACardToMeet() throws {
+  @Test func `a quote is not a card to meet`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
         .blockQuote([
