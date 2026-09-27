@@ -40,10 +40,9 @@ public enum DocumentInfo {
     ].compactMap { $0 }
   }
 
-  /// "Editor" is the one role the index and both parsers record, and it is read the
-  /// way `CitationFormatter` reads it, so "Ed." counts too.
+  /// "Editor" is the one role the index and both parsers record.
   private static func role(_ author: Author) -> String {
-    author.role?.lowercased().hasPrefix("ed") == true ? "Editor" : ""
+    author.isEditor ? "Editor" : ""
   }
 
   private static func section(_ title: String, _ rows: [Row]) -> Section? {
@@ -82,10 +81,12 @@ public enum DocumentInfo {
       rows.append(Row(label: "Published as", value: .text(original.displayName)))
     }
     rows.append(Row(label: "Stream", value: .text(metadata.stream.displayName)))
-    if let group = metadata.workingGroup {
+    if let group = metadata.namedWorkingGroup {
       rows.append(Row(label: "Working group", value: .text(group)))
     }
-    if let area = metadata.area { rows.append(Row(label: "Area", value: .text(area))) }
+    if let area = metadata.area {
+      rows.append(Row(label: "Area", value: .text(area)))
+    }
     return rows
   }
 
@@ -104,7 +105,7 @@ public enum DocumentInfo {
     }
     for series in metadata.isAlso {
       let others =
-        index?.series.first { $0.id == series }?.members.filter { $0 != metadata.id } ?? []
+        index?.series(series)?.members.filter { $0 != metadata.id } ?? []
       if !others.isEmpty {
         rows.append(Row(label: "Part of \(series.displayName)", value: .documents(others)))
       }
@@ -112,11 +113,15 @@ public enum DocumentInfo {
     return rows
   }
 
-  /// The same pages the More menu opens, so the two read them from one place.
+  /// The pages the More menu opens, from the same `RFCEditorEndpoints`.
   private static func links(_ metadata: RFCMetadata) -> [Row] {
     var rows: [Row] = []
-    if let doi = metadata.doi { rows.append(Row(label: "DOI", value: .copyable(doi))) }
-    if let errata = metadata.errataURL { rows.append(Row(label: "Errata", value: .link(errata))) }
+    if let doi = metadata.doi {
+      rows.append(Row(label: "DOI", value: .copyable(doi)))
+    }
+    if let errata = metadata.errataURL {
+      rows.append(Row(label: "Errata", value: .link(errata)))
+    }
     rows.append(Row(label: "RFC Editor", value: .link(RFCEditorEndpoints.infoPage(metadata.id))))
     rows.append(
       Row(label: "Datatracker", value: .link(RFCEditorEndpoints.datatracker(metadata.id))))

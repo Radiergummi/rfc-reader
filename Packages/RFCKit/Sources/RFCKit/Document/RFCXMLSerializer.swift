@@ -132,7 +132,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
-      if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
+      if author.isEditor { attributes.append(("role", "editor")) }
       if let contact = author.contact {
         writer.open("author", attributes)
         writeContact(contact, writer: &writer)

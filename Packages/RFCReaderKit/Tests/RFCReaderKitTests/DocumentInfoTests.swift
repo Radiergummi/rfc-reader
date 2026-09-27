@@ -96,8 +96,15 @@ struct DocumentInfoTests {
 
     var unchanged = rich
     unchanged.publicationStatus = unchanged.currentStatus
-    let rows = DocumentInfo.sections(for: unchanged, in: index).first { $0.title == "Status" }?.rows
-    #expect(rows?.contains { $0.label == "Published as" } == false)
+    #expect(value("Published as", in: section("Status", of: unchanged)) == nil)
+  }
+
+  /// The index fills the field for a document from no group with a sentence rather
+  /// than leaving it empty, and that is not a group's name.
+  @Test func `a document from no working group has no working group row`() {
+    var metadata = rich
+    metadata.workingGroup = "NON WORKING GROUP"
+    #expect(value("Working group", in: section("Status", of: metadata)) == nil)
   }
 
   /// A series member links to the others, not to itself.

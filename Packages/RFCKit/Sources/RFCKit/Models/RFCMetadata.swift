@@ -88,6 +88,12 @@ public struct Author: Hashable, Sendable, Codable {
     self.role = role
     self.contact = contact
   }
+
+  /// Whether the role is an editor's, however it is spelled: the index and RFCXML
+  /// write "editor", and a legacy header "Editor" or "Ed.".
+  public var isEditor: Bool {
+    role?.lowercased().hasPrefix("ed") == true
+  }
 }
 
 /// An author's affiliation and address, as RFCXML's `<author>` states them.
