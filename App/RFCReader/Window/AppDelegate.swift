@@ -40,9 +40,6 @@
     func application(_ application: NSApplication, open urls: [URL]) {
       for url in urls {
         guard let link = RFCLink(url: url) else { continue }
-        if controllers.isEmpty {
-          openWindow(tabbedWith: nil, inBackground: false)
-        }
         LibraryModel.shared.route(link)
       }
     }

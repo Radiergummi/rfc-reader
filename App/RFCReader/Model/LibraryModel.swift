@@ -268,11 +268,18 @@ final class LibraryModel {
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
+  /// With every window closed there is no scene coming to take the link, so one is
+  /// opened for it -- the way `openInNewScene` does -- rather than leaving it for
+  /// whatever window the reader next opens, possibly minutes later. iOS brings up a
+  /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
     let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
     guard let target else {
       pendingSceneLink = link
+      #if os(macOS)
+        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+      #endif
       return
     }
     target.open(link, in: index)
