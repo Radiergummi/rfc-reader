@@ -123,6 +123,18 @@ struct AuthorCardTests {
     #expect(card.familyName.isEmpty)
   }
 
+  /// Its organization is the name the chip already shows, so an organization that
+  /// publishes nothing else has no card to open.
+  @Test func `an organization that publishes only itself has no card`() {
+    let name = "Internet Architecture Board"
+    let itself = AuthorContact(organization: name)
+    let withEmail = AuthorContact(organization: name, emails: ["iab@iab.org"])
+    #expect(!AuthorCard.hasCard(Author(name: name, contact: itself)))
+    #expect(AuthorCard.hasCard(Author(name: name, contact: withEmail)))
+    // A person's organization is not their name, and is worth a card.
+    #expect(AuthorCard.hasCard(author(AuthorContact(organization: "Fastly"))))
+  }
+
   /// Contacts has no field for a sorting code, so it goes beside the postal code
   /// rather than being lost.
   @Test func `a sorting code is kept beside the postal code`() throws {

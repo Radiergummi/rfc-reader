@@ -34,8 +34,14 @@ public enum AuthorMonogram {
 public enum AuthorCard {
   /// Whether the document publishes anything beyond the name. A chip without it is
   /// not a button: a card holding only the name the chip already shows says nothing.
+  ///
+  /// An author that is an organization and publishes only that has nothing beyond
+  /// the name either: its organization is the name.
   public static func hasCard(_ author: Author) -> Bool {
-    guard let contact = author.contact else { return false }
+    guard var contact = author.contact else { return false }
+    if contact.organization == author.name {
+      contact.organization = nil
+    }
     return !contact.isEmpty
   }
 
