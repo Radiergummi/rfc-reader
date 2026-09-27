@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -65,24 +65,31 @@ test-app:
 xcodeproj:
 	xcodegen generate
 
-# project.yml ships without a DEVELOPMENT_TEAM, and xcodebuild refuses to sign
-# without one. Compiling is what the two app targets are for, so signing is off
-# unless a team is passed:
+# Signed with the team project.yml names, provisioning included: automatic signing
+# may create the profile and register this Mac or the attached iPhone on the way.
+# CI has neither certificates nor an account, and builds only to prove the app
+# compiles, so it turns signing off:
 #
-#   make build-app DEVELOPMENT_TEAM=ABCDE12345
+#   make build-app CODE_SIGNING_ALLOWED=NO
 #
-DEVELOPMENT_TEAM ?=
-SIGNING := $(if $(DEVELOPMENT_TEAM),DEVELOPMENT_TEAM=$(DEVELOPMENT_TEAM),CODE_SIGNING_ALLOWED=NO)
+CODE_SIGNING_ALLOWED ?= YES
+SIGNING := CODE_SIGNING_ALLOWED=$(CODE_SIGNING_ALLOWED) \
+	  $(if $(filter YES,$(CODE_SIGNING_ALLOWED)),-allowProvisioningUpdates -allowProvisioningDeviceRegistration)
 
 # Debug for everything but `install`, which puts a Release build in /Applications.
 CONFIGURATION ?= Debug
 
-# Where xcodebuild left RFCReader.app. Asked for rather than spelled out: the
-# DerivedData directory carries a hash of the project's own path, so it differs
-# per checkout. Recursively expanded (`=`, not `:=`) so only the targets that
-# need it pay for the xcodebuild call.
-app_path = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
-	  -destination 'platform=macOS' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
+# The iPhone `run-device` installs on, by the name `xcrun devicectl list devices`
+# shows. `ios-app` alone builds for any iOS device.
+IOS_DEVICE      ?=
+IOS_DESTINATION ?= generic/platform=iOS
+
+# Where xcodebuild left RFCReader.app for a destination. Asked for rather than
+# spelled out: the DerivedData directory carries a hash of the project's own
+# path, so it differs per checkout. Recursively expanded (`=`, not `:=`) so only
+# the targets that need it pay for the xcodebuild call.
+built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+	  -destination '$(1)' -configuration $(CONFIGURATION) -showBuildSettings 2>/dev/null \
 	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
 
 ## Build the app for macOS
@@ -91,28 +98,47 @@ build-app: xcodeproj
 	  -destination 'platform=macOS' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
 ## Build the app for the iOS Simulator
-build-ios: xcodeproj
+ios-sim: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination 'generic/platform=iOS Simulator' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
+## Build the app for an iOS device
+ios-app: xcodeproj
+	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
+	  -destination '$(IOS_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+
+## Build, install and launch the app on an attached iPhone
+# Built for that one device rather than for any, so automatic signing registers
+# it with the team if it is not yet. The iPhone needs Developer Mode on, and has
+# to be unlocked for the launch.
+#
+#   make run-device IOS_DEVICE=Charon
+#
+run-device: IOS_DESTINATION = platform=iOS,name=$(IOS_DEVICE)
+run-device: run-device-check ios-app
+	@app='$(call built_app,$(IOS_DESTINATION))'; \
+	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
+	  xcrun devicectl device install app --device '$(IOS_DEVICE)' "$$app" && \
+	  xcrun devicectl device process launch --terminate-existing --device '$(IOS_DEVICE)' \
+	    "$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$app/Info.plist")"
+
+run-device-check:
+	@test -n '$(IOS_DEVICE)' || { echo "set IOS_DEVICE to one of these:"; xcrun devicectl list devices; exit 1; }
+
 ## Build and launch the macOS app
-# Unsigned is enough to run locally: the linker ad-hoc signs the bundle, which
-# satisfies the sandbox entitlements on this machine. A running copy is quit
-# first, or `open` would just bring the old build back to the front.
+# A running copy is quit first, or `open` would just bring the old build back to
+# the front.
 run: build-app
-	@app='$(app_path)'; \
+	@app='$(call built_app,platform=macOS)'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  echo "launching $$app"; \
 	  open "$$app"
 
 ## Install a Release build into /Applications
-# Ad-hoc signed unless a DEVELOPMENT_TEAM is passed, which is fine for a local
-# install -- a locally built bundle carries no quarantine flag, so Gatekeeper
-# does not object. Pass a team to get something you can hand to anyone else.
 install: CONFIGURATION := Release
 install: build-app
-	@app='$(app_path)'; \
+	@app='$(call built_app,platform=macOS)'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  rm -rf '/Applications/$(SCHEME).app'; \

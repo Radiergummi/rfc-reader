@@ -97,12 +97,12 @@ jobs:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
           restore-keys: xcode-compilation-cache-
-      # Compiling is the point, so both builds go unsigned; project.yml ships
-      # without a DEVELOPMENT_TEAM and the Makefile turns signing off without one.
+      # Compiling is the point, so both builds go unsigned: the runner has no
+      # certificate for the team project.yml names.
       - name: Build for macOS
-        run: make build-app
+        run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
-        run: make build-ios
+        run: make ios-sim CODE_SIGNING_ALLOWED=NO
       # Saved from main only: a pull request restores main's newest cache, and
       # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache
