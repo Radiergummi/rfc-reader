@@ -70,3 +70,46 @@ extension Array where Element == Inline {
     }
   }
 }
+
+extension RFCDocument {
+  /// Every block in the document, in document order: the abstract's first, then
+  /// each section's, depth first through nesting and through subsections, each
+  /// block ahead of what it holds. The one definition of "every block" (#131).
+  public var blocks: [Block] {
+    (header.abstract + allSections.flatMap(\.blocks)).flattened
+  }
+
+  /// Every inline a reader sees as prose, in document order: the abstract, then
+  /// each section's heading and its blocks' own runs of prose. The one definition
+  /// of "everywhere the text can cite something" (#131); a walk that missed the
+  /// headings was #127.
+  ///
+  /// Flattened as `[Inline].flattened` is: an emphasis, strong text or link comes
+  /// ahead of the inlines it holds, and they come too. So this is for finding
+  /// inlines, such as cross references, not for reading text, where a wrapper's
+  /// words would be counted twice.
+  ///
+  /// Not captions, which are plain strings in the model, and not artwork or source
+  /// code, which are set as typed; see `Block.proseRuns`.
+  public var proseInlines: [Inline] {
+    var runs = header.abstract.flattened.flatMap(\.proseRuns)
+    for section in allSections {
+      runs.append(section.title)
+      runs += section.blocks.flattened.flatMap(\.proseRuns)
+    }
+    return runs.flatMap(\.flattened)
+  }
+
+  /// The first section, depth first, that `matches`, without building the list of
+  /// every section to look through.
+  func firstSection(where matches: (Section) -> Bool) -> Section? {
+    func search(_ sections: [Section]) -> Section? {
+      for section in sections {
+        if matches(section) { return section }
+        if let found = search(section.subsections) { return found }
+      }
+      return nil
+    }
+    return search(sections)
+  }
+}
