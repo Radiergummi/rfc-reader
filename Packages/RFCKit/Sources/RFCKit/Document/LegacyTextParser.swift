@@ -470,13 +470,45 @@ public struct LegacyTextParser: Sendable {
   /// clauses read as sentences too: RFC 3635 has 632 such lines at column 23 against
   /// 354 of body at 3, and the commonest indent put its cap at 26.
   ///
+  /// Nor is a MIB module's quoted text counted at all, because the quarter is not
+  /// enough where the module is most of the document. RFC 8096 is mostly its module,
+  /// and its `DESCRIPTION` clauses at 6 to 10 outnumber the body at 3 so far that the
+  /// quarter landed at 7: the cap rose to 10, and 37 of the module's blocks, `::= {
+  /// ipv6MIBObjects 1 }` and all, became paragraphs. RFC 1657 has 175 such lines at 28
+  /// against 22 of body. A clause is its keyword's quoted string, open until the line
+  /// that closes the quote.
+  ///
   /// Over the whole document rather than the body, because the front matter's own
   /// prose test runs before the body's start is known. The front matter is a few
   /// dozen lines against the hundreds the indent is taken from.
   static func proseIndent(_ lines: [Line]) -> Int {
+    proseIndent(
+      lines.compactMap { line in
+        guard case .text(let string) = line else { return nil }
+        return string
+      })
+  }
+
+  static func proseIndent(_ lines: [String]) -> Int {
     var counts: [Int: Int] = [:]
-    for case .text(let string) in lines where readsLikeSentences([string], minimumWords: 4) {
-      counts[string.leadingSpaceCount, default: 0] += 1
+    var insideClause = false
+    var followsClauseKeyword = false
+    for string in lines {
+      let trimmed = string.trimmingCharacters(in: .whitespaces)
+      guard !trimmed.isEmpty else { continue }
+      let keyword = trimmed.prefix { !$0.isWhitespace }
+      let opensClause =
+        mibClauseKeywords.contains(keyword) || (followsClauseKeyword && trimmed.hasPrefix("\""))
+      followsClauseKeyword = mibClauseKeywords.contains(trimmed[...])
+      if insideClause || opensClause {
+        // A clause's string holds no quote of its own, so an odd count opens or
+        // closes it.
+        if !trimmed.count(where: { $0 == "\"" }).isMultiple(of: 2) { insideClause.toggle() }
+        continue
+      }
+      if readsLikeSentences([string], minimumWords: 4) {
+        counts[string.leadingSpaceCount, default: 0] += 1
+      }
     }
     let total = counts.values.reduce(0, +)
     var seen = 0
@@ -486,6 +518,12 @@ public struct LegacyTextParser: Sendable {
     }
     return classicProseIndent
   }
+
+  /// The SMI clauses whose quoted string is text: what a MIB module says about an
+  /// object in sentences, set as deep as the module sets it.
+  private static let mibClauseKeywords: Set<Substring> = [
+    "DESCRIPTION", "REFERENCE", "CONTACT-INFO", "ORGANIZATION",
+  ]
 
   /// Whether `1:` and `2.4.12:` at column 0 are headings in this document. RFC 2078, 2743
   /// and 2130 number every heading that way (#71), and 1308, 1309, 1913, 2025 and 2479
@@ -1664,10 +1702,15 @@ public struct LegacyTextParser: Sendable {
 
     // Past the classic cap the indent is excused only for sentences, as it is under a
     // list item: a document whose body sits deeper sets its one-line code there too
-    // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard.
+    // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard. Nor for
+    // a MIB module's text, whose `DESCRIPTION` clauses and comments are sentences: a
+    // block with an assignment in it, or an ASN.1 comment, is the module's (RFC 8096's
+    // `... obsoleted by IP-MIB::ipv6IpForwarding." ::= { ipv6MIBObjects 1 }`).
     if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
-    } else if indent > classicProseIndent, !readsLikeSentences(lines, share: (of: 1, in: 2)) {
+    } else if indent > classicProseIndent,
+      !readsLikeSentences(lines, share: (of: 1, in: 2)) || readsAsModuleText(lines)
+    {
       diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {
@@ -1702,6 +1745,19 @@ public struct LegacyTextParser: Sendable {
     if diagnosis.artworkMatches > 0 { diagnosis.rejections.append(.artworkPattern) }
     if gapped { diagnosis.rejections.append(.internalGap) }
     return diagnosis
+  }
+
+  /// An ASN.1 assignment (`::=`), which ends every clause, or a comment of two lines or
+  /// more, each opening `--`.
+  ///
+  /// Not a single line opening `--`, nor a block of several whose first line does
+  /// alone: RFC 479 and 1343 mark the items of a list that way. And not an unbalanced
+  /// quote, which a clause's string split by a blank line has, because a quotation
+  /// running over several paragraphs has it as well (RFC 1127, 1207).
+  private static func readsAsModuleText(_ lines: [String]) -> Bool {
+    if lines.contains(where: { $0.contains("::=") }) { return true }
+    return lines.count > 1
+      && lines.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
   }
 
   /// The early RFCs typeset with justified text (757, 806, 841, 909, 1341) pad the gaps
