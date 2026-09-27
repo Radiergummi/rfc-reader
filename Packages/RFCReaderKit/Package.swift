@@ -1,6 +1,14 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
+// One set of language settings for every target, tests included (#129).
+let swiftSettings: [SwiftSetting] = [
+  .enableUpcomingFeature("ExistentialAny"),
+  .enableUpcomingFeature("MemberImportVisibility"),
+  .enableUpcomingFeature("InferIsolatedConformances"),
+  .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+]
+
 let package = Package(
   name: "RFCReaderKit",
   // The app's floors: nothing else consumes this package (#129). No visionOS until
@@ -19,14 +27,13 @@ let package = Package(
     .target(
       name: "RFCReaderKit",
       dependencies: [.product(name: "RFCKit", package: "RFCKit")],
-      swiftSettings: [
-        .enableUpcomingFeature("ExistentialAny")
-      ]
+      swiftSettings: swiftSettings
     ),
     .testTarget(
       name: "RFCReaderKitTests",
       dependencies: ["RFCReaderKit"],
-      resources: [.copy("Fixtures")]
+      resources: [.copy("Fixtures")],
+      swiftSettings: swiftSettings
     ),
   ],
   swiftLanguageModes: [.v6]

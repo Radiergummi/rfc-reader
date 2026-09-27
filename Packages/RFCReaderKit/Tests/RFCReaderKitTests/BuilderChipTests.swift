@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Builder: reference chips")
 @MainActor
 struct BuilderChipTests {

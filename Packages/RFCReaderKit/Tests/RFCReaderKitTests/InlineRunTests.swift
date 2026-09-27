@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Inline runs")
 @MainActor
 struct InlineRunTests {

@@ -8,6 +8,14 @@ import PackageDescription
 // the report and manifest types, the schema check's causes -- so tests call it rather
 // than re-implement it. corpus-build is the command line around it: arguments, files,
 // concurrency, logging (swift-log) and xmllint.
+// One set of language settings for every target, tests included (#129).
+let swiftSettings: [SwiftSetting] = [
+  .enableUpcomingFeature("ExistentialAny"),
+  .enableUpcomingFeature("MemberImportVisibility"),
+  .enableUpcomingFeature("InferIsolatedConformances"),
+  .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+]
+
 let package = Package(
   name: "corpus-build",
   // RFCKit's floor.
@@ -20,7 +28,8 @@ let package = Package(
   targets: [
     .target(
       name: "RFCCorpusKit",
-      dependencies: [.product(name: "RFCKit", package: "RFCKit")]
+      dependencies: [.product(name: "RFCKit", package: "RFCKit")],
+      swiftSettings: swiftSettings
     ),
     .executableTarget(
       name: "corpus-build",
@@ -29,13 +38,15 @@ let package = Package(
         .product(name: "RFCKit", package: "RFCKit"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "Logging", package: "swift-log"),
-      ]
+      ],
+      swiftSettings: swiftSettings
     ),
     .testTarget(
       name: "RFCCorpusKitTests",
       // corpus-build is here to be built, not imported: the command-line tests run
       // the binary, as `make` does.
-      dependencies: ["RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit")]
+      dependencies: ["RFCCorpusKit", "corpus-build", .product(name: "RFCKit", package: "RFCKit")],
+      swiftSettings: swiftSettings
     ),
   ],
   swiftLanguageModes: [.v6]
