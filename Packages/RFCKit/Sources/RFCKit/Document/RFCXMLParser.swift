@@ -6,30 +6,25 @@ import Foundation
 /// `derivedContent` on cross references, which this parser leans on for stable
 /// anchors and display text instead of re-implementing the numbering rules.
 public struct RFCXMLParser: Sendable {
-  public enum ParseError: Error, Sendable {
+  public enum ParseError: Error, Sendable, Equatable {
     case notAnRFC(rootElement: String)
-    case malformed(String)
+    case malformed(XMLSyntaxError)
   }
 
   public init() {}
 
-  public static func parse(_ data: Data) throws -> RFCDocument {
+  public static func parse(_ data: Data) throws(ParseError) -> RFCDocument {
     try RFCXMLParser().parse(data)
   }
 
-  public func parse(_ data: Data) throws -> RFCDocument {
-    let root: XMLElement
+  public func parse(_ data: Data) throws(ParseError) -> RFCDocument {
+    let root: XMLTree.Element
     do {
-      root = try XMLTreeBuilder.parse(data)
-    } catch let error as XMLTreeError {
-      switch error {
-      case .malformed(let line, let column, let message):
-        throw ParseError.malformed("line \(line), column \(column): \(message)")
-      case .empty:
-        throw ParseError.malformed("empty document")
-      }
+      root = try XMLTree.parse(data)
+    } catch {
+      throw .malformed(error)
     }
-    guard root.name == "rfc" else { throw ParseError.notAnRFC(rootElement: root.name) }
+    guard root.name == "rfc" else { throw .notAnRFC(rootElement: root.name) }
 
     // References first, so cross references in the body resolve to RFC numbers.
     // Every list, not only the back's: a converted legacy document can hold one in
@@ -99,9 +94,9 @@ public struct RFCXMLParser: Sendable {
 
     /// Every reference anchor below `element`, which has to be read before the
     /// body so a cross reference in it resolves to a document.
-    static func referenceTargets(in element: XMLElement) -> [String: DocumentID] {
+    static func referenceTargets(in element: XMLTree.Element) -> [String: DocumentID] {
       var targets: [String: DocumentID] = [:]
-      func walk(_ element: XMLElement) {
+      func walk(_ element: XMLTree.Element) {
         for child in element.elements {
           switch child.name {
           case "reference":
@@ -126,7 +121,7 @@ public struct RFCXMLParser: Sendable {
 
     // MARK: Header
 
-    func parseHeader(_ rfc: XMLElement) -> DocumentHeader {
+    func parseHeader(_ rfc: XMLTree.Element) -> DocumentHeader {
       let front = rfc.first("front")
       let titleElement = front?.first("title")
       var header = DocumentHeader(title: titleElement?.normalizedText ?? "")
@@ -178,7 +173,7 @@ public struct RFCXMLParser: Sendable {
         .map { DocumentID.rfc($0) }
     }
 
-    private static func parseAuthor(_ element: XMLElement) -> Author? {
+    private static func parseAuthor(_ element: XMLTree.Element) -> Author? {
       var name = element["fullname"]
       if name == nil || name?.isEmpty == true {
         let parts = [element["initials"], element["surname"]].compactMap { $0 }.filter {
@@ -197,7 +192,7 @@ public struct RFCXMLParser: Sendable {
     /// `<organization>` and `<address>`, when the author has either. Every element
     /// is optional in the schema, and empty ones are common in the published
     /// series (`<organization/>`), so an empty one counts as absent.
-    private static func parseContact(_ element: XMLElement) -> AuthorContact? {
+    private static func parseContact(_ element: XMLTree.Element) -> AuthorContact? {
       let address = element.first("address")
       let contact = AuthorContact(
         organization: nonEmpty(element.first("organization")),
@@ -214,7 +209,7 @@ public struct RFCXMLParser: Sendable {
     /// A field given twice is given once and left empty once in the published
     /// series (RFC 9269's `<city/><city>Munich</city>`), so the first with text
     /// is the one kept.
-    private static func parsePostal(_ element: XMLElement) -> PostalAddress? {
+    private static func parsePostal(_ element: XMLTree.Element) -> PostalAddress? {
       func values(_ name: String) -> [String] { element.all(name).compactMap(nonEmpty) }
       let postal = PostalAddress(
         street: values("street"),
@@ -231,12 +226,12 @@ public struct RFCXMLParser: Sendable {
       return postal.lines.isEmpty ? nil : postal
     }
 
-    private static func nonEmpty(_ element: XMLElement?) -> String? {
+    private static func nonEmpty(_ element: XMLTree.Element?) -> String? {
       guard let text = element?.normalizedText, !text.isEmpty else { return nil }
       return text
     }
 
-    private static func parseDate(_ element: XMLElement) -> PublicationDate? {
+    private static func parseDate(_ element: XMLTree.Element) -> PublicationDate? {
       guard let year = element["year"].flatMap(Int.init) else { return nil }
       let month = element["month"].flatMap(PublicationDate.month(from:))
       let day = element["day"].flatMap(Int.init)
@@ -245,7 +240,7 @@ public struct RFCXMLParser: Sendable {
 
     // MARK: Sections
 
-    func parseSections(in parent: XMLElement, appendix: Bool) -> [Section] {
+    func parseSections(in parent: XMLTree.Element, appendix: Bool) -> [Section] {
       parent.elements.compactMap { child in
         switch child.name {
         case "section": parseSection(child, appendix: appendix)
@@ -257,7 +252,7 @@ public struct RFCXMLParser: Sendable {
       }
     }
 
-    func parseSection(_ element: XMLElement, appendix: Bool) -> Section {
+    func parseSection(_ element: XMLTree.Element, appendix: Bool) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let isNumbered = element["numbered"] != "false"
@@ -279,7 +274,7 @@ public struct RFCXMLParser: Sendable {
     /// A heading's `<name>`, as inlines. Headings cite documents like any other
     /// prose -- "Changes from RFC 3066" -- and the schema lets `<name>` hold an
     /// `<xref>`, so reading it as flat text threw those links away.
-    private func parseHeadingTitle(_ element: XMLElement, fallback: String) -> [Inline] {
+    private func parseHeadingTitle(_ element: XMLTree.Element, fallback: String) -> [Inline] {
       guard let name = element.first("name") else { return [.text(fallback)] }
       let inlines = normalize(parseInlines(name.children))
       return inlines.isEmpty ? [.text(fallback)] : inlines
@@ -301,7 +296,7 @@ public struct RFCXMLParser: Sendable {
       return (nil, false)
     }
 
-    func parseReferencesSection(_ element: XMLElement) -> Section {
+    func parseReferencesSection(_ element: XMLTree.Element) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let title = parseHeadingTitle(element, fallback: "References")
@@ -331,7 +326,7 @@ public struct RFCXMLParser: Sendable {
       )
     }
 
-    func parseReference(_ element: XMLElement) -> Reference {
+    func parseReference(_ element: XMLTree.Element) -> Reference {
       var reference = Self.parseEntryMetadata(element)
       if let annotation = element.first("annotation") {
         reference.annotation = normalize(parseInlines(annotation.children))
@@ -342,16 +337,16 @@ public struct RFCXMLParser: Sendable {
     /// Everything about an entry that is not prose. Static because
     /// `referenceTargets(in:)` needs it before there is a builder to link prose
     /// with; the annotation, which is prose, is read by the instance method.
-    static func parseEntryMetadata(_ element: XMLElement) -> Reference {
+    static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
         author.role == nil ? author.name : "\(author.name), Ed."
       }
-      let seriesInfo: [(name: String, value: String)] =
+      let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
-          info -> (name: String, value: String)? in
+          info -> SeriesInfo? in
           guard let name = info["name"], let value = info["value"] else { return nil }
-          return (name: name, value: value)
+          return SeriesInfo(name: name, value: value)
         }
       let refContent = element.first("refcontent")?.normalizedText
       return Reference(
@@ -369,17 +364,17 @@ public struct RFCXMLParser: Sendable {
     /// The tag the prep tool resolved for this entry -- a `<displayreference>`
     /// nickname, or a number under `symRefs="false"` -- which is what every
     /// `<xref>` citing it carries as `derivedContent`.
-    private static func derivedAnchor(of element: XMLElement) -> String? {
+    private static func derivedAnchor(of element: XMLTree.Element) -> String? {
       element["derivedAnchor"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private func parseReferenceGroup(_ element: XMLElement) -> Reference {
+    private func parseReferenceGroup(_ element: XMLTree.Element) -> Reference {
       let anchor = element["anchor"] ?? ""
       let members = element.all("reference").map(parseReference)
       let memberNames = members.compactMap { $0.documentID?.displayName }
-      var seriesInfo: [(name: String, value: String)] = []
+      var seriesInfo: [SeriesInfo] = []
       if let id = DocumentID(label: anchor) {
-        seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
+        seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
       }
       return Reference(
         anchor: anchor,
@@ -419,15 +414,17 @@ public struct RFCXMLParser: Sendable {
     /// `<contact>` is inline in prose ("thanks to <contact fullname=…/>") and a
     /// block of its own directly in a section, where a Contributors section lists
     /// people with their addresses. The schema allows it as a block nowhere else.
-    private static func isBlockContact(_ child: XMLElement, in parent: XMLElement) -> Bool {
+    private static func isBlockContact(
+      _ child: XMLTree.Element, in parent: XMLTree.Element
+    ) -> Bool {
       child.name == "contact" && parent.name == "section"
     }
 
     /// Converts the children of a container element into blocks. Runs of loose text
     /// and inline elements (as found inside `<li>` or `<dd>`) become implicit paragraphs.
-    func parseBlocks(in element: XMLElement) -> [Block] {
+    func parseBlocks(in element: XMLTree.Element) -> [Block] {
       var blocks: [Block] = []
-      var pendingInline: [XMLNode] = []
+      var pendingInline: [XMLTree.Node] = []
 
       func flushInline() {
         guard !pendingInline.isEmpty else { return }
@@ -457,7 +454,7 @@ public struct RFCXMLParser: Sendable {
       return blocks
     }
 
-    private func parseBlock(_ element: XMLElement) -> Block? {
+    private func parseBlock(_ element: XMLTree.Element) -> Block? {
       switch element.name {
       case "t":
         let inlines = normalize(parseInlines(element.children))
@@ -556,13 +553,13 @@ public struct RFCXMLParser: Sendable {
       }
     }
 
-    private func parseListItems(_ element: XMLElement) -> [ListItem] {
+    private func parseListItems(_ element: XMLTree.Element) -> [ListItem] {
       element.all("li").map { item in
         ListItem(blocks: parseBlocks(in: item), anchor: item["anchor"] ?? item["pn"])
       }
     }
 
-    private func parseDefinitionItems(_ element: XMLElement) -> [DefinitionItem] {
+    private func parseDefinitionItems(_ element: XMLTree.Element) -> [DefinitionItem] {
       var items: [DefinitionItem] = []
       var pendingTerm: [Inline]?
       var pendingAnchor: String?
@@ -591,7 +588,7 @@ public struct RFCXMLParser: Sendable {
       return items
     }
 
-    private func parseArtwork(_ element: XMLElement, kind: Preformatted.Kind) -> Preformatted {
+    private func parseArtwork(_ element: XMLTree.Element, kind: Preformatted.Kind) -> Preformatted {
       var text = element.text
       // The RFC Editor wraps artwork in newlines for readability of the XML itself.
       while text.hasPrefix("\n") { text.removeFirst() }
@@ -602,15 +599,15 @@ public struct RFCXMLParser: Sendable {
         kind: kind, text: text, type: type, name: name, anchor: element["anchor"] ?? element["pn"])
     }
 
-    private func parseTable(_ element: XMLElement) -> Table {
-      func cells(of rows: [XMLElement]) -> [[[Inline]]] {
+    private func parseTable(_ element: XMLTree.Element) -> Table {
+      func cells(of rows: [XMLTree.Element]) -> [[[Inline]]] {
         rows.map { row in
           row.elements.filter { $0.name == "th" || $0.name == "td" }
             .map { normalize(parseInlines($0.children)) }
         }
       }
       // Empty unless some row has one, as `Table.rowAnchors` documents.
-      func anchors(of rows: [XMLElement]) -> [String?] {
+      func anchors(of rows: [XMLTree.Element]) -> [String?] {
         rows.contains { $0["anchor"] != nil } ? rows.map { $0["anchor"] } : []
       }
       // RFC 7991 allows more than one `<tbody>`: RFC 9911's tables of YANG types
@@ -640,7 +637,7 @@ public struct RFCXMLParser: Sendable {
 
     /// `linkBare` is false for the words inside an `<eref>`: they are already a
     /// link, and a cross reference nested in one is a link with two destinations.
-    func parseInlines(_ nodes: [XMLNode], linkBare: Bool = true) -> [Inline] {
+    func parseInlines(_ nodes: [XMLTree.Node], linkBare: Bool = true) -> [Inline] {
       var result: [Inline] = []
       for node in nodes {
         switch node {
@@ -653,7 +650,7 @@ public struct RFCXMLParser: Sendable {
       return result
     }
 
-    private func parseInline(_ element: XMLElement, linkBare: Bool) -> [Inline] {
+    private func parseInline(_ element: XMLTree.Element, linkBare: Bool) -> [Inline] {
       switch element.name {
       case "xref", "relref":
         return [.crossReference(parseCrossReference(element))]
@@ -708,7 +705,7 @@ public struct RFCXMLParser: Sendable {
       }
     }
 
-    private func parseCrossReference(_ element: XMLElement) -> CrossReference {
+    private func parseCrossReference(_ element: XMLTree.Element) -> CrossReference {
       let targetAnchor = element["target"] ?? ""
       let section = element["section"]
       let innerText = element.normalizedText

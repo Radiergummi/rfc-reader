@@ -1,48 +1,37 @@
 import Foundation
 
-#if canImport(FoundationXML)
-  import FoundationXML
-#endif
-
 /// Streaming parser for `https://www.rfc-editor.org/rfc-index.xml` (about 14 MB, ~10k entries).
 ///
 /// The index is parsed with a SAX-style state machine rather than a tree because it is
-/// large and flat; an `XMLElement` tree of it would waste memory on the many tiny nodes.
-public final class RFCIndexParser: NSObject, XMLParserDelegate {
-  public enum ParseError: Error, Sendable {
-    case malformed(line: Int, message: String)
+/// large and flat; an `XMLTree` of it would waste memory on the many tiny nodes. It runs
+/// on `XMLDriver`, the tree's own driver, so the two share the rule about errors
+/// reported after the root closes (#133).
+public enum RFCIndexParser {
+  public enum ParseError: Error, Sendable, Equatable {
+    case malformed(XMLSyntaxError)
   }
 
-  public static func parse(_ data: Data) throws -> RFCIndex {
-    let parser = RFCIndexParser()
-    let xml = XMLParser(data: data)
-    xml.delegate = parser
-    xml.shouldProcessNamespaces = false
-    _ = xml.parse()
-    // swift-corelibs-foundation reports a spurious error after the closing root tag on
-    // large documents; once the root element has closed, the document is complete.
-    if !parser.rootClosed {
-      if let error = parser.error { throw error }
-      if let error = xml.parserError {
-        throw ParseError.malformed(line: xml.lineNumber, message: error.localizedDescription)
-      }
-      throw ParseError.malformed(
-        line: xml.lineNumber, message: "document ended before </rfc-index>")
+  public static func parse(_ data: Data) throws(ParseError) -> RFCIndex {
+    let reader = Reader()
+    do {
+      try XMLDriver.run(data, into: reader)
+    } catch {
+      throw .malformed(error)
     }
-    return RFCIndex(rfcs: parser.rfcs, series: parser.series, notIssued: parser.notIssued)
+    return RFCIndex(rfcs: reader.rfcs, series: reader.series, notIssued: reader.notIssued)
   }
 
+  /// Untyped, since reading the file can fail as well as parsing it.
   public static func parse(contentsOf url: URL) throws -> RFCIndex {
     try parse(Data(contentsOf: url))
   }
+}
 
-  // MARK: - State
-
-  private var rfcs: [RFCMetadata] = []
-  private var series: [SeriesEntry] = []
-  private var notIssued: [Int] = []
-  private var error: ParseError?
-  private var rootClosed = false
+/// The index's state machine, fed by `XMLDriver`.
+private final class Reader: XMLEvents {
+  private(set) var rfcs: [RFCMetadata] = []
+  private(set) var series: [SeriesEntry] = []
+  private(set) var notIssued: [Int] = []
 
   private var path: [String] = []
   private var text = ""
@@ -107,12 +96,9 @@ public final class RFCIndexParser: NSObject, XMLParserDelegate {
     }
   }
 
-  // MARK: - XMLParserDelegate
+  // MARK: - XMLEvents
 
-  public func parser(
-    _ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
-    qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]
-  ) {
+  func start(_ elementName: String, attributes: [String: String]) {
     path.append(elementName)
     text = ""
     switch elementName {
@@ -133,18 +119,14 @@ public final class RFCIndexParser: NSObject, XMLParserDelegate {
     }
   }
 
-  public func parser(_ parser: XMLParser, foundCharacters string: String) {
+  func text(_ string: String) {
     text.append(string)
   }
 
-  public func parser(
-    _ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
-    qualifiedName qName: String?
-  ) {
+  func end(_ elementName: String) {
     defer {
       path.removeLast()
       text = ""
-      if path.isEmpty { rootClosed = true }
     }
     let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
     let parent = path.count >= 2 ? path[path.count - 2] : ""
@@ -206,7 +188,4 @@ public final class RFCIndexParser: NSObject, XMLParserDelegate {
     }
   }
 
-  public func parser(_ parser: XMLParser, parseErrorOccurred parseError: any Error) {
-    error = .malformed(line: parser.lineNumber, message: parseError.localizedDescription)
-  }
 }
