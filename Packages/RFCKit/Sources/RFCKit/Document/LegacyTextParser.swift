@@ -480,8 +480,8 @@ public struct LegacyTextParser: Sendable {
     }
     let total = counts.values.reduce(0, +)
     var seen = 0
-    for indent in counts.keys.sorted() {
-      seen += counts[indent] ?? 0
+    for (indent, count) in counts.sorted(by: { $0.key < $1.key }) {
+      seen += count
       if seen * 4 >= total { return max(classicProseIndent, indent + 3) }
     }
     return classicProseIndent
@@ -868,9 +868,9 @@ public struct LegacyTextParser: Sendable {
     var index = blocks.startIndex
     while index < blocks.endIndex {
       let block = blocks[index]
-      if let title = standaloneTitle(block)?.lowercased(), isBoilerplateTitle(title) {
+      if let heading = standaloneTitle(block)?.lowercased(), isBoilerplateTitle(heading) {
         index += 1
-        guard !title.hasPrefix("table of contents") else { continue }
+        guard !heading.hasPrefix("table of contents") else { continue }
         // Status paragraphs run to one or two, the copyright statement to three, and
         // they are paragraphs: RFC 1144's author's note after its status is artwork.
         // And they say what boilerplate says, because otherwise only a heading ends the

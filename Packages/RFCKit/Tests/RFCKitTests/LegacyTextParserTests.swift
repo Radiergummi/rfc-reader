@@ -618,9 +618,7 @@ struct LegacyTextCorpusFindingsTests {
   /// and its paragraph, and its contents. The body after them stays.
   @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
     func leadIn(_ fixture: String) throws -> [Block] {
-      LegacyTextParser.parse(try Fixtures.string(fixture)).sections.first {
-        $0.anchor == "preamble"
-      }?.blocks ?? []
+      LegacyTextParser.parse(try Fixtures.string(fixture)).leadIn
     }
     func text(_ block: Block) -> String {
       switch block {
@@ -713,9 +711,8 @@ struct LegacyTextCorpusFindingsTests {
 
     let document = LegacyTextParser.parse(text, title: title)
     #expect(document.header.title == title)
-    let leadIn = document.sections.first { $0.anchor == "preamble" }?.blocks ?? []
     #expect(
-      !leadIn.contains {
+      !document.leadIn.contains {
         if case .preformatted(let artwork) = $0 {
           return artwork.text.contains("For Multimedia Mail")
         }
@@ -742,9 +739,8 @@ struct LegacyTextCorpusFindingsTests {
   /// `June 9, 1972` was the lead-in's second block (#170).
   @Test func aDateAloneOnALineIsTheTitlePages() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc355.txt"))
-    let leadIn = document.sections.first { $0.anchor == "preamble" }?.blocks ?? []
     #expect(
-      !leadIn.contains {
+      !document.leadIn.contains {
         if case .preformatted(let artwork) = $0 { return artwork.text.contains("June 9, 1972") }
         return false
       })
@@ -1408,6 +1404,9 @@ extension RFCDocument {
   /// the same flattened block list, and written out at each call site the filter --
   /// which is the part that differs -- is the line you have to read four lines to find.
   var everyBlock: [Block] { allSections.flatMap(\.blocks) }
+
+  /// The unnumbered text before the first heading, which the parser keeps as `preamble`.
+  var leadIn: [Block] { sections.first { $0.anchor == "preamble" }?.blocks ?? [] }
 
   var referenceLists: [ReferenceList] {
     everyBlock.compactMap {
