@@ -73,7 +73,19 @@ import SwiftUI
           }
         }
       }
-      .onAppear { library.register(navigation) }
+      .onAppear {
+        library.register(navigation)
+        // Collapsed, the sidebar is a list of push rows, and a filter selected
+        // before anything was tapped reads as a tap left behind. The list still
+        // lists it: `filter` keeps its value.
+        if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
+      }
+      // Side by side, the sidebar shows which filter feeds the list.
+      .onChange(of: horizontalSizeClass) {
+        if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {
+          navigation.sidebarSelection = navigation.filter
+        }
+      }
       .onDisappear { library.unregister(navigation) }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
       .onChange(of: navigation.selection) { library.activate(navigation) }

@@ -4,14 +4,9 @@ import SwiftUI
 struct SidebarView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
-  #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    /// The filter a collapsed split view has pushed. See `collapsedSelection`.
-    @State private var pushedFilter: LibraryFilter?
-  #endif
 
   var body: some View {
-    List(selection: selection) {
+    List(selection: Bindable(navigation).sidebarSelection) {
       Section("Library") {
         row(.bookmarks)
         row(.recent)
@@ -80,26 +75,7 @@ struct SidebarView: View {
         .frame(maxWidth: .infinity)
         .background(.bar)
       }
-    #else
-      // Collapsing shows the filter that was open, not the sidebar above it.
-      .onChange(of: horizontalSizeClass) {
-        pushedFilter = navigation.filter
-      }
     #endif
-  }
-
-  /// iOS only offers `List(selection:)` with an optional binding, and deselecting
-  /// should leave the current filter in place rather than clear it.
-  private var selection: Binding<LibraryFilter?> {
-    #if !os(macOS)
-      if horizontalSizeClass == .compact {
-        return collapsedSelection(pushed: $pushedFilter) { navigation.filter = $0 }
-      }
-    #endif
-    return Binding(
-      get: { navigation.filter },
-      set: { if let new = $0 { navigation.filter = new } }
-    )
   }
 
   private func row(_ filter: LibraryFilter) -> some View {
