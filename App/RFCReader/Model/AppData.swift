@@ -1,5 +1,10 @@
+import Foundation
 import RFCReaderKit
 import SwiftData
+import os
+
+private let userDataLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "user data")
 
 /// The one SwiftData container.
 ///
@@ -11,9 +16,7 @@ import SwiftData
 /// scene and every hosted root.
 @MainActor
 enum AppData {
-  /// Versioned, and migrated from whatever version is on disk; see `UserData` (#152).
-  /// Rows naming the same document are merged once it opens: the schema has no
-  /// unique constraint, which CloudKit refuses.
+  /// Versioned and migrated, then merged to one row per document; see `UserData`.
   static let container: ModelContainer = {
     let container: ModelContainer
     do {
@@ -21,7 +24,12 @@ enum AppData {
     } catch {
       fatalError("Could not open the user data store: \(error)")
     }
-    try? UserData.deduplicate(container.mainContext)
+    do {
+      try UserData.deduplicate(container.mainContext)
+    } catch {
+      userDataLog.error(
+        "merging duplicate rows failed: \(String(describing: error), privacy: .public)")
+    }
     return container
   }()
 }

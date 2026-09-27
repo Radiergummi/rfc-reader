@@ -42,10 +42,9 @@ final class LibraryModel {
   /// BCP 14 is not answered for by RFC 14 (#152).
   private(set) var bookmarkedDocuments: Set<DocumentID> = []
 
-  /// The bookmarked RFCs' numbers, for the lists, which list RFCs.
-  var bookmarkedNumbers: Set<Int> {
-    Set(bookmarkedDocuments.filter { $0.series == .rfc }.map(\.number))
-  }
+  /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
+  /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
+  private(set) var bookmarkedNumbers: Set<Int> = []
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
   /// Every RFC with a cached body: the Available Offline list. Kept here, and
@@ -54,19 +53,20 @@ final class LibraryModel {
   private(set) var downloadedNumbers: Set<Int> = []
 
   private init() {
-    refreshBookmarkedNumbers()
+    refreshBookmarks()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.refreshBookmarkedNumbers() }
+      MainActor.assumeIsolated { self?.refreshBookmarks() }
     }
   }
 
-  private func refreshBookmarkedNumbers() {
+  private func refreshBookmarks() {
     let documents = BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
     // Only a change is news: most saves record a reading position, not a bookmark.
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
+    bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))
   }
 
   private func refreshDownloadedNumbers() async {
