@@ -38,7 +38,7 @@ struct CommandLineTests {
 
   /// The misspelling a lenient parser once ran with: `convert` without overrides, and
   /// exit status 0.
-  @Test func anUnknownFlagIsRejected() throws {
+  @Test func `an unknown flag is rejected`() throws {
     let out = Self.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: out) }
 
@@ -54,7 +54,7 @@ struct CommandLineTests {
   /// A report from `--only` holds only the named documents. Written over the corpus
   /// report, it would become the next full run's baseline, and every document it left
   /// out would count as newly checked rather than as one that stopped validating.
-  @Test func onlyRefusesAReport() throws {
+  @Test func `only refuses a report`() throws {
     let out = Self.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: out) }
 
@@ -67,7 +67,7 @@ struct CommandLineTests {
     #expect(!FileManager.default.fileExists(atPath: out.path), "nothing was converted")
   }
 
-  @Test func onlyConvertsTheNamedDocuments() throws {
+  @Test func `only converts the named documents`() throws {
     let out = Self.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: out) }
 

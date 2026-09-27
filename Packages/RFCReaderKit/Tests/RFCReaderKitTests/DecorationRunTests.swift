@@ -27,7 +27,7 @@ struct DecorationRunTests {
     return span.runRange
   }
 
-  @Test func multiLineArtworkIsOneDecorationRun() throws {
+  @Test func `multi line artwork is one decoration run`() throws {
     let art = "line one\nline two\nline three\nline four"
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: art, anchor: "figure-1"))),
@@ -43,7 +43,7 @@ struct DecorationRunTests {
     }
   }
 
-  @Test func aStackedTablesCellsAreOneDecorationRun() throws {
+  @Test func `a stacked tables cells are one decoration run`() throws {
     let table = RFCKit.Table(
       title: nil,
       number: nil,
@@ -81,7 +81,7 @@ struct DecorationRunTests {
     ],
     [Preformatted(kind: .artwork, text: "AAAA"), Preformatted(kind: .artwork, text: "BBBB")],
   ])
-  func adjacentVerbatimBlocksAreTwoCards(blocks: [Preformatted]) throws {
+  func `adjacent verbatim blocks are two cards`(blocks: [Preformatted]) throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(blocks[0]), .preformatted(blocks[1])), style: style)
     let first = try Fixtures.offset(of: "AAAA", in: built.text)
@@ -108,7 +108,7 @@ struct DecorationRunTests {
   }
 
   /// Two different decorations must still not merge into each other.
-  @Test func differentDecorationsStayDifferentRuns() throws {
+  @Test func `different decorations stay different runs`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
         .blockQuote([.paragraph(Paragraph(text: "quoted"))]),
@@ -129,7 +129,7 @@ struct DecorationRunTests {
   /// That is the shape the staircase had, and this catches it without anyone
   /// having to write a fixture for the new block kind.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
-  func noBlockIsSplitIntoTwoRuns(fixture: String) throws {
+  func `no block is split into two runs`(fixture: String) throws {
     let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
     let built = DocumentTextBuilder.build(document, style: style)
     let text = built.text.string as NSString

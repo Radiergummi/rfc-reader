@@ -1,5 +1,11 @@
 import Foundation
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// Everything the builder needs to know about presentation — and nothing about colour.
 ///
 /// Colours are dynamic `PlatformColor` values stored straight into the attributed

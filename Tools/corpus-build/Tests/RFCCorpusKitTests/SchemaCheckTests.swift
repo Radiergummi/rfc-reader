@@ -19,7 +19,7 @@ struct SchemaCheckTests {
     SchemaCheck.causes(in: Data(xml.utf8))
   }
 
-  @Test func aMinimalDocumentHasNoCause() {
+  @Test func `a minimal document has no cause`() {
     #expect(Self.causes(Self.document()) == [])
   }
 
@@ -47,36 +47,36 @@ struct SchemaCheckTests {
     (document(middle: ""), .emptyMiddle),
     (document(front: "<author/><abstract><artwork>x</artwork></abstract>"), .blockInAbstract),
   ])
-  func eachCauseIsFoundAlone(xml: String, cause: SchemaCheck.Cause) {
+  func `each cause is found alone`(xml: String, cause: SchemaCheck.Cause) {
     #expect(Self.causes(xml) == [cause], "\(xml)")
   }
 
-  @Test func aReferencesListBesideEntriesIsMisplaced() {
+  @Test func `a references list beside entries is misplaced`() {
     let back =
       #"<references><reference anchor="r"><front><title>t</title><author/></front></reference><references/></references>"#
     #expect(Self.causes(Self.document(back: back)) == [.misplacedReferences])
   }
 
-  @Test func aReferenceFrontNeedsAnAuthorToo() {
+  @Test func `a reference front needs an author too`() {
     let back =
       #"<references><reference anchor="r"><front><title>t</title></front></reference></references>"#
     #expect(Self.causes(Self.document(back: back)) == [.frontWithoutAuthor])
   }
 
-  @Test func causesComeInDeclarationOrder() {
+  @Test func `causes come in declaration order`() {
     #expect(
       Self.causes(Self.document(front: "", middle: "")) == [.frontWithoutAuthor, .emptyMiddle])
   }
 
   @Test(arguments: ["rfc8999.xml", "rfc9220.xml"])
-  func publishedRFCsHaveNoCause(fixture: String) throws {
+  func `published RFCs have no cause`(fixture: String) throws {
     #expect(SchemaCheck.causes(in: try Data(contentsOf: Fixtures.url(fixture))) == [])
   }
 
   /// What a run compares itself with, read from the report it is about to replace. A
   /// report from a run that did not check says nothing about validity, so it is no
   /// baseline, rather than one in which nothing validated.
-  @Test func thePreviousReportSaysWhichDocumentsValidated() {
+  @Test func `the previous report says which documents validated`() {
     func valid(_ json: String) -> Set<String>? {
       DocumentReport.validDocuments(inReport: Data(json.utf8))
     }

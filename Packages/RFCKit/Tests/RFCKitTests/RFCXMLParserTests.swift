@@ -9,7 +9,7 @@ struct RFCXMLParserTests {
     try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
   }
 
-  @Test func header() throws {
+  @Test func `header`() throws {
     let document = try Self.document()
     #expect(document.source == .xml)
     #expect(document.header.id == .rfc(8999))
@@ -35,7 +35,7 @@ struct RFCXMLParserTests {
     }
   }
 
-  @Test func sectionTree() throws {
+  @Test func `section tree`() throws {
     let document = try Self.document()
     let top = document.sections
     #expect(top.first?.number == "1")
@@ -59,7 +59,7 @@ struct RFCXMLParserTests {
     #expect(document.section(anchor: "status-of-memo") == nil)
   }
 
-  @Test func blocksAndInlines() throws {
+  @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
 
@@ -100,7 +100,7 @@ struct RFCXMLParserTests {
     #expect(mentionsFigure)
   }
 
-  @Test func crossReferencesResolveToRFCs() throws {
+  @Test func `cross references resolve to RFCs`() throws {
     let document = try Self.document()
     let fixed = try #require(document.section(number: "2"))
     guard case .paragraph(let paragraph)? = fixed.blocks.first else {
@@ -121,7 +121,7 @@ struct RFCXMLParserTests {
   /// A reference tagged with its canonical number reads as "RFC 2119", and the
   /// space never breaks across a line. A reference the author tagged themselves
   /// ("[QUIC-TRANSPORT]") keeps the name the document uses throughout.
-  @Test func canonicalDocumentLabelsUseANonBreakingSpace() throws {
+  @Test func `canonical document labels use a non breaking space`() throws {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
@@ -139,7 +139,7 @@ struct RFCXMLParserTests {
     #expect(transport.text == "[QUIC-TRANSPORT]", "an author's own reference tag is left alone")
   }
 
-  @Test func canonicalLabelsAreFlaggedForTheRenderer() throws {
+  @Test func `canonical labels are flagged for the renderer`() throws {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
@@ -160,7 +160,7 @@ struct RFCXMLParserTests {
   }
 
   /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.
-  @Test func sectionCompositeLabelsUseNonBreakingSpaces() throws {
+  @Test func `section composite labels use non breaking spaces`() throws {
     let xml = """
       <?xml version="1.0" encoding="UTF-8"?>
       <rfc number="9999" version="3">
@@ -197,7 +197,7 @@ struct RFCXMLParserTests {
 
   /// XML collapses #x20, #x9, #xD and #xA. U+00A0 is not one of them, and
   /// collapsing it would undo every non-breaking label on a round trip.
-  @Test func nonBreakingSpacesSurviveWhitespaceCollapsing() throws {
+  @Test func `non breaking spaces survive whitespace collapsing`() throws {
     let xml = """
       <?xml version="1.0" encoding="UTF-8"?>
       <rfc number="9999" version="3">
@@ -223,7 +223,7 @@ struct RFCXMLParserTests {
   /// whenever the sentence reads better that way -- 160 times in RFC 9293, 30 in
   /// RFC 9110. Only the legacy parser used to linkify those, so the entire
   /// post-8650 range showed them as plain text.
-  @Test func bareRFCMentionsInProseAreLinked() throws {
+  @Test func `bare RFC mentions in prose are linked`() throws {
     let xml = """
       <rfc number="9999"><front><title>Bare Mentions</title></front>
       <middle><section anchor="s1"><name>Introduction</name>
@@ -262,7 +262,7 @@ struct RFCXMLParserTests {
     #expect(!document.referencedDocuments.contains(.rfc(1035)))
   }
 
-  @Test func references() throws {
+  @Test func `references`() throws {
     let document = try Self.document()
     let references = try #require(document.sections.first { $0.titleText == "References" })
     #expect(references.number == "8")
@@ -295,7 +295,7 @@ struct RFCXMLParserTests {
   /// cites them as `[HTTP/2]` and `[HTTP/3]`. The entry has to read the same, or a
   /// reader cannot find the citation in the bibliography -- while the anchor stays
   /// what `<xref target>` points at.
-  @Test func anEntryIsLabelledTheWayItsCitationsAre() throws {
+  @Test func `an entry is labelled the way its citations are`() throws {
     let entries = try Self.entries(in: "rfc9220.xml")
     let http2 = try #require(entries.first { $0.anchor == "HTTP2" })
     #expect(http2.displayAnchor == "HTTP/2")
@@ -307,7 +307,7 @@ struct RFCXMLParserTests {
   /// is a position in the list, not an RFC: RFC 1004's `[2]` is the EGP specification.
   /// Neither an entry's anchor nor a group's names a document unless it says which
   /// series, and a citation of one opens nothing it does not name.
-  @Test func aNumberedAnchorIsNotTheRFCOfItsNumber() throws {
+  @Test func `a numbered anchor is not the RFC of its number`() throws {
     let xml = """
       <rfc number="1004"><front><title>Numbered</title></front>
       <middle><section anchor="s1"><name>Introduction</name>
@@ -339,7 +339,7 @@ struct RFCXMLParserTests {
 
   /// RFC 8761 sets `symRefs="false"`: its prose cites `[1]`, `[2]`, and nothing in the
   /// bibliography says `BT2020-2` anywhere a reader can see.
-  @Test func numberedReferencesAreLabelledByNumber() throws {
+  @Test func `numbered references are labelled by number`() throws {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
@@ -348,7 +348,7 @@ struct RFCXMLParserTests {
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
   /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
   /// Reading only the first kept the six counters and dropped the rest.
-  @Test func everyTableBodyIsRead() throws {
+  @Test func `every table body is read`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
     let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
       if case .table(let table) = block { return table }
@@ -365,7 +365,7 @@ struct RFCXMLParserTests {
   /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,
   /// beside the `rel="alternate"` links for its DOI and the series ISSN, which are not
   /// lineage and must not be taken for it.
-  @Test func theDraftAnRFCCameFromIsRead() throws {
+  @Test func `the draft an RFC came from is read`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml"))
     #expect(
       document.header.precedingDraft?.absoluteString
@@ -375,7 +375,7 @@ struct RFCXMLParserTests {
   /// RFC 9842 cites two WHATWG living standards and pins each to the commit it was
   /// written against in an `<annotation>`. Without it the entry names only the moving
   /// target.
-  @Test func aReferenceKeepsItsAnnotation() throws {
+  @Test func `a reference keeps its annotation`() throws {
     let entries = try Self.entries(in: "rfc9842.xml")
     let fetch = try #require(entries.first { $0.anchor == "FETCH" })
     let snapshot = try #require(
@@ -396,7 +396,7 @@ struct RFCXMLParserTests {
   /// 10050 -- so this is the smallest document that does, rather than a fixture. A
   /// group of one keeps its member's annotation as is; a group of several keeps every
   /// member's, each after the name of the member it belongs to.
-  @Test func aGroupKeepsItsMembersAnnotations() throws {
+  @Test func `a group keeps its members annotations`() throws {
     let xml = """
       <rfc number="9999"><front><title>Grouped</title></front>
       <back><references>
@@ -431,7 +431,7 @@ struct RFCXMLParserTests {
   }
 
   /// `rel` is HTML's: space-separated keywords, compared without regard to case.
-  @Test func aLinkRelationIsATokenList() {
+  @Test func `a link relation is a token list`() {
     #expect(RFCXMLParser.relation("prev", includes: "prev"))
     #expect(RFCXMLParser.relation("Prev", includes: "prev"))
     #expect(RFCXMLParser.relation("alternate  prev", includes: "prev"))
@@ -443,7 +443,7 @@ struct RFCXMLParserTests {
 
   /// RFC 9601 sets off the reasoning behind a rule as `<t indent="3">` under the list
   /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
-  @Test func aParagraphKeepsItsIndent() throws {
+  @Test func `a paragraph keeps its indent`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9601.xml"))
     let paragraphs = document.nestedParagraphs
     let reasoning = try #require(paragraphs.first { $0.plainText.hasPrefix("Reasoning:") })
@@ -452,7 +452,7 @@ struct RFCXMLParserTests {
     #expect(paragraphs.filter { $0.indent != 0 }.count == 1)
   }
 
-  @Test func rejectsNonRFCDocuments() {
+  @Test func `rejects non RFC documents`() {
     #expect(throws: RFCXMLParser.ParseError.self) {
       try RFCXMLParser.parse(Data("<html><body/></html>".utf8))
     }

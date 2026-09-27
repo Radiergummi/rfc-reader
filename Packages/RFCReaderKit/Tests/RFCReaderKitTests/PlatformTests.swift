@@ -12,7 +12,7 @@ import Testing
 @Suite("Platform types")
 @MainActor
 struct PlatformTests {
-  @Test func dynamicColoursAreNotResolved() {
+  @Test func `dynamic colours are not resolved`() {
     // The point of RFCColors is that the values stored in the attributed string
     // resolve at draw time, so dark mode costs a redraw and never a rebuild.
     #expect(RFCColors.label !== RFCColors.secondaryLabel)
@@ -23,7 +23,7 @@ struct PlatformTests {
   /// system fills forced to 0.3 opacity read far darker in light and far lighter in
   /// dark. An aside is set a little stronger than a figure.
   @Test(arguments: [false, true])
-  func cardsAreAFaintTintOfThePage(dark: Bool) throws {
+  func `cards are a faint tint of the page`(dark: Bool) throws {
     let card = try resolved(RFCColors.cardFill, dark: dark)
     let aside = try resolved(RFCColors.asideFill, dark: dark)
     // Towards black on a light page, towards white on a dark one.
@@ -49,20 +49,20 @@ struct PlatformTests {
     return (white, alpha)
   }
 
-  @Test func theSymbolShimRendersAtTheSizeAsked() throws {
+  @Test func `the symbol shim renders at the size asked`() throws {
     let small = try #require(PlatformImage.symbol(named: "doc.text", pointSize: 10))
     let large = try #require(PlatformImage.symbol(named: "doc.text", pointSize: 30))
     #expect(large.size.height > small.size.height)
   }
 
-  @Test func addingATraitKeepsTheSizeAndAddsTheTrait() {
+  @Test func `adding a trait keeps the size and adds the trait`() {
     let base = PlatformFont.systemFont(ofSize: 17)
     let bold = base.adding(traits: RFCTraits.bold)
     #expect(bold.pointSize == base.pointSize)
     #expect(bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
   }
 
-  @Test func traitsAreDistinctAndNonEmpty() {
+  @Test func `traits are distinct and non empty`() {
     #expect(!RFCTraits.italic.isEmpty)
     #expect(!RFCTraits.bold.isEmpty)
     #expect(RFCTraits.italic != RFCTraits.bold)

@@ -1,6 +1,10 @@
 import Foundation
 import RFCKit
 import SwiftData
+import os
+
+private let bookmarkLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "bookmarks")
 
 /// The one place a `Bookmark` is read or written.
 ///
@@ -40,7 +44,14 @@ enum BookmarkStore {
     // other: on macOS the sidebar's list and the reader's toolbar are separate
     // hosting roots reading the same store, and the glyph should not be able to
     // disagree with the list behind it while a save is still pending.
-    try? context.save()
+    do {
+      try context.save()
+    } catch {
+      // Logged rather than discarded (#125): the change is still in the context,
+      // and autosave may yet write it, but a bookmark that is never saved should
+      // leave a trace.
+      bookmarkLog.error("saving a bookmark failed: \(String(describing: error), privacy: .public)")
+    }
     return bookmarked
   }
 
