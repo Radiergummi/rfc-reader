@@ -38,7 +38,8 @@ public struct DocumentConverter: Sendable {
       document.header.obsoletes = metadata.obsoletes
       document.header.updates = metadata.updates
     }
-    let prose = diagnosesProse ? ProseReport(diagnosing: text, id: stem) : nil
+    let prose =
+      diagnosesProse ? ProseReport(diagnosing: text, id: stem, title: metadata?.title) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
     let serializer = RFCXMLSerializer(
       options: .init(

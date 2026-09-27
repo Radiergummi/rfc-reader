@@ -36,8 +36,21 @@ struct ConvertCommand: AsyncParsableCommand {
 
   @Option(
     parsing: .upToNextOption,
-    help: "Convert only these RFC numbers from --in. Each must have its text there.")
+    help:
+      "Convert only these RFC numbers from --in. Each must have its text there. Not with --report.")
   var only: [Int] = []
+
+  /// A report from `--only` holds only the named documents. Written over the corpus
+  /// report, it becomes the next full run's baseline: the schema comparison then sees
+  /// only those documents as previously valid, so any other document that stopped
+  /// validating goes unreported, and a comparison of `report.json` between runs shows
+  /// every document it left out as new.
+  func validate() throws {
+    if !only.isEmpty, report != nil {
+      throw ValidationError(
+        "--report cannot be combined with --only: it would hold only the named documents.")
+    }
+  }
 
   /// What converting one document asks for; the same for every document in a run.
   struct Job: Sendable {

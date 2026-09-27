@@ -588,6 +588,20 @@ struct LegacyTextCorpusFindingsTests {
     #expect(traffic.document.header.abstract.count == 1)
   }
 
+  /// Under a contents heading an entry needs a dot leader or a page number, not both:
+  /// the lead-in's stricter test (#76) is for blocks with no heading to vouch for
+  /// them. A listing without leaders, set as more blocks than the gap that tells
+  /// boilerplate from a swallowed body, is still omitted whole.
+  @Test func aContentsListingWithoutLeadersIsOmittedWhole() {
+    let entries = (1...21).map { number in
+      LegacyTextParser.RawBlock(lines: [
+        "   \(number).  Section title                                      \(number + 2)"
+      ])
+    }
+    #expect(
+      LegacyTextParser.boilerplateExtent(of: entries, isContents: true, proseIndent: 6) == 21)
+  }
+
   /// Front matter is the header and the title; a paragraph after them is the body's,
   /// whether or not a heading has come yet. RFC 796 opens with prose under a heading of
   /// a shape the scan does not stop at, and the first column-0 heading it does stop at is
@@ -777,6 +791,52 @@ struct LegacyTextCorpusFindingsTests {
     let tcp = LegacyTextParser.parse(
       try Fixtures.string("rfc793.txt"), title: "Transmission Control Protocol")
     #expect(tcp.header.title == "Transmission Control Protocol")
+  }
+
+  /// The index rewords titles as well as recasing them, so the page's stays where it
+  /// has most of the index's words, in order, and little else. It gives way where the
+  /// front matter took something that is not the title -- a header line, an author, a
+  /// paragraph that happens to use the title's words -- and where it took only the
+  /// first of the runs a title page sets its title over.
+  @Test func thePageTitleStaysWhereTheIndexRewordsIt() {
+    func title(_ page: String, _ index: String, titlePage: [[String]] = []) -> String {
+      LegacyTextParser.title(page: page, index: index, titlePage: titlePage)
+    }
+
+    let managedObjects = "Definitions of Managed Objects for the Example Routing Protocol"
+    #expect(
+      title(managedObjects, "Definitions of Managed Objects for Example Routing Protocol")
+        == managedObjects)
+    let variance = "Variance for the PPP Connection Negotiation Option"
+    #expect(title(variance, "Variance for the PPP Compression Negotiation Option") == variance)
+    #expect(
+      title("Example transfer protocol", "Example Transfer Protocol")
+        == "Example transfer protocol",
+      "words are compared whatever their case")
+
+    #expect(title("Network Working Group", "Echo Protocol for Hosts") == "Echo Protocol for Hosts")
+    #expect(
+      title("J. Example   Example University   March 1979", "A Proposal for Example Mail")
+        == "A Proposal for Example Mail")
+    #expect(
+      title("At Example the network meeting agreed to meet again in the spring.", "Network Meeting")
+        == "Network Meeting",
+      "all of the index's words, and many more of its own")
+    #expect(
+      title("EXAMPLE TRANSFER PROTOCOL", "Example transfer protocol")
+        == "Example transfer protocol",
+      "capitals give way, and the index's casing is kept")
+
+    let partial = "A Mechanism for Configuring Mail Readers"
+    let whole = "A Mechanism for Configuring Mail Readers for Multimedia Formats"
+    let titlePage = [
+      ["                  A Mechanism for Configuring Mail Readers"],
+      ["                          FOR MULTIMEDIA FORMATS"],
+    ]
+    #expect(title(partial, whole, titlePage: titlePage) == whole, "the rest, however it is set")
+    #expect(
+      title(partial, whole, titlePage: Array(titlePage.prefix(1))) == partial,
+      "without the rest on the page, the index has only named it more fully")
   }
 
   /// A date alone on a line is the title page's, like the author above it: RFC 355's
