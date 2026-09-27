@@ -58,5 +58,12 @@ struct CitationFormatterTests {
     let entry = formatter.cite(rfc, style: .bibtex)
     #expect(entry.contains(#"    title = {{Sets \{A \& B\} at 100\%}},"#))
     #expect(entry.contains(#"    abstract = {Uses \% and \{braces\}.},"#))
+
+    // A backslash of the text's own must not pair with the escape that follows it.
+    let slashed = RFCMetadata(
+      id: .rfc(2), title: #"Paths like C:\ and {x\}"#, date: PublicationDate(year: 1969))
+    #expect(
+      formatter.cite(slashed, style: .bibtex).contains(
+        #"    title = {{Paths like C:\textbackslash{} and \{x\textbackslash{}\}}},"#))
   }
 }
