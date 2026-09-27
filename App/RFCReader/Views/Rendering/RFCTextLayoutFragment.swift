@@ -172,7 +172,7 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
       joined(rule, placement: placement, span: span, in: context),
       radius: 1.5,
       corners: Corners(first: span.isFirst, last: span.isLast),
-      color: RFCColors.quaternaryFill.cgColor,
+      color: RFCColors.rule.cgColor,
       in: context
     )
   }

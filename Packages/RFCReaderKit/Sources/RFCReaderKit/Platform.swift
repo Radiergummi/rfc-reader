@@ -51,6 +51,19 @@ public enum RFCColors {
 
   /// A fill on both platforms: macOS had `quaternaryLabelColor`, a text colour.
   public static var quaternaryFill: PlatformColor { .quaternarySystemFill }
+
+  /// The rule beside a quote or aside: a line, not a fill. macOS's
+  /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
+  /// the rule used to draw in, which left a rule this thin close to invisible;
+  /// `separatorColor` is the line colour, at about the old opacity. iOS's
+  /// `quaternarySystemFill` is darker, and the rule keeps it.
+  public static var rule: PlatformColor {
+    #if canImport(UIKit)
+      .quaternarySystemFill
+    #else
+      .separatorColor
+    #endif
+  }
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.
