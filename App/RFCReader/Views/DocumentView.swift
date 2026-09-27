@@ -191,7 +191,10 @@ struct DocumentView: View {
         work.buildingFor = buildInputs
         work.build = Task { await rebuild() }
       }
-      .onChange(of: metadata) { deriveInfo() }
+      // The index state, not the metadata: a refresh can change a series' members
+      // without changing this document's entry, and comparing the state is cheaper
+      // on a body the reader re-evaluates on every section crossing.
+      .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
       }
@@ -426,8 +429,8 @@ struct DocumentView: View {
     work.load = Task { await load() }
   }
 
-  /// The Info tab's rows. Again whenever the metadata changes: a document opened
-  /// before the index finished loading has none to show until it does.
+  /// The Info tab's rows. Again whenever the index loads or refreshes: a document
+  /// opened before the index finished loading has none to show until it does.
   private func deriveInfo() {
     reader.info = metadata.map { DocumentInfo.sections(for: $0, in: library.index) } ?? []
   }
@@ -448,8 +451,8 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
-    // Before the fetch, not after: the index knows the document whether or not its
-    // body arrives, and a failed or offline open still has an Info tab to show.
+    // Before the fetch, not after: the index knows the document before its body
+    // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
     do {
       let loaded = try await library.document(for: id)

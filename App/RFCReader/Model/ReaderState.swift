@@ -23,8 +23,9 @@ final class ReaderState {
   var groups: [ReferenceGroup] = []
   /// The Info tab's rows, derived once per document by `DocumentView` (#25).
   var info: [DocumentInfo.Section] = []
-  /// Which of the two the panel is showing. Both are ways of navigating the
-  /// document, so they share one panel rather than competing for the toolbar.
+  /// Which tab the panel is showing. The contents and references are ways of
+  /// navigating the document, and Info is about it, so they share one panel rather
+  /// than competing for the toolbar.
   var tab: InspectorTab = .contents
 
   /// The anchor the reader is looking at: the contents' highlight.

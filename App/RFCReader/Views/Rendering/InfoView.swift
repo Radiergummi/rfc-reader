@@ -23,7 +23,9 @@ struct InfoView: View {
         }
       }
       if let document {
+        // A section per document, so one's size is never shown under another.
         DownloadSection(document: document, library: library)
+          .id(document)
       }
     }
     #if os(macOS)
@@ -75,44 +77,41 @@ private struct InfoRow: View {
 }
 
 /// Whether the document is on disk, how much it takes, and Remove Download: the one
-/// part of the tab that is the store's rather than the index's, so read when the tab
-/// shows and again after a removal.
+/// part of the tab that is the store's rather than the index's.
+///
+/// Whether it is downloaded is the library's set, so it is right the moment the tab
+/// shows, and a download or a removal re-reads the size. Only an RFC has a body of
+/// its own; a series number the index has not resolved yet has none.
 private struct DownloadSection: View {
   let document: DocumentID
   let library: LibraryModel
+  /// Nil until read, and for as long as there is nothing to read.
   @State private var size: Int?
-  @State private var generation = 0
+
+  private var isDownloaded: Bool {
+    document.series == .rfc && library.downloadedNumbers.contains(document.number)
+  }
 
   var body: some View {
     Section("Download") {
-      if let size {
+      if isDownloaded {
         LabeledContent("Downloaded") {
-          Text(size.formatted(.byteCount(style: .file)))
+          Text(size?.formatted(.byteCount(style: .file)) ?? "")
         }
         Button("Remove Download", role: .destructive) {
-          Task {
-            await library.removeDownload(document)
-            generation += 1
-          }
+          Task { await library.removeDownload(document) }
         }
       } else {
         Text("Not downloaded").foregroundStyle(.secondary)
       }
     }
-    // Also whenever the library's downloads change: opening a document downloads
-    // it, and that finishes after this first read.
-    .task(
-      id: DownloadKey(
-        document: document, generation: generation,
-        isDownloaded: library.downloadedNumbers.contains(document.number))
-    ) {
-      size = await library.downloadedSize(document)
+    .task(id: DownloadKey(document: document, isDownloaded: isDownloaded)) {
+      size = isDownloaded ? await library.downloadedSize(document) : nil
     }
   }
 
   private struct DownloadKey: Hashable {
     let document: DocumentID
-    let generation: Int
     let isDownloaded: Bool
   }
 }

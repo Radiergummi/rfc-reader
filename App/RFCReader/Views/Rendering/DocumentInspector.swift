@@ -144,7 +144,7 @@ struct PanelHost: View {
   }
 }
 
-/// The panel's two tabs, drawn the way an inspector's are rather than as a segmented
+/// The panel's tabs, drawn the way an inspector's are rather than as a segmented
 /// control.
 ///
 /// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which
@@ -159,17 +159,26 @@ private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
   var body: some View {
-    // No rule between the two: Pages draws one only between labels that are both
-    // unselected, and with two tabs one of them always is the pill.
     HStack(spacing: 0) {
       segment(.contents, "Contents")
+      rule(between: .contents, and: .references)
       segment(.references, "References")
+      rule(between: .references, and: .info)
       segment(.info, "Info")
     }
     // The track the segments sit in, and the inset that keeps the selected pill
     // inside it rather than flush with its edge.
     .padding(2)
     .background(.quaternary.opacity(0.7), in: .capsule)
+  }
+
+  /// Pages draws a rule only between two labels that are both unselected; beside
+  /// the pill there is none. Hidden rather than removed, so choosing a tab does
+  /// not move the labels.
+  private func rule(between leading: InspectorTab, and trailing: InspectorTab) -> some View {
+    Divider()
+      .frame(height: 12)
+      .opacity(tab != leading && tab != trailing ? 1 : 0)
   }
 
   private func segment(_ value: InspectorTab, _ title: String) -> some View {
