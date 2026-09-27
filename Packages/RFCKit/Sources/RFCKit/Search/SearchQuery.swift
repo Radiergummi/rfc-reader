@@ -74,9 +74,10 @@ public enum SearchQuery {
 
   /// Completions for the last word of `query`, the one being typed.
   ///
-  /// A plain word is offered the qualifiers it begins; a qualifier is offered its
-  /// values — working groups from `index`, statuses and streams from their
-  /// vocabulary, `has:xml`. Authors and years are free-form, and get nothing.
+  /// A plain word is offered the qualifiers it begins, by name or by alias (`by`
+  /// offers `author:`); a qualifier is offered its values — working groups from
+  /// `index`, statuses and streams from their vocabulary, `has:xml`. Authors and
+  /// years are free-form, and get nothing.
   public static func suggestions(for query: String, in index: RFCIndex) -> [Suggestion] {
     let head: String
     let word: String
@@ -93,10 +94,10 @@ public enum SearchQuery {
 
     guard let colon = word.firstIndex(of: ":") else {
       let typed = word.lowercased()
-      return offer(
-        qualifiers.filter { $0.name.hasPrefix(typed) }.map {
-          $0.name == "has" ? "has:xml" : "\($0.name):"
-        })
+      let begun = qualifiers.filter { qualifier in
+        ([qualifier.name] + qualifier.aliases).contains { $0.hasPrefix(typed) }
+      }
+      return offer(begun.map { $0.name == "has" ? "has:xml" : "\($0.name):" })
     }
     let key = word[..<colon].lowercased()
     let typed = word[word.index(after: colon)...].lowercased()

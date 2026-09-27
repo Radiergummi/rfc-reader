@@ -61,6 +61,14 @@ struct SearchQueryTests {
     #expect(try completions("w") == ["wg:"])
   }
 
+  /// `parseQuery` reads `by:`, `is:` and `group:` as well; a reader who types one
+  /// is offered the qualifier it stands for, by its long name.
+  @Test func `a word that begins an alias is offered its qualifier`() throws {
+    #expect(try completions("cache by") == ["cache author:"])
+    #expect(try completions("is") == ["status:"])
+    #expect(try completions("gro") == ["wg:"])
+  }
+
   @Test func `an empty last word is offered every qualifier`() throws {
     #expect(
       try completions("cache ")
