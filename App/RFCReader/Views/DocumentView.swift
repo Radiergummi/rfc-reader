@@ -178,7 +178,6 @@ struct DocumentView: View {
         }
       #endif
       .onAppear {
-        markAsRead()
         if work.load == nil { startLoad() }
       }
       .onChange(of: buildInputs, initial: true) {
@@ -439,6 +438,11 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      // Here rather than on appearing: once per opening, since each is a view of
+      // its own (`.id(selection)`) and a collapsed split view's spurious
+      // disappear and appear is not another one (#260). And only once the
+      // document is here, so one that failed to open is not listed as read.
+      markAsRead()
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
