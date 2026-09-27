@@ -414,8 +414,9 @@ public struct RFCXMLParser: Sendable {
     /// `<contact>` is inline in prose ("thanks to <contact fullname=…/>") and a
     /// block of its own directly in a section, where a Contributors section lists
     /// people with their addresses. The schema allows it as a block nowhere else.
-    private static func isBlockContact(_ child: XMLTree.Element, in parent: XMLTree.Element) -> Bool
-    {
+    private static func isBlockContact(
+      _ child: XMLTree.Element, in parent: XMLTree.Element
+    ) -> Bool {
       child.name == "contact" && parent.name == "section"
     }
 
