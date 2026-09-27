@@ -15,7 +15,7 @@ struct PreparedIndexTests {
       id: .rfc(number), title: title, date: PublicationDate(year: 2020), workingGroup: group)
   }
 
-  @Test func theWorkingGroupsAreTheTwelveWithTheMostRFCs() {
+  @Test func `the working groups are the twelve with the most RFCs`() {
     var rfcs = [rfc(1, group: "httpbis"), rfc(2, group: "httpbis"), rfc(3, group: "httpbis")]
     rfcs += [rfc(4, group: "tls"), rfc(5, group: "tls")]
     rfcs += (0..<14).map { rfc(100 + $0, group: "group\($0)") }
@@ -30,7 +30,7 @@ struct PreparedIndexTests {
   /// Equal counts are ordered by name. By count alone, ties came out in dictionary
   /// order, which Swift randomizes per process: the sidebar reordered from launch to
   /// launch, and which of the tied groups made the cut changed with it.
-  @Test func workingGroupsWithEqualCountsAreOrderedByName() {
+  @Test func `working groups with equal counts are ordered by name`() {
     var rfcs = [rfc(1, group: "httpbis"), rfc(2, group: "httpbis"), rfc(3, group: "httpbis")]
     rfcs += [rfc(4, group: "tls"), rfc(5, group: "tls")]
     rfcs += (0..<14).map { rfc(100 + $0, group: "group\($0)") }
@@ -44,7 +44,7 @@ struct PreparedIndexTests {
       ])
   }
 
-  @Test func theSearchIsOverTheSameIndex() {
+  @Test func `the search is over the same index`() {
     let index = RFCIndex(rfcs: [
       rfc(9110, title: "HTTP Semantics"), rfc(791, title: "Internet Protocol"),
     ])
@@ -55,7 +55,7 @@ struct PreparedIndexTests {
     #expect(prepared.search.search("semantics").map(\.rfc.number) == [9110])
   }
 
-  @Test func parsingPreparesWhatItParsed() throws {
+  @Test func `parsing prepares what it parsed`() throws {
     let data = Data(
       """
       <?xml version="1.0" encoding="UTF-8"?>

@@ -46,5 +46,31 @@
       }
       return root.acceptsFirstResponder ? root : nil
     }
+
+    /// The first search field inside `root`, for the menu item that focuses it.
+    ///
+    /// By type rather than by asking who takes focus: the sidebar's column holds the
+    /// list as well, which takes focus just as readily.
+    public static func searchField(in root: NSView) -> NSSearchField? {
+      if let field = root as? NSSearchField { return field }
+      for subview in root.subviews {
+        if let found = searchField(in: subview) { return found }
+      }
+      return nil
+    }
+
+    /// The text view inside `root` that Find should search: the first visible one
+    /// with a find bar, the reader body or Original Text.
+    ///
+    /// Not `innermostTarget`, which takes the first view that accepts focus at all,
+    /// and a control laid out ahead of the text would be that view.
+    public static func searchableText(in root: NSView) -> NSTextView? {
+      guard !root.isHidden else { return nil }
+      if let text = root as? NSTextView, text.usesFindBar { return text }
+      for subview in root.subviews {
+        if let found = searchableText(in: subview) { return found }
+      }
+      return nil
+    }
   }
 #endif

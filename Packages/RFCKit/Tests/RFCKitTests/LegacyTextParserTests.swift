@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Legacy text parser")
 struct LegacyTextParserTests {
-  @Test func stripsPageFurniture() throws {
+  @Test func `strips page furniture`() throws {
     let text = try Fixtures.string("rfc2119.txt")
     let stripped = LegacyTextParser.stripPagination(text)
     #expect(!stripped.contains("[Page 1]"))
@@ -17,7 +17,7 @@ struct LegacyTextParserTests {
     #expect(stripped.contains("6. Guidance in the use of these Imperatives"))
   }
 
-  @Test func frontMatter() throws {
+  @Test func `front matter`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
     #expect(document.source == .text)
     #expect(document.header.id == .rfc(1149))
@@ -38,7 +38,7 @@ struct LegacyTextParserTests {
     #expect(abnf.header.date == PublicationDate(year: 2008, month: 1))
   }
 
-  @Test func unnumberedHeadings() throws {
+  @Test func `unnumbered headings`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
     let titles = document.sections.map(\.titleText)
     #expect(
@@ -50,7 +50,7 @@ struct LegacyTextParserTests {
     #expect(document.sections.allSatisfy { $0.number == nil })
   }
 
-  @Test func abstractMovesToHeader() throws {
+  @Test func `abstract moves to header`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2119.txt"))
     #expect(!document.sections.contains { $0.titleText == "Abstract" })
     #expect(!document.sections.contains { $0.titleText.hasPrefix("Status of") })
@@ -61,7 +61,7 @@ struct LegacyTextParserTests {
     #expect(paragraph.plainText.hasPrefix("In many standards track documents"))
   }
 
-  @Test func paragraphsSplitAcrossPagesAreRejoined() throws {
+  @Test func `paragraphs split across pages are rejoined`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
     let discussion = try #require(document.sections.first { $0.titleText == "Discussion" })
     let paragraphs = discussion.blocks.compactMap { block -> String? in
@@ -75,7 +75,7 @@ struct LegacyTextParserTests {
     #expect(paragraphs[0].hasSuffix("cable trays."))
   }
 
-  @Test func numberedSectionsNest() throws {
+  @Test func `numbered sections nest`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     #expect(document.sections.map(\.number) == ["1", "2", "3", "4", "5", "6", "A", "B", nil])
     #expect(document.sections.last?.titleText == "Authors' Addresses")
@@ -90,7 +90,7 @@ struct LegacyTextParserTests {
     #expect(!document.sections.contains { $0.titleText == "Table of Contents" })
   }
 
-  @Test func proseVersusArtwork() throws {
+  @Test func `prose versus artwork`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let terminals = try #require(document.section(number: "2.3"))
     var paragraphs: [String] = []
@@ -120,7 +120,7 @@ struct LegacyTextParserTests {
     #expect(artwork.contains { $0.text.contains("rulelist       =  1*( rule / (*c-wsp c-nl) )") })
   }
 
-  @Test func listsAreDetected() throws {
+  @Test func `lists are detected`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let grammar = try #require(document.section(number: "4"))
     let lists = grammar.blocks.compactMap { block -> ListBlock? in
@@ -136,7 +136,7 @@ struct LegacyTextParserTests {
     }
   }
 
-  @Test func referencesAndLinks() throws {
+  @Test func `references and links`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let informative = try #require(document.section(number: "6.2"))
     guard case .references(let list)? = informative.blocks.first else {
@@ -162,7 +162,7 @@ struct LegacyTextParserTests {
     #expect(document.referencedDocuments.contains(.rfc(822)))
   }
 
-  @Test func inlineLinkingRules() {
+  @Test func `inline linking rules`() {
     let text = """
       Network Working Group                                          A. Person
       Request for Comments: 99999                                  Example Org
@@ -214,7 +214,7 @@ struct LegacyTextParserTests {
   /// Between them they dropped 1,606 of the 1,640 unlinked RFC mentions left in the
   /// corpus's prose. RFC 2606 sets its citations `[RFC 1034]`; RFC 2147 writes a
   /// multi-anchor `[RFC1883, Section 4.3]`, where the bracket is not ours to eat.
-  @Test func bracketedRFCMentionsLinkWhateverTheirSpacing() throws {
+  @Test func `bracketed RFC mentions link whatever their spacing`() throws {
     let spaced = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
     #expect(spaced.referencedDocuments.contains(.rfc(1034)), "[RFC 1034] names a document")
 
@@ -227,7 +227,7 @@ struct LegacyTextParserTests {
     #expect(note.plainText.contains(", Section 4.3]"))
   }
 
-  @Test func legacyBracketedRFCLabelsAreFlaggedAsCanonical() throws {
+  @Test func `legacy bracketed RFC labels are flagged as canonical`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let xrefs = document.crossReferences
     // Measured over 1,200 corpus documents before this rule was fixed: 12,612
@@ -246,7 +246,7 @@ struct LegacyTextParserTests {
   /// sound while every match of the pattern holds the literal, so wherever a pattern
   /// matches -- over every line of every fixture, and the shapes a
   /// byte test and a grapheme test could disagree on -- its literal must be set.
-  @Test func theLiteralGateSkipsNoMatch() throws {
+  @Test func `the literal gate skips no match`() throws {
     let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
     var fragments = [
       "RFC\u{0301} 1", "\u{FEFF}RFC 1", "ＲＦＣ 1", "rfc 1", "section 2", "HTTP://x", "RFC\r\n1",
@@ -280,7 +280,7 @@ struct LegacyTextCorpusFindingsTests {
   /// the series: `RFC-791`, and a list written once as `RFCs 765, 821 and 854`.
   /// Measured on the corpus, prose held 2,223 of the first and 659 of the second,
   /// against 1,640 of the plain `RFC 791` the linker already knew.
-  @Test func hyphenatedAndPluralMentionsLink() throws {
+  @Test func `hyphenated and plural mentions link`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc980.txt"))
     let xrefs = document.crossReferences
     let byTarget = Dictionary(
@@ -304,7 +304,7 @@ struct LegacyTextCorpusFindingsTests {
   /// admitted no whitespace in an anchor, so those lines started no entry and were
   /// swallowed as continuation text of whatever came before -- RFC 2290 and RFC
   /// 2535 produced no bibliography at all. 782 entries across 205 documents.
-  @Test func referenceAnchorsMayHoldSpaces() throws {
+  @Test func `reference anchors may hold spaces`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
     let lists = document.referenceLists
     let list = try #require(lists.first, "the bibliography is lost entirely without this")
@@ -320,7 +320,7 @@ struct LegacyTextCorpusFindingsTests {
   /// `Section.title` was a `String`, so a heading that named a document -- 3,471 of
   /// them across the corpus, "Changes from RFC 3066" among them -- could not carry
   /// the link even in principle. RFC 21 heads a section "Revisions to NWG/RFC 11".
-  @Test func headingsCarryTheirCrossReferences() throws {
+  @Test func `headings carry their cross references`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc21.txt"))
     let heading = try #require(document.allSections.first { $0.titleText.contains("Revisions to") })
     let targets = heading.title.compactMap { inline -> CrossReference.Target? in
@@ -347,7 +347,7 @@ struct LegacyTextCorpusFindingsTests {
   /// marker of its own, so it used to fail the prose test's indent guard and be
   /// preserved as artwork. Artwork is never linkified, and the list was shredded
   /// into one single-item list per item.
-  @Test func listContinuationParagraphsStayProse() throws {
+  @Test func `list continuation paragraphs stay prose`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc234.txt"))
     let lists = document.lists
     let carrying = try #require(
@@ -369,7 +369,7 @@ struct LegacyTextCorpusFindingsTests {
   }
 
   /// Shapes found in the first full corpus run (September 2026).
-  @Test func columnZeroTitleAndAnchorOnlyReferences() {
+  @Test func `column zero title and anchor only references`() {
     let text = """
       Network Working Group                                       P. Jayaraman
       Request for Comments: 5193                                       Net.Com
@@ -416,7 +416,7 @@ struct LegacyTextCorpusFindingsTests {
   /// RFC 1245 sets its body at column 0, so every prose line looks like an unnumbered
   /// heading. The first full corpus run turned it into 262 sections; documents of this
   /// shape reached 10,000 (RFC 1142).
-  @Test func unindentedBodyDoesNotTurnEveryLineIntoAHeading() throws {
+  @Test func `unindented body does not turn every line into a heading`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1245.txt"))
     #expect(document.header.id == .rfc(1245))
     #expect(document.header.title == "OSPF protocol analysis")
@@ -446,7 +446,7 @@ struct LegacyTextCorpusFindingsTests {
   /// under prose indented six spaces: the block's indent came out as 0, the four
   /// columns its figure shares were never stripped, and the tabs themselves reached
   /// the reader, whose verbatim style sets no tab stops.
-  @Test func tabsAreColumnsBeforeAnyIndentIsRead() throws {
+  @Test func `tabs are columns before any indent is read`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc717.txt"))
     let artwork = document.artworkText
     #expect(!artwork.contains { $0.contains("\t") }, "a tab survived into artwork")
@@ -467,7 +467,7 @@ struct LegacyTextCorpusFindingsTests {
   /// (#52). Each page then opened with `Transmission Control Protocol` at column 0,
   /// which is a heading: ~33 sections called `Functional Specification`, and every
   /// paragraph that crossed a page break cut in two by one of them.
-  @Test func recurringPageHeadersAreFurnitureNotSections() throws {
+  @Test func `recurring page headers are furniture not sections`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
     let furniture = ["Transmission Control Protocol", "Functional Specification", "September 1981"]
     let spurious = document.allSections.filter { furniture.contains($0.titleText) }
@@ -491,7 +491,7 @@ struct LegacyTextCorpusFindingsTests {
   /// the only thing that says a section starts. RFC 770 heads its bibliography with
   /// a centred `REFERENCES` that is no heading, and a running `References` on each of
   /// its pages; dropping every one of those lost all 58 entries.
-  @Test func aSectionRunningHeaderStillOpensItsSection() throws {
+  @Test func `a section running header still opens its section`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))
     let lists = document.referenceLists
     #expect(lists.flatMap(\.entries).count == 58)
@@ -504,7 +504,7 @@ struct LegacyTextCorpusFindingsTests {
   /// pattern knows, and `1 March 1982 ... RFC 810` on its odd ones, which it does not:
   /// on three of eight, that header was read as a section's, and its first copy
   /// stayed in the body.
-  @Test func aHeaderOnAlternatePagesNamesTheDocument() throws {
+  @Test func `a header on alternate pages names the document`() throws {
     let text = try Fixtures.string("rfc810.txt")
     #expect(
       LegacyTextParser.recurringFurniture(in: text).filter { $0.hasPrefix("1 March 1982") }.count
@@ -517,7 +517,7 @@ struct LegacyTextCorpusFindingsTests {
   /// when furniture is compared. RFC 2049 sets one-line anchors in its bibliography
   /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and
   /// `[RFC-1524]` the same line recurring across pages, and both were dropped.
-  @Test func numbersInsideAWordDoNotMakeTwoLinesTheSame() throws {
+  @Test func `numbers inside a word do not make two lines the same`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
     let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
     #expect(anchors.contains("RFC-1522"))
@@ -531,7 +531,7 @@ struct LegacyTextCorpusFindingsTests {
   /// as a section running header, every copy after the first was dropped from the
   /// module. A running header sits at the head of its pages, on every page of its
   /// section, set off by a blank line -- and is rarer anywhere else than at the edge.
-  @Test func aLineTheBodyRepeatsIsNotFurniture() throws {
+  @Test func `a line the body repeats is not furniture`() throws {
     let text = try Fixtures.string("rfc2013.txt")
     let document = LegacyTextParser.parse(text)
     func count(_ line: String, in text: String) -> Int {
@@ -550,7 +550,7 @@ struct LegacyTextCorpusFindingsTests {
   /// registration's `Additional information:` falls at the head of a page -- but below
   /// the blank lines the removed `RFC 6208 ... April 2011` leaves, and every copy but
   /// the first was dropped as the running header of a section.
-  @Test func aLineBelowThePageHeaderIsNotASectionRunningHeader() throws {
+  @Test func `a line below the page header is not a section running header`() throws {
     let text = try Fixtures.string("rfc6208.txt")
     let body = LegacyTextParser.stripPagination(text)
     func count(_ text: String) -> Int {
@@ -571,7 +571,7 @@ struct LegacyTextCorpusFindingsTests {
   /// know, no heading ever ends it, and the whole body went with it (#60): RFC 1927's
   /// sections are numbered `1)`, and RFC 509 follows its one-line abstract with two
   /// pages of traffic tables. RFC 1927 kept 3 of its blocks, RFC 509 none.
-  @Test func anOmittedSectionEndsWhereItsBoilerplateDoes() throws {
+  @Test func `an omitted section ends where its boilerplate does`() throws {
     func middle(_ name: String) throws -> (document: RFCDocument, middle: Substring) {
       let document = LegacyTextParser.parse(try Fixtures.string(name))
       let xml = RFCXMLSerializer().serialize(document)
@@ -592,7 +592,7 @@ struct LegacyTextCorpusFindingsTests {
   /// the lead-in's stricter test (#76) is for blocks with no heading to vouch for
   /// them. A listing without leaders, set as more blocks than the gap that tells
   /// boilerplate from a swallowed body, is still omitted whole.
-  @Test func aContentsListingWithoutLeadersIsOmittedWhole() {
+  @Test func `a contents listing without leaders is omitted whole`() {
     let entries = (1...21).map { number in
       LegacyTextParser.RawBlock(lines: [
         "   \(number).  Section title                                      \(number + 2)"
@@ -609,7 +609,7 @@ struct LegacyTextCorpusFindingsTests {
   /// RFC 105 indents the first line of its opening paragraph and sets the second at the
   /// margin, and the second was taken for a heading that ended the front matter, leaving
   /// the first line in it.
-  @Test func theFrontMatterEndsAtTheFirstParagraph() throws {
+  @Test func `the front matter ends at the first paragraph`() throws {
     let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
     #expect(
       addresses.paragraphs.contains {
@@ -631,7 +631,7 @@ struct LegacyTextCorpusFindingsTests {
   /// header block, under its journal stamp, and the page number after its title; RFC
   /// 1441's centred `Status of this Memo` and its paragraph, and its contents. The
   /// body after them stays.
-  @Test func theTitlePagesLeftoversAreNotTheLeadIn() throws {
+  @Test func `the title pages leftovers are not the lead in`() throws {
     #expect(
       LegacyTextParser.parse(try Fixtures.string("rfc757.txt")).leadIn.isEmpty,
       "a phone number alone is not a lead-in")
@@ -699,7 +699,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A contents entry's page number may be roman (RFC 822's `PREFACE .......   ii`),
   /// but a word made of the same letters is not one.
-  @Test func aRomanPageNumberIsANumeral() {
+  @Test func `a roman page number is a numeral`() {
     for page in ["i", "ii", "iv", "vi", "ix", "xiv", "xxxix"] {
       #expect(LegacyTextParser.isRomanPageNumber(Substring(page)), "\(page)")
     }
@@ -711,7 +711,7 @@ struct LegacyTextCorpusFindingsTests {
   /// A header block states the document's own number: RFC 674's, under its journal
   /// stamp, goes from the lead-in. A table of other RFCs is two columns stating numbers
   /// too, and stays.
-  @Test func aHeaderBlockStatesTheDocumentsOwnNumber() {
+  @Test func `a header block states the documents own number`() {
     let header = [
       "Request for Comments 674                                    Jon Postel",
       "NIC 31484                                                    Jim White",
@@ -730,7 +730,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// The lead-in drops the paragraphs under a status heading only while they say what
   /// a status paragraph says, so a body that follows with no heading of its own stays.
-  @Test func onlyBoilerplateWordingIsTakenForBoilerplate() {
+  @Test func `only boilerplate wording is taken for boilerplate`() {
     #expect(
       LegacyTextParser.readsAsBoilerplate([
         "   This document is distributed as an RFC for information only.  It",
@@ -754,7 +754,7 @@ struct LegacyTextCorpusFindingsTests {
   /// it where its words are not the page's, and the run the front matter left behind
   /// leaves the lead-in: RFC 1343's `For Multimedia Mail Format Information` opened the
   /// body as artwork (#170).
-  @Test func theIndexTitleReplacesAPartialOneAndTheRestLeavesTheLeadIn() throws {
+  @Test func `the index title replaces a partial one and the rest leaves the lead in`() throws {
     let replaced = LegacyTextParser.parse(
       try Fixtures.string("rfc1149.txt"), title: "Carrier Pigeons for Internet Datagrams")
     #expect(replaced.header.title == "Carrier Pigeons for Internet Datagrams")
@@ -781,7 +781,7 @@ struct LegacyTextCorpusFindingsTests {
   /// The index sets older titles in sentence case and drops their article, so where its
   /// words are the page's, the page's own title stays -- unless the page sets it in
   /// capitals, which is emphasis rather than spelling.
-  @Test func thePageTitleStaysWhereTheIndexOnlyRecasesIt() throws {
+  @Test func `the page title stays where the index only recases it`() throws {
     let avian = LegacyTextParser.parse(
       try Fixtures.string("rfc1149.txt"),
       title: "Standard for the transmission of IP datagrams on avian carriers")
@@ -798,7 +798,7 @@ struct LegacyTextCorpusFindingsTests {
   /// front matter took something that is not the title -- a header line, an author, a
   /// paragraph that happens to use the title's words -- and where it took only the
   /// first of the runs a title page sets its title over.
-  @Test func thePageTitleStaysWhereTheIndexRewordsIt() {
+  @Test func `the page title stays where the index rewords it`() {
     func title(_ page: String, _ index: String, titlePage: [[String]] = []) -> String {
       LegacyTextParser.title(page: page, index: index, titlePage: titlePage)
     }
@@ -841,7 +841,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A date alone on a line is the title page's, like the author above it: RFC 355's
   /// `June 9, 1972` was the lead-in's second block (#170).
-  @Test func aDateAloneOnALineIsTheTitlePages() {
+  @Test func `a date alone on a line is the title pages`() {
     let body = [
       "   Long transmission delays such as those inherent in satellite",
       "   communication are most certainly a cause for concern among users of",
@@ -863,7 +863,7 @@ struct LegacyTextCorpusFindingsTests {
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
   /// neither was left in the body. The catalogues -- RFC 1292, 1632, 2116 -- give every
   /// entry one, and lost each entry's to the header the same way (#72).
-  @Test func onlyTheFirstAbstractIsTheDocuments() throws {
+  @Test func `only the first abstract is the documents`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2371.txt"))
     let abstract = document.header.abstract.compactMap {
       if case .paragraph(let paragraph) = $0 { return paragraph.plainText }
@@ -883,7 +883,7 @@ struct LegacyTextCorpusFindingsTests {
   /// at the head of the next are not two sightings of it. RFC 1556 cites ISO 8859
   /// parts 6 and 8 as one anchor each, word for word the same up to the part number
   /// on the entry's third line, and the pair straddles a page break.
-  @Test func theSameLineAtOppositeEdgesIsNotARunningHeader() throws {
+  @Test func `the same line at opposite edges is not a running header`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
     let labels = document.referenceLists.flatMap { $0.entries.map(\.displayAnchor) }
     #expect(labels.filter { $0 == "ISO-8859" }.count == 2)
@@ -895,7 +895,7 @@ struct LegacyTextCorpusFindingsTests {
   /// blank lines to be read as one (#56). RFC 1540 lists the protocol standards one
   /// per line at column 0 against a body indented three, 395 lines each way: the tie
   /// used to resolve to an indented body and every row became a section.
-  @Test func aColumnZeroTableIsNotAStackOfHeadings() throws {
+  @Test func `a column zero table is not a stack of headings`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
     let titles = document.allSections.map(\.titleText)
     #expect(!titles.contains { $0.hasPrefix("IP ") || $0.hasPrefix("TCP ") })
@@ -918,14 +918,14 @@ struct LegacyTextCorpusFindingsTests {
     ("rfc757.txt", 757), ("rfc793.txt", 793), ("rfc12.txt", 12), ("rfc50.txt", 50),
     ("rfc811.txt", 811), ("rfc4801.txt", 4801), ("rfc2347.txt", 2347), ("rfc103.txt", 103),
   ])
-  func everySpellingOfTheNumberLineIsRead(fixture: String, number: Int) throws {
+  func `every spelling of the number line is read`(fixture: String, number: Int) throws {
     #expect(LegacyTextParser.parse(try Fixtures.string(fixture)).header.id == .rfc(number))
   }
 
   /// The header block was taken to be the first run of lines, and RFC 609 opens with its
   /// title instead: the number was never reached, and the header itself became the
   /// title. Twenty documents open with a date, a title or a report number this way.
-  @Test func theHeaderIsTheRunThatStatesTheNumber() throws {
+  @Test func `the header is the run that states the number`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc609.txt"))
     #expect(document.header.id == .rfc(609))
     #expect(document.header.title == "Statement of Upcoming Move of NIC/NLS Services")
@@ -935,7 +935,7 @@ struct LegacyTextCorpusFindingsTests {
   /// to keep `Network Working Group` and `Request for Comments: 796` out of the body --
   /// but the rule held anywhere in a document, and refused about 120 real headings with
   /// those two, RFC 796's only one among them: `Internet to Local Net Address Mappings`.
-  @Test func aHeadingMayStartWithAWordTheFrontMatterUses() throws {
+  @Test func `a heading may start with a word the front matter uses`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
     let mappings = try #require(
       document.allSections.first { $0.titleText == "Internet to Local Net Address Mappings" })
@@ -948,7 +948,7 @@ struct LegacyTextCorpusFindingsTests {
   /// document: `1. Command name and code` and everything after it became the title,
   /// and the body was empty (#60). A numbered heading at column 0 ends the title run,
   /// unless it is the run's first line.
-  @Test func aNumberedHeadingEndsTheTitle() throws {
+  @Test func `a numbered heading ends the title`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc651.txt"))
     #expect(document.header.title == "Revised Telnet Status Option")
     #expect(document.section(number: "1")?.titleText == "Command name and code")
@@ -959,7 +959,7 @@ struct LegacyTextCorpusFindingsTests {
   /// and sets every heading five columns in, so the front matter ends where the
   /// fallback puts it, after the second run -- which was counted from the stamp, and
   /// fell before the number line. The runs are counted from the header (#60, #51).
-  @Test func theTitleIsCountedFromTheHeader() throws {
+  @Test func `the title is counted from the header`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc873.txt"))
     #expect(document.header.id == .rfc(873))
     #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
@@ -968,7 +968,7 @@ struct LegacyTextCorpusFindingsTests {
   /// RFC 2078 numbers its headings `1:` and `2.4.12:`, a shape the heading pattern did
   /// not know, so the body came out as one untitled run: no table of contents, and
   /// `Section 2.2.8` resolving to nothing (#71). RFC 2743 and 2130 are set the same way.
-  @Test func headingsNumberedWithAColonAreHeadings() throws {
+  @Test func `headings numbered with a colon are headings`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2078.txt"))
     #expect(document.allSections.filter { $0.number != nil }.count == 76)
     #expect(document.section(number: "2.4.12")?.titleText == "GSS_Release_OID call")
@@ -980,7 +980,7 @@ struct LegacyTextCorpusFindingsTests {
   /// The same shape is a second numbering where a document already has the first: RFC
   /// 705 lists its commands as `1.  BEGIN Command` and describes each again under `1:
   /// BEGIN   4b`, and the colon form read the descriptions as seven more sections 1-7.
-  @Test func aColonNumberRepeatingAHeadingNumberIsNotAHeading() throws {
+  @Test func `a colon number repeating a heading number is not a heading`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc705.txt"))
     let numbered = document.allSections.filter { $0.number != nil }
     #expect(
@@ -994,7 +994,7 @@ struct LegacyTextCorpusFindingsTests {
   /// a heading number too: without that, a document with one stray `11:` and no `11.`
   /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the
   /// next line not being blank kept it from becoming section 11.
-  @Test func aColonNumberHasToFollowFromAnother() throws {
+  @Test func `a colon number has to follow from another`() throws {
     #expect(
       !LegacyTextParser.numbersHeadingsWithAColon(
         try Fixtures.string("rfc526.txt").components(separatedBy: "\n")))
@@ -1026,7 +1026,7 @@ struct LegacyTextCorpusFindingsTests {
   /// bibliography that lists a label twice gave two entries one: 526 documents in all
   /// (#65). A repeat takes the next free `-2`, `-3`, the way xml2rfc numbers them, and
   /// the first keeps its anchor, so every link that landed on it still does.
-  @Test func noTwoElementsShareAnAnchor() throws {
+  @Test func `no two elements share an anchor`() throws {
     let fixtures = try Fixtures.legacyTexts()
     #expect(fixtures.count > 20)
     for fixture in fixtures {
@@ -1056,7 +1056,7 @@ struct LegacyTextCorpusFindingsTests {
   /// A numbered entry whose text names no RFC was recorded as the RFC its number
   /// happened to be: RFC 2013's `[1]` is ISO 8824, and it and its citation became RFC 1.
   /// 6,887 entries in 1,381 converted documents. `[2]`, which says RFC 1902, still is.
-  @Test func aNumberedEntryIsNotTheRFCOfItsNumber() throws {
+  @Test func `a numbered entry is not the RFC of its number`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
     let entries = document.referenceLists.flatMap(\.entries)
     let asn1 = try #require(entries.first { $0.displayAnchor == "1" })
@@ -1069,7 +1069,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// An entry names its RFC however the document spells it. RFC 1041 writes every entry
   /// `[1] RFC-854, ...`; read as no RFC, its numbered entries named nothing at all.
-  @Test func anEntryNamesAnRFCWrittenWithAHyphen() throws {
+  @Test func `an entry names an RFC written with a hyphen`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
     let entries = document.referenceLists.flatMap(\.entries)
     #expect(entries.first { $0.displayAnchor == "1" }?.documentID == .rfc(854))
@@ -1088,7 +1088,7 @@ struct LegacyTextCorpusFindingsTests {
   /// And in the series' earliest spellings: RFC 338 cites `RFC #189` and `RFC #183`,
   /// RFC 1275 `Request for Comments 1006`, RFC 1005 `Request For Comments 990`, broken
   /// across a line.
-  @Test func anEntryNamesAnRFCInTheSeriesEarliestSpellings() throws {
+  @Test func `an entry names an RFC in the series earliest spellings`() throws {
     let rfc338 = LegacyTextParser.parse(try Fixtures.string("rfc338.txt")).referenceLists.flatMap(
       \.entries)
     #expect(rfc338.first { $0.displayAnchor == "1" }?.documentID == .rfc(189))
@@ -1110,7 +1110,7 @@ struct LegacyTextCorpusFindingsTests {
   /// citation of an entry that names no RFC pointed at `ref-<label>`, which no entry was
   /// declared under: RFC 2005 cited `<xref target="ref-MIP-OPTIM">` beside `<reference
   /// anchor="MIP-OPTIM">`, and 30,368 citations in 3,708 documents linked nowhere (#81).
-  @Test func everyAnchorIsANameAndEveryCitationReachesOne() throws {
+  @Test func `every anchor is a name and every citation reaches one`() throws {
     var cited = 0
     for fixture in try Fixtures.legacyTexts() {
       let document = LegacyTextParser.parse(try Fixtures.string(fixture))
@@ -1154,7 +1154,7 @@ struct LegacyTextCorpusFindingsTests {
   /// Entry anchors are settled before the prose is linked, so a citation points at the
   /// anchor its entry ends with rather than one a later rename moves. None of these
   /// shapes is in the corpus, so they are pinned at the guard, on entries by hand.
-  @Test func anEntryIsRenamedOnlyOntoAnAnchorNothingElseHolds() {
+  @Test func `an entry is renamed only onto an anchor nothing else holds`() {
     func settled(_ labels: [String], reserved: Set<String> = []) -> [String] {
       let entries = labels.map {
         Reference(
@@ -1179,7 +1179,7 @@ struct LegacyTextCorpusFindingsTests {
   /// with: an entry settled onto `section-1-2` beside two sections numbered 1 lost it to
   /// the second, and its citations to a rename. Every suffix a repeat can reach is held,
   /// past the ones another heading already spells (`name-foo-2`, for `Foo 2`).
-  @Test func aRepeatedHeadingHoldsEveryAnchorItCanBeRenamedTo() {
+  @Test func `a repeated heading holds every anchor it can be renamed to`() {
     #expect(
       LegacyTextParser.reservedAnchors(["section-1", "section-1"]) == ["section-1", "section-1-2"])
     #expect(
@@ -1192,7 +1192,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// What `parse` reserves is every anchor its sections end with, and no entry holds one:
   /// RFC 19 numbers two sections 1, and the second is `section-1-2`.
-  @Test func everySectionAnchorIsReservedAndNoEntryHoldsOne() throws {
+  @Test func `every section anchor is reserved and no entry holds one`() throws {
     #expect(
       try LegacyTextParser.reservedAnchors(in: Fixtures.string("rfc19.txt")).contains("section-1-2")
     )
@@ -1211,7 +1211,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A label listed twice is cited as its first entry, whether that names a document or
   /// not: RFC 2023 lists RFCs 1883 and 1884 both as `[2]`.
-  @Test func aRepeatedLabelIsCitedAsItsFirstEntry() throws {
+  @Test func `a repeated label is cited as its first entry`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt"))
     let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(
       \.target)
@@ -1221,7 +1221,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// The stricter rule applies only to documents whose body is not indented: where the
   /// body *is* indented, a heading followed immediately by text is still a heading.
-  @Test func indentedBodyStillAcceptsHeadingsWithoutABlankLineAfter() {
+  @Test func `indented body still accepts headings without a blank line after`() {
     let text = """
       Network Working Group                                          A. Person
       Request for Comments: 99998                                  Example Org
@@ -1246,7 +1246,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
   /// every entry matched the numbered-heading pattern.
-  @Test func tabIndentedLinesAreNotHeadings() {
+  @Test func `tab indented lines are not headings`() {
     let text = """
       Network Working Group                                          A. Person
       Request for Comments: 99997                                  Example Org
@@ -1274,7 +1274,7 @@ struct LegacyTextCorpusFindingsTests {
 
   /// RFC 775 and RFC 1144 indent their headings like the body, so the scan for the end of
   /// the front matter never finds a column-0 heading. The text still has to survive.
-  @Test func documentWithoutColumnZeroHeadingsKeepsItsProse() {
+  @Test func `document without column zero headings keeps its prose`() {
     let text = """
             RFC 99996          A Document With No Column Zero          Page 1
 
@@ -1301,7 +1301,7 @@ struct LegacyTextCorpusFindingsTests {
   /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
   /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
   /// every one of those paragraphs artwork.
-  @Test func paragraphsWithAFirstLineIndentAreProse() {
+  @Test func `paragraphs with a first line indent are prose`() {
     let text = """
       Network Working Group                                          A. Person
       Request for Comments: 99995                                  Example Org
@@ -1345,7 +1345,7 @@ struct LegacyTextCorpusFindingsTests {
   /// RFC 817, 813, 888 and about twenty others are typeset double spaced: a single blank
   /// line is a wrapped line and two or more are the real break. No paragraph ever formed
   /// and every line stood alone, so RFC 817 produced 577 sections for 658 lines of text.
-  @Test func doubleSpacedDocumentsAreCollapsed() throws {
+  @Test func `double spaced documents are collapsed`() throws {
     let text = """
       Network Working Group                                          A. Person
       Request for Comments: 99994                                  Example Org
@@ -1414,7 +1414,7 @@ struct LegacyTextCorpusFindingsTests {
   /// RFC 757 is typeset justified: every line is padded with extra spaces between words
   /// to reach a common right margin. Those runs of spaces are what tells prose from
   /// artwork everywhere else, so all 60-odd of its paragraphs were preformatted blocks.
-  @Test func justifiedProseIsNotArtwork() throws {
+  @Test func `justified prose is not artwork`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc757.txt"))
     #expect(
       document.header.title
@@ -1451,7 +1451,7 @@ struct LegacyTextCorpusFindingsTests {
   /// sets its headings at 6 and its body at 9, so every paragraph it has failed the cap
   /// and was kept as artwork, and none of it was linked (#55). The cap follows the
   /// body now, and a body at column 3 keeps the classic one.
-  @Test func aBodySetDeeperThanColumnThreeIsStillProse() {
+  @Test func `a body set deeper than column three is still prose`() {
     let paragraph = [
       "         Using a word that has strong semantic implications in the",
       "         current context will cause confusion.  This is especially true",
@@ -1476,7 +1476,7 @@ struct LegacyTextCorpusFindingsTests {
   /// as the rest of a sentence does. An `o` bullet opens lower case too: RFC 1581's
   /// `it is assumed that:` ends a page, the list under it starts the next, and its
   /// first item was read into the sentence as `that: o The most recently ...`.
-  @Test func aBulletAtTheTopOfAPageIsNotTheRestOfASentence() {
+  @Test func `a bullet at the top of a page is not the rest of a sentence`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
       "   In a stable network there is no requirement to propagate routing",
       "   information on a circuit, so if no routing information is (being)",
@@ -1497,7 +1497,7 @@ struct LegacyTextCorpusFindingsTests {
   /// which is the other reason a page join is made: RFC 6614's `For example, they send`
   /// ends a page, and its list of packet types, which starts the next, was read into it
   /// as `they send o Access-Request o Accounting-Request ...`.
-  @Test func aBulletAfterAnUnfinishedSentenceIsNotItsRest() {
+  @Test func `a bullet after an unfinished sentence is not its rest`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
       "   RADIUS/TLS clients transmit the same packet types on the connection",
       "   they initiated as a RADIUS/UDP client would (see Section 3.4 (3) and",
@@ -1512,7 +1512,7 @@ struct LegacyTextCorpusFindingsTests {
     #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
 
-  @Test func overstrikesAndControlBytesAreRemoved() {
+  @Test func `overstrikes and control bytes are removed`() {
     let bold = "T\u{08}Ta\u{08}ab\u{08}bl\u{08}le\u{08}e"
     let underlined = "_\u{08}R_\u{08}F_\u{08}C"
     #expect(LegacyTextParser.removingControlCharacters(bold) == "Table")

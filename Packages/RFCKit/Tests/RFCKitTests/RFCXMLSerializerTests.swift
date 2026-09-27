@@ -19,32 +19,32 @@ struct RFCXMLSerializerTests {
         "D\(items.count):" + items.map { $0.term.plainText }.joined(separator: "|")
       case .preformatted(let artwork): "A:" + artwork.text
       case .figure(let figure):
-        "F:\(figure.title ?? "")" + figure.blocks.map(blockKind).joined(separator: "|")
+        "F:\(figure.title, default: "")" + figure.blocks.map(blockKind).joined(separator: "|")
       case .table(let table): "T:\(table.header.count)x\(table.rows.count)"
       case .blockQuote(let blocks): "Q:" + blocks.map(blockKind).joined(separator: "|")
       case .aside(let blocks): "S:" + blocks.map(blockKind).joined(separator: "|")
       case .references(let list):
         "R:"
-          + list.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(
+          + list.entries.map { "\($0.anchor)=\($0.documentID, default: "-")" }.joined(
             separator: ",")
       }
     }
     func visit(_ section: Section, depth: Int) {
       lines.append(
-        "\(depth) \(section.anchor) [\(section.number ?? "-")] \(section.isAppendix ? "appendix " : "")\(section.title)"
+        "\(depth) \(section.anchor) [\(section.number, default: "-")] \(section.isAppendix ? "appendix " : "")\(section.title)"
       )
       for block in section.blocks { lines.append("  " + blockKind(block)) }
       for sub in section.subsections { visit(sub, depth: depth + 1) }
     }
     lines.append(
-      "title=\(document.header.title) id=\(document.header.id?.description ?? "-") authors=\(document.header.authors.map(\.name))"
+      "title=\(document.header.title) id=\(document.header.id, default: "-") authors=\(document.header.authors.map(\.name))"
     )
     for block in document.header.abstract { lines.append("abstract " + blockKind(block)) }
     for section in document.sections { visit(section, depth: 1) }
     return lines
   }
 
-  @Test func roundTripsRFCXML() throws {
+  @Test func `round trips RFCXML`() throws {
     let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
     let xml = RFCXMLSerializer().serialize(original)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
@@ -54,7 +54,7 @@ struct RFCXMLSerializerTests {
     #expect(reparsed.header.keywords == original.header.keywords)
   }
 
-  @Test func anEntrysPrintedTagSurvivesARoundTrip() throws {
+  @Test func `an entrys printed tag survives a round trip`() throws {
     let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     func tags(_ document: RFCDocument) -> [String] {
@@ -75,13 +75,13 @@ struct RFCXMLSerializerTests {
     return (original, reparsed)
   }
 
-  @Test func theDraftAnRFCCameFromSurvivesARoundTrip() throws {
+  @Test func `the draft an RFC came from survives a round trip`() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
     #expect(original.header.precedingDraft != nil)
     #expect(reparsed.header.precedingDraft == original.header.precedingDraft)
   }
 
-  @Test func aReferenceAnnotationSurvivesARoundTrip() throws {
+  @Test func `a reference annotation survives a round trip`() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
     func annotations(_ document: RFCDocument) -> [String: [Inline]] {
       var result: [String: [Inline]] = [:]
@@ -97,7 +97,7 @@ struct RFCXMLSerializerTests {
     #expect(annotations(reparsed) == annotations(original))
   }
 
-  @Test func aParagraphIndentSurvivesARoundTrip() throws {
+  @Test func `a paragraph indent survives a round trip`() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9601.xml")
     func indents(_ document: RFCDocument) -> [Int] {
       document.nestedParagraphs.map(\.indent)
@@ -106,7 +106,7 @@ struct RFCXMLSerializerTests {
     #expect(indents(reparsed) == indents(original))
   }
 
-  @Test func roundTripsLegacyText() throws {
+  @Test func `round trips legacy text`() throws {
     let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let xml = RFCXMLSerializer(
       options: .init(
@@ -124,7 +124,7 @@ struct RFCXMLSerializerTests {
     #expect(xml.contains("rel=\"alternate\""))
   }
 
-  @Test func canonicalLabelsSurviveLegacyRoundTrip() throws {
+  @Test func `canonical labels survive legacy round trip`() throws {
     let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let xml = RFCXMLSerializer().serialize(parsed)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
@@ -151,7 +151,7 @@ struct RFCXMLSerializerTests {
     #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
   }
 
-  @Test func unresolvedDocumentReferencesSurviveAsLinks() throws {
+  @Test func `unresolved document references survive as links`() throws {
     // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
     let document = RFCDocument(
       header: DocumentHeader(
@@ -189,7 +189,7 @@ struct RFCXMLSerializerTests {
     #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
   }
 
-  @Test func artworkIsPreservedByteForByte() throws {
+  @Test func `artwork is preserved byte for byte`() throws {
     let art = "  +---+\n  | a |  <-- & <\n  +---+"
     let document = RFCDocument(
       header: DocumentHeader(title: "Art"),
@@ -211,7 +211,7 @@ struct RFCXMLSerializerTests {
 
 @Suite("RFCXML serializer: corpus findings")
 struct RFCXMLSerializerCorpusFindingsTests {
-  @Test func referencesSubsectionUnderMixedParentSurvives() throws {
+  @Test func `references subsection under mixed parent survives`() throws {
     // "10. References" whose 10.1 parsed to plain prose (no entries) and 10.2 to entries.
     let document = RFCDocument(
       header: DocumentHeader(id: .rfc(7019), title: "T"),
@@ -231,7 +231,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
                     entries: [
                       Reference(
                         anchor: "RFC2119", title: "Key words",
-                        seriesInfo: [(name: "RFC", value: "2119")])
+                        seriesInfo: [SeriesInfo(name: "RFC", value: "2119")])
                     ]))
               ]),
           ])
@@ -246,7 +246,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// RFCXML requires `author+` in every `<front>`, the document's and each reference's.
   /// A legacy reference never has structured authors, and a header can name none --
   /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
-  @Test func everyFrontHasAnAuthorEvenWhenNoneIsKnown() throws {
+  @Test func `every front has an author even when none is known`() throws {
     for fixture in ["rfc1.txt", "rfc5234.txt"] {
       let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
       let xml = RFCXMLSerializer().serialize(parsed)
@@ -287,7 +287,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
   /// anchor is the part number for every numbered section, so it is written once, as the
   /// `pn` the published series always carries, and read back from there.
-  @Test func anAnchorThatIsThePartNumberIsWrittenOnce() throws {
+  @Test func `an anchor that is the part number is written once`() throws {
     let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     #expect(parsed.allSections.contains { $0.anchor == "section-1" })
     let xml = RFCXMLSerializer().serialize(parsed)
@@ -306,7 +306,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
     #expect(reparsed.allSections.map(\.isAppendix) == parsed.allSections.map(\.isAppendix))
   }
 
-  @Test func controlCharactersNeverReachTheXML() throws {
+  @Test func `control characters never reach the XML`() throws {
     let document = RFCDocument(
       header: DocumentHeader(title: "T\u{00}itle\u{1B}"),
       sections: [

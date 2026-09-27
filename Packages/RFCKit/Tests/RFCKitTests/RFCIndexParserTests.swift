@@ -4,7 +4,7 @@ import Testing
 
 @Suite("RFC index parser")
 struct RFCIndexParserTests {
-  @Test func parsesEveryEntryKind() throws {
+  @Test func `parses every entry kind`() throws {
     let index = try Fixtures.sampleIndex()
     #expect(index.rfcs.count >= 9)
     #expect(index.series.contains { $0.id == DocumentID(series: .bcp, number: 14) })
@@ -12,7 +12,7 @@ struct RFCIndexParserTests {
     #expect(index.notIssued.contains(14))
   }
 
-  @Test func readsRichMetadata() throws {
+  @Test func `reads rich metadata`() throws {
     let index = try Fixtures.sampleIndex()
     let http = try #require(index[9110])
     #expect(http.title == "HTTP Semantics")
@@ -35,7 +35,7 @@ struct RFCIndexParserTests {
     #expect(http.abstract?.hasPrefix("The Hypertext Transfer Protocol (HTTP)") == true)
   }
 
-  @Test func legacyEntriesHaveSensibleDefaults() throws {
+  @Test func `legacy entries have sensible defaults`() throws {
     let index = try Fixtures.sampleIndex()
     let pigeons = try #require(index[1149])
     #expect(pigeons.currentStatus == .experimental)
@@ -44,7 +44,7 @@ struct RFCIndexParserTests {
     #expect(pigeons.date.year == 1990)
   }
 
-  @Test func obsoleteChainIsNavigable() throws {
+  @Test func `obsolete chain is navigable`() throws {
     let index = try Fixtures.sampleIndex()
     let old = try #require(index[7231])
     #expect(old.isObsolete)
@@ -52,7 +52,7 @@ struct RFCIndexParserTests {
     #expect(index.documentsAffecting(7231).map(\.number) == [9110])
   }
 
-  @Test func seriesMembership() throws {
+  @Test func `series membership`() throws {
     let index = try Fixtures.sampleIndex()
     let bcp14 = try #require(index.series(DocumentID(series: .bcp, number: 14)))
     #expect(bcp14.members == [.rfc(2119), .rfc(8174)])

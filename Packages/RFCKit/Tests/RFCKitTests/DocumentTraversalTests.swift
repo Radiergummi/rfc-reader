@@ -54,7 +54,8 @@ struct DocumentTraversalTests {
                 title: "Normative",
                 entries: [
                   Reference(
-                    anchor: "RFC10", title: "Ten", seriesInfo: [(name: "RFC", value: "10")],
+                    anchor: "RFC10", title: "Ten",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "10")],
                     annotation: [.text("see "), cite(11)])
                 ]))
           ]),

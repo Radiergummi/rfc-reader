@@ -12,7 +12,7 @@ public enum DocumentSource: String, Sendable, Codable {
 ///
 /// The renderer works exclusively against this model, so the same SwiftUI code
 /// handles a 1990 text-only RFC and a 2026 RFCXML document.
-public struct RFCDocument: Sendable {
+public struct RFCDocument: Sendable, Hashable, Codable {
   public var header: DocumentHeader
   /// Sections of the body (`<middle>` in RFCXML) and back matter (references, appendices).
   public var sections: [Section]
@@ -68,7 +68,7 @@ public struct RFCDocument: Sendable {
   }
 }
 
-public struct DocumentHeader: Sendable {
+public struct DocumentHeader: Sendable, Hashable, Codable {
   public var id: DocumentID?
   public var title: String
   public var abbreviatedTitle: String?
@@ -121,7 +121,7 @@ public struct DocumentHeader: Sendable {
   }
 }
 
-public struct Section: Sendable, Identifiable {
+public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// Stable anchor, e.g. `section-4.2` or the author's own `anchor` attribute.
   public var anchor: String
   /// `1`, `4.2`, `A`, `B.1`; nil for unnumbered sections such as "Acknowledgements".
@@ -193,7 +193,7 @@ public struct Section: Sendable, Identifiable {
   }
 }
 
-public indirect enum Block: Sendable {
+public enum Block: Sendable, Hashable, Codable {
   case paragraph(Paragraph)
   case list(ListBlock)
   case definitionList([DefinitionItem])
@@ -205,7 +205,7 @@ public indirect enum Block: Sendable {
   case references(ReferenceList)
 }
 
-public struct Paragraph: Sendable {
+public struct Paragraph: Sendable, Hashable, Codable {
   public var inlines: [Inline]
   public var anchor: String?
   /// How far the author set this paragraph in, in characters of the 72-column
@@ -227,8 +227,8 @@ public struct Paragraph: Sendable {
   public var plainText: String { inlines.plainText }
 }
 
-public struct ListBlock: Sendable {
-  public enum Style: Sendable, Equatable {
+public struct ListBlock: Sendable, Hashable, Codable {
+  public enum Style: Sendable, Hashable, Codable {
     case bullet
     /// Numbered with the given format, e.g. `%d.` or `(%c)`; nil means plain decimal.
     case numbered(format: String?, start: Int)
@@ -247,7 +247,7 @@ public struct ListBlock: Sendable {
   }
 }
 
-public struct ListItem: Sendable {
+public struct ListItem: Sendable, Hashable, Codable {
   public var blocks: [Block]
   public var anchor: String?
 
@@ -261,7 +261,7 @@ public struct ListItem: Sendable {
   }
 }
 
-public struct DefinitionItem: Sendable {
+public struct DefinitionItem: Sendable, Hashable, Codable {
   public var term: [Inline]
   public var definition: [Block]
   /// The term's anchor (`<dt>`).
@@ -281,8 +281,8 @@ public struct DefinitionItem: Sendable {
 }
 
 /// Verbatim monospaced content: ASCII art, packet diagrams, ABNF, code.
-public struct Preformatted: Sendable {
-  public enum Kind: Sendable, Equatable {
+public struct Preformatted: Sendable, Hashable, Codable {
+  public enum Kind: Sendable, Hashable, Codable {
     case artwork
     case sourceCode
   }
@@ -305,7 +305,7 @@ public struct Preformatted: Sendable {
   }
 }
 
-public struct Figure: Sendable {
+public struct Figure: Sendable, Hashable, Codable {
   public var title: String?
   public var number: Int?
   public var blocks: [Block]
@@ -319,7 +319,7 @@ public struct Figure: Sendable {
   }
 }
 
-public struct Table: Sendable {
+public struct Table: Sendable, Hashable, Codable {
   public var title: String?
   public var number: Int?
   public var header: [[[Inline]]]
@@ -369,7 +369,21 @@ extension Reference {
   }
 }
 
-public struct ReferenceList: Sendable {
+/// One `<seriesInfo>` of a reference: a series and the document's place in it, such
+/// as RFC 9110 or DOI 10.17487/RFC9110. A struct rather than a labelled tuple, which
+/// could be none of `Hashable`, `Codable` or `Equatable`, and so kept every type that
+/// held a reference from being any of them (#130).
+public struct SeriesInfo: Hashable, Codable, Sendable {
+  public var name: String
+  public var value: String
+
+  public init(name: String, value: String) {
+    self.name = name
+    self.value = value
+  }
+}
+
+public struct ReferenceList: Sendable, Hashable, Codable {
   public var title: String
   public var entries: [Reference]
 
@@ -380,7 +394,7 @@ public struct ReferenceList: Sendable {
 }
 
 /// One bibliographic entry, e.g. `[RFC7301]`.
-public struct Reference: Sendable, Identifiable {
+public struct Reference: Sendable, Identifiable, Hashable, Codable {
   /// What `<xref target>` points at, and the stable key a link to this entry uses.
   public var anchor: String
   /// The tag the document prints for this entry, which its citations print too.
@@ -393,7 +407,7 @@ public struct Reference: Sendable, Identifiable {
   public var authors: [String]
   public var date: PublicationDate?
   /// `RFC 7301`, `DOI 10.17487/RFC7301`, `STD 90`, ...
-  public var seriesInfo: [(name: String, value: String)]
+  public var seriesInfo: [SeriesInfo]
   public var url: URL?
   /// Free-form fallback when the reference came from legacy text and could not be structured.
   public var rawText: String?
@@ -410,7 +424,7 @@ public struct Reference: Sendable, Identifiable {
     title: String,
     authors: [String] = [],
     date: PublicationDate? = nil,
-    seriesInfo: [(name: String, value: String)] = [],
+    seriesInfo: [SeriesInfo] = [],
     url: URL? = nil,
     rawText: String? = nil,
     annotation: [Inline] = []
@@ -439,8 +453,8 @@ public struct Reference: Sendable, Identifiable {
   }
 }
 
-public struct CrossReference: Sendable, Hashable {
-  public enum Target: Sendable, Hashable {
+public struct CrossReference: Sendable, Hashable, Codable {
+  public enum Target: Sendable, Hashable, Codable {
     /// Another place in the same document, by anchor.
     case anchor(String)
     /// Another RFC, optionally a specific section within it.
@@ -451,7 +465,7 @@ public struct CrossReference: Sendable, Hashable {
   ///
   /// RFCXML's own `sectionFormat`. The legacy text format has no equivalent, so the
   /// text parser reports the shape it matched in the prose.
-  public enum SectionFormat: String, Sendable, Hashable, CaseIterable {
+  public enum SectionFormat: String, Sendable, Hashable, CaseIterable, Codable {
     /// `Section 4.2 of [RFC 9110]`
     case of
     /// `[RFC 9110], Section 4.2`
@@ -588,7 +602,7 @@ public struct CrossReference: Sendable, Hashable {
   }
 }
 
-public indirect enum Inline: Sendable, Hashable {
+public enum Inline: Sendable, Hashable, Codable {
   case text(String)
   case emphasis([Inline])
   case strong([Inline])

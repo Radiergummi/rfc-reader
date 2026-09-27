@@ -1488,7 +1488,7 @@ public struct LegacyTextParser: Sendable {
   nonisolated(unsafe) private static let numberedItemPattern =
     #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
   /// `containsArtwork` answers the same question byte by byte; an alternative added
-  /// here has to be added there, and `theByteScansAgreeWithTheRegexes` is the guard.
+  /// here has to be added there, and `` `the byte scans agree with the regexes` `` is the guard.
   nonisolated(unsafe) static let artworkPattern =
     #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
   /// A run of three or more spaces between two non-space characters, not following
@@ -2108,7 +2108,7 @@ public struct LegacyTextParser: Sendable {
   }
 
   private static func reference(anchor label: String, text: String) -> Reference {
-    var seriesInfo: [(name: String, value: String)] = []
+    var seriesInfo: [SeriesInfo] = []
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
     // `Request for Comments 796`, `Request For Comments 990` and `RFC #189` only when an
     // entry has none: once a bare `[1]` stopped naming RFC 1, an entry spelled so named
@@ -2118,15 +2118,15 @@ public struct LegacyTextParser: Sendable {
     if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#)
       ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
     {
-      seriesInfo.append((name: "RFC", value: String(match.1)))
+      seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
-      seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
+      seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
     }
     if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
-      seriesInfo.append((name: "BCP", value: String(match.1)))
+      seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))
     }
     if let match = text.firstMatch(of: #/\bSTD\s?(\d+)/#) {
-      seriesInfo.append((name: "STD", value: String(match.1)))
+      seriesInfo.append(SeriesInfo(name: "STD", value: String(match.1)))
     }
     let title = text.firstMatch(of: #/"([^"]+)"/#).map { String($0.1) } ?? ""
     let date = text.firstMatch(of: monthYearPattern).map {
@@ -2246,7 +2246,7 @@ struct InlineLinker: Sendable {
   /// literal is absent is skipped without changing what `link` returns.
   /// A pattern above that stops needing its literal -- a `(?i)`, a lowercase
   /// `section`, a `www.` URL -- has to change this too, or its matches are dropped
-  /// without a word; `theLiteralGateSkipsNoMatch` is the guard.
+  /// without a word; `` `the literal gate skips no match` `` is the guard.
   struct Literals {
     var bracket = false, rfc = false, rfcs = false, section = false, http = false
     var any: Bool { bracket || rfc || section || http }
