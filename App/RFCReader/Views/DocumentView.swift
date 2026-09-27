@@ -178,13 +178,7 @@ struct DocumentView: View {
         }
       #endif
       .onAppear {
-        // Once per opening: each one is a view of its own (`.id(selection)`), and
-        // appearing again — the sheet over it, or a collapsed split view's
-        // spurious disappear and appear — is not another opening (#260).
-        if work.load == nil {
-          markAsRead()
-          startLoad()
-        }
+        if work.load == nil { startLoad() }
       }
       .onChange(of: buildInputs, initial: true) {
         // Appearing again fires this with nothing changed. A build already made,
@@ -444,6 +438,11 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      // Here rather than on appearing: once per opening, since each is a view of
+      // its own (`.id(selection)`) and a collapsed split view's spurious
+      // disappear and appear is not another one (#260). And only once the
+      // document is here, so one that failed to open is not listed as read.
+      markAsRead()
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
