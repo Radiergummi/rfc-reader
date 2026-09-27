@@ -128,6 +128,7 @@ struct DocumentFallbackTests {
     } catch {
       // The parser's own error.
     }
+    #expect(transport.requested == ["xml", "txt"])
   }
 
   @Test func `the index is fetched through the client`() async throws {
