@@ -53,6 +53,77 @@ struct ProseDiagnosticsTests {
     #expect(LegacyTextParser.diagnose(code, maxIndent: 6).rejections == [.indentTooDeep])
   }
 
+  /// Nor does it excuse a MIB module's text, which is sentences where it is a
+  /// `DESCRIPTION` or a comment: a block with an assignment in it, or a comment of
+  /// several lines. A list marked with dashes is not one.
+  @Test func aDeeperCapDoesNotExcuseAModulesText() {
+    let comment = [
+      "         -- The peer table.  This table holds one entry for each",
+      "         -- peer, with what is known about the connection to it.",
+    ]
+    let clauseEnd = [
+      "         This object is kept only for compatibility with older agents.\"",
+      "         ::= { exampleObjects 1 }",
+    ]
+    for lines in [comment, clauseEnd] {
+      #expect(
+        LegacyTextParser.diagnose(lines, maxIndent: 12).rejections
+          == [.deepIndentNotSentences],
+        "\(lines[0])")
+    }
+
+    let dashedItem = [
+      "         -- The \"print\" field names a program that prints a body part",
+      "         in the given format, as the view command displays it.",
+    ]
+    #expect(LegacyTextParser.diagnose(dashedItem, maxIndent: 12).isProse)
+    #expect(
+      LegacyTextParser.diagnose(
+        ["         -- only when the message could not be delivered"], maxIndent: 12
+      )
+      .isProse)
+  }
+
+  // MARK: The document's prose cap
+
+  /// The cap is three columns past the body, which is the indent a quarter of the
+  /// document's sentences sit at or left of (#55). A MIB module's `DESCRIPTION` clauses
+  /// are sentences too, and where the module is most of the document they outnumber
+  /// the body enough to carry the quarter into the module: the cap rose with it, and
+  /// the module's text became paragraphs. A clause's quoted string is not counted.
+  @Test func theProseCapFollowsTheBodyAndNotAModule() {
+    let body = [
+      "   This memo defines a portion of the management information base for",
+      "   use with the network management protocols in the community.",
+    ]
+    let clause = [
+      "                    DESCRIPTION",
+      "                       \"The number of packets that were received on this",
+      "                       interface and discarded because they were found",
+      "                       to be malformed in some way, as the counter says.",
+      "                       This counter is maintained by every interface",
+      "                       which supports the module as it is described.\"",
+      "                    ::= { exampleEntry 4 }",
+    ]
+    let module = Array(repeating: clause, count: 3).flatMap { $0 }
+    #expect(LegacyTextParser.proseIndent(body + module) == 6)
+    #expect(
+      LegacyTextParser.proseIndent(body + module.filter { !$0.contains("DESCRIPTION") }) == 26,
+      "counted as the body's, the clauses would set the cap")
+
+    let deeperBody = [
+      "      1.  Introduction",
+      "",
+      "         A host name is chosen once and then kept for as long as the",
+      "         machine is in service, so it is worth choosing with some care.",
+    ]
+    #expect(LegacyTextParser.proseIndent(deeperBody) == 12)
+    #expect(
+      LegacyTextParser.proseIndent(["      DESCRIPTION \"The local system number.\""] + deeperBody)
+        == 12,
+      "a clause closed on its own line leaves the lines after it counted")
+  }
+
   @Test func firstLineIndentOutOfRangeIsDistinctFromIndent() {
     let lines = [
       "                The opening line is set far too deep relative to the body",
@@ -165,6 +236,24 @@ struct ProseDiagnosticsTests {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc757.txt"))
       .filter { $0.section.isEmpty }
     #expect(leadIn.isEmpty, "\(leadIn.map(\.firstLine))")
+  }
+
+  /// Whatever title `parse` is handed, the report is handed too, because the lead-in
+  /// loses the blocks that repeat it: a report given only the page's title diagnoses
+  /// blocks the parser dropped. The title here is made up to be one RFC 873's
+  /// `Bedford, Massachusetts` line repeats; the page sets its own in capitals, so the
+  /// given one is the title `parse` uses.
+  @Test func theReportFiltersTheLeadInByTheTitleParseIsGiven() throws {
+    let text = try Fixtures.string("rfc873.txt")
+    let title = "The Illusion of Vendor Support, Bedford, Massachusetts"
+    let leadIn = { (title: String?) in
+      LegacyTextParser.proseDiagnostics(for: text, title: title)
+        .filter { $0.section.isEmpty }.map(\.firstLine)
+    }
+
+    #expect(LegacyTextParser.parse(text, title: title).header.title == title)
+    #expect(leadIn(nil).contains("Bedford, Massachusetts"))
+    #expect(!leadIn(title).contains("Bedford, Massachusetts"))
   }
 
   /// `classify` offers a block to the list parser before it asks the prose test, so a

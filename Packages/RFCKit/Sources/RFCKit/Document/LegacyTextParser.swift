@@ -390,9 +390,13 @@ public struct LegacyTextParser: Sendable {
   /// decided about each, and why.
   ///
   /// Shares `rawSections` with `parse`, so the blocks reported here are exactly the
-  /// blocks the parser classifies — not a re-segmentation that might disagree.
-  public static func proseDiagnostics(for text: String) -> [BlockDiagnostics] {
-    let prepared = prepared(text)
+  /// blocks the parser classifies — not a re-segmentation that might disagree. `title`
+  /// is the index's title, as `parse` takes it: the lead-in loses what repeats the
+  /// title, so a report given a different one diagnoses blocks the parser dropped.
+  public static func proseDiagnostics(for text: String, title: String? = nil)
+    -> [BlockDiagnostics]
+  {
+    let prepared = prepared(text, title: title)
     return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in
@@ -420,14 +424,24 @@ public struct LegacyTextParser: Sendable {
       lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
     let body = bodyIsIndented(lines[bodyStart...])
     var header = parseFrontMatter(front)
-    if let title, !title.isEmpty,
-      titleWords(header.title) != titleWords(title)
-        || !header.title.contains(where: \.isLowercase)
-    {
-      header.title = title
-    }
     var sections = rawSections(
       in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
+    if let title, !title.isEmpty {
+      // The title page is the front matter's runs and the lead-in's blocks up to the
+      // one that opens the body, which is where a title set over several runs leaves
+      // the rest. Up to and including it, because the rest can pass for a paragraph:
+      // RFC 806 sets it in two lines of capitals.
+      var titlePage = front.split(whereSeparator: \.isBlank).map(Array.init)
+      if sections.first?.heading == nil {
+        var leadIn = sections[0].blocks[...]
+        let opening = leadIn.firstIndex { opensBody($0.lines, proseIndent: proseIndent) }
+        if let opening {
+          leadIn = leadIn[...opening]
+        }
+        titlePage += leadIn.map(\.lines)
+      }
+      header.title = Self.title(page: header.title, index: title, titlePage: titlePage)
+    }
     // The lead-in, which is the only section with no heading, loses what the title page
     // left in it here rather than in `parse`, so the diagnosis never sees it either: a
     // report of blocks the parser dropped unread would count refusals it never made.
@@ -470,13 +484,45 @@ public struct LegacyTextParser: Sendable {
   /// clauses read as sentences too: RFC 3635 has 632 such lines at column 23 against
   /// 354 of body at 3, and the commonest indent put its cap at 26.
   ///
+  /// Nor is a MIB module's quoted text counted at all, because the quarter is not
+  /// enough where the module is most of the document. RFC 8096 is mostly its module,
+  /// and its `DESCRIPTION` clauses at 6 to 10 outnumber the body at 3 so far that the
+  /// quarter landed at 7: the cap rose to 10, and 37 of the module's blocks, `::= {
+  /// ipv6MIBObjects 1 }` and all, became paragraphs. RFC 1657 has 175 such lines at 28
+  /// against 22 of body. A clause is its keyword's quoted string, open until the line
+  /// that closes the quote.
+  ///
   /// Over the whole document rather than the body, because the front matter's own
   /// prose test runs before the body's start is known. The front matter is a few
   /// dozen lines against the hundreds the indent is taken from.
   static func proseIndent(_ lines: [Line]) -> Int {
+    proseIndent(
+      lines.compactMap { line in
+        guard case .text(let string) = line else { return nil }
+        return string
+      })
+  }
+
+  static func proseIndent(_ lines: [String]) -> Int {
     var counts: [Int: Int] = [:]
-    for case .text(let string) in lines where readsLikeSentences([string], minimumWords: 4) {
-      counts[string.leadingSpaceCount, default: 0] += 1
+    var insideClause = false
+    var followsClauseKeyword = false
+    for string in lines {
+      let trimmed = string.trimmingCharacters(in: .whitespaces)
+      guard !trimmed.isEmpty else { continue }
+      let keyword = trimmed.prefix { !$0.isWhitespace }
+      let opensClause =
+        mibClauseKeywords.contains(keyword) || (followsClauseKeyword && trimmed.hasPrefix("\""))
+      followsClauseKeyword = mibClauseKeywords.contains(trimmed[...])
+      if insideClause || opensClause {
+        // A clause's string holds no quote of its own, so an odd count opens or
+        // closes it.
+        if !trimmed.count(where: { $0 == "\"" }).isMultiple(of: 2) { insideClause.toggle() }
+        continue
+      }
+      if readsLikeSentences([string], minimumWords: 4) {
+        counts[string.leadingSpaceCount, default: 0] += 1
+      }
     }
     let total = counts.values.reduce(0, +)
     var seen = 0
@@ -486,6 +532,12 @@ public struct LegacyTextParser: Sendable {
     }
     return classicProseIndent
   }
+
+  /// The SMI clauses whose quoted string is text: what a MIB module says about an
+  /// object in sentences, set as deep as the module sets it.
+  private static let mibClauseKeywords: Set<Substring> = [
+    "DESCRIPTION", "REFERENCE", "CONTACT-INFO", "ORGANIZATION",
+  ]
 
   /// Whether `1:` and `2.4.12:` at column 0 are headings in this document. RFC 2078, 2743
   /// and 2130 number every heading that way (#71), and 1308, 1309, 1913, 2025 and 2479
@@ -600,16 +652,15 @@ public struct LegacyTextParser: Sendable {
   /// `title` is the document's title as the RFC index gives it, where the caller has
   /// it. The run of lines front matter takes for the title is a guess: in RFC 822 it
   /// is `Obsoletes:  RFC #733`, in RFC 1144 the first of the title's two lines (#170,
-  /// #171), in RFC 5323 the author and date. Where the guess has other words than the
-  /// index's, the index's title replaces it -- in 698 of the 8,457 legacy documents --
-  /// and the rest of the title the page sets is recognised in the lead-in and kept out
-  /// of it.
+  /// #171), in RFC 5323 the author and date. Where the guess is not the title, the
+  /// index's replaces it -- in 601 of the 8,457 legacy documents -- and the rest of the
+  /// title the page sets is recognised in the lead-in and kept out of it.
   ///
-  /// Where the two have the same words, the page's own title stays: the index sets
-  /// older titles in sentence case and drops their article (`Note on Reconnection
-  /// Protocol` for RFC 671's `A Note on Reconnection Protocol`), and the page is what
-  /// the author wrote. Unless the page sets it in capitals, which is a typewriter's
-  /// emphasis rather than a spelling.
+  /// Where the guess is the title, the page's own stays, although the index recases
+  /// and rewords it: it sets older titles in sentence case and drops their article
+  /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
+  /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
+  /// is where the two are told apart.
   public func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
@@ -811,14 +862,20 @@ public struct LegacyTextParser: Sendable {
   /// that is boilerplate is more than 16, and every one that swallowed its body is 22 or
   /// more. Past the gap a single line ends it, because boilerplate is paragraphs and a
   /// lone line is where the body's own unrecognised heading sits.
-  private static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
+  static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
     -> Int
   {
     guard blocks.count > 20 else { return blocks.count }
+    // Looser than the lead-in's `isContentsEntries`: under a contents heading an entry
+    // needs only a leader or a page number, because not every listing sets both.
+    func isEntry(_ line: String) -> Bool {
+      line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..")
+        || line.contains(". .")
+    }
     return 1
       + blocks.dropFirst().prefix { block in
         isContents
-          ? isContentsEntries(block.lines)
+          ? block.lines.count(where: isEntry) * 2 >= block.lines.count
           : block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent)
       }.count
   }
@@ -896,13 +953,16 @@ public struct LegacyTextParser: Sendable {
       }
       kept.append(block)
       index += 1
-      if listMarker(of: block.lines) != nil
-        || (block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent))
-      {
-        break
-      }
+      if opensBody(block.lines, proseIndent: proseIndent) { break }
     }
     return kept + blocks[index...]
+  }
+
+  /// A paragraph or a list, which is where the body has begun and the title page
+  /// has ended.
+  private static func opensBody(_ lines: [String], proseIndent: Int) -> Bool {
+    listMarker(of: lines) != nil
+      || (lines.count > 1 && looksLikeProse(lines, maxIndent: proseIndent))
   }
 
   /// What a status, copyright or IPR paragraph says and a body's opening does not: RFC
@@ -944,6 +1004,64 @@ public struct LegacyTextParser: Sendable {
   private static func titleWords(_ title: String) -> ArraySlice<Substring> {
     let all = words(title)
     return ["a", "an", "the"].contains(all.first) ? all.dropFirst() : all[...]
+  }
+
+  /// The document's title: the one the page sets, or the RFC index's where the page's
+  /// is not the title at all (#170).
+  ///
+  /// The page's stays where it has most of the index's words, in order -- four in
+  /// five -- and they are at least half its own. The index rewords titles: RFC 1801's
+  /// `X.400-MHS` is its `MHS`, RFC 6527 loses `the`, RFC 1915's `Connection Control
+  /// Protocol` is its `Compression`, and none of those misses more than one of the
+  /// index's words. Four in five keeps a title the index rewords by a word or
+  /// two, where a title from a header line, an author or a paragraph shares a few
+  /// words by chance. Half its own, because a title that has an author, a date or
+  /// the opening paragraph run on after it has all the index's words and many more:
+  /// RFC 815 and 816 run on through the author and his affiliation, and RFC 21's
+  /// `Network meeting` is in its first sentence.
+  ///
+  /// A page title that is part of the index's, and nothing else, stays too, unless
+  /// the rest of the index's title is on the title page as well. Then it is a title
+  /// set over several runs, of which the front matter took the first: RFC 1144's
+  /// `for Low-Speed Serial Links` is on the line below. Where the rest is not on the
+  /// page, the index has named the document more fully than its author did: RFC 766
+  /// is `Internet Protocol Handbook`, and only the index adds `: Table of contents`.
+  ///
+  /// A page title set in capitals gives way to the index's whatever its words, as a
+  /// typewriter's emphasis rather than a spelling.
+  static func title(page: String, index: String, titlePage: [[String]]) -> String {
+    guard page.contains(where: \.isLowercase) else { return index }
+    let indexWords = titleWords(index)
+    let pageWords = titleWords(page)
+    let shared = sharedWordCount(indexWords, pageWords)
+    if shared * 5 >= indexWords.count * 4, shared * 2 >= pageWords.count {
+      return page
+    }
+    guard shared == pageWords.count else { return index }
+    let allIndexWords = words(index)
+    var onTitlePage = Set(pageWords)
+    for run in titlePage where repeatsTitle(run, allIndexWords) {
+      onTitlePage.formUnion(words(run.joined(separator: " ")))
+    }
+    let found = indexWords.count { onTitlePage.contains($0) }
+    return found * 5 >= indexWords.count * 4 ? index : page
+  }
+
+  /// How many words the two have in common, in the same order: the longest run of
+  /// words both contain, not necessarily side by side.
+  private static func sharedWordCount(
+    _ first: ArraySlice<Substring>, _ second: ArraySlice<Substring>
+  ) -> Int {
+    var previousRow = [Int](repeating: 0, count: second.count + 1)
+    for word in first {
+      var row = [0]
+      for (offset, other) in second.enumerated() {
+        row.append(
+          word == other ? previousRow[offset] + 1 : max(previousRow[offset + 1], row[offset]))
+      }
+      previousRow = row
+    }
+    return previousRow[second.count]
   }
 
   nonisolated(unsafe) private static let dateLinePattern =
@@ -1550,9 +1668,11 @@ public struct LegacyTextParser: Sendable {
     // is also twenty times cheaper than the prose test and rejects most of what
     // reaches here, so it is asked first.
     guard readsLikeSentences(block.lines, share: (of: 1, in: 2)) else { return false }
-    // The indent is the only test excused, and it is the only one that consulted
-    // it. `RawBlock.indent` is the smallest indent in the block and the block is
-    // uniform by the time this passes, so the cap could only ever be its own.
+    // The cap is the only test excused. `RawBlock.indent` is the smallest indent in
+    // the block and the block is uniform by the time this passes, so the cap could
+    // only ever be its own. Past the classic cap `diagnose` still refuses a MIB
+    // module's text (#55), under an item as anywhere; the sentence share it asks
+    // there too has already passed above.
     guard looksLikeProse(block.lines, maxIndent: .max) else { return false }
     let inlines = linker.link(joinWrappedLines(block.lines))
     guard !inlines.isEmpty else { return false }
@@ -1664,10 +1784,15 @@ public struct LegacyTextParser: Sendable {
 
     // Past the classic cap the indent is excused only for sentences, as it is under a
     // list item: a document whose body sits deeper sets its one-line code there too
-    // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard.
+    // (`::= { ifMauEntry 4 }`, `END`), and a single line has no other guard. Nor for
+    // a MIB module's text, whose `DESCRIPTION` clauses and comments are sentences: a
+    // block with an assignment in it, or an ASN.1 comment, is the module's (RFC 8096's
+    // `... obsoleted by IP-MIB::ipv6IpForwarding." ::= { ipv6MIBObjects 1 }`).
     if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
-    } else if indent > classicProseIndent, !readsLikeSentences(lines, share: (of: 1, in: 2)) {
+    } else if indent > classicProseIndent,
+      !readsLikeSentences(lines, share: (of: 1, in: 2)) || readsAsModuleText(lines)
+    {
       diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {
@@ -1702,6 +1827,19 @@ public struct LegacyTextParser: Sendable {
     if diagnosis.artworkMatches > 0 { diagnosis.rejections.append(.artworkPattern) }
     if gapped { diagnosis.rejections.append(.internalGap) }
     return diagnosis
+  }
+
+  /// An ASN.1 assignment (`::=`), which ends every clause, or a comment of two lines or
+  /// more, each opening `--`.
+  ///
+  /// Not a single line opening `--`, nor a block of several whose first line does
+  /// alone: RFC 479 and 1343 mark the items of a list that way. And not an unbalanced
+  /// quote, which a clause's string split by a blank line has, because a quotation
+  /// running over several paragraphs has it as well (RFC 1127, 1207).
+  private static func readsAsModuleText(_ lines: [String]) -> Bool {
+    if lines.contains(where: { $0.contains("::=") }) { return true }
+    return lines.count > 1
+      && lines.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
   }
 
   /// The early RFCs typeset with justified text (757, 806, 841, 909, 1341) pad the gaps
@@ -1790,7 +1928,7 @@ public struct LegacyTextParser: Sendable {
     _ lines: [String], share: (of: Int, in: Int) = (of: 3, in: 5), minimumWords: Int = 1
   ) -> Bool {
     let counted = sentenceWords(lines)
-    guard counted.total >= minimumWords, counted.total > 0 else { return false }
+    guard counted.total >= max(minimumWords, 1) else { return false }
     // Kept as an exact integer comparison rather than a threshold on `sentenceRatio`:
     // the two agree everywhere, but only this one is free of rounding at the boundary.
     return counted.ordinary * share.in >= counted.total * share.of
