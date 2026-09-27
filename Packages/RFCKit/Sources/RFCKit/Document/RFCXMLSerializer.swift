@@ -497,16 +497,11 @@ public struct RFCXMLSerializer: Sendable {
 
   private static func referenceAnchors(in document: RFCDocument) -> [DocumentID: String] {
     var anchors: [DocumentID: String] = [:]
-    func visit(_ blocks: [Block]) {
-      for block in blocks {
-        if case .references(let list) = block {
-          for reference in list.entries {
-            if let id = reference.documentID, anchors[id] == nil { anchors[id] = reference.anchor }
-          }
-        }
+    for case .references(let list) in document.blocks {
+      for reference in list.entries {
+        if let id = reference.documentID, anchors[id] == nil { anchors[id] = reference.anchor }
       }
     }
-    for section in document.allSections { visit(section.blocks) }
     return anchors
   }
 
