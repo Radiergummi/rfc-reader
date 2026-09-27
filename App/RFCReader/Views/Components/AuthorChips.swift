@@ -12,7 +12,7 @@ struct AuthorChips: View {
   let authors: [Author]
 
   var body: some View {
-    WrappingRow(spacing: 6) {
+    WrappingRowLayout(spacing: 6) {
       ForEach(Array(authors.enumerated()), id: \.offset) { _, author in
         AuthorChip(author: author)
       }
@@ -83,64 +83,40 @@ extension Color {
 }
 
 /// Lays its children out left to right, starting a new line wherever the next one
-/// would not fit.
-private struct WrappingRow: Layout {
+/// would not fit; where each lands is `WrappingRow`'s. The cache holds each child's
+/// own size, which does not depend on the width, so a layout pass measures a child
+/// again only when it is wider than the line.
+private struct WrappingRowLayout: Layout {
   let spacing: CGFloat
 
-  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-    let rows = arrange(subviews, width: proposal.width ?? .infinity)
-    let width = rows.map(\.width).max() ?? 0
-    let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
-    return CGSize(width: width, height: height)
+  func makeCache(subviews: Subviews) -> [CGSize] {
+    subviews.map { $0.sizeThatFits(.unspecified) }
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGSize])
+    -> CGSize
+  {
+    WrappingRow.size(of: frames(subviews, width: proposal.width ?? .infinity, cache: cache))
   }
 
   func placeSubviews(
-    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGSize]
   ) {
-    var y = bounds.minY
-    for row in arrange(subviews, width: bounds.width) {
-      var x = bounds.minX
-      for index in row.indices {
-        let size = Self.size(of: subviews[index], within: bounds.width)
-        subviews[index].place(
-          at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
-          proposal: ProposedViewSize(size))
-        x += size.width + spacing
-      }
-      y += row.height + spacing
+    for (subview, frame) in zip(subviews, frames(subviews, width: bounds.width, cache: cache)) {
+      subview.place(
+        at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+        proposal: ProposedViewSize(frame.size))
     }
   }
 
-  /// Its own width, or the row's when it is wider: a chip is never wider than the
-  /// column, and its name truncates instead.
-  private static func size(of subview: LayoutSubview, within width: CGFloat) -> CGSize {
-    let ideal = subview.sizeThatFits(.unspecified)
-    guard ideal.width > width else { return ideal }
-    return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
-  }
-
-  private struct Row {
-    var indices: [Int] = []
-    var width: CGFloat = 0
-    var height: CGFloat = 0
-  }
-
-  private func arrange(_ subviews: Subviews, width: CGFloat) -> [Row] {
-    var rows: [Row] = []
-    var row = Row()
-    for index in subviews.indices {
-      let size = Self.size(of: subviews[index], within: width)
-      let needed = row.indices.isEmpty ? size.width : row.width + spacing + size.width
-      if needed > width, !row.indices.isEmpty {
-        rows.append(row)
-        row = Row()
-      }
-      row.width = row.indices.isEmpty ? size.width : row.width + spacing + size.width
-      row.height = max(row.height, size.height)
-      row.indices.append(index)
+  /// Each child at its own width, or the line's when it is wider: a chip is never
+  /// wider than the column, and its name truncates instead.
+  private func frames(_ subviews: Subviews, width: CGFloat, cache: [CGSize]) -> [CGRect] {
+    let sizes = zip(subviews, cache).map { subview, ideal in
+      ideal.width > width
+        ? subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) : ideal
     }
-    if !row.indices.isEmpty { rows.append(row) }
-    return rows
+    return WrappingRow.frames(for: sizes, width: width, spacing: spacing)
   }
 }
 
