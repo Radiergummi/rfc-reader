@@ -19,15 +19,16 @@ extension Block {
   }
 
   /// The runs of prose this block holds itself, not those of the blocks nested in
-  /// it: a paragraph's text, each definition's term, each table cell. Artwork and
-  /// source code are set as the author typed them, and bibliography entries are
-  /// not prose.
+  /// it: a paragraph's text, each definition's term, each table cell, each
+  /// reference's annotation. Artwork and source code are set as the author typed
+  /// them, and the rest of a bibliography entry is not prose.
   public var proseRuns: [[Inline]] {
     switch self {
     case .paragraph(let paragraph): [paragraph.inlines]
     case .definitionList(let items): items.map(\.term)
     case .table(let table): Array((table.header + table.rows).joined())
-    case .list, .preformatted, .figure, .blockQuote, .aside, .references: []
+    case .references(let list): list.entries.map(\.annotation)
+    case .list, .preformatted, .figure, .blockQuote, .aside: []
     }
   }
 

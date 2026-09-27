@@ -17,6 +17,10 @@ public struct ProseDiagnostics: Sendable {
     case noLines
     /// The body indent is deeper than a paragraph is allowed to start.
     case indentTooDeep
+    /// The body indent is within the document's cap but past the classic one, which
+    /// excuses only a block that reads as sentences, and this one does not, or reads
+    /// as a MIB module's text (#55).
+    case deepIndentNotSentences
     /// The first line is offset from the body by more than a paragraph indent.
     case firstLineIndentOutOfRange
     /// Some line after the first does not return to the block's indent.

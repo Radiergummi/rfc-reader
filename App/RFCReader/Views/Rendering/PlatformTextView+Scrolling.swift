@@ -30,10 +30,12 @@ extension PlatformTextView {
     #endif
   }
 
-  /// The padding below the last line.
+  /// The padding below the last line, and on iOS the room under the home indicator
+  /// the reader scrolls it clear of (`ReaderTextView.safeAreaInsetsDidChange`):
+  /// together, what UIKit lets the view scroll past the end of the text.
   var containerBottom: CGFloat {
     #if canImport(UIKit)
-      return textContainerInset.bottom
+      return textContainerInset.bottom + contentInset.bottom
     #else
       // AppKit's inset is symmetric, so the top inset is also the bottom padding.
       return textContainerInset.height

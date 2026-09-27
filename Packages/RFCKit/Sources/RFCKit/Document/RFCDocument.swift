@@ -48,14 +48,27 @@ public struct RFCDocument: Sendable {
   }
 
   /// Every RFC referenced anywhere in the document, deduplicated and sorted.
+  ///
+  /// Anywhere includes the headings and the abstract: a heading cites like prose
+  /// ("Changes from RFC 3066"), which is why titles are inlines, and walking only
+  /// section bodies missed a document cited there alone (#127). So does a reference's
+  /// annotation, which is prose too. Captions are plain strings in the model and
+  /// cannot cite.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
-    for block in allSections.flatMap(\.blocks).flattened {
-      for inline in block.proseRuns.flatMap(\.flattened) {
+    func visit(_ inlines: [Inline]) {
+      for inline in inlines.flattened {
         if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
           seen.insert(id)
         }
       }
+    }
+    let everySection = allSections
+    for section in everySection {
+      visit(section.title)
+    }
+    for block in (header.abstract + everySection.flatMap(\.blocks)).flattened {
+      block.proseRuns.forEach(visit)
       if case .references(let list) = block {
         seen.formUnion(list.entries.compactMap(\.documentID))
       }

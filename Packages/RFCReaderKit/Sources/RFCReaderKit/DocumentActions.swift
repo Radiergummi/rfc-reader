@@ -26,6 +26,14 @@ public enum DocumentActions {
     metadata?.title ?? documentTitle ?? id.displayName
   }
 
+  /// What the document is called, under its designation in the reader's title.
+  ///
+  /// The same sources as `bookmarkTitle`, in the same order, without its last
+  /// resort: the designation is already the title above it.
+  public static func subtitle(metadata: RFCMetadata?, documentTitle: String?) -> String? {
+    metadata?.title ?? documentTitle
+  }
+
   /// The citation to put on the pasteboard.
   ///
   /// A section is part of the citation for every style but BibTeX, whose entry
