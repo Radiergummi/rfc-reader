@@ -104,7 +104,10 @@ struct DocumentView: View {
 
   private var metadata: RFCMetadata? { library.metadata(id) }
   #if !os(macOS)
-    private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
+    private var isBookmarked: Bool {
+      let key = UserDataKey.key(for: id)
+      return bookmarks.contains { $0.documentKey == key }
+    }
   #endif
 
   /// Everything a build depends on. One trigger, so the document is built in one
@@ -279,7 +282,7 @@ struct DocumentView: View {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
           jump(toSection: request.section)
-        } else if let saved = storedPosition()?.sectionAnchor,
+        } else if let saved = storedPosition()?.anchor,
           document.section(anchor: saved) != nil
         {
           scrollTarget = saved
@@ -554,8 +557,9 @@ struct DocumentView: View {
   #endif
 
   private func storedPosition() -> ReadingPosition? {
-    let number = id.number
-    let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
+    let key = UserDataKey.key(for: id)
+    let descriptor = FetchDescriptor<ReadingPosition>(
+      predicate: #Predicate { $0.documentKey == key })
     return try? modelContext.fetch(descriptor).first
   }
 
@@ -572,17 +576,19 @@ struct DocumentView: View {
     if let existing = storedPosition() {
       existing.updatedAt = .now
     } else {
-      modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: nil))
+      modelContext.insert(ReadingPosition(document: id, place: nil))
     }
   }
 
   private func saveReadingPosition() {
-    let anchor = lastVisibleAnchor.anchor
+    // The anchor alone for now: the reader reports the section on screen, not the
+    // offset within it, so a place is saved at the anchor itself (#152).
+    let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
     if let existing = storedPosition() {
-      existing.sectionAnchor = anchor
+      existing.place = place
       existing.updatedAt = .now
     } else {
-      modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: anchor))
+      modelContext.insert(ReadingPosition(document: id, place: place))
     }
   }
 }

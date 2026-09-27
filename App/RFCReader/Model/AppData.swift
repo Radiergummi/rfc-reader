@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftData
 
 /// The one SwiftData container.
@@ -10,11 +11,17 @@ import SwiftData
 /// scene and every hosted root.
 @MainActor
 enum AppData {
+  /// Versioned, and migrated from whatever version is on disk; see `UserData` (#152).
+  /// Rows naming the same document are merged once it opens: the schema has no
+  /// unique constraint, which CloudKit refuses.
   static let container: ModelContainer = {
+    let container: ModelContainer
     do {
-      return try ModelContainer(for: Bookmark.self, ReadingPosition.self)
+      container = try UserData.container()
     } catch {
       fatalError("Could not open the user data store: \(error)")
     }
+    try? UserData.deduplicate(container.mainContext)
+    return container
   }()
 }

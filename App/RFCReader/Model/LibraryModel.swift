@@ -430,7 +430,7 @@ final class LibraryModel {
       sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
     )
     let positions = (try? AppData.container.mainContext.fetch(descriptor)) ?? []
-    return positions.map(\.number)
+    return positions.compactMap(\.document).filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import os
 
@@ -24,8 +25,9 @@ enum BookmarkStore {
   /// every save of the store, and most of those record a reading position.
   static func bookmarkedNumbers(in context: ModelContext) -> Set<Int> {
     var descriptor = FetchDescriptor<Bookmark>()
-    descriptor.propertiesToFetch = [\.number]
-    return Set(((try? context.fetch(descriptor)) ?? []).map(\.number))
+    descriptor.propertiesToFetch = [\.documentKey]
+    let documents = ((try? context.fetch(descriptor)) ?? []).compactMap(\.document)
+    return Set(documents.filter { $0.series == .rfc }.map(\.number))
   }
 
   /// Adds the bookmark, or removes the one already there. Answers with the state it
@@ -37,7 +39,7 @@ enum BookmarkStore {
       context.delete(existing)
       bookmarked = false
     } else {
-      context.insert(Bookmark(number: id.number, title: title))
+      context.insert(Bookmark(document: id, title: title))
       bookmarked = true
     }
     // Explicitly, rather than leaving it to autosave on one platform and not the
@@ -55,9 +57,11 @@ enum BookmarkStore {
     return bookmarked
   }
 
+  /// Looked up by key before every insert: the store has no unique constraint to do
+  /// it (#152).
   private static func bookmark(for id: DocumentID, in context: ModelContext) -> Bookmark? {
-    let number = id.number
-    let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
+    let key = UserDataKey.key(for: id)
+    let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.documentKey == key })
     return try? context.fetch(descriptor).first
   }
 }

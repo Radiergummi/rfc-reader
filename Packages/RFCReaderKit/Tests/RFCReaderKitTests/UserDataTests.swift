@@ -57,18 +57,19 @@ struct UserDataTests {
     let read = Date(timeIntervalSince1970: 1_750_000_000)
 
     do {
-      let v1 = try ModelContainer(
+      let legacy = try ModelContainer(
         for: Schema(versionedSchema: SchemaV1.self), configurations: ModelConfiguration(url: url))
-      let context = ModelContext(v1)
+      let context = ModelContext(legacy)
       context.insert(SchemaV1.Bookmark(number: 9110, title: "HTTP Semantics", createdAt: created))
       context.insert(SchemaV1.Bookmark(number: 2119, title: "Key words", createdAt: created))
-      context.insert(SchemaV1.ReadingPosition(number: 9110, sectionAnchor: "section-8.3", updatedAt: read))
+      context.insert(
+        SchemaV1.ReadingPosition(number: 9110, sectionAnchor: "section-8.3", updatedAt: read))
       context.insert(SchemaV1.ReadingPosition(number: 1149, sectionAnchor: nil, updatedAt: read))
       try context.save()
     }
 
-    let v2 = try UserData.container(configurations: ModelConfiguration(url: url))
-    let context = ModelContext(v2)
+    let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
+    let context = ModelContext(migrated)
     let bookmarks = try context.fetch(
       FetchDescriptor<Bookmark>(sortBy: [SortDescriptor(\.documentKey)]))
     #expect(bookmarks.map(\.documentKey) == ["rfc2119", "rfc9110"])

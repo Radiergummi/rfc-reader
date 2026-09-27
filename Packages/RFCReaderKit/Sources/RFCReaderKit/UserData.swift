@@ -125,8 +125,8 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
   public static var stages: [MigrationStage] { [v1ToV2] }
 
   private struct V1Rows: Sendable {
-    var bookmarks: [(number: Int, title: String, createdAt: Date)] = []
-    var positions: [(number: Int, anchor: String?, updatedAt: Date)] = []
+    var bookmarks: [CarriedBookmark] = []
+    var positions: [CarriedPosition] = []
   }
 
   /// Carried from `willMigrate` to `didMigrate`, the one way a custom stage's two
@@ -139,8 +139,12 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
       let bookmarks = try context.fetch(FetchDescriptor<SchemaV1.Bookmark>())
       let positions = try context.fetch(FetchDescriptor<SchemaV1.ReadingPosition>())
       let rows = V1Rows(
-        bookmarks: bookmarks.map { ($0.number, $0.title, $0.createdAt) },
-        positions: positions.map { ($0.number, $0.sectionAnchor, $0.updatedAt) })
+        bookmarks: bookmarks.map {
+          CarriedBookmark(number: $0.number, title: $0.title, createdAt: $0.createdAt)
+        },
+        positions: positions.map {
+          CarriedPosition(number: $0.number, anchor: $0.sectionAnchor, updatedAt: $0.updatedAt)
+        })
       carried.withLock { $0 = rows }
     },
     didMigrate: { context in
@@ -159,11 +163,26 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
       for row in rows.positions {
         context.insert(
           SchemaV2.ReadingPosition(
-            document: .rfc(row.number), place: row.anchor.map { ReadingPlace(anchor: $0, offset: 0) },
+            document: .rfc(row.number),
+            place: row.anchor.map { ReadingPlace(anchor: $0, offset: 0) },
             updatedAt: row.updatedAt))
       }
       try context.save()
     })
+}
+
+/// A V1 bookmark, as `UserDataMigrationPlan` carries it across the stage.
+private struct CarriedBookmark: Sendable {
+  let number: Int
+  let title: String
+  let createdAt: Date
+}
+
+/// A V1 reading position, likewise.
+private struct CarriedPosition: Sendable {
+  let number: Int
+  let anchor: String?
+  let updatedAt: Date
 }
 
 /// Opening the store, and keeping it one row per document.
