@@ -22,21 +22,12 @@ struct FoldedLinesTests {
 
   /// Every verbatim block the document folds, in document order.
   private static func foldedBlocks(in name: String) throws -> [Preformatted] {
-    func preformatted(in blocks: [Block]) -> [Preformatted] {
-      blocks.flatMap { block -> [Preformatted] in
-        switch block {
-        case .preformatted(let content): [content]
-        case .figure(let figure): preformatted(in: figure.blocks)
-        case .list(let list): list.items.flatMap { preformatted(in: $0.blocks) }
-        case .definitionList(let items): items.flatMap { preformatted(in: $0.definition) }
-        case .blockQuote(let blocks), .aside(let blocks): preformatted(in: blocks)
-        default: []
-        }
-      }
-    }
     let document = try RFCXMLParser.parse(try Fixtures.data(name))
-    return document.allSections.flatMap { preformatted(in: $0.blocks) }
-      .filter { FoldedLines.strategy(of: $0.text) != nil }
+    return document.blocks.compactMap {
+      guard case .preformatted(let content) = $0, FoldedLines.strategy(of: content.text) != nil
+      else { return nil }
+      return content
+    }
   }
 
   /// A `'\'` continuation's leading spaces are indentation, so they go.
