@@ -48,7 +48,8 @@ struct CacheEvictionTests {
       entry(2, bytes: 100, daysAgo: 2),
       entry(3, bytes: 100, daysAgo: 1),
     ]
-    #expect(CacheEviction.victims(of: entries, pinned: [.rfc(1)], bound: 200) == [.rfc(2), .rfc(3)])
+    #expect(
+      CacheEviction.victims(of: entries, pinned: [.rfc(1)], bound: 200) == [.rfc(2), .rfc(3)])
   }
 
   @Test func `documents opened at the same moment go in a fixed order`() {

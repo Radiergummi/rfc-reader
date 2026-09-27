@@ -392,14 +392,29 @@ final class LibraryModel {
   /// Fetching a document caches it, so the offline set is refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
     await refreshDownloadedNumbers()
     return document
   }
 
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
+    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
     await refreshDownloadedNumbers()
     return text
+  }
+
+  /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
+  /// keep the document offline; what was read in the last month; and whatever a
+  /// window has open, which includes the document just fetched.
+  private func pinnedDocuments() -> Set<DocumentID> {
+    let context = AppData.container.mainContext
+    let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
+    let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
+    let read = ((try? context.fetch(recent)) ?? []).map(\.number)
+    let bookmarked = BookmarkStore.bookmarkedNumbers(in: context)
+    let open = scenes.compactMap { $0.model?.selection }
+    return Set((read + bookmarked).map { DocumentID.rfc($0) } + open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
