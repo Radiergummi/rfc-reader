@@ -857,10 +857,11 @@ final class RFCTextViewCoordinator: NSObject {
   }
 #endif
 
-extension RFCTextViewCoordinator: NSTextLayoutManagerDelegate {
+extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   // TextKit 2's background-layout design permits this delegate to be called off
   // the main thread; `nonisolated` keeps the conformance honest about that rather
-  // than binding it to the main actor. The body only reads its parameters and
+  // than binding it to the main actor, which approachable concurrency would infer
+  // for a main-actor type. The body only reads its parameters and
   // allocates, so it needs no isolation.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,

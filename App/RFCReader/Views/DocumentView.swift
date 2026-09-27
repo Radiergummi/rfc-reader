@@ -506,7 +506,9 @@ struct DocumentView: View {
   }
 
   /// Off the main actor, and structured: unlike a detached task, it inherits the
-  /// caller's priority and is part of its cancellation (#129).
+  /// caller's priority and its cancellation (#129). The builder never checks for
+  /// cancellation, so a build that has started runs to the end; `rebuild()` is
+  /// what discards a cancelled one.
   @concurrent
   private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
     DocumentTextBuilder.build(document, style: style)

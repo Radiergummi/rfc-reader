@@ -18,8 +18,8 @@ import Testing
 /// does not need it.
 @Suite("Builder: handover")
 struct BuilderHandoverTests {
-  /// The app's own shape: `DocumentView` builds in a detached task and awaits the
-  /// value. A build that quietly came to need the main actor would trap or diverge
+  /// The app's own shape: `DocumentView` builds off the main actor, in an
+  /// `@concurrent` function, and awaits the value. A build that quietly came to need the main actor would trap or diverge
   /// here rather than pass.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
   func aBuildOffTheMainActorMatchesOneOnIt(fixture: String) async throws {
