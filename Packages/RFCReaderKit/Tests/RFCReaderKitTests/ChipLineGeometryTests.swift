@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import Testing
 
 @testable import RFCReaderKit
@@ -130,18 +131,18 @@ struct ChipLineGeometryTests {
   /// chip's extent on its first line was that one character, so the first line
   /// rounded its trailing end as if the chip ended there, and a wrapped chip drew
   /// as a whole pill followed by a half one (#122).
+  ///
+  /// The chip comes from the builder, not a hand-made copy of its recipe: its label
+  /// is bound with no-break spaces, so it wraps only where a column is too narrow
+  /// to hold it at all, and that is the width it is laid out at here: narrow enough
+  /// for three lines, so there is a middle one that rounds neither end.
   @Test func aWrappedChipRoundsOnlyItsOuterEnds() throws {
-    let font = PlatformFont.systemFont(ofSize: 17)
-    let text = NSMutableAttributedString(
-      string: "As described in ", attributes: [.font: font])
-    let chip: [NSAttributedString.Key: Any] = [.font: font, .rfcChip: 1]
-    let symbol = NSMutableAttributedString(attachment: NSTextAttachment())
-    symbol.addAttributes(chip, range: NSRange(location: 0, length: symbol.length))
-    text.append(symbol)
-    text.append(NSAttributedString(string: "\u{2060}Section 4.2 of RFC 9110", attributes: chip))
-    text.append(NSAttributedString(string: " and elsewhere.", attributes: [.font: font]))
+    let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
+    let text = Fixtures.inlineRun([
+      .text("As described in "), .crossReference(xref), .text(" and elsewhere."),
+    ])
 
-    let (storage, layout) = layOut(text, width: 200)
+    let (storage, layout) = layOut(text, width: 60)
     defer { withExtendedLifetime(storage) {} }
     var fragment: NSTextLayoutFragment?
     layout.enumerateTextLayoutFragments(
@@ -157,11 +158,14 @@ struct ChipLineGeometryTests {
       fragment: NSRange(location: 0, length: text.length),
       origin: .zero
     )
-    try #require(chips.count >= 2, "the chip must wrap for this to test anything")
+    try #require(chips.count >= 3, "the chip must wrap across three lines to have a middle one")
     #expect(chips.first?.roundsLeading == true)
     #expect(chips.first?.roundsTrailing == false, "the chip goes on past its first line")
     #expect(chips.last?.roundsLeading == false, "the chip began on an earlier line")
     #expect(chips.last?.roundsTrailing == true)
+    for middle in chips.dropFirst().dropLast() {
+      #expect(!middle.roundsLeading && !middle.roundsTrailing, "a middle line rounds neither end")
+    }
   }
 
   @Test func everyChipRectSitsOverItsOwnGlyphs() throws {
