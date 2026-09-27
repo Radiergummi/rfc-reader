@@ -22,6 +22,10 @@ public enum FragmentGeometry {
   /// The padding a chip's tint extends past its glyphs, on the ends that round.
   public static let chipPadding: CGFloat = 5
 
+  /// The padding a chip's tint extends above its font's ascender and below its
+  /// descender.
+  public static let chipVerticalPadding: CGFloat = 2
+
   /// The padding a card extends past its column on either side, and half of it
   /// past its run's own first and last line.
   public static let cardPadding: CGFloat = 10
@@ -203,19 +207,38 @@ public enum FragmentGeometry {
         let startX = line.locationForCharacter(
           at: elementIndex(of: piece.location, fragmentStart: fragmentStart)
         ).x
-        let endX = line.locationForCharacter(
-          at: elementIndex(of: NSMaxRange(piece), fragmentStart: fragmentStart)
-        ).x
+        // The chip's last character is kerned by the builder to make room for
+        // the tint (`reserveChipPadding`), and the next character starts after
+        // that room; the glyphs end before it.
+        let trailingKern =
+          roundsTrailing
+          ? text.attribute(.kern, at: NSMaxRange(runRange) - 1, effectiveRange: nil) as? CGFloat
+            ?? 0
+          : 0
+        let endX =
+          line.locationForCharacter(
+            at: elementIndex(of: NSMaxRange(piece), fragmentStart: fragmentStart)
+          ).x - trailingKern
         let padLeft = roundsLeading ? chipPadding : 0
         let padRight = roundsTrailing ? chipPadding : 0
+
+        // Centred on the glyphs, not the line: `lineHeightMultiple` adds all of
+        // a line's extra leading above its ascender, so a tint filling the line
+        // box had room above the label and none below its descenders.
+        let font =
+          text.attribute(.font, at: piece.location, effectiveRange: nil) as? PlatformFont
+          ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
+        let baseline = line.typographicBounds.minY + line.glyphOrigin.y
+        let top = baseline - font.ascender - chipVerticalPadding
+        let bottom = baseline - font.descender + chipVerticalPadding
 
         result.append(
           ChipRect(
             rect: CGRect(
               x: origin.x + line.typographicBounds.minX + startX - padLeft,
-              y: origin.y + line.typographicBounds.minY + 1,
+              y: origin.y + top,
               width: endX - startX + padLeft + padRight,
-              height: line.typographicBounds.height - 2
+              height: bottom - top
             ),
             roundsLeading: roundsLeading,
             roundsTrailing: roundsTrailing

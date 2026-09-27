@@ -41,6 +41,19 @@ struct DocumentIDTests {
     #expect(id.fileStem == "rfc9110")
   }
 
+  /// Exactly the stem `fileStem` writes, and nothing looser: a cached file name and
+  /// a stored key must name one document, never two.
+  @Test func `a file stem names its document, and only an exact one does`() {
+    #expect(DocumentID(fileStem: "rfc9110") == .rfc(9110))
+    #expect(DocumentID(fileStem: "bcp14") == DocumentID(series: .bcp, number: 14))
+    #expect(DocumentID(fileStem: "") == nil)
+    #expect(DocumentID(fileStem: "notes") == nil)
+    #expect(DocumentID(fileStem: "RFC9110") == nil)
+    #expect(DocumentID(fileStem: "rfc 9110") == nil)
+    #expect(DocumentID(fileStem: "9110") == nil)
+    #expect(DocumentID(fileStem: "rfc09110") == nil)
+  }
+
   @Test func `ordering`() {
     #expect(DocumentID.rfc(791) < .rfc(9110))
     #expect(DocumentID.rfc(9110) < DocumentID(series: .bcp, number: 1))

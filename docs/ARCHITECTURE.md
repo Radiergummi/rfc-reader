@@ -15,7 +15,7 @@ rfc-reader/
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest); see DATA_PIPELINE.md
 ├── App/RFCReader/            SwiftUI multiplatform app (iOS, iPadOS, macOS)
-│   ├── Model/                LibraryModel (@Observable app state), DocumentStore (actor, disk cache), SwiftData models
+│   ├── Model/                LibraryModel (@Observable app state), DocumentStore (actor, disk cache)
 │   ├── Views/                Navigation, list, reader, table of contents
 │   │   └── Rendering/        RFCTextView, RFCTextViewCoordinator, RFCTextLayoutFragment — one TextKit 2 text view over one document text storage
 │   └── Intents/              App Intents (Open RFC)
@@ -90,7 +90,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
                        SwiftUI views ── macOS: NSSplitViewController(sidebar, list, DocumentView, panel)
                                         iOS:   NavigationSplitView(sidebar, list, DocumentView)
                                                           ▼
-                       SwiftData ── Bookmark, ReadingPosition (user data only; iCloud later)
+                       SwiftData ── Bookmark, ReadingPosition (RFCReaderKit's UserData; user data only; iCloud later)
 ```
 
 - Legacy RFCs arrive pre-converted to XML through data packs (DATA_PIPELINE.md); on-device text parsing is the fallback when no pack is installed.
@@ -211,6 +211,12 @@ What is left: two changes within one tick of the file system's clock share a dat
 *Decided September 2026 (issue #116).* `DocumentStore.document` suspends in the network fetch, and the actor runs other calls meanwhile, so a Remove Download made during that suspension finished first and the fetch then wrote the body back. The removal was silently undone, and with the in-memory cache index it stayed undone for the session. A removal does not cancel the fetch: one is only ever started by opening the document, so a reader is waiting for it, and cancelling would turn "don't keep this offline" into an error in front of them. Instead the reader gets the document and the disk does not. `InFlightDownloads` (in `RFCReaderKit`, for its tests) keeps the running fetch per document, so a second open joins it rather than fetching twice, and a removal marks the running fetch so that no reader of it writes the result, a reader who joined after the removal included. Of the readers of an unmarked fetch exactly one is told to keep it, so a shared download is written once. The whole sequence (join, wait, finish, the decision to keep) is `InFlightDownloads.value(for:start:)`, which runs on the store's actor, so the store writes a kept result before a removal can slip in; the store holds no copy of it for the tests to re-implement. Original Text's own `.txt` fetch goes through a second instance.
 
 The fetch and its parse run in a task of their own, off the actor, which lasts as long as a reader waits for it. Awaiting a task does not pass the awaiting task's cancellation on, so `InFlightDownloads` counts the readers joined to each fetch, and a reader whose wait is cancelled — it left the document — leaves; the state is behind a lock, so its cancellation handler does so without a hop to the actor. A cancelled fetch throws `CancellationError`, whatever it failed with, so URLSession's `URLError.cancelled` is not shown as a load failure. When the last one has left, the fetch is cancelled and forgotten: it writes nothing, even if it finishes anyway (a parse does not look at cancellation), and the next open starts afresh. While any reader still waits it goes on, so closing one of two tabs on a document does not fail the other. An earlier revision let the fetch outlive its reader and kept the result, on the grounds that a document finished a moment before the reader left was always kept; that was rejected, because the app is held to being kind to metered and poor connections (`VISION.md`), and a download nobody is waiting for any more is bandwidth spent on nothing. A fetch that finishes before its reader's cancellation reaches the actor is still kept, since there is nothing left to save.
+
+## Decision: the user data store is versioned, keyed on the document, and in CloudKit's shape
+
+*Decided September 2026 (issue #152).* Bookmarks and reading positions keyed on a bare, unique RFC number, which cannot tell RFC 1 from BCP 1, and the schema had no version, so any change to it was a store that would not open. The models are now `VersionedSchema`s in `RFCReaderKit` (`UserData.swift`), where the migration is tested against a store written on disk. The one the app uses, `SchemaV3`, keys each row on the document's `fileStem` and is in CloudKit's shape: no `@Attribute(.unique)`, every attribute optional or defaulted. Uniqueness is the code's job instead: `BookmarkStore` looks a document up before inserting, and `UserData.deduplicate` merges rows naming one document, newest first, when the container opens.
+
+The migration never takes a row out of the store. SwiftData's inferred step cannot turn a number into a key, so `SchemaV2` is only a step: V1's rows, with V3's columns beside the number. V1 to V2 is inferred; V2 to V3 writes each row's key from its own number and then drops the number. A launch that stops between the two leaves a V2 store, and the next one finishes the job. An earlier draft carried the rows across one custom stage in memory, which a crash between its halves would have lost for good. A V1 row is read as an RFC, since a number is all it kept.
 
 ## Decision: the document cache is bounded by size, and evicts the least recently opened
 
