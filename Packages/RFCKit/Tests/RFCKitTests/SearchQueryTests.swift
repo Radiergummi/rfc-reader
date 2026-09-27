@@ -39,7 +39,8 @@ struct SearchQueryTests {
   /// The canonical form: long spellings, lowercased values, one qualifier per
   /// filter in a fixed order, and the free text last.
   @Test func `the canonical form is the one written back`() {
-    let parsed = IndexSearch.parseQuery("cache by:Fielding is:standard group:HTTPBIS year:2022-2020")
+    let parsed = IndexSearch.parseQuery(
+      "cache by:Fielding is:standard group:HTTPBIS year:2022-2020")
     #expect(
       SearchQuery.format(text: parsed.text, filters: parsed.filters)
         == "wg:httpbis status:std author:fielding year:2020-2022 cache")
@@ -63,7 +64,10 @@ struct SearchQueryTests {
   @Test func `an empty last word is offered every qualifier`() throws {
     #expect(
       try completions("cache ")
-        == ["cache wg:", "cache status:", "cache author:", "cache stream:", "cache year:", "cache has:xml"])
+        == [
+          "cache wg:", "cache status:", "cache author:", "cache stream:", "cache year:",
+          "cache has:xml",
+        ])
   }
 
   @Test func `a working group is completed from the index`() throws {
@@ -80,9 +84,16 @@ struct SearchQueryTests {
   }
 
   @Test func `statuses and streams are completed from their vocabulary`() throws {
-    #expect(try completions("status:") == ["status:std", "status:bcp", "status:info", "status:exp", "status:historic", "status:current"])
+    #expect(
+      try completions("status:") == [
+        "status:std", "status:bcp", "status:info", "status:exp", "status:historic",
+        "status:current",
+      ])
     #expect(try completions("is:e") == ["status:exp"])
-    #expect(try completions("stream:i") == ["stream:ietf", "stream:irtf", "stream:iab", "stream:independent"])
+    #expect(
+      try completions("stream:i") == [
+        "stream:ietf", "stream:irtf", "stream:iab", "stream:independent",
+      ])
   }
 
   @Test func `a free-form value is offered nothing`() throws {
@@ -93,7 +104,8 @@ struct SearchQueryTests {
   /// Still searched for as text, as `parseQuery` does; the suggestion says the
   /// qualifier means nothing, so a typo is not silently a word.
   @Test func `an unknown qualifier is marked as unknown`() throws {
-    let suggestions = SearchQuery.suggestions(for: "cache colour:red", in: try Fixtures.sampleIndex())
+    let suggestions = SearchQuery.suggestions(
+      for: "cache colour:red", in: try Fixtures.sampleIndex())
     #expect(suggestions.map(\.isUnknown) == [true])
     #expect(suggestions.first?.completion == "cache colour:red")
   }
