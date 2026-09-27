@@ -58,5 +58,19 @@
       }
       return nil
     }
+
+    /// The text view inside `root` that Find should search: the first visible one
+    /// with a find bar, the reader body or Original Text.
+    ///
+    /// Not `innermostTarget`, which takes the first view that accepts focus at all,
+    /// and a control laid out ahead of the text would be that view.
+    public static func searchableText(in root: NSView) -> NSTextView? {
+      guard !root.isHidden else { return nil }
+      if let text = root as? NSTextView, text.usesFindBar { return text }
+      for subview in root.subviews {
+        if let found = searchableText(in: subview) { return found }
+      }
+      return nil
+    }
   }
 #endif
