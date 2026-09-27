@@ -11,8 +11,14 @@ options:
 
 settings:
   base:
+    # Swift 6 is the language mode; there is no 6.2 mode. The 6.2 behaviour is the
+    # two settings below (#129). Complete strict concurrency is Swift 6's default,
+    # so it is not spelled out.
     SWIFT_VERSION: "6.0"
-    SWIFT_STRICT_CONCURRENCY: complete
+    # The app is UI throughout, so its code is main-actor unless it says
+    # otherwise. Not the packages: `DocumentTextBuilder` must stay nonisolated.
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: "YES"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: TH593VRB6W
 

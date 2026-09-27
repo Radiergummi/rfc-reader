@@ -189,7 +189,7 @@ struct DocumentView: View {
         }
         work.build?.cancel()
         work.buildingFor = buildInputs
-        work.build = Task { await rebuild() }
+        work.build = Task(name: "Build document") { await rebuild() }
       }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
@@ -422,7 +422,7 @@ struct DocumentView: View {
 
   private func startLoad() {
     work.load?.cancel()
-    work.load = Task { await load() }
+    work.load = Task(name: "Load document") { await load() }
   }
 
   private func trace(_ event: String) {
@@ -472,6 +472,13 @@ struct DocumentView: View {
   /// rebuild — every further tick of the font-size slider or the window's edge.
   /// The first build of a document does not wait: there is nothing on screen to
   /// disturb, and the column is already known, so it is built once and built right.
+  /// Off the main actor, and structured: unlike a detached task, it inherits the
+  /// caller's priority and is part of its cancellation (#129).
+  @concurrent
+  private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
+    DocumentTextBuilder.build(document, style: style)
+  }
+
   private func rebuild() async {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
@@ -483,7 +490,7 @@ struct DocumentView: View {
     guard !Task.isCancelled else { return }
     // Off the main actor: this is string assembly and text measurement, and
     // blocking the main thread for it is what made the font-size slider stutter.
-    let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
+    let rebuilt = await Self.build(document, style: style)
     guard !Task.isCancelled else {
       trace("build cancelled, discarded")
       return

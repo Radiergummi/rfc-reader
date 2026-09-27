@@ -29,7 +29,6 @@
   /// protocol keeps the one deliberate use from being a standing warning that a
   /// build is otherwise clean of. If they stop working, the title collapses to
   /// nothing — it does not break the rest of the toolbar.
-  @MainActor
   private protocol FlexibleToolbarItem: AnyObject {
     var minSize: NSSize { get set }
     var maxSize: NSSize { get set }
@@ -54,7 +53,6 @@
   /// grouping and glass, which a hosted control cannot.
   /// A title over a line of detail, as a window's own titlebar draws its title over
   /// its subtitle: the list's title.
-  @MainActor
   private final class TitleStack: NSStackView {
     private let title = TitleStack.titleLabel()
     private let subtitle = TitleStack.subtitleLabel()
@@ -112,7 +110,6 @@
 
   /// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
   /// so that it takes the width of its text instead of every pixel that is going.
-  @MainActor
   private final class TitleView: NSView {
     private let stack = TitleStack()
 
@@ -175,7 +172,6 @@
   /// from under the toolbar's bottom edge and fades in as the heading passes under
   /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`. Its subtitle
   /// names the section being read; see `ToolbarSubtitle`.
-  @MainActor
   private final class DocumentTitleView: NSView {
     private let title = TitleStack.titleLabel()
     /// The subtitle's line, clipped to itself: a section's heading hands over to
@@ -324,7 +320,6 @@
     }
   }
 
-  @MainActor
   final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
 

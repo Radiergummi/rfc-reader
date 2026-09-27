@@ -8,7 +8,6 @@ import SwiftData
 /// handed a container of its own, and two writers on one store is a bookmark that
 /// appears in one column and not the next. Made here instead, and given to both the
 /// scene and every hosted root.
-@MainActor
 enum AppData {
   static let container: ModelContainer = {
     do {

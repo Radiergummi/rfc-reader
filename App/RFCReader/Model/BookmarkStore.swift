@@ -14,7 +14,6 @@ import SwiftData
 /// for the filled glyph, macOS holds the last answer in
 /// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
 /// often to ask a store here.
-@MainActor
 enum BookmarkStore {
   static func isBookmarked(_ id: DocumentID, in context: ModelContext) -> Bool {
     bookmark(for: id, in: context) != nil
