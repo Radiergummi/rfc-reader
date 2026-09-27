@@ -20,13 +20,13 @@ struct ReferenceAnnotationTests {
     annotation: [.text("Commit snapshot: "), .link(snapshot, [.text(snapshot.absoluteString)])]
   )
 
-  @Test func anAnnotationReadsAsItsText() throws {
+  @Test func `an annotation reads as its text`() throws {
     let text = try #require(Self.fetch.annotationText)
     #expect(String(text.characters) == "Commit snapshot: \(Self.snapshot.absoluteString)")
   }
 
   /// A snapshot nobody can open is only half kept.
-  @Test func anAnnotationKeepsItsLinks() throws {
+  @Test func `an annotation keeps its links`() throws {
     let text = try #require(Self.fetch.annotationText)
     let links = text.runs.compactMap { run -> (String, URL)? in
       guard let link = run.link else { return nil }
@@ -37,7 +37,7 @@ struct ReferenceAnnotationTests {
     #expect(links.first?.1 == Self.snapshot)
   }
 
-  @Test func anEntryWithoutAnAnnotationHasNoText() {
+  @Test func `an entry without an annotation has no text`() {
     #expect(Reference(anchor: "RFC2119", title: "Key words").annotationText == nil)
   }
 }

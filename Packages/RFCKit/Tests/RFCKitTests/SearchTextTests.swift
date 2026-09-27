@@ -8,52 +8,52 @@ struct SearchTextTests {
 
   // MARK: - Containment
 
-  @Test func aTermIsFoundAtTheStartMiddleAndEnd() {
+  @Test func `a term is found at the start middle and end`() {
     let haystack = text("hypertext transfer protocol")
     #expect(haystack.contains(text("hypertext")))
     #expect(haystack.contains(text("transfer")))
     #expect(haystack.contains(text("protocol")))
   }
 
-  @Test func aTermThatIsNotThereIsNotFound() {
+  @Test func `a term that is not there is not found`() {
     #expect(!text("hypertext transfer protocol").contains(text("quic")))
   }
 
-  @Test func aTermLongerThanTheFieldIsNotFound() {
+  @Test func `a term longer than the field is not found`() {
     #expect(!text("tls").contains(text("transport layer security")))
   }
 
-  @Test func everyFieldContainsTheEmptyTerm() {
+  @Test func `every field contains the empty term`() {
     #expect(text("anything").contains(text("")))
     #expect(text("").contains(text("")))
   }
 
-  @Test func anEmptyFieldContainsNothingElse() {
+  @Test func `an empty field contains nothing else`() {
     #expect(!text("").contains(text("a")))
   }
 
   /// The case the first-byte skip gets wrong if the inner walk does not restart
   /// from the right place: every candidate starts correctly and fails late.
-  @Test func repeatedFirstBytesDoNotConfuseTheScan() {
+  @Test func `repeated first bytes do not confuse the scan`() {
     #expect(text("aaaaab").contains(text("aaab")))
     #expect(!text("aaaaa").contains(text("aaab")))
     #expect(text("abababc").contains(text("ababc")))
   }
 
-  @Test func aFieldContainsItself() {
+  @Test func `a field contains itself`() {
     #expect(text("congestion control").contains(text("congestion control")))
   }
 
   // MARK: - Prefixes
 
-  @Test func numbersMatchOnTheirPrefix() {
+  @Test func `numbers match on their prefix`() {
     #expect(text("9110").hasPrefix(text("91")))
     #expect(text("9110").hasPrefix(text("9110")))
     #expect(!text("9110").hasPrefix(text("110")))
     #expect(!text("911").hasPrefix(text("9110")))
   }
 
-  @Test func everythingHasTheEmptyPrefix() {
+  @Test func `everything has the empty prefix`() {
     #expect(text("9110").hasPrefix(text("")))
   }
 
@@ -61,7 +61,7 @@ struct SearchTextTests {
 
   /// UTF-8 is self-synchronizing and a needle never begins with a continuation
   /// byte, so scanning bytes cannot match halfway into a character.
-  @Test func aMatchNeverStartsInsideACharacter() {
+  @Test func `a match never starts inside a character`() {
     #expect(text("münchen").contains(text("ünchen")))
     #expect(!text("münchen").contains(text("unchen")))
     #expect(text("größe").contains(text("öß")))
@@ -70,7 +70,7 @@ struct SearchTextTests {
   /// The one thing byte comparison gives up against `String.range(of:)`, pinned so
   /// it is a known trade rather than a surprise: the two spellings of `é` are
   /// canonically equivalent and no longer match each other.
-  @Test func canonicallyEquivalentSpellingsNoLongerMatch() {
+  @Test func `canonically equivalent spellings no longer match`() {
     let composed = text("\u{00E9}")
     let decomposed = text("e\u{0301}")
     #expect(!composed.contains(decomposed))

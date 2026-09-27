@@ -77,7 +77,9 @@ struct DecorationSeamTests {
   }
 
   @Test(arguments: [1, 2, 3] as [CGFloat], LayerGrid.allCases)
-  func consecutiveFragmentsStillTileWithNoGapAndNoOverlap(scale: CGFloat, grid: LayerGrid) {
+  func `consecutive fragments still tile with no gap and no overlap`(
+    scale: CGFloat, grid: LayerGrid
+  ) {
     for origins in LayerOrigin.allCases {
       let drawn = cards(scale: scale, grid: grid, origins: origins)
       for (upper, lower) in zip(drawn, drawn.dropFirst()) {
@@ -89,7 +91,7 @@ struct DecorationSeamTests {
   }
 
   @Test(arguments: [1, 2, 3] as [CGFloat], LayerGrid.allCases)
-  func everyJoinLandsOnAWholeDevicePixel(scale: CGFloat, grid: LayerGrid) {
+  func `every join lands on a whole device pixel`(scale: CGFloat, grid: LayerGrid) {
     let document = grid.documentToDevice(scale: scale)
     for origins in LayerOrigin.allCases {
       for card in cards(scale: scale, grid: grid, origins: origins).dropLast() {
@@ -104,14 +106,14 @@ struct DecorationSeamTests {
   /// The run's own top and bottom are rounded, antialiased and shared with
   /// nothing, so they are left exactly where the layout put them.
   @Test(arguments: LayerGrid.allCases, LayerOrigin.allCases)
-  func theRunsOwnEndsAreLeftAlone(grid: LayerGrid, origins: LayerOrigin) {
+  func `the runs own ends are left alone`(grid: LayerGrid, origins: LayerOrigin) {
     let drawn = cards(scale: 2, grid: grid, origins: origins)
     #expect(abs((drawn.first?.minY ?? 0) - fragmentTops[0]) < 1e-6)
     #expect(abs((drawn.last?.maxY ?? 0) - (fragmentTops[3] + advance)) < 1e-6)
   }
 
   @Test(arguments: [1, 2] as [CGFloat], LayerGrid.allCases)
-  func aJoinMovesByAtMostHalfADevicePixel(scale: CGFloat, grid: LayerGrid) {
+  func `a join moves by at most half a device pixel`(scale: CGFloat, grid: LayerGrid) {
     for origins in LayerOrigin.allCases {
       let drawn = cards(scale: scale, grid: grid, origins: origins)
       for (index, card) in drawn.enumerated().dropLast() {
@@ -124,7 +126,7 @@ struct DecorationSeamTests {
   /// An edge exactly half a pixel off the grid is where two roundings can
   /// disagree. Seen from above (at a positive local offset) and from below (at a
   /// negative one), it must land on the same pixel.
-  @Test func aTieRoundsTheSameWayFromBothSides() {
+  @Test func `a tie rounds the same way from both sides`() {
     let document = CGAffineTransform(a: 2, b: 0, c: 0, d: -2, tx: 0, ty: 1000)
     // One absolute edge at 100.25, exactly between the pixels at 100.0 and 100.5.
     let upper = FragmentGeometry.Placement(
@@ -147,7 +149,7 @@ struct DecorationSeamTests {
     #expect(abs((fromAbove.maxY + 71 - 0.3) - (fromBelow.minY + 100.25 + 0.2)) < 1e-9)
   }
 
-  @Test func nothingMovesSideways() {
+  @Test func `nothing moves sideways`() {
     let placement = FragmentGeometry.Placement(
       origin: CGPoint(x: 13.3, y: 0.2892),
       frame: CGRect(x: 0, y: 74617.7892, width: 600, height: 29.25), containerWidth: 600, indent: 0

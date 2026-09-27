@@ -37,20 +37,20 @@ struct AnchorResolutionTests {
     "rfc8761.xml", "rfc8771.xml", "rfc8999.xml", "rfc9197.xml", "rfc9220.xml", "rfc9271.xml",
     "rfc9682.xml",
   ])
-  func everyCitedAnchorIsHeld(fixture: String) throws {
+  func `every cited anchor is held`(fixture: String) throws {
     let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
     let dangling = Self.citedAnchors(in: document).subtracting(Self.anchors(in: document))
     #expect(dangling.isEmpty, "cited but not held: \(dangling.sorted())")
   }
 
-  @Test func aDefinitionKeepsItsOwnAnchor() throws {
+  @Test func `a definition keeps its own anchor`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9197.xml"))
     let anchors = Self.anchors(in: document)
     #expect(anchors.contains("TraceFlags"))
     #expect(anchors.contains("IOAMTraceType"))
   }
 
-  @Test func aRowKeepsItsAnchor() throws {
+  @Test func `a row keeps its anchor`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
     #expect(Self.anchors(in: document).contains("EventFSD"))
   }
@@ -59,7 +59,7 @@ struct AnchorResolutionTests {
   /// should land as surely as a link to a body row. So RFC 9271's first table with
   /// a header is given one, and the anchor has to come back through the serializer
   /// and the parser on the header row, not on a body row.
-  @Test func aHeaderRowKeepsItsAnchor() throws {
+  @Test func `a header row keeps its anchor`() throws {
     var document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
     func anchorFirstHeaderRow(in sections: inout [Section]) -> Bool {
       for section in sections.indices {
@@ -90,7 +90,7 @@ struct AnchorResolutionTests {
 
   /// The serializer writes both back, so a round trip keeps the links whole.
   @Test(arguments: ["rfc9197.xml", "rfc9271.xml"])
-  func theAnchorsSurviveARoundTrip(fixture: String) throws {
+  func `the anchors survive a round trip`(fixture: String) throws {
     let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))

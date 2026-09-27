@@ -5,7 +5,6 @@ import Testing
 @Suite("DocumentID")
 struct DocumentIDTests {
   @Test(
-    "parses the spellings people actually type",
     arguments: [
       ("RFC9110", DocumentID.rfc(9110)),
       ("rfc 9110", .rfc(9110)),
@@ -15,20 +14,19 @@ struct DocumentIDTests {
       ("BCP14", DocumentID(series: .bcp, number: 14)),
       ("std 97", DocumentID(series: .std, number: 97)),
     ])
-  func parsing(input: String, expected: DocumentID) {
+  func `parses the spellings people actually type`(input: String, expected: DocumentID) {
     #expect(DocumentID(parsing: input) == expected)
   }
 
   @Test(
-    "rejects things that are not document identifiers",
     arguments: ["", "RFC", "HTTP", "RFC 91 10", "draft-ietf-quic", "0"])
-  func rejects(input: String) {
+  func `rejects things that are not document identifiers`(input: String) {
     #expect(DocumentID(parsing: input) == nil)
   }
 
   /// A bare number is an RFC when a reader types it, and only a position when a
   /// bibliography prints it: `[2]` is the second entry, not RFC 2.
-  @Test func aLabelNamesADocumentOnlyWhenItSaysWhichSeries() {
+  @Test func `a label names a document only when it says which series`() {
     #expect(DocumentID(label: "2") == nil)
     #expect(DocumentID(label: " 791") == nil)
     #expect(DocumentID(label: "RFC 2119") == .rfc(2119))
@@ -36,14 +34,14 @@ struct DocumentIDTests {
     #expect(DocumentID(label: "MIP-OPTIM") == nil)
   }
 
-  @Test func formatting() {
+  @Test func `formatting`() {
     let id = DocumentID.rfc(9110)
     #expect(id.description == "RFC9110")
     #expect(id.displayName == "RFC 9110")
     #expect(id.fileStem == "rfc9110")
   }
 
-  @Test func ordering() {
+  @Test func `ordering`() {
     #expect(DocumentID.rfc(791) < .rfc(9110))
     #expect(DocumentID.rfc(9110) < DocumentID(series: .bcp, number: 1))
   }
