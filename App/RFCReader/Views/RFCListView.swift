@@ -1,55 +1,30 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import SwiftUI
 
 struct RFCListView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
-  @Query(sort: \Bookmark.createdAt, order: .reverse) private var bookmarks: [Bookmark]
-  @State private var downloaded: Set<Int> = []
-  /// The Recently read order, taken once when the filter is entered.
-  ///
-  /// Not a live `@Query`: opening or leaving a document writes its `updatedAt`, so
-  /// a query sorted on that re-sorted the list the click came from — the row just
-  /// left jumped to the top and everything below it shifted down a place. Held
-  /// here instead, the order is whatever it was on arrival and stays put while it
-  /// is being read through; coming back to the filter takes a fresh one, the same
-  /// way `downloaded` beside it does.
-  @State private var recentOrder: [Int] = []
   /// How many rows are handed to the `List`. See `ListWindow`: all 9,842 of them at
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
 
-  /// Built once per body pass and shared by every row: `RFCRow` used to scan the
-  /// whole bookmark list itself, which is a linear search per row over a list that
-  /// can be 9,842 rows long.
-  private var bookmarkedNumbers: Set<Int> {
-    Set(bookmarks.map(\.number))
-  }
-
   private var rfcs: [RFCMetadata] {
-    library.list(
-      filter: navigation.filter,
-      searchText: navigation.searchText,
-      bookmarked: bookmarkedNumbers,
-      recentlyRead: recentOrder,
-      downloaded: downloaded
-    )
+    library.list(for: navigation)
   }
 
   var body: some View {
     @Bindable var navigation = navigation
-    let bookmarked = bookmarkedNumbers
+    // Once, and shared by every row: `RFCRow` used to scan the whole bookmark list
+    // itself, which is a linear search per row over a list that can be 9,842 rows
+    // long.
+    let bookmarked = library.bookmarkedNumbers
     // Once, and shared by everything below: `rfcs` was read twice per body pass —
     // here and in the overlay — which is half of why the memoised list was worth
     // memoising.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
-    // Nil while the index loads: "0 Documents" would be a claim about the library,
-    // not about a list that has not arrived yet.
-    let listed: Int? = library.indexState.isReady ? rows.count : nil
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
     // is handed the outcome, not the click, and Command-click on a list row is the
@@ -85,14 +60,7 @@ struct RFCListView: View {
         ContentUnavailableView.search(text: navigation.searchText)
       }
     }
-    .onChange(of: listed, initial: true) {
-      navigation.listedCount = listed
-    }
-    .task(id: navigation.filter) {
-      recentOrder = library.recentlyReadNumbers()
-      downloaded = await library.downloadedNumbers()
-      // After the two above, not before: both are inputs to the list the window
-      // is being measured against.
+    .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.searchText) {
@@ -108,7 +76,7 @@ struct RFCListView: View {
     }
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
-      .navigationSubtitle(listed.map { DocumentCount.label($0) } ?? "")
+      .navigationSubtitle(library.listSubtitle(for: navigation))
     #endif
   }
 

@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 struct SidebarView: View {
