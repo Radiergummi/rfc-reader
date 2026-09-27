@@ -472,13 +472,6 @@ struct DocumentView: View {
   /// rebuild — every further tick of the font-size slider or the window's edge.
   /// The first build of a document does not wait: there is nothing on screen to
   /// disturb, and the column is already known, so it is built once and built right.
-  /// Off the main actor, and structured: unlike a detached task, it inherits the
-  /// caller's priority and is part of its cancellation (#129).
-  @concurrent
-  private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
-  }
-
   private func rebuild() async {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
@@ -510,6 +503,13 @@ struct DocumentView: View {
     // No place to restore here: the coordinator carries the line at the top of
     // the viewport into the new storage itself, which a section anchor — all
     // this view is told — could only approximate to the section's heading.
+  }
+
+  /// Off the main actor, and structured: unlike a detached task, it inherits the
+  /// caller's priority and is part of its cancellation (#129).
+  @concurrent
+  private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
+    DocumentTextBuilder.build(document, style: style)
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
