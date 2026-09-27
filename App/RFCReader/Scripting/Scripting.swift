@@ -147,6 +147,11 @@
 
   /// Every command in the dictionary: run on the main actor, against the window it
   /// names or the front one.
+  ///
+  /// Stated rather than left to the default isolation: inferred, it would make the
+  /// initializers inherited from `NSScriptCommand` main-actor isolated, which the
+  /// compiler rejects as overrides of nonisolated ones.
+  @MainActor
   class RFCScriptCommand: NSScriptCommand {
     /// Cocoa Scripting's entry point, which Swift sees as nonisolated. It is only
     /// ever called on the main thread, and `assumeIsolated` traps rather than races
