@@ -179,6 +179,7 @@
 
       self.toolbar = toolbar
       self.reader.updateToolbarTitle = { [weak toolbar] in toolbar?.updateDocumentTitle($0) }
+      self.reader.openPanel = { [weak self] in self?.setPanelOpen(true) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)

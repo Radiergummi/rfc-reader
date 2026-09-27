@@ -58,6 +58,62 @@ struct BuilderChipTests {
     #expect(run(xref).attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
   }
 
+  /// Links are not underlined unless the reader asks for it: the tint marks a
+  /// chip, the colour marks any other link, and an underline under a chip ran
+  /// under its symbol too.
+  @Test func `no link is underlined by default`() {
+    let chip = run(CrossReference(target: .document(.rfc(9110), section: "4.2")))
+    let authored = run(
+      CrossReference(target: .document(.rfc(9110), section: "4.2"), text: "the caching rules"))
+    for attributed in [chip, authored] {
+      attributed.enumerateAttribute(
+        .underlineStyle, in: NSRange(location: 0, length: attributed.length)
+      ) { value, _, _ in
+        #expect(value == nil)
+      }
+    }
+  }
+
+  /// Asked for, every link character is underlined, a chip's included: one rule
+  /// for every link, rather than an exception the reader has to learn.
+  @Test func `underlining links underlines chips as well`() {
+    let underlining = ReadingStyle(underlinesLinks: true)
+    let chip = Fixtures.inlineRun(
+      [.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))],
+      style: underlining)
+    let external = Fixtures.inlineRun(
+      [.link(URL(string: "https://example.com")!, [.text("example")])], style: underlining)
+    for attributed in [chip, external] {
+      var range = NSRange(location: 0, length: 0)
+      let underline = attributed.attribute(
+        .underlineStyle, at: 0, longestEffectiveRange: &range,
+        in: NSRange(location: 0, length: attributed.length))
+      #expect(underline as? Int == NSUnderlineStyle.single.rawValue)
+      #expect(range.length == attributed.length, "every character of the link is underlined")
+    }
+  }
+
+  /// A citation of a bibliography entry that names no RFC is still an anchor after
+  /// parsing, but the body leaves the bibliography out, so the builder links it
+  /// with a scheme of its own: the one `LinkDestination` sends to the panel.
+  @Test func `a citation of a bibliography entry links to the entry`() throws {
+    let entry = "IEEE.802.3_2018"
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph([.crossReference(CrossReference(target: .anchor(entry)))])),
+        .paragraph(Paragraph([.crossReference(CrossReference(target: .anchor("section-1")))])),
+        .references(ReferenceList(title: "R", entries: [Reference(anchor: entry, title: "E")]))),
+      style: style)
+    var links: [URL] = []
+    built.text.enumerateAttribute(
+      .link, in: NSRange(location: 0, length: built.text.length)
+    ) { value, _, _ in
+      if let url = value as? URL { links.append(url) }
+    }
+    #expect(links.compactMap(DocumentTextBuilder.reference(from:)) == [entry])
+    #expect(links.compactMap(DocumentTextBuilder.anchor(from:)) == ["section-1"])
+  }
+
   private static let chipPrefix = "\u{FFFC}\u{2060}"
 
   @Test func `the whole section reference is one chip run`() throws {

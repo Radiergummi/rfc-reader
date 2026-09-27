@@ -54,7 +54,7 @@ extension DocumentTextBuilder {
 
     case .link(let url, let inner):
       let result = NSMutableAttributedString(attributedString: inlineRuns(inner, base: base))
-      result.addAttribute(.link, value: url, range: NSRange(location: 0, length: result.length))
+      result.addAttributes(linkAttributes(url), range: NSRange(location: 0, length: result.length))
       #if !canImport(UIKit)
         // Explicit, because the reader turns `displaysLinkToolTips` off: the
         // implicit tooltip gave every reference its raw `rfc://` URL. Only an
@@ -68,7 +68,9 @@ extension DocumentTextBuilder {
     case .crossReference(let xref):
       var attributes = base
       attributes[.rfcReference] = ReferenceBox(xref)
-      if let url = url(for: xref) { attributes[.link] = url }
+      if let url = url(for: xref) {
+        attributes.merge(linkAttributes(url)) { _, link in link }
+      }
       // What the reference reads as, and which part of it is a chip, are the
       // model's to say — `CrossReference.display`, which `plainText` answers
       // from too, so the screen and a copied selection cannot disagree.
@@ -90,6 +92,16 @@ extension DocumentTextBuilder {
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)
     }
+  }
+
+  /// What makes a run a link: the URL, and the underline when the reader asked
+  /// for one (`ReadingStyle.underlinesLinks`).
+  private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+    var attributes: [NSAttributedString.Key: Any] = [.link: url]
+    if style.underlinesLinks {
+      attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+    }
+    return attributes
   }
 
   /// The only constructor of a `.rfcChip` run, and the only place `nextChipID` is
@@ -117,6 +129,44 @@ extension DocumentTextBuilder {
     }
     result.append(NSAttributedString(string: text, attributes: chip))
     return result
+  }
+
+  /// Makes room in the line for every chip's tint. **The only writer of `.kern`
+  /// around a chip.**
+  ///
+  /// The tint reaches `FragmentGeometry.chipPadding` past a chip's glyphs, and a
+  /// space is narrower than two of those, so `BCP 14 [RFC2119] [RFC8174]` — in
+  /// nearly every RFC — drew its two chips overlapping, each tint covering the
+  /// space beside it. Kerning the chip's last character and the character before
+  /// it by the padding gives the tint its own room. Run once over the finished
+  /// text rather than as each chip is made, because the character before a chip
+  /// is whatever came before its inline, and two adjacent chips each add to the
+  /// one character between them.
+  func reserveChipPadding() {
+    let padding = FragmentGeometry.chipPadding
+    let whole = NSRange(location: 0, length: output.length)
+    var chips: [NSRange] = []
+    // The default options give the longest effective range, which is the whole
+    // chip: its symbol's attachment is a storage run of its own.
+    output.enumerateAttribute(.rfcChip, in: whole) { value, range, _ in
+      if value != nil { chips.append(range) }
+    }
+    // The backing store itself: `string` would copy the whole document.
+    let text = output.mutableString
+    for chip in chips {
+      addKern(padding, at: NSMaxRange(chip) - 1)
+      let before = chip.location - 1
+      // A chip that starts a line has nothing before it to make room in: its
+      // tint reaches into the margin, as a card's does.
+      if before >= 0, text.character(at: before) != 0x0A {
+        addKern(padding, at: before)
+      }
+    }
+  }
+
+  private func addKern(_ amount: CGFloat, at index: Int) {
+    let existing = output.attribute(.kern, at: index, effectiveRange: nil) as? CGFloat ?? 0
+    output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
   }
 
   /// The leading `doc.text` glyph that rides inside the chip's own run, so it
@@ -156,8 +206,17 @@ extension DocumentTextBuilder {
   /// different modules is one percent-encoding rule away from silently failing on
   /// an anchor containing `?` or `#`.
   public static func anchor(from url: URL) -> String? {
-    guard url.scheme == anchorScheme else { return nil }
-    let encoded = url.absoluteString.dropFirst(anchorScheme.count + 1)
+    decoded(url, scheme: anchorScheme)
+  }
+
+  /// The same for `referenceScheme`: the bibliography entry a citation names.
+  public static func reference(from url: URL) -> String? {
+    decoded(url, scheme: referenceScheme)
+  }
+
+  private static func decoded(_ url: URL, scheme: String) -> String? {
+    guard url.scheme == scheme else { return nil }
+    let encoded = url.absoluteString.dropFirst(scheme.count + 1)
     return String(encoded).removingPercentEncoding ?? String(encoded)
   }
 
@@ -167,7 +226,8 @@ extension DocumentTextBuilder {
       return RFCLink(id: id, section: section).appURL
     case .anchor(let anchor):
       let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
-      return URL(string: "\(Self.anchorScheme):\(encoded)")
+      let scheme = referenceAnchors.contains(anchor) ? Self.referenceScheme : Self.anchorScheme
+      return URL(string: "\(scheme):\(encoded)")
     }
   }
 
