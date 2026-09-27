@@ -176,6 +176,7 @@
       observeTitle()
       observeListTitle()
       observeDocument()
+      observeStoreSaves()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -370,9 +371,28 @@
     /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
     /// item once per event cycle, and asking SwiftData there put a compiled
     /// `#Predicate` and a store round trip under every mouse move, once per open tab.
-    /// Nothing else on macOS writes a `Bookmark`, so the two places it can change
-    /// are the selection moving and `toggleBookmark()`.
+    /// It changes when the selection moves, and whenever a bookmark is saved — by
+    /// this window's `toggleBookmark()`, or by another tab's, which left this one's
+    /// glyph stale while both showed the same RFC (#141).
     private(set) var isBookmarked = false
+
+    /// The token for `observeStoreSaves()`, removed when the window closes.
+    private var storeSaves: (any NSObjectProtocol)?
+
+    /// Refreshes `isBookmarked` on every save of the store, whoever made it. Saves
+    /// follow what the reader does — a bookmark toggled, a document opened or left,
+    /// which records its reading position — not every event cycle, so the fetch
+    /// stays off the toolbar's validation path, where the comment above wants it.
+    private func observeStoreSaves() {
+      storeSaves = NotificationCenter.default.addObserver(
+        forName: ModelContext.didSave, object: nil, queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          self?.refreshBookmarked()
+          self?.window?.toolbar?.validateVisibleItems()
+        }
+      }
+    }
 
     private func refreshBookmarked() {
       isBookmarked =
@@ -411,6 +431,9 @@
     }
 
     func windowWillClose(_ notification: Notification) {
+      if let storeSaves {
+        NotificationCenter.default.removeObserver(storeSaves)
+      }
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
