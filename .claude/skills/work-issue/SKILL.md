@@ -55,13 +55,13 @@ Make a worktree off the latest `origin/main` with `EnterWorktree` (name `issue-N
 
 ## 4. Test first, and open the draft right away
 
-1. Write the test that shows the bug, or pins the new behaviour, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: prefer a guard-level test over hand-written lines, then a test through `parse` over a fixture already committed in `Fixtures`, then a `Corpus-backed:` test. Never commit RFC text, whether a new fixture, an excerpt of an existing one or an override snapshot.
+1. Write the test that shows the bug, or pins the new behaviour, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: prefer a guard-level test on hand-written lines, then a test through `parse` on a fixture already committed in `Fixtures`, then a `Corpus-backed:` test. Never commit RFC text, whether a new fixture, an excerpt of an existing one or an override snapshot.
 2. Commit it, push, and open a **draft** pull request at once: `gh pr create --draft`. Its body says `Closes #N`, and the plan as you understand it. Add `agent-pr` to the issue.
 3. Keep the pull request a draft for as long as you are working on it.
 
 ## 5. Fix
 
-Make the smallest change that makes the test pass and follows the architecture. Commit in steps that each make sense alone. Legacy-parser heuristics follow the workflow in `CLAUDE.md`: a class of documents is fixed in the heuristic, a single document gets an override.
+Make the smallest change that makes the test pass and follows the architecture. Commit in steps that each make sense alone. Legacy-parser heuristics follow the workflow in `CLAUDE.md`: a class of documents is fixed in the heuristic; a correction to a single document waits for #197, so no new override is committed.
 
 ## 6. Verify
 
