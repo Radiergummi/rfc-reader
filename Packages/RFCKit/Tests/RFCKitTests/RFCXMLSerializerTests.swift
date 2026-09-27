@@ -231,7 +231,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
                     entries: [
                       Reference(
                         anchor: "RFC2119", title: "Key words",
-                        seriesInfo: [(name: "RFC", value: "2119")])
+                        seriesInfo: [SeriesInfo(name: "RFC", value: "2119")])
                     ]))
               ]),
           ])

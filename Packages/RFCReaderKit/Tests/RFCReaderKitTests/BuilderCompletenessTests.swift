@@ -121,7 +121,7 @@ struct BuilderCompletenessTests {
       title: "HTTP Semantics",
       authors: ["R. Fielding", "M. Nottingham", "J. Reschke"],
       date: PublicationDate(year: 2022, month: 6),
-      seriesInfo: [(name: "RFC", value: "9110")]
+      seriesInfo: [SeriesInfo(name: "RFC", value: "9110")]
     )
     let built = DocumentTextBuilder.build(
       RFCDocument(

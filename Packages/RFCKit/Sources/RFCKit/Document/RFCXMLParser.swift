@@ -347,11 +347,11 @@ public struct RFCXMLParser: Sendable {
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
         author.role == nil ? author.name : "\(author.name), Ed."
       }
-      let seriesInfo: [(name: String, value: String)] =
+      let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
-          info -> (name: String, value: String)? in
+          info -> SeriesInfo? in
           guard let name = info["name"], let value = info["value"] else { return nil }
-          return (name: name, value: value)
+          return SeriesInfo(name: name, value: value)
         }
       let refContent = element.first("refcontent")?.normalizedText
       return Reference(
@@ -377,9 +377,9 @@ public struct RFCXMLParser: Sendable {
       let anchor = element["anchor"] ?? ""
       let members = element.all("reference").map(parseReference)
       let memberNames = members.compactMap { $0.documentID?.displayName }
-      var seriesInfo: [(name: String, value: String)] = []
+      var seriesInfo: [SeriesInfo] = []
       if let id = DocumentID(label: anchor) {
-        seriesInfo.append((name: id.series.rawValue, value: String(id.number)))
+        seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
       }
       return Reference(
         anchor: anchor,
