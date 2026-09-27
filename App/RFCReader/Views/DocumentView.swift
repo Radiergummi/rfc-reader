@@ -551,12 +551,7 @@ struct OriginalTextView: View {
 
   var body: some View {
     if let text {
-      ScrollView([.vertical, .horizontal]) {
-        Text(text)
-          .font(.system(size: fontSize * 0.85, design: .monospaced))
-          .textSelection(.enabled)
-          .padding(24)
-      }
+      OriginalTextBody(text: text, fontSize: fontSize)
     } else {
       ProgressView()
     }
