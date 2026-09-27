@@ -17,14 +17,14 @@ struct LinkDestinationTests {
 
   // MARK: - Inside this document
 
-  @Test func anAnchorJumpsWithinTheDocument() {
+  @Test func `an anchor jumps within the document`() {
     #expect(resolve("\(DocumentTextBuilder.anchorScheme):section-4.2") == .jump("section-4.2"))
   }
 
   /// The rule the enum exists to pin: a jump inside this document has nowhere else
   /// to go, so a modifier must not turn it into a second tab of the same document
   /// scrolled elsewhere.
-  @Test func anAnchorStillJumpsWhenCommandIsHeld() {
+  @Test func `an anchor still jumps when command is held`() {
     #expect(
       resolve("\(DocumentTextBuilder.anchorScheme):section-4.2", .newTab(inBackground: true))
         == .jump("section-4.2"))
@@ -32,22 +32,22 @@ struct LinkDestinationTests {
 
   /// A reference to a section of the document already on screen scrolls rather than
   /// re-opening what is already open.
-  @Test func aSectionOfThisDocumentScrollsInsteadOfOpening() {
+  @Test func `a section of this document scrolls instead of opening`() {
     #expect(resolve("rfc://9110#section-4.2") == .jump("4.2"))
   }
 
   /// Without a section there is nothing to scroll to, so it opens as any link would.
-  @Test func thisDocumentWithoutASectionOpensNormally() {
+  @Test func `this document without a section opens normally`() {
     #expect(resolve("rfc://9110") == .document(RFCLink(id: current)))
   }
 
   // MARK: - Another document
 
-  @Test func anotherDocumentOpensInPlace() {
+  @Test func `another document opens in place`() {
     #expect(resolve("rfc://8446#section-2") == .document(RFCLink(id: other, section: "2")))
   }
 
-  @Test func aWebReferenceResolvesTheSameWayAsTheAppScheme() {
+  @Test func `a web reference resolves the same way as the app scheme`() {
     #expect(resolve("https://www.rfc-editor.org/rfc/rfc8446") == .document(RFCLink(id: other)))
   }
 
@@ -56,7 +56,7 @@ struct LinkDestinationTests {
   /// A section of *this* document is still a document worth its own tab when asked
   /// for one — unlike an anchor, it names something the reader can open. The scroll
   /// shortcut is for following in place only.
-  @Test func aSectionOfThisDocumentStillGetsItsOwnTabWhenAsked() {
+  @Test func `a section of this document still gets its own tab when asked`() {
     let asked = resolve("rfc://9110#section-4.2", .newTab(inBackground: true))
     #expect(asked == .document(RFCLink(id: current, section: "4.2")))
   }
@@ -64,12 +64,11 @@ struct LinkDestinationTests {
   // MARK: - Not ours
 
   @Test(
-    "anything that is not an RFC is left to the system",
     arguments: [
       "https://example.com/spec",
       "mailto:someone@example.com",
     ])
-  func isLeftToTheSystem(input: String) {
+  func `anything that is not an RFC is left to the system`(input: String) {
     #expect(resolve(input) == .unhandled)
   }
 }

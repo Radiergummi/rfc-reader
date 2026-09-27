@@ -6,7 +6,6 @@ import Testing
 @Suite("Links")
 struct RFCLinkTests {
   @Test(
-    "recognises the ways RFCs get linked",
     arguments: [
       ("rfc://9110", RFCLink(id: .rfc(9110))),
       ("rfc://9110#section-4.2", RFCLink(id: .rfc(9110), section: "4.2")),
@@ -27,7 +26,7 @@ struct RFCLinkTests {
       ("https://datatracker.ietf.org/doc/rfc9110/", RFCLink(id: .rfc(9110))),
       ("https://tools.ietf.org/html/rfc2616", RFCLink(id: .rfc(2616))),
     ])
-  func parses(input: String, expected: RFCLink) throws {
+  func `recognises the ways RFCs get linked`(input: String, expected: RFCLink) throws {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url) == expected)
   }
@@ -36,7 +35,7 @@ struct RFCLinkTests {
   /// string: `appURL` force-unwrapped `URL(string:)` over it, and the web builders
   /// fell back to the page without its fragment (#150). Set as a fragment through
   /// `URLComponents`, it is percent-encoded, and it survives the way back.
-  @Test func aSectionWithReservedCharactersMakesEveryURL() {
+  @Test func `a section with reserved characters makes every URL`() {
     let link = RFCLink(id: .rfc(9110), section: "4.2 draft#1")
     #expect(link.appURL.absoluteString == "rfc://9110#section-4.2%20draft%231")
     #expect(RFCLink(url: link.appURL) == link)
@@ -49,19 +48,18 @@ struct RFCLinkTests {
   }
 
   @Test(
-    "ignores unrelated URLs",
     arguments: [
       "https://example.com/rfc9110",
       "https://www.rfc-editor.org/",
       "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics/",
       "mailto:rfc-editor@rfc-editor.org",
     ])
-  func rejects(input: String) throws {
+  func `ignores unrelated URLs`(input: String) throws {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url) == nil)
   }
 
-  @Test func roundTrip() {
+  @Test func `round trip`() {
     let link = RFCLink(id: .rfc(9110), section: "4.2")
     #expect(link.appURL.absoluteString == "rfc://9110#section-4.2")
     #expect(RFCLink(url: link.appURL) == link)
@@ -70,7 +68,7 @@ struct RFCLinkTests {
 
   /// An appendix gets the RFC Editor's other prefix, in both URLs, so the two never
   /// name the same place differently.
-  @Test func anAppendixRoundTripsAsAnAppendix() {
+  @Test func `an appendix round trips as an appendix`() {
     let link = RFCLink(id: .rfc(9110), section: "A.1")
     #expect(link.appURL.absoluteString == "rfc://9110#appendix-A.1")
     #expect(RFCLink(url: link.appURL) == link)
@@ -81,14 +79,13 @@ struct RFCLinkTests {
   /// section, and `#page-12` stays unrecognised rather than becoming one. Both
   /// schemes are strict about it.
   @Test(
-    "an unprefixed or unrelated fragment is not a section",
     arguments: [
       "rfc://9110#4.2",
       "rfc://9110#page-12",
       "https://www.rfc-editor.org/rfc/rfc9110#4.2",
       "https://www.rfc-editor.org/rfc/rfc9110#page-12",
     ])
-  func rejectsFragment(input: String) throws {
+  func `an unprefixed or unrelated fragment is not a section`(input: String) throws {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url) == RFCLink(id: .rfc(9110)))
   }

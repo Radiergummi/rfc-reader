@@ -16,7 +16,7 @@ struct AuthorContactTests {
 
   /// RFC 9682's one author has everything but a fax: a structured postal
   /// address, a phone number and an email address.
-  @Test func aFullAddressIsStructured() throws {
+  @Test func `a full address is structured`() throws {
     let author = try #require(try Self.xml("rfc9682.xml").header.authors.first)
     #expect(author.name == "Carsten Bormann")
     let contact = try #require(author.contact)
@@ -30,13 +30,13 @@ struct AuthorContactTests {
     #expect(contact.uri == nil)
   }
 
-  @Test func aWebAddressIsKeptAsWritten() throws {
+  @Test func `a web address is kept as written`() throws {
     let authors = try Self.xml("rfc8771.xml").header.authors
     #expect(authors.map(\.contact?.uri) == ["https://i-dunno.at/", "https://www.sinodun.com/"])
   }
 
   /// RFC 9652's author wrote the address as lines, which have no fields to recover.
-  @Test func postalLinesAreKeptAsLines() throws {
+  @Test func `postal lines are kept as lines`() throws {
     let author = try #require(try Self.xml("rfc9652.xml").header.authors.first)
     #expect(author.contact?.organization == nil, "`<organization/>` is empty")
     #expect(author.contact?.postal == PostalAddress(postalLines: ["Prahran", "Australia"]))
@@ -44,7 +44,7 @@ struct AuthorContactTests {
   }
 
   /// A building is not a street: RFC 9283's `<extaddr>` stays one.
-  @Test func anExtendedAddressIsNotAStreet() throws {
+  @Test func `an extended address is not a street`() throws {
     let author = try #require(try Self.xml("rfc9283.xml").header.authors.first)
     let postal = try #require(author.contact?.postal)
     #expect(postal.extendedAddress == ["School of Computer Science"])
@@ -54,13 +54,13 @@ struct AuthorContactTests {
   }
 
   /// Nothing is looked up or inferred: a legacy header names its authors and no more.
-  @Test func aLegacyHeaderHasNoContactDetails() throws {
+  @Test func `a legacy header has no contact details`() throws {
     let document = LegacyTextParser.parse(try Fixtures.data("rfc2119.txt"))
     #expect(!document.header.authors.isEmpty)
     #expect(document.header.authors.allSatisfy { $0.contact == nil })
   }
 
-  @Test func theAddressReadsAsTheRFCEditorSetsIt() {
+  @Test func `the address reads as the RFC editor sets it`() {
     let postal = PostalAddress(
       street: ["Postfach 330440"], city: "Bremen", code: "D-28359", country: "Germany")
     #expect(postal.lines == ["Postfach 330440", "Bremen D-28359", "Germany"])
@@ -78,7 +78,7 @@ struct AuthorContactTests {
 
   /// One paragraph per author, a detail per line, where it used to be an aside
   /// per level of `<author><address><postal>`, nested three deep.
-  @Test func eachAuthorIsOneParagraph() throws {
+  @Test func `each author is one paragraph`() throws {
     let section = try #require(
       try Self.xml("rfc9682.xml").section(anchor: "authors-addresses"))
     #expect(section.blocks.count == 1)
@@ -100,7 +100,7 @@ struct AuthorContactTests {
   /// schema gives an author's content. Each is a paragraph of their own, a
   /// district kept beside its city, where the names used to run together as
   /// inline text and everything else about them was dropped.
-  @Test func eachContributorIsOneParagraph() throws {
+  @Test func `each contributor is one paragraph`() throws {
     let section = try #require(
       try Self.xml("rfc9631.xml").allSections.first { $0.titleText == "Contributors" })
     #expect(section.blocks.count == 3)
@@ -112,7 +112,7 @@ struct AuthorContactTests {
   }
 
   /// A `<contact>` in prose is still the name, inline.
-  @Test func aContactInProseIsInline() throws {
+  @Test func `a contact in prose is inline`() throws {
     let document = try Self.xml("rfc9682.xml")
     let thanks = document.allSections.flatMap(\.blocks).compactMap { block -> String? in
       guard case .paragraph(let paragraph) = block else { return nil }
@@ -125,7 +125,7 @@ struct AuthorContactTests {
   /// `parseAuthor` has it, and is not repeated beneath itself. No published v3 RFC
   /// has such an author of its own (none of RFC 8650 onwards does), so there is no
   /// document to read one from.
-  @Test func anOrganizationIsNotRepeatedAsItsOwnAffiliation() {
+  @Test func `an organization is not repeated as its own affiliation`() {
     let author = Author(
       name: "IAB", contact: AuthorContact(organization: "IAB", emails: ["iab@iab.org"]))
     #expect(
@@ -137,7 +137,7 @@ struct AuthorContactTests {
 
   /// An address is the `mailto:` URL's path, so a `?`, `#` or `%` in it is
   /// escaped rather than starting a query, a fragment or an escape.
-  @Test func aMailtoLinkEscapesTheAddress() throws {
+  @Test func `a mailto link escapes the address`() throws {
     let url = try #require(RFCXMLParser.mailto("a?b#c%d@example.com"))
     #expect(url.absoluteString == "mailto:a%3Fb%23c%25d@example.com")
     // `URL.path` is empty for a URL with no authority on Apple's Foundation, so the
@@ -147,7 +147,7 @@ struct AuthorContactTests {
   }
 
   /// A web address `URL` cannot read is shown as text, not dropped.
-  @Test func aWebAddressThatIsNoURLIsText() {
+  @Test func `a web address that is no URL is text`() {
     #expect(URL(string: "http://[::1") == nil, "the host's bracket is never closed")
     let author = Author(name: "A", contact: AuthorContact(uri: "http://[::1"))
     #expect(
@@ -158,7 +158,7 @@ struct AuthorContactTests {
 
   /// The schema forbids an aside inside an aside, and a round trip is held to it.
   @Test(arguments: ["rfc8761.xml", "rfc8771.xml", "rfc8999.xml", "rfc9220.xml", "rfc9682.xml"])
-  func noAsideHoldsAnother(fixture: String) throws {
+  func `no aside holds another`(fixture: String) throws {
     func nested(_ blocks: [Block], inAside: Bool) -> Bool {
       blocks.contains { block in
         switch block {
@@ -182,25 +182,25 @@ struct AuthorContactTests {
   }
 
   @Test(arguments: ["rfc8771.xml", "rfc8999.xml", "rfc9283.xml", "rfc9652.xml", "rfc9682.xml"])
-  func contactDetailsSurviveARoundTrip(fixture: String) throws {
+  func `contact details survive a round trip`(fixture: String) throws {
     let document = try Self.xml(fixture)
     #expect(try Self.roundTrip(document).1.header.authors == document.header.authors)
   }
 
   /// The form is the author's to choose, and written back as chosen.
-  @Test func postalLinesAreWrittenBackAsLines() throws {
+  @Test func `postal lines are written back as lines`() throws {
     let (xml, _) = try Self.roundTrip(try Self.xml("rfc9652.xml"))
     #expect(xml.contains("<postalLine>Prahran</postalLine>"))
     #expect(!xml.contains("<street>"))
   }
 
-  @Test func anExtendedAddressIsWrittenBackAsOne() throws {
+  @Test func `an extended address is written back as one`() throws {
     let (xml, _) = try Self.roundTrip(try Self.xml("rfc9283.xml"))
     #expect(xml.contains("<extaddr>School of Computer Science</extaddr>"))
     #expect(xml.contains("<street>PB 92019</street>"))
   }
 
-  @Test func aWebAddressThatIsNoURLSurvivesARoundTrip() throws {
+  @Test func `a web address that is no URL survives a round trip`() throws {
     var document = try Self.xml("rfc9682.xml")
     document.header.authors[0].contact?.uri = "http://[::1"
     let (_, reparsed) = try Self.roundTrip(document)

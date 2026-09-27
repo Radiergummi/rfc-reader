@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 enum Fixtures {
   static func data(_ name: String) throws -> Data {
     let url = try #require(
