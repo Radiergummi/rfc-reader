@@ -52,21 +52,60 @@
   /// on top of the one before it — the bookmark drew inside the back/forward group and
   /// the share icon over the panel's toggle. Native items also get the system's own
   /// grouping and glass, which a hosted control cannot.
-  /// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
-  /// so that it takes the width of its text instead of every pixel that is going.
+  /// A title over a line of detail, as a window's own titlebar draws its title over
+  /// its subtitle. Both of the toolbar's titles are one of these, so the two cannot
+  /// drift apart in type.
   @MainActor
-  private final class TitleView: NSView {
-    private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
-    private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
+  private final class TitleStack: NSStackView {
+    private let title = TitleStack.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
+    private let subtitle = TitleStack.label(.systemFont(ofSize: 11), .secondaryLabelColor)
 
-    static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
+    /// What the longer of the two lines needs. Measured when the strings change,
+    /// which is the only time it can: the list's title is capped once per frame of
+    /// a divider drag, and reads this rather than measuring again.
+    private(set) var textWidth: CGFloat = 0
+
+    init() {
+      super.init(frame: .zero)
+      orientation = .vertical
+      alignment = .leading
+      spacing = 0
+      addArrangedSubview(title)
+      addArrangedSubview(subtitle)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the titlebar is built in code")
+    }
+
+    func show(_ title: String, subtitle: String) {
+      self.title.stringValue = title
+      self.subtitle.stringValue = subtitle
+      self.subtitle.isHidden = subtitle.isEmpty
+      textWidth = max(
+        self.title.intrinsicContentSize.width,
+        subtitle.isEmpty ? 0 : self.subtitle.intrinsicContentSize.width
+      )
+    }
+
+    private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
       let field = NSTextField(labelWithString: "")
       field.font = font
       field.textColor = colour
       field.lineBreakMode = .byTruncatingTail
       field.cell?.usesSingleLineMode = true
+      // Truncated rather than pushing its title wider than it was given.
+      field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
       return field
     }
+  }
+
+  /// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
+  /// so that it takes the width of its text instead of every pixel that is going.
+  @MainActor
+  private final class TitleView: NSView {
+    private let stack = TitleStack()
 
     /// The toolbar sizes a custom view from its constraints, and from nothing else:
     /// an intrinsic width alone left the title drawn on top of the navigation group,
@@ -75,16 +114,13 @@
 
     init() {
       super.init(frame: .zero)
-      let stack = NSStackView(views: [title, subtitle])
-      stack.orientation = .vertical
-      stack.alignment = .leading
-      stack.spacing = 0
       stack.translatesAutoresizingMaskIntoConstraints = false
       addSubview(stack)
       translatesAutoresizingMaskIntoConstraints = false
       widthConstraint = widthAnchor.constraint(equalToConstant: 1)
       NSLayoutConstraint.activate([
-        stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+        stack.leadingAnchor.constraint(
+          equalTo: leadingAnchor, constant: ToolbarTitleLayout.padding),
         stack.trailingAnchor.constraint(equalTo: trailingAnchor),
         stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         heightAnchor.constraint(equalToConstant: 32),
@@ -98,15 +134,7 @@
     }
 
     func show(_ title: String, subtitle: String) {
-      self.title.stringValue = title
-      self.subtitle.stringValue = subtitle
-      self.subtitle.isHidden = subtitle.isEmpty
-      // The only place the strings change, so the only place the text has to be
-      // measured. `limit(to:)` runs once per frame of a divider drag.
-      textWidth = max(
-        self.title.intrinsicContentSize.width,
-        subtitle.isEmpty ? 0 : self.subtitle.intrinsicContentSize.width
-      )
+      stack.show(title, subtitle: subtitle)
       applyWidth()
     }
 
@@ -119,10 +147,9 @@
     }
 
     private var limit: CGFloat = 0
-    private var textWidth: CGFloat = 0
 
     private func applyWidth() {
-      let width = ToolbarTitleLayout.width(forText: textWidth, inColumn: limit)
+      let width = ToolbarTitleLayout.width(forText: stack.textWidth, inColumn: limit)
       // Assigning a constant dirties the titlebar's layout whether or not it moved.
       guard width != widthConstraint.constant else { return }
       widthConstraint.constant = width
@@ -140,9 +167,7 @@
   /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`.
   @MainActor
   private final class DocumentTitleView: NSView {
-    private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
-    private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
-    private let stack: NSStackView
+    private let stack = TitleStack()
     /// What the text is clipped to: from the top of the item down to the toolbar's
     /// bottom edge, which is below the item's own — the toolbar gives the item 32
     /// pt in the middle of a taller bar. Clipped at the item's edge instead, the
@@ -155,15 +180,7 @@
     private var toolbarBottom: CGFloat = 0
 
     init() {
-      stack = NSStackView(views: [title, subtitle])
       super.init(frame: .zero)
-      stack.orientation = .vertical
-      stack.alignment = .leading
-      stack.spacing = 0
-      for label in [title, subtitle] {
-        // Truncated rather than pushing the item wider than it was given.
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-      }
       // Placed by frame, not by constraints: it moves on every scroll tick, and a
       // frame set inside a view whose own size does not change dirties nothing
       // outside it.
@@ -173,11 +190,8 @@
       addSubview(clip)
       // The clip reaches below this view's bounds, so this view must not cut it
       // off at its own edge.
+      // Sized by the item's `minSize` and `maxSize`, not by constraints.
       clipsToBounds = false
-      translatesAutoresizingMaskIntoConstraints = false
-      // Only the height: the width is the toolbar's to hand out, between the
-      // item's `minSize` and `maxSize`.
-      heightAnchor.constraint(equalToConstant: 32).isActive = true
       reveal(0)
     }
 
@@ -187,9 +201,7 @@
     }
 
     func show(_ title: String, subtitle: String) {
-      self.title.stringValue = title
-      self.subtitle.stringValue = subtitle
-      self.subtitle.isHidden = subtitle.isEmpty
+      stack.show(title, subtitle: subtitle)
       stackHeight = stack.fittingSize.height
       placeStack()
     }
@@ -222,10 +234,11 @@
       let hidden = toolbarBottom - stackHeight
       let resting = (bounds.height - stackHeight) / 2
       let y = hidden + (resting - hidden) * progress
+      let padding = ToolbarTitleLayout.padding
       stack.frame = CGRect(
-        x: Self.padding,
+        x: padding,
         y: y - toolbarBottom,
-        width: max(0, bounds.width - Self.padding * 2),
+        width: max(0, bounds.width - padding * 2),
         height: stackHeight
       )
       // Hidden, not only transparent, while it is out of sight or too narrow to
@@ -233,7 +246,6 @@
       stack.isHidden = progress == 0 || !ToolbarTitleLayout.isWorthDrawing(width: bounds.width)
     }
 
-    private static let padding: CGFloat = 8
   }
 
   @MainActor

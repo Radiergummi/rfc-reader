@@ -452,29 +452,34 @@ final class RFCTextViewCoordinator: NSObject {
     Task { self.onVisibleAnchorChange(anchor) }
   }
 
+  /// macOS only: iOS has no toolbar title for this to drive, so it neither
+  /// measures nor reports there.
   func updateTitleReveal() {
-    guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else { return }
-    let progress = ToolbarTitleReveal.progress(
-      headingBottom: header.frame.minY + bottom,
-      visibleTop: textView.unobscuredTop,
-      distance: Self.headingLineHeight
-    )
-    // Pinned at 0 or 1 for almost all of a document; only a change is news.
-    guard progress != lastTitleReveal else { return }
-    lastTitleReveal = progress
-    onTitleReveal(progress)
-  }
-
-  /// The height of one line of the header's heading, which is set in the large
-  /// title style (`DocumentHeaderView`): the distance the reveal runs over.
-  private static var headingLineHeight: CGFloat {
-    #if canImport(UIKit)
-      UIFont.preferredFont(forTextStyle: .largeTitle).lineHeight
-    #else
-      let font = NSFont.preferredFont(forTextStyle: .largeTitle)
-      return ceil(font.ascender - font.descender + font.leading)
+    #if !canImport(UIKit)
+      guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
+        return
+      }
+      let progress = ToolbarTitleReveal.progress(
+        headingBottom: header.frame.minY + bottom,
+        visibleTop: textView.unobscuredTop,
+        distance: Self.headingLineHeight
+      )
+      // Pinned at 0 or 1 for almost all of a document; only a change is news.
+      guard progress != lastTitleReveal else { return }
+      lastTitleReveal = progress
+      onTitleReveal(progress)
     #endif
   }
+
+  #if !canImport(UIKit)
+    /// The height of one line of the header's heading, which is set in the large
+    /// title style (`DocumentHeaderView`): the distance the reveal runs over. Once,
+    /// not per scroll tick — macOS text styles do not change size at run time.
+    private static let headingLineHeight: CGFloat = {
+      let font = NSFont.preferredFont(forTextStyle: .largeTitle)
+      return ceil(font.ascender - font.descender + font.leading)
+    }()
+  #endif
 
   /// Clamped against the laid-out document end rather than the text view's own
   /// published height, and **not clamped at all** if that end is unknown: an

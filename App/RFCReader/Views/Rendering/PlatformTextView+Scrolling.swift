@@ -21,19 +21,17 @@ extension PlatformTextView {
     #endif
   }
 
-  /// The top of the part of the viewport nothing covers — the toolbar's bottom
-  /// edge — in the text view's own coordinates. Not `viewportTop` moved by an
-  /// inset: on macOS the text view's `visibleRect` stops at its own top, so at the
-  /// top of a document it reads 0 where the clip view is showing the toolbar's
-  /// height above it.
-  var unobscuredTop: CGFloat {
-    #if canImport(UIKit)
-      return contentOffset.y + adjustedContentInset.top
-    #else
+  #if !canImport(UIKit)
+    /// The top of the part of the viewport nothing covers — the toolbar's bottom
+    /// edge — in the text view's own coordinates. Not `viewportTop` moved by an
+    /// inset: the text view's `visibleRect` stops at its own top, so at the top of
+    /// a document it reads 0 where the clip view is showing the toolbar's height
+    /// above it.
+    var unobscuredTop: CGFloat {
       guard let clip = enclosingScrollView?.contentView else { return visibleRect.minY }
       return convert(clip.bounds.origin, from: clip).y + clip.contentInsets.top
-    #endif
-  }
+    }
+  #endif
 
   /// Where the text container's origin sits inside the scrolled content.
   var containerTop: CGFloat {

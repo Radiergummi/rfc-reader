@@ -221,12 +221,15 @@ final class LibraryModel {
     }
 
     guard !key.query.isEmpty, let search else { return base }
-    let allowed = Set(base.map(\.number))
     // Every hit, not the top few hundred: the search scores and sorts all of them
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    return search.search(key.query, limit: .max).map(\.rfc).filter { allowed.contains($0.number) }
+    let hits = search.search(key.query, limit: .max)
+    // Everything is allowed in the whole library, so there is nothing to filter.
+    if case .all = filter { return hits.map(\.rfc) }
+    let allowed = Set(base.map(\.number))
+    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
   // MARK: - Scene routing

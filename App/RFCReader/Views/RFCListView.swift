@@ -64,11 +64,10 @@ struct RFCListView: View {
           }
       }
       // Where Mail says when it last checked: after the last row, scrolled to
-      // rather than pinned, so it costs the list no room. It used to sit under
-      // the sidebar, beside a count that is now the subtitle over the list.
-      // Only once every row is in the window: after a partial page it would
-      // read as the end of a list that goes on. Not under an empty search
-      // either, where the overlay already says what there is to say.
+      // rather than pinned. Only once every row is in the window — after a
+      // partial page it would read as the end of a list that goes on — and not
+      // under an empty search, where the overlay already says what there is to
+      // say.
       if limit >= rows.count, !(rows.isEmpty && library.indexState.isReady) {
         IndexStatusView()
           .frame(maxWidth: .infinity)

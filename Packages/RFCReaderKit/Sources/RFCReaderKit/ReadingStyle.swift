@@ -100,7 +100,7 @@ public enum ReaderLayout {
 public enum ToolbarTitleLayout {
   /// The leading padding the title is inset by, and as much again at the trailing
   /// edge so it stops short of the divider rather than against it.
-  static let padding: CGFloat = 8
+  public static let padding: CGFloat = 8
 
   /// Narrow enough to be worth drawing at all: below this the title is only an
   /// ellipsis, and the sidebar shows which collection is chosen anyway.
