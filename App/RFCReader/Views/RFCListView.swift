@@ -138,5 +138,20 @@ struct RFCRow: View {
       }
     }
     .padding(.vertical, 2)
+    // One element, not five: VoiceOver read the number, the year, the title, the
+    // status and the group as separate stops per row (#156).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  /// What a row is, in the order a listener needs it: which document, what it is
+  /// called, and what state it is in.
+  private var accessibilityLabel: String {
+    var parts = [rfc.id.displayName, rfc.title, rfc.currentStatus.displayName]
+    if rfc.isObsolete { parts.append("Obsolete") }
+    if let group = rfc.workingGroup { parts.append("Working group \(group)") }
+    parts.append(String(rfc.date.year))
+    if isBookmarked { parts.append("Bookmarked") }
+    return parts.joined(separator: ", ")
   }
 }

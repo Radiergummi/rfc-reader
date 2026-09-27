@@ -581,6 +581,9 @@ struct TableOfContentsView: View {
             .fontWeight(section.anchor == current ? .semibold : .regular)
         }
         .buttonStyle(.plain)
+        // Weight alone marks the current section only for someone who can see it
+        // (#156).
+        .accessibilityAddTraits(section.anchor == current ? .isSelected : [])
       }
     }
     .listStyle(.sidebar)
