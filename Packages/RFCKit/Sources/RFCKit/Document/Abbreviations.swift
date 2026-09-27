@@ -2,7 +2,7 @@ import Foundation
 
 /// An abbreviation the document expands itself, so a reader can be shown the
 /// expansion wherever the abbreviation is used (issue #67).
-public struct Abbreviation: Sendable, Hashable {
+public struct Abbreviation: Sendable, Hashable, Codable {
   /// As written between the parentheses: `TLS`, `IPv6`, `TCs`.
   public var short: String
   /// The author's own words for it, as first written: `Transport Layer Security`.
