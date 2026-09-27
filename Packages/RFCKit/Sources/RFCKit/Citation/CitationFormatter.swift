@@ -127,18 +127,20 @@ public struct CitationFormatter: Sendable {
 
   /// Text for a brace-delimited BibTeX field. An unbalanced brace ends the field
   /// early, `%` starts a comment and `&` is LaTeX's alignment character, so a title
-  /// holding any of them made the whole entry invalid (#150). A backslash of the
-  /// text's own is spelled out first, because left alone it would pair with the
-  /// escape before a brace and leave the brace unescaped.
+  /// holding any of them made the whole entry invalid (#150). Braces are spelled
+  /// out rather than escaped, because BibTeX counts a brace whether or not a
+  /// backslash precedes it, so `\{` only works for braces that already pair up. A
+  /// backslash of the text's own is spelled out too, so it can't start a command.
   static func bibtexEscaped(_ text: String) -> String {
     var escaped = ""
     for character in text {
-      if character == "\\" {
-        escaped.append("\\textbackslash{}")
-        continue
+      switch character {
+      case "\\": escaped.append("\\textbackslash{}")
+      case "{": escaped.append("\\textbraceleft{}")
+      case "}": escaped.append("\\textbraceright{}")
+      case "%", "&": escaped.append("\\\(character)")
+      default: escaped.append(character)
       }
-      if "{}%&".contains(character) { escaped.append("\\") }
-      escaped.append(character)
     }
     return escaped
   }
