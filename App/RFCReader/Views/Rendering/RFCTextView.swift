@@ -17,7 +17,7 @@ struct RFCTextView: View {
   let built: BuiltDocument
   /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
   let lastVisibleAnchor: VisibleAnchorBox
-  let scrollTarget: String?
+  let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
@@ -35,7 +35,7 @@ struct RFCTextView: View {
   init(
     built: BuiltDocument,
     lastVisibleAnchor: VisibleAnchorBox,
-    scrollTarget: String?,
+    scrollTarget: ReaderScrollTarget?,
     onScrollHandled: @escaping () -> Void,
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
@@ -78,13 +78,23 @@ struct RFCTextView: View {
   }
 }
 
+/// Where the reader is asked to scroll, and whether it should get there smoothly.
+///
+/// Smoothly only within a document already on screen — a link, a contents row, Back
+/// within it — where the motion says which way the jump went. Arriving at a
+/// document, or at a restored reading position, is not a movement the reader made.
+struct ReaderScrollTarget: Equatable {
+  let anchor: String
+  let animated: Bool
+}
+
 /// Everything the two representables hand their shared coordinator, and the one
 /// place that handing-over is written. Declared outside the `#if` so a new callback
 /// is added once instead of in both platform structs and both update bodies.
 struct ReaderInputs {
   let built: BuiltDocument
   let lastVisibleAnchor: VisibleAnchorBox
-  let scrollTarget: String?
+  let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
@@ -119,7 +129,7 @@ struct ReaderInputs {
       coordinator.install(built)
     }
     if let scrollTarget {
-      coordinator.scroll(to: scrollTarget)
+      coordinator.scroll(to: scrollTarget.anchor, animated: scrollTarget.animated)
     }
   }
 }
@@ -217,6 +227,10 @@ struct ReaderInputs {
       // builder gives an external link an explicit `.toolTip` of its own URL
       // instead, so only a reference goes without — it has its preview.
       textView.displaysLinkToolTips = false
+      // The default underlines every link, as a rendering attribute nothing in the
+      // storage can take back. Whether links are underlined is a setting, so the
+      // builder underlines them itself when asked (`ReadingStyle.underlinesLinks`).
+      textView.linkTextAttributes?[.underlineStyle] = nil
       textView.textLayoutManager?.delegate = context.coordinator
       textView.delegate = context.coordinator
       textView.quickLookReference = { [weak coordinator = context.coordinator] event in

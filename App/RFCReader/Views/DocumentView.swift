@@ -29,6 +29,7 @@ struct DocumentView: View {
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage("underlineLinks") private var underlineLinks = false
 
   let id: DocumentID
 
@@ -111,22 +112,27 @@ struct DocumentView: View {
   #endif
 
   /// Everything a build depends on. One trigger, so the document is built in one
-  /// place whatever changed — a new RFC, the font-size slider, or a window resize.
+  /// place whatever changed — a new RFC, a reading setting, or a window resize.
   private struct BuildInputs: Equatable {
     /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
     /// triggers the build. `load()` only ever fetches into a view with no
     /// document, so every load arrives as a false → true transition.
     let hasDocument: Bool
     let fontSize: Double
+    let underlineLinks: Bool
     let column: CGFloat?
 
     var style: ReadingStyle? {
-      column.map { ReadingStyle(bodySize: fontSize, measure: $0) }
+      column.map {
+        ReadingStyle(bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks)
+      }
     }
   }
 
   private var buildInputs: BuildInputs {
-    BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
+    BuildInputs(
+      hasDocument: document != nil, fontSize: fontSize, underlineLinks: underlineLinks,
+      column: column)
   }
 
   /// The reader, and on macOS only the reader.
@@ -181,6 +187,11 @@ struct DocumentView: View {
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
+        #if !os(macOS)
+          reader.openPanel = { [isPresented = $showTableOfContents] in
+            withAnimation(.snappy) { isPresented.wrappedValue = true }
+          }
+        #endif
       }
       .onChange(of: buildInputs, initial: true) {
         // Appearing again fires this with nothing changed. A build already made,
@@ -195,13 +206,13 @@ struct DocumentView: View {
         work.build = Task(name: "Build document") { await rebuild() }
       }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section)
+        jump(toSection: request?.section, animated: true)
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
   }
 
-  @State private var scrollTarget: String?
+  @State private var scrollTarget: ReaderScrollTarget?
 
   /// The width channel. It wraps everything, including the loading state, so the
   /// column is known before there is a document to build.
@@ -281,11 +292,11 @@ struct DocumentView: View {
       .onAppear {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
-          jump(toSection: request.section)
+          jump(toSection: request.section, animated: false)
         } else if let saved = storedPosition()?.anchor,
           document.section(anchor: saved) != nil
         {
-          scrollTarget = saved
+          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
     } else if let loadError {
@@ -518,10 +529,11 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?) {
+  private func jump(toSection section: String?, animated: Bool) {
     guard let section, let document else { return }
-    scrollTarget =
+    let anchor =
       (document.section(number: section) ?? document.section(anchor: section))?.anchor ?? section
+    scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
@@ -543,6 +555,8 @@ struct DocumentView: View {
     switch LinkDestination.resolve(url, from: id, activation: activation) {
     case .jump(let section):
       navigation.jump(toSection: section)
+    case .reference(let anchor):
+      reader.reveal(reference: anchor)
     case .document(let link):
       library.open(link, activation: activation, in: navigation)
     case .unhandled:

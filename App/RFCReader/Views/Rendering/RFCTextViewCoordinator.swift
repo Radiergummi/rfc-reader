@@ -388,19 +388,19 @@ final class RFCTextViewCoordinator: NSObject {
   /// fragment that has not been laid out has no frame to scroll to. So the jump
   /// pays for its own target: everything above it is laid out first, which is what
   /// makes its y the real one.
-  func scroll(to anchor: String) {
+  func scroll(to anchor: String, animated: Bool) {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
     guard let offset = built?.anchors.offset(of: anchor) else { return }
     // Set here as well as by tracking, which does not run while a resize waits
     // for its rebuild: a jump in that window is where the rebuild must land.
     tracker.jumped(to: ReadingPlace(anchor: anchor, offset: 0))
-    scroll(toOffset: offset)
+    scroll(toOffset: offset, animated: animated)
   }
 
   /// Puts the line holding `offset` at the top of the viewport; see
   /// `FragmentGeometry.scrollTarget(of:in:fragmentStart:)`.
-  private func scroll(toOffset offset: Int) {
+  private func scroll(toOffset offset: Int, animated: Bool = false) {
     guard let textView, let layout = textView.textLayoutManager else { return }
     ensureLayout(through: offset + Self.layoutSlice)
     guard let location = layout.location(atOffset: offset),
@@ -409,7 +409,7 @@ final class RFCTextViewCoordinator: NSObject {
     let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
     let line = FragmentGeometry.scrollTarget(
       of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart)
-    scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line)
+    scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line, animated: animated)
     reportVisibleAnchor()
   }
 
@@ -510,7 +510,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// published height, and **not clamped at all** if that end is unknown: an
   /// overshoot self-corrects on the next scroll, whereas clamping to the top
   /// silently rewrites the reading position.
-  private func scrollContainerTopTo(_ containerY: CGFloat) {
+  private func scrollContainerTopTo(_ containerY: CGFloat, animated: Bool) {
     guard let textView else { return }
     textView.syncLayout()
     let top = textView.containerTop
@@ -519,7 +519,7 @@ final class RFCTextViewCoordinator: NSObject {
       let content = top + end + textView.containerBottom
       target = min(target, max(0, content - textView.viewportHeight))
     }
-    textView.scroll(toY: target)
+    textView.scroll(toY: target, animated: animated)
   }
 
   // MARK: - References
