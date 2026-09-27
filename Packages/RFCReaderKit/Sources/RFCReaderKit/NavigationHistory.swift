@@ -31,8 +31,16 @@ public struct NavigationHistory: Sendable {
   /// Whether the last move struck out somewhere new, rather than stepping back or
   /// forward through what was already here.
   private var arrivedByGoing = false
+  /// Whether `current` was put away with `hide()`.
+  private var isHidden = false
 
   public init() {}
+
+  /// What is on screen: `current`, unless it was hidden.
+  ///
+  /// This is what a list's selection reads, so it has to be able to say "nothing"
+  /// while the history still holds where the reader was (#261).
+  public var shown: Place? { isHidden ? nil : current }
 
   public var canGoBack: Bool { !backward.isEmpty }
   public var canGoForward: Bool { !forward.isEmpty }
@@ -44,7 +52,8 @@ public struct NavigationHistory: Sendable {
   /// once the offer is settled: it is for undoing a jump just made, not for
   /// walking the history.
   public var returnOffer: Place? {
-    guard arrivedByGoing, let current, let previous = backward.last, previous.id == current.id
+    guard arrivedByGoing, let current = shown, let previous = backward.last,
+      previous.id == current.id
     else { return nil }
     return previous
   }
@@ -61,7 +70,14 @@ public struct NavigationHistory: Sendable {
   /// through. Striking out in a new direction drops whatever was ahead, as a browser
   /// does.
   public mutating func go(to place: Place, leaving position: String? = nil) {
+    defer { isHidden = false }
     guard place != current else { return }
+    // Reopening the hidden document from its row, which names no section: back
+    // where it was, and not a jump to offer a way back from.
+    if isHidden, place.section == nil, place.id == current?.id {
+      arrivedByGoing = false
+      return
+    }
     if var previous = current {
       previous.section = position ?? previous.section
       backward.append(previous)
@@ -82,6 +98,7 @@ public struct NavigationHistory: Sendable {
     }
     current = previous
     arrivedByGoing = false
+    isHidden = false
     return previous
   }
 
@@ -95,6 +112,17 @@ public struct NavigationHistory: Sendable {
     }
     current = next
     arrivedByGoing = false
+    isHidden = false
     return next
+  }
+
+  /// Put the current place away without leaving it: going back to the list on an
+  /// iPhone, or deselecting the row on a Mac.
+  ///
+  /// The place stays current, so Back and Forward work from the list, and going
+  /// to a new place records it as the one left behind, as it would had it stayed
+  /// on screen.
+  public mutating func hide() {
+    isHidden = true
   }
 }

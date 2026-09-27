@@ -21,11 +21,6 @@ struct RFCListView: View {
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
-  #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    /// The row a collapsed split view has pushed. See `collapsedSelection`.
-    @State private var pushedSelection: DocumentID?
-  #endif
 
   /// Built once per body pass and shared by every row: `RFCRow` used to scan the
   /// whole bookmark list itself, which is a linear search per row over a list that
@@ -44,23 +39,6 @@ struct RFCListView: View {
     )
   }
 
-  /// Selecting a row is a navigation, so it goes through the history rather than
-  /// assigning the selection behind its back.
-  private var selectionBinding: Binding<DocumentID?> {
-    #if !os(macOS)
-      if horizontalSizeClass == .compact {
-        return collapsedSelection(pushed: $pushedSelection) { navigation.select($0) }
-      }
-    #endif
-    return Binding(
-      get: { navigation.selection },
-      // Not `library.open(_:activation:in:)` like every other open: a selection
-      // binding is handed the outcome, not the click, and Command-click on a
-      // list row is the platform's multi-select chord rather than ours to take.
-      set: { if let id = $0 { navigation.select(id) } }
-    )
-  }
-
   var body: some View {
     @Bindable var navigation = navigation
     let bookmarked = bookmarkedNumbers
@@ -69,7 +47,11 @@ struct RFCListView: View {
     // memoising.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
-    List(selection: selectionBinding) {
+    // Selecting a row is a navigation: the setter goes through the history. Not
+    // `library.open(_:activation:in:)` like every other open: a selection binding
+    // is handed the outcome, not the click, and Command-click on a list row is the
+    // platform's multi-select chord rather than ours to take.
+    List(selection: $navigation.selection) {
       ForEach(rows.prefix(limit)) { rfc in
         RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
           .tag(rfc.id)
@@ -105,18 +87,9 @@ struct RFCListView: View {
     // already scrolled down through.
     .onChange(of: navigation.selection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
-      #if !os(macOS)
-        // A document opened from elsewhere — a citation, Back in the reader's
-        // menu, a deep link — is pushed like a tapped row.
-        pushedSelection = navigation.selection
-      #endif
     }
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
-      // Collapsing shows what was open, not the list above it.
-      .onChange(of: horizontalSizeClass) {
-        pushedSelection = navigation.selection
-      }
     #endif
   }
 

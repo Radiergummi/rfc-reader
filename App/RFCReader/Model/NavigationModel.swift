@@ -36,11 +36,48 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
-  var filter: LibraryFilter = .all
+  private var filterChoice = KeptSelection(LibraryFilter.all)
   var searchText = ""
   var isShowingGoToSheet = false
 
-  var selection: DocumentID? { history.current?.id }
+  /// What the list lists: the last filter chosen, whether or not the sidebar still
+  /// shows it as selected.
+  var filter: LibraryFilter { filterChoice.value }
+
+  /// The sidebar's `List(selection:)`, bound to directly.
+  ///
+  /// Nil when a collapsed split view has gone back to the sidebar. A Mac refuses
+  /// it: the sidebar is always beside the list there, and shows which filter feeds
+  /// it, so a click in its blank space or a Command-click must not leave it showing
+  /// none.
+  var sidebarSelection: LibraryFilter? {
+    get { filterChoice.selection }
+    set {
+      #if os(macOS)
+        guard newValue != nil else { return }
+      #endif
+      filterChoice.selection = newValue
+    }
+  }
+
+  /// The document list's `List(selection:)`, bound to directly, and what the reader
+  /// shows.
+  ///
+  /// Setting a row is `select(_:)`. Setting nil — a collapsed split view going back
+  /// to the list, or a Mac deselecting the row — hides the document and leaves the
+  /// history alone, so Back and Forward still work (#261). The selection used to be
+  /// `history.current`, which never becomes nil again, and every list bound to it
+  /// needed a workaround of its own for the nil a pop writes.
+  var selection: DocumentID? {
+    get { history.shown?.id }
+    set {
+      if let newValue {
+        select(newValue)
+      } else {
+        history.hide()
+      }
+    }
+  }
   private(set) var scrollRequest: ScrollRequest?
 
   var canGoBack: Bool { history.canGoBack }
@@ -65,7 +102,7 @@ final class NavigationModel: Identifiable {
     go(to: Place(id: id, section: link.section))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
-    filter = .all
+    sidebarSelection = .all
   }
 
   func open(_ id: DocumentID, section: String? = nil, in index: RFCIndex?) {

@@ -73,10 +73,28 @@ import SwiftUI
           }
         }
       }
-      .onAppear { library.register(navigation) }
+      .onAppear {
+        // Collapsed, the sidebar is a list of push rows, and a filter selected
+        // before anything was tapped reads as a tap left behind. The list still
+        // lists it: `filter` keeps its value. Before registering, which may open a
+        // waiting link and reveal it in the list.
+        if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
+        library.register(navigation)
+      }
+      // Side by side, the sidebar shows which filter feeds the list.
+      .onChange(of: horizontalSizeClass) {
+        if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {
+          navigation.sidebarSelection = navigation.filter
+        }
+      }
       .onDisappear { library.unregister(navigation) }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .onChange(of: navigation.selection) {
+        library.activate(navigation)
+        // Nothing on screen: the panel must not go on describing the document
+        // that was.
+        if navigation.selection == nil { reader.clear() }
+      }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
