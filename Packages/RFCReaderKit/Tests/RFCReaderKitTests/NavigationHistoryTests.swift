@@ -75,6 +75,68 @@ struct NavigationHistoryTests {
     #expect(history.returnOffer == place(9110, "section-2"))
   }
 
+  // MARK: - Leaving the document without leaving the history (#261)
+
+  /// Going back to the list on an iPhone, or deselecting the row on a Mac, puts
+  /// nothing on screen. The history is not where that decision is undone: Back
+  /// and Forward still work from the list.
+  @Test func hidingPutsNothingOnScreenAndKeepsTheHistory() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    #expect(history.shown == nil)
+    #expect(history.current == place(8999))
+    #expect(history.canGoBack)
+  }
+
+  /// The row just left is the likeliest one to be tapped again, and `go` treats
+  /// the place already current as no navigation at all.
+  @Test func goingToTheHiddenPlaceShowsItWithoutANewEntry() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    history.go(to: place(8999))
+    #expect(history.shown == place(8999))
+    #expect(history.goBack() == place(9110))
+    #expect(!history.canGoBack)
+  }
+
+  @Test func goingSomewhereElseRecordsTheHiddenPlace() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.hide()
+    history.go(to: place(8999))
+    #expect(history.shown == place(8999))
+    #expect(history.goBack() == place(9110))
+  }
+
+  @Test func steppingBackOrForwardShowsWhereItLands() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    _ = history.goBack()
+    #expect(history.shown == place(9110))
+    history.hide()
+    _ = history.goForward()
+    #expect(history.shown == place(8999))
+  }
+
+  /// The offer is drawn over the document it returns within.
+  @Test func nothingOnScreenOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    #expect(history.returnOffer == nil)
+  }
+
+  @Test func aFreshHistoryShowsNothing() {
+    #expect(NavigationHistory().shown == nil)
+  }
+
   @Test func aFreshHistoryGoesNowhere() {
     let history = NavigationHistory()
     #expect(history.current == nil)
