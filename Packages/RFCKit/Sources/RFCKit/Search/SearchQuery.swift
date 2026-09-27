@@ -112,8 +112,28 @@ public enum SearchQuery {
       case "has": ["xml"]
       default: []
       }
-    return offer(values.filter { $0.hasPrefix(typed) }.map { "\(qualifier.name):\($0)" })
+    var matching = values.filter { $0.hasPrefix(typed) }
+    if qualifier.name == "status" {
+      for (spelling, value) in statusSpellings
+      where spelling.hasPrefix(typed) && !matching.contains(value) {
+        matching.append(value)
+      }
+    }
+    // A value outside a closed vocabulary is a typo `parseQuery` would search as
+    // text, or drop. Working groups are not closed: any name filters.
+    if matching.isEmpty, !typed.isEmpty, ["status", "stream", "has"].contains(qualifier.name) {
+      return [Suggestion(completion: query, isUnknown: true)]
+    }
+    return offer(matching.map { "\(qualifier.name):\($0)" })
   }
+
+  /// The long `status:` spellings `parseQuery` also reads, and the value each means.
+  private static let statusSpellings: [(String, String)] = [
+    ("standard", "std"),
+    ("standards", "std"),
+    ("informational", "info"),
+    ("experimental", "exp"),
+  ]
 
   /// Every working group the index names, lowercased as `parseQuery` matches them,
   /// most documents first. Not one with a space in its name ("NON WORKING GROUP"):

@@ -101,6 +101,23 @@ struct SearchQueryTests {
     #expect(try completions("year:20").isEmpty)
   }
 
+  /// A known qualifier with a value outside its vocabulary is as much a typo as an
+  /// unknown qualifier: `parseQuery` searches `status:stnd` as text, and ignores
+  /// `stream:ieft` altogether.
+  @Test(arguments: ["status:stnd", "has:pdf", "stream:ieft"])
+  func `a value the qualifier does not know is marked as unknown`(word: String) throws {
+    let suggestions = SearchQuery.suggestions(for: "cache \(word)", in: try Fixtures.sampleIndex())
+    #expect(suggestions == [SearchQuery.Suggestion(completion: "cache \(word)", isUnknown: true)])
+  }
+
+  /// `parseQuery` takes the long spellings as well; completion offers the short one
+  /// they mean rather than nothing.
+  @Test func `a long status spelling completes to its short one`() throws {
+    #expect(try completions("status:standard") == ["status:std"])
+    #expect(try completions("is:informational") == ["status:info"])
+    #expect(try completions("status:experimental") == ["status:exp"])
+  }
+
   /// Still searched for as text, as `parseQuery` does; the suggestion says the
   /// qualifier means nothing, so a typo is not silently a word.
   @Test func `an unknown qualifier is marked as unknown`() throws {
