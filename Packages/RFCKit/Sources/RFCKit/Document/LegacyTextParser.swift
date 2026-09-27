@@ -1488,7 +1488,7 @@ public struct LegacyTextParser: Sendable {
   nonisolated(unsafe) private static let numberedItemPattern =
     #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
   /// `containsArtwork` answers the same question byte by byte; an alternative added
-  /// here has to be added there, and `theByteScansAgreeWithTheRegexes` is the guard.
+  /// here has to be added there, and `` `the byte scans agree with the regexes` `` is the guard.
   nonisolated(unsafe) static let artworkPattern =
     #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
   /// A run of three or more spaces between two non-space characters, not following
@@ -2246,7 +2246,7 @@ struct InlineLinker: Sendable {
   /// literal is absent is skipped without changing what `link` returns.
   /// A pattern above that stops needing its literal -- a `(?i)`, a lowercase
   /// `section`, a `www.` URL -- has to change this too, or its matches are dropped
-  /// without a word; `theLiteralGateSkipsNoMatch` is the guard.
+  /// without a word; `` `the literal gate skips no match` `` is the guard.
   struct Literals {
     var bracket = false, rfc = false, rfcs = false, section = false, http = false
     var any: Bool { bracket || rfc || section || http }

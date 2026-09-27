@@ -7,7 +7,7 @@ import Testing
 struct ProseDiagnosticsTests {
   // MARK: A block that passes
 
-  @Test func plainProsePassesEveryGuard() {
+  @Test func `plain prose passes every guard`() {
     let lines = [
       "   The key words in this document are to be interpreted as",
       "   described in the relevant specification, and carry their",
@@ -24,7 +24,7 @@ struct ProseDiagnosticsTests {
 
   /// The margin matters as much as the verdict: #43 samples blocks that miss by a
   /// little, and an indent of 7 is a different proposition from an indent of 20.
-  @Test func indentTooDeepCarriesTheIndentThatFailed() {
+  @Test func `indent too deep carries the indent that failed`() {
     let lines = [
       "       An example paragraph set well past the body margin, which the",
       "       parser treats as preformatted for that reason alone.",
@@ -40,7 +40,7 @@ struct ProseDiagnosticsTests {
   /// depth, and a single line has no other guard to keep it artwork. Refused within
   /// the cap, it is refused for what it says rather than for its indent, and the
   /// report names that apart: an indent of 9 is not too deep in such a document.
-  @Test func aDeeperCapExcusesSentencesButNotCode() {
+  @Test func `a deeper cap excuses sentences but not code`() {
     let sentences = [
       "         Using a word that has strong semantic implications in the",
       "         current context will cause confusion.",
@@ -56,7 +56,7 @@ struct ProseDiagnosticsTests {
   /// Nor does it excuse a MIB module's text, which is sentences where it is a
   /// `DESCRIPTION` or a comment: a block with an assignment in it, or a comment of
   /// several lines. A list marked with dashes is not one.
-  @Test func aDeeperCapDoesNotExcuseAModulesText() {
+  @Test func `a deeper cap does not excuse a modules text`() {
     let comment = [
       "         -- The peer table.  This table holds one entry for each",
       "         -- peer, with what is known about the connection to it.",
@@ -91,7 +91,7 @@ struct ProseDiagnosticsTests {
   /// are sentences too, and where the module is most of the document they outnumber
   /// the body enough to carry the quarter into the module: the cap rose with it, and
   /// the module's text became paragraphs. A clause's quoted string is not counted.
-  @Test func theProseCapFollowsTheBodyAndNotAModule() {
+  @Test func `the prose cap follows the body and not a module`() {
     let body = [
       "   This memo defines a portion of the management information base for",
       "   use with the network management protocols in the community.",
@@ -124,7 +124,7 @@ struct ProseDiagnosticsTests {
       "a clause closed on its own line leaves the lines after it counted")
   }
 
-  @Test func firstLineIndentOutOfRangeIsDistinctFromIndent() {
+  @Test func `first line indent out of range is distinct from indent`() {
     let lines = [
       "                The opening line is set far too deep relative to the body",
       "   of the paragraph, which sits at the ordinary margin.",
@@ -136,7 +136,7 @@ struct ProseDiagnosticsTests {
     #expect(diagnosis.firstLineIndent == 13)
   }
 
-  @Test func raggedIndentIsReportedSeparately() {
+  @Test func `ragged indent is reported separately`() {
     // The block's indent comes from its *second* line, so the ragged line has to be
     // the third: a ragged second line reads as a first-line indent instead.
     let lines = [
@@ -149,7 +149,7 @@ struct ProseDiagnosticsTests {
   }
 
   /// The case #43 exists to find: prose rejected on a single incidental match.
-  @Test func oneArrowRejectsAnOtherwiseOrdinaryParagraph() {
+  @Test func `one arrow rejects an otherwise ordinary paragraph`() {
     let lines = [
       "   The client moves to the established state, and the transition",
       "   from open -> closed is described in the following section of",
@@ -164,7 +164,7 @@ struct ProseDiagnosticsTests {
     #expect(diagnosis.sentenceRatio > 0.6)
   }
 
-  @Test func artworkMatchesAreCountedNotJustDetected() {
+  @Test func `artwork matches are counted not just detected`() {
     let lines = [
       "   +--------+      +--------+",
       "   | Client | ---> | Server |",
@@ -183,7 +183,7 @@ struct ProseDiagnosticsTests {
   /// Asserting the five tells inside a filter on `agreed` would be vacuous — `agreed`
   /// *is* their conjunction. What is worth pinning is the consequence: agreeing tells
   /// are what excuse a justified block's padding from the internal-gap guard.
-  @Test func justifiedProseIsExcusedTheInternalGapGuard() throws {
+  @Test func `justified prose is excused the internal gap guard`() throws {
     let text = try Fixtures.string("rfc757.txt")
     let blocks = LegacyTextParser.proseDiagnostics(for: text)
     let justified = blocks.filter { $0.diagnosis.justification.agreed }
@@ -193,7 +193,7 @@ struct ProseDiagnosticsTests {
     }
   }
 
-  @Test func aFailedTellIsNamed() {
+  @Test func `a failed tell is named`() {
     // A common right margin and spread padding, but a gutter running through it:
     // a two-column layout, not justified prose.
     let lines = [
@@ -213,7 +213,7 @@ struct ProseDiagnosticsTests {
   /// linkify to nothing, so it may end with fewer — never with more, and never with
   /// none at all.
   @Test(arguments: ["rfc2119.txt", "rfc1149.txt", "rfc757.txt", "rfc1245.txt"])
-  func everyClassifiedBlockIsAlsoDiagnosed(fixture: String) throws {
+  func `every classified block is also diagnosed`(fixture: String) throws {
     let text = try Fixtures.string(fixture)
     let diagnosed = LegacyTextParser.proseDiagnostics(for: text)
     let classified = Self.blockCount(LegacyTextParser.parse(text).sections)
@@ -232,7 +232,7 @@ struct ProseDiagnosticsTests {
   /// report does not diagnose it either: RFC 1441's centred status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
   /// RFC 757's phone number is the whole of its lead-in, and the report has none.
-  @Test func theTitlePagesLeftoversAreNotDiagnosed() throws {
+  @Test func `the title pages leftovers are not diagnosed`() throws {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc757.txt"))
       .filter { $0.section.isEmpty }
     #expect(leadIn.isEmpty, "\(leadIn.map(\.firstLine))")
@@ -243,7 +243,7 @@ struct ProseDiagnosticsTests {
   /// blocks the parser dropped. The title here is made up to be one RFC 873's
   /// `Bedford, Massachusetts` line repeats; the page sets its own in capitals, so the
   /// given one is the title `parse` uses.
-  @Test func theReportFiltersTheLeadInByTheTitleParseIsGiven() throws {
+  @Test func `the report filters the lead in by the title parse is given`() throws {
     let text = try Fixtures.string("rfc873.txt")
     let title = "The Illusion of Vendor Support, Bedford, Massachusetts"
     let leadIn = { (title: String?) in
@@ -260,7 +260,7 @@ struct ProseDiagnosticsTests {
   /// list item's prose verdict was never actually taken. A hanging marker outdents the
   /// first line, so these fail `firstLineIndentOutOfRange` almost without exception —
   /// and counting that as a failure of the prose test would misreport the parser.
-  @Test func listItemsAreMarkedAsNeverReachingTheProseTest() throws {
+  @Test func `list items are marked as never reaching the prose test`() throws {
     let blocks = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc1245.txt"))
     let lists = blocks.filter(\.claimedByList)
     #expect(!lists.isEmpty, "RFC 1245 is full of bulleted lists")
@@ -279,7 +279,7 @@ struct ProseDiagnosticsTests {
   /// vetoes, so stopping at the first one cannot change the answer, and this is what
   /// says so for every block of four real documents rather than in a comment.
   @Test(arguments: ["rfc2119.txt", "rfc1149.txt", "rfc757.txt", "rfc1245.txt", "rfc5234.txt"])
-  func shortCircuitingAgreesWithTheFullDiagnosis(fixture: String) throws {
+  func `short circuiting agrees with the full diagnosis`(fixture: String) throws {
     // Any group of lines will do — the invariant is a property of `diagnose`, not of
     // the parser's segmentation — so this splits the document at blank lines and gets
     // far more varied inputs than the blocks alone.
@@ -297,7 +297,7 @@ struct ProseDiagnosticsTests {
     #expect(checked > 10)
   }
 
-  @Test func everyBlockCarriesEnoughToFindItAgain() throws {
+  @Test func `every block carries enough to find it again`() throws {
     let blocks = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc2119.txt"))
     let sample = try #require(blocks.first { $0.diagnosis.isProse })
     #expect(!sample.firstLine.isEmpty)
@@ -305,14 +305,14 @@ struct ProseDiagnosticsTests {
     #expect(sample.firstLine.count <= 80, "truncated for a report, not a second copy of the corpus")
   }
 
-  @Test func rejectionsAreRecordedInEvaluationOrder() {
+  @Test func `rejections are recorded in evaluation order`() {
     let lines = ["          +-+-+-+-+", "          | A | B |", "          +-+-+-+-+"]
     let diagnosis = LegacyTextParser.diagnose(lines)
     #expect(diagnosis.rejections.first == .indentTooDeep, "indent is tested before content")
     #expect(diagnosis.rejections.contains(.artworkPattern))
   }
 
-  @Test func emptyInputIsRejectedWithoutCrashing() {
+  @Test func `empty input is rejected without crashing`() {
     let diagnosis = LegacyTextParser.diagnose([])
     #expect(diagnosis.rejections == [.noLines])
   }
@@ -324,7 +324,7 @@ struct ProseDiagnosticsTests {
   /// exactly what its regex would, over every line of every fixture and over the shapes
   /// the scans treat specially: the gap's punctuation rule, runs at the trimmed edges,
   /// `\r\n`, and lines that are not ASCII.
-  @Test func theByteScansAgreeWithTheRegexes() throws {
+  @Test func `the byte scans agree with the regexes`() throws {
     let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
     var lines = [
       "a.   b", "a    b", "a   b", "a  \tb", "    four leading", "x\u{0B}\u{0C} y",

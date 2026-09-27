@@ -11,7 +11,7 @@ Everything goes through the `Makefile`:
 | `make check` | `lint build test` — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK, not part of `make check`) |
-| `swift test --package-path Packages/RFCKit --filter <testName>` | one test or suite |
+| `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | both Swift packages (RFCKit, corpus-build) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
@@ -37,7 +37,7 @@ Swift 6 language mode with complete strict concurrency, everywhere.
 
 Standing constraints those documents establish, which are easy to violate by accident:
 
-- **The reader body is one text storage.** `RFCTextView`/`RFCTextViewCoordinator` lay out a single `NSTextContentStorage` per document with `UITextView`/`NSTextView`; nothing in it may become a hosted SwiftUI view. New block kinds are added to `DocumentTextBuilder` (`Packages/RFCReaderKit`), not as SwiftUI views. `BuilderCompletenessTests.nothingBecomesAnAttachment` is the guard, and it allows an attachment character only inside a `.rfcChip` run.
+- **The reader body is one text storage.** `RFCTextView`/`RFCTextViewCoordinator` lay out a single `NSTextContentStorage` per document with `UITextView`/`NSTextView`; nothing in it may become a hosted SwiftUI view. New block kinds are added to `DocumentTextBuilder` (`Packages/RFCReaderKit`), not as SwiftUI views. ``BuilderCompletenessTests.`nothing becomes an attachment` `` is the guard, and it allows an attachment character only inside a `.rfcChip` run.
 - **The App target has no test bundle, so nothing testable may live there.** Anything in the reader that is a pure function of its inputs goes in `RFCReaderKit`: where a decoration lands is `FragmentGeometry`, how wide the column is is `ReaderLayout`, what the text says is `DocumentTextBuilder`. The App target keeps only genuine UIKit/AppKit object-graph work — the representables, the coordinator's view wiring, drawing. Both of the reader's hardest bugs were index arithmetic written on the wrong side of that line, where a test could only re-implement it and check its own copy.
 - **The column is derived, not reported.** `DocumentView` computes it from its own width with `ReaderLayout` and builds once, because artwork scaling and table shape are measured against it at build time. Do not reintroduce a callback from the text view that tells the view what its column is — that is what made every document build twice.
 - **`DocumentTextBuilder` is not main-actor bound** and must stay that way: builds run in a detached task. `BuiltDocument` is `@unchecked Sendable` because a build hands its result over rather than sharing it: the builder ends with `build`, and every attribute value is immutable or made by that build alone. Paragraph styles must be immutable copies, not `NSMutableParagraphStyle` — Foundation uniques equal attribute dictionaries process-wide, so two builds share them. `BuilderHandoverTests` is the guard.
@@ -62,7 +62,7 @@ Standing constraints those documents establish, which are easy to violate by acc
 2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 
-Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
+Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test is named with a raw identifier that says what it pins, ``@Test func `a canonical label loses its brackets`()``, not a camel-cased sentence and not a display-name string beside a short name. A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
 
 The rule is about what a **document-shaped** input has to be. Anything fed to `parse` is a real RFC, because a synthetic document is exactly the thing that lacks the quirks these heuristics exist for — the justification, the tab indents, the inverted page furniture. A hand-written document tests the parser against the author's idea of an RFC.
 

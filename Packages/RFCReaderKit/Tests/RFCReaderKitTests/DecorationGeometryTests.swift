@@ -39,20 +39,20 @@ struct DecorationGeometryTests {
       padding: padding, capTop: capTop, capBottom: capBottom)
   }
 
-  @Test func linesOfDifferentWidthGetTheSameBand() {
+  @Test func `lines of different width get the same band`() {
     let narrow = rect(narrowLine)
     let wide = rect(wideLine)
     #expect(narrow.minX == wide.minX, "a staircase starts when the left edges disagree")
     #expect(narrow.width == wide.width, "a staircase starts when the widths disagree")
   }
 
-  @Test func theBandSpansTheColumnNotTheText() {
+  @Test func `the band spans the column not the text`() {
     // The widest line here is 380pt in a 600pt column; the card still covers the
     // column, or short lines leave a notch in the block.
     #expect(rect(wideLine).width == column + padding * 2)
   }
 
-  @Test func anIndentedBlockIsInsetAndNarrowedByTheSameAmount() {
+  @Test func `an indented block is inset and narrowed by the same amount`() {
     let plain = rect(wideLine)
     let indented = rect(wideLine, indent: 40)
     #expect(indented.minX == plain.minX + 40)
@@ -60,7 +60,7 @@ struct DecorationGeometryTests {
   }
 
   /// Middle fragments must sit flush, or a translucent fill darkens every seam.
-  @Test func onlyTheRunsOwnEndsCarryTheOuterPadding() {
+  @Test func `only the runs own ends carry the outer padding`() {
     let middle = rect(wideLine)
     let first = rect(wideLine, capTop: true)
     let last = rect(wideLine, capBottom: true)
@@ -72,7 +72,7 @@ struct DecorationGeometryTests {
   }
 
   /// Consecutive fragments of one run must tile with no gap and no overlap.
-  @Test func consecutiveFragmentsTileExactly() {
+  @Test func `consecutive fragments tile exactly`() {
     let upper = rect(CGRect(x: 0, y: 100, width: 40, height: 20), capTop: true)
     let lower = rect(CGRect(x: 0, y: 120, width: 380, height: 20), capBottom: true)
     #expect(upper.maxY == lower.minY)
@@ -81,7 +81,7 @@ struct DecorationGeometryTests {
   /// The block quote's rule hangs outside the band, beside the quoted text's own
   /// edge -- not the fragment's, or a short line would pull the rule inwards and it
   /// would zigzag down the quote. Consecutive fragments' rules meet end to end.
-  @Test func theRuleHangsLeftOfTheTextAtAConstantOffset() {
+  @Test func `the rule hangs left of the text at a constant offset`() {
     let narrow = placement(narrowLine, indent: 40).ruleRect(padding: 8, width: 3)
     let wide = placement(wideLine, indent: 40).ruleRect(padding: 8, width: 3)
     #expect(narrow.minX == wide.minX, "a zigzag starts when the left edges disagree")
@@ -90,7 +90,7 @@ struct DecorationGeometryTests {
     #expect(narrow.maxY == wide.minY, "consecutive fragments' rules must meet with no gap")
   }
 
-  @Test func theColumnLeftIgnoresHowWideTheFragmentIs() {
+  @Test func `the column left ignores how wide the fragment is`() {
     let narrow = FragmentGeometry.Placement(
       origin: CGPoint(x: 24, y: 0), frame: narrowLine, containerWidth: column, indent: 0
     ).columnLeft
@@ -102,7 +102,7 @@ struct DecorationGeometryTests {
 
   /// A block that mixes indents -- an authors' block alternating affiliation and
   /// address lines -- must still draw one band, at the shallowest indent.
-  @Test func theBandIndentIsTheShallowestInTheRun() {
+  @Test func `the band indent is the shallowest in the run`() {
     func para(_ indent: CGFloat) -> NSParagraphStyle {
       let style = NSMutableParagraphStyle()
       style.headIndent = indent
@@ -123,13 +123,13 @@ struct DecorationGeometryTests {
     #expect(FragmentGeometry.indent(in: text, over: whole) < deep)
   }
 
-  @Test func aRangeOutsideTheTextDoesNotTrap() {
+  @Test func `a range outside the text does not trap`() {
     let text = NSAttributedString(string: "short")
     #expect(FragmentGeometry.indent(in: text, over: NSRange(location: 0, length: 9_999)) == 0)
     #expect(FragmentGeometry.indent(in: text, over: NSRange(location: 400, length: 10)) == 0)
   }
 
-  @Test func theIndentComesFromTheParagraphStyle() {
+  @Test func `the indent comes from the paragraph style`() {
     let style = NSMutableParagraphStyle()
     style.headIndent = 32
     let text = NSAttributedString(string: "quoted", attributes: [.paragraphStyle: style])
