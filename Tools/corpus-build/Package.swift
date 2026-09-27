@@ -1,13 +1,6 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
-// Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
-// RFCKit's parsers, and writes a signed manifest for the data packs the app downloads.
-//
-// RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
-// the report and manifest types, the schema check's causes -- so tests call it rather
-// than re-implement it. corpus-build is the command line around it: arguments, files,
-// concurrency, logging (swift-log) and xmllint.
 // One set of language settings for every target, tests included (#129).
 let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("ExistentialAny"),
@@ -16,6 +9,13 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
+// Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
+// RFCKit's parsers, and writes a signed manifest for the data packs the app downloads.
+//
+// RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
+// the report and manifest types, the schema check's causes -- so tests call it rather
+// than re-implement it. corpus-build is the command line around it: arguments, files,
+// concurrency, logging (swift-log) and xmllint.
 let package = Package(
   name: "corpus-build",
   // RFCKit's floor.
