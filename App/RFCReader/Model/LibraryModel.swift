@@ -247,8 +247,9 @@ final class LibraryModel {
   }
 
   /// Waiting for the next scene to appear, because nothing can be handed to a tab
-  /// as it is made — see `openInNewScene(_:inBackground:)`. Taken in `register(_:)`
-  /// and cleared there, so no later window picks up a stale one.
+  /// as it is made — see `openInNewScene(_:inBackground:)` — or because a link was
+  /// routed before any scene existed — see `route(_:)`. Taken in `register(_:)` and
+  /// cleared there, so no later window picks up a stale one.
   private var pendingSceneLink: RFCLink?
 
   /// Registers a new scene, and gives it the link it was opened for if it was
@@ -280,13 +281,37 @@ final class LibraryModel {
   /// Sends `link` to exactly one scene: the tab already showing that document if
   /// there is one, otherwise the most recently used tab.
   ///
-  /// Focusing that tab's window when it is not the frontmost one needs its
-  /// `NSWindow`, which SwiftUI does not hand out; the state is correct either way,
-  /// and the window follows in a later change.
+  /// A link can arrive before any scene has registered -- a URL or the Open RFC
+  /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
+  /// `pendingSceneLink` instead, for `register(_:)` to hand to the first scene. One
+  /// slot, so of two links routed before then the later wins: the first scene can
+  /// show one document, and the later link is the more recent ask. It cannot race
+  /// `openInNewScene`, which is only ever reached from a scene that already exists.
+  ///
+  /// On macOS the app makes every window itself, so the tab that takes the link is
+  /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
+  /// With every window closed there is no scene coming to take the link, so one is
+  /// opened for it -- the way `openInNewScene` does -- rather than leaving it for
+  /// whatever window the reader next opens, possibly minutes later. iOS brings up a
+  /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
     let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
-    target?.open(link, in: index)
+    guard let target else {
+      pendingSceneLink = link
+      #if os(macOS)
+        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+      #endif
+      return
+    }
+    target.open(link, in: index)
+    // The tab that took the link is the most recently used one now, and where the
+    // next untargeted link belongs -- even when it already showed that document, so
+    // its selection did not change and `activate` was not called for it.
+    activate(target)
+    #if os(macOS)
+      AppDelegate.shared?.bringForward(target)
+    #endif
   }
 
   /// Opens `link` the way the click asked for: in `scene`, or in a tab of its own.
