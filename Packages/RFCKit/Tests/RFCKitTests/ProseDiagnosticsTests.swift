@@ -238,6 +238,24 @@ struct ProseDiagnosticsTests {
     #expect(leadIn.isEmpty, "\(leadIn.map(\.firstLine))")
   }
 
+  /// Whatever title `parse` is handed, the report is handed too, because the lead-in
+  /// loses the blocks that repeat it: a report given only the page's title diagnoses
+  /// blocks the parser dropped. The title here is made up to be one RFC 873's
+  /// `Bedford, Massachusetts` line repeats; the page sets its own in capitals, so the
+  /// given one is the title `parse` uses.
+  @Test func theReportFiltersTheLeadInByTheTitleParseIsGiven() throws {
+    let text = try Fixtures.string("rfc873.txt")
+    let title = "The Illusion of Vendor Support, Bedford, Massachusetts"
+    let leadIn = { (title: String?) in
+      LegacyTextParser.proseDiagnostics(for: text, title: title)
+        .filter { $0.section.isEmpty }.map(\.firstLine)
+    }
+
+    #expect(LegacyTextParser.parse(text, title: title).header.title == title)
+    #expect(leadIn(nil).contains("Bedford, Massachusetts"))
+    #expect(!leadIn(title).contains("Bedford, Massachusetts"))
+  }
+
   /// `classify` offers a block to the list parser before it asks the prose test, so a
   /// list item's prose verdict was never actually taken. A hanging marker outdents the
   /// first line, so these fail `firstLineIndentOutOfRange` almost without exception —

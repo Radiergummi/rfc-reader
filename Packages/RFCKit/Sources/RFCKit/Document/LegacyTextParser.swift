@@ -390,9 +390,13 @@ public struct LegacyTextParser: Sendable {
   /// decided about each, and why.
   ///
   /// Shares `rawSections` with `parse`, so the blocks reported here are exactly the
-  /// blocks the parser classifies — not a re-segmentation that might disagree.
-  public static func proseDiagnostics(for text: String) -> [BlockDiagnostics] {
-    let prepared = prepared(text)
+  /// blocks the parser classifies — not a re-segmentation that might disagree. `title`
+  /// is the index's title, as `parse` takes it: the lead-in loses what repeats the
+  /// title, so a report given a different one diagnoses blocks the parser dropped.
+  public static func proseDiagnostics(for text: String, title: String? = nil)
+    -> [BlockDiagnostics]
+  {
+    let prepared = prepared(text, title: title)
     return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in

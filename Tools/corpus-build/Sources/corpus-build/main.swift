@@ -203,10 +203,10 @@ enum Convert {
     var sentenceRatio: Double
   }
 
-  static func proseReport(for text: String, id: String) -> ProseReport {
+  static func proseReport(for text: String, id: String, title: String?) -> ProseReport {
     var report = ProseReport()
     report.documents += 1
-    for block in LegacyTextParser.proseDiagnostics(for: text) {
+    for block in LegacyTextParser.proseDiagnostics(for: text, title: title) {
       let diagnosis = block.diagnosis
       report.blocks += 1
       if block.claimedByList {
@@ -378,7 +378,8 @@ enum Convert {
       document.header.obsoletes = metadata.obsoletes
       document.header.updates = metadata.updates
     }
-    let prose = job.wantsDiagnostics ? proseReport(for: text, id: stem) : nil
+    let prose =
+      job.wantsDiagnostics ? proseReport(for: text, id: stem, title: metadata?.title) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
     let serializer = RFCXMLSerializer(
       options: .init(
