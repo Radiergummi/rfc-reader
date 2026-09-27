@@ -1545,6 +1545,24 @@ extension RFCDocument {
     }
   }
 
+  /// Every paragraph at any depth: inside list items, definitions, figures, block
+  /// quotes and asides as well as directly in a section.
+  var nestedParagraphs: [Paragraph] {
+    func paragraphs(in blocks: [Block]) -> [Paragraph] {
+      blocks.flatMap { block -> [Paragraph] in
+        switch block {
+        case .paragraph(let paragraph): [paragraph]
+        case .list(let list): list.items.flatMap { paragraphs(in: $0.blocks) }
+        case .definitionList(let items): items.flatMap { paragraphs(in: $0.definition) }
+        case .figure(let figure): paragraphs(in: figure.blocks)
+        case .blockQuote(let inner), .aside(let inner): paragraphs(in: inner)
+        case .preformatted, .table, .references: []
+        }
+      }
+    }
+    return paragraphs(in: everyBlock)
+  }
+
   var artworkText: [String] {
     everyBlock.compactMap {
       if case .preformatted(let art) = $0 { return art.text }

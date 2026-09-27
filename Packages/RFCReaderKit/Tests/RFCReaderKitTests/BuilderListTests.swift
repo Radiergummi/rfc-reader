@@ -66,6 +66,29 @@ struct BuilderListTests {
     #expect((paragraph?.headIndent ?? 0) > 0)
   }
 
+  /// A definition's own anchor is indexed where its text starts, and an empty
+  /// definition's at the end of its own term: after the newline would be the next
+  /// item's term, and a link to it would land one item late (#166).
+  @Test func aDefinitionsAnchorIsIndexedOnItsOwnItem() throws {
+    let items = [
+      DefinitionItem(
+        term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))],
+        definitionAnchor: "must-definition"),
+      DefinitionItem(term: [.text("SHALL")], definition: [], definitionAnchor: "shall-definition"),
+      DefinitionItem(
+        term: [.text("SHOULD")], definition: [.paragraph(Paragraph(text: "recommended"))]),
+    ]
+    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(items)), style: style)
+
+    let definition = try #require(built.anchors.offset(of: "must-definition"))
+    #expect(try Fixtures.offset(of: "absolute requirement", in: built.text) == definition)
+
+    let empty = try #require(built.anchors.offset(of: "shall-definition"))
+    let term = try Fixtures.offset(of: "SHALL", in: built.text)
+    #expect(empty == term + "SHALL".utf16.count)
+    #expect(try Fixtures.offset(of: "SHOULD", in: built.text) > empty)
+  }
+
   @Test func aListItemHangsItsMarkerLeftOfItsText() throws {
     let list = ListBlock(style: .bullet, items: [ListItem(text: "first")])
     let document = Fixtures.document(.list(list))

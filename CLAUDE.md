@@ -15,12 +15,13 @@ Everything goes through the `Makefile`:
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | both Swift packages (RFCKit, corpus-build) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
-| `make build-app` / `make build-ios` | compile the app for macOS / iOS Simulator, unsigned |
+| `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |
+| `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
 | `make install` | build Release and copy it into `/Applications` |
 | `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,464 |
 
-`make build-app DEVELOPMENT_TEAM=ABCDE12345` produces a signed, runnable bundle; without a team, signing is off and the target only proves the app compiles.
+The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle ID `me.mazetti.rfc-reader`) and may create provisioning profiles as they go. CI has no certificates and passes `CODE_SIGNING_ALLOWED=NO`, which does the same locally.
 
 ## The one structural rule
 

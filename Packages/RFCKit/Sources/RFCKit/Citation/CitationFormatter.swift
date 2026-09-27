@@ -47,9 +47,9 @@ public struct CitationFormatter: Sendable {
 
   /// The RFC Editor's own HTML has `#section-N` anchors; deep links go there.
   public static func url(for id: DocumentID, section: String? = nil) -> URL {
-    let base = RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)")
     guard let section else { return RFCEditorEndpoints.infoPage(id) }
-    return URL(string: base.absoluteString + "#\(RFCLink.fragment(for: section))") ?? base
+    return RFCLink.url(
+      RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), section: section)
   }
 
   private func sectionSuffix(_ section: String?) -> String? {
@@ -111,15 +111,37 @@ public struct CitationFormatter: Sendable {
     ]
     if let doi = rfc.doi { fields.append(("doi", "{\(doi)}")) }
     fields.append(("url", "{\(RFCEditorEndpoints.infoPage(rfc.id).absoluteString)}"))
-    if !authors.isEmpty { fields.append(("author", "{\(authors)}")) }
-    fields.append(("title", "{{\(rfc.title)}}"))
+    if !authors.isEmpty { fields.append(("author", "{\(Self.bibtexEscaped(authors))}")) }
+    fields.append(("title", "{{\(Self.bibtexEscaped(rfc.title))}}"))
     if let pages = rfc.pageCount { fields.append(("pagetotal", String(pages))) }
     fields.append(("year", String(rfc.date.year)))
     if let monthName = rfc.date.monthName {
       fields.append(("month", String(monthName.prefix(3).lowercased())))
     }
-    if let abstract = rfc.abstract { fields.append(("abstract", "{\(abstract)}")) }
+    if let abstract = rfc.abstract {
+      fields.append(("abstract", "{\(Self.bibtexEscaped(abstract))}"))
+    }
     let body = fields.map { "    \($0.0) = \($0.1)," }.joined(separator: "\n")
     return "@misc{\(key),\n\(body)\n}"
+  }
+
+  /// Text for a brace-delimited BibTeX field. An unbalanced brace ends the field
+  /// early, `%` starts a comment and `&` is LaTeX's alignment character, so a title
+  /// holding any of them made the whole entry invalid (#150). Braces are spelled
+  /// out rather than escaped, because BibTeX counts a brace whether or not a
+  /// backslash precedes it, so `\{` only works for braces that already pair up. A
+  /// backslash of the text's own is spelled out too, so it can't start a command.
+  static func bibtexEscaped(_ text: String) -> String {
+    var escaped = ""
+    for character in text {
+      switch character {
+      case "\\": escaped.append("\\textbackslash{}")
+      case "{": escaped.append("\\textbraceleft{}")
+      case "}": escaped.append("\\textbraceright{}")
+      case "%", "&": escaped.append("\\\(character)")
+      default: escaped.append(character)
+      }
+    }
+    return escaped
   }
 }

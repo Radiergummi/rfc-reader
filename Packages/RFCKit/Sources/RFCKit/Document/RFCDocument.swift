@@ -17,6 +17,10 @@ public struct RFCDocument: Sendable {
   /// Sections of the body (`<middle>` in RFCXML) and back matter (references, appendices).
   public var sections: [Section]
   public var source: DocumentSource
+  /// The abbreviations the document expands itself, keyed by the short form as
+  /// written (issue #67). Both parsers collect them as their last step, so the
+  /// expansion is read from the document the reader is shown.
+  public var abbreviations: [String: Abbreviation] = [:]
 
   public init(header: DocumentHeader, sections: [Section], source: DocumentSource) {
     self.header = header
@@ -44,51 +48,31 @@ public struct RFCDocument: Sendable {
   }
 
   /// Every RFC referenced anywhere in the document, deduplicated and sorted.
+  ///
+  /// Anywhere includes the headings and the abstract: a heading cites like prose
+  /// ("Changes from RFC 3066"), which is why titles are inlines, and walking only
+  /// section bodies missed a document cited there alone (#127). So does a reference's
+  /// annotation, which is prose too. Captions are plain strings in the model and
+  /// cannot cite.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
-    func visitInlines(_ inlines: [Inline]) {
-      for inline in inlines {
-        switch inline {
-        case .crossReference(let xref):
-          if case .document(let id, _) = xref.target { seen.insert(id) }
-        case .emphasis(let inner), .strong(let inner), .link(_, let inner):
-          visitInlines(inner)
-        default:
-          break
+    func visit(_ inlines: [Inline]) {
+      for inline in inlines.flattened {
+        if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
+          seen.insert(id)
         }
       }
     }
-    func visitBlocks(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .paragraph(let paragraph): visitInlines(paragraph.inlines)
-        case .list(let list):
-          for item in list.items {
-            visitBlocks(item.blocks)
-          }
-        case .definitionList(let items):
-          for item in items {
-            visitInlines(item.term)
-            visitBlocks(item.definition)
-          }
-        case .figure(let figure): visitBlocks(figure.blocks)
-        case .table(let table):
-          for row in table.header + table.rows {
-            for cell in row {
-              visitInlines(cell)
-            }
-          }
-        case .blockQuote(let inner), .aside(let inner): visitBlocks(inner)
-        case .references(let list):
-          for reference in list.entries {
-            if let id = reference.documentID { seen.insert(id) }
-          }
-        case .preformatted:
-          break
-        }
+    let everySection = allSections
+    for section in everySection {
+      visit(section.title)
+    }
+    for block in (header.abstract + everySection.flatMap(\.blocks)).flattened {
+      block.proseRuns.forEach(visit)
+      if case .references(let list) = block {
+        seen.formUnion(list.entries.compactMap(\.documentID))
       }
     }
-    for section in allSections { visitBlocks(section.blocks) }
     return seen.sorted()
   }
 }
@@ -107,6 +91,11 @@ public struct DocumentHeader: Sendable {
   public var updates: [DocumentID]
   public var category: String?
   public var draftName: String?
+  /// The Internet-Draft this RFC was published from, as the RFC Editor links it
+  /// (`<link rel="prev">`): a Datatracker URL naming the draft and, usually, its
+  /// final revision. The start of the document's lineage, handed over in the source
+  /// rather than looked up.
+  public var precedingDraft: URL?
 
   public init(
     id: DocumentID? = nil,
@@ -121,7 +110,8 @@ public struct DocumentHeader: Sendable {
     obsoletes: [DocumentID] = [],
     updates: [DocumentID] = [],
     category: String? = nil,
-    draftName: String? = nil
+    draftName: String? = nil,
+    precedingDraft: URL? = nil
   ) {
     self.id = id
     self.title = title
@@ -136,6 +126,7 @@ public struct DocumentHeader: Sendable {
     self.updates = updates
     self.category = category
     self.draftName = draftName
+    self.precedingDraft = precedingDraft
   }
 }
 
@@ -226,14 +217,20 @@ public indirect enum Block: Sendable {
 public struct Paragraph: Sendable {
   public var inlines: [Inline]
   public var anchor: String?
+  /// How far the author set this paragraph in, in characters of the 72-column
+  /// text rendering: RFCXML's `<t indent="3">`, which the RFC Editor uses to set
+  /// off quoted text, a continuation or a note belonging to the paragraph above.
+  /// Zero, almost always.
+  public var indent: Int
 
-  public init(_ inlines: [Inline], anchor: String? = nil) {
+  public init(_ inlines: [Inline], anchor: String? = nil, indent: Int = 0) {
     self.inlines = inlines
     self.anchor = anchor
+    self.indent = indent
   }
 
-  public init(text: String, anchor: String? = nil) {
-    self.init([.text(text)], anchor: anchor)
+  public init(text: String, anchor: String? = nil, indent: Int = 0) {
+    self.init([.text(text)], anchor: anchor, indent: indent)
   }
 
   public var plainText: String { inlines.plainText }
@@ -276,12 +273,19 @@ public struct ListItem: Sendable {
 public struct DefinitionItem: Sendable {
   public var term: [Inline]
   public var definition: [Block]
+  /// The term's anchor (`<dt>`).
   public var anchor: String?
+  /// The definition's own anchor (`<dd>`), which a document can cite apart from
+  /// the term's: RFC 9113's `PROTOCOL_ERROR` is a `<dd anchor>` (#166).
+  public var definitionAnchor: String?
 
-  public init(term: [Inline], definition: [Block], anchor: String? = nil) {
+  public init(
+    term: [Inline], definition: [Block], anchor: String? = nil, definitionAnchor: String? = nil
+  ) {
     self.term = term
     self.definition = definition
     self.anchor = anchor
+    self.definitionAnchor = definitionAnchor
   }
 }
 
@@ -330,16 +334,36 @@ public struct Table: Sendable {
   public var header: [[[Inline]]]
   public var rows: [[[Inline]]]
   public var anchor: String?
+  /// Each body row's anchor (`<tr anchor>`), by index into `rows`; shorter than
+  /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
+  /// `EventFSD` (#166).
+  public var rowAnchors: [String?]
+  /// The same for the header rows, by index into `header`. The schema lets a
+  /// `<thead>` row carry an anchor just as a body row can, and a link to one
+  /// should land as surely.
+  public var headerRowAnchors: [String?]
 
   public init(
     title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil
+    anchor: String? = nil, rowAnchors: [String?] = [], headerRowAnchors: [String?] = []
   ) {
     self.title = title
     self.number = number
     self.header = header
     self.rows = rows
     self.anchor = anchor
+    self.rowAnchors = rowAnchors
+    self.headerRowAnchors = headerRowAnchors
+  }
+
+  /// The anchor of body row `index`, if it has one.
+  public func anchor(ofRow index: Int) -> String? {
+    rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
+  }
+
+  /// The anchor of header row `index`, if it has one.
+  public func anchor(ofHeaderRow index: Int) -> String? {
+    headerRowAnchors.indices.contains(index) ? headerRowAnchors[index] : nil
   }
 }
 
@@ -382,6 +406,10 @@ public struct Reference: Sendable, Identifiable {
   public var url: URL?
   /// Free-form fallback when the reference came from legacy text and could not be structured.
   public var rawText: String?
+  /// Prose the author wrote after the entry (RFCXML's `<annotation>`), most often
+  /// pinning a living standard to the commit the RFC was written against. Empty
+  /// when there is none.
+  public var annotation: [Inline]
 
   public var id: String { anchor }
 
@@ -393,7 +421,8 @@ public struct Reference: Sendable, Identifiable {
     date: PublicationDate? = nil,
     seriesInfo: [(name: String, value: String)] = [],
     url: URL? = nil,
-    rawText: String? = nil
+    rawText: String? = nil,
+    annotation: [Inline] = []
   ) {
     self.anchor = anchor
     self.displayAnchor = displayAnchor ?? anchor
@@ -403,6 +432,7 @@ public struct Reference: Sendable, Identifiable {
     self.seriesInfo = seriesInfo
     self.url = url
     self.rawText = rawText
+    self.annotation = annotation
   }
 
   /// The RFC/BCP/STD this reference points at, when it is one.
