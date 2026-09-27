@@ -33,7 +33,14 @@ final class VisibleAnchorBox {
 /// through to a coordinator it was built before.
 @MainActor
 final class HeadingBox {
-  var bottom: CGFloat?
+  var bottom: CGFloat? {
+    didSet { if bottom != oldValue { didChange() } }
+  }
+
+  /// The reader can report its viewport before the header has measured its
+  /// heading — a text view made afresh on the way back from the original text
+  /// does — and nothing scrolls afterwards to report it again.
+  var didChange: () -> Void = {}
 }
 
 /// Everything the two representables share. Both platforms drive the same anchor
@@ -445,7 +452,7 @@ final class RFCTextViewCoordinator: NSObject {
     Task { self.onVisibleAnchorChange(anchor) }
   }
 
-  private func updateTitleReveal() {
+  func updateTitleReveal() {
     guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else { return }
     let progress = ToolbarTitleReveal.progress(
       headingBottom: header.frame.minY + bottom,

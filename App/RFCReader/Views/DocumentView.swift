@@ -229,6 +229,10 @@ struct DocumentView: View {
     if reader.showOriginal {
       OriginalTextView(text: originalText, fontSize: fontSize)
         .task { originalText = try? await library.originalText(for: id) }
+        // No header to show the title here, so the toolbar shows it throughout.
+        // On `hasDocument` rather than on appearing: loading a document clears
+        // the title back to hidden after this view may already have appeared.
+        .onChange(of: reader.hasDocument, initial: true) { reader.revealTitle(1) }
     } else if let document, let built {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(
@@ -632,7 +636,7 @@ struct DocumentHeaderView: View {
   /// as it scrolls away; see `ToolbarTitleReveal`.
   let heading: HeadingBox
 
-  static let coordinateSpace = "documentHeader"
+  nonisolated static let coordinateSpace = "documentHeader"
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {

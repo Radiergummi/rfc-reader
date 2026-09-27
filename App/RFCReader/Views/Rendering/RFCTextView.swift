@@ -102,7 +102,10 @@ struct ReaderInputs {
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
     coordinator.onTitleReveal = onTitleReveal
-    coordinator.heading = heading
+    if coordinator.heading !== heading {
+      coordinator.heading = heading
+      heading.didChange = { [weak coordinator] in coordinator?.updateTitleReveal() }
+    }
     coordinator.library = library
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
