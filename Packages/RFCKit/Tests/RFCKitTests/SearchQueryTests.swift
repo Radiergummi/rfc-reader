@@ -1,0 +1,100 @@
+import Testing
+
+@testable import RFCKit
+
+/// The search field's filter vocabulary, made visible (#21): a parsed query written
+/// back out in its canonical form, and completion for the qualifier being typed.
+@Suite("Search query")
+struct SearchQueryTests {
+  // MARK: - Round trip
+
+  /// Everything `parseQuery` understands comes back out as a query it reads the same
+  /// way — so a saved collection, or a token removed from the field, is exactly the
+  /// query that was on screen.
+  @Test(arguments: [
+    "tls",
+    "wg:httpbis",
+    "group:QUIC cache",
+    "status:std",
+    "is:bcp status:info",
+    "status:exp status:historic",
+    "status:current",
+    "author:fielding",
+    "by:Nottingham semantics",
+    "stream:ietf stream:IRTF",
+    "year:2020-2022",
+    "year:2022-2020",
+    "year:1997",
+    "has:xml",
+    "wg:httpbis status:std author:fielding year:2020-2022 has:xml status:current HTTP caching",
+  ])
+  func `a formatted query parses back to the same filters`(query: String) {
+    let parsed = IndexSearch.parseQuery(query)
+    let formatted = SearchQuery.format(text: parsed.text, filters: parsed.filters)
+    let reparsed = IndexSearch.parseQuery(formatted)
+    #expect(reparsed.text == parsed.text)
+    #expect(reparsed.filters == parsed.filters)
+  }
+
+  /// The canonical form: long spellings, lowercased values, one qualifier per
+  /// filter in a fixed order, and the free text last.
+  @Test func `the canonical form is the one written back`() {
+    let parsed = IndexSearch.parseQuery("cache by:Fielding is:standard group:HTTPBIS year:2022-2020")
+    #expect(
+      SearchQuery.format(text: parsed.text, filters: parsed.filters)
+        == "wg:httpbis status:std author:fielding year:2020-2022 cache")
+  }
+
+  @Test func `an empty query formats as nothing`() {
+    #expect(SearchQuery.format(text: "", filters: SearchFilters()) == "")
+  }
+
+  // MARK: - Completion
+
+  private func completions(_ query: String) throws -> [String] {
+    SearchQuery.suggestions(for: query, in: try Fixtures.sampleIndex()).map(\.completion)
+  }
+
+  @Test func `a word being typed is offered the qualifiers it starts`() throws {
+    #expect(try completions("cache st") == ["cache status:", "cache stream:"])
+    #expect(try completions("w") == ["wg:"])
+  }
+
+  @Test func `an empty last word is offered every qualifier`() throws {
+    #expect(
+      try completions("cache ")
+        == ["cache wg:", "cache status:", "cache author:", "cache stream:", "cache year:", "cache has:xml"])
+  }
+
+  @Test func `a working group is completed from the index`() throws {
+    #expect(try completions("wg:") == ["wg:httpbis", "wg:quic", "wg:tls"])
+    #expect(try completions("wg:q") == ["wg:quic"])
+    #expect(try completions("group:HT") == ["wg:httpbis"])
+  }
+
+  /// "NON WORKING GROUP" names documents in the index, but a value ends at a space,
+  /// so no query can say it; offering it would complete to a filter that matches
+  /// nothing.
+  @Test func `a working group the query cannot spell is not offered`() throws {
+    #expect(try !completions("wg:").contains { $0.contains("non") })
+  }
+
+  @Test func `statuses and streams are completed from their vocabulary`() throws {
+    #expect(try completions("status:") == ["status:std", "status:bcp", "status:info", "status:exp", "status:historic", "status:current"])
+    #expect(try completions("is:e") == ["status:exp"])
+    #expect(try completions("stream:i") == ["stream:ietf", "stream:irtf", "stream:iab", "stream:independent"])
+  }
+
+  @Test func `a free-form value is offered nothing`() throws {
+    #expect(try completions("author:fie").isEmpty)
+    #expect(try completions("year:20").isEmpty)
+  }
+
+  /// Still searched for as text, as `parseQuery` does; the suggestion says the
+  /// qualifier means nothing, so a typo is not silently a word.
+  @Test func `an unknown qualifier is marked as unknown`() throws {
+    let suggestions = SearchQuery.suggestions(for: "cache colour:red", in: try Fixtures.sampleIndex())
+    #expect(suggestions.map(\.isUnknown) == [true])
+    #expect(suggestions.first?.completion == "cache colour:red")
+  }
+}
