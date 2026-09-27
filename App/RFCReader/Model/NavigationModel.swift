@@ -36,22 +36,27 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
-  /// What the list lists. It keeps the last filter chosen while the sidebar shows
-  /// none, so the list does not change under the animation back to the sidebar.
-  private(set) var filter: LibraryFilter = .all
-  private var isFilterHidden = false
+  private var filterChoice = KeptSelection(LibraryFilter.all)
   var searchText = ""
   var isShowingGoToSheet = false
 
+  /// What the list lists: the last filter chosen, whether or not the sidebar still
+  /// shows it as selected.
+  var filter: LibraryFilter { filterChoice.value }
+
   /// The sidebar's `List(selection:)`, bound to directly.
   ///
-  /// Nil when a collapsed split view has gone back to the sidebar, or on a Mac when
-  /// the row is deselected. `filter` keeps its value either way.
+  /// Nil when a collapsed split view has gone back to the sidebar. A Mac refuses
+  /// it: the sidebar is always beside the list there, and shows which filter feeds
+  /// it, so a click in its blank space or a Command-click must not leave it showing
+  /// none.
   var sidebarSelection: LibraryFilter? {
-    get { isFilterHidden ? nil : filter }
+    get { filterChoice.selection }
     set {
-      if let newValue { filter = newValue }
-      isFilterHidden = newValue == nil
+      #if os(macOS)
+        guard newValue != nil else { return }
+      #endif
+      filterChoice.selection = newValue
     }
   }
 

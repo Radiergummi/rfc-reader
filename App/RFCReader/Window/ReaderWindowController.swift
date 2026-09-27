@@ -421,6 +421,7 @@
   struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
 
     var body: some View {
       @Bindable var navigation = navigation
@@ -433,7 +434,12 @@
         }
       }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .onChange(of: navigation.selection) {
+        library.activate(navigation)
+        // A deselected row leaves nothing on screen, and the panel and the toolbar
+        // must not go on describing the document that was.
+        if navigation.selection == nil { reader.clear() }
+      }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
