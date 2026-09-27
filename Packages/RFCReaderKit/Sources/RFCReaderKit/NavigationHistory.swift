@@ -40,8 +40,9 @@ public struct NavigationHistory: Sendable {
   /// Where Back would return to, offered straight after following a link within
   /// the document on screen (#254).
   ///
-  /// On an iPhone in portrait the system back button leaves the document, so
-  /// returning from a cross-reference needs an offer of its own. Nil when Back
+  /// In a single column there is no back/forward pair and the system back button
+  /// leaves the document, so returning from a cross-reference needs an offer of
+  /// its own. Nil when Back
   /// would leave the document, and after stepping back or forward: the offer is
   /// for undoing a jump just made, not for walking the history.
   public var returnOffer: Place? {

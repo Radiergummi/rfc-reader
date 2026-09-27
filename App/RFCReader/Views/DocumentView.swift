@@ -124,6 +124,8 @@ struct DocumentView: View {
     content
       .navigationTitle(id.displayName)
       #if !os(macOS)
+        // The designation as the title, and what it is called beneath it.
+        .navigationSubtitle(metadata?.title ?? reader.documentTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         // An overlay rather than an inset: it floats over the text and takes no
@@ -314,15 +316,6 @@ struct DocumentView: View {
           }
         }
 
-        // The system back button leaves the document; this history also steps
-        // back out of a jump inside it. With room to spare, the pair is in the
-        // bar instead (`ContentView`).
-        if !hasRoomyToolbar {
-          Section {
-            HistoryButtons()
-          }
-        }
-
         Section {
           Toggle("Original Text", isOn: Bindable(reader).showOriginal)
           Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
@@ -341,17 +334,20 @@ struct DocumentView: View {
 
     /// Where a tap on the return offer goes, while it is on show.
     ///
-    /// In portrait only: with room to spare, the back/forward pair is in the bar.
+    /// In a single column only: beside other columns, the back/forward pair is in
+    /// the bar.
     private var visibleReturn: Place? {
-      guard !hasRoomyToolbar, let offer = navigation.returnOffer, offer != settledReturn else {
+      guard horizontalSizeClass == .compact, let offer = navigation.returnOffer,
+        offer != settledReturn
+      else {
         return nil
       }
       return offer
     }
 
-    /// "Back to §4.2" after following a link within the document (#254). The
-    /// system back button leaves the document, and Back in More is two taps for
-    /// the most common thing a reader does after following a cross-reference.
+    /// "Back to §4.2" after following a link within the document (#254). In a
+    /// single column there is no back/forward pair, and the system back button
+    /// leaves the document.
     @ViewBuilder
     private var returnButton: some View {
       if let offer = visibleReturn {
@@ -708,7 +704,6 @@ struct TableOfContentsView: View {
       }
     }
     .listStyle(.sidebar)
-    .navigationTitle("Contents")
   }
 }
 

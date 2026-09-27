@@ -82,8 +82,7 @@ public enum ReaderLayout {
     width - gutter(forWidth: width) * 2
   }
 
-  /// Whether the reader's bar has room for Share and the back/forward pair beside
-  /// Contents and More (#245).
+  /// Whether the reader's bar has room for Share beside Contents and More (#245).
   ///
   /// A regular width, which is an iPad, or a compact height, which is any iPhone
   /// held sideways. Most iPhones stay compact in width even in landscape, so width

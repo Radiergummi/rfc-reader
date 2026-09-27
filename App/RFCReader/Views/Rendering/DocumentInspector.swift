@@ -34,24 +34,26 @@ struct DocumentInspector: View {
         selectedTab
       }
     #else
-      // The system's segmented control, in the panel's own bar (#247). The
-      // inspector tab bar is macOS's idiom, and its insets were sized for the
-      // inspector column: in an iPhone's sheet they left it pressed against the
-      // sheet's top edge, its capsule ends inside the sheet's rounded corners. The
-      // bar places the control clear of both, as every other iOS sheet does.
-      NavigationStack {
+      // The system's segmented control, inside the panel it switches (#247).
+      //
+      // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
+      // reader's own bar, even through a `NavigationStack` of the panel's own, so
+      // the tabs ended up above the reader, apart from the sheet they switch and in
+      // the place of the reader's title. The insets are the sheet's rather than the
+      // inspector column's: 10 and 8 left the control against the sheet's top edge,
+      // its capsule ends inside the sheet's rounded corners.
+      VStack(spacing: 0) {
+        Picker("Panel", selection: $tab) {
+          Text("Contents").tag(InspectorTab.contents)
+          Text("References").tag(InspectorTab.references)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
+
         selectedTab
-          .navigationBarTitleDisplayMode(.inline)
-          .toolbar {
-            ToolbarItem(placement: .principal) {
-              Picker("Panel", selection: $tab) {
-                Text("Contents").tag(InspectorTab.contents)
-                Text("References").tag(InspectorTab.references)
-              }
-              .pickerStyle(.segmented)
-              .fixedSize()
-            }
-          }
       }
     #endif
   }

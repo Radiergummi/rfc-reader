@@ -11,7 +11,6 @@ import SwiftUI
   struct ContentView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
@@ -60,14 +59,12 @@ import SwiftUI
       // Always present, dimmed when there is nowhere to go, as Safari does. A pair
       // that appears and vanishes with the history shifts everything beside it.
       //
-      // Except on an iPhone in portrait, where it sat beside the system back button
-      // and took the room the reader's title needed (#245). The system button
-      // leaves the document there, and the reader's More menu holds the pair.
+      // Only beside other columns, though. In a single column, as on an iPhone,
+      // it sat beside the system back button and took the room the reader's title
+      // needed (#245); the system button leaves the document there, and "Back to
+      // §…" returns from a jump within it (#254).
       .toolbar {
-        if ReaderLayout.toolbarHasRoom(
-          isRegularWidth: horizontalSizeClass == .regular,
-          isCompactHeight: verticalSizeClass == .compact)
-        {
+        if horizontalSizeClass == .regular {
           ToolbarItem(placement: .navigation) {
             ControlGroup {
               HistoryButtons()
