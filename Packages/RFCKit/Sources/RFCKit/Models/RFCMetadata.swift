@@ -311,10 +311,10 @@ public struct SeriesEntry: Hashable, Sendable, Codable, Identifiable {
 
 /// The parsed RFC Editor index: every RFC plus the series groupings.
 public struct RFCIndex: Sendable {
-  public private(set) var rfcs: [RFCMetadata]
-  public private(set) var series: [SeriesEntry]
+  public let rfcs: [RFCMetadata]
+  public let series: [SeriesEntry]
   /// RFC numbers that were allocated but never issued.
-  public private(set) var notIssued: [Int]
+  public let notIssued: [Int]
 
   private var byNumber: [Int: Int]
 
