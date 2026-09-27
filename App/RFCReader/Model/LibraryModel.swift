@@ -8,49 +8,6 @@ import SwiftData
   import AppKit
 #endif
 
-/// What the list in the middle column shows.
-enum LibraryFilter: Hashable, Identifiable {
-  case all
-  case recent
-  case bookmarks
-  case downloaded
-  case standards
-  case bestCurrentPractice
-  case stream(RFCKit.Stream)
-  case workingGroup(String)
-  case series(DocumentID)
-
-  var id: Self { self }
-
-  var title: String {
-    switch self {
-    case .all: "All RFCs"
-    case .recent: "Recently Read"
-    case .bookmarks: "Bookmarks"
-    case .downloaded: "Available Offline"
-    case .standards: "Internet Standards"
-    case .bestCurrentPractice: "Best Current Practices"
-    case .stream(let stream): stream.displayName
-    case .workingGroup(let group): group.uppercased()
-    case .series(let id): id.displayName
-    }
-  }
-
-  var systemImage: String {
-    switch self {
-    case .all: "books.vertical"
-    case .recent: "clock"
-    case .bookmarks: "bookmark"
-    case .downloaded: "arrow.down.circle"
-    case .standards: "checkmark.seal"
-    case .bestCurrentPractice: "hand.thumbsup"
-    case .stream: "tray"
-    case .workingGroup: "person.2"
-    case .series: "square.stack"
-    }
-  }
-}
-
 /// Application state: the index, navigation, and the document cache.
 ///
 /// One observable object keeps the SwiftUI surface small; SwiftData holds the
@@ -340,19 +297,29 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil }
     let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
     guard let target else {
-      pendingSceneLink = link
-      #if os(macOS)
-        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
-      #endif
+      openInNewWindow(link)
       return
     }
-    target.open(link, in: index)
+    deliver(link, to: target)
+  }
+
+  /// Opens `link` in `scene` and makes that the tab in use.
+  private func deliver(_ link: RFCLink, to scene: NavigationModel) {
+    scene.open(link, in: index)
     // The tab that took the link is the most recently used one now, and where the
     // next untargeted link belongs -- even when it already showed that document, so
     // its selection did not change and `activate` was not called for it.
-    activate(target)
+    activate(scene)
     #if os(macOS)
-      AppDelegate.shared?.bringForward(target)
+      AppDelegate.shared?.bringForward(scene)
+    #endif
+  }
+
+  /// Opens a window for `link`, which it takes in `register(_:)`.
+  private func openInNewWindow(_ link: RFCLink) {
+    pendingSceneLink = link
+    #if os(macOS)
+      AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
     #endif
   }
 
@@ -389,6 +356,36 @@ final class LibraryModel {
       AppDelegate.shared?.openTab(inBackground: inBackground)
     #endif
   }
+
+  #if os(macOS)
+    /// Where a document asked for by name opens.
+    enum Placement {
+      case frontTab
+      case newTab
+      case newWindow
+    }
+
+    /// Opens `link` where `placement` says.
+    ///
+    /// The front tab is the one the menu acts on (`AppDelegate.activeController`),
+    /// not whichever tab `route(_:)` would pick: a script that says "open this"
+    /// means the window it is looking at. With no window open there is no front
+    /// tab, and the link is routed the way one from outside is, which opens one.
+    func open(_ link: RFCLink, placement: Placement) {
+      switch placement {
+      case .frontTab:
+        if let scene = AppDelegate.shared?.activeController?.navigation {
+          deliver(link, to: scene)
+        } else {
+          route(link)
+        }
+      case .newTab:
+        openInNewScene(link, inBackground: false)
+      case .newWindow:
+        openInNewWindow(link)
+      }
+    }
+  #endif
 
   // MARK: - Documents
 

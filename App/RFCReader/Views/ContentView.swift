@@ -139,12 +139,7 @@ struct GoToDocumentSheet: View {
   @FocusState private var focused: Bool
 
   private var resolved: RFCLink? {
-    if let url = URL(string: input.trimmingCharacters(in: .whitespaces)), url.scheme != nil,
-      let link = RFCLink(url: url)
-    {
-      return link
-    }
-    return DocumentID(parsing: input).map { RFCLink(id: $0) }
+    DocumentReference.link(from: input)
   }
 
   var body: some View {

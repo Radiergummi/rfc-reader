@@ -1,0 +1,250 @@
+#if os(macOS)
+  import AppKit
+  import RFCKit
+  import RFCReaderKit
+
+  // The objects and commands `RFCReader.sdef` names, by the Cocoa class and key each
+  // entry there gives. None of them decides anything: they translate between Apple
+  // events and the models the menus and toolbar already drive, and what needs
+  // deciding — which collection a name means, which document a reference names —
+  // is in `RFCReaderKit`, where it is tested.
+
+  /// An RFC as a script sees it, named by its number: `rfc id 9110`.
+  @MainActor
+  @objc(ScriptableRFC)
+  final class ScriptableRFC: NSObject {
+    let id: DocumentID
+
+    init(_ id: DocumentID) {
+      self.id = id
+    }
+
+    private var metadata: RFCMetadata? {
+      LibraryModel.shared.metadata(id)
+    }
+
+    @objc var number: Int { id.number }
+    @objc var name: String { id.displayName }
+    @objc var title: String? { metadata?.title }
+    @objc var status: String? { metadata?.currentStatus.displayName }
+    @objc var year: Int { metadata?.date.year ?? 0 }
+    @objc var workingGroup: String? { metadata?.workingGroup }
+    @objc var isObsolete: Bool { metadata?.isObsolete ?? false }
+
+    @objc var isBookmarked: Bool {
+      get { LibraryModel.shared.bookmarkedNumbers.contains(id.number) }
+      set {
+        guard newValue != isBookmarked else { return }
+        let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: nil, id: id)
+        BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      }
+    }
+
+    /// Where the object lives, which is how a script gets a reference it can use
+    /// again: the application's `rfcs`, by number.
+    nonisolated override var objectSpecifier: NSScriptObjectSpecifier? {
+      guard let application = NSScriptClassDescription(for: NSApplication.self) else { return nil }
+      return NSUniqueIDSpecifier(
+        containerClassDescription: application,
+        containerSpecifier: nil,
+        key: "rfcs",
+        uniqueID: NSNumber(value: id.number)
+      )
+    }
+  }
+
+  extension AppDelegate {
+    /// The application's elements that live here rather than on `NSApplication`.
+    func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
+      key == "rfcs"
+    }
+
+    /// Every RFC, for `every rfc`. `count of rfcs` and `rfc 5` go through the two
+    /// indexed accessors below instead, which build one object or none rather than
+    /// all 9,842.
+    @objc var rfcs: [ScriptableRFC] {
+      LibraryModel.shared.index?.rfcs.map { ScriptableRFC($0.id) } ?? []
+    }
+
+    @objc func countOfRfcs() -> Int {
+      LibraryModel.shared.index?.rfcs.count ?? 0
+    }
+
+    @objc(objectInRfcsAtIndex:)
+    func objectInRfcs(at index: Int) -> ScriptableRFC? {
+      LibraryModel.shared.index.map { ScriptableRFC($0.rfcs[index].id) }
+    }
+
+    /// `rfc id 9110`, looked up by number rather than found by walking `rfcs`.
+    @objc(valueInRfcsWithUniqueID:)
+    func valueInRfcs(withUniqueID uniqueID: Any) -> ScriptableRFC? {
+      guard let number = (uniqueID as? NSNumber)?.intValue,
+        LibraryModel.shared.index?[number] != nil
+      else { return nil }
+      return ScriptableRFC(.rfc(number))
+    }
+  }
+
+  /// A reader window's properties. Every window and tab is a `ReaderWindow`; a script
+  /// asking one of these of any other window — the settings — gets an error.
+  extension ReaderWindow {
+    private var controller: ReaderWindowController? {
+      ReaderWindowController.controller(for: self)
+    }
+
+    @objc var scriptCurrentRFC: ScriptableRFC? {
+      controller?.navigation.selection.map(ScriptableRFC.init)
+    }
+
+    @objc var scriptCurrentSection: String? {
+      controller?.reader.currentSection
+    }
+
+    @objc var scriptCollection: String {
+      get { controller?.navigation.filter.title ?? "" }
+      set {
+        let groups = Set(LibraryModel.shared.index?.rfcs.compactMap(\.workingGroup) ?? [])
+        guard let filter = LibraryFilter(scriptName: newValue, workingGroups: groups) else {
+          ScriptError.report("There is no collection named “\(newValue)”.")
+          return
+        }
+        controller?.navigation.sidebarSelection = filter
+      }
+    }
+
+    @objc var scriptSearchText: String {
+      get { controller?.navigation.searchText ?? "" }
+      set { controller?.navigation.searchText = newValue }
+    }
+
+    @objc var scriptListedRFCs: [ScriptableRFC] {
+      guard let navigation = controller?.navigation else { return [] }
+      return LibraryModel.shared.list(for: navigation).map { ScriptableRFC($0.id) }
+    }
+
+    @objc var scriptInspectorVisible: Bool {
+      get { controller?.isPanelOpen ?? false }
+      set {
+        if controller?.setPanelOpen(newValue) == false {
+          ScriptError.report("The inspector can only be shown over an RFC.")
+        }
+      }
+    }
+
+    /// A command told to this window rather than to the application — `tell front
+    /// window to go back`. The command already knows its window from its receiver,
+    /// so this only runs it.
+    @objc(handleReaderCommand:)
+    func handleReaderCommand(_ command: NSScriptCommand) -> Any? {
+      command.performDefaultImplementation()
+    }
+
+    /// An enumeration's value crosses as its four-character code.
+    @objc var scriptInspectorPane: FourCharCode {
+      get { controller?.reader.tab == .references ? ScriptCode.references : ScriptCode.contents }
+      set { controller?.reader.tab = newValue == ScriptCode.references ? .references : .contents }
+    }
+  }
+
+  /// Every command in the dictionary: run on the main actor, against the window it
+  /// names or the front one.
+  @MainActor
+  class RFCScriptCommand: NSScriptCommand {
+    /// Cocoa Scripting's entry point, which Swift sees as nonisolated. It is only
+    /// ever called on the main thread, and `assumeIsolated` traps rather than races
+    /// if that changes; the command itself only crosses to where it already is.
+    nonisolated override func performDefaultImplementation() -> Any? {
+      nonisolated(unsafe) let command = self
+      MainActor.assumeIsolated { command.perform() }
+      return nil
+    }
+
+    func perform() {
+      preconditionFailure("\(type(of: self)) must override perform()")
+    }
+
+    var targetWindow: ReaderWindowController? {
+      let named = (evaluatedReceivers as? NSWindow) ?? (evaluatedArguments?["window"] as? NSWindow)
+      return named.flatMap(ReaderWindowController.controller(for:))
+        ?? AppDelegate.shared?.activeController
+    }
+  }
+
+  /// `open rfc 9110 at section "4.2" placement new tab`.
+  @objc(RFCOpenCommand)
+  final class RFCOpenCommand: RFCScriptCommand {
+    override func perform() {
+      let reference =
+        (directParameter as? String) ?? (directParameter as? NSNumber)?.stringValue ?? ""
+      let section = evaluatedArguments?["section"] as? String
+      guard let link = DocumentReference.link(from: reference, section: section) else {
+        ScriptError.report("“\(reference)” names no RFC.", in: self)
+        return
+      }
+      let code = (evaluatedArguments?["placement"] as? NSNumber)?.uint32Value
+      let placement: LibraryModel.Placement =
+        switch code {
+        case ScriptCode.newTab: .newTab
+        case ScriptCode.newWindow: .newWindow
+        default: .frontTab
+        }
+      LibraryModel.shared.open(link, placement: placement)
+    }
+  }
+
+  @objc(RFCGoBackCommand)
+  final class RFCGoBackCommand: RFCScriptCommand {
+    override func perform() {
+      targetWindow?.navigation.goBack()
+    }
+  }
+
+  @objc(RFCGoForwardCommand)
+  final class RFCGoForwardCommand: RFCScriptCommand {
+    override func perform() {
+      targetWindow?.navigation.goForward()
+    }
+  }
+
+  /// `jump to section "4.2"`: resolved against the document the window shows, the
+  /// way a section link in the prose is, by number or by anchor.
+  @objc(RFCJumpToSectionCommand)
+  final class RFCJumpToSectionCommand: RFCScriptCommand {
+    override func perform() {
+      guard let section = directParameter as? String, !section.isEmpty else {
+        ScriptError.report("Which section?", in: self)
+        return
+      }
+      guard let window = targetWindow, window.navigation.selection != nil else {
+        ScriptError.report("There is no RFC to jump in.", in: self)
+        return
+      }
+      window.navigation.jump(toSection: section)
+    }
+  }
+
+  /// The dictionary's enumerators, as the four-character codes Apple events carry.
+  enum ScriptCode {
+    static let contents = code("RIpC")
+    static let references = code("RIpR")
+    static let newTab = code("RPnT")
+    static let newWindow = code("RPnW")
+
+    private static func code(_ string: String) -> FourCharCode {
+      string.utf8.reduce(0) { $0 << 8 | FourCharCode($1) }
+    }
+  }
+
+  /// A failure the script sees as an error, with our words rather than a generic one.
+  enum ScriptError {
+    /// `command` defaults to the one being executed, which is the only way a
+    /// property's setter can reach it.
+    static func report(
+      _ message: String,
+      in command: NSScriptCommand? = NSScriptCommand.current()
+    ) {
+      command?.scriptErrorNumber = Int(errAEEventFailed)
+      command?.scriptErrorString = message
+    }
+  }
+#endif
