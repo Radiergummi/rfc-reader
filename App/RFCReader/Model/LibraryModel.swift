@@ -36,8 +36,13 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
-  /// Every bookmarked RFC's number, fetched again on every save of the store: one
-  /// set for the lists, the toolbars and scripts alike.
+  /// Every bookmarked document, fetched again on every save of the store: one set
+  /// for the toolbars and scripts alike, which ask about the document on screen, so
+  /// BCP 14 is not answered for by RFC 14 (#152).
+  private(set) var bookmarkedDocuments: Set<DocumentID> = []
+
+  /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
+  /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
@@ -47,19 +52,20 @@ final class LibraryModel {
   private(set) var downloadedNumbers: Set<Int> = []
 
   private init() {
-    refreshBookmarkedNumbers()
+    refreshBookmarks()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.refreshBookmarkedNumbers() }
+      MainActor.assumeIsolated { self?.refreshBookmarks() }
     }
   }
 
-  private func refreshBookmarkedNumbers() {
-    let numbers = BookmarkStore.bookmarkedNumbers(in: AppData.container.mainContext)
+  private func refreshBookmarks() {
+    let documents = BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
     // Only a change is news: most saves record a reading position, not a bookmark.
-    guard numbers != bookmarkedNumbers else { return }
-    bookmarkedNumbers = numbers
+    guard documents != bookmarkedDocuments else { return }
+    bookmarkedDocuments = documents
+    bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))
   }
 
   private func refreshDownloadedNumbers() async {
@@ -441,10 +447,10 @@ final class LibraryModel {
     let context = AppData.container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
-    let read = ((try? context.fetch(recent)) ?? []).map(\.number)
-    let bookmarked = BookmarkStore.bookmarkedNumbers(in: context)
+    let read = ((try? context.fetch(recent)) ?? []).compactMap(\.document)
+    let bookmarked = BookmarkStore.bookmarkedDocuments(in: context)
     let open = scenes.compactMap { $0.model?.selection }
-    return Set((read + bookmarked).map { DocumentID.rfc($0) } + open)
+    return bookmarked.union(read).union(open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
@@ -462,7 +468,7 @@ final class LibraryModel {
       sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
     )
     let positions = (try? AppData.container.mainContext.fetch(descriptor)) ?? []
-    return positions.map(\.number)
+    return positions.compactMap(\.document).filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

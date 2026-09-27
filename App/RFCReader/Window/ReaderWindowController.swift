@@ -413,7 +413,7 @@
     /// event cycle — asking SwiftData there put a store round trip under every mouse
     /// move.
     var isBookmarked: Bool {
-      navigation.selection.map { library.bookmarkedNumbers.contains($0.number) } ?? false
+      navigation.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
     }
 
     /// Puts focus in the text on screen, for Find. Nothing else focuses it: after a

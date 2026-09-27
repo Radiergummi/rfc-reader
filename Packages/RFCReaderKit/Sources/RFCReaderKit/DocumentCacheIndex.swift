@@ -127,10 +127,7 @@ public struct DocumentCacheIndex: Sendable {
       return nil
     }
     let stem = url.deletingPathExtension().lastPathComponent
-    guard let id = DocumentID(parsing: stem), id.fileStem == stem else {
-      return nil
-    }
-    return id
+    return DocumentID(fileStem: stem)
   }
 
   /// Asked of the file system on every call. `URL.resourceValues` may answer from

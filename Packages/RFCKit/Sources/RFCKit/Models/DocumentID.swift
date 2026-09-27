@@ -99,6 +99,15 @@ public struct DocumentID: Hashable, Sendable, Codable, Comparable, CustomStringC
   /// The file-name stem the RFC Editor uses, e.g. `rfc9110`.
   public var fileStem: String { "\(series.rawValue.lowercased())\(number)" }
 
+  /// The document a file stem names: exactly what `fileStem` writes, so a name that
+  /// only parses to a document (`RFC9110`, `rfc09110`) names none.
+  public init?(fileStem: String) {
+    guard let document = DocumentID(parsing: fileStem), document.fileStem == fileStem else {
+      return nil
+    }
+    self = document
+  }
+
   public static func < (lhs: DocumentID, rhs: DocumentID) -> Bool {
     if lhs.series != rhs.series { return lhs.series < rhs.series }
     return lhs.number < rhs.number
