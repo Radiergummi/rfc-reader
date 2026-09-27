@@ -49,6 +49,15 @@ struct InlineRunTests {
     #expect(font.weight == heading.weight)
   }
 
+  @Test func codeInEmphasisStaysItalic() throws {
+    let emphasised = run([.emphasis([.text("see "), .code("foo")])])
+    let offset = try Fixtures.offset(of: "foo", in: emphasised)
+    let font = try #require(
+      emphasised.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+  }
+
   @Test func aSuperscriptOrSubscriptKeepsTheTraitsAroundIt() throws {
     let strong = run([.strong([.text("x"), .superscript("2"), .subscript("i")])])
     for script in ["2", "i"] {

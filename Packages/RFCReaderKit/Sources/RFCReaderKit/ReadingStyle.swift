@@ -29,9 +29,14 @@ public struct ReadingStyle: Sendable, Equatable {
   public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
   public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
   /// Inline code set in `surrounding` prose: monospaced, a little smaller, and at
-  /// the surrounding weight, so code in a heading stays heading-sized (#154).
+  /// the surrounding weight and slant, so code in a heading stays heading-sized and
+  /// code in emphasis stays italic (#154).
   public func codeFont(matching surrounding: PlatformFont) -> PlatformFont {
-    .monospacedSystemFont(ofSize: surrounding.pointSize * 0.92, weight: surrounding.weight)
+    let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
+    return PlatformFont.monospacedSystemFont(
+      ofSize: surrounding.pointSize * 0.92, weight: surrounding.weight
+    )
+    .adding(traits: slant)
   }
 
   public func monospacedFont(scale: CGFloat) -> PlatformFont {
