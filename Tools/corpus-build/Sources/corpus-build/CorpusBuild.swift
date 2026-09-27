@@ -50,7 +50,7 @@ extension Logger {
   /// The logger of one command, labelled `corpus-build.<command>`. It writes to standard
   /// error, where progress and diagnostics have always gone, and is made with its handler
   /// rather than through `LoggingSystem.bootstrap`, whose default writes to standard
-  /// output. Values go in metadata, so a message stays the same line from run to run.
+  /// output. Values go in metadata, so a message is the same text from run to run.
   init(command: String) {
     self.init(label: "corpus-build.\(command)") { label in
       StreamLogHandler.standardError(label: label)
