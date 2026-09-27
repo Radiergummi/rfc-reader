@@ -46,17 +46,30 @@ public enum AuthorMonogram {
 
   /// The first letter of the first and the last word of the name, whatever its
   /// script: "Mark Nottingham" is "MN", "R. Fielding" "RF". A single word gives
-  /// one letter.
+  /// one letter. A generational suffix is not the last word: "D. Eastlake 3rd" is
+  /// "DE", not "D3".
   public static func initials(for name: String) -> String {
-    let words = name.split(whereSeparator: \.isWhitespace)
+    var words = name.split(whereSeparator: \.isWhitespace)
+    while words.count > 1, let last = words.last, isGenerationalSuffix(last) {
+      words.removeLast()
+    }
     guard let first = words.first?.first else { return "" }
     guard words.count > 1, let last = words.last?.first else { return String(first).uppercased() }
     return (String(first) + String(last)).uppercased()
   }
 
+  /// "Jr.", "Sr", "III", or a word that starts with a digit, like "3rd".
+  private static func isGenerationalSuffix(_ word: Substring) -> Bool {
+    guard let first = word.first, !first.isNumber else { return true }
+    let bare = word.trimmingCharacters(in: CharacterSet(charactersIn: ".,")).lowercased()
+    return ["jr", "sr", "ii", "iii", "iv"].contains(bare)
+  }
+
   /// Which of `count` colours the name gets. FNV-1a over the name's UTF-8, not
-  /// `hashValue`, which Swift seeds afresh every launch: the same person has to be
-  /// the same colour in every document and every session.
+  /// `hashValue`, which Swift seeds afresh every launch: the same name has to be
+  /// the same colour in every document and every session. It is the name as
+  /// written, so a person spelled differently ("R. Fielding", "Roy T. Fielding")
+  /// can wear two colours.
   public static func tint(for name: String, among count: Int) -> Int {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for byte in name.utf8 {
@@ -78,25 +91,31 @@ public enum AuthorCard {
   /// the name either: its organization is the name.
   public static func hasCard(_ author: Author) -> Bool {
     guard var contact = author.contact else { return false }
-    if contact.organization == author.name {
+    if isOrganization(author) {
       contact.organization = nil
     }
     return !contact.isEmpty
   }
 
+  /// An author that is an organization: RFCXML names it by the organization alone,
+  /// and the parser takes that for the name.
+  private static func isOrganization(_ author: Author) -> Bool {
+    author.contact?.organization == author.name
+  }
+
   public static func contact(for author: Author) -> CNMutableContact {
     let card = CNMutableContact()
-    // An author that is an organization: RFCXML names it by the organization alone,
-    // and the parser takes that for the name.
-    if let organization = author.contact?.organization, organization == author.name {
+    if isOrganization(author) {
       card.contactType = .organization
     } else if let components = PersonNameComponentsFormatter().personNameComponents(
       from: author.name),
       components.familyName != nil
     {
+      card.namePrefix = components.namePrefix ?? ""
       card.givenName = components.givenName ?? ""
       card.middleName = components.middleName ?? ""
       card.familyName = components.familyName ?? ""
+      card.nameSuffix = components.nameSuffix ?? ""
     } else {
       card.familyName = author.name
     }
@@ -137,11 +156,11 @@ public enum AuthorCard {
     let pobox = postal.postOfficeBox.map { [$0] } ?? []
     address.street = (postal.extendedAddress + postal.street + pobox).joined(separator: "\n")
     address.subLocality = postal.cityArea ?? ""
-    address.city = postal.city ?? ""
+    // Contacts has no field for a sorting code; after the city is where the
+    // countries that use one write it ("75008 Paris CEDEX 08").
+    address.city = [postal.city, postal.sortingCode].compactMap { $0 }.joined(separator: " ")
     address.state = postal.region ?? ""
-    // Contacts has no field for a sorting code; beside the postal code is where
-    // the countries that use one write it.
-    address.postalCode = [postal.code, postal.sortingCode].compactMap { $0 }.joined(separator: " ")
+    address.postalCode = postal.code ?? ""
     address.country = postal.country ?? ""
     return address
   }

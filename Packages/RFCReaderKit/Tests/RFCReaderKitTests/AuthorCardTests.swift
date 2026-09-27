@@ -18,6 +18,15 @@ struct AuthorCardTests {
     #expect(AuthorMonogram.initials(for: "Jan Van den Berg") == "JB")
   }
 
+  /// A generational suffix is not a name: "D. Eastlake 3rd" is "DE", not "D3".
+  @Test func `a generational suffix is not an initial`() {
+    #expect(AuthorMonogram.initials(for: "D. Eastlake 3rd") == "DE")
+    #expect(AuthorMonogram.initials(for: "Donald E. Eastlake 3rd") == "DE")
+    #expect(AuthorMonogram.initials(for: "John Smith Jr.") == "JS")
+    #expect(AuthorMonogram.initials(for: "John Smith, Jr.") == "JS")
+    #expect(AuthorMonogram.initials(for: "Henry Ford III") == "HF")
+  }
+
   @Test func `a single name gives one initial`() {
     #expect(AuthorMonogram.initials(for: "Postel") == "P")
   }
@@ -31,7 +40,7 @@ struct AuthorCardTests {
     #expect(AuthorMonogram.initials(for: "  ") == "")
   }
 
-  /// Stable across launches, unlike `hashValue`, so the same person is the same
+  /// Stable across launches, unlike `hashValue`, so the same name is the same
   /// colour in every document and every session.
   @Test func `the tint is fixed for a name and within the palette`() {
     let count = AuthorMonogram.palette.count
@@ -51,7 +60,9 @@ struct AuthorCardTests {
   /// is the contrast in light and dark appearance alike.
   @Test func `every tint's initials clear 4.5 to 1`() {
     for tint in AuthorMonogram.palette {
-      #expect(AuthorMonogram.initialsColour.contrast(with: tint) >= 4.5, "\(tint)")
+      #expect(
+        AuthorMonogram.initialsColour.contrast(with: tint) >= AuthorMonogram.minimumContrast,
+        "\(tint)")
     }
     #expect(AuthorMonogram.minimumContrast == 4.5)
   }
@@ -74,6 +85,18 @@ struct AuthorCardTests {
     let contact = AuthorCard.contact(for: author(nil))
     #expect(contact.givenName == "Mark")
     #expect(contact.familyName == "Nottingham")
+  }
+
+  /// The formatter finds a title and a suffix as well as the names, and the card
+  /// shows the whole name the document gives.
+  @Test func `a title and a suffix stay on the card`() {
+    let suffixed = AuthorCard.contact(for: Author(name: "John Smith Jr."))
+    #expect(suffixed.givenName == "John")
+    #expect(suffixed.familyName == "Smith")
+    #expect(suffixed.nameSuffix == "Jr.")
+    let titled = AuthorCard.contact(for: Author(name: "Dr. Jane Smith"))
+    #expect(titled.namePrefix == "Dr.")
+    #expect(titled.givenName == "Jane")
   }
 
   @Test func `an editor is marked as one`() {
@@ -149,15 +172,16 @@ struct AuthorCardTests {
     #expect(AuthorCard.hasCard(author(AuthorContact(organization: "Fastly"))))
   }
 
-  /// Contacts has no field for a sorting code, so it goes beside the postal code
-  /// rather than being lost.
-  @Test func `a sorting code is kept beside the postal code`() throws {
+  /// Contacts has no field for a sorting code, so it goes after the city, where
+  /// France writes a CEDEX: "75008 Paris CEDEX 08", not "75008 CEDEX 08 Paris".
+  @Test func `a sorting code is kept after the city`() throws {
     let card = AuthorCard.contact(
       for: author(
         AuthorContact(postal: PostalAddress(city: "Paris", code: "75008", sortingCode: "CEDEX 08")))
     )
     let address = try #require(card.postalAddresses.first?.value)
-    #expect(address.postalCode == "75008 CEDEX 08")
+    #expect(address.postalCode == "75008")
+    #expect(address.city == "Paris CEDEX 08")
   }
 
   @Test func `an author who publishes nothing has only a name`() {
