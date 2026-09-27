@@ -30,9 +30,6 @@ struct RFCReaderApp: App {
       }
       .commands {
         WindowCommands()
-        // View ▸ Show Sidebar. It sends `toggleSidebar:` down the responder chain,
-        // which the window's own `NSSplitViewController` answers (#157).
-        SidebarCommands()
         DocumentCommands()
       }
     #else
