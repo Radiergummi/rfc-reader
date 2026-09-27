@@ -7,6 +7,7 @@
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
+    static let rfcDocumentTitle = NSToolbarItem.Identifier("rfc.documentTitle")
     static let rfcTitle = NSToolbarItem.Identifier("rfc.title")
     static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
     static let rfcCite = NSToolbarItem.Identifier("rfc.cite")
@@ -15,6 +16,26 @@
     static let rfcPanelSeparator = NSToolbarItem.Identifier("rfc.panelSeparator")
     static let rfcPanelToggle = NSToolbarItem.Identifier("rfc.panelToggle")
   }
+
+  /// `NSToolbarItem.minSize` and `maxSize`, reached without the deprecation warning
+  /// they carry since macOS 12.
+  ///
+  /// Deprecated, and the only thing that makes an item flex. The replacement —
+  /// width constraints on the view — gives an item exactly its fitting size:
+  /// measured, a `>= 0, <= text` pair left the document's title 0 pt wide with or
+  /// without a flexible space beside it, and a low-priority preferred width made it
+  /// a fixed width the toolbar would not compress, so Back and Forward were pushed
+  /// out over the list instead. The properties still work; going through a
+  /// protocol keeps the one deliberate use from being a standing warning that a
+  /// build is otherwise clean of. If they stop working, the title collapses to
+  /// nothing — it does not break the rest of the toolbar.
+  @MainActor
+  private protocol FlexibleToolbarItem: AnyObject {
+    var minSize: NSSize { get set }
+    var maxSize: NSSize { get set }
+  }
+
+  extension NSToolbarItem: FlexibleToolbarItem {}
 
   /// The window's toolbar.
   ///
@@ -31,12 +52,42 @@
   /// on top of the one before it — the bookmark drew inside the back/forward group and
   /// the share icon over the panel's toggle. Native items also get the system's own
   /// grouping and glass, which a hosted control cannot.
-  /// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
-  /// so that it takes the width of its text instead of every pixel that is going.
+  /// A title over a line of detail, as a window's own titlebar draws its title over
+  /// its subtitle. Both of the toolbar's titles are one of these, so the two cannot
+  /// drift apart in type.
   @MainActor
-  private final class TitleView: NSView {
-    private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
-    private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
+  private final class TitleStack: NSStackView {
+    private let title = TitleStack.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
+    private let subtitle = TitleStack.label(.systemFont(ofSize: 11), .secondaryLabelColor)
+
+    /// What the longer of the two lines needs. Measured when the strings change,
+    /// which is the only time it can: the list's title is capped once per frame of
+    /// a divider drag, and reads this rather than measuring again.
+    private(set) var textWidth: CGFloat = 0
+
+    init() {
+      super.init(frame: .zero)
+      orientation = .vertical
+      alignment = .leading
+      spacing = 0
+      addArrangedSubview(title)
+      addArrangedSubview(subtitle)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the titlebar is built in code")
+    }
+
+    func show(_ title: String, subtitle: String) {
+      self.title.stringValue = title
+      self.subtitle.stringValue = subtitle
+      self.subtitle.isHidden = subtitle.isEmpty
+      textWidth = max(
+        self.title.intrinsicContentSize.width,
+        subtitle.isEmpty ? 0 : self.subtitle.intrinsicContentSize.width
+      )
+    }
 
     private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
       let field = NSTextField(labelWithString: "")
@@ -44,8 +95,17 @@
       field.textColor = colour
       field.lineBreakMode = .byTruncatingTail
       field.cell?.usesSingleLineMode = true
+      // Truncated rather than pushing its title wider than it was given.
+      field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
       return field
     }
+  }
+
+  /// Title over subtitle, the shape a window's own titlebar draws — as a view we own,
+  /// so that it takes the width of its text instead of every pixel that is going.
+  @MainActor
+  private final class TitleView: NSView {
+    private let stack = TitleStack()
 
     /// The toolbar sizes a custom view from its constraints, and from nothing else:
     /// an intrinsic width alone left the title drawn on top of the navigation group,
@@ -54,16 +114,13 @@
 
     init() {
       super.init(frame: .zero)
-      let stack = NSStackView(views: [title, subtitle])
-      stack.orientation = .vertical
-      stack.alignment = .leading
-      stack.spacing = 0
       stack.translatesAutoresizingMaskIntoConstraints = false
       addSubview(stack)
       translatesAutoresizingMaskIntoConstraints = false
       widthConstraint = widthAnchor.constraint(equalToConstant: 1)
       NSLayoutConstraint.activate([
-        stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+        stack.leadingAnchor.constraint(
+          equalTo: leadingAnchor, constant: ToolbarTitleLayout.padding),
         stack.trailingAnchor.constraint(equalTo: trailingAnchor),
         stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         heightAnchor.constraint(equalToConstant: 32),
@@ -77,15 +134,7 @@
     }
 
     func show(_ title: String, subtitle: String) {
-      self.title.stringValue = title
-      self.subtitle.stringValue = subtitle
-      self.subtitle.isHidden = subtitle.isEmpty
-      // The only place the strings change, so the only place the text has to be
-      // measured. `limit(to:)` runs once per frame of a divider drag.
-      textWidth = max(
-        self.title.intrinsicContentSize.width,
-        subtitle.isEmpty ? 0 : self.subtitle.intrinsicContentSize.width
-      )
+      stack.show(title, subtitle: subtitle)
       applyWidth()
     }
 
@@ -98,14 +147,105 @@
     }
 
     private var limit: CGFloat = 0
-    private var textWidth: CGFloat = 0
 
     private func applyWidth() {
-      let width = ToolbarTitleLayout.width(forText: textWidth, inColumn: limit)
+      let width = ToolbarTitleLayout.width(forText: stack.textWidth, inColumn: limit)
       // Assigning a constant dirties the titlebar's layout whether or not it moved.
       guard width != widthConstraint.constant else { return }
       widthConstraint.constant = width
     }
+  }
+
+  /// The document's number over its title, in the reader's own toolbar section once
+  /// the header that shows them has scrolled away.
+  ///
+  /// It is the filler between Back/Forward and the document's actions — the item
+  /// takes the place of the flexible space that stood there — and it shrinks to
+  /// nothing rather than overflowing into the toolbar's chevron menu, drawing
+  /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises out
+  /// from under the toolbar's bottom edge and fades in as the heading passes under
+  /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`.
+  @MainActor
+  private final class DocumentTitleView: NSView {
+    private let stack = TitleStack()
+    /// What the text is clipped to: from the top of the item down to the toolbar's
+    /// bottom edge, which is below the item's own — the toolbar gives the item 32
+    /// pt in the middle of a taller bar. Clipped at the item's edge instead, the
+    /// text appeared out of a line drawn across the middle of the toolbar.
+    private let clip = NSView()
+
+    private var progress: CGFloat = 0
+    private var stackHeight: CGFloat = 0
+    /// The toolbar's bottom edge, in this view's coordinates: below zero.
+    private var toolbarBottom: CGFloat = 0
+
+    init() {
+      super.init(frame: .zero)
+      // Placed by frame, not by constraints: it moves on every scroll tick, and a
+      // frame set inside a view whose own size does not change dirties nothing
+      // outside it.
+      clip.wantsLayer = true
+      clip.layer?.masksToBounds = true
+      clip.addSubview(stack)
+      addSubview(clip)
+      // The clip reaches below this view's bounds, so this view must not cut it
+      // off at its own edge.
+      // Sized by the item's `minSize` and `maxSize`, not by constraints.
+      clipsToBounds = false
+      reveal(0)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the titlebar is built in code")
+    }
+
+    func show(_ title: String, subtitle: String) {
+      stack.show(title, subtitle: subtitle)
+      stackHeight = stack.fittingSize.height
+      placeStack()
+    }
+
+    func reveal(_ progress: CGFloat) {
+      self.progress = progress
+      // On the text, not on this view: the toolbar sets its items' own alpha
+      // for their enabled state and overrides whatever is set here.
+      stack.alphaValue = ToolbarTitleReveal.opacity(atProgress: progress)
+      placeStack()
+    }
+
+    override func layout() {
+      super.layout()
+      // Where the toolbar ends, which is where the window's content begins. Only
+      // a layout pass can move it, so it is measured here rather than per tick.
+      if let window {
+        let edge = convert(NSPoint(x: 0, y: window.contentLayoutRect.maxY), from: nil).y
+        toolbarBottom = min(0, edge)
+      }
+      clip.frame = CGRect(
+        x: 0, y: toolbarBottom, width: bounds.width, height: bounds.height - toolbarBottom)
+      placeStack()
+    }
+
+    private func placeStack() {
+      // Not flipped, so down is a smaller y. At 0 the text's top is at the
+      // toolbar's bottom edge, just out of sight under it; at 1 it rests in the
+      // middle of the item.
+      let hidden = toolbarBottom - stackHeight
+      let resting = (bounds.height - stackHeight) / 2
+      let y = hidden + (resting - hidden) * progress
+      let padding = ToolbarTitleLayout.padding
+      stack.frame = CGRect(
+        x: padding,
+        y: y - toolbarBottom,
+        width: max(0, bounds.width - padding * 2),
+        height: stackHeight
+      )
+      // Hidden, not only transparent, while it is out of sight or too narrow to
+      // say anything: VoiceOver reads a transparent label all the same.
+      stack.isHidden = progress == 0 || !ToolbarTitleLayout.isWorthDrawing(width: bounds.width)
+    }
+
   }
 
   @MainActor
@@ -115,6 +255,7 @@
     /// The window's title and subtitle, drawn by us; see `ReaderWindowController`
     /// for why AppKit is not allowed to draw them.
     private let titleView = TitleView()
+    private let documentTitleView = DocumentTitleView()
 
     /// Held so `menuNeedsUpdate` can tell them apart by identity. Their contents are
     /// built when they open rather than held and mutated: what they say depends on
@@ -139,8 +280,16 @@
       capTitleToList()
     }
 
-    /// Keeps the title inside the column it names. Without it a long RFC title ran
-    /// past the list's trailing edge and over the reader's own section.
+    func showDocumentTitle(_ title: String, subtitle: String) {
+      documentTitleView.show(title, subtitle: subtitle)
+    }
+
+    func revealDocumentTitle(_ progress: CGFloat) {
+      documentTitleView.reveal(progress)
+    }
+
+    /// Keeps the title inside the column it names. Without it a long title ran past
+    /// the list's trailing edge and over the reader's own section.
     func capTitleToList() {
       titleView.limit(to: controller.listWidth)
     }
@@ -163,8 +312,10 @@
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
-        // of the document they act on rather than over the list beside it.
-        .rfcNavigation, .flexibleSpace,
+        // of the document they act on rather than over the list beside it. The
+        // document's title fills the room between them and its actions, which is
+        // what holds the actions against the panel's edge.
+        .rfcNavigation, .rfcDocumentTitle,
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
         // The panel's own section. The flexible space holds the toggle against
         // the window's trailing corner, so it stays in the corner whether the
@@ -230,9 +381,21 @@
         // bordered pill and it reads as a button.
         item.isBordered = false
         item.isNavigational = false
-        // The first thing to give up its room when the window narrows — the tab
-        // bar carries the same title, and the document's actions do not.
+        // The first thing to give up its room when the window narrows — the
+        // sidebar shows which collection is chosen, and the document's actions
+        // are nowhere else.
         item.visibilityPriority = .low
+        return item
+
+      case .rfcDocumentTitle:
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = "Document"
+        item.view = documentTitleView
+        // A range, so it flexes; see `FlexibleToolbarItem`.
+        (item as any FlexibleToolbarItem).minSize = NSSize(width: 0, height: 32)
+        (item as any FlexibleToolbarItem).maxSize = NSSize(width: 10_000, height: 32)
+        item.isBordered = false
+        item.isNavigational = false
         return item
 
       case .rfcBookmark:
@@ -261,7 +424,8 @@
         return item
 
       case .rfcPanelToggle:
-        return button(identifier, "Contents", "list.bullet.indent", #selector(togglePanel))
+        return button(
+          identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
 
       default:
         return nil

@@ -36,15 +36,64 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
-  var filter: LibraryFilter = .all
+  private var filterChoice = KeptSelection(LibraryFilter.all)
   var searchText = ""
   var isShowingGoToSheet = false
 
-  var selection: DocumentID? { history.current?.id }
+  /// How many documents the list shows — after the filter and the search — or nil
+  /// until the index is ready. Written by `RFCListView`, which is the one place the
+  /// list is computed; the window's toolbar reads it for the subtitle under the
+  /// list's title, and has no list of its own to count.
+  var listedCount: Int?
+
+  /// What the list lists: the last filter chosen, whether or not the sidebar still
+  /// shows it as selected.
+  var filter: LibraryFilter { filterChoice.value }
+
+  /// The sidebar's `List(selection:)`, bound to directly.
+  ///
+  /// Nil when a collapsed split view has gone back to the sidebar. A Mac refuses
+  /// it: the sidebar is always beside the list there, and shows which filter feeds
+  /// it, so a click in its blank space or a Command-click must not leave it showing
+  /// none.
+  var sidebarSelection: LibraryFilter? {
+    get { filterChoice.selection }
+    set {
+      #if os(macOS)
+        guard newValue != nil else { return }
+      #endif
+      filterChoice.selection = newValue
+    }
+  }
+
+  /// The document list's `List(selection:)`, bound to directly, and what the reader
+  /// shows.
+  ///
+  /// Setting a row is `select(_:)`. Setting nil — a collapsed split view going back
+  /// to the list, or a Mac deselecting the row — hides the document and leaves the
+  /// history alone, so Back and Forward still work (#261). The selection used to be
+  /// `history.current`, which never becomes nil again, and every list bound to it
+  /// needed a workaround of its own for the nil a pop writes.
+  var selection: DocumentID? {
+    get { history.shown?.id }
+    set {
+      if let newValue {
+        select(newValue)
+      } else {
+        history.hide()
+      }
+    }
+  }
   private(set) var scrollRequest: ScrollRequest?
 
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
+  /// Where Back returns to, straight after a jump within the document on screen.
+  var returnOffer: Place? { history.returnOffer }
+
+  func settleReturnOffer() {
+    history.settleReturnOffer()
+  }
 
   // MARK: - Navigation
 
@@ -59,7 +108,7 @@ final class NavigationModel: Identifiable {
     go(to: Place(id: id, section: link.section))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
-    filter = .all
+    sidebarSelection = .all
   }
 
   func open(_ id: DocumentID, section: String? = nil, in index: RFCIndex?) {

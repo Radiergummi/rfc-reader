@@ -32,6 +32,22 @@ struct RFCLinkTests {
     #expect(RFCLink(url: url) == expected)
   }
 
+  /// A section is caller-supplied text, and every builder spliced it into a URL
+  /// string: `appURL` force-unwrapped `URL(string:)` over it, and the web builders
+  /// fell back to the page without its fragment (#150). Set as a fragment through
+  /// `URLComponents`, it is percent-encoded, and it survives the way back.
+  @Test func aSectionWithReservedCharactersMakesEveryURL() {
+    let link = RFCLink(id: .rfc(9110), section: "4.2 draft#1")
+    #expect(link.appURL.absoluteString == "rfc://9110#section-4.2%20draft%231")
+    #expect(RFCLink(url: link.appURL) == link)
+    #expect(
+      link.webURL.absoluteString
+        == "https://www.rfc-editor.org/rfc/rfc9110#section-4.2%20draft%231")
+    #expect(
+      RFCEditorEndpoints.datatracker(.rfc(9110), section: "4.2 draft#1").absoluteString
+        == "https://datatracker.ietf.org/doc/html/rfc9110#section-4.2%20draft%231")
+  }
+
   @Test(
     "ignores unrelated URLs",
     arguments: [

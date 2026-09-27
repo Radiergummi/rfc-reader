@@ -177,11 +177,14 @@
       window.titleVisibility = .hidden
 
       self.toolbar = toolbar
+      self.reader.revealTitle = { [weak toolbar] in toolbar?.revealDocumentTitle($0) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)
       observeTitle()
+      observeListTitle()
       observeDocument()
+      observeStoreSaves()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -234,17 +237,43 @@
         // is far narrower than the window and clips rather than eliding.
         let subtitle =
           navigation.selection
-          .flatMap { library.metadata($0)?.title }?
+          .flatMap {
+            DocumentActions.subtitle(
+              metadata: library.metadata($0), documentTitle: reader.documentTitle)
+          }?
           .truncated(to: Self.subtitleLimit) ?? ""
         window?.title = title
         window?.subtitle = subtitle
-        toolbar?.showTitle(title, subtitle: subtitle)
+        // The reader's own copy, shown once its header scrolls away. Whole, not
+        // truncated like the tab's: the item ellipsises to whatever room it has.
+        toolbar?.showDocumentTitle(
+          navigation.selection?.displayName ?? "",
+          subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
+        )
         // Here because this is already the one place that re-fires when the
         // selection changes, and the fetch must not be on the toolbar's
         // validation path; see `isBookmarked`.
         refreshBookmarked()
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeTitle() }
+      }
+    }
+
+    /// The title over the list names the list: the collection the sidebar chose and
+    /// how many documents it holds after the search. The document is the tab's to
+    /// name, and the reader's own.
+    ///
+    /// Its own loop, apart from `observeTitle`: the count changes with most
+    /// keystrokes in the search field, and nothing else there — the window's
+    /// title, the reader's, the bookmark fetch — depends on it.
+    private func observeListTitle() {
+      withObservationTracking {
+        toolbar?.showTitle(
+          navigation.filter.title,
+          subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+        )
+      } onChange: { [weak self] in
+        Task { @MainActor in self?.observeListTitle() }
       }
     }
 
@@ -358,9 +387,28 @@
     /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
     /// item once per event cycle, and asking SwiftData there put a compiled
     /// `#Predicate` and a store round trip under every mouse move, once per open tab.
-    /// Nothing else on macOS writes a `Bookmark`, so the two places it can change
-    /// are the selection moving and `toggleBookmark()`.
+    /// It changes when the selection moves, and whenever a bookmark is saved — by
+    /// this window's `toggleBookmark()`, or by another tab's, which left this one's
+    /// glyph stale while both showed the same RFC (#141).
     private(set) var isBookmarked = false
+
+    /// The token for `observeStoreSaves()`, removed when the window closes.
+    private var storeSaves: (any NSObjectProtocol)?
+
+    /// Refreshes `isBookmarked` on every save of the store, whoever made it. Saves
+    /// follow what the reader does — a bookmark toggled, a document opened or left,
+    /// which records its reading position — not every event cycle, so the fetch
+    /// stays off the toolbar's validation path, where the comment above wants it.
+    private func observeStoreSaves() {
+      storeSaves = NotificationCenter.default.addObserver(
+        forName: ModelContext.didSave, object: nil, queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          self?.refreshBookmarked()
+          self?.window?.toolbar?.validateVisibleItems()
+        }
+      }
+    }
 
     private func refreshBookmarked() {
       isBookmarked =
@@ -399,6 +447,9 @@
     }
 
     func windowWillClose(_ notification: Notification) {
+      if let storeSaves {
+        NotificationCenter.default.removeObserver(storeSaves)
+      }
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
@@ -434,6 +485,7 @@
   struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
 
     var body: some View {
       @Bindable var navigation = navigation
@@ -446,7 +498,12 @@
         }
       }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .onChange(of: navigation.selection) {
+        library.activate(navigation)
+        // A deselected row leaves nothing on screen, and the panel and the toolbar
+        // must not go on describing the document that was.
+        if navigation.selection == nil { reader.clear() }
+      }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }

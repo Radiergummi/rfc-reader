@@ -1,4 +1,5 @@
 import Foundation
+import RFCKit
 import Testing
 
 @testable import RFCReaderKit
@@ -122,6 +123,48 @@ struct ChipLineGeometryTests {
       #expect(
         chip.rect.minX > FragmentGeometry.chipPadding,
         "a chip on a later line must not draw at the line's left edge")
+    }
+  }
+
+  /// A chip is its symbol's attachment, a word joiner and its label, and the
+  /// attachment is a storage run of its own. Asked for with `effectiveRange`, the
+  /// chip's extent on its first line was that one character, so the first line
+  /// rounded its trailing end as if the chip ended there, and a wrapped chip drew
+  /// as a whole pill followed by a half one (#122).
+  ///
+  /// The chip comes from the builder, not a hand-made copy of its recipe: its label
+  /// is bound with no-break spaces, so it wraps only where a column is too narrow
+  /// to hold it at all, and that is the width it is laid out at here: narrow enough
+  /// for three lines, so there is a middle one that rounds neither end.
+  @Test func aWrappedChipRoundsOnlyItsOuterEnds() throws {
+    let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
+    let text = Fixtures.inlineRun([
+      .text("As described in "), .crossReference(xref), .text(" and elsewhere."),
+    ])
+
+    let (storage, layout) = layOut(text, width: 60)
+    defer { withExtendedLifetime(storage) {} }
+    var fragment: NSTextLayoutFragment?
+    layout.enumerateTextLayoutFragments(
+      from: layout.documentRange.location, options: [.ensuresLayout]
+    ) {
+      fragment = $0
+      return false
+    }
+    let paragraph = try #require(fragment)
+    let chips = FragmentGeometry.chipRects(
+      in: text,
+      lines: paragraph.textLineFragments,
+      fragment: NSRange(location: 0, length: text.length),
+      origin: .zero
+    )
+    try #require(chips.count >= 3, "the chip must wrap across three lines to have a middle one")
+    #expect(chips.first?.roundsLeading == true)
+    #expect(chips.first?.roundsTrailing == false, "the chip goes on past its first line")
+    #expect(chips.last?.roundsLeading == false, "the chip began on an earlier line")
+    #expect(chips.last?.roundsTrailing == true)
+    for middle in chips.dropFirst().dropLast() {
+      #expect(!middle.roundsLeading && !middle.roundsTrailing, "a middle line rounds neither end")
     }
   }
 

@@ -39,18 +39,6 @@ struct RFCListView: View {
     )
   }
 
-  /// Selecting a row is a navigation, so it goes through the history rather than
-  /// assigning the selection behind its back.
-  private var selectionBinding: Binding<DocumentID?> {
-    Binding(
-      get: { navigation.selection },
-      // Not `library.open(_:activation:in:)` like every other open: a selection
-      // binding is handed the outcome, not the click, and Command-click on a
-      // list row is the platform's multi-select chord rather than ours to take.
-      set: { if let id = $0 { navigation.select(id) } }
-    )
-  }
-
   var body: some View {
     @Bindable var navigation = navigation
     let bookmarked = bookmarkedNumbers
@@ -59,7 +47,14 @@ struct RFCListView: View {
     // memoising.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
-    List(selection: selectionBinding) {
+    // Nil while the index loads: "0 Documents" would be a claim about the library,
+    // not about a list that has not arrived yet.
+    let listed: Int? = library.indexState.isReady ? rows.count : nil
+    // Selecting a row is a navigation: the setter goes through the history. Not
+    // `library.open(_:activation:in:)` like every other open: a selection binding
+    // is handed the outcome, not the click, and Command-click on a list row is the
+    // platform's multi-select chord rather than ours to take.
+    List(selection: $navigation.selection) {
       ForEach(rows.prefix(limit)) { rfc in
         RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
           .tag(rfc.id)
@@ -68,15 +63,30 @@ struct RFCListView: View {
             limit = ListWindow.extendedLimit(from: limit, total: rows.count)
           }
       }
+      // Where Mail says when it last checked: after the last row, scrolled to
+      // rather than pinned. Only once every row is in the window — after a
+      // partial page it would read as the end of a list that goes on — and not
+      // under an empty search, where the overlay already says what there is to
+      // say.
+      if limit >= rows.count, !(rows.isEmpty && library.indexState.isReady) {
+        IndexStatusView()
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 8)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
     }
     // Inset rather than plain: the selection is a rounded capsule with a margin
     // either side, the way every other macOS content list draws one. Plain fills
     // the row edge to edge and squares it off.
     .listStyle(.inset)
     .overlay {
-      if rows.isEmpty, case .ready = library.indexState {
+      if rows.isEmpty, library.indexState.isReady {
         ContentUnavailableView.search(text: navigation.searchText)
       }
+    }
+    .onChange(of: listed, initial: true) {
+      navigation.listedCount = listed
     }
     .task(id: navigation.filter) {
       recentOrder = library.recentlyReadNumbers()
@@ -96,6 +106,10 @@ struct RFCListView: View {
     .onChange(of: navigation.selection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
+    #if !os(macOS)
+      .navigationTitle(navigation.filter.title)
+      .navigationSubtitle(listed.map { DocumentCount.label($0) } ?? "")
+    #endif
   }
 
   /// Where the selected document sits in the list, if it is in it at all.
@@ -105,6 +119,31 @@ struct RFCListView: View {
   private func selectedRow() -> Int? {
     guard let selection = navigation.selection else { return nil }
     return rfcs.firstIndex { $0.id == selection }
+  }
+}
+
+/// Where the index stands: loading, when it was last updated, or why it failed
+/// and a way to try again — the last of which is the only place a failed refresh
+/// is reported at all.
+struct IndexStatusView: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    HStack(spacing: 6) {
+      switch library.indexState {
+      case .idle, .loading:
+        ProgressView().controlSize(.mini)
+        Text("Loading index…")
+      case .ready(let updatedAt):
+        Text("Updated \(updatedAt, format: .relative(presentation: .named))")
+      case .failed(let message):
+        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+        Text(message).lineLimit(2)
+        Button("Retry") { Task { await library.refreshIndex() } }.buttonStyle(.borderless)
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
   }
 }
 

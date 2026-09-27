@@ -14,6 +14,152 @@ struct NavigationHistoryTests {
     Place(id: .rfc(number), section: section)
   }
 
+  // MARK: - Returning from a jump within a document (#254)
+
+  @Test func aJumpWithinTheDocumentOffersTheWayBack() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    #expect(history.returnOffer == place(9110, "section-4.2"))
+  }
+
+  /// The system back button already leaves the document; the offer is for
+  /// returning within it.
+  @Test func aJumpToAnotherDocumentOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    #expect(history.returnOffer == nil)
+  }
+
+  @Test func theFirstPlaceOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-4.2"))
+    #expect(history.returnOffer == nil)
+  }
+
+  /// Stepping through the history is not a jump to undo, even when the step lands
+  /// next to another place in the same document.
+  @Test func steppingBackOrForwardOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-4"))
+    history.go(to: place(9110, "section-15"))
+    _ = history.goBack()
+    #expect(history.returnOffer == nil)
+    _ = history.goForward()
+    #expect(history.returnOffer == nil)
+  }
+
+  /// Settled is a fact about the history, not about the place offered: the same
+  /// jump taken again, after going back, offers again.
+  @Test func aSettledOfferStaysSettledUntilTheNextJump() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    history.settleReturnOffer()
+    #expect(history.returnOffer == nil)
+    #expect(history.current == place(9110, "section-15"), "settling does not move")
+
+    _ = history.goBack()
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    #expect(history.returnOffer == place(9110, "section-4"))
+  }
+
+  @Test func aNewJumpAfterSteppingBackOffersAgain() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-4"))
+    _ = history.goBack()
+    history.go(to: place(9110, "section-9"), leaving: "section-2")
+    #expect(history.returnOffer == place(9110, "section-2"))
+  }
+
+  // MARK: - Leaving the document without leaving the history (#261)
+
+  /// Going back to the list on an iPhone, or deselecting the row on a Mac, puts
+  /// nothing on screen. The history is not where that decision is undone: Back
+  /// and Forward still work from the list.
+  @Test func hidingPutsNothingOnScreenAndKeepsTheHistory() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    #expect(history.shown == nil)
+    #expect(history.current == place(8999))
+    #expect(history.canGoBack)
+  }
+
+  /// The row just left is the likeliest one to be tapped again, and `go` treats
+  /// the place already current as no navigation at all.
+  @Test func goingToTheHiddenPlaceShowsItWithoutANewEntry() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    history.go(to: place(8999))
+    #expect(history.shown == place(8999))
+    #expect(history.goBack() == place(9110))
+    #expect(!history.canGoBack)
+  }
+
+  /// The row carries no section, and the place left behind usually does: after a
+  /// jump, a deep link, or Back and Forward.
+  @Test func reopeningTheHiddenDocumentShowsItWhereItWas() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    history.go(to: place(9110))
+    #expect(history.shown == place(9110, "section-15.5"))
+    #expect(history.goBack() == place(9110, "section-4.2"))
+    #expect(!history.canGoBack)
+  }
+
+  /// Reopening is not a jump to undo, even though Back stays in the document.
+  @Test func reopeningTheHiddenDocumentOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    history.go(to: place(9110))
+    #expect(history.returnOffer == nil)
+  }
+
+  @Test func goingSomewhereElseRecordsTheHiddenPlace() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.hide()
+    history.go(to: place(8999))
+    #expect(history.shown == place(8999))
+    #expect(history.goBack() == place(9110))
+  }
+
+  @Test func steppingBackOrForwardShowsWhereItLands() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(8999))
+    history.hide()
+    _ = history.goBack()
+    #expect(history.shown == place(9110))
+    history.hide()
+    _ = history.goForward()
+    #expect(history.shown == place(8999))
+  }
+
+  /// The offer is drawn over the document it returns within.
+  @Test func nothingOnScreenOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    #expect(history.returnOffer == nil)
+  }
+
+  @Test func aFreshHistoryShowsNothing() {
+    #expect(NavigationHistory().shown == nil)
+  }
+
   @Test func aFreshHistoryGoesNowhere() {
     let history = NavigationHistory()
     #expect(history.current == nil)

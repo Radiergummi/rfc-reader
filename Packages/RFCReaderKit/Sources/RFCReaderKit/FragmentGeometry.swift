@@ -83,7 +83,8 @@ public enum FragmentGeometry {
     // authors' block's affiliation and address lines. Each fragment then saw a
     // decoration that began and ended with itself, so it drew a fully rounded
     // card at its own indent and the block came out as a staircase. Artwork
-    // happened to look right only because its attributes are uniform.
+    // hid this while its attributes were uniform; its last line now carries the
+    // block's spacing alone (#31), so it depends on this as much as a table does.
     var effective = NSRange(location: 0, length: 0)
     guard
       let decoration = RFCDecoration(
@@ -188,9 +189,14 @@ public enum FragmentGeometry {
 
         // The piece `enumerateAttribute` hands back is already clipped to
         // this line; the run's own full extent — which may start before or
-        // end after this line — decides which ends round.
+        // end after this line — decides which ends round. The longest range,
+        // not the storage run: the chip's symbol is an attachment, a storage
+        // run of its own, and ending the chip there rounded the trailing end
+        // of every wrapped chip's first line (#122).
         var runRange = NSRange(location: 0, length: 0)
-        _ = text.attribute(.rfcChip, at: piece.location, effectiveRange: &runRange)
+        _ = text.attribute(
+          .rfcChip, at: piece.location, longestEffectiveRange: &runRange,
+          in: NSRange(location: 0, length: text.length))
         let roundsLeading = runRange.location >= lineRange.location
         let roundsTrailing = NSMaxRange(runRange) <= NSMaxRange(lineRange)
 

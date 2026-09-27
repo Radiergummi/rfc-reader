@@ -269,7 +269,8 @@ extension DocumentTextBuilder {
     spacingAfter: CGFloat,
     tabStops: [NSTextTab]? = nil,
     wraps: Bool = true,
-    alignment: NSTextAlignment = .natural
+    alignment: NSTextAlignment = .natural,
+    lineHeightMultiple: CGFloat? = nil
   ) -> NSParagraphStyle {
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = alignment
@@ -277,7 +278,7 @@ extension DocumentTextBuilder {
     paragraph.headIndent = indent
     paragraph.paragraphSpacingBefore = spacingBefore
     paragraph.paragraphSpacing = spacingAfter
-    paragraph.lineHeightMultiple = style.lineHeightMultiple
+    paragraph.lineHeightMultiple = lineHeightMultiple ?? style.lineHeightMultiple
     paragraph.lineBreakMode = wraps ? .byWordWrapping : .byClipping
     if let tabStops {
       paragraph.tabStops = tabStops

@@ -50,7 +50,18 @@ final class ReaderState {
   /// by the reader.
   var showOriginal = false
 
+  /// Moves the document's title into the toolbar, from 0 to 1 as its heading
+  /// scrolls away; see `ToolbarTitleReveal`. The toolbar installs itself here.
+  ///
+  /// A callback, not a property the toolbar observes: it is called on every
+  /// scroll tick the title moves in, and observation delivers a change a run-loop
+  /// turn later, which leaves a title coupled to the scroll trailing behind it.
+  @ObservationIgnored var revealTitle: (CGFloat) -> Void = { _ in }
+
   func clear() {
+    // The next document starts at its top, under its own header, until the reader
+    // reports otherwise.
+    revealTitle(0)
     sections = []
     groups = []
     currentAnchor = nil
