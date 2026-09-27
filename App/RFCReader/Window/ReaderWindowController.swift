@@ -169,6 +169,7 @@
       window.titleVisibility = .hidden
 
       self.toolbar = toolbar
+      self.reader.revealTitle = { [weak toolbar] in toolbar?.revealDocumentTitle($0) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)
@@ -239,6 +240,12 @@
         toolbar?.showTitle(
           navigation.filter.title,
           subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+        )
+        // The reader's own copy, shown once its header scrolls away. Whole, not
+        // truncated like the tab's: the item ellipsises to whatever room it has.
+        toolbar?.showDocumentTitle(
+          navigation.selection?.displayName ?? "",
+          subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
         )
         // Here because this is already the one place that re-fires when the
         // selection changes, and the fetch must not be on the toolbar's

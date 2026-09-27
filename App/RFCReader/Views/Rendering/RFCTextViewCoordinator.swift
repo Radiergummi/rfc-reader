@@ -26,6 +26,16 @@ final class VisibleAnchorBox {
   var anchor: String?
 }
 
+/// Where the header's heading ends, in the hosted header's own coordinates, as
+/// `DocumentHeaderView` measured it. A box for the same reason as
+/// `VisibleAnchorBox`: the header is hosted outside SwiftUI's diffing and built
+/// once, so it writes into something both sides already hold rather than calling
+/// through to a coordinator it was built before.
+@MainActor
+final class HeadingBox {
+  var bottom: CGFloat?
+}
+
 /// Everything the two representables share. Both platforms drive the same anchor
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
@@ -65,6 +75,14 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
+  /// How far the document's title has come into the toolbar; see
+  /// `ToolbarTitleReveal`. Called synchronously, on every scroll tick that moves
+  /// it: the toolbar's title is coupled to the scroll, and a hop through a `Task`
+  /// would leave it a frame behind the text. That is safe where
+  /// `onVisibleAnchorChange` is not because it touches no SwiftUI state.
+  var onTitleReveal: (CGFloat) -> Void = { _ in }
+  var heading: HeadingBox?
+  private var lastTitleReveal: CGFloat?
 
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -395,6 +413,9 @@ final class RFCTextViewCoordinator: NSObject {
   /// `textViewportLayoutController.viewportRange`: that range is larger than the
   /// visible rect, so its start names a section already scrolled past.
   func reportVisibleAnchor() {
+    // Everything that reports where the viewport is comes through here — scrolls,
+    // jumps, restored places — which is every time the title's position can move.
+    updateTitleReveal()
     guard let textView,
       let built,
       let layout = textView.textLayoutManager
@@ -422,6 +443,30 @@ final class RFCTextViewCoordinator: NSObject {
     // Deferred for the same reason as `onScrollHandled`: installing a document
     // reports from inside SwiftUI's update, where mutating state is illegal.
     Task { self.onVisibleAnchorChange(anchor) }
+  }
+
+  private func updateTitleReveal() {
+    guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else { return }
+    let progress = ToolbarTitleReveal.progress(
+      headingBottom: header.frame.minY + bottom,
+      visibleTop: textView.unobscuredTop,
+      distance: Self.headingLineHeight
+    )
+    // Pinned at 0 or 1 for almost all of a document; only a change is news.
+    guard progress != lastTitleReveal else { return }
+    lastTitleReveal = progress
+    onTitleReveal(progress)
+  }
+
+  /// The height of one line of the header's heading, which is set in the large
+  /// title style (`DocumentHeaderView`): the distance the reveal runs over.
+  private static var headingLineHeight: CGFloat {
+    #if canImport(UIKit)
+      UIFont.preferredFont(forTextStyle: .largeTitle).lineHeight
+    #else
+      let font = NSFont.preferredFont(forTextStyle: .largeTitle)
+      return ceil(font.ascender - font.descender + font.leading)
+    #endif
   }
 
   /// Clamped against the laid-out document end rather than the text view's own

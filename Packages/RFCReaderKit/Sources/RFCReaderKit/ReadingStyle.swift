@@ -109,4 +109,33 @@ public enum ToolbarTitleLayout {
   public static func width(forText text: CGFloat, inColumn column: CGFloat) -> CGFloat {
     min(text + padding * 2, max(minimumWidth, column - padding * 3))
   }
+
+  /// Whether a title squeezed to this width still says anything. The reader's
+  /// title flexes with the room between Back/Forward and the document's actions,
+  /// and below this it draws nothing rather than a lone ellipsis.
+  public static func isWorthDrawing(width: CGFloat) -> Bool {
+    width >= minimumWidth
+  }
+}
+
+/// How far the document's title has come into the reader's toolbar, from 0 to 1.
+///
+/// The header shows the title in full while it is on screen; as its heading scrolls
+/// up under the toolbar, the toolbar's copy rises in to replace it, scrubbing with
+/// the scroll rather than playing an animation. The transition runs over the
+/// heading's last line — `distance` — so the toolbar's title arrives exactly as the
+/// header's leaves: 0 while that line is wholly below the toolbar's bottom edge, 1
+/// once it has passed wholly under it.
+public enum ToolbarTitleReveal {
+  /// `headingBottom` and `visibleTop` — the toolbar's bottom edge — are in the same
+  /// coordinates, y growing down the document.
+  public static func progress(
+    headingBottom: CGFloat,
+    visibleTop: CGFloat,
+    distance: CGFloat
+  ) -> CGFloat {
+    guard distance > 0 else { return visibleTop >= headingBottom ? 1 : 0 }
+    let travelled = (visibleTop - (headingBottom - distance)) / distance
+    return min(1, max(0, travelled))
+  }
 }

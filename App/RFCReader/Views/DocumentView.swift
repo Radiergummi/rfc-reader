@@ -74,6 +74,7 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var heading = HeadingBox()
   /// Anchor to section number, built once with the document. See
   /// `onVisibleAnchorChange` for why it is not asked of the document each time.
   @State private var sectionNumbers: [String: String] = [:]
@@ -249,13 +250,20 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
+        onTitleReveal: { reader.revealTitle($0) },
+        heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
         // it: the banner's links to newer RFCs go through `LibraryModel`.
         header: {
-          DocumentHeaderView(library: library, navigation: navigation, identity: headerIdentity)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+          DocumentHeaderView(
+            library: library, navigation: navigation, identity: headerIdentity, heading: heading
+          )
+          .padding(.top, 16)
+          .padding(.bottom, 12)
+          // Outside the padding, so the heading is measured from the top of the
+          // hosted view, which is where the coordinator places it.
+          .coordinateSpace(.named(DocumentHeaderView.coordinateSpace))
         }
       )
       #if !os(macOS)
@@ -620,11 +628,22 @@ struct DocumentHeaderView: View {
   /// describe different headers.
   let identity: Identity
 
+  /// Where the heading ends, for the toolbar's copy of the title to take over from
+  /// as it scrolls away; see `ToolbarTitleReveal`.
+  let heading: HeadingBox
+
+  static let coordinateSpace = "documentHeader"
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(identity.title)
         .font(.largeTitle.weight(.semibold))
         .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) {
+          $0.frame(in: .named(Self.coordinateSpace)).maxY
+        } action: { bottom in
+          heading.bottom = bottom
+        }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {
           StatusBadge(status: metadata.currentStatus)

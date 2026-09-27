@@ -7,6 +7,7 @@
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
+    static let rfcDocumentTitle = NSToolbarItem.Identifier("rfc.documentTitle")
     static let rfcTitle = NSToolbarItem.Identifier("rfc.title")
     static let rfcBookmark = NSToolbarItem.Identifier("rfc.bookmark")
     static let rfcCite = NSToolbarItem.Identifier("rfc.cite")
@@ -38,7 +39,7 @@
     private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
     private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
 
-    private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
+    static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
       let field = NSTextField(labelWithString: "")
       field.font = font
       field.textColor = colour
@@ -108,6 +109,93 @@
     }
   }
 
+  /// The document's number over its title, in the reader's own toolbar section once
+  /// the header that shows them has scrolled away.
+  ///
+  /// It is the filler between Back/Forward and the document's actions — the item
+  /// takes the place of the flexible space that stood there — and it shrinks to
+  /// nothing rather than overflowing into the toolbar's chevron menu, drawing
+  /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises in
+  /// from below the item's bottom edge and fades in as the heading passes under the
+  /// toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`.
+  @MainActor
+  private final class DocumentTitleView: NSView {
+    private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
+    private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
+    private let stack: NSStackView
+
+    private var progress: CGFloat = 0
+    private var stackHeight: CGFloat = 0
+
+    init() {
+      stack = NSStackView(views: [title, subtitle])
+      super.init(frame: .zero)
+      stack.orientation = .vertical
+      stack.alignment = .leading
+      stack.spacing = 0
+      for label in [title, subtitle] {
+        // Truncated rather than pushing the item wider than it was given.
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+      }
+      // Placed by frame, not by constraints: it moves on every scroll tick, and a
+      // frame set inside a view whose own size does not change dirties nothing
+      // outside it.
+      addSubview(stack)
+      // The text slides in from outside the item's bounds, and is not seen there.
+      wantsLayer = true
+      layer?.masksToBounds = true
+      translatesAutoresizingMaskIntoConstraints = false
+      // Only the height: the width is the toolbar's to hand out, between the
+      // item's `minSize` and `maxSize`.
+      heightAnchor.constraint(equalToConstant: 32).isActive = true
+      reveal(0)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) is not used: the titlebar is built in code")
+    }
+
+    func show(_ title: String, subtitle: String) {
+      self.title.stringValue = title
+      self.subtitle.stringValue = subtitle
+      self.subtitle.isHidden = subtitle.isEmpty
+      stackHeight = stack.fittingSize.height
+      placeStack()
+    }
+
+    func reveal(_ progress: CGFloat) {
+      self.progress = progress
+      // On the text, not on this view: the toolbar sets its items' own alpha
+      // for their enabled state and overrides whatever is set here.
+      stack.alphaValue = progress
+      placeStack()
+    }
+
+    override func layout() {
+      super.layout()
+      placeStack()
+    }
+
+    private func placeStack() {
+      let resting = (bounds.height - stackHeight) / 2
+      // Not flipped, so down is a smaller y: at 0 the text sits a whole item's
+      // height below where it rests, just out of sight under the bottom edge.
+      let offset = (1 - progress) * bounds.height
+      stack.frame = CGRect(
+        x: Self.padding,
+        y: resting - offset,
+        width: max(0, bounds.width - Self.padding * 2),
+        height: stackHeight
+      )
+      // Hidden, not only transparent, while it is out of sight or too narrow to
+      // say anything: VoiceOver reads a transparent label all the same.
+      stack.isHidden = progress == 0 || !ToolbarTitleLayout.isWorthDrawing(width: bounds.width)
+    }
+
+    private static let padding: CGFloat = 8
+  }
+
   @MainActor
   final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
@@ -115,6 +203,7 @@
     /// The window's title and subtitle, drawn by us; see `ReaderWindowController`
     /// for why AppKit is not allowed to draw them.
     private let titleView = TitleView()
+    private let documentTitleView = DocumentTitleView()
 
     /// Held so `menuNeedsUpdate` can tell them apart by identity. Their contents are
     /// built when they open rather than held and mutated: what they say depends on
@@ -137,6 +226,14 @@
     func showTitle(_ title: String, subtitle: String) {
       titleView.show(title, subtitle: subtitle)
       capTitleToList()
+    }
+
+    func showDocumentTitle(_ title: String, subtitle: String) {
+      documentTitleView.show(title, subtitle: subtitle)
+    }
+
+    func revealDocumentTitle(_ progress: CGFloat) {
+      documentTitleView.reveal(progress)
     }
 
     /// Keeps the title inside the column it names. Without it a long title ran past
@@ -163,8 +260,10 @@
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
-        // of the document they act on rather than over the list beside it.
-        .rfcNavigation, .flexibleSpace,
+        // of the document they act on rather than over the list beside it. The
+        // document's title fills the room between them and its actions, which is
+        // what holds the actions against the panel's edge.
+        .rfcNavigation, .rfcDocumentTitle,
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
         // The panel's own section. The flexible space holds the toggle against
         // the window's trailing corner, so it stays in the corner whether the
@@ -234,6 +333,22 @@
         // sidebar shows which collection is chosen, and the document's actions
         // are nowhere else.
         item.visibilityPriority = .low
+        return item
+
+      case .rfcDocumentTitle:
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = "Document"
+        item.view = documentTitleView
+        // Deprecated, and the only thing that works. The replacement — width
+        // constraints on the view — gives an item exactly its fitting size:
+        // measured, a `>= 0, <= text` pair left it 0 pt wide with or without a
+        // flexible space beside it, and a low-priority preferred width made it
+        // a fixed width the toolbar would not compress, so Back and Forward were
+        // pushed out over the list instead. A range here makes it flex.
+        item.minSize = NSSize(width: 0, height: 32)
+        item.maxSize = NSSize(width: 10_000, height: 32)
+        item.isBordered = false
+        item.isNavigational = false
         return item
 
       case .rfcBookmark:

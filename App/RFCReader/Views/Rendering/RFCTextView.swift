@@ -21,6 +21,9 @@ struct RFCTextView: View {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
+  let onTitleReveal: (CGFloat) -> Void
+  /// Written by the header as it lays out; see `HeadingBox`.
+  let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
   /// thing done with it is to hand it to a hosting controller, which is not
   /// generic either.
@@ -36,6 +39,8 @@ struct RFCTextView: View {
     onScrollHandled: @escaping () -> Void,
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
+    onTitleReveal: @escaping (CGFloat) -> Void,
+    heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
   ) {
@@ -45,6 +50,8 @@ struct RFCTextView: View {
     self.onScrollHandled = onScrollHandled
     self.onVisibleAnchorChange = onVisibleAnchorChange
     self.onLink = onLink
+    self.onTitleReveal = onTitleReveal
+    self.heading = heading
     self.headerIdentity = headerIdentity
     self.header = AnyView(header())
   }
@@ -59,6 +66,8 @@ struct RFCTextView: View {
           onScrollHandled: onScrollHandled,
           onVisibleAnchorChange: onVisibleAnchorChange,
           onLink: onLink,
+          onTitleReveal: onTitleReveal,
+          heading: heading,
           library: library,
           header: header,
           headerIdentity: headerIdentity
@@ -79,6 +88,8 @@ struct ReaderInputs {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
+  let onTitleReveal: (CGFloat) -> Void
+  let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView
   let headerIdentity: DocumentHeaderView.Identity
@@ -90,6 +101,8 @@ struct ReaderInputs {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
+    coordinator.onTitleReveal = onTitleReveal
+    coordinator.heading = heading
     coordinator.library = library
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
