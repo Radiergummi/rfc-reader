@@ -24,15 +24,8 @@ actor DocumentStore {
   /// one keeps its result off the disk, and one nobody waits for any more is
   /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
   /// own.
-  private var downloads = InFlightDownloads<Fetched>()
-  private var originalTexts = InFlightDownloads<Data>()
-
-  /// A body as fetched, with the format it came in and the document parsed from it.
-  private struct Fetched: Sendable {
-    let data: Data
-    let format: FileFormat
-    let document: RFCDocument
-  }
+  private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
+  private let originalTexts = InFlightDownloads<Data>()
 
   /// Whether a body has been written since eviction last looked, so a cache that
   /// has not grown is not enumerated again.
@@ -119,20 +112,12 @@ actor DocumentStore {
       return document
     }
 
-    let (task, generation) = downloads.join(id) {
+    let (fetched, isKept) = try await downloads.value(for: id) {
       Task { try await Self.fetch(id, formats: formats, client: client) }
     }
-    let fetched: Fetched
-    do {
-      fetched = try await InFlightDownloads.value(of: task) { await self.leaveDownload(id, task) }
-    } catch {
-      downloads.finish(id, task)
-      throw error
-    }
-    downloads.finish(id, task)
-    // A removal while this was in flight: the reader waiting for it still gets
-    // the document, but it is not kept (#116).
-    guard downloads.isCurrent(id, since: generation) else { return fetched.document }
+    // A removal while this was in flight, or another reader of the same fetch has
+    // kept it: the document is shown, and not written here (#116).
+    guard isKept else { return fetched.document }
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
@@ -140,20 +125,11 @@ actor DocumentStore {
     return fetched.document
   }
 
-  /// The reader waiting for `task` was cancelled; the last to leave cancels it.
-  private func leaveDownload(_ id: DocumentID, _ task: Task<Fetched, any Error>) {
-    downloads.leave(id, task)
-  }
-
-  private func leaveOriginalText(_ id: DocumentID, _ task: Task<Data, any Error>) {
-    originalTexts.leave(id, task)
-  }
-
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
   /// text only when there is no XML (#125). Off the actor, parse included, so the
   /// store answers other calls meanwhile.
   private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
-    async throws -> Fetched
+    async throws -> RFCEditorClient.FetchedDocument
   {
     let fetched = try await client.fetchPreferredDocument(
       id, availableFormats: formats.isEmpty ? nil : formats)
@@ -162,7 +138,7 @@ actor DocumentStore {
         "\(id.displayName, privacy: .public): XML did not parse, shown from the text: \(String(describing: failure), privacy: .public)"
       )
     }
-    return Fetched(data: fetched.data, format: fetched.format, document: fetched.document)
+    return fetched
   }
 
   // MARK: - Eviction (#39)
@@ -202,18 +178,10 @@ actor DocumentStore {
     if let data = try? Data(contentsOf: textURL) {
       return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
     }
-    let (task, generation) = originalTexts.join(id) {
+    let (data, isKept) = try await originalTexts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
     }
-    let data: Data
-    do {
-      data = try await InFlightDownloads.value(of: task) { await self.leaveOriginalText(id, task) }
-    } catch {
-      originalTexts.finish(id, task)
-      throw error
-    }
-    originalTexts.finish(id, task)
-    if originalTexts.isCurrent(id, since: generation) {
+    if isKept {
       try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
       hasGrown = true
     }

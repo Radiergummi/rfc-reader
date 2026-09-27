@@ -31,20 +31,16 @@ struct InFlightDownloadsTests {
   /// The store's use of `InFlightDownloads`, with a fetch that waits on a gate and a
   /// disk that is a list of what was written.
   private actor Store {
-    var downloads = InFlightDownloads<Data>()
+    let downloads = InFlightDownloads<Data>()
     private(set) var written: [DocumentID] = []
     private(set) var fetches = 0
-    /// Opens that have reached `join`, so a test can wait for a second one to have
-    /// joined rather than guess when it has.
-    private(set) var joins = 0
     /// Every fetch started, in order, so a test can ask whether one was cancelled.
     private(set) var started: [Task<Data, any Error>] = []
 
     /// The fetch does not look at cancellation, as a parse does not: a cancelled
     /// one still finishes once the gate opens, and must still not be written.
     func open(_ id: DocumentID, gate: Gate) async throws -> Data {
-      joins += 1
-      let (task, generation) = downloads.join(id) {
+      let (data, isKept) = try await downloads.value(for: id) {
         fetches += 1
         let task = Task<Data, any Error> {
           await gate.wait()
@@ -53,22 +49,10 @@ struct InFlightDownloadsTests {
         started.append(task)
         return task
       }
-      let data: Data
-      do {
-        data = try await InFlightDownloads.value(of: task) { await self.leave(id, task) }
-      } catch {
-        downloads.finish(id, task)
-        throw error
-      }
-      downloads.finish(id, task)
-      if downloads.isCurrent(id, since: generation) {
+      if isKept {
         written.append(id)
       }
       return data
-    }
-
-    private func leave(_ id: DocumentID, _ task: Task<Data, any Error>) {
-      downloads.leave(id, task)
     }
 
     func remove(_ id: DocumentID) {
@@ -122,15 +106,43 @@ struct InFlightDownloadsTests {
     #expect(await store.written.isEmpty)
   }
 
+  /// The fetch overlapped the removal, whoever waits for it: a reader who joins it
+  /// afterwards does not bring it back.
+  @Test func `a removal during a shared download keeps it off the disk`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let first = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    await store.remove(.rfc(9110))
+    let second = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilWaiting(2, for: .rfc(9110), in: store)
+    await gate.open()
+
+    #expect(try await first.value == second.value)
+    #expect(await store.written.isEmpty)
+  }
+
+  /// Every reader of one fetch gets its result, and it is written once.
+  @Test func `a shared download is written once`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let first = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    let second = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilWaiting(2, for: .rfc(9110), in: store)
+    await gate.open()
+
+    #expect(try await first.value == second.value)
+    #expect(await store.written == [.rfc(9110)])
+  }
+
   @Test func `a second open joins the download already running`() async throws {
     let store = Store()
     let gate = Gate()
     let first = Task { try await store.open(.rfc(9110), gate: gate) }
     await untilRunning(.rfc(9110), in: store)
     let second = Task { try await store.open(.rfc(9110), gate: gate) }
-    while await store.joins < 2 {
-      await Task.yield()
-    }
+    await untilWaiting(2, for: .rfc(9110), in: store)
     await gate.open()
 
     #expect(try await first.value == second.value)
@@ -196,7 +208,7 @@ struct InFlightDownloadsTests {
 
     #expect(try await second.value == Data("\(DocumentID.rfc(9110))".utf8))
     #expect(await store.started.first?.isCancelled == false)
-    #expect(await store.written.contains(.rfc(9110)))
+    #expect(await store.written == [.rfc(9110)])
   }
 
   @Test func `an open after a cancelled download starts a new one`() async throws {
@@ -212,5 +224,31 @@ struct InFlightDownloadsTests {
     _ = try await store.open(.rfc(9110), gate: gate)
     #expect(await store.fetches == 2)
     #expect(await store.written == [.rfc(9110)])
+  }
+
+  /// A fetch that notices its cancellation fails with its own error, as URLSession
+  /// does with `URLError.cancelled`; the reader still sees a cancellation, not a
+  /// failure to show.
+  @Test func `a cancelled download throws a cancellation whatever it failed with`() async throws {
+    let downloads = InFlightDownloads<Data>()
+    let gate = Gate()
+    let opening = Task {
+      try await downloads.value(for: .rfc(9110)) {
+        Task<Data, any Error> {
+          await gate.wait()
+          throw URLError(Task.isCancelled ? .cancelled : .badServerResponse)
+        }
+      }
+    }
+    while !downloads.isRunning(.rfc(9110)) {
+      await Task.yield()
+    }
+    opening.cancel()
+    while downloads.isRunning(.rfc(9110)) {
+      await Task.yield()
+    }
+    await gate.open()
+
+    await #expect(throws: CancellationError.self) { try await opening.value }
   }
 }
