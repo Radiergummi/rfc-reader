@@ -31,7 +31,7 @@ struct InlineRunTests {
   @Test func codeUsesTheMonospacedFont() {
     let code = run([.code("GET")])
     let font = code.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
-    #expect(font == style.codeFont(matching: style.bodyFont))
+    #expect(font == .monospacedSystemFont(ofSize: style.bodySize * 0.92, weight: .regular))
   }
 
   /// Code, superscript and subscript each replaced the font with one sized from the
@@ -46,6 +46,7 @@ struct InlineRunTests {
     let font = try #require(run.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
     #expect(font.pointSize == heading.pointSize * 0.92)
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+    #expect(font.weight == heading.weight)
   }
 
   @Test func aSuperscriptOrSubscriptKeepsTheTraitsAroundIt() throws {
