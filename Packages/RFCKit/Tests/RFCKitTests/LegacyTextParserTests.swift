@@ -1586,32 +1586,12 @@ extension RFCDocument {
   }
 
   /// Every citation anywhere the linker runs: headings, the abstract, and prose at any
-  /// depth -- lists, definitions, tables, quotes -- not only top-level paragraphs.
+  /// depth -- lists, definitions, tables, quotes, a reference's annotation -- not only
+  /// top-level paragraphs.
   var everyCrossReference: [CrossReference] {
-    func fromInlines(_ inlines: [Inline]) -> [CrossReference] {
-      inlines.flatMap { inline -> [CrossReference] in
-        switch inline {
-        case .crossReference(let xref): [xref]
-        case .emphasis(let inner), .strong(let inner), .link(_, let inner): fromInlines(inner)
-        default: []
-        }
-      }
+    proseInlines.compactMap {
+      if case .crossReference(let xref) = $0 { return xref }
+      return nil
     }
-    func fromBlocks(_ blocks: [Block]) -> [CrossReference] {
-      blocks.flatMap { block -> [CrossReference] in
-        switch block {
-        case .paragraph(let paragraph): fromInlines(paragraph.inlines)
-        case .list(let list): list.items.flatMap { fromBlocks($0.blocks) }
-        case .definitionList(let items):
-          items.flatMap { fromInlines($0.term) + fromBlocks($0.definition) }
-        case .figure(let figure): fromBlocks(figure.blocks)
-        case .table(let table): (table.header + table.rows).flatMap { $0.flatMap(fromInlines) }
-        case .blockQuote(let inner), .aside(let inner): fromBlocks(inner)
-        case .references, .preformatted: []
-        }
-      }
-    }
-    return fromBlocks(header.abstract)
-      + allSections.flatMap { fromInlines($0.title) + fromBlocks($0.blocks) }
   }
 }

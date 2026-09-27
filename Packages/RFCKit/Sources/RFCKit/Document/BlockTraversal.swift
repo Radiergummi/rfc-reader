@@ -79,10 +79,15 @@ extension RFCDocument {
     (header.abstract + allSections.flatMap(\.blocks)).flattened
   }
 
-  /// Every inline a reader sees as prose, in document order, flattened out of
-  /// emphasis, strong text and links: the abstract, then each section's heading
-  /// and its blocks' own runs of prose. The one definition of "everywhere the text
-  /// can cite something" (#131); a walk that missed the headings was #127.
+  /// Every inline a reader sees as prose, in document order: the abstract, then
+  /// each section's heading and its blocks' own runs of prose. The one definition
+  /// of "everywhere the text can cite something" (#131); a walk that missed the
+  /// headings was #127.
+  ///
+  /// Flattened as `[Inline].flattened` is: an emphasis, strong text or link comes
+  /// ahead of the inlines it holds, and they come too. So this is for finding
+  /// inlines, such as cross references, not for reading text, where a wrapper's
+  /// words would be counted twice.
   ///
   /// Not captions, which are plain strings in the model, and not artwork or source
   /// code, which are set as typed; see `Block.proseRuns`.

@@ -12,8 +12,8 @@ struct DocumentTraversalTests {
   }
 
   /// One of each thing, in each place it can be: the abstract, a heading, a nested
-  /// list item, a table cell, a definition's term, a figure, a subsection, and a
-  /// bibliography entry with an annotation.
+  /// list item, a table's header and body cells, a definition's term, a figure, a
+  /// block quote, an aside, a subsection, and a bibliography entry with an annotation.
   private var document: RFCDocument {
     RFCDocument(
       header: DocumentHeader(
@@ -27,20 +27,24 @@ struct DocumentTraversalTests {
                 style: .bullet,
                 items: [ListItem(blocks: [.paragraph(Paragraph([.text("item "), cite(3)]))])])),
             .table(
-              Table(title: nil, header: [], rows: [[[.text("cell "), cite(4)]]])),
+              Table(
+                title: nil, header: [[[.text("head "), cite(4)]]],
+                rows: [[[.text("cell "), cite(5)]]])),
             .definitionList([
               DefinitionItem(
-                term: [.text("term "), cite(5)],
+                term: [.text("term "), cite(6)],
                 definition: [.paragraph(Paragraph(text: "definition"))])
             ]),
             .figure(
               Figure(title: "F", blocks: [.preformatted(Preformatted(kind: .artwork, text: "+-+"))])
             ),
+            .blockQuote([.paragraph(Paragraph([.text("quote "), cite(7)]))]),
+            .aside([.paragraph(Paragraph([.text("aside "), cite(8)]))]),
           ],
           subsections: [
             Section(
               anchor: "s1.1", number: "1.1", title: "Sub",
-              blocks: [.paragraph(Paragraph([.emphasis([.strong([cite(6)])])]))])
+              blocks: [.paragraph(Paragraph([.emphasis([.strong([cite(9)])])]))])
           ]),
         Section(
           anchor: "s2", number: "2", title: "References",
@@ -50,8 +54,8 @@ struct DocumentTraversalTests {
                 title: "Normative",
                 entries: [
                   Reference(
-                    anchor: "RFC7", title: "Seven", seriesInfo: [(name: "RFC", value: "7")],
-                    annotation: [.text("see "), cite(8)])
+                    anchor: "RFC10", title: "Ten", seriesInfo: [(name: "RFC", value: "10")],
+                    annotation: [.text("see "), cite(11)])
                 ]))
           ]),
       ],
@@ -80,7 +84,7 @@ struct DocumentTraversalTests {
     #expect(
       document.blocks.map(label) == [
         "p:abstract ", "list", "p:item ", "table", "definitions", "p:definition", "figure",
-        "artwork", "p:", "references",
+        "artwork", "quote", "p:quote ", "aside", "p:aside ", "p:", "references",
       ])
   }
 
@@ -93,11 +97,11 @@ struct DocumentTraversalTests {
       }
       return id.number
     }
-    #expect(cited == [1, 2, 3, 4, 5, 6, 8])
+    #expect(cited == [1, 2, 3, 4, 5, 6, 7, 8, 9, 11])
   }
 
   @Test func `referenced documents come from everywhere, bibliography included`() {
-    #expect(document.referencedDocuments.map(\.number) == [1, 2, 3, 4, 5, 6, 7, 8])
+    #expect(document.referencedDocuments.map(\.number) == Array(1...11))
   }
 
   @Test func `a section is found by anchor or number at any depth`() {
