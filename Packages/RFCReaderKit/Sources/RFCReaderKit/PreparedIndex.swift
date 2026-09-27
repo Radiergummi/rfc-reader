@@ -12,7 +12,8 @@ import RFCKit
 public struct PreparedIndex: Sendable {
   public let index: RFCIndex
   public let search: IndexSearch
-  /// The working groups with the most RFCs, most first, for the sidebar.
+  /// The working groups with the most RFCs, most first and equal counts by name, for
+  /// the sidebar.
   public let topWorkingGroups: [String]
 
   public init(index: RFCIndex) {
@@ -31,6 +32,11 @@ public struct PreparedIndex: Sendable {
     for rfc in index.rfcs {
       if let group = rfc.workingGroup { counts[group, default: 0] += 1 }
     }
-    return counts.sorted { $0.value > $1.value }.prefix(12).map(\.key)
+    // By name within a count: dictionary order is randomized per process, so by
+    // count alone the sidebar reordered its tied groups from launch to launch.
+    let ranked = counts.sorted { lhs, rhs in
+      lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key
+    }
+    return ranked.prefix(12).map(\.key)
   }
 }

@@ -27,6 +27,23 @@ struct PreparedIndexTests {
     #expect(Array(prepared.topWorkingGroups.prefix(2)) == ["httpbis", "tls"])
   }
 
+  /// Equal counts are ordered by name. By count alone, ties came out in dictionary
+  /// order, which Swift randomizes per process: the sidebar reordered from launch to
+  /// launch, and which of the tied groups made the cut changed with it.
+  @Test func workingGroupsWithEqualCountsAreOrderedByName() {
+    var rfcs = [rfc(1, group: "httpbis"), rfc(2, group: "httpbis"), rfc(3, group: "httpbis")]
+    rfcs += [rfc(4, group: "tls"), rfc(5, group: "tls")]
+    rfcs += (0..<14).map { rfc(100 + $0, group: "group\($0)") }
+
+    let prepared = PreparedIndex(index: RFCIndex(rfcs: rfcs))
+
+    #expect(
+      prepared.topWorkingGroups == [
+        "httpbis", "tls", "group0", "group1", "group10", "group11", "group12", "group13",
+        "group2", "group3", "group4", "group5",
+      ])
+  }
+
   @Test func theSearchIsOverTheSameIndex() {
     let index = RFCIndex(rfcs: [
       rfc(9110, title: "HTTP Semantics"), rfc(791, title: "Internet Protocol"),
