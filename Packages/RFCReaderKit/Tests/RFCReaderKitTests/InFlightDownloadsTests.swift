@@ -33,8 +33,12 @@ struct InFlightDownloadsTests {
     var downloads = InFlightDownloads<Data>()
     private(set) var written: [DocumentID] = []
     private(set) var fetches = 0
+    /// Opens that have reached `join`, so a test can wait for a second one to have
+    /// joined rather than guess when it has.
+    private(set) var joins = 0
 
     func open(_ id: DocumentID, gate: Gate) async throws -> Data {
+      joins += 1
       let (task, generation) = downloads.join(id) {
         fetches += 1
         return Task {
@@ -95,7 +99,9 @@ struct InFlightDownloadsTests {
     let first = Task { try await store.open(.rfc(9110), gate: gate) }
     await untilRunning(.rfc(9110), in: store)
     let second = Task { try await store.open(.rfc(9110), gate: gate) }
-    await Task.yield()
+    while await store.joins < 2 {
+      await Task.yield()
+    }
     await gate.open()
 
     #expect(try await first.value == second.value)

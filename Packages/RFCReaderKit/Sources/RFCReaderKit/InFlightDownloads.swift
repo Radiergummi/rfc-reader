@@ -18,6 +18,12 @@ import RFCKit
 /// While one fetch for a document is running, a second open joins it rather than
 /// fetching again.
 ///
+/// A fetch outlives the reader that started it: leaving the document while it loads
+/// does not cancel it, and it is kept. Cancelling on the first reader's way out
+/// would fail any other reader joined to it, and opening a document already means
+/// keeping it offline — one that finished loading a moment before the reader left
+/// was always kept. Eviction (#39) is what bounds what that adds up to.
+///
 /// A value, held by the store's actor, which is what serialises it. Here rather
 /// than in the App target for its tests.
 public struct InFlightDownloads<Value: Sendable> {
