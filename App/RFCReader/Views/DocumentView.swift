@@ -612,7 +612,8 @@ struct DocumentHeaderView: View {
     let title: String
     let date: String?
     let workingGroup: String?
-    let authors: [String]
+    /// Whole, not pre-joined names: a chip needs the author's contact (#19).
+    let authors: [Author]
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
@@ -621,8 +622,7 @@ struct DocumentHeaderView: View {
       title = header.title
       date = (header.date ?? metadata?.date)?.formatted
       workingGroup = header.workingGroup ?? metadata?.workingGroup
-      let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
-      self.authors = authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }
+      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
       self.metadata = metadata
     }
   }
@@ -662,7 +662,7 @@ struct DocumentHeaderView: View {
       .font(.subheadline)
       .foregroundStyle(.secondary)
       if !identity.authors.isEmpty {
-        Text(identity.authors.joined(separator: ", "))
+        AuthorChips(authors: identity.authors)
           .font(.subheadline)
       }
       if let metadata = identity.metadata {

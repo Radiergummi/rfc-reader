@@ -57,14 +57,18 @@ public enum AuthorCard {
     guard let contact = author.contact else { return card }
 
     card.organizationName = contact.organization ?? ""
-    card.emailAddresses = contact.emails.map { CNLabeledValue(label: CNLabelWork, value: $0 as NSString) }
+    card.emailAddresses = contact.emails.map {
+      CNLabeledValue(label: CNLabelWork, value: $0 as NSString)
+    }
     card.phoneNumbers =
       [(CNLabelWork, contact.phone), (CNLabelPhoneNumberWorkFax, contact.facsimile)]
       .compactMap { label, number in
         number.map { CNLabeledValue(label: label, value: CNPhoneNumber(stringValue: $0)) }
       }
     // As written: `AuthorContact.uri` is kept as text for the same reason.
-    card.urlAddresses = contact.uri.map { [CNLabeledValue(label: CNLabelURLAddressHomePage, value: $0 as NSString)] } ?? []
+    card.urlAddresses =
+      contact.uri.map { [CNLabeledValue(label: CNLabelURLAddressHomePage, value: $0 as NSString)] }
+      ?? []
     if let postal = contact.postal {
       card.postalAddresses = [CNLabeledValue(label: CNLabelWork, value: address(postal))]
     }

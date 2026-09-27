@@ -43,7 +43,9 @@ struct AuthorCardTests {
   }
 
   @Test func `different names spread across the palette`() {
-    let names = ["A. Barth", "R. Fielding", "M. Nottingham", "J. Reschke", "J. Postel", "S. Bradner"]
+    let names = [
+      "A. Barth", "R. Fielding", "M. Nottingham", "J. Reschke", "J. Postel", "S. Bradner",
+    ]
     let tints = Set(names.map { AuthorMonogram.tint(for: $0, among: 8) })
     #expect(tints.count > 1)
   }
@@ -72,7 +74,8 @@ struct AuthorCardTests {
           organization: "Cloudflare", phone: "+1 555 0100", facsimile: "+1 555 0101",
           emails: ["mnot@mnot.net", "mark@example.com"], uri: "https://www.mnot.net/")))
     #expect(card.organizationName == "Cloudflare")
-    #expect(card.emailAddresses.map { $0.value as String } == ["mnot@mnot.net", "mark@example.com"])
+    #expect(
+      card.emailAddresses.map { $0.value as String } == ["mnot@mnot.net", "mark@example.com"])
     #expect(card.phoneNumbers.map(\.value.stringValue) == ["+1 555 0100", "+1 555 0101"])
     #expect(card.phoneNumbers.map(\.label) == [CNLabelWork, CNLabelPhoneNumberWorkFax])
     #expect(card.urlAddresses.map { $0.value as String } == ["https://www.mnot.net/"])
@@ -98,7 +101,8 @@ struct AuthorCardTests {
   /// addresses, so they are kept as written, in their order, and never parsed.
   @Test func `postal lines are kept in their own order`() throws {
     let lines = ["〒100-0001", "東京都千代田区", "千代田1-1"]
-    let card = AuthorCard.contact(for: author(AuthorContact(postal: PostalAddress(postalLines: lines))))
+    let card = AuthorCard.contact(
+      for: author(AuthorContact(postal: PostalAddress(postalLines: lines))))
     let address = try #require(card.postalAddresses.first?.value)
     #expect(address.street == lines.joined(separator: "\n"))
     #expect(address.city.isEmpty)
