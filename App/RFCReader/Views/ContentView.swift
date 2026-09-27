@@ -93,8 +93,7 @@ import SwiftUI
       // Once, when the bookmarks store fell back to memory (#152). Continue only:
       // an iOS app does not quit itself.
       .onAppear {
-        if AppData.openFailure != nil, !AppData.hasShownStoreWarning {
-          AppData.hasShownStoreWarning = true
+        if AppData.claimStoreWarning() {
           showsStoreWarning = true
         }
       }

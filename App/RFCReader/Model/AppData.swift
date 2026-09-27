@@ -15,13 +15,13 @@ private let dataLog = Logger(
 /// scene and every hosted root.
 @MainActor
 enum AppData {
-  /// Why the store on disk could not be opened, when it could not (#152).
+  /// Whether the store on disk could not be opened (#152).
   ///
   /// The app then runs on a store in memory instead of crashing at launch: reading
   /// works, bookmarks and reading positions made this session are not kept, and
   /// nothing on disk is touched, so a later launch that can open it has everything
-  /// back. The window says so once; see `storeWarning`.
-  private(set) static var openFailure: (any Error)?
+  /// back. The window says so once; see `claimStoreWarning()`.
+  private static var isStoredInMemory = false
 
   static let container: ModelContainer = {
     do {
@@ -29,7 +29,7 @@ enum AppData {
     } catch {
       dataLog.error(
         "the user data store did not open: \(String(describing: error), privacy: .public)")
-      openFailure = error
+      isStoredInMemory = true
       do {
         return try ModelContainer(
           for: Bookmark.self, ReadingPosition.self,
@@ -44,7 +44,17 @@ enum AppData {
 
   /// Whether the warning has been shown, so a second window or scene does not show
   /// it again.
-  static var hasShownStoreWarning = false
+  private static var hasShownStoreWarning = false
+
+  /// Whether the caller should show `storeWarning`: true once per launch, and only
+  /// when the store fell back to memory. Opens the container first, so the answer
+  /// does not depend on something else having opened it already.
+  static func claimStoreWarning() -> Bool {
+    _ = container
+    guard isStoredInMemory, !hasShownStoreWarning else { return false }
+    hasShownStoreWarning = true
+    return true
+  }
 
   /// What the window tells the reader when the store fell back to memory.
   static let storeWarning = (

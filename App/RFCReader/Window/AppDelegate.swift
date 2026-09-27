@@ -26,18 +26,22 @@
     /// Once, at launch, when the bookmarks store fell back to memory (#152):
     /// Continue to read without saving, or Quit to fix whatever kept it closed and
     /// try again.
+    ///
+    /// A sheet on the first window rather than `runModal()`: a modal loop here would
+    /// keep `applicationDidFinishLaunching` from returning, and with it the `rfc://`
+    /// link the app was launched with.
     private func warnIfTheStoreDidNotOpen() {
-      _ = AppData.container
-      guard AppData.openFailure != nil, !AppData.hasShownStoreWarning else { return }
-      AppData.hasShownStoreWarning = true
+      guard let window = controllers.first?.window, AppData.claimStoreWarning() else { return }
       let alert = NSAlert()
       alert.alertStyle = .warning
       alert.messageText = AppData.storeWarning.title
       alert.informativeText = AppData.storeWarning.message
       alert.addButton(withTitle: "Continue")
       alert.addButton(withTitle: "Quit")
-      if alert.runModal() == .alertSecondButtonReturn {
-        NSApp.terminate(nil)
+      alert.beginSheetModal(for: window) { response in
+        if response == .alertSecondButtonReturn {
+          NSApp.terminate(nil)
+        }
       }
     }
 
