@@ -348,6 +348,14 @@
       splitController.toggleSidebar(nil)
     }
 
+    /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
+    func focusSearch() {
+      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
+      guard let field = FirstResponderSearch.searchField(in: sidebarItem.viewController.view)
+      else { return }
+      window?.makeFirstResponder(field)
+    }
+
     // MARK: - The panel
 
     /// Animated, so the panel slides in rather than appearing between frames — which
