@@ -141,8 +141,20 @@
 
     /// An enumeration's value crosses as its four-character code.
     @objc var scriptInspectorPane: FourCharCode {
-      get { controller?.reader.tab == .references ? ScriptCode.references : ScriptCode.contents }
-      set { controller?.reader.tab = newValue == ScriptCode.references ? .references : .contents }
+      get {
+        switch controller?.reader.tab {
+        case .references: ScriptCode.references
+        case .info: ScriptCode.info
+        case .contents, nil: ScriptCode.contents
+        }
+      }
+      set {
+        switch newValue {
+        case ScriptCode.references: controller?.reader.tab = .references
+        case ScriptCode.info: controller?.reader.tab = .info
+        default: controller?.reader.tab = .contents
+        }
+      }
     }
   }
 
@@ -227,6 +239,7 @@
   enum ScriptCode {
     static let contents = code("RIpC")
     static let references = code("RIpR")
+    static let info = code("RIpI")
     static let newTab = code("RPnT")
     static let newWindow = code("RPnW")
 

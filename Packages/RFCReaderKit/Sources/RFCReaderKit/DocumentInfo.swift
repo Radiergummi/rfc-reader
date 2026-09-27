@@ -33,13 +33,17 @@ public enum DocumentInfo {
   public static func sections(for metadata: RFCMetadata, in index: RFCIndex?) -> [Section] {
     [
       section("Document", document(metadata)),
-      section(
-        "Authors",
-        metadata.authors.map { Row(label: $0.role == nil ? "" : "Editor", value: .text($0.name)) }),
+      section("Authors", metadata.authors.map { Row(label: role($0), value: .text($0.name)) }),
       section("Status", status(metadata)),
       section("Relationships", relationships(metadata, index: index)),
       section("Links", links(metadata)),
     ].compactMap { $0 }
+  }
+
+  /// "Editor" is the one role the index and both parsers record, and it is read the
+  /// way `CitationFormatter` reads it, so "Ed." counts too.
+  private static func role(_ author: Author) -> String {
+    author.role?.lowercased().hasPrefix("ed") == true ? "Editor" : ""
   }
 
   private static func section(_ title: String, _ rows: [Row]) -> Section? {

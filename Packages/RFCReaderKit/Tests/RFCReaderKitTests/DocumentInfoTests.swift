@@ -71,6 +71,18 @@ struct DocumentInfoTests {
         ])
   }
 
+  /// The legacy parser records an editor as "Editor" and the index as whatever it
+  /// says; both mean the same, and an unknown role is not promoted to one.
+  @Test func `an editor is recognised however the role is spelled`() {
+    var metadata = bare
+    metadata.authors = [
+      Author(name: "A. Author", role: "Ed."),
+      Author(name: "B. Author", role: "Editor"),
+      Author(name: "C. Author", role: "contributor"),
+    ]
+    #expect(section("Authors", of: metadata)?.rows.map(\.label) == ["Editor", "Editor", ""])
+  }
+
   /// The status it was published with only where it differs from the current one:
   /// RFC 9110 went out a Proposed Standard and is an Internet Standard now.
   @Test func `the original status is shown only where it differs`() {

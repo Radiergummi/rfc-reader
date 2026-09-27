@@ -19,6 +19,7 @@
     <enumeration name="inspector pane" code="RIpn">
       <enumerator name="contents" code="RIpC" description="The table of contents."/>
       <enumerator name="references" code="RIpR" description="The documents the RFC cites."/>
+      <enumerator name="information" code="RIpI" description="What the index knows about the RFC."/>
     </enumeration>
 
     <class name="rfc" code="RFCd" plural="rfcs" description="An RFC in the index.">
