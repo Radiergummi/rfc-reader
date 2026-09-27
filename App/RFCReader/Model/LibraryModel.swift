@@ -3,6 +3,10 @@ import Observation
 import RFCKit
 import RFCReaderKit
 import SwiftData
+import os
+
+private let libraryLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
 #if os(macOS)
   import AppKit
@@ -92,7 +96,16 @@ final class LibraryModel {
     } catch {
       indexState = .failed(error.localizedDescription)
     }
-    Task { recent = (try? await client.fetchRecent()) ?? [] }
+    // Just Published is decoration: a failure leaves it empty, and is logged
+    // rather than shown (#125).
+    Task {
+      do {
+        recent = try await client.fetchRecent()
+      } catch {
+        libraryLog.error(
+          "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
+      }
+    }
   }
 
   func refreshIndex() async {
@@ -449,17 +462,5 @@ final class LibraryModel {
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
     await refreshDownloadedNumbers()
-  }
-}
-
-extension RFCEditorClient {
-  /// The index as bytes, so the model can both parse and persist it.
-  func fetchIndexData() async throws -> Data {
-    let (data, response) = try await URLSession.shared.data(from: RFCEditorEndpoints.index)
-    guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else {
-      throw ClientError.httpStatus(
-        (response as? HTTPURLResponse)?.statusCode ?? -1, RFCEditorEndpoints.index)
-    }
-    return data
   }
 }

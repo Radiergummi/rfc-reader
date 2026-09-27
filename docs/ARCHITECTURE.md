@@ -94,6 +94,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
 ```
 
 - Legacy RFCs arrive pre-converted to XML through data packs (DATA_PIPELINE.md); on-device text parsing is the fallback when no pack is installed.
+- A document is fetched by `RFCEditorClient.fetchPreferredDocument`, the one fallback rule (#125): the XML where the index lists it, and the text only when there is no XML, a 404 for it. A cancelled load, a server error or a network failure is the error, not a reason to start a second request whose failure would be reported instead. XML that is there but does not parse falls back to the text too, and the parse error comes back beside the document for `DocumentStore` to log; with no text either, the parse error is what is thrown.
 - Raw files are cached exactly as served. Re-parsing after a parser fix is free, and the "original text" mode needs no second download.
 - The index is cached to disk and re-fetched in the background when older than a day; a bundled snapshot (drop `rfc-index.xml` into the app's resources) makes first launch work offline.
 - Navigation is data: `LibraryModel.open(RFCLink)` sets `selection` and `pendingSection`; `DocumentView` scrolls once the document has loaded. The URL scheme handler, the App Intent, cross-reference taps and the status banner all go through the same call.
