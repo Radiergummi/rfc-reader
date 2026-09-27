@@ -26,6 +26,23 @@ final class VisibleAnchorBox {
   var anchor: String?
 }
 
+/// Where the header's heading ends, in the hosted header's own coordinates, as
+/// `DocumentHeaderView` measured it. A box for the same reason as
+/// `VisibleAnchorBox`: the header is hosted outside SwiftUI's diffing and built
+/// once, so it writes into something both sides already hold rather than calling
+/// through to a coordinator it was built before.
+@MainActor
+final class HeadingBox {
+  var bottom: CGFloat? {
+    didSet { if bottom != oldValue { didChange() } }
+  }
+
+  /// The reader can report its viewport before the header has measured its
+  /// heading — a text view made afresh on the way back from the original text
+  /// does — and nothing scrolls afterwards to report it again.
+  var didChange: () -> Void = {}
+}
+
 /// Everything the two representables share. Both platforms drive the same anchor
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
@@ -65,6 +82,14 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
+  /// What the toolbar's title shows; see `ToolbarTitleState`. Called
+  /// synchronously, on every scroll tick that changes it: the title is coupled to
+  /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
+  /// That is safe where `onVisibleAnchorChange` is not because it touches no
+  /// SwiftUI state.
+  var onToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
+  var heading: HeadingBox?
+  private var lastToolbarTitle: ToolbarTitleState?
 
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -395,6 +420,9 @@ final class RFCTextViewCoordinator: NSObject {
   /// `textViewportLayoutController.viewportRange`: that range is larger than the
   /// visible rect, so its start names a section already scrolled past.
   func reportVisibleAnchor() {
+    // Everything that reports where the viewport is comes through here — scrolls,
+    // jumps, restored places — which is every time the title's position can move.
+    updateToolbarTitle()
     guard let textView,
       let built,
       let layout = textView.textLayoutManager
@@ -423,6 +451,63 @@ final class RFCTextViewCoordinator: NSObject {
     // reports from inside SwiftUI's update, where mutating state is illegal.
     Task { self.onVisibleAnchorChange(anchor) }
   }
+
+  /// macOS only: iOS has no toolbar title for this to drive, so it neither
+  /// measures nor reports there.
+  func updateToolbarTitle() {
+    #if !canImport(UIKit)
+      guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
+        return
+      }
+      let edge = textView.unobscuredTop
+      let state = ToolbarTitleState(
+        reveal: ToolbarTitleReveal.progress(
+          headingBottom: header.frame.minY + bottom,
+          visibleTop: edge,
+          distance: Self.headingLineHeight
+        ),
+        subtitle: subtitle(atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
+      )
+      // Steady for almost all of a document; only a change is news.
+      guard state != lastToolbarTitle else { return }
+      lastToolbarTitle = state
+      onToolbarTitle(state)
+    #endif
+  }
+
+  #if !canImport(UIKit)
+    /// The section the toolbar's subtitle names, from the paragraph under the
+    /// toolbar's edge — `edge` is in container coordinates.
+    private func subtitle(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
+      -> ToolbarSubtitle.State
+    {
+      // Above the container is the header, which belongs to no section.
+      guard edge >= 0, let layout,
+        let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
+      else { return .steady(nil) }
+      let frame = fragment.layoutFragmentFrame
+      return ToolbarSubtitle.state(
+        in: sectionIndex,
+        topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
+        crossing: ToolbarSubtitle.crossing(
+          edge: edge,
+          fragmentTop: frame.minY,
+          fragmentHeight: frame.height,
+          lastLine: fragment.textLineFragments.last?.typographicBounds
+        )
+      )
+    }
+  #endif
+
+  #if !canImport(UIKit)
+    /// The height of one line of the header's heading, which is set in the large
+    /// title style (`DocumentHeaderView`): the distance the reveal runs over. Once,
+    /// not per scroll tick — macOS text styles do not change size at run time.
+    private static let headingLineHeight: CGFloat = {
+      let font = NSFont.preferredFont(forTextStyle: .largeTitle)
+      return ceil(font.ascender - font.descender + font.leading)
+    }()
+  #endif
 
   /// Clamped against the laid-out document end rather than the text view's own
   /// published height, and **not clamped at all** if that end is unknown: an

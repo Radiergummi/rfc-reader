@@ -49,11 +49,42 @@ public enum RFCColors {
     #endif
   }
 
-  public static var quaternaryFill: PlatformColor {
+  /// The card behind artwork and tables: a faint tint of the page, the way Apple's
+  /// documentation sets a code listing. DocC darkens a white page to 247 and lifts a
+  /// black one to 22, about 3% towards black and 9% towards white. A system fill
+  /// forced to a fixed opacity read far darker than that in light and far lighter
+  /// in dark.
+  public static var cardFill: PlatformColor { pageTint(light: 0.03, dark: 0.085) }
+
+  /// An aside's card, a step stronger than a figure's.
+  public static var asideFill: PlatformColor { pageTint(light: 0.045, dark: 0.12) }
+
+  /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
+  /// so it tints whatever the page is rather than assuming its colour.
+  private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
+    #if canImport(UIKit)
+      UIColor { traits in
+        traits.userInterfaceStyle == .dark
+          ? UIColor(white: 1, alpha: dark) : UIColor(white: 0, alpha: light)
+      }
+    #else
+      NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+          ? NSColor(white: 1, alpha: dark) : NSColor(white: 0, alpha: light)
+      }
+    #endif
+  }
+
+  /// The rule beside a quote or aside: a line, not a fill. macOS's
+  /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
+  /// the rule used to draw in, which left a rule this thin close to invisible;
+  /// `separatorColor` is the line colour, at about the old opacity. iOS's
+  /// `quaternarySystemFill` is darker, and the rule keeps it.
+  public static var rule: PlatformColor {
     #if canImport(UIKit)
       .quaternarySystemFill
     #else
-      .quaternaryLabelColor
+      .separatorColor
     #endif
   }
 }
@@ -73,6 +104,14 @@ public enum RFCTraits {
       .traitBold
     #else
       .bold
+    #endif
+  }
+
+  public static var monospace: PlatformFontDescriptor.SymbolicTraits {
+    #if canImport(UIKit)
+      .traitMonoSpace
+    #else
+      .monoSpace
     #endif
   }
 }
@@ -105,6 +144,29 @@ extension PlatformFont {
     #else
       return PlatformFont(descriptor: descriptor.withSymbolicTraits(combined), size: pointSize)
         ?? self
+    #endif
+  }
+
+  /// The font's weight as its descriptor states it, regular where it states none.
+  /// A heading is `.semibold`, which is no symbolic trait, so this is what lets a
+  /// run inside one keep its weight. A bold italic face states no weight at all,
+  /// only the bold trait, so the trait counts as at least bold.
+  var weight: PlatformFont.Weight {
+    let traits = fontDescriptor.object(forKey: .traits) as? [PlatformFontDescriptor.TraitKey: Any]
+    let stated = (traits?[.weight] as? CGFloat).map(PlatformFont.Weight.init(rawValue:)) ?? .regular
+    let isBold = fontDescriptor.symbolicTraits.contains(RFCTraits.bold)
+    if isBold && stated.rawValue < PlatformFont.Weight.bold.rawValue {
+      return .bold
+    }
+    return stated
+  }
+
+  /// This font's face and traits at another size.
+  func resized(to size: CGFloat) -> PlatformFont {
+    #if canImport(UIKit)
+      PlatformFont(descriptor: fontDescriptor, size: size)
+    #else
+      PlatformFont(descriptor: fontDescriptor, size: size) ?? self
     #endif
   }
 }

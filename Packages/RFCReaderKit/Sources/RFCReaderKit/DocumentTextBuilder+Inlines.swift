@@ -30,21 +30,26 @@ extension DocumentTextBuilder {
     case .strong(let inner):
       return inlineRuns(inner, base: base.adding(trait: RFCTraits.bold, style: style))
 
+    // Code and scripts are made from the font in effect, not from the body's: code
+    // in a heading dropped to body size, and a superscript in strong text lost its
+    // weight (#154). In body prose these are the sizes they always were.
     case .code(let text):
       var attributes = base
-      attributes[.font] = style.codeFont
+      attributes[.font] = style.codeFont(matching: font(in: base))
       return NSAttributedString(string: text, attributes: attributes)
 
     case .superscript(let text):
       var attributes = base
-      attributes[.baselineOffset] = style.bodySize * 0.3
-      attributes[.font] = PlatformFont.systemFont(ofSize: style.bodySize * 0.75)
+      let current = font(in: base)
+      attributes[.baselineOffset] = current.pointSize * 0.3
+      attributes[.font] = current.resized(to: current.pointSize * 0.75)
       return NSAttributedString(string: text, attributes: attributes)
 
     case .subscript(let text):
       var attributes = base
-      attributes[.baselineOffset] = -style.bodySize * 0.18
-      attributes[.font] = PlatformFont.systemFont(ofSize: style.bodySize * 0.75)
+      let current = font(in: base)
+      attributes[.baselineOffset] = -current.pointSize * 0.18
+      attributes[.font] = current.resized(to: current.pointSize * 0.75)
       return NSAttributedString(string: text, attributes: attributes)
 
     case .link(let url, let inner):
@@ -120,7 +125,7 @@ extension DocumentTextBuilder {
   /// which reads low against the words around it, so the symbol is drawn at the
   /// run's own font size and its bounds are centred on that font's cap height.
   private func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
-    let font = (attributes[.font] as? PlatformFont) ?? PlatformFont.systemFont(ofSize: 17)
+    let font = font(in: attributes)
     guard let symbol = chipSymbol(pointSize: font.pointSize) else { return nil }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
     // after the default initializer instead, which UIKit also accepts.
@@ -164,6 +169,11 @@ extension DocumentTextBuilder {
       let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
       return URL(string: "\(Self.anchorScheme):\(encoded)")
     }
+  }
+
+  /// The font a run's context carries, or the body's where it carries none.
+  func font(in attributes: [NSAttributedString.Key: Any]) -> PlatformFont {
+    (attributes[.font] as? PlatformFont) ?? style.bodyFont
   }
 }
 

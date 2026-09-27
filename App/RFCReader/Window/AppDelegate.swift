@@ -40,9 +40,6 @@
     func application(_ application: NSApplication, open urls: [URL]) {
       for url in urls {
         guard let link = RFCLink(url: url) else { continue }
-        if controllers.isEmpty {
-          openWindow(tabbedWith: nil, inBackground: false)
-        }
         LibraryModel.shared.route(link)
       }
     }
@@ -51,6 +48,12 @@
     /// bar's `+`, and a link that asked for a tab of its own.
     func openTab(inBackground: Bool) {
       openWindow(tabbedWith: activeController, inBackground: inBackground)
+    }
+
+    /// Brings the window showing `scene` forward, selecting it within its tab group.
+    func bringForward(_ scene: NavigationModel) {
+      let controller = controllers.first { $0.navigation === scene }
+      controller?.window?.makeKeyAndOrderFront(nil)
     }
 
     /// Opens a window, as a tab of `sibling` when there is one.
@@ -120,11 +123,21 @@
     static let shared = ActiveReaderWindow()
 
     private(set) var controller: ReaderWindowController?
+    /// Whether the key window's sidebar is collapsed, for the title of View ▸ Show
+    /// Sidebar. A SwiftUI menu item cannot ask the split view when the menu opens,
+    /// so the window reports it here.
+    private(set) var isSidebarCollapsed = false
 
     private init() {}
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
+      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+    }
+
+    func sidebarChanged(_ controller: ReaderWindowController) {
+      guard self.controller === controller else { return }
+      isSidebarCollapsed = controller.sidebarItem.isCollapsed
     }
 
     func willClose(_ controller: ReaderWindowController) {

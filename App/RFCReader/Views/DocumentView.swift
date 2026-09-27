@@ -2,6 +2,12 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import os
+
+/// The reader's load and build decisions, at debug level: what a device's
+/// Console shows when a document fails to load or never finishes (#252, #253).
+private let readerLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -16,6 +22,9 @@ struct DocumentView: View {
     // external links are the window's, and a `@Query` left outside this guard ran a
     // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
@@ -29,6 +38,33 @@ struct DocumentView: View {
   @State private var built: BuiltDocument?
   @State private var originalText: String?
   @State private var loadError: String?
+  /// The fetch, and the build it triggers. Owned by the view rather than by
+  /// `.task`, which ties them to appearance: in a collapsed split view, a reader
+  /// pushed over one that was popped is told it disappeared the moment it appears,
+  /// and is never told it appeared again. `.task` cancelled the fetch on that
+  /// notice and nothing started it again, so the reader spun forever while on
+  /// screen (#252 was the same cancellation, shown as an error).
+  @State private var work = Work()
+  /// What the document on screen was built from, so a change that comes back to
+  /// where it started does not build it again.
+  @State private var builtInputs: BuildInputs?
+
+  /// The fetch and the build, and the inputs the build under way is for.
+  ///
+  /// A reference, so that it goes when the view's state does, which is when the
+  /// view is replaced by the next document's (`.id(selection)`): the old reader's
+  /// fetch and 650 ms build are cancelled then, rather than running on for a
+  /// document nobody will see. Disappearing is not going (#252).
+  private final class Work {
+    var load: Task<Void, Never>?
+    var build: Task<Void, Never>?
+    var buildingFor: BuildInputs?
+
+    deinit {
+      load?.cancel()
+      build?.cancel()
+    }
+  }
   #if !os(macOS)
     @State private var showTableOfContents = false
   #endif
@@ -38,6 +74,7 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var heading = HeadingBox()
   /// Anchor to section number, built once with the document. See
   /// `onVisibleAnchorChange` for why it is not asked of the document each time.
   @State private var sectionNumbers: [String: String] = [:]
@@ -74,9 +111,8 @@ struct DocumentView: View {
   /// place whatever changed — a new RFC, the font-size slider, or a window resize.
   private struct BuildInputs: Equatable {
     /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
-    /// triggers the build. It also carries a change of document on its own:
-    /// `load()` clears `document` before awaiting the next one, so every new RFC
-    /// arrives as a false → true transition and needs no id of its own here.
+    /// triggers the build. `load()` only ever fetches into a view with no
+    /// document, so every load arrives as a false → true transition.
     let hasDocument: Bool
     let fontSize: Double
     let column: CGFloat?
@@ -108,20 +144,53 @@ struct DocumentView: View {
     content
       .navigationTitle(id.displayName)
       #if !os(macOS)
+        // The designation as the title, and what it is called beneath it.
+        .navigationSubtitle(
+          DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
+        )
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        // An overlay rather than an inset: it floats over the text and takes no
+        // layout, so it cannot disturb the column, which is derived from this
+        // view's frame.
+        .overlay(alignment: .bottom) {
+          returnButton.animation(.snappy, value: visibleReturn)
+        }
+        // Long enough to decide, without sitting over the text for good. Not under
+        // VoiceOver, where a control that leaves on a timer may be gone before it
+        // is reached: there it stays until the next navigation replaces it.
+        .task(id: visibleReturn) {
+          guard visibleReturn != nil, !voiceOverEnabled else { return }
+          try? await Task.sleep(for: .seconds(8))
+          guard !Task.isCancelled else { return }
+          navigation.settleReturnOffer()
+        }
         // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
         // swallows an iPhone, and in compact width the inspector already presents
         // itself as a sheet.
         .inspector(isPresented: $showTableOfContents) {
-          PanelHost().inspectorColumnWidth(min: 260, ideal: 320)
+          PanelHost(
+            isPresented: $showTableOfContents,
+            closesAfterChoice: horizontalSizeClass == .compact
+          )
+          .inspectorColumnWidth(min: 260, ideal: 320)
         }
       #endif
-      .task(id: id) {
-        markAsRead()
-        await load()
+      .onAppear {
+        if work.load == nil { startLoad() }
       }
-      .task(id: buildInputs) { await rebuild() }
+      .onChange(of: buildInputs, initial: true) {
+        // Appearing again fires this with nothing changed. A build already made,
+        // or under way, for these inputs is left to stand rather than cancelled
+        // and paid for twice.
+        guard buildInputs != builtInputs, buildInputs != work.buildingFor else {
+          trace("build skipped, inputs unchanged")
+          return
+        }
+        work.build?.cancel()
+        work.buildingFor = buildInputs
+        work.build = Task { await rebuild() }
+      }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
       }
@@ -158,6 +227,10 @@ struct DocumentView: View {
     if reader.showOriginal {
       OriginalTextView(text: originalText, fontSize: fontSize)
         .task { originalText = try? await library.originalText(for: id) }
+        // No header to show the title here, so the toolbar shows it throughout.
+        // On `hasDocument` rather than on appearing: loading a document clears
+        // the title back to hidden after this view may already have appeared.
+        .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(
@@ -179,15 +252,29 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
+        onToolbarTitle: { reader.updateToolbarTitle($0) },
+        heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
         // it: the banner's links to newer RFCs go through `LibraryModel`.
         header: {
-          DocumentHeaderView(library: library, navigation: navigation, identity: headerIdentity)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+          DocumentHeaderView(
+            library: library, navigation: navigation, identity: headerIdentity, heading: heading
+          )
+          .padding(.top, 16)
+          .padding(.bottom, 12)
+          // Outside the padding, so the heading is measured from the top of the
+          // hosted view, which is where the coordinator places it.
+          .coordinateSpace(.named(DocumentHeaderView.coordinateSpace))
         }
       )
+      #if !os(macOS)
+        // To the bottom edge of the screen, under the home indicator, rather than
+        // stopping above it at a hard edge with a blank strip below. The text view
+        // makes that strip room to scroll the last line clear of it. Vertical
+        // only: the column is derived from the width, which this leaves alone.
+        .ignoresSafeArea(.container, edges: .bottom)
+      #endif
       .onAppear {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
@@ -204,7 +291,7 @@ struct DocumentView: View {
       } description: {
         Text(loadError)
       } actions: {
-        Button("Try Again") { Task { await load() } }
+        Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else {
@@ -214,35 +301,74 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
+    private var hasRoomyToolbar: Bool {
+      ReaderLayout.toolbarHasRoom(
+        isRegularWidth: horizontalSizeClass == .regular,
+        isCompactHeight: verticalSizeClass == .compact)
+    }
+
+    /// Contents and More, plus Share when there is room; everything else is in
+    /// More (#245).
+    ///
+    /// The inline title has the lowest priority in the bar. Five actions beside the
+    /// back button left an iPhone's bar no room for it, and it collapsed to "…".
+    /// Contents stays out of the menu because jumping to a section is what a long
+    /// RFC is read by.
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-      ToolbarItemGroup(placement: .primaryAction) {
+      if hasRoomyToolbar, let metadata {
+        ToolbarItem(placement: .primaryAction) {
+          shareLink(metadata)
+        }
+      }
+
+      ToolbarItem(placement: .primaryAction) {
         Button {
-          toggleBookmark()
+          withAnimation(.snappy) { showTableOfContents.toggle() }
         } label: {
-          Label("Bookmark", systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
-        .keyboardShortcut("d", modifiers: .command)
+        // The same chord as the Mac's (#157).
+        .keyboardShortcut("i", modifiers: [.command, .option])
+      }
 
-        Menu {
-          ForEach(CitationStyle.allCases) { style in
-            Button(style.displayName) { copyCitation(style) }
+      ToolbarItem(placement: .primaryAction) {
+        moreMenu
+      }
+    }
+
+    private var moreMenu: some View {
+      // Read once: a linear scan of the bookmarks, and the label wants it twice.
+      let bookmarked = isBookmarked
+      return Menu {
+        Section {
+          if !hasRoomyToolbar, let metadata {
+            shareLink(metadata)
           }
-          Divider()
-          Button("Copy Link to Current Section") {
-            Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+
+          Button {
+            toggleBookmark()
+          } label: {
+            Label(
+              bookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: bookmarked ? "bookmark.fill" : "bookmark")
           }
-        } label: {
-          Label("Cite", systemImage: "quote.opening")
+          .keyboardShortcut("d", modifiers: .command)
+
+          Menu {
+            ForEach(CitationStyle.allCases) { style in
+              Button(style.displayName) { copyCitation(style) }
+            }
+            Divider()
+            Button("Copy Link to Current Section") {
+              Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+            }
+          } label: {
+            Label("Cite", systemImage: "quote.opening")
+          }
         }
 
-        if let metadata {
-          ShareLink(
-            item: RFCEditorEndpoints.infoPage(id),
-            subject: Text("\(id.displayName): \(metadata.title)"))
-        }
-
-        Menu {
+        Section {
           Toggle("Original Text", isOn: Bindable(reader).showOriginal)
           Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
           if let url = metadata?.errataURL {
@@ -252,36 +378,68 @@ struct DocumentView: View {
           if let draft = reader.precedingDraft {
             Button("Preceding Draft") { systemOpenURL(draft) }
           }
-        } label: {
-          Label("More", systemImage: "ellipsis.circle")
         }
+      } label: {
+        Label("More", systemImage: "ellipsis.circle")
       }
+    }
 
-      ToolbarItem(placement: .primaryAction) {
+    /// Where a tap on the return offer goes, while it is on show.
+    ///
+    /// In a single column only: beside other columns, the back/forward pair is in
+    /// the bar.
+    private var visibleReturn: Place? {
+      horizontalSizeClass == .compact ? navigation.returnOffer : nil
+    }
+
+    /// "Back to §4.2" after following a link within the document (#254). In a
+    /// single column there is no back/forward pair, and the system back button
+    /// leaves the document.
+    @ViewBuilder
+    private var returnButton: some View {
+      if let offer = visibleReturn {
         Button {
-          withAnimation(.snappy) { showTableOfContents.toggle() }
+          navigation.goBack()
         } label: {
-          Label("Contents", systemImage: "list.bullet.indent")
+          Label(
+            ReturnOffer.title(for: offer, sectionNumbers: sectionNumbers),
+            systemImage: "arrow.uturn.backward")
         }
-        // The same chord as the Mac's (#157).
-        .keyboardShortcut("i", modifiers: [.command, .option])
+        .buttonStyle(.glass)
+        .padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
       }
+    }
+
+    private func shareLink(_ metadata: RFCMetadata) -> some View {
+      ShareLink(
+        item: RFCEditorEndpoints.infoPage(id),
+        subject: Text("\(id.displayName): \(metadata.title)"))
     }
   #endif
 
   // MARK: - Actions
 
+  private func startLoad() {
+    work.load?.cancel()
+    work.load = Task { await load() }
+  }
+
+  private func trace(_ event: String) {
+    readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
+  }
+
   /// Fetches. Building is `rebuild()`'s job, which this triggers by setting
   /// `document`.
+  ///
+  /// Once per view, plus Try Again after a failure: the view is made per document
+  /// (`.id(selection)`), and appearing again keeps what it loaded.
   private func load() async {
+    trace("loading")
     loadError = nil
-    document = nil
-    built = nil
-    sectionNumbers = [:]
-    // A reused view must not carry the previous document's place into the new
-    // one; `install()` reports the real anchor a moment later.
+    // The scene's `ReaderState` must not carry the previous document's place into
+    // this one; `install()` reports the real anchor a moment later.
     reader.clear()
-    lastVisibleAnchor.anchor = nil
     reader.showOriginal = preferOriginalText
     do {
       let loaded = try await library.document(for: id)
@@ -291,10 +449,17 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      // Here rather than on appearing: once per opening, since each is a view of
+      // its own (`.id(selection)`) and a collapsed split view's spurious
+      // disappear and appear is not another one (#260). And only once the
+      // document is here, so one that failed to open is not listed as read.
+      markAsRead()
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
+      trace("loaded")
     } catch {
+      trace("failed: \(error)")
       loadError = error.localizedDescription
     }
   }
@@ -303,21 +468,29 @@ struct DocumentView: View {
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
   /// the largest documents in the library — so a change to an *existing* document's
-  /// style waits that long to settle, and `.task(id:)` cancels the pending rebuild
-  /// on every further tick of the font-size slider or the window's edge. The first
-  /// build of a document does not wait: there is nothing on screen to disturb, and
-  /// the column is already known, so it is built once and built right.
+  /// style waits that long to settle, and the next change cancels the pending
+  /// rebuild — every further tick of the font-size slider or the window's edge.
+  /// The first build of a document does not wait: there is nothing on screen to
+  /// disturb, and the column is already known, so it is built once and built right.
   private func rebuild() async {
-    guard let document, let style = buildInputs.style else { return }
+    let inputs = buildInputs
+    guard let document, let style = inputs.style else { return }
+    trace("building")
     if built != nil {
       try? await Task.sleep(for: .milliseconds(650))
-      guard !Task.isCancelled else { return }
     }
+    // Before the build, which cannot be interrupted once it starts.
+    guard !Task.isCancelled else { return }
     // Off the main actor: this is string assembly and text measurement, and
     // blocking the main thread for it is what made the font-size slider stutter.
     let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
-    guard !Task.isCancelled else { return }
+    guard !Task.isCancelled else {
+      trace("build cancelled, discarded")
+      return
+    }
     built = rebuilt
+    builtInputs = inputs
+    trace("built")
     // The sections the storage actually holds, straight from the index the
     // builder just emitted — rather than re-deriving "is this a bibliography?"
     // from the model and hoping the two rules stay in step. A contents row that
@@ -458,11 +631,22 @@ struct DocumentHeaderView: View {
   /// describe different headers.
   let identity: Identity
 
+  /// Where the heading ends, for the toolbar's copy of the title to take over from
+  /// as it scrolls away; see `ToolbarTitleReveal`.
+  let heading: HeadingBox
+
+  nonisolated static let coordinateSpace = "documentHeader"
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(identity.title)
         .font(.largeTitle.weight(.semibold))
         .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) {
+          $0.frame(in: .named(Self.coordinateSpace)).maxY
+        } action: { bottom in
+          heading.bottom = bottom
+        }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {
           StatusBadge(status: metadata.currentStatus)
@@ -589,10 +773,12 @@ struct TableOfContentsView: View {
             .fontWeight(section.anchor == current ? .semibold : .regular)
         }
         .buttonStyle(.plain)
+        // Weight alone marks the current section only for someone who can see it
+        // (#156).
+        .accessibilityAddTraits(section.anchor == current ? .isSelected : [])
       }
     }
     .listStyle(.sidebar)
-    .navigationTitle("Contents")
   }
 }
 

@@ -26,13 +26,14 @@
     /// for, and the back/forward stack that got here. `ContentView` held it as
     /// `@State`, which is what made a tab a tab; now the window holds it, and every
     /// hosted root is handed the same one.
-    let navigation = NavigationModel()
+    let navigation: NavigationModel
 
     /// What the reader is showing, for the toolbar and the panel — which are not
     /// inside it any more.
     let reader = ReaderState()
 
     let splitController = ReaderSplitViewController()
+    private(set) var sidebarItem: NSSplitViewItem!
     private(set) var listItem: NSSplitViewItem!
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
@@ -55,6 +56,7 @@
 
     init(library: LibraryModel) {
       self.library = library
+      self.navigation = NavigationModel(library: library)
       let window = ReaderWindow(
         contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -84,6 +86,7 @@
       let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
       sidebar.minimumThickness = Self.sidebarMinimum
       sidebar.maximumThickness = 320
+      sidebarItem = sidebar
 
       let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
       list.minimumThickness = Self.listMinimum
@@ -153,7 +156,13 @@
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
       // that column is dragged.
-      splitController.didResizeSubviews = { [weak self] in self?.toolbar?.capTitleToList() }
+      // Collapsing or expanding the sidebar resizes the subviews too, so this is also
+      // where View ▸ Show Sidebar learns which title to show.
+      splitController.didResizeSubviews = { [weak self] in
+        guard let self else { return }
+        self.toolbar?.capTitleToList()
+        ActiveReaderWindow.shared.sidebarChanged(self)
+      }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
       // The title is the toolbar's own item, not AppKit's.
@@ -169,10 +178,12 @@
       window.titleVisibility = .hidden
 
       self.toolbar = toolbar
+      self.reader.updateToolbarTitle = { [weak toolbar] in toolbar?.updateDocumentTitle($0) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)
       observeTitle()
+      observeListTitle()
       observeDocument()
     }
 
@@ -226,17 +237,43 @@
         // is far narrower than the window and clips rather than eliding.
         let subtitle =
           navigation.selection
-          .flatMap { library.metadata($0)?.title }?
+          .flatMap {
+            DocumentActions.subtitle(
+              metadata: library.metadata($0), documentTitle: reader.documentTitle)
+          }?
           .truncated(to: Self.subtitleLimit) ?? ""
         window?.title = title
         window?.subtitle = subtitle
-        toolbar?.showTitle(title, subtitle: subtitle)
-        // Here because this is already the one place that re-fires when the
-        // selection changes, and the fetch must not be on the toolbar's
-        // validation path; see `isBookmarked`.
-        refreshBookmarked()
+        // The reader's own copy, shown once its header scrolls away. Whole, not
+        // truncated like the tab's: the item ellipsises to whatever room it has.
+        toolbar?.showDocumentTitle(
+          navigation.selection?.displayName ?? "",
+          subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
+        )
+        // The bookmark glyph follows the selection and the bookmarks, and this is
+        // the one place that re-fires when either changes.
+        _ = isBookmarked
+        window?.toolbar?.validateVisibleItems()
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeTitle() }
+      }
+    }
+
+    /// The title over the list names the list: the collection the sidebar chose and
+    /// how many documents it holds after the search. The document is the tab's to
+    /// name, and the reader's own.
+    ///
+    /// Its own loop, apart from `observeTitle`: the count changes with most
+    /// keystrokes in the search field, and nothing else there — the window's
+    /// title, the reader's, the bookmark fetch — depends on it.
+    private func observeListTitle() {
+      withObservationTracking {
+        toolbar?.showTitle(
+          navigation.filter.title,
+          subtitle: library.listSubtitle(for: navigation)
+        )
+      } onChange: { [weak self] in
+        Task { @MainActor in self?.observeListTitle() }
       }
     }
 
@@ -303,6 +340,14 @@
       panelItem.isCollapsed = true
     }
 
+    // MARK: - The sidebar
+
+    /// Through the split view controller rather than down the responder chain, so
+    /// the menu toggles this window's sidebar whatever holds focus in it.
+    func toggleSidebar() {
+      splitController.toggleSidebar(nil)
+    }
+
     // MARK: - The panel
 
     /// Animated, so the panel slides in rather than appearing between frames — which
@@ -316,6 +361,21 @@
       // Before AppKit gets a chance to enforce the old minimum against the new
       // arrangement.
       if let window { applyMinimumWidth(to: window) }
+    }
+
+    /// Whether the contents panel is showing.
+    var isPanelOpen: Bool {
+      !panelItem.isCollapsed
+    }
+
+    /// Opens or closes the panel, the way the toolbar's toggle does — so only over
+    /// a document, which is what the toggle's validation allows. False when it
+    /// refused to open.
+    @discardableResult
+    func setPanelOpen(_ open: Bool) -> Bool {
+      guard !open || reader.hasDocument else { return false }
+      if open != isPanelOpen { togglePanel() }
+      return true
     }
 
     #if DEBUG
@@ -339,18 +399,13 @@
 
     /// Whether the document on screen is bookmarked, for the toolbar's glyph.
     ///
-    /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
-    /// item once per event cycle, and asking SwiftData there put a compiled
-    /// `#Predicate` and a store round trip under every mouse move, once per open tab.
-    /// Nothing else on macOS writes a `Bookmark`, so the two places it can change
-    /// are the selection moving and `toggleBookmark()`.
-    private(set) var isBookmarked = false
-
-    private func refreshBookmarked() {
-      isBookmarked =
-        navigation.selection.map {
-          BookmarkStore.isBookmarked($0, in: AppData.container.mainContext)
-        } ?? false
+    /// From the library's one set of bookmarked numbers, which every tab reads, so
+    /// a bookmark toggled in another tab shows here too (#141). A set lookup is
+    /// cheap enough for `NSToolbar`, which autovalidates every visible item once per
+    /// event cycle — asking SwiftData there put a store round trip under every mouse
+    /// move.
+    var isBookmarked: Bool {
+      navigation.selection.map { library.bookmarkedNumbers.contains($0.number) } ?? false
     }
 
     /// Puts focus in the text on screen, for Find. Nothing else focuses it: after a
@@ -374,7 +429,7 @@
         documentTitle: reader.documentTitle,
         id: id
       )
-      isBookmarked = BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     }
 
     // MARK: - Lifetime
@@ -430,6 +485,7 @@
   struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
+    @Environment(ReaderState.self) private var reader
 
     var body: some View {
       @Bindable var navigation = navigation
@@ -442,7 +498,12 @@
         }
       }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .onChange(of: navigation.selection) {
+        library.activate(navigation)
+        // A deselected row leaves nothing on screen, and the panel and the toolbar
+        // must not go on describing the document that was.
+        if navigation.selection == nil { reader.clear() }
+      }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }

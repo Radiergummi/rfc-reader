@@ -31,7 +31,53 @@ struct InlineRunTests {
   @Test func codeUsesTheMonospacedFont() {
     let code = run([.code("GET")])
     let font = code.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
-    #expect(font == style.codeFont)
+    #expect(font == .monospacedSystemFont(ofSize: style.bodySize * 0.92, weight: .regular))
+  }
+
+  /// Code, superscript and subscript each replaced the font with one sized from the
+  /// body, whatever surrounded them: `code` in a heading dropped to body size, and a
+  /// superscript inside strong text lost its weight (#154). Each is now made from the
+  /// font in effect.
+  @Test func codeInAHeadingIsScaledFromTheHeading() throws {
+    let heading = style.headingFont(depth: 1)
+    let run = DocumentTextBuilder(style: style).inlineRuns(
+      [.text("Changes to "), .code("foo")], base: [.font: heading])
+    let offset = try Fixtures.offset(of: "foo", in: run)
+    let font = try #require(run.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.pointSize == heading.pointSize * 0.92)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+    #expect(font.weight == heading.weight)
+  }
+
+  @Test func codeInEmphasisStaysItalic() throws {
+    let emphasised = run([.emphasis([.text("see "), .code("foo")])])
+    let offset = try Fixtures.offset(of: "foo", in: emphasised)
+    let font = try #require(
+      emphasised.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+  }
+
+  /// A bold italic face states no weight in its descriptor, only the bold trait, so
+  /// code inside strong emphasis came out regular italic.
+  @Test func codeInStrongEmphasisStaysBoldAndItalic() throws {
+    let text = run([.strong([.emphasis([.text("see "), .code("foo")])])])
+    let offset = try Fixtures.offset(of: "foo", in: text)
+    let font = try #require(text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+  }
+
+  @Test func aSuperscriptOrSubscriptKeepsTheTraitsAroundIt() throws {
+    let strong = run([.strong([.text("x"), .superscript("2"), .subscript("i")])])
+    for script in ["2", "i"] {
+      let offset = try Fixtures.offset(of: script, in: strong)
+      let font = try #require(
+        strong.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+      #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(script) lost bold")
+      #expect(font.pointSize == style.bodySize * 0.75)
+    }
   }
 
   @Test func linksCarryTheirURL() throws {

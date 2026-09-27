@@ -1,65 +1,35 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import SwiftUI
 
 struct RFCListView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
-  @Query(sort: \Bookmark.createdAt, order: .reverse) private var bookmarks: [Bookmark]
-  @State private var downloaded: Set<Int> = []
-  /// The Recently read order, taken once when the filter is entered.
-  ///
-  /// Not a live `@Query`: opening or leaving a document writes its `updatedAt`, so
-  /// a query sorted on that re-sorted the list the click came from — the row just
-  /// left jumped to the top and everything below it shifted down a place. Held
-  /// here instead, the order is whatever it was on arrival and stays put while it
-  /// is being read through; coming back to the filter takes a fresh one, the same
-  /// way `downloaded` beside it does.
-  @State private var recentOrder: [Int] = []
   /// How many rows are handed to the `List`. See `ListWindow`: all 9,842 of them at
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
 
-  /// Built once per body pass and shared by every row: `RFCRow` used to scan the
-  /// whole bookmark list itself, which is a linear search per row over a list that
-  /// can be 9,842 rows long.
-  private var bookmarkedNumbers: Set<Int> {
-    Set(bookmarks.map(\.number))
-  }
-
   private var rfcs: [RFCMetadata] {
-    library.list(
-      filter: navigation.filter,
-      searchText: navigation.searchText,
-      bookmarked: bookmarkedNumbers,
-      recentlyRead: recentOrder,
-      downloaded: downloaded
-    )
-  }
-
-  /// Selecting a row is a navigation, so it goes through the history rather than
-  /// assigning the selection behind its back.
-  private var selectionBinding: Binding<DocumentID?> {
-    Binding(
-      get: { navigation.selection },
-      // Not `library.open(_:activation:in:)` like every other open: a selection
-      // binding is handed the outcome, not the click, and Command-click on a
-      // list row is the platform's multi-select chord rather than ours to take.
-      set: { if let id = $0 { navigation.select(id) } }
-    )
+    library.list(for: navigation)
   }
 
   var body: some View {
     @Bindable var navigation = navigation
-    let bookmarked = bookmarkedNumbers
+    // Once, and shared by every row: `RFCRow` used to scan the whole bookmark list
+    // itself, which is a linear search per row over a list that can be 9,842 rows
+    // long.
+    let bookmarked = library.bookmarkedNumbers
     // Once, and shared by everything below: `rfcs` was read twice per body pass —
     // here and in the overlay — which is half of why the memoised list was worth
     // memoising.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
-    List(selection: selectionBinding) {
+    // Selecting a row is a navigation: the setter goes through the history. Not
+    // `library.open(_:activation:in:)` like every other open: a selection binding
+    // is handed the outcome, not the click, and Command-click on a list row is the
+    // platform's multi-select chord rather than ours to take.
+    List(selection: $navigation.selection) {
       ForEach(rows.prefix(limit)) { rfc in
         RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
           .tag(rfc.id)
@@ -68,21 +38,29 @@ struct RFCListView: View {
             limit = ListWindow.extendedLimit(from: limit, total: rows.count)
           }
       }
+      // Where Mail says when it last checked: after the last row, scrolled to
+      // rather than pinned. Only once every row is in the window — after a
+      // partial page it would read as the end of a list that goes on — and not
+      // under an empty search, where the overlay already says what there is to
+      // say.
+      if limit >= rows.count, !(rows.isEmpty && library.indexState.isReady) {
+        IndexStatusView()
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 8)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
     }
     // Inset rather than plain: the selection is a rounded capsule with a margin
     // either side, the way every other macOS content list draws one. Plain fills
     // the row edge to edge and squares it off.
     .listStyle(.inset)
     .overlay {
-      if rows.isEmpty, case .ready = library.indexState {
+      if rows.isEmpty, library.indexState.isReady {
         ContentUnavailableView.search(text: navigation.searchText)
       }
     }
-    .task(id: navigation.filter) {
-      recentOrder = library.recentlyReadNumbers()
-      downloaded = await library.downloadedNumbers()
-      // After the two above, not before: both are inputs to the list the window
-      // is being measured against.
+    .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.searchText) {
@@ -96,6 +74,10 @@ struct RFCListView: View {
     .onChange(of: navigation.selection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
+    #if !os(macOS)
+      .navigationTitle(navigation.filter.title)
+      .navigationSubtitle(library.listSubtitle(for: navigation))
+    #endif
   }
 
   /// Where the selected document sits in the list, if it is in it at all.
@@ -105,6 +87,31 @@ struct RFCListView: View {
   private func selectedRow() -> Int? {
     guard let selection = navigation.selection else { return nil }
     return rfcs.firstIndex { $0.id == selection }
+  }
+}
+
+/// Where the index stands: loading, when it was last updated, or why it failed
+/// and a way to try again — the last of which is the only place a failed refresh
+/// is reported at all.
+struct IndexStatusView: View {
+  @Environment(LibraryModel.self) private var library
+
+  var body: some View {
+    HStack(spacing: 6) {
+      switch library.indexState {
+      case .idle, .loading:
+        ProgressView().controlSize(.mini)
+        Text("Loading index…")
+      case .ready(let updatedAt):
+        Text("Updated \(updatedAt, format: .relative(presentation: .named))")
+      case .failed(let message):
+        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+        Text(message).lineLimit(2)
+        Button("Retry") { Task { await library.refreshIndex() } }.buttonStyle(.borderless)
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
   }
 }
 
@@ -138,5 +145,9 @@ struct RFCRow: View {
       }
     }
     .padding(.vertical, 2)
+    // One element, not five: VoiceOver read the number, the year, the title, the
+    // status and the group as separate stops per row (#156).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
   }
 }

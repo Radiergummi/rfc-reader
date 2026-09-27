@@ -23,6 +23,15 @@ struct AnchorIndexTests {
     #expect(index.anchor(at: 10_000) == "section-2")
   }
 
+  /// The same lookup, as a position in `entries`, for a caller that needs the
+  /// entry before as well.
+  @Test func findsTheNearestPrecedingEntrysIndex() {
+    #expect(index.index(at: 0) == 0)
+    #expect(index.index(at: 399) == 1)
+    #expect(index.index(at: 400) == 2)
+    #expect(AnchorIndex([.init(anchor: "abstract", offset: 50)]).index(at: 49) == nil)
+  }
+
   @Test func returnsNilBeforeTheFirstAnchor() {
     let offsetIndex = AnchorIndex([.init(anchor: "abstract", offset: 50)])
     #expect(offsetIndex.anchor(at: 49) == nil)

@@ -1,0 +1,81 @@
+# The repository's issue labels. `.github/workflows/labels.yml` creates or updates every
+# label listed here on each push to main; a label that is not listed is left alone, so
+# renaming one here adds the new name and the old one has to be deleted by hand.
+#
+# Three families:
+# - type: what the issue is (bug, enhancement).
+# - platform: set only when the issue is specific to one platform. An issue with no
+#   platform label affects both.
+# - area: which part of the project it touches. An issue may carry more than one.
+#
+# Colours are quoted: unquoted, one like 5319e7 is read as a number in exponent notation.
+#
+# The agent-* labels are the queue the work-issue skill reads (.claude/skills/work-issue).
+
+# Type
+- name: bug
+  color: "d73a4a"
+  description: Something isn't working
+- name: enhancement
+  color: "a2eeef"
+  description: New feature or request
+
+# Platform
+- name: "platform: iOS"
+  color: "1d76db"
+  description: Specific to iOS or iPadOS
+- name: "platform: macOS"
+  color: "0e4d92"
+  description: Specific to macOS
+
+# Area
+- name: "area: reader"
+  color: "c5def5"
+  description: The reading view — text building, TextKit layout, decorations, in-document navigation
+- name: "area: legacy parser"
+  color: "fbca04"
+  description: LegacyTextParser's heuristics for the plain-text RFCs
+- name: "area: xml & model"
+  color: "fef2c0"
+  description: The RFCXML parser, the RFCDocument model and its serialisation
+- name: "area: corpus"
+  color: "bfd4f2"
+  description: corpus-build, the data packs, overrides and the RFC index data
+- name: "area: search"
+  color: "d4c5f9"
+  description: Search, and the corpus indexes that answer questions about the specs
+- name: "area: integrations"
+  color: "f9d0c4"
+  description: Ways in from outside the app — rfc:// links, App Intents, Spotlight, scripting, extensions, CLI/MCP
+- name: "area: ux"
+  color: "e99695"
+  description: Interface design, HIG conformance and app chrome
+- name: "area: accessibility"
+  color: "006b75"
+  description: VoiceOver, Dynamic Type and keyboard access
+- name: "area: performance"
+  color: "b60205"
+  description: Speed, memory and work done on the main actor
+- name: "area: data & sync"
+  color: "c2e0c6"
+  description: SwiftData, bookmarks, downloads, the document cache, state restoration and sync
+- name: "area: architecture"
+  color: "5319e7"
+  description: Structure, refactoring and modern Swift
+- name: "area: tooling & ci"
+  color: "7f8c8d"
+  description: The Makefile, CI workflows, the build setup and toolchains
+- name: "area: docs"
+  color: "0075ca"
+  description: Repository documentation
+
+# Queue for the work-issue skill
+- name: agent-ready
+  color: "0e8a16"
+  description: Queued for Claude to work on autonomously
+- name: agent-blocked
+  color: "d93f0b"
+  description: Claude asked a question and is waiting for an answer
+- name: agent-pr
+  color: "5319e7"
+  description: A pull request by Claude closes this

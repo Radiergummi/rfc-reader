@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -6,7 +7,7 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
 
   var body: some View {
-    List(selection: selection) {
+    List(selection: Bindable(navigation).sidebarSelection) {
       Section("Library") {
         row(.bookmarks)
         row(.recent)
@@ -59,18 +60,6 @@ struct SidebarView: View {
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
     #endif
     .labelStyle(SidebarLabelStyle())
-    .safeAreaInset(edge: .bottom) {
-      IndexStatusView()
-    }
-  }
-
-  /// iOS only offers `List(selection:)` with an optional binding, and deselecting
-  /// should leave the current filter in place rather than clear it.
-  private var selection: Binding<LibraryFilter?> {
-    Binding(
-      get: { navigation.filter },
-      set: { if let new = $0 { navigation.filter = new } }
-    )
   }
 
   private func row(_ filter: LibraryFilter) -> some View {
@@ -141,30 +130,5 @@ private struct SidebarLabelStyle: LabelStyle {
         title
       }
     }
-  }
-}
-
-struct IndexStatusView: View {
-  @Environment(LibraryModel.self) private var library
-
-  var body: some View {
-    HStack(spacing: 6) {
-      switch library.indexState {
-      case .idle, .loading:
-        ProgressView().controlSize(.mini)
-        Text("Loading index…")
-      case .ready(let count, let updatedAt):
-        Text("\(count) RFCs · updated \(updatedAt, format: .relative(presentation: .named))")
-      case .failed(let message):
-        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        Text(message).lineLimit(2)
-        Button("Retry") { Task { await library.refreshIndex() } }.buttonStyle(.borderless)
-      }
-    }
-    .font(.caption)
-    .foregroundStyle(.secondary)
-    .padding(8)
-    .frame(maxWidth: .infinity)
-    .background(.bar)
   }
 }

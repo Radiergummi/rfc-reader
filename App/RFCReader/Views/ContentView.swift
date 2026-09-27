@@ -10,12 +10,13 @@ import SwiftUI
 #if !os(macOS)
   struct ContentView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
     /// selection, filter, search text and back/forward stack. Shared library state —
     /// the index, the cache — stays on the environment's `LibraryModel`.
-    @State private var navigation = NavigationModel()
+    @State private var navigation = NavigationModel(library: .shared)
     /// What the reader is showing, shared with the panel. One per scene, for the same
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()
@@ -46,14 +47,9 @@ import SwiftUI
           EmptyDetailView()
         }
       }
-      // The window's title, and therefore the tab's.
-      //
-      // Only one `navigationTitle` in a `NavigationSplitView` reaches the window,
-      // and the list column's was winning it — so every tab read "All RFCs"
-      // whatever it was showing, while the subtitle set here came through
-      // untouched because nothing competed for it. The list column no longer sets
-      // one: the sidebar already shows which filter is active, so that title was
-      // spending the window's only title slot on something said elsewhere.
+      // The scene's title, for the app switcher and iPad's window controls. It
+      // reaches no column's bar: each column titles itself, the list included
+      // (#246).
       .navigationTitle(windowTitle)
       // On the split view rather than on `DocumentView`: macOS gives the detail
       // column no leading toolbar slot — a `.navigation` item declared down there is
@@ -62,30 +58,43 @@ import SwiftUI
       //
       // Always present, dimmed when there is nowhere to go, as Safari does. A pair
       // that appears and vanishes with the history shifts everything beside it.
+      //
+      // Only beside other columns, though. In a single column, as on an iPhone,
+      // it sat beside the system back button and took the room the reader's title
+      // needed (#245); the system button leaves the document there, and "Back to
+      // §…" returns from a jump within it (#254).
       .toolbar {
-        ToolbarItem(placement: .navigation) {
-          ControlGroup {
-            Button {
-              navigation.goBack()
-            } label: {
-              Label("Back", systemImage: "chevron.backward")
+        if horizontalSizeClass == .regular {
+          ToolbarItem(placement: .navigation) {
+            ControlGroup {
+              HistoryButtons()
             }
-            .disabled(!navigation.canGoBack)
-
-            Button {
-              navigation.goForward()
-            } label: {
-              Label("Forward", systemImage: "chevron.forward")
-            }
-            .disabled(!navigation.canGoForward)
+            .controlGroupStyle(.navigation)
           }
-          .controlGroupStyle(.navigation)
         }
       }
-      .onAppear { library.register(navigation) }
+      .onAppear {
+        // Collapsed, the sidebar is a list of push rows, and a filter selected
+        // before anything was tapped reads as a tap left behind. The list still
+        // lists it: `filter` keeps its value. Before registering, which may open a
+        // waiting link and reveal it in the list.
+        if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
+        library.register(navigation)
+      }
+      // Side by side, the sidebar shows which filter feeds the list.
+      .onChange(of: horizontalSizeClass) {
+        if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {
+          navigation.sidebarSelection = navigation.filter
+        }
+      }
       .onDisappear { library.unregister(navigation) }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) { library.activate(navigation) }
+      .onChange(of: navigation.selection) {
+        library.activate(navigation)
+        // Nothing on screen: the panel must not go on describing the document
+        // that was.
+        if navigation.selection == nil { reader.clear() }
+      }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
@@ -130,12 +139,7 @@ struct GoToDocumentSheet: View {
   @FocusState private var focused: Bool
 
   private var resolved: RFCLink? {
-    if let url = URL(string: input.trimmingCharacters(in: .whitespaces)), url.scheme != nil,
-      let link = RFCLink(url: url)
-    {
-      return link
-    }
-    return DocumentID(parsing: input).map { RFCLink(id: $0) }
+    DocumentReference.link(from: input)
   }
 
   var body: some View {

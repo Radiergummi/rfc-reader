@@ -94,8 +94,8 @@ struct DocumentCommands: Commands {
     private var navigation: NavigationModel? { active.controller?.navigation }
     private var reader: ReaderState? { active.controller?.reader }
     /// A document is on screen, not just selected: a selection is also showing while
-    /// it loads and when it failed to. The toolbar's Contents button validates on
-    /// the same `hasDocument`.
+    /// it loads and when it failed to, and `hasDocument` stays true after the
+    /// selection is cleared.
     private var showsDocument: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
@@ -131,6 +131,22 @@ struct DocumentCommands: Commands {
       }
     #endif
     CommandGroup(before: .sidebar) {
+      #if os(macOS)
+        // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
+        // reads the state of a split view AppKit made, so its title stayed "Show
+        // Sidebar" with the sidebar open, and its first click did nothing -- measured.
+        // Here rather than replacing `.sidebar`, which a scene with no `WindowGroup`
+        // does not have: the item never appeared.
+        //
+        // Outside the `Section`, first in the group: the group draws a separator
+        // before itself and a section draws one at each end, so a section opening
+        // the group drew two lines there -- measured.
+        Button(active.isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
+          active.controller?.toggleSidebar()
+        }
+        .keyboardShortcut("s", modifiers: [.command, .control])
+        .disabled(active.controller == nil)
+      #endif
       Section {
         #if os(macOS)
           // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
@@ -140,7 +156,9 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("i", modifiers: [.command, .option])
             // As the toolbar's button is: opened with no document, the panel is an
             // empty strip, and nothing closes it again until a document arrives.
-            .disabled(!showsDocument)
+            // Not `showsDocument`: clearing the selection leaves `hasDocument` set
+            // and the panel open, and the chord has to be able to close it.
+            .disabled(reader?.hasDocument != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }

@@ -26,18 +26,53 @@ struct DocumentInspector: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      InspectorTabBar(tab: $tab)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+      #if os(macOS)
+        InspectorTabBar(tab: $tab)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 8)
+      #else
+        // The system's segmented control, inside the panel it switches (#247).
+        //
+        // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
+        // reader's own bar, even through a `NavigationStack` of the panel's own, so
+        // the tabs ended up above the reader, apart from the sheet they switch and
+        // in the place of the reader's title. The insets are the sheet's rather
+        // than the inspector column's: 10 and 8 left the control against the
+        // sheet's top edge, its capsule ends inside the sheet's rounded corners.
+        Picker("Panel", selection: $tab) {
+          Text("Contents").tag(InspectorTab.contents)
+          Text("References").tag(InspectorTab.references)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
+      #endif
 
-      switch tab {
-      case .contents:
+      selectedTab
+    }
+  }
+
+  @ViewBuilder
+  private var selectedTab: some View {
+    switch tab {
+    case .contents:
+      // Opened at the section being read rather than at the top: from §15 of a long
+      // RFC, the top of the list is a long way from where the reader is.
+      ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
-      case .references:
-        // A document with no bibliography says so here rather than being
-        // steered away from the tab.
-        ReferencesView(groups: groups, open: openDocument)
+          .task {
+            // A turn later, once the list has rows to scroll to: a timing guess,
+            // since `List` offers no initial scroll position to declare instead.
+            await Task.yield()
+            if let current { proxy.scrollTo(current, anchor: .center) }
+          }
       }
+    case .references:
+      // A document with no bibliography says so here rather than being steered
+      // away from the tab.
+      ReferencesView(groups: groups, open: openDocument)
     }
   }
 }
@@ -52,6 +87,21 @@ struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  #if !os(macOS)
+    /// The panel's presentation. None on macOS, where the panel is a split item
+    /// that collapses through AppKit.
+    ///
+    /// A binding and a flag rather than a closure, because both compare equal to
+    /// themselves and a closure never does: with a closure, every pass of the
+    /// reader's body drew the panel and its whole table of contents again (#259).
+    @Binding var isPresented: Bool
+    /// Whether a choice that navigates closes the panel: when it is a sheet over
+    /// the text, and what was chosen is behind it (#249). Beside the text, as a
+    /// column, it stays open. The reader decides, from its own width: the size
+    /// class inside the panel is the panel's, which as a narrow column may be
+    /// compact while the reader is not.
+    let closesAfterChoice: Bool
+  #endif
 
   var body: some View {
     @Bindable var reader = reader
@@ -61,12 +111,24 @@ struct PanelHost: View {
         groups: reader.groups,
         tab: $reader.tab,
         current: reader.currentAnchor,
-        selectSection: { navigation.jump(toSection: $0) },
-        openDocument: { library.open($0, activation: .current, in: navigation) }
+        selectSection: {
+          navigation.jump(toSection: $0)
+          didNavigate()
+        },
+        openDocument: {
+          library.open($0, activation: .current, in: navigation)
+          didNavigate()
+        }
       )
     } else {
       Color.clear
     }
+  }
+
+  private func didNavigate() {
+    #if !os(macOS)
+      if closesAfterChoice { isPresented = false }
+    #endif
   }
 }
 
@@ -78,6 +140,9 @@ struct PanelHost: View {
 /// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
 /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
 /// divider only between two unselected labels.
+///
+/// macOS only: in an iPhone's sheet the system's own segmented control sits in the
+/// panel's bar instead (#247).
 private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
@@ -99,8 +164,10 @@ private struct InspectorTabBar: View {
     return Button {
       tab = value
     } label: {
+      // A text style rather than a fixed 13 pt, so the tabs follow the text size;
+      // on macOS `.body` is the same 13 pt.
       Text(title)
-        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .font(.body.weight(isSelected ? .semibold : .regular))
         .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
         .lineLimit(1)
         .frame(maxWidth: .infinity)
@@ -116,6 +183,8 @@ private struct InspectorTabBar: View {
         .contentShape(.rect)
     }
     .buttonStyle(.plain)
+    // The pill shows which tab is chosen; this says so to VoiceOver (#156).
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -149,12 +218,22 @@ struct ReferenceRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
-      entryDescription
-        .contentShape(Rectangle())
-        .onTapGesture { if let id = entry.documentID { open(id) } }
+      // A button, not a tap gesture: a gesture is no control, so VoiceOver did
+      // not announce the row as one and Full Keyboard Access could not press it
+      // (#156). An entry that names no RFC opens nothing and stays plain text.
+      if let id = entry.documentID {
+        Button {
+          open(id)
+        } label: {
+          entryDescription.contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      } else {
+        entryDescription
+      }
       // What the author added after the entry, most often the commit a living
       // standard was cited at; its link opens in the browser like any other.
-      // Outside the tap gesture, which would otherwise take the link's click.
+      // Outside the button, which would otherwise take the link's click.
       if let annotation = entry.annotationText {
         Text(annotation)
           .font(.caption)
@@ -162,14 +241,23 @@ struct ReferenceRow: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .padding(.vertical, 2)
+    #if os(macOS)
+      .padding(.vertical, 2)
+    #else
+      // Entries of three lines each, in an inset list, need more room between them
+      // than the denser macOS inspector gives them (#248).
+      .padding(.vertical, 8)
+    #endif
   }
 
   private var entryDescription: some View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if entry.documentID != nil {
+          // Decoration: inside the button it would otherwise open the button's
+          // spoken name with the symbol's own.
           Image(systemName: "doc.text").foregroundStyle(.tint).imageScale(.small)
+            .accessibilityHidden(true)
         }
         Text(entry.displayAnchor)
           .font(.subheadline.weight(.semibold))
