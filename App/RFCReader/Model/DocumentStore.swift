@@ -131,6 +131,10 @@ actor DocumentStore {
     }
   }
 
+  /// Whether a body has been written since eviction last ran: asked before the
+  /// caller builds the pinned set, which is not free.
+  var hasGrownSinceEviction: Bool { hasGrown }
+
   /// Removes the least recently opened bodies past `bound`, never a pinned one; see
   /// `CacheEviction`. Only after the cache has grown, so an ordinary open costs
   /// nothing here. Returns what it removed.

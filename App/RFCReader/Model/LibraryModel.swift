@@ -392,16 +392,23 @@ final class LibraryModel {
   /// Fetching a document caches it, so the offline set is refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    await evictIfGrown()
     await refreshDownloadedNumbers()
     return document
   }
 
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    await evictIfGrown()
     await refreshDownloadedNumbers()
     return text
+  }
+
+  /// Asks the store first, so an open that wrote nothing costs neither the pinned
+  /// set's fetches nor the cache's enumeration.
+  private func evictIfGrown() async {
+    guard await store.hasGrownSinceEviction else { return }
+    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
