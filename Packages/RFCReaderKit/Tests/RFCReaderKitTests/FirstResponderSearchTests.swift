@@ -92,6 +92,24 @@
       #expect(FirstResponderSearch.innermostTarget(in: column) == nil)
     }
 
+    /// ⌥⌘F: the sidebar's column is a hosting view with the search field somewhere
+    /// inside it, beside the list, and the list is not the field.
+    @Test func `the search field is found inside its column beside the list`() {
+      let column = Taker()
+      let inset = NSView()
+      let field = NSSearchField()
+      column.addSubview(Taker())
+      inset.addSubview(field)
+      column.addSubview(inset)
+      #expect(FirstResponderSearch.searchField(in: column) === field)
+    }
+
+    @Test func `a column with no search field has none to focus`() {
+      let column = Taker()
+      column.addSubview(NSTextField())
+      #expect(FirstResponderSearch.searchField(in: column) == nil)
+    }
+
     /// Find focuses the text on screen, not whatever takes focus first: a control
     /// ahead of the text in the column would take the innermost search.
     @Test func `find reaches past a control to the searchable text`() {

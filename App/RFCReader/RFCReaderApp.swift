@@ -185,6 +185,13 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("g", modifiers: [.command, .shift])
         }
         .disabled(!showsDocument)
+        // ⌥⌘F, the chord Mail and Notes give their search field. Enabled with any
+        // reader window: the library is there to search with no document open.
+        Section {
+          Button("Search Library") { active.controller?.focusSearch() }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            .disabled(active.controller == nil)
+        }
       }
     #endif
   }
