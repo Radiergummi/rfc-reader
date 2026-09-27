@@ -110,7 +110,7 @@ struct AccessibleReadingTests {
         continue
       }
       let span = IndexSet(integersIn: range.location..<NSMaxRange(range))
-      #expect(covered.intersection(span).isEmpty)
+      #expect(covered.isDisjoint(with: span))
       covered.formUnion(span)
     }
     var artwork = IndexSet()
