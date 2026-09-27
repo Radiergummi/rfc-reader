@@ -316,7 +316,7 @@ public struct RFCIndex: Sendable {
   /// RFC numbers that were allocated but never issued.
   public let notIssued: [Int]
 
-  private var byNumber: [Int: Int]
+  private let byNumber: [Int: Int]
 
   public init(rfcs: [RFCMetadata], series: [SeriesEntry] = [], notIssued: [Int] = []) {
     self.rfcs = rfcs.sorted { $0.number < $1.number }
