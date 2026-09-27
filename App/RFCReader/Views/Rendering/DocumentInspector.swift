@@ -26,18 +26,53 @@ struct DocumentInspector: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      InspectorTabBar(tab: $tab)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+      #if os(macOS)
+        InspectorTabBar(tab: $tab)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 8)
+      #else
+        // The system's segmented control, inside the panel it switches (#247).
+        //
+        // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
+        // reader's own bar, even through a `NavigationStack` of the panel's own, so
+        // the tabs ended up above the reader, apart from the sheet they switch and
+        // in the place of the reader's title. The insets are the sheet's rather
+        // than the inspector column's: 10 and 8 left the control against the
+        // sheet's top edge, its capsule ends inside the sheet's rounded corners.
+        Picker("Panel", selection: $tab) {
+          Text("Contents").tag(InspectorTab.contents)
+          Text("References").tag(InspectorTab.references)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
+      #endif
 
-      switch tab {
-      case .contents:
+      selectedTab
+    }
+  }
+
+  @ViewBuilder
+  private var selectedTab: some View {
+    switch tab {
+    case .contents:
+      // Opened at the section being read rather than at the top: from §15 of a long
+      // RFC, the top of the list is a long way from where the reader is.
+      ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
-      case .references:
-        // A document with no bibliography says so here rather than being
-        // steered away from the tab.
-        ReferencesView(groups: groups, open: openDocument)
+          .task {
+            // A turn later, once the list has rows to scroll to: a timing guess,
+            // since `List` offers no initial scroll position to declare instead.
+            await Task.yield()
+            if let current { proxy.scrollTo(current, anchor: .center) }
+          }
       }
+    case .references:
+      // A document with no bibliography says so here rather than being steered
+      // away from the tab.
+      ReferencesView(groups: groups, open: openDocument)
     }
   }
 }
@@ -52,6 +87,10 @@ struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  /// Called after a choice in the panel has navigated, which is when iOS closes the
+  /// panel's sheet. Nothing on macOS, where the panel is a split item beside the
+  /// text and collapses through AppKit, not through a SwiftUI presentation.
+  var didNavigate: () -> Void = {}
 
   var body: some View {
     @Bindable var reader = reader
@@ -61,8 +100,14 @@ struct PanelHost: View {
         groups: reader.groups,
         tab: $reader.tab,
         current: reader.currentAnchor,
-        selectSection: { navigation.jump(toSection: $0) },
-        openDocument: { library.open($0, activation: .current, in: navigation) }
+        selectSection: {
+          navigation.jump(toSection: $0)
+          didNavigate()
+        },
+        openDocument: {
+          library.open($0, activation: .current, in: navigation)
+          didNavigate()
+        }
       )
     } else {
       Color.clear
@@ -78,6 +123,9 @@ struct PanelHost: View {
 /// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
 /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
 /// divider only between two unselected labels.
+///
+/// macOS only: in an iPhone's sheet the system's own segmented control sits in the
+/// panel's bar instead (#247).
 private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
@@ -162,7 +210,13 @@ struct ReferenceRow: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .padding(.vertical, 2)
+    #if os(macOS)
+      .padding(.vertical, 2)
+    #else
+      // Entries of three lines each, in an inset list, need more room between them
+      // than the denser macOS inspector gives them (#248).
+      .padding(.vertical, 8)
+    #endif
   }
 
   private var entryDescription: some View {

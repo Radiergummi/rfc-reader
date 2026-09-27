@@ -36,11 +36,7 @@ public enum RFCEditorEndpoints {
 
   /// Datatracker's HTMLized rendering, which has anchors for every section and reference.
   public static func datatracker(_ id: DocumentID, section: String? = nil) -> URL {
-    var url = datatrackerBase.appending(path: "doc/html/\(id.fileStem)")
-    if let section {
-      url = URL(string: url.absoluteString + "#\(RFCLink.fragment(for: section))") ?? url
-    }
-    return url
+    RFCLink.url(datatrackerBase.appending(path: "doc/html/\(id.fileStem)"), section: section)
   }
 
   /// Datatracker's document record, including working group and history.

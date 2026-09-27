@@ -1,8 +1,7 @@
 import Foundation
+import RFCCorpusKit
 import RFCKit
 import Testing
-
-@testable import corpus_build
 
 /// The committed overrides in `corpus/overrides/`, which `convert` publishes in place of
 /// its own output. It checks them only during a corpus run, so this is what notices a

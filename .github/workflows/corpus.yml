@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
     timeout-minutes: 180
-    container: swift:6.1@sha256:3991e5dd5c40b04580c1e56f1ad6042f3173829b1995ffa53b84957371c25876
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     # write only for the optional `gh release create` in the last step.
     permissions:
       contents: write
@@ -53,7 +53,7 @@ jobs:
           apt-get update -qq && apt-get install -y -qq libxml2-utils >/dev/null
           Tools/corpus-build/.build/release/corpus-build convert \
             --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json \
-            --schema Tools/corpus-build/Schema/v3.rng
+            --index corpus/rfc-index.xml --schema Tools/corpus-build/Schema/v3.rng
 
       - name: Manifest
         run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "$VERSION"
