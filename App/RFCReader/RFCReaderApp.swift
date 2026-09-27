@@ -154,8 +154,8 @@ struct DocumentCommands: Commands {
     #if os(macOS)
       // `NSTextView.usesFindBar` puts a find bar in the scroll view, but nothing
       // opens it: AppKit's find bar is driven from the Edit > Find menu, and a
-      // SwiftUI app has no such item, so Cmd+F reached nothing at all. These send
-      // the action down the responder chain to whichever text view is focused.
+      // SwiftUI app has no such item, so Cmd+F reached nothing at all. These focus
+      // the key window's text first, then send the action down the responder chain.
       CommandGroup(after: .textEditing) {
         // Disabled unless a document is on screen: there is nothing to search with
         // none, while one loads or failed to (#157). Original Text counts: on macOS
@@ -194,6 +194,7 @@ struct DocumentCommands: Commands {
     }
 
     func send() {
+      ActiveReaderWindow.shared.controller?.focusSearchableText()
       NSApp.sendAction(#selector(NSTextView.performTextFinderAction(_:)), to: nil, from: self)
     }
   }

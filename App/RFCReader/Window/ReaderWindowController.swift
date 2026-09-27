@@ -353,6 +353,18 @@
         } ?? false
     }
 
+    /// Puts focus in the text on screen, for Find. Nothing else focuses it: after a
+    /// document opens focus is still in the library list, and after Original Text
+    /// swaps the body out it falls back to the window, so ⌘F reached no find bar.
+    /// Focus moves only when Find is asked for, never when the text appears.
+    func focusSearchableText() {
+      guard let window,
+        let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      else { return }
+      if let focused = window.firstResponder as? NSView, focused.isDescendant(of: text) { return }
+      window.makeFirstResponder(text)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
