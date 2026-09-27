@@ -297,19 +297,29 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil }
     let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
     guard let target else {
-      pendingSceneLink = link
-      #if os(macOS)
-        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
-      #endif
+      openInNewWindow(link)
       return
     }
-    target.open(link, in: index)
+    deliver(link, to: target)
+  }
+
+  /// Opens `link` in `scene` and makes that the tab in use.
+  private func deliver(_ link: RFCLink, to scene: NavigationModel) {
+    scene.open(link, in: index)
     // The tab that took the link is the most recently used one now, and where the
     // next untargeted link belongs -- even when it already showed that document, so
     // its selection did not change and `activate` was not called for it.
-    activate(target)
+    activate(scene)
     #if os(macOS)
-      AppDelegate.shared?.bringForward(target)
+      AppDelegate.shared?.bringForward(scene)
+    #endif
+  }
+
+  /// Opens a window for `link`, which it takes in `register(_:)`.
+  private func openInNewWindow(_ link: RFCLink) {
+    pendingSceneLink = link
+    #if os(macOS)
+      AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
     #endif
   }
 
@@ -348,8 +358,7 @@ final class LibraryModel {
   }
 
   #if os(macOS)
-    /// Where a document asked for by name opens: by a script today, and by an App
-    /// Intent when one needs the same choice.
+    /// Where a document asked for by name opens.
     enum Placement {
       case frontTab
       case newTab
@@ -365,18 +374,15 @@ final class LibraryModel {
     func open(_ link: RFCLink, placement: Placement) {
       switch placement {
       case .frontTab:
-        guard let scene = AppDelegate.shared?.activeController?.navigation else {
+        if let scene = AppDelegate.shared?.activeController?.navigation {
+          deliver(link, to: scene)
+        } else {
           route(link)
-          return
         }
-        scene.open(link, in: index)
-        activate(scene)
-        AppDelegate.shared?.bringForward(scene)
       case .newTab:
         openInNewScene(link, inBackground: false)
       case .newWindow:
-        pendingSceneLink = link
-        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+        openInNewWindow(link)
       }
     }
   #endif

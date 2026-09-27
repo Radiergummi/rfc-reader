@@ -369,10 +369,13 @@
     }
 
     /// Opens or closes the panel, the way the toolbar's toggle does — so only over
-    /// a document, which is what the toggle's validation allows.
-    func setPanelOpen(_ open: Bool) {
-      guard open != isPanelOpen, !open || reader.hasDocument else { return }
-      togglePanel()
+    /// a document, which is what the toggle's validation allows. False when it
+    /// refused to open.
+    @discardableResult
+    func setPanelOpen(_ open: Bool) -> Bool {
+      guard !open || reader.hasDocument else { return false }
+      if open != isPanelOpen { togglePanel() }
+      return true
     }
 
     #if DEBUG

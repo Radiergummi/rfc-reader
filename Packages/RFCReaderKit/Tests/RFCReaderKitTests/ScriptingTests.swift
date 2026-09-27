@@ -50,35 +50,35 @@ struct LibraryFilterScriptNameTests {
   }
 }
 
-@Suite("Scripting: document references")
-struct ScriptReferenceTests {
+@Suite("Document references")
+struct DocumentReferenceTests {
   @Test func aNumberIsAnRFC() {
-    #expect(ScriptReference.link(from: "9110") == RFCLink(id: .rfc(9110)))
+    #expect(DocumentReference.link(from: "9110") == RFCLink(id: .rfc(9110)))
   }
 
   @Test func aNameIsItsDocument() {
-    #expect(ScriptReference.link(from: "RFC 9110") == RFCLink(id: .rfc(9110)))
+    #expect(DocumentReference.link(from: "RFC 9110") == RFCLink(id: .rfc(9110)))
     #expect(
-      ScriptReference.link(from: "bcp 14") == RFCLink(id: DocumentID(series: .bcp, number: 14)))
+      DocumentReference.link(from: "bcp 14") == RFCLink(id: DocumentID(series: .bcp, number: 14)))
   }
 
   @Test func aLinkIsFollowed() {
-    let link = ScriptReference.link(from: "rfc://9110#section-4.2")
+    let link = DocumentReference.link(from: "rfc://9110#section-4.2")
     #expect(link == RFCLink(id: .rfc(9110), section: "4.2"))
   }
 
   /// The section asked for outright is the more specific request.
   @Test func aGivenSectionWinsOverTheLinks() {
     #expect(
-      ScriptReference.link(from: "9110", section: "3") == RFCLink(id: .rfc(9110), section: "3"))
+      DocumentReference.link(from: "9110", section: "3") == RFCLink(id: .rfc(9110), section: "3"))
     #expect(
-      ScriptReference.link(from: "rfc://9110#section-4.2", section: "5")
+      DocumentReference.link(from: "rfc://9110#section-4.2", section: "5")
         == RFCLink(id: .rfc(9110), section: "5"))
-    #expect(ScriptReference.link(from: "9110", section: "") == RFCLink(id: .rfc(9110)))
+    #expect(DocumentReference.link(from: "9110", section: "") == RFCLink(id: .rfc(9110)))
   }
 
   @Test func anythingElseIsNothing() {
-    #expect(ScriptReference.link(from: "hypertext") == nil)
-    #expect(ScriptReference.link(from: "") == nil)
+    #expect(DocumentReference.link(from: "hypertext") == nil)
+    #expect(DocumentReference.link(from: "") == nil)
   }
 }

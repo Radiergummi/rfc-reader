@@ -8,10 +8,6 @@
   // events and the models the menus and toolbar already drive, and what needs
   // deciding — which collection a name means, which document a reference names —
   // is in `RFCReaderKit`, where it is tested.
-  //
-  // Cocoa Scripting calls all of this on the main thread, but through Objective-C
-  // entry points Swift cannot see as main-actor isolated; the commands say so with
-  // `MainActor.assumeIsolated`, which traps rather than races if that ever changes.
 
   /// An RFC as a script sees it, named by its number: `rfc id 9110`.
   @MainActor
@@ -63,9 +59,20 @@
       key == "rfcs"
     }
 
-    /// Every RFC, for `every rfc` and `count of rfcs`.
+    /// Every RFC, for `every rfc`. `count of rfcs` and `rfc 5` go through the two
+    /// indexed accessors below instead, which build one object or none rather than
+    /// all 9,842.
     @objc var rfcs: [ScriptableRFC] {
       LibraryModel.shared.index?.rfcs.map { ScriptableRFC($0.id) } ?? []
+    }
+
+    @objc func countOfRfcs() -> Int {
+      LibraryModel.shared.index?.rfcs.count ?? 0
+    }
+
+    @objc(objectInRfcsAtIndex:)
+    func objectInRfcs(at index: Int) -> ScriptableRFC? {
+      LibraryModel.shared.index.map { ScriptableRFC($0.rfcs[index].id) }
     }
 
     /// `rfc id 9110`, looked up by number rather than found by walking `rfcs`.
@@ -118,12 +125,9 @@
     @objc var scriptInspectorVisible: Bool {
       get { controller?.isPanelOpen ?? false }
       set {
-        guard let controller else { return }
-        if newValue, !controller.reader.hasDocument {
+        if controller?.setPanelOpen(newValue) == false {
           ScriptError.report("The inspector can only be shown over an RFC.")
-          return
         }
-        controller.setPanelOpen(newValue)
       }
     }
 
@@ -132,8 +136,7 @@
     /// so this only runs it.
     @objc(handleReaderCommand:)
     func handleReaderCommand(_ command: NSScriptCommand) -> Any? {
-      (command as? RFCScriptCommand)?.perform()
-      return nil
+      command.performDefaultImplementation()
     }
 
     /// An enumeration's value crosses as its four-character code.
@@ -156,7 +159,9 @@
       return nil
     }
 
-    func perform() {}
+    func perform() {
+      preconditionFailure("\(type(of: self)) must override perform()")
+    }
 
     var targetWindow: ReaderWindowController? {
       let named = (evaluatedReceivers as? NSWindow) ?? (evaluatedArguments?["window"] as? NSWindow)
@@ -172,7 +177,7 @@
       let reference =
         (directParameter as? String) ?? (directParameter as? NSNumber)?.stringValue ?? ""
       let section = evaluatedArguments?["section"] as? String
-      guard let link = ScriptReference.link(from: reference, section: section) else {
+      guard let link = DocumentReference.link(from: reference, section: section) else {
         ScriptError.report("“\(reference)” names no RFC.", in: self)
         return
       }

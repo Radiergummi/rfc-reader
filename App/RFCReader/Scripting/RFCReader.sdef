@@ -26,21 +26,11 @@
       <property name="id" code="ID  " type="integer" access="r" description="The RFC's number.">
         <cocoa key="number"/>
       </property>
-      <property name="name" code="pnam" type="text" access="r" description="The RFC's name, such as “RFC 9110”.">
-        <cocoa key="name"/>
-      </property>
-      <property name="title" code="RFCt" type="text" access="r" description="The RFC's title.">
-        <cocoa key="title"/>
-      </property>
-      <property name="status" code="RFCs" type="text" access="r" description="The RFC's current status, such as “Internet Standard”.">
-        <cocoa key="status"/>
-      </property>
-      <property name="year" code="RFCy" type="integer" access="r" description="The year the RFC was published.">
-        <cocoa key="year"/>
-      </property>
-      <property name="working group" code="RFCg" type="text" access="r" description="The working group that produced the RFC; missing value if none.">
-        <cocoa key="workingGroup"/>
-      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The RFC's name, such as “RFC 9110”."/>
+      <property name="title" code="RFCt" type="text" access="r" description="The RFC's title."/>
+      <property name="status" code="RFCs" type="text" access="r" description="The RFC's current status, such as “Internet Standard”."/>
+      <property name="year" code="RFCy" type="integer" access="r" description="The year the RFC was published."/>
+      <property name="working group" code="RFCg" type="text" access="r" description="The working group that produced the RFC; missing value if none."/>
       <property name="obsolete" code="RFCo" type="boolean" access="r" description="Whether a later RFC obsoletes this one.">
         <cocoa key="isObsolete"/>
       </property>
@@ -50,9 +40,7 @@
     </class>
 
     <class-extension extends="application" description="RFC Reader's top-level scripting object.">
-      <element type="rfc" access="r" description="Every RFC in the index; ask for one by its number, as in rfc id 9110.">
-        <cocoa key="rfcs"/>
-      </element>
+      <element type="rfc" access="r" description="Every RFC in the index; ask for one by its number, as in rfc id 9110."/>
     </class-extension>
 
     <class-extension extends="window" description="A reader window or tab.">
@@ -93,9 +81,7 @@
       <parameter name="at section" code="RFsc" type="text" optional="yes" description="The section to open at, such as “4.2” or “A.1”.">
         <cocoa key="section"/>
       </parameter>
-      <parameter name="placement" code="RFpl" type="placement" optional="yes" description="Where to open it; the front tab if omitted.">
-        <cocoa key="placement"/>
-      </parameter>
+      <parameter name="placement" code="RFpl" type="placement" optional="yes" description="Where to open it; the front tab if omitted."/>
     </command>
 
     <command name="go back" code="RFCrGoBk" description="Go back to where the window was before.">

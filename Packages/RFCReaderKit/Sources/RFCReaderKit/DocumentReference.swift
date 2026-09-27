@@ -1,8 +1,9 @@
 import Foundation
 import RFCKit
 
-/// The document a script asks to open, from whatever it named it by.
-public enum ScriptReference {
+/// The document someone asks for by typing or scripting it: the Go to RFC sheet,
+/// and `open rfc` in the scripting dictionary.
+public enum DocumentReference {
   /// A number (`9110`), a name (`"RFC 9110"`, `"BCP 14"`), or a link the app
   /// already opens (`rfc://9110#section-4.2`, an rfc-editor.org or datatracker
   /// URL). A `section` given separately wins over one the link carries: it is the
