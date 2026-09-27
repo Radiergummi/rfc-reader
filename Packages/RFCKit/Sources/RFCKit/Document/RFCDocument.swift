@@ -63,11 +63,11 @@ public struct RFCDocument: Sendable {
         }
       }
     }
-    let sections = allSections
-    for title in sections.map(\.title) {
-      visit(title)
+    let everySection = allSections
+    for section in everySection {
+      visit(section.title)
     }
-    for block in (header.abstract + sections.flatMap(\.blocks)).flattened {
+    for block in (header.abstract + everySection.flatMap(\.blocks)).flattened {
       block.proseRuns.forEach(visit)
       if case .references(let list) = block {
         seen.formUnion(list.entries.compactMap(\.documentID))
