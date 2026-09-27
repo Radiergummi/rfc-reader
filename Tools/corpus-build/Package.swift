@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.3
 import PackageDescription
 
 // Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with

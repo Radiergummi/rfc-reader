@@ -32,3 +32,30 @@ public struct ReferenceGroup: Identifiable, Sendable {
     }
   }
 }
+
+extension Reference {
+  /// The entry's `<annotation>`, for the panel to show under its provenance line,
+  /// or nil when it has none. External links stay links, since the usual annotation
+  /// is the commit a living standard was cited at and a snapshot nobody can open is
+  /// only half kept; everything else reads as its words.
+  public var annotationText: AttributedString? {
+    annotation.isEmpty ? nil : Self.attributedText(annotation)
+  }
+
+  private static func attributedText(_ inlines: [Inline]) -> AttributedString {
+    var result = AttributedString()
+    for inline in inlines {
+      switch inline {
+      case .link(let url, let inner):
+        var linked = AttributedString(inner.plainText)
+        linked.link = url
+        result += linked
+      case .emphasis(let inner), .strong(let inner):
+        result += attributedText(inner)
+      default:
+        result += AttributedString([inline].plainText)
+      }
+    }
+    return result
+  }
+}

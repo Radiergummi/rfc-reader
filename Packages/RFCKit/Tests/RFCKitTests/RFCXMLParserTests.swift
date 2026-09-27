@@ -15,7 +15,12 @@ struct RFCXMLParserTests {
     #expect(document.header.id == .rfc(8999))
     #expect(document.header.title == "Version-Independent Properties of QUIC")
     #expect(document.header.abbreviatedTitle == "QUIC Invariants")
-    #expect(document.header.authors == [Author(name: "Martin Thomson")])
+    #expect(
+      document.header.authors == [
+        Author(
+          name: "Martin Thomson",
+          contact: AuthorContact(organization: "Mozilla", emails: ["mt@lowentropy.net"]))
+      ])
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
     #expect(document.header.keywords.count == 7)
@@ -338,6 +343,113 @@ struct RFCXMLParserTests {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+  }
+
+  /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
+  /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
+  /// Reading only the first kept the six counters and dropped the rest.
+  @Test func everyTableBodyIsRead() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
+    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
+      if case .table(let table) = block { return table }
+      return nil
+    }
+    let table = try #require(tables.first { $0.anchor == "T1" })
+    #expect(table.header.count == 1)
+    #expect(table.rows.count == 32)
+    #expect(table.rows.first?.first?.plainText == "counter32")
+    #expect(table.rows[6].first?.plainText == "object-identifier")
+    #expect(table.rows.last?.first?.plainText == "yang-identifier")
+  }
+
+  /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,
+  /// beside the `rel="alternate"` links for its DOI and the series ISSN, which are not
+  /// lineage and must not be taken for it.
+  @Test func theDraftAnRFCCameFromIsRead() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml"))
+    #expect(
+      document.header.precedingDraft?.absoluteString
+        == "https://datatracker.ietf.org/doc/draft-ietf-httpbis-compression-dictionary-19")
+  }
+
+  /// RFC 9842 cites two WHATWG living standards and pins each to the commit it was
+  /// written against in an `<annotation>`. Without it the entry names only the moving
+  /// target.
+  @Test func aReferenceKeepsItsAnnotation() throws {
+    let entries = try Self.entries(in: "rfc9842.xml")
+    let fetch = try #require(entries.first { $0.anchor == "FETCH" })
+    let snapshot = try #require(
+      URL(
+        string:
+          "https://fetch.spec.whatwg.org/commit-snapshots/5a9680638ebfc2b3b7f4efb2bef0b579a2663951/"
+      ))
+    #expect(
+      fetch.annotation == [
+        .text("Commit snapshot: "), .link(snapshot, [.text(snapshot.absoluteString)]),
+      ])
+    #expect(fetch.rawText == "WHATWG Living Standard", "the annotation is not the refcontent")
+    #expect(entries.first { $0.anchor == "RFC8792" }?.annotation == [])
+  }
+
+  /// A `<referencegroup>` is one entry, and the schema lets only its members carry an
+  /// annotation. No published RFC annotates a grouped member yet -- none from 8650 to
+  /// 10050 -- so this is the smallest document that does, rather than a fixture. A
+  /// group of one keeps its member's annotation as is; a group of several keeps every
+  /// member's, each after the name of the member it belongs to.
+  @Test func aGroupKeepsItsMembersAnnotations() throws {
+    let xml = """
+      <rfc number="9999"><front><title>Grouped</title></front>
+      <back><references>
+      <referencegroup anchor="BCP14">
+      <reference anchor="RFC2119"><front><title>Key words</title>
+      <seriesInfo name="RFC" value="2119"/></front><annotation>The original.</annotation></reference>
+      <reference anchor="RFC8174"><front><title>Ambiguity</title>
+      <seriesInfo name="RFC" value="8174"/></front></reference>
+      <reference anchor="LIVING"><front><title>A Living Standard</title></front>
+      <annotation>Commit <eref target="https://example.com/abc">abc</eref>.</annotation></reference>
+      </referencegroup>
+      <referencegroup anchor="STD1"><reference anchor="RFC9999"><front><title>One</title>
+      <seriesInfo name="RFC" value="9999"/></front><annotation>Only member.</annotation></reference>
+      </referencegroup>
+      </references></back>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let entries = document.allSections.flatMap { section in
+      section.blocks.flatMap { block -> [Reference] in
+        if case .references(let list) = block { return list.entries }
+        return []
+      }
+    }
+    let commit = try #require(URL(string: "https://example.com/abc"))
+    #expect(
+      entries.first { $0.anchor == "BCP14" }?.annotation == [
+        .text("RFC 2119: The original."), .lineBreak,
+        .text("LIVING: Commit "), .link(commit, [.text("abc")]), .text("."),
+      ])
+    #expect(entries.first { $0.anchor == "STD1" }?.annotation == [.text("Only member.")])
+  }
+
+  /// `rel` is HTML's: space-separated keywords, compared without regard to case.
+  @Test func aLinkRelationIsATokenList() {
+    #expect(RFCXMLParser.relation("prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("Prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("alternate  prev", includes: "prev"))
+    #expect(RFCXMLParser.relation("\tprev\n", includes: "prev"))
+    #expect(!RFCXMLParser.relation("alternate", includes: "prev"))
+    #expect(!RFCXMLParser.relation("preview", includes: "prev"))
+    #expect(!RFCXMLParser.relation(nil, includes: "prev"))
+  }
+
+  /// RFC 9601 sets off the reasoning behind a rule as `<t indent="3">` under the list
+  /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
+  @Test func aParagraphKeepsItsIndent() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9601.xml"))
+    let paragraphs = document.nestedParagraphs
+    let reasoning = try #require(paragraphs.first { $0.plainText.hasPrefix("Reasoning:") })
+    #expect(reasoning.anchor == "section-5-5")
+    #expect(reasoning.indent == 3)
+    #expect(paragraphs.filter { $0.indent != 0 }.count == 1)
   }
 
   @Test func rejectsNonRFCDocuments() {

@@ -56,29 +56,34 @@ public struct RFCXMLSerializer: Sendable {
     rfcAttributes.append(("xml:lang", "en"))
 
     writer.open("rfc", rfcAttributes)
+    if let draft = document.header.precedingDraft {
+      writer.empty("link", [("href", draft.absoluteString), ("rel", "prev")])
+    }
     if let source = options.sourceURL {
       writer.empty("link", [("href", source.absoluteString), ("rel", "alternate")])
     }
-    writeFront(document.header, writer: &writer, context: &context)
+    // `<abstract>` holds paragraphs and lists only. One holding anything else
+    // (RFC 391's has artwork) is written as the body's first section instead, so
+    // nothing in it is dropped.
+    let abstractFits = document.header.abstract.allSatisfy(Self.fitsInAbstract)
+    writeFront(document.header, writer: &writer, context: &context, abstract: abstractFits)
 
-    // Everything up to the first references section or appendix is the middle.
-    let backStart =
-      document.sections.firstIndex { Self.isReferences($0) || $0.isAppendix }
-      ?? document.sections.count
+    let backStart = Self.backStart(document.sections)
     writer.open("middle")
+    if !abstractFits {
+      let abstract = Section(
+        anchor: "abstract", title: "Abstract", blocks: document.header.abstract)
+      writeSection(abstract, writer: &writer, context: &context)
+    }
     for section in document.sections[..<backStart] {
-      writeSection(section, writer: &writer, context: &context)
+      writeTopLevel(section, writer: &writer, context: &context)
     }
     writer.close("middle")
 
     if backStart < document.sections.count {
       writer.open("back")
       for section in document.sections[backStart...] {
-        if Self.isReferences(section) {
-          writeReferences(section, writer: &writer, context: &context)
-        } else {
-          writeSection(section, writer: &writer, context: &context)
-        }
+        writeTopLevel(section, writer: &writer, context: &context)
       }
       writer.close("back")
     }
@@ -86,9 +91,38 @@ public struct RFCXMLSerializer: Sendable {
     return writer.output
   }
 
+  /// Where `<back>` starts. The schema orders it as its `<references>`, then its
+  /// sections, and requires `<middle>` to hold at least one section (#65). So the back
+  /// is the run of references sections that ends at the last one, and whatever
+  /// follows; everything before that run is the middle, an appendix among it too,
+  /// whose `pn` still names it one. With no references, the back is the appendices
+  /// the document ends with, and when that would leave the middle empty, as in the
+  /// legacy documents whose first chapter, `I.`, reads as an appendix, there is no
+  /// back.
+  static func backStart(_ sections: [Section]) -> Int {
+    if let last = sections.lastIndex(where: isReferences) {
+      var first = last
+      while first > 0, isReferences(sections[first - 1]) { first -= 1 }
+      return first
+    }
+    var first = sections.count
+    while first > 0, sections[first - 1].isAppendix { first -= 1 }
+    return first == 0 ? sections.count : first
+  }
+
+  /// `<abstract>` holds `t`, `dl`, `ol` and `ul`, and nothing else.
+  private static func fitsInAbstract(_ block: Block) -> Bool {
+    switch block {
+    case .paragraph, .list, .definitionList: true
+    default: false
+    }
+  }
+
   // MARK: - Front
 
-  private func writeFront(_ header: DocumentHeader, writer: inout Writer, context: inout Context) {
+  private func writeFront(
+    _ header: DocumentHeader, writer: inout Writer, context: inout Context, abstract: Bool
+  ) {
     writer.open("front")
     var titleAttributes: [(String, String)] = []
     if let abbrev = header.abbreviatedTitle { titleAttributes.append(("abbrev", abbrev)) }
@@ -99,7 +133,13 @@ public struct RFCXMLSerializer: Sendable {
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
       if author.role?.lowercased().hasPrefix("ed") == true { attributes.append(("role", "editor")) }
-      writer.empty("author", attributes)
+      if let contact = author.contact {
+        writer.open("author", attributes)
+        writeContact(contact, writer: &writer)
+        writer.close("author")
+      } else {
+        writer.empty("author", attributes)
+      }
     }
     // RFCXML requires `author+`, and `<author/>` satisfies the schema; the parser reads
     // it back as no author at all. Unlike a reference's, a document's own front always
@@ -116,7 +156,7 @@ public struct RFCXMLSerializer: Sendable {
     if let area = header.area { writer.element("area", text: area) }
     if let group = header.workingGroup { writer.element("workgroup", text: group) }
     for keyword in header.keywords { writer.element("keyword", text: keyword) }
-    if !header.abstract.isEmpty {
+    if abstract, !header.abstract.isEmpty {
       writer.open("abstract")
       for block in header.abstract { writeBlock(block, writer: &writer, context: &context) }
       writer.close("abstract")
@@ -124,10 +164,63 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("front")
   }
 
+  /// In the schema's order: `organization`, then `address` holding `postal`,
+  /// `phone`, `facsimile`, each `email` and `uri`.
+  private func writeContact(_ contact: AuthorContact, writer: inout Writer) {
+    if let organization = contact.organization {
+      writer.element("organization", text: organization)
+    }
+    let hasAddress =
+      contact.postal != nil || contact.phone != nil || contact.facsimile != nil
+      || !contact.emails.isEmpty || contact.uri != nil
+    guard hasAddress else { return }
+    writer.open("address")
+    if let postal = contact.postal {
+      writer.open("postal")
+      // The schema's choice: the author's lines, or the fields, never both.
+      if postal.postalLines.isEmpty {
+        for street in postal.street { writer.element("street", text: street) }
+        for line in postal.extendedAddress { writer.element("extaddr", text: line) }
+        let fields = [
+          ("pobox", postal.postOfficeBox), ("cityarea", postal.cityArea), ("city", postal.city),
+          ("region", postal.region), ("code", postal.code), ("sortingcode", postal.sortingCode),
+          ("country", postal.country),
+        ]
+        for case (let name, let value?) in fields { writer.element(name, text: value) }
+      } else {
+        for line in postal.postalLines { writer.element("postalLine", text: line) }
+      }
+      writer.close("postal")
+    }
+    if let phone = contact.phone { writer.element("phone", text: phone) }
+    if let facsimile = contact.facsimile { writer.element("facsimile", text: facsimile) }
+    for email in contact.emails { writer.element("email", text: email) }
+    if let uri = contact.uri { writer.element("uri", text: uri) }
+    writer.close("address")
+  }
+
   // MARK: - Sections
 
+  /// A chapter, in `<middle>` or `<back>`. A references section is `<references>`
+  /// wherever it sits: one ahead of the back (RFC 2511's `9. References`, before its
+  /// appendices and theirs) is no more valid in `<middle>` than inside a `<section>`,
+  /// but written as a section it would wrap its list in a second, unnumbered
+  /// `<references>`, and read back as a section holding a subsection it never had.
+  private func writeTopLevel(_ section: Section, writer: inout Writer, context: inout Context) {
+    if Self.isReferences(section) {
+      writeReferences(section, writer: &writer, context: &context)
+    } else {
+      writeSection(section, writer: &writer, context: &context)
+    }
+  }
+
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
+    // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,
+    // which is an ID. The second is written unnumbered, its number in its name, so it
+    // reads the same and names nothing twice (#65).
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+      .flatMap { context.claim($0) ? $0 : nil }
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -136,7 +229,7 @@ public struct RFCXMLSerializer: Sendable {
       attributes.append(("numbered", "false"))
     }
     writer.open("section", attributes)
-    writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+    writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
     for subsection in section.subsections {
       if Self.isReferences(subsection) {
@@ -150,17 +243,21 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
+      .flatMap { context.claim($0) ? $0 : nil }
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
-    writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+    writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks {
       guard case .references(let list) = block else {
         context.warnings.append(
           "dropped non-reference block in references section \(section.anchor)")
         continue
       }
-      for reference in list.entries { writeReference(reference, writer: &writer) }
+      for reference in list.entries {
+        writeReference(reference, writer: &writer, context: &context)
+      }
     }
     for subsection in section.subsections {
       writeReferences(subsection, writer: &writer, context: &context)
@@ -168,7 +265,9 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("references")
   }
 
-  private func writeReference(_ reference: Reference, writer: inout Writer) {
+  private func writeReference(
+    _ reference: Reference, writer: inout Writer, context: inout Context
+  ) {
     var attributes: [(String, String)] = [("anchor", reference.anchor)]
     if let url = reference.url { attributes.append(("target", url.absoluteString)) }
     if reference.displayAnchor != reference.anchor {
@@ -201,6 +300,10 @@ public struct RFCXMLSerializer: Sendable {
     if let raw = reference.rawText, !reference.title.isEmpty {
       writer.element("refcontent", text: raw)
     }
+    if !reference.annotation.isEmpty {
+      writer.line(
+        "<annotation>\(inlineXML(reference.annotation, context: &context))</annotation>")
+    }
     writer.close("reference")
   }
 
@@ -211,6 +314,7 @@ public struct RFCXMLSerializer: Sendable {
     case .paragraph(let paragraph):
       var attributes: [(String, String)] = []
       if let anchor = paragraph.anchor { attributes.append(("pn", anchor)) }
+      if paragraph.indent > 0 { attributes.append(("indent", String(paragraph.indent))) }
       writer.line(
         "<t\(Writer.attributeString(attributes))>\(inlineXML(paragraph.inlines, context: &context))</t>"
       )
@@ -246,7 +350,9 @@ public struct RFCXMLSerializer: Sendable {
         writer.line(
           "<dt\(Writer.attributeString(termAttributes))>\(inlineXML(item.term, context: &context))</dt>"
         )
-        writer.open("dd")
+        var definitionAttributes: [(String, String)] = []
+        if let anchor = item.definitionAnchor { definitionAttributes.append(("pn", anchor)) }
+        writer.open("dd", definitionAttributes)
         for inner in item.definition { writeBlock(inner, writer: &writer, context: &context) }
         writer.close("dd")
       }
@@ -276,16 +382,16 @@ public struct RFCXMLSerializer: Sendable {
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for row in table.header {
-          writer.open("tr")
+        for (index, row) in table.header.enumerated() {
+          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
           for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
         writer.close("thead")
       }
       writer.open("tbody")
-      for row in table.rows {
-        writer.open("tr")
+      for (index, row) in table.rows.enumerated() {
+        writer.open("tr", table.anchor(ofRow: index).map { [("anchor", $0)] } ?? [])
         for cell in row { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
         writer.close("tr")
       }
@@ -303,7 +409,9 @@ public struct RFCXMLSerializer: Sendable {
       // A reference list outside a references section: wrap it so it stays valid.
       writer.open("references", [("anchor", "refs-\(context.nextAutoAnchor())")])
       writer.element("name", text: list.title)
-      for reference in list.entries { writeReference(reference, writer: &writer) }
+      for reference in list.entries {
+        writeReference(reference, writer: &writer, context: &context)
+      }
       writer.close("references")
     }
   }
@@ -370,6 +478,12 @@ public struct RFCXMLSerializer: Sendable {
     var referenceAnchors: [DocumentID: String]
     var warnings: [String] = []
     private var autoAnchor = 0
+    private var claimedPartNumbers: Set<String> = []
+
+    /// Whether `partNumber` is still free, taking it if it is.
+    mutating func claim(_ partNumber: String) -> Bool {
+      claimedPartNumbers.insert(partNumber).inserted
+    }
 
     init(referenceAnchors: [DocumentID: String]) {
       self.referenceAnchors = referenceAnchors
