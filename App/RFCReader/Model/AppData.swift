@@ -1,4 +1,5 @@
 import Foundation
+import RFCReaderKit
 import SwiftData
 import os
 
@@ -22,16 +23,17 @@ enum AppData {
   /// back. The window says so once; see `claimStoreWarning()`.
   private static var isStoredInMemory = false
 
+  /// Versioned and migrated, then merged to one row per document; see `UserData`.
   static let container: ModelContainer = {
+    let container: ModelContainer
     do {
-      return try ModelContainer(for: Bookmark.self, ReadingPosition.self)
+      container = try UserData.container()
     } catch {
       dataLog.error(
         "the user data store did not open: \(String(describing: error), privacy: .public)")
       isStoredInMemory = true
       do {
-        return try ModelContainer(
-          for: Bookmark.self, ReadingPosition.self,
+        return try UserData.container(
           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
       } catch {
         // A store in memory has no file to fail on; if even that will not open,
@@ -39,6 +41,13 @@ enum AppData {
         fatalError("Could not open even an in-memory user data store: \(error)")
       }
     }
+    do {
+      try UserData.deduplicate(container.mainContext)
+    } catch {
+      dataLog.error(
+        "merging duplicate rows failed: \(String(describing: error), privacy: .public)")
+    }
+    return container
   }()
 
   /// Whether the warning has been shown, so a second window or scene does not show

@@ -249,6 +249,7 @@ struct DocumentCommands: Commands {
 struct SettingsView: View {
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage("underlineLinks") private var underlineLinks = false
 
   var body: some View {
     Form {
@@ -256,6 +257,7 @@ struct SettingsView: View {
         Text("Reading font size: \(Int(fontSize))")
       }
       Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
+      Toggle("Underline links", isOn: $underlineLinks)
     }
     .padding()
     .frame(width: 420)

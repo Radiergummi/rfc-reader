@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import os
 
@@ -19,12 +20,12 @@ private let bookmarkLog = Logger(
 /// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
 /// often to ask a store here.
 enum BookmarkStore {
-  /// Every bookmarked RFC's number. Only the numbers are fetched: this runs on
-  /// every save of the store, and most of those record a reading position.
-  static func bookmarkedNumbers(in context: ModelContext) -> Set<Int> {
+  /// Every bookmarked document. Only the keys are fetched: this runs on every save
+  /// of the store, and most of those record a reading position.
+  static func bookmarkedDocuments(in context: ModelContext) -> Set<DocumentID> {
     var descriptor = FetchDescriptor<Bookmark>()
-    descriptor.propertiesToFetch = [\.number]
-    return Set(((try? context.fetch(descriptor)) ?? []).map(\.number))
+    descriptor.propertiesToFetch = [\.documentKey]
+    return Set(((try? context.fetch(descriptor)) ?? []).compactMap(\.document))
   }
 
   /// Adds the bookmark, or removes the one already there. Answers with the state it
@@ -32,11 +33,13 @@ enum BookmarkStore {
   @discardableResult
   static func toggle(_ id: DocumentID, title: String, in context: ModelContext) -> Bool {
     let bookmarked: Bool
-    if let existing = bookmark(for: id, in: context) {
-      context.delete(existing)
+    let existing = bookmarks(for: id, in: context)
+    if !existing.isEmpty {
+      // Every row naming the document, since nothing stops there being two.
+      existing.forEach(context.delete)
       bookmarked = false
     } else {
-      context.insert(Bookmark(number: id.number, title: title))
+      context.insert(Bookmark(document: id, title: title))
       bookmarked = true
     }
     // Explicitly, rather than leaving it to autosave on one platform and not the
@@ -54,9 +57,11 @@ enum BookmarkStore {
     return bookmarked
   }
 
-  private static func bookmark(for id: DocumentID, in context: ModelContext) -> Bookmark? {
-    let number = id.number
-    let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.number == number })
-    return try? context.fetch(descriptor).first
+  /// Looked up by key before every insert: the store has no unique constraint to do
+  /// it (#152).
+  private static func bookmarks(for id: DocumentID, in context: ModelContext) -> [Bookmark] {
+    let key = id.fileStem
+    let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.documentKey == key })
+    return (try? context.fetch(descriptor)) ?? []
   }
 }

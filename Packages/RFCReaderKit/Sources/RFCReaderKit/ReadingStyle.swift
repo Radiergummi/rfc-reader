@@ -17,22 +17,31 @@ public struct ReadingStyle: Sendable, Equatable {
   /// Width available to text: the reader's 760 pt frame less its horizontal padding.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
+  /// Off by default: colour marks a link, and a chip's tint marks a reference.
+  /// An underline is the reader's to ask for, and then it goes under every link,
+  /// chips included.
+  public var underlinesLinks: Bool
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
   public var artworkLineHeightMultiple: CGFloat { 1.1 }
 
-  public init(bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25) {
+  public init(
+    bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
+    underlinesLinks: Bool = false
+  ) {
     self.bodySize = bodySize
     self.measure = measure
     self.lineHeightMultiple = lineHeightMultiple
+    self.underlinesLinks = underlinesLinks
   }
 
   /// The same style at a different size — everything else about reading it is
   /// unchanged, so only the body size moves and the rest follows from it.
   public func scaled(by scale: CGFloat) -> ReadingStyle {
     ReadingStyle(
-      bodySize: bodySize * scale, measure: measure, lineHeightMultiple: lineHeightMultiple)
+      bodySize: bodySize * scale, measure: measure, lineHeightMultiple: lineHeightMultiple,
+      underlinesLinks: underlinesLinks)
   }
 
   public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
