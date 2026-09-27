@@ -174,7 +174,7 @@
       library.register(navigation)
       observeTitle()
       observeDocument()
-      observeBookmarkSaves()
+      observeStoreSaves()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -343,19 +343,19 @@
     /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
     /// item once per event cycle, and asking SwiftData there put a compiled
     /// `#Predicate` and a store round trip under every mouse move, once per open tab.
-    /// It changes when the selection moves, and whenever a bookmark is saved -- by
+    /// It changes when the selection moves, and whenever a bookmark is saved — by
     /// this window's `toggleBookmark()`, or by another tab's, which left this one's
     /// glyph stale while both showed the same RFC (#141).
     private(set) var isBookmarked = false
 
-    /// The token for `observeBookmarkSaves()`, removed when the window closes.
-    private var bookmarkSaves: (any NSObjectProtocol)?
+    /// The token for `observeStoreSaves()`, removed when the window closes.
+    private var storeSaves: (any NSObjectProtocol)?
 
     /// Refreshes `isBookmarked` on every save of the store, whoever made it. A save
-    /// is rare -- a bookmark toggled, a reading position recorded -- so the fetch
+    /// is rare — a bookmark toggled, a reading position recorded — so the fetch
     /// stays off the toolbar's validation path, where the comment above wants it.
-    private func observeBookmarkSaves() {
-      bookmarkSaves = NotificationCenter.default.addObserver(
+    private func observeStoreSaves() {
+      storeSaves = NotificationCenter.default.addObserver(
         forName: ModelContext.didSave, object: nil, queue: .main
       ) { [weak self] _ in
         MainActor.assumeIsolated {
@@ -402,7 +402,7 @@
     }
 
     func windowWillClose(_ notification: Notification) {
-      if let bookmarkSaves { NotificationCenter.default.removeObserver(bookmarkSaves) }
+      if let storeSaves { NotificationCenter.default.removeObserver(storeSaves) }
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
