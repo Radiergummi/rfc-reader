@@ -54,7 +54,7 @@ Add the file to the target's resources. `DocumentStore` picks it up when no down
 
 1. Typography pass on `DocumentView` and `BlockView` (fonts, measure, spacing, dark mode).
 2. Reference peek popover on cross-reference links.
-3. Definition-list detection in `LegacyTextParser` (add a fixture that exercises it and a test first).
+3. Definition-list detection in `LegacyTextParser` (a test first; no RFC text is committed, so `CLAUDE.md` says where its input comes from).
 4. Spotlight indexing of the index in `LibraryModel.apply`.
 5. iCloud sync: add the iCloud capability and a CloudKit container; SwiftData does the rest.
 
