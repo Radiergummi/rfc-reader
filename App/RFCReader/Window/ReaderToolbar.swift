@@ -17,6 +17,26 @@
     static let rfcPanelToggle = NSToolbarItem.Identifier("rfc.panelToggle")
   }
 
+  /// `NSToolbarItem.minSize` and `maxSize`, reached without the deprecation warning
+  /// they carry since macOS 12.
+  ///
+  /// Deprecated, and the only thing that makes an item flex. The replacement —
+  /// width constraints on the view — gives an item exactly its fitting size:
+  /// measured, a `>= 0, <= text` pair left the document's title 0 pt wide with or
+  /// without a flexible space beside it, and a low-priority preferred width made it
+  /// a fixed width the toolbar would not compress, so Back and Forward were pushed
+  /// out over the list instead. The properties still work; going through a
+  /// protocol keeps the one deliberate use from being a standing warning that a
+  /// build is otherwise clean of. If they stop working, the title collapses to
+  /// nothing — it does not break the rest of the toolbar.
+  @MainActor
+  private protocol FlexibleToolbarItem: AnyObject {
+    var minSize: NSSize { get set }
+    var maxSize: NSSize { get set }
+  }
+
+  extension NSToolbarItem: FlexibleToolbarItem {}
+
   /// The window's toolbar.
   ///
   /// `NSToolbar` only accepts items from its delegate, which is why the overlay panel
@@ -359,14 +379,9 @@
         let item = NSToolbarItem(itemIdentifier: identifier)
         item.label = "Document"
         item.view = documentTitleView
-        // Deprecated, and the only thing that works. The replacement — width
-        // constraints on the view — gives an item exactly its fitting size:
-        // measured, a `>= 0, <= text` pair left it 0 pt wide with or without a
-        // flexible space beside it, and a low-priority preferred width made it
-        // a fixed width the toolbar would not compress, so Back and Forward were
-        // pushed out over the list instead. A range here makes it flex.
-        item.minSize = NSSize(width: 0, height: 32)
-        item.maxSize = NSSize(width: 10_000, height: 32)
+        // A range, so it flexes; see `FlexibleToolbarItem`.
+        (item as any FlexibleToolbarItem).minSize = NSSize(width: 0, height: 32)
+        (item as any FlexibleToolbarItem).maxSize = NSSize(width: 10_000, height: 32)
         item.isBordered = false
         item.isNavigational = false
         return item
