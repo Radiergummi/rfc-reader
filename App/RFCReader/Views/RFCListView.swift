@@ -148,10 +148,16 @@ struct RFCRow: View {
   /// called, and what state it is in.
   private var accessibilityLabel: String {
     var parts = [rfc.id.displayName, rfc.title, rfc.currentStatus.displayName]
-    if rfc.isObsolete { parts.append("Obsolete") }
-    if let group = rfc.workingGroup { parts.append("Working group \(group)") }
+    if rfc.isObsolete {
+      parts.append("Obsolete")
+    }
+    if let group = rfc.workingGroup {
+      parts.append("Working group \(group)")
+    }
     parts.append(String(rfc.date.year))
-    if isBookmarked { parts.append("Bookmarked") }
+    if isBookmarked {
+      parts.append("Bookmarked")
+    }
     return parts.joined(separator: ", ")
   }
 }
