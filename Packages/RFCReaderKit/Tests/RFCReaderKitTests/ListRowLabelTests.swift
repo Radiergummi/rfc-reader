@@ -32,4 +32,19 @@ struct ListRowLabelTests {
         == "RFC 2616, Hypertext Transfer Protocol -- HTTP/1.1, Draft Standard, Obsolete, Working group http, 1999, Bookmarked"
     )
   }
+
+  /// The index's placeholder for "no group" is not a group's name.
+  @Test func theIndexPlaceholderForNoGroupIsNotSpokenAsAGroup() {
+    let metadata = RFCMetadata(
+      id: DocumentID(series: .rfc, number: 2119),
+      title: "Key words for use in RFCs to Indicate Requirement Levels",
+      date: PublicationDate(year: 1997, month: 3),
+      currentStatus: .bestCurrentPractice,
+      workingGroup: "NON WORKING GROUP"
+    )
+    #expect(
+      metadata.accessibilityLabel(isBookmarked: false)
+        == "RFC 2119, Key words for use in RFCs to Indicate Requirement Levels, Best Current Practice, 1997"
+    )
+  }
 }

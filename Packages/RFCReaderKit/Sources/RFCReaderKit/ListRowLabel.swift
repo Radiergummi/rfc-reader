@@ -11,7 +11,10 @@ extension RFCMetadata {
     if isObsolete {
       parts.append("Obsolete")
     }
-    if let workingGroup {
+    // The index fills the field for documents from no group with this sentence
+    // rather than leaving it empty; prefixed, it would be read as "Working group
+    // NON WORKING GROUP".
+    if let workingGroup, workingGroup.caseInsensitiveCompare("NON WORKING GROUP") != .orderedSame {
       parts.append("Working group \(workingGroup)")
     }
     parts.append(String(date.year))
