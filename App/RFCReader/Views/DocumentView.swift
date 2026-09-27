@@ -168,8 +168,10 @@ struct DocumentView: View {
         // swallows an iPhone, and in compact width the inspector already presents
         // itself as a sheet.
         .inspector(isPresented: $showTableOfContents) {
-          // Closes itself after a choice in compact width; see `isPresented`.
-          PanelHost(isPresented: $showTableOfContents)
+          PanelHost(
+            isPresented: $showTableOfContents,
+            closesAfterChoice: horizontalSizeClass == .compact
+          )
           .inspectorColumnWidth(min: 260, ideal: 320)
         }
       #endif

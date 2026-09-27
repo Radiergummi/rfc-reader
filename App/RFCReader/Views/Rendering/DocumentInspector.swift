@@ -88,17 +88,20 @@ struct PanelHost: View {
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
   #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The panel's presentation. None on macOS, where the panel is a split item
+    /// that collapses through AppKit.
+    ///
+    /// A binding and a flag rather than a closure, because both compare equal to
+    /// themselves and a closure never does: with a closure, every pass of the
+    /// reader's body drew the panel and its whole table of contents again (#259).
+    @Binding var isPresented: Bool
+    /// Whether a choice that navigates closes the panel: when it is a sheet over
+    /// the text, and what was chosen is behind it (#249). Beside the text, as a
+    /// column, it stays open. The reader decides, from its own width: the size
+    /// class inside the panel is the panel's, which as a narrow column may be
+    /// compact while the reader is not.
+    let closesAfterChoice: Bool
   #endif
-  /// The panel's presentation on iOS, which a choice that navigates closes in
-  /// compact width: the panel is a sheet over the text there, and what was chosen
-  /// is behind it (#249). Beside the text, as a column, it stays open. Nil on
-  /// macOS, where the panel is a split item that collapses through AppKit.
-  ///
-  /// A binding rather than a closure, because a binding compares equal to itself
-  /// and a closure never does: with a closure, every pass of the reader's body
-  /// drew the panel and its whole table of contents again (#259).
-  var isPresented: Binding<Bool>?
 
   var body: some View {
     @Bindable var reader = reader
@@ -124,7 +127,7 @@ struct PanelHost: View {
 
   private func didNavigate() {
     #if !os(macOS)
-      if horizontalSizeClass == .compact { isPresented?.wrappedValue = false }
+      if closesAfterChoice { isPresented = false }
     #endif
   }
 }
