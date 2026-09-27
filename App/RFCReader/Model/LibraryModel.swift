@@ -283,6 +283,10 @@ final class LibraryModel {
       return
     }
     target.open(link, in: index)
+    // The tab that took the link is the most recently used one now, and where the
+    // next untargeted link belongs -- even when it already showed that document, so
+    // its selection did not change and `activate` was not called for it.
+    activate(target)
     #if os(macOS)
       let window = NSApp.windows.first {
         ReaderWindowController.controller(for: $0)?.navigation === target
