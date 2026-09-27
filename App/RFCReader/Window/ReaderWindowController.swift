@@ -233,7 +233,13 @@
           .truncated(to: Self.subtitleLimit) ?? ""
         window?.title = title
         window?.subtitle = subtitle
-        toolbar?.showTitle(title, subtitle: subtitle)
+        // The toolbar's title sits over the list, so it names the list: the
+        // collection the sidebar chose and how many documents it holds after the
+        // search. The document is the tab's to name, and the reader's own.
+        toolbar?.showTitle(
+          navigation.filter.title,
+          subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+        )
         // Here because this is already the one place that re-fires when the
         // selection changes, and the fetch must not be on the toolbar's
         // validation path; see `isBookmarked`.

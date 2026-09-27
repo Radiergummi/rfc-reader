@@ -103,7 +103,7 @@ public enum ToolbarTitleLayout {
   static let padding: CGFloat = 8
 
   /// Narrow enough to be worth drawing at all: below this the title is only an
-  /// ellipsis, and the tab bar carries the same text anyway.
+  /// ellipsis, and the sidebar shows which collection is chosen anyway.
   static let minimumWidth: CGFloat = 80
 
   public static func width(forText text: CGFloat, inColumn column: CGFloat) -> CGFloat {

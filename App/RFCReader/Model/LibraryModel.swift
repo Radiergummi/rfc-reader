@@ -64,8 +64,12 @@ final class LibraryModel {
   enum IndexState: Equatable {
     case idle
     case loading
-    case ready(count: Int, updatedAt: Date)
+    case ready(updatedAt: Date)
     case failed(String)
+
+    var isReady: Bool {
+      if case .ready = self { true } else { false }
+    }
   }
 
   private(set) var index: RFCIndex?
@@ -119,7 +123,7 @@ final class LibraryModel {
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
     listCache.removeAll()
-    indexState = .ready(count: prepared.index.rfcs.count, updatedAt: updatedAt)
+    indexState = .ready(updatedAt: updatedAt)
   }
 
   // MARK: - Lists

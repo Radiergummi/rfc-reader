@@ -139,8 +139,8 @@
       capTitleToList()
     }
 
-    /// Keeps the title inside the column it names. Without it a long RFC title ran
-    /// past the list's trailing edge and over the reader's own section.
+    /// Keeps the title inside the column it names. Without it a long title ran past
+    /// the list's trailing edge and over the reader's own section.
     func capTitleToList() {
       titleView.limit(to: controller.listWidth)
     }
@@ -230,8 +230,9 @@
         // bordered pill and it reads as a button.
         item.isBordered = false
         item.isNavigational = false
-        // The first thing to give up its room when the window narrows — the tab
-        // bar carries the same title, and the document's actions do not.
+        // The first thing to give up its room when the window narrows — the
+        // sidebar shows which collection is chosen, and the document's actions
+        // are nowhere else.
         item.visibilityPriority = .low
         return item
 

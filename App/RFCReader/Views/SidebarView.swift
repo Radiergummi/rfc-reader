@@ -42,15 +42,6 @@ struct SidebarView: View {
           }
         }
       }
-      #if !os(macOS)
-        // The list's last footer, scrolling with it (#251). As a bar on the bottom
-        // edge it sat under iOS 26's floating search field in a strip of old bar
-        // material of its own.
-        Section {
-        } footer: {
-          IndexStatusView()
-        }
-      #endif
     }
     .navigationTitle("RFCs")
     // Search lives on the sidebar, not on the list it filters, and not in the
@@ -68,14 +59,6 @@ struct SidebarView: View {
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
     #endif
     .labelStyle(SidebarLabelStyle())
-    #if os(macOS)
-      .safeAreaInset(edge: .bottom) {
-        IndexStatusView()
-        .padding(8)
-        .frame(maxWidth: .infinity)
-        .background(.bar)
-      }
-    #endif
   }
 
   private func row(_ filter: LibraryFilter) -> some View {
@@ -146,27 +129,5 @@ private struct SidebarLabelStyle: LabelStyle {
         title
       }
     }
-  }
-}
-
-struct IndexStatusView: View {
-  @Environment(LibraryModel.self) private var library
-
-  var body: some View {
-    HStack(spacing: 6) {
-      switch library.indexState {
-      case .idle, .loading:
-        ProgressView().controlSize(.mini)
-        Text("Loading index…")
-      case .ready(let count, let updatedAt):
-        Text("\(count) RFCs · updated \(updatedAt, format: .relative(presentation: .named))")
-      case .failed(let message):
-        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        Text(message).lineLimit(2)
-        Button("Retry") { Task { await library.refreshIndex() } }.buttonStyle(.borderless)
-      }
-    }
-    .font(.caption)
-    .foregroundStyle(.secondary)
   }
 }
