@@ -49,8 +49,31 @@ public enum RFCColors {
     #endif
   }
 
-  /// A fill on both platforms: macOS had `quaternaryLabelColor`, a text colour.
-  public static var quaternaryFill: PlatformColor { .quaternarySystemFill }
+  /// The card behind artwork and tables: a faint tint of the page, the way Apple's
+  /// documentation sets a code listing. DocC darkens a white page to 247 and lifts a
+  /// black one to 22, about 3% towards black and 9% towards white. A system fill
+  /// forced to a fixed opacity read far darker than that in light and far lighter
+  /// in dark.
+  public static var cardFill: PlatformColor { pageTint(light: 0.03, dark: 0.085) }
+
+  /// An aside's card, a step stronger than a figure's.
+  public static var asideFill: PlatformColor { pageTint(light: 0.045, dark: 0.12) }
+
+  /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
+  /// so it tints whatever the page is rather than assuming its colour.
+  private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
+    #if canImport(UIKit)
+      UIColor { traits in
+        traits.userInterfaceStyle == .dark
+          ? UIColor(white: 1, alpha: dark) : UIColor(white: 0, alpha: light)
+      }
+    #else
+      NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+          ? NSColor(white: 1, alpha: dark) : NSColor(white: 0, alpha: light)
+      }
+    #endif
+  }
 
   /// The rule beside a quote or aside: a line, not a fill. macOS's
   /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
