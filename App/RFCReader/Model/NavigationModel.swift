@@ -36,9 +36,12 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
+  /// Takes the list inputs on entering a filter, not on a change of `value`: on
+  /// iPhone, going back to the sidebar clears the selection and keeps `value`, so
+  /// tapping the same filter again leaves `value` as it was.
   private var filterChoice = KeptSelection(LibraryFilter.all) {
     didSet {
-      if filterChoice.value != oldValue.value { takeListInputs() }
+      if filterChoice.enters(since: oldValue) { takeListInputs() }
     }
   }
   var searchText = ""
