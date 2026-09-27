@@ -20,7 +20,7 @@ public struct LegacyTextParser: Sendable {
 
   // MARK: - Pagination
 
-  private enum Line: Sendable {
+  enum Line: Sendable {
     case text(String)
     case pageBreak
   }
@@ -360,7 +360,7 @@ public struct LegacyTextParser: Sendable {
 
   // MARK: - Parsing
 
-  private struct RawBlock {
+  struct RawBlock {
     var lines: [String]
     var followedByPageBreak = false
 
@@ -473,15 +473,15 @@ public struct LegacyTextParser: Sendable {
   /// Over the whole document rather than the body, because the front matter's own
   /// prose test runs before the body's start is known. The front matter is a few
   /// dozen lines against the hundreds the indent is taken from.
-  private static func proseIndent(_ lines: [Line]) -> Int {
+  static func proseIndent(_ lines: [Line]) -> Int {
     var counts: [Int: Int] = [:]
     for case .text(let string) in lines where readsLikeSentences([string], minimumWords: 4) {
       counts[string.leadingSpaceCount, default: 0] += 1
     }
     let total = counts.values.reduce(0, +)
     var seen = 0
-    for indent in counts.keys.sorted() {
-      seen += counts[indent] ?? 0
+    for (indent, count) in counts.sorted(by: { $0.key < $1.key }) {
+      seen += count
       if seen * 4 >= total { return max(classicProseIndent, indent + 3) }
     }
     return classicProseIndent
@@ -860,7 +860,7 @@ public struct LegacyTextParser: Sendable {
   ///
   /// Only up to the first paragraph or list the lead-in keeps, which is where the
   /// body has begun; past it, a line of those shapes is the body's.
-  private static func leadInWithoutFrontMatter(
+  static func leadInWithoutFrontMatter(
     _ blocks: [RawBlock], title: String, proseIndent: Int, number: Int?
   ) -> [RawBlock] {
     let titleWords = words(title)
@@ -868,9 +868,9 @@ public struct LegacyTextParser: Sendable {
     var index = blocks.startIndex
     while index < blocks.endIndex {
       let block = blocks[index]
-      if let title = standaloneTitle(block)?.lowercased(), isBoilerplateTitle(title) {
+      if let heading = standaloneTitle(block)?.lowercased(), isBoilerplateTitle(heading) {
         index += 1
-        guard !title.hasPrefix("table of contents") else { continue }
+        guard !heading.hasPrefix("table of contents") else { continue }
         // Status paragraphs run to one or two, the copyright statement to three, and
         // they are paragraphs: RFC 1144's author's note after its status is artwork.
         // And they say what boilerplate says, because otherwise only a heading ends the
@@ -1590,7 +1590,7 @@ public struct LegacyTextParser: Sendable {
     return nil
   }
 
-  private static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock, proseIndent: Int)
+  static func shouldJoinAcrossPage(_ first: RawBlock, _ second: RawBlock, proseIndent: Int)
     -> Bool
   {
     guard looksLikeProse(first.lines, maxIndent: proseIndent),
