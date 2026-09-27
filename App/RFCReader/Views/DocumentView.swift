@@ -39,6 +39,8 @@ struct DocumentView: View {
   @State private var builtInputs: BuildInputs?
   #if !os(macOS)
     @State private var showTableOfContents = false
+    /// The last return offer shown out its time, so it does not come back.
+    @State private var settledReturn: Place?
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -124,6 +126,18 @@ struct DocumentView: View {
       #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        // An overlay rather than an inset: it floats over the text and takes no
+        // layout, so it cannot disturb the column, which is derived from this
+        // view's frame.
+        .overlay(alignment: .bottom) { returnButton }
+        .animation(.snappy, value: visibleReturn)
+        // Long enough to decide, without sitting over the text for good.
+        .task(id: visibleReturn) {
+          guard let offer = visibleReturn else { return }
+          try? await Task.sleep(for: .seconds(8))
+          guard !Task.isCancelled else { return }
+          settledReturn = offer
+        }
         // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
         // swallows an iPhone, and in compact width the inspector already presents
         // itself as a sheet.
@@ -322,6 +336,35 @@ struct DocumentView: View {
         }
       } label: {
         Label("More", systemImage: "ellipsis.circle")
+      }
+    }
+
+    /// Where a tap on the return offer goes, while it is on show.
+    ///
+    /// In portrait only: with room to spare, the back/forward pair is in the bar.
+    private var visibleReturn: Place? {
+      guard !hasRoomyToolbar, let offer = navigation.returnOffer, offer != settledReturn else {
+        return nil
+      }
+      return offer
+    }
+
+    /// "Back to §4.2" after following a link within the document (#254). The
+    /// system back button leaves the document, and Back in More is two taps for
+    /// the most common thing a reader does after following a cross-reference.
+    @ViewBuilder
+    private var returnButton: some View {
+      if let offer = visibleReturn {
+        Button {
+          navigation.goBack()
+        } label: {
+          Label(
+            ReturnOffer.title(for: offer, sectionNumbers: sectionNumbers),
+            systemImage: "arrow.uturn.backward")
+        }
+        .buttonStyle(.glass)
+        .padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
 

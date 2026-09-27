@@ -28,11 +28,27 @@ public struct NavigationHistory: Sendable {
   public private(set) var current: Place?
   private var backward: [Place] = []
   private var forward: [Place] = []
+  /// Whether the last move struck out somewhere new, rather than stepping back or
+  /// forward through what was already here.
+  private var arrivedByGoing = false
 
   public init() {}
 
   public var canGoBack: Bool { !backward.isEmpty }
   public var canGoForward: Bool { !forward.isEmpty }
+
+  /// Where Back would return to, offered straight after following a link within
+  /// the document on screen (#254).
+  ///
+  /// On an iPhone in portrait the system back button leaves the document, so
+  /// returning from a cross-reference needs an offer of its own. Nil when Back
+  /// would leave the document, and after stepping back or forward: the offer is
+  /// for undoing a jump just made, not for walking the history.
+  public var returnOffer: Place? {
+    guard arrivedByGoing, let current, let previous = backward.last, previous.id == current.id
+    else { return nil }
+    return previous
+  }
 
   /// Go to `place`, recording `position` as the spot being left behind.
   ///
@@ -48,6 +64,7 @@ public struct NavigationHistory: Sendable {
     }
     forward.removeAll()
     current = place
+    arrivedByGoing = true
   }
 
   /// Step back, recording `position` as the spot being left behind so that going
@@ -60,6 +77,7 @@ public struct NavigationHistory: Sendable {
       forward.append(leaving)
     }
     current = previous
+    arrivedByGoing = false
     return previous
   }
 
@@ -72,6 +90,7 @@ public struct NavigationHistory: Sendable {
       backward.append(leaving)
     }
     current = next
+    arrivedByGoing = false
     return next
   }
 }
