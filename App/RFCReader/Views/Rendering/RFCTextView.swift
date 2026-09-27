@@ -21,7 +21,7 @@ struct RFCTextView: View {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
-  let onTitleReveal: (CGFloat) -> Void
+  let onTitleReveal: (ToolbarTitleState) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -39,7 +39,7 @@ struct RFCTextView: View {
     onScrollHandled: @escaping () -> Void,
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
-    onTitleReveal: @escaping (CGFloat) -> Void,
+    onTitleReveal: @escaping (ToolbarTitleState) -> Void,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -88,7 +88,7 @@ struct ReaderInputs {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
-  let onTitleReveal: (CGFloat) -> Void
+  let onTitleReveal: (ToolbarTitleState) -> Void
   let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView

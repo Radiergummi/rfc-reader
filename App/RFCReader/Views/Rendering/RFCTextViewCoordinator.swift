@@ -82,14 +82,14 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
-  /// How far the document's title has come into the toolbar; see
-  /// `ToolbarTitleReveal`. Called synchronously, on every scroll tick that moves
-  /// it: the toolbar's title is coupled to the scroll, and a hop through a `Task`
+  /// How far the document's title has come into the toolbar, and which section
+  /// its subtitle names; see `ToolbarTitleReveal` and `ToolbarSubtitle`. Called
+  /// synchronously, on every scroll tick that moves either: the toolbar's title is coupled to the scroll, and a hop through a `Task`
   /// would leave it a frame behind the text. That is safe where
   /// `onVisibleAnchorChange` is not because it touches no SwiftUI state.
-  var onTitleReveal: (CGFloat) -> Void = { _ in }
+  var onTitleReveal: (ToolbarTitleState) -> Void = { _ in }
   var heading: HeadingBox?
-  private var lastTitleReveal: CGFloat?
+  private var lastTitleReveal: ToolbarTitleState?
 
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -459,17 +459,52 @@ final class RFCTextViewCoordinator: NSObject {
       guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
         return
       }
-      let progress = ToolbarTitleReveal.progress(
-        headingBottom: header.frame.minY + bottom,
-        visibleTop: textView.unobscuredTop,
-        distance: Self.headingLineHeight
+      let edge = textView.unobscuredTop
+      let state = ToolbarTitleState(
+        reveal: ToolbarTitleReveal.progress(
+          headingBottom: header.frame.minY + bottom,
+          visibleTop: edge,
+          distance: Self.headingLineHeight
+        ),
+        subtitle: subtitle(atEdge: edge - textView.containerTop, in: textView)
       )
-      // Pinned at 0 or 1 for almost all of a document; only a change is news.
-      guard progress != lastTitleReveal else { return }
-      lastTitleReveal = progress
-      onTitleReveal(progress)
+      // Steady for almost all of a document; only a change is news.
+      guard state != lastTitleReveal else { return }
+      lastTitleReveal = state
+      onTitleReveal(state)
     #endif
   }
+
+  #if !canImport(UIKit)
+    /// The section the toolbar's subtitle names, from the paragraph under the
+    /// toolbar's edge — `edge` is in container coordinates — and how far its last
+    /// line has crossed it.
+    private func subtitle(atEdge edge: CGFloat, in textView: PlatformTextView)
+      -> ToolbarSubtitle.State
+    {
+      // Above the container is the header, which belongs to no section.
+      guard edge >= 0, let layout = textView.textLayoutManager,
+        let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
+      else { return .steady(nil) }
+      let frame = fragment.layoutFragmentFrame
+      // The last line, not the fragment: a heading's fragment carries the space
+      // above it, and a wrapped heading hands over as its last line passes, the
+      // way the title's reveal does.
+      let line =
+        fragment.textLineFragments.last?.typographicBounds
+        ?? CGRect(origin: .zero, size: frame.size)
+      let crossing = ToolbarTitleReveal.progress(
+        headingBottom: frame.minY + line.maxY,
+        visibleTop: edge,
+        distance: line.height
+      )
+      return ToolbarSubtitle.state(
+        in: sectionIndex,
+        topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
+        crossing: crossing
+      )
+    }
+  #endif
 
   #if !canImport(UIKit)
     /// The height of one line of the header's heading, which is set in the large
