@@ -46,6 +46,7 @@ private struct AuthorChip: View {
     HStack(spacing: 5) {
       Monogram(name: author.name)
       Text(author.role == nil ? author.name : "\(author.name), Ed.")
+        .lineLimit(1)
     }
     .padding(.vertical, 2)
     .padding(.leading, 2)
@@ -97,13 +98,22 @@ private struct WrappingRow: Layout {
     for row in arrange(subviews, width: bounds.width) {
       var x = bounds.minX
       for index in row.indices {
-        let size = subviews[index].sizeThatFits(.unspecified)
+        let size = Self.size(of: subviews[index], within: bounds.width)
         subviews[index].place(
-          at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: .unspecified)
+          at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+          proposal: ProposedViewSize(size))
         x += size.width + spacing
       }
       y += row.height + spacing
     }
+  }
+
+  /// Its own width, or the row's when it is wider: a chip is never wider than the
+  /// column, and its name truncates instead.
+  private static func size(of subview: LayoutSubview, within width: CGFloat) -> CGSize {
+    let ideal = subview.sizeThatFits(.unspecified)
+    guard ideal.width > width else { return ideal }
+    return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
   }
 
   private struct Row {
@@ -116,7 +126,7 @@ private struct WrappingRow: Layout {
     var rows: [Row] = []
     var row = Row()
     for index in subviews.indices {
-      let size = subviews[index].sizeThatFits(.unspecified)
+      let size = Self.size(of: subviews[index], within: width)
       let needed = row.indices.isEmpty ? size.width : row.width + spacing + size.width
       if needed > width, !row.indices.isEmpty {
         rows.append(row)
@@ -154,6 +164,8 @@ private struct WrappingRow: Layout {
     func makeUIViewController(context: Context) -> UINavigationController {
       let card = CNContactViewController(forUnknownContact: contact)
       card.allowsEditing = false
+      // Without a store the card hides its own add actions.
+      card.contactStore = CNContactStore()
       return UINavigationController(rootViewController: card)
     }
 

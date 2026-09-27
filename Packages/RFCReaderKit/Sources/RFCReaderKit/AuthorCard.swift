@@ -41,7 +41,12 @@ public enum AuthorCard {
 
   public static func contact(for author: Author) -> CNMutableContact {
     let card = CNMutableContact()
-    if let components = PersonNameComponentsFormatter().personNameComponents(from: author.name),
+    // An author that is an organization: RFCXML names it by the organization alone,
+    // and the parser takes that for the name.
+    if let organization = author.contact?.organization, organization == author.name {
+      card.contactType = .organization
+    } else if let components = PersonNameComponentsFormatter().personNameComponents(
+      from: author.name),
       components.familyName != nil
     {
       card.givenName = components.givenName ?? ""
@@ -89,7 +94,9 @@ public enum AuthorCard {
     address.subLocality = postal.cityArea ?? ""
     address.city = postal.city ?? ""
     address.state = postal.region ?? ""
-    address.postalCode = postal.code ?? ""
+    // Contacts has no field for a sorting code; beside the postal code is where
+    // the countries that use one write it.
+    address.postalCode = [postal.code, postal.sortingCode].compactMap { $0 }.joined(separator: " ")
     address.country = postal.country ?? ""
     return address
   }

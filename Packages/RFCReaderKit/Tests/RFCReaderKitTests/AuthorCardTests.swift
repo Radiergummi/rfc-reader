@@ -108,6 +108,32 @@ struct AuthorCardTests {
     #expect(address.city.isEmpty)
   }
 
+  /// RFCXML names an author that is an organization by the organization alone, and
+  /// the parser uses it as the name. That is a company card, not a person called
+  /// "Internet Architecture Board".
+  @Test func `an organization that is the author is a company card`() {
+    let card = AuthorCard.contact(
+      for: Author(
+        name: "Internet Architecture Board",
+        contact: AuthorContact(organization: "Internet Architecture Board", emails: ["iab@iab.org"])
+      ))
+    #expect(card.contactType == .organization)
+    #expect(card.organizationName == "Internet Architecture Board")
+    #expect(card.givenName.isEmpty)
+    #expect(card.familyName.isEmpty)
+  }
+
+  /// Contacts has no field for a sorting code, so it goes beside the postal code
+  /// rather than being lost.
+  @Test func `a sorting code is kept beside the postal code`() throws {
+    let card = AuthorCard.contact(
+      for: author(
+        AuthorContact(postal: PostalAddress(city: "Paris", code: "75008", sortingCode: "CEDEX 08")))
+    )
+    let address = try #require(card.postalAddresses.first?.value)
+    #expect(address.postalCode == "75008 CEDEX 08")
+  }
+
   @Test func `an author who publishes nothing has only a name`() {
     let card = AuthorCard.contact(for: author(nil))
     #expect(card.emailAddresses.isEmpty)
