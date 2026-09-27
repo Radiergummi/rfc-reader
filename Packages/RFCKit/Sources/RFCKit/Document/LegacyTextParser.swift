@@ -420,14 +420,24 @@ public struct LegacyTextParser: Sendable {
       lines, colonNumbered: colonNumbered, proseIndent: proseIndent)
     let body = bodyIsIndented(lines[bodyStart...])
     var header = parseFrontMatter(front)
-    if let title, !title.isEmpty,
-      titleWords(header.title) != titleWords(title)
-        || !header.title.contains(where: \.isLowercase)
-    {
-      header.title = title
-    }
     var sections = rawSections(
       in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
+    if let title, !title.isEmpty {
+      // The title page is the front matter's runs and the lead-in's blocks up to the
+      // one that opens the body, which is where a title set over several runs leaves
+      // the rest. Up to and including it, because the rest can pass for a paragraph:
+      // RFC 806 sets it in two lines of capitals.
+      var titlePage = front.split(whereSeparator: \.isBlank).map(Array.init)
+      if sections.first?.heading == nil {
+        var leadIn = sections[0].blocks[...]
+        let opening = leadIn.firstIndex { opensBody($0.lines, proseIndent: proseIndent) }
+        if let opening {
+          leadIn = leadIn[...opening]
+        }
+        titlePage += leadIn.map(\.lines)
+      }
+      header.title = Self.title(page: header.title, index: title, titlePage: titlePage)
+    }
     // The lead-in, which is the only section with no heading, loses what the title page
     // left in it here rather than in `parse`, so the diagnosis never sees it either: a
     // report of blocks the parser dropped unread would count refusals it never made.
@@ -638,16 +648,15 @@ public struct LegacyTextParser: Sendable {
   /// `title` is the document's title as the RFC index gives it, where the caller has
   /// it. The run of lines front matter takes for the title is a guess: in RFC 822 it
   /// is `Obsoletes:  RFC #733`, in RFC 1144 the first of the title's two lines (#170,
-  /// #171), in RFC 5323 the author and date. Where the guess has other words than the
-  /// index's, the index's title replaces it -- in 698 of the 8,457 legacy documents --
-  /// and the rest of the title the page sets is recognised in the lead-in and kept out
-  /// of it.
+  /// #171), in RFC 5323 the author and date. Where the guess is not the title, the
+  /// index's replaces it -- in 601 of the 8,457 legacy documents -- and the rest of the
+  /// title the page sets is recognised in the lead-in and kept out of it.
   ///
-  /// Where the two have the same words, the page's own title stays: the index sets
-  /// older titles in sentence case and drops their article (`Note on Reconnection
-  /// Protocol` for RFC 671's `A Note on Reconnection Protocol`), and the page is what
-  /// the author wrote. Unless the page sets it in capitals, which is a typewriter's
-  /// emphasis rather than a spelling.
+  /// Where the guess is the title, the page's own stays, although the index recases
+  /// and rewords it: it sets older titles in sentence case and drops their article
+  /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
+  /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
+  /// is where the two are told apart.
   public func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
@@ -934,13 +943,16 @@ public struct LegacyTextParser: Sendable {
       }
       kept.append(block)
       index += 1
-      if listMarker(of: block.lines) != nil
-        || (block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent))
-      {
-        break
-      }
+      if opensBody(block.lines, proseIndent: proseIndent) { break }
     }
     return kept + blocks[index...]
+  }
+
+  /// A paragraph or a list, which is where the body has begun and the title page
+  /// has ended.
+  private static func opensBody(_ lines: [String], proseIndent: Int) -> Bool {
+    listMarker(of: lines) != nil
+      || (lines.count > 1 && looksLikeProse(lines, maxIndent: proseIndent))
   }
 
   /// What a status, copyright or IPR paragraph says and a body's opening does not: RFC
@@ -982,6 +994,64 @@ public struct LegacyTextParser: Sendable {
   private static func titleWords(_ title: String) -> ArraySlice<Substring> {
     let all = words(title)
     return ["a", "an", "the"].contains(all.first) ? all.dropFirst() : all[...]
+  }
+
+  /// The document's title: the one the page sets, or the RFC index's where the page's
+  /// is not the title at all (#170).
+  ///
+  /// The page's stays where it has most of the index's words, in order -- four in
+  /// five -- and they are at least half its own. The index rewords titles: RFC 1801's
+  /// `X.400-MHS` is its `MHS`, RFC 6527 loses `the`, RFC 1915's `Connection Control
+  /// Protocol` is its `Compression`, and none of those misses more than one of the
+  /// index's words. Four in five keeps a title the index rewords by a word or
+  /// two, where a title from a header line, an author or a paragraph shares a few
+  /// words by chance. Half its own, because a title that has an author, a date or
+  /// the opening paragraph run on after it has all the index's words and many more:
+  /// RFC 815 and 816 run on through the author and his affiliation, and RFC 21's
+  /// `Network meeting` is in its first sentence.
+  ///
+  /// A page title that is part of the index's, and nothing else, stays too, unless
+  /// the rest of the index's title is on the title page as well. Then it is a title
+  /// set over several runs, of which the front matter took the first: RFC 1144's
+  /// `for Low-Speed Serial Links` is on the line below. Where the rest is not on the
+  /// page, the index has named the document more fully than its author did: RFC 766
+  /// is `Internet Protocol Handbook`, and only the index adds `: Table of contents`.
+  ///
+  /// A page title set in capitals gives way to the index's whatever its words, as a
+  /// typewriter's emphasis rather than a spelling.
+  static func title(page: String, index: String, titlePage: [[String]]) -> String {
+    guard page.contains(where: \.isLowercase) else { return index }
+    let indexWords = titleWords(index)
+    let pageWords = titleWords(page)
+    let shared = sharedWordCount(indexWords, pageWords)
+    if shared * 5 >= indexWords.count * 4, shared * 2 >= pageWords.count {
+      return page
+    }
+    guard shared == pageWords.count else { return index }
+    let allIndexWords = words(index)
+    var onTitlePage = Set(pageWords)
+    for run in titlePage where repeatsTitle(run, allIndexWords) {
+      onTitlePage.formUnion(words(run.joined(separator: " ")))
+    }
+    let found = indexWords.count { onTitlePage.contains($0) }
+    return found * 5 >= indexWords.count * 4 ? index : page
+  }
+
+  /// How many words the two have in common, in the same order: the longest run of
+  /// words both contain, not necessarily side by side.
+  private static func sharedWordCount(
+    _ first: ArraySlice<Substring>, _ second: ArraySlice<Substring>
+  ) -> Int {
+    var previousRow = [Int](repeating: 0, count: second.count + 1)
+    for word in first {
+      var row = [0]
+      for (offset, other) in second.enumerated() {
+        row.append(
+          word == other ? previousRow[offset] + 1 : max(previousRow[offset + 1], row[offset]))
+      }
+      previousRow = row
+    }
+    return previousRow[second.count]
   }
 
   nonisolated(unsafe) private static let dateLinePattern =
