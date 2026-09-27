@@ -53,6 +53,24 @@ struct BuilderVerbatimTests {
     #expect(spacings.last == style.paragraphSpacing, "the block is spaced from what follows it")
   }
 
+  /// The body's line height leaves a gap between the lines of a vertical `|` stroke,
+  /// so a diagram is set tighter. A code listing is read as text and keeps the body's.
+  @Test(arguments: [
+    (Preformatted.Kind.artwork, ReadingStyle().artworkLineHeightMultiple),
+    (Preformatted.Kind.sourceCode, ReadingStyle().lineHeightMultiple),
+  ])
+  func artworkIsSetTighterThanCode(kind: Preformatted.Kind, expected: CGFloat) throws {
+    let built = DocumentTextBuilder.build(
+      document(Preformatted(kind: kind, text: "+-A-+\n| B |\n+-C-+")), style: style)
+    for line in ["+-A-+", "| B |", "+-C-+"] {
+      let offset = try Fixtures.offset(of: line, in: built.text)
+      let paragraph = try #require(
+        built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil)
+          as? NSParagraphStyle)
+      #expect(paragraph.lineHeightMultiple == expected, "line height of \(line)")
+    }
+  }
+
   @Test func artworkIsMonospacedAndNeverWraps() throws {
     let art = "GET / HTTP/1.1"
     let built = DocumentTextBuilder.build(
