@@ -24,13 +24,14 @@ public struct RFCLink: Hashable, Sendable {
     var components = URLComponents()
     components.scheme = Self.scheme
     components.host = id.series == .rfc ? String(id.number) : id.fileStem
+    components.fragment = section.map(Self.fragment(for:))
     // Unwrapped because nothing here can fail: the host is a document ID's own
     // letters and digits, and the one caller-supplied part, the section, goes in
     // as a fragment, which `URLComponents` percent-encodes (#150).
-    return Self.url(components.url!, section: section)
+    return components.url!
   }
 
-  /// `url` with `section`'s fragment, the one way every builder attaches a section.
+  /// `url` with `section`'s fragment, the one way every web builder attaches a section.
   ///
   /// Through `URLComponents`, which percent-encodes the fragment. A section is
   /// caller-supplied text, and splicing it into a string gave a URL that
@@ -53,8 +54,7 @@ public struct RFCLink: Hashable, Sendable {
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
     // and `section-4.2%20draft` has to come back as the section it was.
-    let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment
-    let fragmentSection = Self.section(fromFragment: fragment)
+    let fragmentSection = Self.section(fromFragment: url.fragment(percentEncoded: false))
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
