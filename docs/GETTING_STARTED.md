@@ -20,7 +20,7 @@ xcodegen generate
 open RFCReader.xcodeproj
 ```
 
-Before generating, edit `project.yml`: set `bundleIdPrefix` and `PRODUCT_BUNDLE_IDENTIFIER` to your own reverse-DNS names and uncomment `DEVELOPMENT_TEAM` with your team ID (Xcode ▸ Settings ▸ Accounts shows it). The generated `.xcodeproj`, `Info.plist` and entitlements file are git-ignored; `project.yml` is the source of truth. If you would rather commit a hand-maintained project, delete those three lines from `.gitignore`.
+`project.yml` signs with the maintainer's team. To build under your own, set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` to your reverse-DNS names and team ID (Xcode ▸ Settings ▸ Accounts shows it) before generating, or build unsigned with `make build-app CODE_SIGNING_ALLOWED=NO`. The generated `.xcodeproj`, `Info.plist` and entitlements file are git-ignored; `project.yml` is the source of truth. If you would rather commit a hand-maintained project, delete those three lines from `.gitignore`.
 
 ### Option B: by hand in Xcode
 
