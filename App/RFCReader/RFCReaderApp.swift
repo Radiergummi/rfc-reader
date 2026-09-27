@@ -157,8 +157,9 @@ struct DocumentCommands: Commands {
       // SwiftUI app has no such item, so Cmd+F reached nothing at all. These send
       // the action down the responder chain to whichever text view is focused.
       CommandGroup(after: .textEditing) {
-        // Disabled with no document open: there is no text view to search then,
-        // and the items stayed enabled with nothing to act on (#157).
+        // Disabled unless the reader's text view is on screen: there is nothing to
+        // search with no document, while one loads or failed to, or in Original
+        // Text, which is a SwiftUI `Text` with no find bar (#157).
         Section {
           Button("Find…") { FindCommand.showFindInterface.send() }
             .keyboardShortcut("f", modifiers: .command)
@@ -167,7 +168,7 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
         }
-        .disabled(navigation?.selection == nil)
+        .disabled(!showsDocument || reader?.showOriginal == true)
       }
     #endif
   }
