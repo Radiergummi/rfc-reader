@@ -103,7 +103,7 @@ Ideas from the first brainstorm session and where each one lands.
 
 **iPhone.** Tab-less: a stack. Search field at the top of the list, reader full screen with a translucent bottom bar (contents, type size, cite, share). Pull the table of contents up as a sheet. Cross-reference taps push the other document; swipe back returns to where you were.
 
-**iPad and Mac.** Three columns: sidebar, list, reader; the table of contents docks as an inspector on the right. Command-L jumps to a number, Command-F finds in document, Command-Shift-T toggles contents, Command-D bookmarks. On Mac the reader opens in tabs, cross references can open in a new window with Command-click, and the menu bar has everything.
+**iPad and Mac.** Three columns: sidebar, list, reader; the table of contents docks as an inspector on the right. Command-L jumps to a number, Command-F finds in document, Command-Option-I toggles contents, Command-D bookmarks. On Mac the reader opens in tabs, cross references can open in a new window with Command-click, and the menu bar has everything.
 
 **Reading typography.** Prose in the system serif or a well-chosen humanist face at a comfortable measure (about 70 characters), artwork in SF Mono in a subtle card that scrolls horizontally rather than wrapping. Headings numbered exactly as the RFC numbers them. Dark mode from day one.
 

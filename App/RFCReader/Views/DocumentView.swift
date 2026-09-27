@@ -330,7 +330,8 @@ struct DocumentView: View {
         } label: {
           Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
-        .keyboardShortcut("t", modifiers: [.command, .shift])
+        // The same chord as the Mac's (#157).
+        .keyboardShortcut("i", modifiers: [.command, .option])
       }
 
       ToolbarItem(placement: .primaryAction) {

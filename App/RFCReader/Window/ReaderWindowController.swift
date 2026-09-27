@@ -33,6 +33,7 @@
     let reader = ReaderState()
 
     let splitController = ReaderSplitViewController()
+    private(set) var sidebarItem: NSSplitViewItem!
     private(set) var listItem: NSSplitViewItem!
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
@@ -84,6 +85,7 @@
       let sidebar = NSSplitViewItem(sidebarWithViewController: host(SidebarView()))
       sidebar.minimumThickness = Self.sidebarMinimum
       sidebar.maximumThickness = 320
+      sidebarItem = sidebar
 
       let list = NSSplitViewItem(contentListWithViewController: host(RFCListView()))
       list.minimumThickness = Self.listMinimum
@@ -153,7 +155,13 @@
       let toolbar = ReaderToolbar(controller: self)
       // The title is capped to the column it sits over, so it has to be told when
       // that column is dragged.
-      splitController.didResizeSubviews = { [weak self] in self?.toolbar?.capTitleToList() }
+      // Collapsing or expanding the sidebar resizes the subviews too, so this is also
+      // where View ▸ Show Sidebar learns which title to show.
+      splitController.didResizeSubviews = { [weak self] in
+        guard let self else { return }
+        self.toolbar?.capTitleToList()
+        ActiveReaderWindow.shared.sidebarChanged(self)
+      }
       window.toolbar = toolbar.makeToolbar()
       window.toolbarStyle = .unified
       // The title is the toolbar's own item, not AppKit's.
@@ -330,6 +338,14 @@
     func closePanelWithoutDocument() {
       guard !reader.hasDocument, !panelItem.isCollapsed else { return }
       panelItem.isCollapsed = true
+    }
+
+    // MARK: - The sidebar
+
+    /// Through the split view controller rather than down the responder chain, so
+    /// the menu toggles this window's sidebar whatever holds focus in it.
+    func toggleSidebar() {
+      splitController.toggleSidebar(nil)
     }
 
     // MARK: - The panel

@@ -123,11 +123,21 @@
     static let shared = ActiveReaderWindow()
 
     private(set) var controller: ReaderWindowController?
+    /// Whether the key window's sidebar is collapsed, for the title of View ▸ Show
+    /// Sidebar. A SwiftUI menu item cannot ask the split view when the menu opens,
+    /// so the window reports it here.
+    private(set) var isSidebarCollapsed = false
 
     private init() {}
 
     func becameKey(_ controller: ReaderWindowController) {
       self.controller = controller
+      isSidebarCollapsed = controller.sidebarItem.isCollapsed
+    }
+
+    func sidebarChanged(_ controller: ReaderWindowController) {
+      guard self.controller === controller else { return }
+      isSidebarCollapsed = controller.sidebarItem.isCollapsed
     }
 
     func willClose(_ controller: ReaderWindowController) {

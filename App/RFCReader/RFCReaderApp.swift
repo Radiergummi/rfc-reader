@@ -89,6 +89,13 @@ struct DocumentCommands: Commands {
     @State private var active = ActiveReaderWindow.shared
 
     private var navigation: NavigationModel? { active.controller?.navigation }
+    private var reader: ReaderState? { active.controller?.reader }
+    /// A document is on screen, not just selected: a selection is also showing while
+    /// it loads and when it failed to, and `hasDocument` stays true after the
+    /// selection is cleared.
+    private var showsDocument: Bool {
+      navigation?.selection != nil && reader?.hasDocument == true
+    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -121,10 +128,34 @@ struct DocumentCommands: Commands {
       }
     #endif
     CommandGroup(before: .sidebar) {
+      #if os(macOS)
+        // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
+        // reads the state of a split view AppKit made, so its title stayed "Show
+        // Sidebar" with the sidebar open, and its first click did nothing -- measured.
+        // Here rather than replacing `.sidebar`, which a scene with no `WindowGroup`
+        // does not have: the item never appeared.
+        //
+        // Outside the `Section`, first in the group: the group draws a separator
+        // before itself and a section draws one at each end, so a section opening
+        // the group drew two lines there -- measured.
+        Button(active.isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
+          active.controller?.toggleSidebar()
+        }
+        .keyboardShortcut("s", modifiers: [.command, .control])
+        .disabled(active.controller == nil)
+      #endif
       Section {
         #if os(macOS)
+          // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
+          // which every tabbed Mac app gives to reopening the last closed tab
+          // (#157).
           Button("Contents") { active.controller?.togglePanel() }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            // As the toolbar's button is: opened with no document, the panel is an
+            // empty strip, and nothing closes it again until a document arrives.
+            // Not `showsDocument`: clearing the selection leaves `hasDocument` set
+            // and the panel open, and the chord has to be able to close it.
+            .disabled(reader?.hasDocument != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }
@@ -141,6 +172,9 @@ struct DocumentCommands: Commands {
       // SwiftUI app has no such item, so Cmd+F reached nothing at all. These send
       // the action down the responder chain to whichever text view is focused.
       CommandGroup(after: .textEditing) {
+        // Disabled unless the reader's text view is on screen: there is nothing to
+        // search with no document, while one loads or failed to, or in Original
+        // Text, which is a SwiftUI `Text` with no find bar (#157).
         Section {
           Button("Find…") { FindCommand.showFindInterface.send() }
             .keyboardShortcut("f", modifiers: .command)
@@ -149,6 +183,7 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
         }
+        .disabled(!showsDocument || reader?.showOriginal == true)
       }
     #endif
   }
