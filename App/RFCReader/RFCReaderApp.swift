@@ -92,6 +92,13 @@ struct DocumentCommands: Commands {
     @State private var active = ActiveReaderWindow.shared
 
     private var navigation: NavigationModel? { active.controller?.navigation }
+    private var reader: ReaderState? { active.controller?.reader }
+    /// A document is on screen, not just selected: a selection is also showing while
+    /// it loads and when it failed to. The toolbar's Contents button validates on
+    /// the same `hasDocument`.
+    private var showsDocument: Bool {
+      navigation?.selection != nil && reader?.hasDocument == true
+    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -131,6 +138,9 @@ struct DocumentCommands: Commands {
           // (#157).
           Button("Contents") { active.controller?.togglePanel() }
             .keyboardShortcut("i", modifiers: [.command, .option])
+            // As the toolbar's button is: opened with no document, the panel is an
+            // empty strip, and nothing closes it again until a document arrives.
+            .disabled(!showsDocument)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }
