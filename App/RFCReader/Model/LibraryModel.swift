@@ -64,8 +64,12 @@ final class LibraryModel {
   enum IndexState: Equatable {
     case idle
     case loading
-    case ready(count: Int, updatedAt: Date)
+    case ready(updatedAt: Date)
     case failed(String)
+
+    var isReady: Bool {
+      if case .ready = self { true } else { false }
+    }
   }
 
   private(set) var index: RFCIndex?
@@ -119,7 +123,7 @@ final class LibraryModel {
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
     listCache.removeAll()
-    indexState = .ready(count: prepared.index.rfcs.count, updatedAt: updatedAt)
+    indexState = .ready(updatedAt: updatedAt)
   }
 
   // MARK: - Lists
@@ -217,8 +221,15 @@ final class LibraryModel {
     }
 
     guard !key.query.isEmpty, let search else { return base }
+    // Every hit, not the top few hundred: the search scores and sorts all of them
+    // anyway, the list windows its rows itself (`ListWindow`), and the count over
+    // the list says how many there are. A cap also cut before the filter below,
+    // so a search inside a collection lost whatever ranked outside the cap overall.
+    let hits = search.search(key.query, limit: .max)
+    // Everything is allowed in the whole library, so there is nothing to filter.
+    if case .all = filter { return hits.map(\.rfc) }
     let allowed = Set(base.map(\.number))
-    return search.search(key.query, limit: 500).map(\.rfc).filter { allowed.contains($0.number) }
+    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
   // MARK: - Scene routing

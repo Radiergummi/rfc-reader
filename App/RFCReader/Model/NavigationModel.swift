@@ -40,6 +40,12 @@ final class NavigationModel: Identifiable {
   var searchText = ""
   var isShowingGoToSheet = false
 
+  /// How many documents the list shows — after the filter and the search — or nil
+  /// until the index is ready. Written by `RFCListView`, which is the one place the
+  /// list is computed; the window's toolbar reads it for the subtitle under the
+  /// list's title, and has no list of its own to count.
+  var listedCount: Int?
+
   /// What the list lists: the last filter chosen, whether or not the sidebar still
   /// shows it as selected.
   var filter: LibraryFilter { filterChoice.value }

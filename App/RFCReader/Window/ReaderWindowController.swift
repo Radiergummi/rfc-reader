@@ -169,10 +169,12 @@
       window.titleVisibility = .hidden
 
       self.toolbar = toolbar
+      self.reader.revealTitle = { [weak toolbar] in toolbar?.revealDocumentTitle($0) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)
       observeTitle()
+      observeListTitle()
       observeDocument()
     }
 
@@ -233,13 +235,36 @@
           .truncated(to: Self.subtitleLimit) ?? ""
         window?.title = title
         window?.subtitle = subtitle
-        toolbar?.showTitle(title, subtitle: subtitle)
+        // The reader's own copy, shown once its header scrolls away. Whole, not
+        // truncated like the tab's: the item ellipsises to whatever room it has.
+        toolbar?.showDocumentTitle(
+          navigation.selection?.displayName ?? "",
+          subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
+        )
         // Here because this is already the one place that re-fires when the
         // selection changes, and the fetch must not be on the toolbar's
         // validation path; see `isBookmarked`.
         refreshBookmarked()
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeTitle() }
+      }
+    }
+
+    /// The title over the list names the list: the collection the sidebar chose and
+    /// how many documents it holds after the search. The document is the tab's to
+    /// name, and the reader's own.
+    ///
+    /// Its own loop, apart from `observeTitle`: the count changes with most
+    /// keystrokes in the search field, and nothing else there — the window's
+    /// title, the reader's, the bookmark fetch — depends on it.
+    private func observeListTitle() {
+      withObservationTracking {
+        toolbar?.showTitle(
+          navigation.filter.title,
+          subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+        )
+      } onChange: { [weak self] in
+        Task { @MainActor in self?.observeListTitle() }
       }
     }
 
