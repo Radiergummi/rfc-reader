@@ -1668,9 +1668,11 @@ public struct LegacyTextParser: Sendable {
     // is also twenty times cheaper than the prose test and rejects most of what
     // reaches here, so it is asked first.
     guard readsLikeSentences(block.lines, share: (of: 1, in: 2)) else { return false }
-    // The indent is the only test excused, and it is the only one that consulted
-    // it. `RawBlock.indent` is the smallest indent in the block and the block is
-    // uniform by the time this passes, so the cap could only ever be its own.
+    // The cap is the only test excused. `RawBlock.indent` is the smallest indent in
+    // the block and the block is uniform by the time this passes, so the cap could
+    // only ever be its own. Past the classic cap `diagnose` still refuses a MIB
+    // module's text (#55), under an item as anywhere; the sentence share it asks
+    // there too has already passed above.
     guard looksLikeProse(block.lines, maxIndent: .max) else { return false }
     let inlines = linker.link(joinWrappedLines(block.lines))
     guard !inlines.isEmpty else { return false }
@@ -1926,7 +1928,7 @@ public struct LegacyTextParser: Sendable {
     _ lines: [String], share: (of: Int, in: Int) = (of: 3, in: 5), minimumWords: Int = 1
   ) -> Bool {
     let counted = sentenceWords(lines)
-    guard counted.total >= minimumWords, counted.total > 0 else { return false }
+    guard counted.total >= max(minimumWords, 1) else { return false }
     // Kept as an exact integer comparison rather than a threshold on `sentenceRatio`:
     // the two agree everywhere, but only this one is free of rounding at the boundary.
     return counted.ordinary * share.in >= counted.total * share.of
