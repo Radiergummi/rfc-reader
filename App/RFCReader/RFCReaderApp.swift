@@ -30,9 +30,6 @@ struct RFCReaderApp: App {
       }
       .commands {
         WindowCommands()
-        // View ▸ Show Sidebar. It sends `toggleSidebar:` down the responder chain,
-        // which the window's own `NSSplitViewController` answers (#157).
-        SidebarCommands()
         DocumentCommands()
       }
     #else
@@ -131,6 +128,22 @@ struct DocumentCommands: Commands {
       }
     #endif
     CommandGroup(before: .sidebar) {
+      #if os(macOS)
+        // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
+        // reads the state of a split view AppKit made, so its title stayed "Show
+        // Sidebar" with the sidebar open, and its first click did nothing -- measured.
+        // Here rather than replacing `.sidebar`, which a scene with no `WindowGroup`
+        // does not have: the item never appeared.
+        //
+        // Outside the `Section`, first in the group: the group draws a separator
+        // before itself and a section draws one at each end, so a section opening
+        // the group drew two lines there -- measured.
+        Button(active.isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar") {
+          active.controller?.toggleSidebar()
+        }
+        .keyboardShortcut("s", modifiers: [.command, .control])
+        .disabled(active.controller == nil)
+      #endif
       Section {
         #if os(macOS)
           // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
