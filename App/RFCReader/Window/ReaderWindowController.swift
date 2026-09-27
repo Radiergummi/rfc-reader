@@ -416,7 +416,13 @@
       guard let window,
         let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
       else { return }
-      if let focused = window.firstResponder as? NSView, focused.isDescendant(of: text) { return }
+      // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
+      // has to leave focus there.
+      if let focused = window.firstResponder as? NSView,
+        focused.isDescendant(of: text.enclosingScrollView ?? text)
+      {
+        return
+      }
       window.makeFirstResponder(text)
     }
 
