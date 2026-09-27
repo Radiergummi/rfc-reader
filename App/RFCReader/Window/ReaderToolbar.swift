@@ -526,6 +526,13 @@
 
     func menuNeedsUpdate(_ menu: NSMenu) {
       menu.removeAllItems()
+      // `NSMenuToolbarItem` opens its menu as a pull-down, and a pull-down's first
+      // item is its title, never shown: Cite had no "Short" and More no "Original
+      // Text", which left the original text out of reach on the Mac. Hidden, so the
+      // menu still reads right where it is not a pull-down -- the overflow menu.
+      let title = NSMenuItem()
+      title.isHidden = true
+      menu.addItem(title)
       switch menu {
       case citeMenu:
         for style in CitationStyle.allCases {
