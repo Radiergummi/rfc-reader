@@ -261,7 +261,7 @@ struct DocumentView: View {
         Button {
           withAnimation(.snappy) { showTableOfContents.toggle() }
         } label: {
-          Label("Contents", systemImage: "list.bullet.indent")
+          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
         .keyboardShortcut("t", modifiers: [.command, .shift])
       }

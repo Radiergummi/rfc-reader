@@ -261,7 +261,7 @@
         return item
 
       case .rfcPanelToggle:
-        return button(identifier, "Contents", "list.bullet.indent", #selector(togglePanel))
+        return button(identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
 
       default:
         return nil
