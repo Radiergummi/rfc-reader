@@ -1,6 +1,5 @@
 #if os(macOS)
   import AppKit
-  import RFCReaderKit
   import SwiftUI
 
   /// The RFC as published on macOS, in an `NSTextView` rather than a SwiftUI `Text`.
@@ -20,7 +19,7 @@
 
     /// The monospaced face the text is set in, a little smaller than the reader's
     /// body so a 72-column page fits beside it.
-    fileprivate var font: PlatformFont {
+    fileprivate var font: NSFont {
       .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
     }
 
@@ -61,9 +60,8 @@
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-      guard context.coordinator.shown.map({ $0 != (text, fontSize) }) ?? true,
-        let textView = scrollView.documentView as? NSTextView
-      else { return }
+      if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
+      guard let textView = scrollView.documentView as? NSTextView else { return }
       // Through the text storage, never the content storage's `attributedString`,
       // which silently discards the backing store (CLAUDE.md).
       textView.textStorage?.setAttributedString(attributed)
