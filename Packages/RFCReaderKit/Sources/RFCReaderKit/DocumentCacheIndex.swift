@@ -111,17 +111,23 @@ public struct DocumentCacheIndex: Sendable {
     let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
     var documents: Set<DocumentID> = []
     for name in names {
-      let url = URL(filePath: name)
-      guard bodyExtensions.contains(url.pathExtension) else {
-        continue
+      if let id = document(named: name) {
+        documents.insert(id)
       }
-      let stem = url.deletingPathExtension().lastPathComponent
-      guard let id = DocumentID(fileStem: stem) else {
-        continue
-      }
-      documents.insert(id)
     }
     return (documents, date)
+  }
+
+  /// The document a file in the cache is a body of, or nil when it is not one: its
+  /// name must be exactly what the store would have written, a document's
+  /// `fileStem` and a body format's extension.
+  public static func document(named name: String) -> DocumentID? {
+    let url = URL(filePath: name)
+    guard bodyExtensions.contains(url.pathExtension) else {
+      return nil
+    }
+    let stem = url.deletingPathExtension().lastPathComponent
+    return DocumentID(fileStem: stem)
   }
 
   /// Asked of the file system on every call. `URL.resourceValues` may answer from
