@@ -20,6 +20,8 @@ import SwiftUI
     /// What the reader is showing, shared with the panel. One per scene, for the same
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()
+    /// The one-time warning that bookmarks this session will not be kept (#152).
+    @State private var showsStoreWarning = false
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
@@ -88,6 +90,19 @@ import SwiftUI
         }
       }
       .onDisappear { library.unregister(navigation) }
+      // Once, when the bookmarks store fell back to memory (#152). Continue only:
+      // an iOS app does not quit itself.
+      .onAppear {
+        if AppData.openFailure != nil, !AppData.hasShownStoreWarning {
+          AppData.hasShownStoreWarning = true
+          showsStoreWarning = true
+        }
+      }
+      .alert(AppData.storeWarning.title, isPresented: $showsStoreWarning) {
+        Button("Continue", role: .cancel) {}
+      } message: {
+        Text(AppData.storeWarning.message)
+      }
       // Any navigation in this tab makes it the one an untargeted deep link lands in.
       .onChange(of: navigation.selection) {
         library.activate(navigation)

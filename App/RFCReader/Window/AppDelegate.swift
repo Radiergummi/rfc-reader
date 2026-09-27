@@ -20,6 +20,25 @@
       // The scene's `.task` did this; there is no scene on macOS any more.
       Task { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
+      warnIfTheStoreDidNotOpen()
+    }
+
+    /// Once, at launch, when the bookmarks store fell back to memory (#152):
+    /// Continue to read without saving, or Quit to fix whatever kept it closed and
+    /// try again.
+    private func warnIfTheStoreDidNotOpen() {
+      _ = AppData.container
+      guard AppData.openFailure != nil, !AppData.hasShownStoreWarning else { return }
+      AppData.hasShownStoreWarning = true
+      let alert = NSAlert()
+      alert.alertStyle = .warning
+      alert.messageText = AppData.storeWarning.title
+      alert.informativeText = AppData.storeWarning.message
+      alert.addButton(withTitle: "Continue")
+      alert.addButton(withTitle: "Quit")
+      if alert.runModal() == .alertSecondButtonReturn {
+        NSApp.terminate(nil)
+      }
     }
 
     /// The dock icon, with every window closed.
