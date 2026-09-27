@@ -178,8 +178,13 @@ struct DocumentView: View {
         }
       #endif
       .onAppear {
-        markAsRead()
-        if work.load == nil { startLoad() }
+        // Once per opening: each one is a view of its own (`.id(selection)`), and
+        // appearing again — the sheet over it, or a collapsed split view's
+        // spurious disappear and appear — is not another opening (#260).
+        if work.load == nil {
+          markAsRead()
+          startLoad()
+        }
       }
       .onChange(of: buildInputs, initial: true) {
         // Appearing again fires this with nothing changed. A build already made,
