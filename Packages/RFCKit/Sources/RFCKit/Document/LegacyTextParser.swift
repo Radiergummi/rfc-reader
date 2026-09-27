@@ -862,14 +862,20 @@ public struct LegacyTextParser: Sendable {
   /// that is boilerplate is more than 16, and every one that swallowed its body is 22 or
   /// more. Past the gap a single line ends it, because boilerplate is paragraphs and a
   /// lone line is where the body's own unrecognised heading sits.
-  private static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
+  static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
     -> Int
   {
     guard blocks.count > 20 else { return blocks.count }
+    // Looser than the lead-in's `isContentsEntries`: under a contents heading an entry
+    // needs only a leader or a page number, because not every listing sets both.
+    func isEntry(_ line: String) -> Bool {
+      line.trimmingCharacters(in: .whitespaces).last?.isNumber == true || line.contains("..")
+        || line.contains(". .")
+    }
     return 1
       + blocks.dropFirst().prefix { block in
         isContents
-          ? isContentsEntries(block.lines)
+          ? block.lines.count(where: isEntry) * 2 >= block.lines.count
           : block.lines.count > 1 && looksLikeProse(block.lines, maxIndent: proseIndent)
       }.count
   }

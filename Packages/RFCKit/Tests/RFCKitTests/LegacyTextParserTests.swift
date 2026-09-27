@@ -588,6 +588,20 @@ struct LegacyTextCorpusFindingsTests {
     #expect(traffic.document.header.abstract.count == 1)
   }
 
+  /// Under a contents heading an entry needs a dot leader or a page number, not both:
+  /// the lead-in's stricter test (#76) is for blocks with no heading to vouch for
+  /// them. A listing without leaders, set as more blocks than the gap that tells
+  /// boilerplate from a swallowed body, is still omitted whole.
+  @Test func aContentsListingWithoutLeadersIsOmittedWhole() {
+    let entries = (1...21).map { number in
+      LegacyTextParser.RawBlock(lines: [
+        "   \(number).  Section title                                      \(number + 2)"
+      ])
+    }
+    #expect(
+      LegacyTextParser.boilerplateExtent(of: entries, isContents: true, proseIndent: 6) == 21)
+  }
+
   /// Front matter is the header and the title; a paragraph after them is the body's,
   /// whether or not a heading has come yet. RFC 796 opens with prose under a heading of
   /// a shape the scan does not stop at, and the first column-0 heading it does stop at is
