@@ -16,6 +16,19 @@ actor DocumentStore {
   /// changed some other way, such as a file deleted in Finder.
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
 
+  /// The fetches running, so a second open joins the first and a removal made
+  /// during one keeps its result off the disk (#116). Original Text fetches the
+  /// `.txt` on its own, so it has its own.
+  private var downloads = InFlightDownloads<Fetched>()
+  private var originalTexts = InFlightDownloads<Data>()
+
+  /// A body as fetched, with the format it came in and the document parsed from it.
+  private struct Fetched: Sendable {
+    let data: Data
+    let format: FileFormat
+    let document: RFCDocument
+  }
+
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
@@ -68,6 +81,8 @@ actor DocumentStore {
   /// A body that cannot be deleted is left where it is, and stays cached: the
   /// index records what the removal left on disk, not what it set out to do.
   func remove(_ id: DocumentID) {
+    downloads.removed(id)
+    originalTexts.removed(id)
     parsed[id] = nil
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
@@ -94,21 +109,40 @@ actor DocumentStore {
       return document
     }
 
-    // Not cached: fetch XML when the index says it exists, otherwise text.
+    let (task, generation) = downloads.join(id) {
+      Task { try await Self.fetch(id, formats: formats, client: client) }
+    }
+    let fetched: Fetched
+    do {
+      fetched = try await task.value
+    } catch {
+      downloads.finish(id, task)
+      throw error
+    }
+    downloads.finish(id, task)
+    // A removal while this was in flight: the reader waiting for it still gets
+    // the document, but it is not kept (#116).
+    guard downloads.isCurrent(id, since: generation) else { return fetched.document }
+    let url = fileURL(id, format: fetched.format)
+    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
+    parsed[id] = fetched.document
+    return fetched.document
+  }
+
+  /// Not cached: XML when the index says it exists, otherwise text. Off the actor,
+  /// parse included, so the store answers other calls meanwhile.
+  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+    async throws -> Fetched
+  {
     if formats.isEmpty || formats.contains(.xml) {
       if let data = try? await client.fetchDocumentData(id, format: .xml),
         let document = try? RFCXMLParser.parse(data)
       {
-        try cachedDocuments.update(id) { try data.write(to: xmlURL, options: .atomic) }
-        parsed[id] = document
-        return document
+        return Fetched(data: data, format: .xml, document: document)
       }
     }
     let data = try await client.fetchDocumentData(id, format: .text)
-    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
-    let document = LegacyTextParser.parse(data)
-    parsed[id] = document
-    return document
+    return Fetched(data: data, format: .text, document: LegacyTextParser.parse(data))
   }
 
   func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
@@ -116,8 +150,20 @@ actor DocumentStore {
     if let data = try? Data(contentsOf: textURL) {
       return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
     }
-    let data = try await client.fetchDocumentData(id, format: .text)
-    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
+    let (task, generation) = originalTexts.join(id) {
+      Task { try await client.fetchDocumentData(id, format: .text) }
+    }
+    let data: Data
+    do {
+      data = try await task.value
+    } catch {
+      originalTexts.finish(id, task)
+      throw error
+    }
+    originalTexts.finish(id, task)
+    if originalTexts.isCurrent(id, since: generation) {
+      try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
+    }
     return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
   }
 }

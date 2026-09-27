@@ -83,7 +83,7 @@ struct InFlightDownloadsTests {
     await store.remove(.rfc(9110))
     await gate.open()
 
-    #expect(try await opening.value == Data("RFC 9110".utf8))
+    #expect(try await opening.value == Data("\(DocumentID.rfc(9110))".utf8))
     #expect(await store.written.isEmpty)
   }
 
