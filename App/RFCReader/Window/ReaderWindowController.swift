@@ -270,7 +270,10 @@
       withObservationTracking {
         toolbar?.showTitle(
           navigation.filter.title,
-          subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+          // Nil while the index loads: "0 Documents" would be a claim about the
+          // library, not about a list that has not arrived yet.
+          subtitle: library.indexState.isReady
+            ? DocumentCount.label(library.list(for: navigation).count) : ""
         )
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeListTitle() }

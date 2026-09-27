@@ -76,6 +76,33 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
+  /// Every bookmarked RFC's number, for the Bookmarks list and the glyph on a row.
+  ///
+  /// One observable set for the process rather than a `@Query` in each list: the
+  /// list is computed here now, for whoever asks — the list itself, the toolbar's
+  /// count, a script — and none of those but a SwiftUI view could hold a query.
+  /// Fetched again on every save of the store, whoever made it, which is when a
+  /// bookmark can have changed.
+  private(set) var bookmarkedNumbers: Set<Int> = []
+  @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
+
+  private init() {
+    refreshBookmarkedNumbers()
+    storeSaves = NotificationCenter.default.addObserver(
+      forName: ModelContext.didSave, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.refreshBookmarkedNumbers() }
+    }
+  }
+
+  private func refreshBookmarkedNumbers() {
+    let bookmarks = (try? AppData.container.mainContext.fetch(FetchDescriptor<Bookmark>())) ?? []
+    let numbers = Set(bookmarks.map(\.number))
+    // Only a change is news: most saves record a reading position, not a bookmark.
+    guard numbers != bookmarkedNumbers else { return }
+    bookmarkedNumbers = numbers
+  }
+
   private let client = RFCEditorClient()
   private let store = DocumentStore()
   private var search: IndexSearch?
@@ -173,6 +200,18 @@ final class LibraryModel {
   /// reads for itself.
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
+
+  /// What `scene`'s list shows: its filter and search, over the inputs it took
+  /// on entering the filter and the bookmarks as they stand.
+  func list(for scene: NavigationModel) -> [RFCMetadata] {
+    list(
+      filter: scene.filter,
+      searchText: scene.searchText,
+      bookmarked: bookmarkedNumbers,
+      recentlyRead: scene.recentOrder,
+      downloaded: scene.downloaded
+    )
+  }
 
   func list(
     filter: LibraryFilter,
@@ -370,8 +409,8 @@ final class LibraryModel {
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
-  /// re-sorted it under the click that was reading it. `RFCListView` takes one of
-  /// these when its filter changes, exactly as it takes `downloadedNumbers()`.
+  /// re-sorted it under the click that was reading it. `NavigationModel` takes one
+  /// of these when its filter changes, exactly as it takes `downloadedNumbers()`.
   func recentlyReadNumbers() -> [Int] {
     let descriptor = FetchDescriptor<ReadingPosition>(
       sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]

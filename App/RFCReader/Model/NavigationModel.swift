@@ -36,15 +36,51 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
-  private var filterChoice = KeptSelection(LibraryFilter.all)
+  private var filterChoice = KeptSelection(LibraryFilter.all) {
+    didSet {
+      if filterChoice.value != oldValue.value { takeListInputs() }
+    }
+  }
   var searchText = ""
   var isShowingGoToSheet = false
 
-  /// How many documents the list shows — after the filter and the search — or nil
-  /// until the index is ready. Written by `RFCListView`, which is the one place the
-  /// list is computed; the window's toolbar reads it for the subtitle under the
-  /// list's title, and has no list of its own to count.
-  var listedCount: Int?
+  /// The Recently Read order, taken once when the filter is entered.
+  ///
+  /// Not live: opening or leaving a document writes its `updatedAt`, so an order
+  /// kept in step with that re-sorted the list the click came from — the row just
+  /// left jumped to the top and everything below it shifted down a place. Taken on
+  /// entering instead, the order is whatever it was on arrival and stays put while
+  /// it is being read through; coming back to the filter takes a fresh one, the
+  /// same way `downloaded` beside it does.
+  ///
+  /// Here, with the filter, rather than in the list view: the list is
+  /// `LibraryModel.list(for:)`, which anything showing or counting this tab's list
+  /// asks, not only a view that is on screen.
+  private(set) var recentOrder: [Int] = []
+  /// The RFCs available offline, as of entering the filter.
+  private(set) var downloaded: Set<Int> = []
+  /// Fetching `downloaded`, which the store does off the main actor.
+  @ObservationIgnored private var listInputs: Task<Void, Never>?
+
+  /// Takes the inputs a list is computed from on entering a filter. Not on making
+  /// the model: it starts on All RFCs, which reads neither, and iOS makes one in a
+  /// `@State` initializer that SwiftUI may run and discard.
+  private func takeListInputs() {
+    let library = LibraryModel.shared
+    recentOrder = library.recentlyReadNumbers()
+    listInputs?.cancel()
+    listInputs = Task { [weak self] in
+      let downloaded = await library.downloadedNumbers()
+      guard !Task.isCancelled else { return }
+      self?.downloaded = downloaded
+    }
+  }
+
+  /// Returns once the inputs taken on entering the current filter have all
+  /// arrived, for whoever needs the list as it will stand rather than as it does.
+  func listInputsSettled() async {
+    await listInputs?.value
+  }
 
   /// What the list lists: the last filter chosen, whether or not the sidebar still
   /// shows it as selected.
