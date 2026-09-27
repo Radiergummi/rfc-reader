@@ -40,11 +40,11 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   }
 
   public func section(anchor: String) -> Section? {
-    allSections.first { $0.anchor == anchor }
+    firstSection { $0.anchor == anchor }
   }
 
   public func section(number: String) -> Section? {
-    allSections.first { $0.number == number }
+    firstSection { $0.number == number }
   }
 
   /// Every RFC referenced anywhere in the document, deduplicated and sorted.
@@ -56,22 +56,13 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// cannot cite.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
-    func visit(_ inlines: [Inline]) {
-      for inline in inlines.flattened {
-        if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
-          seen.insert(id)
-        }
+    for inline in proseInlines {
+      if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
+        seen.insert(id)
       }
     }
-    let everySection = allSections
-    for section in everySection {
-      visit(section.title)
-    }
-    for block in (header.abstract + everySection.flatMap(\.blocks)).flattened {
-      block.proseRuns.forEach(visit)
-      if case .references(let list) = block {
-        seen.formUnion(list.entries.compactMap(\.documentID))
-      }
+    for case .references(let list) in blocks {
+      seen.formUnion(list.entries.compactMap(\.documentID))
     }
     return seen.sorted()
   }

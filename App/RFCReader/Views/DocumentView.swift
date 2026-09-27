@@ -246,9 +246,9 @@ struct DocumentView: View {
           // Resolved here, where the document is: the toolbar's citation and
           // section link need the number, and on macOS the toolbar is in the
           // window rather than in this view. Through the map rather than
-          // `document.section(anchor:)`, which walks the whole section tree
-          // and materialises it afresh — 305 sections on RFC 9110 — and this
-          // runs on every section crossing while scrolling.
+          // `document.section(anchor:)`, which searches the section tree
+          // depth first — 305 sections on RFC 9110 — and this runs on every
+          // section crossing while scrolling.
           reader.currentSection = sectionNumbers[$0]
           // Recorded on the history entry when navigating away, so coming
           // back returns here rather than to the top of the document.
