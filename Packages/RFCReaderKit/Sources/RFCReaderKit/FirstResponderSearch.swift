@@ -46,5 +46,17 @@
       }
       return root.acceptsFirstResponder ? root : nil
     }
+
+    /// The first search field inside `root`, for the menu item that focuses it.
+    ///
+    /// By type rather than by asking who takes focus: the sidebar's column holds the
+    /// list as well, which takes focus just as readily.
+    public static func searchField(in root: NSView) -> NSSearchField? {
+      if let field = root as? NSSearchField { return field }
+      for subview in root.subviews {
+        if let found = searchField(in: subview) { return found }
+      }
+      return nil
+    }
   }
 #endif

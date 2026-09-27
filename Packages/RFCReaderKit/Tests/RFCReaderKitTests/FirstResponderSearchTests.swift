@@ -91,5 +91,23 @@
       column.addSubview(NSView())
       #expect(FirstResponderSearch.innermostTarget(in: column) == nil)
     }
+
+    /// ⌥⌘F: the sidebar's column is a hosting view with the search field somewhere
+    /// inside it, beside the list, and the list is not the field.
+    @Test func theSearchFieldIsFoundInsideItsColumnBesideTheList() {
+      let column = Taker()
+      let inset = NSView()
+      let field = NSSearchField()
+      column.addSubview(Taker())
+      inset.addSubview(field)
+      column.addSubview(inset)
+      #expect(FirstResponderSearch.searchField(in: column) === field)
+    }
+
+    @Test func aColumnWithNoSearchFieldHasNoneToFocus() {
+      let column = Taker()
+      column.addSubview(NSTextField())
+      #expect(FirstResponderSearch.searchField(in: column) == nil)
+    }
   }
 #endif
