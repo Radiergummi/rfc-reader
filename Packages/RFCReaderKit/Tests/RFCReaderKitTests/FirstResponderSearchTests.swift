@@ -91,5 +91,48 @@
       column.addSubview(NSView())
       #expect(FirstResponderSearch.innermostTarget(in: column) == nil)
     }
+
+    /// ⌥⌘F: the sidebar's column is a hosting view with the search field somewhere
+    /// inside it, beside the list, and the list is not the field.
+    @Test func `the search field is found inside its column beside the list`() {
+      let column = Taker()
+      let inset = NSView()
+      let field = NSSearchField()
+      column.addSubview(Taker())
+      inset.addSubview(field)
+      column.addSubview(inset)
+      #expect(FirstResponderSearch.searchField(in: column) === field)
+    }
+
+    @Test func `a column with no search field has none to focus`() {
+      let column = Taker()
+      column.addSubview(NSTextField())
+      #expect(FirstResponderSearch.searchField(in: column) == nil)
+    }
+
+    /// Find focuses the text on screen, not whatever takes focus first: a control
+    /// ahead of the text in the column would take the innermost search.
+    @Test func `find reaches past a control to the searchable text`() {
+      let column = NSView()
+      column.addSubview(Taker())
+      let text = NSTextView()
+      text.usesFindBar = true
+      let scroll = NSView()
+      scroll.addSubview(text)
+      column.addSubview(scroll)
+      #expect(FirstResponderSearch.searchableText(in: column) === text)
+    }
+
+    /// A hidden text view is one that has been swapped out, and a text view with no
+    /// find bar has nothing to search with.
+    @Test func `find skips text that is hidden or has no find bar`() {
+      let column = NSView()
+      let hidden = NSTextView()
+      hidden.usesFindBar = true
+      hidden.isHidden = true
+      column.addSubview(hidden)
+      column.addSubview(NSTextView())
+      #expect(FirstResponderSearch.searchableText(in: column) == nil)
+    }
   }
 #endif

@@ -55,7 +55,11 @@ struct SidebarView: View {
       // sidebar is its own hosting controller now, with no `NavigationSplitView`
       // around it to give `.sidebar` placement a meaning. Measured — the window
       // contained no text field at all.
-      .safeAreaInset(edge: .top) { SidebarSearchField(navigation: navigation) }
+      .safeAreaInset(edge: .top) {
+        SidebarSearchField(navigation: navigation)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+      }
     #else
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
     #endif
@@ -68,38 +72,47 @@ struct SidebarView: View {
 }
 
 #if os(macOS)
-  /// The sidebar's search field.
+  /// The sidebar's search field: AppKit's own `NSSearchField`, so it draws, clears and
+  /// behaves as every other Mac search field does (#157).
   ///
   /// Takes the model rather than a binding out of `SidebarView.body`: a binding made
   /// up there makes the whole sidebar — the filter list, the working groups, the index
   /// status — depend on the search text and re-evaluate on every keystroke. In here
   /// the dependency reaches no further than the field.
-  private struct SidebarSearchField: View {
-    @Bindable var navigation: NavigationModel
+  private struct SidebarSearchField: NSViewRepresentable {
+    let navigation: NavigationModel
 
-    private var text: Binding<String> { $navigation.searchText }
+    func makeNSView(context: Context) -> NSSearchField {
+      let field = NSSearchField()
+      field.placeholderString = "Search"
+      field.delegate = context.coordinator
+      return field
+    }
 
-    var body: some View {
-      HStack(spacing: 6) {
-        Image(systemName: "magnifyingglass")
-          .foregroundStyle(.secondary)
-        TextField("Search", text: text)
-          .textFieldStyle(.plain)
-        if !navigation.searchText.isEmpty {
-          Button {
-            navigation.searchText = ""
-          } label: {
-            Image(systemName: "xmark.circle.fill")
-          }
-          .buttonStyle(.plain)
-          .foregroundStyle(.secondary)
-        }
+    func updateNSView(_ field: NSSearchField, context: Context) {
+      context.coordinator.navigation = navigation
+      // Only when it differs: assigning moves the insertion point to the end, which
+      // mid-edit would jump the caret on every keystroke.
+      if field.stringValue != navigation.searchText {
+        field.stringValue = navigation.searchText
       }
-      .padding(.horizontal, 8)
-      .padding(.vertical, 5)
-      .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 6))
-      .padding(.horizontal, 10)
-      .padding(.vertical, 8)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation) }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+      var navigation: NavigationModel
+
+      init(navigation: NavigationModel) {
+        self.navigation = navigation
+      }
+
+      /// Every edit, the clear button included, rather than `searchFieldDidEndSearching`
+      /// or the field's action: the list filters as the reader types.
+      func controlTextDidChange(_ notification: Notification) {
+        guard let field = notification.object as? NSSearchField else { return }
+        navigation.searchText = field.stringValue
+      }
     }
   }
 #endif
