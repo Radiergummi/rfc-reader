@@ -50,6 +50,12 @@
       openWindow(tabbedWith: activeController, inBackground: inBackground)
     }
 
+    /// Brings the window showing `scene` forward, selecting it within its tab group.
+    func bringForward(_ scene: NavigationModel) {
+      let controller = controllers.first { $0.navigation === scene }
+      controller?.window?.makeKeyAndOrderFront(nil)
+    }
+
     /// Opens a window, as a tab of `sibling` when there is one.
     func openWindow(tabbedWith sibling: ReaderWindowController?, inBackground: Bool) {
       let controller = ReaderWindowController(library: LibraryModel.shared)

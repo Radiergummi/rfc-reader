@@ -288,10 +288,7 @@ final class LibraryModel {
     // its selection did not change and `activate` was not called for it.
     activate(target)
     #if os(macOS)
-      let window = NSApp.windows.first {
-        ReaderWindowController.controller(for: $0)?.navigation === target
-      }
-      window?.makeKeyAndOrderFront(nil)
+      AppDelegate.shared?.bringForward(target)
     #endif
   }
 
