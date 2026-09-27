@@ -1,7 +1,7 @@
 import Foundation
 
 /// Where a parsed document came from. Drives which reading modes make sense.
-public enum DocumentSource: String, Sendable, Codable, Hashable {
+public enum DocumentSource: String, Sendable, Codable {
   /// Semantic RFCXML v3 (RFC 7991). Everything is structured.
   case xml
   /// Legacy plain text; structure was recovered heuristically.
