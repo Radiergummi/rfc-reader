@@ -18,7 +18,6 @@ private let bookmarkLog = Logger(
 /// for the filled glyph, macOS holds the last answer in
 /// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
 /// often to ask a store here.
-@MainActor
 enum BookmarkStore {
   /// Every bookmarked RFC's number. Only the numbers are fetched: this runs on
   /// every save of the store, and most of those record a reading position.

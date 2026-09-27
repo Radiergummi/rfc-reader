@@ -33,7 +33,7 @@ RFCDocument
 ├── sections: [Section]             tree; each has anchor, number ("4.2", "A.1"), title: [Inline], blocks, subsections
 └── source: .xml | .text
 
-Block (indirect enum)
+Block (enum)
   paragraph(Paragraph)              inlines + optional anchor + author's indent in characters
   list(ListBlock)                   bullet / numbered(format, start) / bare; items hold blocks
   definitionList([DefinitionItem])  term inlines + definition blocks
@@ -41,7 +41,7 @@ Block (indirect enum)
   figure(Figure) · table(Table) · blockQuote · aside
   references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines
 
-Inline (indirect enum)
+Inline (enum)
   text · emphasis · strong · code · superscript · subscript · link(URL) · crossReference · lineBreak
 
 CrossReference.target
@@ -112,11 +112,13 @@ CI (`.github/workflows/ci.yml`) runs `Packages/RFCKit`'s tests on both macOS and
 
 *Decided September 2026.* The reader's prose is rendered by `UITextView` / `NSTextView` with TextKit 2, not by SwiftUI `Text`. The wishlist needs link previews on hard press, hover popovers on Mac and find-in-document; SwiftUI `Text` built from an `AttributedString` handles link taps but cannot attach a per-link context menu or preview, and offers no in-document find. TextKit 2 does all of that (`textView(_:menuConfigurationFor:defaultMenu:)` and `primaryActionFor` on iOS 17+, link hover on macOS), scales to very long documents, and keeps selection across paragraphs.
 
-`DocumentTextBuilder` is not main-actor bound. A build is string assembly, `CTLine` measurement and paragraph styles — it costs hundreds of milliseconds on the largest RFCs, and running it on the main thread is what made the font-size slider stutter. `DocumentView` builds in a detached task and `BuiltDocument` carries the result back; it is `@unchecked Sendable` on the strength of a handover (#128). The builder is local to `build`, so nothing that could write the text outlives the call, and every attribute value is either immutable or made by that build alone. Paragraph styles are stored as immutable copies because Foundation uniques equal attribute dictionaries across every string in the process: two builds were measured sharing 21 of RFC 8999's 47 paragraph style objects, so being unshared is not something a build can promise. There used to be a defensive copy of the finished string; it was shallow, so it protected none of this, and it cost a pass over the whole text.
+`DocumentTextBuilder` is not main-actor bound. A build is string assembly, `CTLine` measurement and paragraph styles — it costs hundreds of milliseconds on the largest RFCs, and running it on the main thread is what made the font-size slider stutter. `DocumentView` builds in an `@concurrent` function and `BuiltDocument` carries the result back; it is `@unchecked Sendable` on the strength of a handover (#128). The builder is local to `build`, so nothing that could write the text outlives the call, and every attribute value is either immutable or made by that build alone. Paragraph styles are stored as immutable copies because Foundation uniques equal attribute dictionaries across every string in the process: two builds were measured sharing 21 of RFC 8999's 47 paragraph style objects, so being unshared is not something a build can promise. There used to be a defensive copy of the finished string; it was shallow, so it protected none of this, and it cost a pass over the whole text.
 
 The text column is a pure function of the view's width (`ReaderLayout`), which is why `DocumentView` derives it rather than being told by the text view. Artwork scaling and table shape are measured against the column at *build* time, so a column that arrives after the first build means a document built against a guess and immediately thrown away; deriving it up front means one build per document instead of two, and no visible re-scroll on open.
 
 Shape: one `NSTextContentStorage` holds the whole document body — paragraphs, lists, definition lists, artwork, tables, figures, block quotes, asides and references are all text, built by `DocumentTextBuilder` in a new `RFCReaderKit` package and laid out by a shared `RFCTextViewCoordinator` behind a macOS `NSTextView` and an iOS `UITextView`. Nothing in the body becomes a hosted SwiftUI view; the decorations attributed text cannot express on its own — the card behind artwork and tables, the rule beside a block quote, the aside tint, the reference chip — are drawn by an `NSTextLayoutFragment` subclass instead. The document header is not in the storage: it is a SwiftUI view hosted in the text view's top content inset, because it carries buttons (the status banner's links to newer RFCs) that nobody selects through. `DocumentTextBuilder` replaces `InlineText.attributedString(_:)` and the per-block SwiftUI views that fed the old `LazyVStack`; ``BuilderCompletenessTests.`nothing becomes an attachment` `` guards the "nothing becomes a hosted view" rule directly, failing on any `NSTextAttachment` outside the one chip run the design allows. See `docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md` for the full design.
+
+Original Text follows on macOS (#159): `OriginalTextBody` is a plain, read-only, unwrapped TextKit 2 `NSTextView` with a find bar, not `RFCTextView`, because none of the reader's decorations, chips or anchors apply to text shown exactly as published. It writes through `textStorage`, like the reader. iOS keeps a SwiftUI `Text` in a scroll view that pans both ways until a sideways-scrolling `UITextView` is checked on a device (#240). Find reaches either view through `ReaderWindowController.focusSearchableText()`, which focuses the first visible text view with a find bar (`FirstResponderSearch.searchableText`) before the action goes down the responder chain.
 
 ### Decision: the parsers do not decide how a reference reads
 
@@ -204,6 +206,14 @@ The trade-off is staleness. An index is a copy, and the store is not the only th
 
 What is left: two changes within one tick of the file system's clock share a date, so a deletion in the same instant as the store's own write can go unnoticed until the next change or launch. A file-system watcher would close that and report changes sooner, and was not worth a live source kept for a list nobody may be looking at.
 
+## Decision: the document cache is bounded by size, and evicts the least recently opened
+
+*Decided September 2026 (issue #39).* Nothing removed a cached body except an explicit Remove Download, and a whole library is about 3.5 GB at the ~370 KB per document measured. The cache is now bounded at 500 MB (`CacheEviction.defaultBound`, about 1,350 documents). The bound is on size, not age: a document read once a year is worth keeping while there is room, and evicting it by age alone saves nothing. Past the bound, the least recently *opened* documents go first, ties in document order, until what is left fits. A document is its bodies together, so its `.xml` and `.txt` go at once, and its size is their sum. Data packs (#36) do not count against the bound.
+
+Some documents are pinned and never go: bookmarks, because a bookmark is a promise to keep the document offline; anything with a reading position from the last 30 days; and every window's selection, which includes the document just fetched. When the pinned documents alone are over the bound, everything else goes and the cache stays over it; saying so is the Storage settings' job (#32).
+
+"Last opened" is the bodies' modification date. A body is never modified after it is written, so the date is free to carry that meaning, and unlike a table in memory it survives a relaunch; setting a file's date does not change its directory's, so it does not send `DocumentCacheIndex` to scan again. Which files are entries is the index's own naming rule, `DocumentCacheIndex.document(named:)`, and the choice of victims is `CacheEviction` in `RFCReaderKit`, a pure function with tests. The store runs it only after it has written a body, and `LibraryModel` asks before building the pinned set, so an open that wrote nothing costs neither the SwiftData fetches nor the enumeration. Removal goes through `remove(_:)`, which keeps the index and the parsed-document cache right.
+
 ## Decision: three things RFCXML says that the model now keeps
 
 *Decided September 2026 (issue #66).* Auditing the parser against the RFCXML vocabulary turned up three things a reader has a use for that it dropped. Each is carried as data, not interpreted:
@@ -213,6 +223,14 @@ What is left: two changes within one tick of the file system's clock share a dat
 - **`<t indent="N">` is `Paragraph.indent`**, in characters of the 72-column rendering, as the source counts it. The reader sets it as a head indent — the whole paragraph moves in, no new view and no decoration — at one indent step per three characters: three is the width RFCXML hangs a list item's text at, and a list's text sits one step in, so a note under a list lines up with the items the way it does on paper. It is rounded to the nearest whole step, and any nonzero indent is at least one: characters mean nothing in a proportional font, every other indent in the reader is whole steps, and a fraction would sit just off the text it belongs under (RFC 8907's `indent="4"`). It is capped at three steps, nine characters, the deepest any XML RFC from 8650 to 10050 asks for, because each step comes off a phone's column. The RFC Editor's HTML scales it linearly instead, at half an em a character, close to one of our 1.4 em steps per three characters. The indent is relative to wherever the paragraph already sits. List `indent` is a different attribute and stays ignored: it is on nearly every list, records the default hanging width, and a reflowing reader has its own.
 
 `RFCXMLSerializer` writes all three back, so a native XML document keeps them across a round trip; the legacy text parser produces none of them.
+
+## Decision: the document model is a value, and its encoding is internal
+
+*Decided September 2026 (issue #130).* Every type from `RFCDocument` down to `Inline` is `Hashable` and `Codable`, all synthesized, so a test compares documents whole, the corpus can be diffed structurally, and a parsed model can be kept. What stood in the way was one field: `Reference.seriesInfo` was an array of labelled tuples, which can be none of `Equatable`, `Hashable` or `Codable`, and so kept every type that held a reference from being any of them. It is `[SeriesInfo]` now. `CrossReference.Display` stays `Equatable` only, because it is computed for rendering rather than parsed.
+
+The encoded form is not a format. Nothing persists it, and a synthesized decoder requires every key, so adding a field, even one with a default such as `abbreviations`, or renaming a case or an associated-value label breaks every payload written before. Whatever first keeps encoded models versions the cache and discards it on a mismatch; committing to a stable format, with migrations, is that change's decision.
+
+`Block` and `Inline` are no longer `indirect`: every recursive case already goes through an array, so the compiler needs no box. That trades pointers for inline payloads, measured: a `Block` is 88 bytes of array stride instead of 8 and an `Inline` 64, and the parsed model of RFC 9271 takes 31% more heap (415 to 544 KB), RFC 9842 23% and RFC 793 7%, with no measurable difference in a full corpus conversion. Should that start to matter, `indirect` on the largest cases alone (`table`, `crossReference`, `link`) is the cheaper form.
 
 ## Decision: the Mac is scriptable through a dictionary over the same models
 

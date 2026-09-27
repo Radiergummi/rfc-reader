@@ -17,7 +17,6 @@ private let libraryLog = Logger(
 /// One observable object keeps the SwiftUI surface small; SwiftData holds the
 /// user's own data (bookmarks, reading positions) separately.
 @Observable
-@MainActor
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
   static let shared = LibraryModel()
@@ -84,11 +83,11 @@ final class LibraryModel {
         // The store parses the cached index on its own actor; the search and the
         // working groups are built off the main actor as well.
         let index = cached.index
-        let prepared = await Task.detached { PreparedIndex(index: index) }.value
+        let prepared = await Self.prepare(index)
         apply(prepared, updatedAt: cached.updatedAt)
         // Refresh in the background if the cache is older than a day.
         if cached.updatedAt.timeIntervalSinceNow < -86_400 {
-          Task { await refreshIndex() }
+          Task(name: "Refresh index") { await refreshIndex() }
         }
       } else {
         await refreshIndex()
@@ -98,7 +97,7 @@ final class LibraryModel {
     }
     // Just Published is decoration: a failure leaves it empty, and is logged
     // rather than shown (#125).
-    Task {
+    Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
       } catch {
@@ -108,11 +107,22 @@ final class LibraryModel {
     }
   }
 
+  /// The search and the working groups, built off the main actor.
+  @concurrent
+  private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
+    PreparedIndex(index: index)
+  }
+
+  @concurrent
+  private static func parse(_ data: Data) async throws -> PreparedIndex {
+    try PreparedIndex.parse(data)
+  }
+
   func refreshIndex() async {
     do {
       let data = try await client.fetchIndexData()
       // Off the main actor: the parse alone is about a second (#124).
-      let prepared = try await Task.detached { try PreparedIndex.parse(data) }.value
+      let prepared = try await Self.parse(data)
       try await store.storeIndex(data)
       apply(prepared, updatedAt: .now)
     } catch {
@@ -255,7 +265,7 @@ final class LibraryModel {
   private var scenes: [WeakScene] = []
 
   private struct WeakScene {
-    weak var model: NavigationModel?
+    weak let model: NavigationModel?
   }
 
   /// Waiting for the next scene to appear, because nothing can be handed to a tab
@@ -405,14 +415,36 @@ final class LibraryModel {
   /// Fetching a document caches it, so the offline set is refreshed after.
   func document(for id: DocumentID) async throws -> RFCDocument {
     let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
+    await evictIfGrown()
     await refreshDownloadedNumbers()
     return document
   }
 
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
+    await evictIfGrown()
     await refreshDownloadedNumbers()
     return text
+  }
+
+  /// Asks the store first, so an open that wrote nothing costs neither the pinned
+  /// set's fetches nor the cache's enumeration.
+  private func evictIfGrown() async {
+    guard await store.hasGrownSinceEviction else { return }
+    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+  }
+
+  /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
+  /// keep the document offline; what was read in the last month; and whatever a
+  /// window has open, which includes the document just fetched.
+  private func pinnedDocuments() -> Set<DocumentID> {
+    let context = AppData.container.mainContext
+    let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
+    let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
+    let read = ((try? context.fetch(recent)) ?? []).map(\.number)
+    let bookmarked = BookmarkStore.bookmarkedNumbers(in: context)
+    let open = scenes.compactMap { $0.model?.selection }
+    return Set((read + bookmarked).map { DocumentID.rfc($0) } + open)
   }
 
   func isDownloaded(_ id: DocumentID) async -> Bool {
