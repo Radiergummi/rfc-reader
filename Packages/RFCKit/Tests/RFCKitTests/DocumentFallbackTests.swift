@@ -40,9 +40,14 @@ struct DocumentFallbackTests {
       let answer = answers[url.pathExtension] ?? .status(404)
       switch answer {
       case .body(let data):
-        return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        return (
+          data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
       case .status(let status):
-        return (Data(), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        return (
+          Data(),
+          HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+        )
       case .failure(let error):
         throw error
       }
@@ -102,7 +107,8 @@ struct DocumentFallbackTests {
   /// XML that exists but does not parse is a parser bug worth knowing about. The
   /// document is still read from its text, and the failure comes back with it
   /// rather than being indistinguishable from there being no XML.
-  @Test func `XML that does not parse is read from the text, and the failure is kept`() async throws {
+  @Test func `XML that does not parse is read from the text, and the failure is kept`() async throws
+  {
     let transport = Transport(
       xml: .body(Data("<rfc><front>".utf8)), text: .body(try Fixtures.data("rfc1149.txt")))
     let fetched = try await RFCEditorClient(transport: transport).fetchPreferredDocument(.rfc(1149))
@@ -113,7 +119,8 @@ struct DocumentFallbackTests {
 
   @Test func `the index is fetched through the client`() async throws {
     let transport = Transport(xml: .body(Data("<rfc-index/>".utf8)))
-    #expect(try await RFCEditorClient(transport: transport).fetchIndexData() == Data("<rfc-index/>".utf8))
+    #expect(
+      try await RFCEditorClient(transport: transport).fetchIndexData() == Data("<rfc-index/>".utf8))
 
     let failing = Transport(xml: .status(500))
     await #expect(throws: RFCEditorClient.ClientError.self) {

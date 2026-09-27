@@ -58,16 +58,52 @@ public actor RFCEditorClient {
   public func fetchDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil) async throws
     -> RFCDocument
   {
-    let tryXML = availableFormats?.contains(.xml) ?? true
-    if tryXML {
-      if let data = try? await fetchDocumentData(id, format: .xml),
-        let document = try? RFCXMLParser.parse(data)
-      {
-        return document
+    try await fetchPreferredDocument(id, availableFormats: availableFormats).document
+  }
+
+  /// A document fetched in the best format it has, with the bytes it came as.
+  public struct FetchedDocument: Sendable {
+    public let data: Data
+    public let format: FileFormat
+    public let document: RFCDocument
+    /// Why the XML was not used, when it was there but did not parse: a parser bug
+    /// worth knowing about, and not the same thing as there being no XML.
+    public let xmlParseFailure: (any Error)?
+  }
+
+  /// The XML where the index lists it, the plain text otherwise (#125).
+  ///
+  /// The text is fetched only when there is no XML: a 404 for it. A cancelled
+  /// load, a server error or a network failure is the error, and asking for the
+  /// text after one would start a second request and report *its* failure instead.
+  /// XML that is there but does not parse falls back to the text too, so the
+  /// document stays readable, and the parse error comes back beside it.
+  public func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil)
+    async throws -> FetchedDocument
+  {
+    var xmlParseFailure: (any Error)?
+    if availableFormats?.contains(.xml) ?? true {
+      do {
+        let data = try await fetchDocumentData(id, format: .xml)
+        do {
+          return FetchedDocument(
+            data: data, format: .xml, document: try RFCXMLParser.parse(data), xmlParseFailure: nil)
+        } catch {
+          xmlParseFailure = error
+        }
+      } catch ClientError.notFound {
+        // No XML: the text is all there is.
       }
     }
     let data = try await fetchDocumentData(id, format: .text)
-    return LegacyTextParser.parse(data)
+    return FetchedDocument(
+      data: data, format: .text, document: LegacyTextParser.parse(data),
+      xmlParseFailure: xmlParseFailure)
+  }
+
+  /// The RFC index as bytes, so the caller can both parse and keep it.
+  public func fetchIndexData() async throws -> Data {
+    try await fetch(RFCEditorEndpoints.index)
   }
 
   public func fetchMetadata(_ id: DocumentID) async throws -> RFCEditorMetadataRecord {
