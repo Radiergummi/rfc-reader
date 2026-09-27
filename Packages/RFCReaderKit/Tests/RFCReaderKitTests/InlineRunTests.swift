@@ -31,7 +31,7 @@ struct InlineRunTests {
   @Test func codeUsesTheMonospacedFont() {
     let code = run([.code("GET")])
     let font = code.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
-    #expect(font == style.codeFont)
+    #expect(font == style.codeFont(matching: style.bodyFont))
   }
 
   /// Code, superscript and subscript each replaced the font with one sized from the

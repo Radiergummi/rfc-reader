@@ -49,13 +49,8 @@ public enum RFCColors {
     #endif
   }
 
-  public static var quaternaryFill: PlatformColor {
-    #if canImport(UIKit)
-      .quaternarySystemFill
-    #else
-      .quaternaryLabelColor
-    #endif
-  }
+  /// A fill on both platforms: macOS had `quaternaryLabelColor`, a text colour.
+  public static var quaternaryFill: PlatformColor { .quaternarySystemFill }
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.
@@ -113,6 +108,24 @@ extension PlatformFont {
     #else
       return PlatformFont(descriptor: descriptor.withSymbolicTraits(combined), size: pointSize)
         ?? self
+    #endif
+  }
+
+  /// The font's weight as its descriptor states it, regular where it states none.
+  /// A heading is `.semibold`, which is no symbolic trait, so this is what lets a
+  /// run inside one keep its weight.
+  var weight: PlatformFont.Weight {
+    let traits = fontDescriptor.object(forKey: .traits) as? [PlatformFontDescriptor.TraitKey: Any]
+    guard let value = traits?[.weight] as? CGFloat else { return .regular }
+    return PlatformFont.Weight(rawValue: value)
+  }
+
+  /// This font's face and traits at another size.
+  func resized(to size: CGFloat) -> PlatformFont {
+    #if canImport(UIKit)
+      PlatformFont(descriptor: fontDescriptor, size: size)
+    #else
+      PlatformFont(descriptor: fontDescriptor, size: size) ?? self
     #endif
   }
 }
