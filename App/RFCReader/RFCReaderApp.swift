@@ -30,6 +30,9 @@ struct RFCReaderApp: App {
       }
       .commands {
         WindowCommands()
+        // View ▸ Show Sidebar. It sends `toggleSidebar:` down the responder chain,
+        // which the window's own `NSSplitViewController` answers (#157).
+        SidebarCommands()
         DocumentCommands()
       }
     #else
@@ -123,8 +126,11 @@ struct DocumentCommands: Commands {
     CommandGroup(before: .sidebar) {
       Section {
         #if os(macOS)
+          // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
+          // which every tabbed Mac app gives to reopening the last closed tab
+          // (#157).
           Button("Contents") { active.controller?.togglePanel() }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .keyboardShortcut("i", modifiers: [.command, .option])
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }
@@ -141,6 +147,8 @@ struct DocumentCommands: Commands {
       // SwiftUI app has no such item, so Cmd+F reached nothing at all. These send
       // the action down the responder chain to whichever text view is focused.
       CommandGroup(after: .textEditing) {
+        // Disabled with no document open: there is no text view to search then,
+        // and the items stayed enabled with nothing to act on (#157).
         Section {
           Button("Find…") { FindCommand.showFindInterface.send() }
             .keyboardShortcut("f", modifiers: .command)
@@ -149,6 +157,7 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
         }
+        .disabled(navigation?.selection == nil)
       }
     #endif
   }
