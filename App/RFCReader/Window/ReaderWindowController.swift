@@ -20,7 +20,6 @@
   /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`. The menu bar
   /// is still SwiftUI's: a `Settings`-only scene keeps `.commands` working, so only
   /// window creation moved to AppKit.
-  @MainActor
   final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// This window's own navigation: which document, which filter, what was searched
     /// for, and the back/forward stack that got here. `ContentView` held it as
@@ -348,6 +347,14 @@
       splitController.toggleSidebar(nil)
     }
 
+    /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
+    func focusSearch() {
+      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
+      guard let field = FirstResponderSearch.searchField(in: sidebarItem.viewController.view)
+      else { return }
+      window?.makeFirstResponder(field)
+    }
+
     // MARK: - The panel
 
     /// Animated, so the panel slides in rather than appearing between frames — which
@@ -408,6 +415,24 @@
       navigation.selection.map { library.bookmarkedNumbers.contains($0.number) } ?? false
     }
 
+    /// Puts focus in the text on screen, for Find. Nothing else focuses it: after a
+    /// document opens focus is still in the library list, and after Original Text
+    /// swaps the body out it falls back to the window, so ⌘F reached no find bar.
+    /// Focus moves only when Find is asked for, never when the text appears.
+    func focusSearchableText() {
+      guard let window,
+        let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      else { return }
+      // The find bar is the scroll view's, not the text view's: ⌘G typed in its field
+      // has to leave focus there.
+      if let focused = window.firstResponder as? NSView,
+        focused.isDescendant(of: text.enclosingScrollView ?? text)
+      {
+        return
+      }
+      window.makeFirstResponder(text)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
@@ -456,7 +481,6 @@
 
   /// Reports a column being dragged, so the toolbar can cap the title to the list it
   /// sits over.
-  @MainActor
   final class ReaderSplitViewController: NSSplitViewController {
     var didResizeSubviews: (() -> Void)?
 

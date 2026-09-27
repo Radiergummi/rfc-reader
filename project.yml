@@ -11,8 +11,10 @@ options:
 
 settings:
   base:
+    # Swift 6 is the language mode; there is no 6.2 mode. The 6.2 behaviour is the
+    # two settings on the RFCReader target (#129). Complete strict concurrency is
+    # Swift 6's default, so it is not spelled out.
     SWIFT_VERSION: "6.0"
-    SWIFT_STRICT_CONCURRENCY: complete
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: TH593VRB6W
 
@@ -71,6 +73,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader
+        # The app is UI throughout, so its code is main-actor unless it says
+        # otherwise. On this target, not the project: the packages keep nonisolated
+        # defaults, as `DocumentTextBuilder` requires, and so would any other target.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: "YES"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_PREVIEWS: YES

@@ -3,7 +3,7 @@ import RFCKit
 import RFCReaderKit
 import os
 
-private let storeLog = Logger(
+nonisolated private let storeLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "store")
 
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
@@ -19,6 +19,10 @@ actor DocumentStore {
   /// Each question revalidates it first, which scans again only if the directory
   /// changed some other way, such as a file deleted in Finder.
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
+
+  /// Whether a body has been written since eviction last looked, so a cache that
+  /// has not grown is not enumerated again.
+  private var hasGrown = true
 
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
@@ -84,6 +88,7 @@ actor DocumentStore {
   func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient) async throws
     -> RFCDocument
   {
+    markOpened(id)
     if let cached = parsed[id] { return cached }
 
     let xmlURL = fileURL(id, format: .xml)
@@ -109,8 +114,41 @@ actor DocumentStore {
     }
     let url = fetched.format == .xml ? xmlURL : textURL
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
+    hasGrown = true
     parsed[id] = fetched.document
     return fetched.document
+  }
+
+  // MARK: - Eviction (#39)
+
+  /// Records that `id` was opened, as its bodies' modification date: a body is
+  /// never modified after it is written, so the date is free to mean "last opened",
+  /// and it outlives the process. A file's date is not its directory's, so this
+  /// does not send `DocumentCacheIndex` to scan again.
+  private func markOpened(_ id: DocumentID) {
+    for format in DocumentCacheIndex.bodyFormats {
+      try? FileManager.default.setAttributes(
+        [.modificationDate: Date.now], ofItemAtPath: fileURL(id, format: format).path)
+    }
+  }
+
+  /// Whether a body has been written since eviction last ran: asked before the
+  /// caller builds the pinned set, which is not free.
+  var hasGrownSinceEviction: Bool { hasGrown }
+
+  /// Removes the least recently opened bodies past `bound`, never a pinned one; see
+  /// `CacheEviction`. Only after the cache has grown, so an ordinary open costs
+  /// nothing here. Returns what it removed.
+  @discardableResult
+  func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
+    guard hasGrown else { return [] }
+    hasGrown = false
+    let victims = CacheEviction.victims(
+      of: CacheEviction.entries(in: directory), pinned: pinned, bound: bound)
+    for id in victims {
+      remove(id)
+    }
+    return victims
   }
 
   func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
@@ -120,6 +158,7 @@ actor DocumentStore {
     }
     let data = try await client.fetchDocumentData(id, format: .text)
     try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
+    hasGrown = true
     return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
   }
 }

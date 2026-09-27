@@ -169,12 +169,13 @@ struct DocumentCommands: Commands {
     #if os(macOS)
       // `NSTextView.usesFindBar` puts a find bar in the scroll view, but nothing
       // opens it: AppKit's find bar is driven from the Edit > Find menu, and a
-      // SwiftUI app has no such item, so Cmd+F reached nothing at all. These send
-      // the action down the responder chain to whichever text view is focused.
+      // SwiftUI app has no such item, so Cmd+F reached nothing at all. These focus
+      // the key window's text first, then send the action down the responder chain.
       CommandGroup(after: .textEditing) {
-        // Disabled unless the reader's text view is on screen: there is nothing to
-        // search with no document, while one loads or failed to, or in Original
-        // Text, which is a SwiftUI `Text` with no find bar (#157).
+        // Disabled unless a document is on screen: there is nothing to search with
+        // none, while one loads or failed to (#157). Original Text counts: on macOS
+        // it is an `NSTextView` with a find bar of its own, which answers the same
+        // action (#159).
         Section {
           Button("Find…") { FindCommand.showFindInterface.send() }
             .keyboardShortcut("f", modifiers: .command)
@@ -183,7 +184,14 @@ struct DocumentCommands: Commands {
           Button("Find Previous") { FindCommand.previousMatch.send() }
             .keyboardShortcut("g", modifiers: [.command, .shift])
         }
-        .disabled(!showsDocument || reader?.showOriginal == true)
+        .disabled(!showsDocument)
+        // ⌥⌘F, the chord Mail and Notes give their search field. Enabled with any
+        // reader window: the library is there to search with no document open.
+        Section {
+          Button("Search Library") { active.controller?.focusSearch() }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            .disabled(active.controller == nil)
+        }
       }
     #endif
   }
@@ -195,7 +203,6 @@ struct DocumentCommands: Commands {
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off
   /// its sender, which is why the sender is this tiny object rather than nil: the
   /// selector alone carries no way to say "show the bar" versus "find next".
-  @MainActor
   final class FindCommand: NSObject {
     static let showFindInterface = FindCommand(.showFindInterface)
     static let nextMatch = FindCommand(.nextMatch)
@@ -208,6 +215,7 @@ struct DocumentCommands: Commands {
     }
 
     func send() {
+      ActiveReaderWindow.shared.controller?.focusSearchableText()
       NSApp.sendAction(#selector(NSTextView.performTextFinderAction(_:)), to: nil, from: self)
     }
   }

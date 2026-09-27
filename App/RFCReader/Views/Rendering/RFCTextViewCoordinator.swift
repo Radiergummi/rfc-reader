@@ -21,7 +21,6 @@ import SwiftUI
 /// ordering guarantee against `onDisappear`, so a scroll immediately followed by
 /// navigating away would persist the section before last. `saveReadingPosition`
 /// reads this instead: it is written the moment the anchor is computed.
-@MainActor
 final class VisibleAnchorBox {
   var anchor: String?
 }
@@ -31,7 +30,6 @@ final class VisibleAnchorBox {
 /// `VisibleAnchorBox`: the header is hosted outside SwiftUI's diffing and built
 /// once, so it writes into something both sides already hold rather than calling
 /// through to a coordinator it was built before.
-@MainActor
 final class HeadingBox {
   var bottom: CGFloat? {
     didSet { if bottom != oldValue { didChange() } }
@@ -47,7 +45,6 @@ final class HeadingBox {
 /// jumping, viewport tracking and link handling; only the scroll plumbing differs,
 /// and that difference lives here rather than in the representables so the pair
 /// stays reviewable side by side.
-@MainActor
 final class RFCTextViewCoordinator: NSObject {
   /// The text view this coordinator drives. Weak: SwiftUI owns both, and the view
   /// outlives no part of this. AppKit's hover preview needs a tracking area the
@@ -266,7 +263,7 @@ final class RFCTextViewCoordinator: NSObject {
     laidOutEnd = nil
     laidOutThrough = 0
     ensureLayout(through: Self.layoutSlice)
-    layoutTask = Task { [weak self] in
+    layoutTask = Task(name: "Lay out document") { [weak self] in
       while let self, self.laidOutEnd == nil {
         // A sleep rather than `Task.yield()`: yielding hands the main actor
         // its next queued job, which is this loop again, and the run loop
@@ -860,10 +857,11 @@ final class RFCTextViewCoordinator: NSObject {
   }
 #endif
 
-extension RFCTextViewCoordinator: NSTextLayoutManagerDelegate {
+extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   // TextKit 2's background-layout design permits this delegate to be called off
   // the main thread; `nonisolated` keeps the conformance honest about that rather
-  // than binding it to the main actor. The body only reads its parameters and
+  // than binding it to the main actor, which approachable concurrency would infer
+  // for a main-actor type. The body only reads its parameters and
   // allocates, so it needs no isolation.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
