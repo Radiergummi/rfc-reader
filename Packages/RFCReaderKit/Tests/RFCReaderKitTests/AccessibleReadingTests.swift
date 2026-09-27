@@ -121,5 +121,8 @@ struct AccessibleReadingTests {
     // Only artwork goes unread, and all of it is under a label.
     #expect(covered.union(artwork).count == text.length)
     #expect(labels == AccessibleReading.diagrams(in: text).count)
+    // RFC 8999 has four artworks; RFC 2119 has none, and checks that prose alone
+    // comes back whole.
+    #expect(labels == (fixture.hasSuffix(".xml") ? 4 : 0))
   }
 }

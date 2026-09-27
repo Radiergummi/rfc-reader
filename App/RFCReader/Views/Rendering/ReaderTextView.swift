@@ -124,5 +124,38 @@ import RFCReaderKit
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(FigureCopy.pasteboardText(for: figure), forType: .string)
     }
+
+    // MARK: - What VoiceOver reads (#12)
+
+    /// A diagram is said as its label, not read out one box-drawing character at a
+    /// time. `AccessibleReading` decides what each part of `range` becomes; the text
+    /// parts come from `super`, so they keep every attribute AppKit gives VoiceOver.
+    ///
+    /// Only the per-range accessors. `accessibilityValue` stays the real text, because
+    /// its length is the character count every range VoiceOver asks for is measured
+    /// in.
+    override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
+      let pieces = AccessibleReading.pieces(of: range, in: attributedString())
+      // All of it text: the common case, prose, left entirely to AppKit. Not "no
+      // label": a range over a diagram's later lines has none, and must still be
+      // silent rather than read out.
+      if pieces == [.text(range)] {
+        return super.accessibilityAttributedString(for: range)
+      }
+      let result = NSMutableAttributedString()
+      for piece in pieces {
+        switch piece {
+        case .text(let range):
+          if let text = super.accessibilityAttributedString(for: range) { result.append(text) }
+        case .label(let label):
+          result.append(NSAttributedString(string: label))
+        }
+      }
+      return result
+    }
+
+    override func accessibilityString(for range: NSRange) -> String? {
+      accessibilityAttributedString(for: range)?.string
+    }
   }
 #endif
