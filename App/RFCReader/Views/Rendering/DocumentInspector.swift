@@ -87,10 +87,21 @@ struct PanelHost: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
-  /// Called after a choice in the panel has navigated, which is when iOS closes the
-  /// panel's sheet. Nothing on macOS, where the panel is a split item beside the
-  /// text and collapses through AppKit, not through a SwiftUI presentation.
-  var didNavigate: () -> Void = {}
+  #if !os(macOS)
+    /// The panel's presentation. None on macOS, where the panel is a split item
+    /// that collapses through AppKit.
+    ///
+    /// A binding and a flag rather than a closure, because both compare equal to
+    /// themselves and a closure never does: with a closure, every pass of the
+    /// reader's body drew the panel and its whole table of contents again (#259).
+    @Binding var isPresented: Bool
+    /// Whether a choice that navigates closes the panel: when it is a sheet over
+    /// the text, and what was chosen is behind it (#249). Beside the text, as a
+    /// column, it stays open. The reader decides, from its own width: the size
+    /// class inside the panel is the panel's, which as a narrow column may be
+    /// compact while the reader is not.
+    let closesAfterChoice: Bool
+  #endif
 
   var body: some View {
     @Bindable var reader = reader
@@ -112,6 +123,12 @@ struct PanelHost: View {
     } else {
       Color.clear
     }
+  }
+
+  private func didNavigate() {
+    #if !os(macOS)
+      if closesAfterChoice { isPresented = false }
+    #endif
   }
 }
 
