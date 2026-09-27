@@ -3,11 +3,19 @@ import Foundation
 /// One document, ready for a single `NSTextContentStorage`.
 ///
 /// `@unchecked Sendable` so a build can happen off the main actor and the result can
-/// cross to it. The invariant that licenses it: `text` is a genuinely immutable
-/// `NSAttributedString` — `DocumentTextBuilder.build` copies its mutable working
-/// buffer on the way out, so no reference to a mutable instance escapes — and
-/// `AnchorIndex` is a `Sendable` value. Nothing mutates a `BuiltDocument` after it
-/// is constructed; the text view only reads it.
+/// cross to it. What licenses it is a handover, not a copy (#128):
+///
+/// - `text` is the builder's own working buffer, and the builder is local to
+///   `DocumentTextBuilder.build`, so nothing that could write it outlives the call.
+/// - Every attribute value in it is either immutable — fonts, colours, paragraph
+///   styles — or made by that build and held by nothing else: the chips'
+///   attachments. Paragraph styles have to be immutable rather than merely
+///   unshared, because Foundation uniques equal attribute dictionaries across
+///   every string in the process and two builds do end up holding the same ones.
+/// - `AnchorIndex` is a `Sendable` value.
+///
+/// Nothing mutates a `BuiltDocument` after it is constructed; the text view only
+/// reads it, and `BuilderHandoverTests` holds each of these to account.
 public struct BuiltDocument: @unchecked Sendable {
   public let text: NSAttributedString
   public let anchors: AnchorIndex

@@ -29,7 +29,7 @@ struct SerializerSchemaShapeTests {
   /// appendix and references, so the back began at the appendix and held a
   /// section before its references.
   @Test(arguments: ["rfc2023.txt", "rfc338.txt"])
-  func theBackHoldsItsReferencesFirst(fixture: String) throws {
+  func `the back holds its references first`(fixture: String) throws {
     let (_, rfc) = try Self.converted(fixture)
     let back = try #require(rfc.first("back"))
     let kinds = back.elements.map(\.name)
@@ -43,7 +43,7 @@ struct SerializerSchemaShapeTests {
   /// 2104 only while the parser reads reference lists wherever they sit, and the
   /// section reads back as the one references section it was, not as a section
   /// holding a second one.
-  @Test func aReferencesSectionAheadOfTheBackStillResolves() throws {
+  @Test func `a references section ahead of the back still resolves`() throws {
     let (document, rfc) = try Self.converted("rfc2511.txt")
     let middle = try #require(rfc.first("middle"))
     #expect(middle.elements.contains { $0.name == "references" && $0["pn"] == "section-9" })
@@ -57,7 +57,7 @@ struct SerializerSchemaShapeTests {
     #expect(cited(document).contains(.rfc(2104)))
     #expect(cited(reparsed) == cited(document))
     let outline = { (document: RFCDocument) in
-      document.allSections.map { "\($0.anchor) \($0.number ?? "-") \($0.subsections.count)" }
+      document.allSections.map { "\($0.anchor) \($0.number, default: "-") \($0.subsections.count)" }
     }
     #expect(outline(reparsed) == outline(document))
   }
@@ -65,7 +65,7 @@ struct SerializerSchemaShapeTests {
   /// RFC 338's first chapter, `I.`, reads as an appendix, which left the middle
   /// empty.
   @Test(arguments: ["rfc338.txt", "rfc2023.txt", "rfc1.txt", "rfc391.txt"])
-  func theMiddleHoldsASection(fixture: String) throws {
+  func `the middle holds a section`(fixture: String) throws {
     let (_, rfc) = try Self.converted(fixture)
     let middle = try #require(rfc.first("middle"))
     #expect(!middle.all("section").isEmpty)
@@ -73,7 +73,7 @@ struct SerializerSchemaShapeTests {
 
   /// RFC 1 has two appendices A. The second is written unnumbered, with its number
   /// in its name, so no `pn` is declared twice and it reads the same.
-  @Test func noTwoSectionsShareAPartNumber() throws {
+  @Test func `no two sections share a part number`() throws {
     let (document, rfc) = try Self.converted("rfc1.txt")
     let ids = Self.declaredIDs(in: rfc)
     #expect(ids.count == Set(ids).count)
@@ -89,7 +89,7 @@ struct SerializerSchemaShapeTests {
 
   /// RFC 391's abstract holds its statistics table as artwork, which `<abstract>`
   /// may not. It is written as the body's first section instead, whole.
-  @Test func anAbstractHoldingArtworkBecomesTheFirstSection() throws {
+  @Test func `an abstract holding artwork becomes the first section`() throws {
     let (document, rfc) = try Self.converted("rfc391.txt")
     #expect(
       document.header.abstract.contains {
@@ -102,7 +102,7 @@ struct SerializerSchemaShapeTests {
   }
 
   /// A document whose abstract fits keeps it where it was.
-  @Test func anAbstractThatFitsStaysInTheFront() throws {
+  @Test func `an abstract that fits stays in the front`() throws {
     let (_, rfc) = try Self.converted("rfc2119.txt")
     #expect(rfc.first("front")?.first("abstract") != nil)
   }
@@ -126,7 +126,7 @@ struct SerializerSchemaShapeTests {
   /// The back is the last run of references sections and everything after it.
   /// Whatever comes before that run stays in the middle, an appendix or an earlier
   /// references section among it.
-  @Test func theBackStartsAtTheLastRunOfReferences() {
+  @Test func `the back starts at the last run of references`() {
     #expect(RFCXMLSerializer.backStart([Self.chapter("1"), Self.references("2")]) == 1)
     #expect(
       RFCXMLSerializer.backStart([
@@ -144,7 +144,7 @@ struct SerializerSchemaShapeTests {
 
   /// With no references, the back is the appendices the document ends with, and
   /// there is none when they are all it has, or it has nothing.
-  @Test func withoutReferencesTheBackIsTheTrailingAppendices() {
+  @Test func `without references the back is the trailing appendices`() {
     #expect(
       RFCXMLSerializer.backStart([
         Self.chapter("1"), Self.appendix("A"), Self.chapter("2"), Self.appendix("B"),

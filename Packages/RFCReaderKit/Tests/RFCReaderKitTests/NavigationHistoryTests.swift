@@ -16,7 +16,7 @@ struct NavigationHistoryTests {
 
   // MARK: - Returning from a jump within a document (#254)
 
-  @Test func aJumpWithinTheDocumentOffersTheWayBack() {
+  @Test func `a jump within the document offers the way back`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
@@ -25,14 +25,14 @@ struct NavigationHistoryTests {
 
   /// The system back button already leaves the document; the offer is for
   /// returning within it.
-  @Test func aJumpToAnotherDocumentOffersNothing() {
+  @Test func `a jump to another document offers nothing`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
     #expect(history.returnOffer == nil)
   }
 
-  @Test func theFirstPlaceOffersNothing() {
+  @Test func `the first place offers nothing`() {
     var history = NavigationHistory()
     history.go(to: place(9110, "section-4.2"))
     #expect(history.returnOffer == nil)
@@ -40,7 +40,7 @@ struct NavigationHistoryTests {
 
   /// Stepping through the history is not a jump to undo, even when the step lands
   /// next to another place in the same document.
-  @Test func steppingBackOrForwardOffersNothing() {
+  @Test func `stepping back or forward offers nothing`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-4"))
@@ -53,7 +53,7 @@ struct NavigationHistoryTests {
 
   /// Settled is a fact about the history, not about the place offered: the same
   /// jump taken again, after going back, offers again.
-  @Test func aSettledOfferStaysSettledUntilTheNextJump() {
+  @Test func `a settled offer stays settled until the next jump`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-15"), leaving: "section-4")
@@ -66,7 +66,7 @@ struct NavigationHistoryTests {
     #expect(history.returnOffer == place(9110, "section-4"))
   }
 
-  @Test func aNewJumpAfterSteppingBackOffersAgain() {
+  @Test func `a new jump after stepping back offers again`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-4"))
@@ -80,7 +80,7 @@ struct NavigationHistoryTests {
   /// Going back to the list on an iPhone, or deselecting the row on a Mac, puts
   /// nothing on screen. The history is not where that decision is undone: Back
   /// and Forward still work from the list.
-  @Test func hidingPutsNothingOnScreenAndKeepsTheHistory() {
+  @Test func `hiding puts nothing on screen and keeps the history`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -92,7 +92,7 @@ struct NavigationHistoryTests {
 
   /// The row just left is the likeliest one to be tapped again, and `go` treats
   /// the place already current as no navigation at all.
-  @Test func goingToTheHiddenPlaceShowsItWithoutANewEntry() {
+  @Test func `going to the hidden place shows it without a new entry`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -105,7 +105,7 @@ struct NavigationHistoryTests {
 
   /// The row carries no section, and the place left behind usually does: after a
   /// jump, a deep link, or Back and Forward.
-  @Test func reopeningTheHiddenDocumentShowsItWhereItWas() {
+  @Test func `reopening the hidden document shows it where it was`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
@@ -117,7 +117,7 @@ struct NavigationHistoryTests {
   }
 
   /// Reopening is not a jump to undo, even though Back stays in the document.
-  @Test func reopeningTheHiddenDocumentOffersNothing() {
+  @Test func `reopening the hidden document offers nothing`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
@@ -126,7 +126,7 @@ struct NavigationHistoryTests {
     #expect(history.returnOffer == nil)
   }
 
-  @Test func goingSomewhereElseRecordsTheHiddenPlace() {
+  @Test func `going somewhere else records the hidden place`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.hide()
@@ -135,7 +135,7 @@ struct NavigationHistoryTests {
     #expect(history.goBack() == place(9110))
   }
 
-  @Test func steppingBackOrForwardShowsWhereItLands() {
+  @Test func `stepping back or forward shows where it lands`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -148,7 +148,7 @@ struct NavigationHistoryTests {
   }
 
   /// The offer is drawn over the document it returns within.
-  @Test func nothingOnScreenOffersNothing() {
+  @Test func `nothing on screen offers nothing`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
@@ -156,18 +156,18 @@ struct NavigationHistoryTests {
     #expect(history.returnOffer == nil)
   }
 
-  @Test func aFreshHistoryShowsNothing() {
+  @Test func `a fresh history shows nothing`() {
     #expect(NavigationHistory().shown == nil)
   }
 
-  @Test func aFreshHistoryGoesNowhere() {
+  @Test func `a fresh history goes nowhere`() {
     let history = NavigationHistory()
     #expect(history.current == nil)
     #expect(!history.canGoBack)
     #expect(!history.canGoForward)
   }
 
-  @Test func theFirstVisitIsNotSomethingToGoBackFrom() {
+  @Test func `the first visit is not something to go back from`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     #expect(history.current == place(9110))
@@ -175,7 +175,7 @@ struct NavigationHistoryTests {
     #expect(!history.canGoForward)
   }
 
-  @Test func backReturnsToThePreviousDocument() {
+  @Test func `back returns to the previous document`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -187,7 +187,7 @@ struct NavigationHistoryTests {
     #expect(!history.canGoBack)
   }
 
-  @Test func forwardRetracesTheStepBack() {
+  @Test func `forward retraces the step back`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -199,7 +199,7 @@ struct NavigationHistoryTests {
     #expect(!history.canGoForward)
   }
 
-  @Test func goingNowhereWhenThereIsNowhereToGo() {
+  @Test func `going nowhere when there is nowhere to go`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     #expect(history.goBack() == nil)
@@ -208,7 +208,7 @@ struct NavigationHistoryTests {
   }
 
   /// A browser drops the forward stack the moment you strike out in a new direction.
-  @Test func navigatingAfterGoingBackDropsTheForwardStack() {
+  @Test func `navigating after going back drops the forward stack`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -221,7 +221,7 @@ struct NavigationHistoryTests {
   }
 
   /// Section jumps are navigations too, so Back undoes one.
-  @Test func aSectionJumpWithinOneDocumentIsItsOwnEntry() {
+  @Test func `a section jump within one document is its own entry`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "4.2"))
@@ -232,7 +232,7 @@ struct NavigationHistoryTests {
 
   /// Leaving a document records where the reader actually was, so coming back does
   /// not dump them at the top of a 200-page RFC.
-  @Test func backRestoresWhereTheReaderWasReading() {
+  @Test func `back restores where the reader was reading`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999), leaving: "section-7.3")
@@ -241,7 +241,7 @@ struct NavigationHistoryTests {
 
   /// The position we left is only remembered for the entry we left; arriving
   /// somewhere new must not inherit it.
-  @Test func thePositionLeftBehindDoesNotFollowYouForward() {
+  @Test func `the position left behind does not follow you forward`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999), leaving: "section-7.3")
@@ -250,7 +250,7 @@ struct NavigationHistoryTests {
 
   /// Going back, then forward again, should return to the spot you were reading when
   /// you first left -- not to the top.
-  @Test func forwardAlsoRestoresItsRecordedPosition() {
+  @Test func `forward also restores its recorded position`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(8999))
@@ -262,14 +262,14 @@ struct NavigationHistoryTests {
 
   /// Re-opening the document already on screen is not a navigation. Clicking the
   /// same link twice must not stack two identical entries to walk back through.
-  @Test func openingWhatIsAlreadyOpenIsNotAnEntry() {
+  @Test func `opening what is already open is not an entry`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110))
     #expect(!history.canGoBack)
   }
 
-  @Test func theStackSurvivesALongWalk() {
+  @Test func `the stack survives a long walk`() {
     var history = NavigationHistory()
     for number in 1...10 { history.go(to: place(number)) }
     for number in stride(from: 9, through: 1, by: -1) {

@@ -14,7 +14,7 @@ struct ReferenceHitTests {
   /// A chip is three storage runs — the symbol's attachment, the joiner, the
   /// label — so the storage run under the pointer is a third of the reference at
   /// best. The extent is the reference's, from wherever in it the pointer lands.
-  @Test func everyCharacterOfAReferenceNamesTheWholeReference() throws {
+  @Test func `every character of a reference names the whole reference`() throws {
     let text = Fixtures.inlineRun([.text("See "), .crossReference(chipped), .text(" for more.")])
     let start = try Fixtures.offset(of: "\u{FFFC}", in: text)
     let whole = NSRange(
@@ -26,7 +26,7 @@ struct ReferenceHitTests {
     }
   }
 
-  @Test func twoAdjacentReferencesAreTwoHits() throws {
+  @Test func `two adjacent references are two hits`() throws {
     let second = CrossReference(target: .document(.rfc(9111), section: nil))
     let text = Fixtures.inlineRun([.crossReference(chipped), .crossReference(second)])
     let boundary = (Self.chipPrefix + chipped.displayLabel).utf16.count
@@ -40,7 +40,7 @@ struct ReferenceHitTests {
   /// The same reference twice in a row — "[RFC 9110] [RFC 9110]" — is equal by
   /// value, so only the box's identity tells the two apart: the hover compares it,
   /// and the popover would otherwise span both.
-  @Test func twoIdenticalAdjacentReferencesAreTwoHits() throws {
+  @Test func `two identical adjacent references are two hits`() throws {
     let text = Fixtures.inlineRun([.crossReference(chipped), .crossReference(chipped)])
     let boundary = (Self.chipPrefix + chipped.displayLabel).utf16.count
     let first = try #require(text.reference(at: boundary - 1))
@@ -50,7 +50,7 @@ struct ReferenceHitTests {
     #expect(first.box !== next.box)
   }
 
-  @Test func proseAndTheEndOfTheTextAreNoHit() {
+  @Test func `prose and the end of the text are no hit`() {
     let text = Fixtures.inlineRun([.text("See "), .crossReference(chipped)])
     #expect(text.reference(at: 0) == nil)
     #expect(text.reference(at: text.length) == nil)
