@@ -49,11 +49,19 @@ public enum RFCColors {
     #endif
   }
 
-  public static var quaternaryFill: PlatformColor {
+  /// A fill on both platforms: macOS had `quaternaryLabelColor`, a text colour.
+  public static var quaternaryFill: PlatformColor { .quaternarySystemFill }
+
+  /// The rule beside a quote or aside: a line, not a fill. macOS's
+  /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
+  /// the rule used to draw in, which left a rule this thin close to invisible;
+  /// `separatorColor` is the line colour, at about the old opacity. iOS's
+  /// `quaternarySystemFill` is darker, and the rule keeps it.
+  public static var rule: PlatformColor {
     #if canImport(UIKit)
       .quaternarySystemFill
     #else
-      .quaternaryLabelColor
+      .separatorColor
     #endif
   }
 }
@@ -73,6 +81,14 @@ public enum RFCTraits {
       .traitBold
     #else
       .bold
+    #endif
+  }
+
+  public static var monospace: PlatformFontDescriptor.SymbolicTraits {
+    #if canImport(UIKit)
+      .traitMonoSpace
+    #else
+      .monoSpace
     #endif
   }
 }
@@ -105,6 +121,29 @@ extension PlatformFont {
     #else
       return PlatformFont(descriptor: descriptor.withSymbolicTraits(combined), size: pointSize)
         ?? self
+    #endif
+  }
+
+  /// The font's weight as its descriptor states it, regular where it states none.
+  /// A heading is `.semibold`, which is no symbolic trait, so this is what lets a
+  /// run inside one keep its weight. A bold italic face states no weight at all,
+  /// only the bold trait, so the trait counts as at least bold.
+  var weight: PlatformFont.Weight {
+    let traits = fontDescriptor.object(forKey: .traits) as? [PlatformFontDescriptor.TraitKey: Any]
+    let stated = (traits?[.weight] as? CGFloat).map(PlatformFont.Weight.init(rawValue:)) ?? .regular
+    let isBold = fontDescriptor.symbolicTraits.contains(RFCTraits.bold)
+    if isBold && stated.rawValue < PlatformFont.Weight.bold.rawValue {
+      return .bold
+    }
+    return stated
+  }
+
+  /// This font's face and traits at another size.
+  func resized(to size: CGFloat) -> PlatformFont {
+    #if canImport(UIKit)
+      PlatformFont(descriptor: fontDescriptor, size: size)
+    #else
+      PlatformFont(descriptor: fontDescriptor, size: size) ?? self
     #endif
   }
 }
