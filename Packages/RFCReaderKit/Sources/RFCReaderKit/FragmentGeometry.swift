@@ -83,7 +83,8 @@ public enum FragmentGeometry {
     // authors' block's affiliation and address lines. Each fragment then saw a
     // decoration that began and ended with itself, so it drew a fully rounded
     // card at its own indent and the block came out as a staircase. Artwork
-    // happened to look right only because its attributes are uniform.
+    // hid this while its attributes were uniform; its last line now carries the
+    // block's spacing alone (#31), so it depends on this as much as a table does.
     var effective = NSRange(location: 0, length: 0)
     guard
       let decoration = RFCDecoration(
