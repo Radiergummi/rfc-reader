@@ -20,7 +20,9 @@ struct InFlightDownloadsTests {
 
     func open() {
       isOpen = true
-      waiters.forEach { $0.resume() }
+      for waiter in waiters {
+        waiter.resume()
+      }
       waiters = []
     }
   }
