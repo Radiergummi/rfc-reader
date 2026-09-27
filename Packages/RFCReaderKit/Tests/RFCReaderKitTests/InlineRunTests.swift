@@ -58,6 +58,17 @@ struct InlineRunTests {
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
   }
 
+  /// A bold italic face states no weight in its descriptor, only the bold trait, so
+  /// code inside strong emphasis came out regular italic.
+  @Test func codeInStrongEmphasisStaysBoldAndItalic() throws {
+    let text = run([.strong([.emphasis([.text("see "), .code("foo")])])])
+    let offset = try Fixtures.offset(of: "foo", in: text)
+    let font = try #require(text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
+  }
+
   @Test func aSuperscriptOrSubscriptKeepsTheTraitsAroundIt() throws {
     let strong = run([.strong([.text("x"), .superscript("2"), .subscript("i")])])
     for script in ["2", "i"] {
