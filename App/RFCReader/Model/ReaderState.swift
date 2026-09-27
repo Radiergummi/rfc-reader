@@ -16,7 +16,6 @@ import RFCReaderKit
 /// the single view tree, and holds one of these too rather than carrying a second
 /// arrangement of the same state.
 @Observable
-@MainActor
 final class ReaderState {
   /// Only the sections the storage actually holds; see `DocumentView.rebuild()`.
   var sections: [RFCKit.Section] = []

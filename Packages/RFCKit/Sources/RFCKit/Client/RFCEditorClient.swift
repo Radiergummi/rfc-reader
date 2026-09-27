@@ -206,18 +206,18 @@ public struct RecentRFC: Sendable, Hashable, Identifiable {
 }
 
 public enum RecentFeedParser {
-  public enum ParseError: Error, Sendable {
-    case malformed(String)
+  public enum ParseError: Error, Sendable, Equatable {
+    case malformed(XMLSyntaxError)
   }
 
   nonisolated(unsafe) private static let titlePattern = #/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#
 
-  public static func parse(_ data: Data) throws -> [RecentRFC] {
-    let root: XMLElement
+  public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
+    let root: XMLTree.Element
     do {
-      root = try XMLTreeBuilder.parse(data)
+      root = try XMLTree.parse(data)
     } catch {
-      throw ParseError.malformed("\(error)")
+      throw .malformed(error)
     }
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
