@@ -30,6 +30,14 @@ struct LinkDestinationTests {
         == .jump("section-4.2"))
   }
 
+  /// The body does not hold the bibliography — the panel does — so a citation of
+  /// an entry that names no RFC had nothing to scroll to and did nothing.
+  @Test func `a citation of a bibliography entry reveals it`() {
+    #expect(
+      resolve("\(DocumentTextBuilder.referenceScheme):IEEE.802.3_2018")
+        == .reference("IEEE.802.3_2018"))
+  }
+
   /// A reference to a section of the document already on screen scrolls rather than
   /// re-opening what is already open.
   @Test func `a section of this document scrolls instead of opening`() {

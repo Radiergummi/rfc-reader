@@ -58,12 +58,38 @@ final class ReaderState {
   /// turn later, which leaves a title coupled to the scroll trailing behind it.
   @ObservationIgnored var updateToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
 
+  /// A request to show one bibliography entry in the panel.
+  ///
+  /// Not a bare `String?`, for the reason `NavigationModel.ScrollRequest` is not:
+  /// the same citation clicked twice must reveal its entry twice.
+  struct RevealedReference: Equatable {
+    let anchor: String
+    private let issue = UUID()
+  }
+
+  /// The entry a citation last asked the panel to show; see `reveal(reference:)`.
+  var revealedReference: RevealedReference?
+
+  /// Opens the panel. The panel is the window's split item on macOS and a SwiftUI
+  /// presentation on iOS, so whichever owns it installs this, the way the toolbar
+  /// installs `updateToolbarTitle`.
+  @ObservationIgnored var openPanel: () -> Void = {}
+
+  /// Shows a bibliography entry: what a citation of anything but an RFC links to
+  /// (`DocumentTextBuilder.referenceScheme`).
+  func reveal(reference anchor: String) {
+    tab = .references
+    revealedReference = RevealedReference(anchor: anchor)
+    openPanel()
+  }
+
   func clear() {
     // The next document starts at its top, under its own header, until the reader
     // reports otherwise.
     updateToolbarTitle(.hidden)
     sections = []
     groups = []
+    revealedReference = nil
     currentAnchor = nil
     currentSection = nil
     hasDocument = false
