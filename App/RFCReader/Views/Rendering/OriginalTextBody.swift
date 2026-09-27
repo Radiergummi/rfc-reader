@@ -45,6 +45,10 @@
       guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
       textView.isEditable = false
       textView.isSelectable = true
+      // Plain text, so Copy puts only the string on the pasteboard. As rich text it
+      // also wrote RTF carrying `labelColor` resolved for the current appearance:
+      // copied in dark mode, it pasted near-white into a light document.
+      textView.isRichText = false
       textView.usesFindBar = true
       textView.isIncrementalSearchingEnabled = true
       textView.drawsBackground = false
