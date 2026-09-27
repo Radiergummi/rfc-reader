@@ -91,5 +91,30 @@
       column.addSubview(NSView())
       #expect(FirstResponderSearch.innermostTarget(in: column) == nil)
     }
+
+    /// Find focuses the text on screen, not whatever takes focus first: a control
+    /// ahead of the text in the column would take the innermost search.
+    @Test func `find reaches past a control to the searchable text`() {
+      let column = NSView()
+      column.addSubview(Taker())
+      let text = NSTextView()
+      text.usesFindBar = true
+      let scroll = NSView()
+      scroll.addSubview(text)
+      column.addSubview(scroll)
+      #expect(FirstResponderSearch.searchableText(in: column) === text)
+    }
+
+    /// A hidden text view is one that has been swapped out, and a text view with no
+    /// find bar has nothing to search with.
+    @Test func `find skips text that is hidden or has no find bar`() {
+      let column = NSView()
+      let hidden = NSTextView()
+      hidden.usesFindBar = true
+      hidden.isHidden = true
+      column.addSubview(hidden)
+      column.addSubview(NSTextView())
+      #expect(FirstResponderSearch.searchableText(in: column) == nil)
+    }
   }
 #endif
