@@ -107,8 +107,7 @@ struct DocumentFallbackTests {
   /// XML that exists but does not parse is a parser bug worth knowing about. The
   /// document is still read from its text, and the failure comes back with it
   /// rather than being indistinguishable from there being no XML.
-  @Test func `XML that does not parse is read from the text, and the failure is kept`() async throws
-  {
+  @Test func `unparseable XML is read from the text, its failure kept`() async throws {
     let transport = Transport(
       xml: .body(Data("<rfc><front>".utf8)), text: .body(try Fixtures.data("rfc1149.txt")))
     let fetched = try await RFCEditorClient(transport: transport).fetchPreferredDocument(.rfc(1149))
