@@ -51,6 +51,22 @@ struct CommandLineTests {
     #expect(!FileManager.default.fileExists(atPath: out.path), "nothing was converted")
   }
 
+  /// A report from `--only` holds only the named documents. Written over the corpus
+  /// report, it would become the next full run's baseline, and every document it left
+  /// out would count as newly checked rather than as one that stopped validating.
+  @Test func onlyRefusesAReport() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+
+    let result = try Self.run([
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119",
+      "--report", out.appending(path: "report.json").path,
+    ])
+    #expect(result.status == 64, "EX_USAGE")
+    #expect(result.standardError.contains("--report"), "\(result.standardError)")
+    #expect(!FileManager.default.fileExists(atPath: out.path), "nothing was converted")
+  }
+
   @Test func onlyConvertsTheNamedDocuments() throws {
     let out = Self.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: out) }
