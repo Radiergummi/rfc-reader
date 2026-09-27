@@ -7,20 +7,20 @@ import Testing
 /// split view shows the sidebar with nothing selected (#261).
 @Suite("Kept selection")
 struct KeptSelectionTests {
-  @Test func startsSelected() {
+  @Test func `starts selected`() {
     let kept = KeptSelection("all")
     #expect(kept.selection == "all")
     #expect(kept.value == "all")
   }
 
-  @Test func clearingKeepsTheValue() {
+  @Test func `clearing keeps the value`() {
     var kept = KeptSelection("bookmarks")
     kept.selection = nil
     #expect(kept.selection == nil)
     #expect(kept.value == "bookmarks")
   }
 
-  @Test func choosingAgainShowsTheNewValue() {
+  @Test func `choosing again shows the new value`() {
     var kept = KeptSelection("bookmarks")
     kept.selection = nil
     kept.selection = "recent"
@@ -28,7 +28,7 @@ struct KeptSelectionTests {
     #expect(kept.value == "recent")
   }
 
-  @Test func choosingTheKeptValueShowsItAgain() {
+  @Test func `choosing the kept value shows it again`() {
     var kept = KeptSelection("bookmarks")
     kept.selection = nil
     kept.selection = "bookmarks"
@@ -38,7 +38,7 @@ struct KeptSelectionTests {
   /// Choosing the kept value again after a clear is entering it, though `value`
   /// never changed: that is the iPhone going back to the sidebar and tapping the
   /// same filter, which has to take a fresh Recently Read order.
-  @Test func choosingTheKeptValueAfterAClearEntersIt() {
+  @Test func `choosing the kept value after a clear enters it`() {
     var kept = KeptSelection("recent")
     kept.selection = nil
     let cleared = kept
@@ -46,14 +46,14 @@ struct KeptSelectionTests {
     #expect(kept.enters(since: cleared))
   }
 
-  @Test func choosingAnotherValueEntersIt() {
+  @Test func `choosing another value enters it`() {
     var kept = KeptSelection("all")
     let before = kept
     kept.selection = "recent"
     #expect(kept.enters(since: before))
   }
 
-  @Test func clearingOrChoosingTheSameValueEntersNothing() {
+  @Test func `clearing or choosing the same value enters nothing`() {
     var kept = KeptSelection("recent")
     let before = kept
     kept.selection = "recent"

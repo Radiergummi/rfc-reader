@@ -18,25 +18,25 @@ struct ReadingPlaceTests {
     .init(anchor: "section-2", offset: 400, heading: "2. Section"),
   ])
 
-  @Test func recordsTheNearestAnchorOfAnyKindAndTheDistanceIntoIt() {
+  @Test func `records the nearest anchor of any kind and the distance into it`() {
     // A paragraph anchor, not the section: restoring to the section would put
     // the reader back at its heading, a screenful or more from where they were.
     #expect(ReadingPlace(at: 250, in: index) == ReadingPlace(anchor: "section-1-1", offset: 120))
     #expect(ReadingPlace(at: 400, in: index) == ReadingPlace(anchor: "section-2", offset: 0))
   }
 
-  @Test func roundTripsThroughTheSameIndex() {
+  @Test func `round trips through the same index`() {
     for offset in [0, 99, 100, 129, 130, 250, 399, 400, 480] {
       let place = ReadingPlace(at: offset, in: index)
       #expect(place.documentOffset(in: index, length: 500) == offset)
     }
   }
 
-  @Test func aPlaceAheadOfTheFirstAnchorIsTheDistanceFromTheDocumentStart() {
+  @Test func `a place ahead of the first anchor is the distance from the document start`() {
     #expect(ReadingPlace(at: 40, in: index) == ReadingPlace(anchor: nil, offset: 40))
   }
 
-  @Test func followsItsAnchorToWhereverTheRebuildPutIt() {
+  @Test func `follows its anchor to wherever the rebuild put it`() {
     let rebuilt = AnchorIndex([
       .init(anchor: "section-1", offset: 100, heading: "1. Section"),
       .init(anchor: "section-1-1", offset: 180),
@@ -47,7 +47,7 @@ struct ReadingPlaceTests {
         == 300)
   }
 
-  @Test func staysInsideItsBlockWhenTheBlockCameBackShorter() {
+  @Test func `stays inside its block when the block came back shorter`() {
     // A table re-shaped for a narrower column can hold fewer characters; the
     // place must not spill into whatever follows it.
     let rebuilt = AnchorIndex([
@@ -62,11 +62,11 @@ struct ReadingPlaceTests {
     )
   }
 
-  @Test func anAnchorTheRebuildNoLongerHasResolvesToNothing() {
+  @Test func `an anchor the rebuild no longer has resolves to nothing`() {
     #expect(ReadingPlace(anchor: "gone", offset: 3).documentOffset(in: index, length: 500) == nil)
   }
 
-  @Test func keepsThePlaceWhileItsLineIsStillAtTheTop() {
+  @Test func `keeps the place while its line is still at the top`() {
     let previous = ReadingPlace(anchor: "section-1-1", offset: 120)
     // The line holding offset 250 after a restore at another column, starting
     // earlier than the place does.
@@ -74,7 +74,7 @@ struct ReadingPlaceTests {
     #expect(ReadingPlace.tracking(previous, topLine: line, in: index, length: 500) == previous)
   }
 
-  @Test func movesToTheLinesStartOnceTheReaderReachesAnotherLine() {
+  @Test func `moves to the lines start once the reader reaches another line`() {
     let previous = ReadingPlace(anchor: "section-1-1", offset: 120)
     let next = NSRange(location: 290, length: 60)
     #expect(
@@ -87,7 +87,7 @@ struct ReadingPlaceTests {
 
   /// Resizing back and forth — a live resize, rebuilding each time it pauses —
   /// comes back to the line it started on, however the two columns wrap.
-  @Test func doesNotWalkBackAcrossRebuildsAtAlternatingColumns() {
+  @Test func `does not walk back across rebuilds at alternating columns`() {
     var place = ReadingPlace(anchor: "section-1-1", offset: 120)
     // At the narrow column the line holding 250 starts at 232; at the wide one,
     // at 241 — both earlier than the place itself.
@@ -104,7 +104,7 @@ struct ReadingPlaceTests {
   /// after a resize rebuilds the document at another measure. A table ahead of
   /// the needle grids at the wide measure and stacks at the narrow one, so the
   /// storage genuinely changes length and a carried raw offset would miss.
-  @Test func findsTheSameTextInADocumentBuiltAtAnotherMeasure() throws {
+  @Test func `finds the same text in a document built at another measure`() throws {
     let table = RFCKit.Table(
       title: "Status Codes",
       number: 1,
@@ -184,7 +184,7 @@ struct ReadingPlaceLineGeometryTests {
     return paragraph
   }
 
-  @Test func aPointInsideALineNamesThatLinesCharacters() throws {
+  @Test func `a point inside a line names that lines characters`() throws {
     let paragraph = try paragraph()
     for line in paragraph.lines {
       let range = FragmentGeometry.lineRange(
@@ -197,14 +197,14 @@ struct ReadingPlaceLineGeometryTests {
     }
   }
 
-  @Test func aPointAboveTheFirstLineNamesTheFirstLine() throws {
+  @Test func `a point above the first line names the first line`() throws {
     let paragraph = try paragraph()
     #expect(
       FragmentGeometry.lineRange(at: -5, in: paragraph.lines, fragment: paragraph.fragment).location
         == paragraph.fragmentStart)
   }
 
-  @Test func anOffsetAnywhereInALineFindsThatLinesTop() throws {
+  @Test func `an offset anywhere in a line finds that lines top`() throws {
     let paragraph = try paragraph()
     for line in paragraph.lines {
       let middle =
@@ -216,7 +216,7 @@ struct ReadingPlaceLineGeometryTests {
     }
   }
 
-  @Test func theTwoAreInverses() throws {
+  @Test func `the two are inverses`() throws {
     let paragraph = try paragraph()
     for line in paragraph.lines {
       let range = FragmentGeometry.lineRange(
@@ -232,7 +232,7 @@ struct ReadingPlaceLineGeometryTests {
   /// a viewport top in that gap has already scrolled past every line of it. The
   /// line it is reading is the next paragraph's first; naming this paragraph's
   /// start would send the next rebuild back up by the paragraph's whole height.
-  @Test func aPointInTheSpacingBelowTheLastLineNamesTheNextParagraph() throws {
+  @Test func `a point in the spacing below the last line names the next paragraph`() throws {
     let paragraph = try paragraph(spacing: 20)
     let lastLine = try #require(paragraph.lines.last).typographicBounds.maxY
     try #require(
@@ -247,7 +247,7 @@ struct ReadingPlaceLineGeometryTests {
   /// line is scrolled to the fragment's top, spacing above it included, and
   /// every other line to its own top; the read-back must name that line either
   /// way, including when the scroll view has rounded the offset down to a pixel.
-  @Test func aLineScrolledToTheTopIsReadBackAsThatLine() throws {
+  @Test func `a line scrolled to the top is read back as that line`() throws {
     let paragraph = try paragraph(spacing: 20)
     for line in paragraph.lines {
       let start = paragraph.fragmentStart + line.characterRange.location
@@ -270,7 +270,7 @@ struct ReadingPlaceLineGeometryTests {
     }
   }
 
-  @Test func theFragmentsFirstCharacterScrollsToTheFragmentsTop() throws {
+  @Test func `the fragments first character scrolls to the fragments top`() throws {
     let paragraph = try paragraph(spacing: 20)
     #expect(
       FragmentGeometry.scrollTarget(
@@ -302,14 +302,14 @@ struct ReadingPlaceTrackerTests {
     return tracker
   }
 
-  @Test func tracksTheLineAtTheTop() {
+  @Test func `tracks the line at the top`() {
     var tracker = reading()
     tracker.report(
       viewportTop: 340, line: NSRange(location: 310, length: 60), in: index, length: 500)
     #expect(tracker.place == .line(ReadingPlace(anchor: "section-1-1", offset: 180)))
   }
 
-  @Test func aChangeOfColumnPausesTrackingUntilTheStorageIsLaidOutAgain() {
+  @Test func `a change of column pauses tracking until the storage is laid out again`() {
     var tracker = reading()
     let laysOutNarrow = tracker.columnChanged(to: narrow)
     #expect(!laysOutNarrow)
@@ -333,7 +333,7 @@ struct ReadingPlaceTrackerTests {
   /// back at the width the storage was laid out at, but TextKit threw that layout
   /// away at the narrow one, and what it shows now is estimated: keyed on the
   /// width alone, tracking resumed here and recorded a line the reader never saw.
-  @Test func aColumnThatComesBackDoesNotResumeTrackingOnDiscardedLayout() {
+  @Test func `a column that comes back does not resume tracking on discarded layout`() {
     var tracker = reading()
     let laysOutNarrow = tracker.columnChanged(to: narrow)
     #expect(!laysOutNarrow)
@@ -344,7 +344,7 @@ struct ReadingPlaceTrackerTests {
     #expect(tracker.place == .line(ReadingPlace(anchor: "section-1-1", offset: 120)))
   }
 
-  @Test func aDocumentInstalledBeforeAnyColumnIsLaidOutAtTheFirstOne() {
+  @Test func `a document installed before any column is laid out at the first one`() {
     var tracker = ReadingPlaceTracker()
     tracker.installed(atColumn: nil)
     tracker.report(
@@ -359,7 +359,7 @@ struct ReadingPlaceTrackerTests {
   /// At the document's end a restore clamps, so the line holding the place is not
   /// the one at the top. Tracking that line would walk the place back on every
   /// resize; until the reader scrolls, the place is the one that was carried.
-  @Test func keepsTheCarriedPlaceUntilTheReaderScrollsAwayFromTheRestore() {
+  @Test func `keeps the carried place until the reader scrolls away from the restore`() {
     var tracker = reading()
     let laysOutNarrow = tracker.columnChanged(to: narrow)
     #expect(!laysOutNarrow)
@@ -373,14 +373,14 @@ struct ReadingPlaceTrackerTests {
     #expect(tracker.place == .line(ReadingPlace(anchor: "section-1-1", offset: 30)))
   }
 
-  @Test func aViewportAboveTheTextIsTheTop() {
+  @Test func `a viewport above the text is the top`() {
     var tracker = reading()
     tracker.report(viewportTop: -40, line: NSRange(location: 0, length: 60), in: index, length: 500)
     #expect(tracker.place == .top)
   }
 
   /// A jump is where the reader is, even while tracking waits for a rebuild.
-  @Test func aJumpIsThePlaceEvenWhilePaused() {
+  @Test func `a jump is the place even while paused`() {
     var tracker = reading()
     let laysOutNarrow = tracker.columnChanged(to: narrow)
     #expect(!laysOutNarrow)

@@ -6,7 +6,7 @@ import Testing
 struct CitationFormatterTests {
   let formatter = CitationFormatter()
 
-  @Test func fullCitationMatchesRFCEditorStyle() throws {
+  @Test func `full citation matches RFC editor style`() throws {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     let citation = formatter.cite(http, style: .full)
     #expect(
@@ -15,7 +15,7 @@ struct CitationFormatterTests {
     )
   }
 
-  @Test func singleAuthor() throws {
+  @Test func `single author`() throws {
     let bcp = try #require(try Fixtures.sampleIndex()[2119])
     let citation = formatter.cite(bcp, style: .full)
     #expect(
@@ -24,7 +24,7 @@ struct CitationFormatterTests {
       ))
   }
 
-  @Test func shortForms() throws {
+  @Test func `short forms`() throws {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     #expect(formatter.cite(http, section: "4.2", style: .short) == "RFC 9110, Section 4.2")
     #expect(formatter.cite(http, section: "A", style: .short) == "RFC 9110, Appendix A")
@@ -37,7 +37,7 @@ struct CitationFormatterTests {
         == "[RFC 9110, Section 4.2](https://www.rfc-editor.org/rfc/rfc9110#section-4.2)")
   }
 
-  @Test func bibtex() throws {
+  @Test func `bibtex`() throws {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     let entry = formatter.cite(http, style: .bibtex)
     #expect(entry.hasPrefix("@misc{rfc9110,"))
@@ -51,7 +51,7 @@ struct CitationFormatterTests {
   /// A brace ends a BibTeX field early, `%` starts a comment and `&` is LaTeX's
   /// alignment character, so a title holding any of them made the entry invalid
   /// (#150). They are escaped the way LaTeX expects.
-  @Test func bibtexEscapesItsSpecialCharacters() {
+  @Test func `bibtex escapes its special characters`() {
     let rfc = RFCMetadata(
       id: .rfc(1), title: "Sets {A & B} at 100%", date: PublicationDate(year: 1969),
       abstract: "Uses % and {braces}.")
@@ -73,7 +73,7 @@ struct CitationFormatterTests {
   /// BibTeX counts braces whether or not a backslash precedes them, so `\{` only
   /// works for braces that already pair up. A lone one in a title has to leave the
   /// entry's braces balanced, or the field runs on into the rest of the entry.
-  @Test func bibtexKeepsItsBracesBalancedAroundALoneBrace() {
+  @Test func `bibtex keeps its braces balanced around a lone brace`() {
     for title in ["Syntax for {", "Closing } early"] {
       let rfc = RFCMetadata(id: .rfc(1), title: title, date: PublicationDate(year: 1969))
       let entry = formatter.cite(rfc, style: .bibtex)
