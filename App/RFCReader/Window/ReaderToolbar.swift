@@ -53,8 +53,7 @@
   /// the share icon over the panel's toggle. Native items also get the system's own
   /// grouping and glass, which a hosted control cannot.
   /// A title over a line of detail, as a window's own titlebar draws its title over
-  /// its subtitle. Both of the toolbar's titles are one of these, so the two cannot
-  /// drift apart in type.
+  /// its subtitle: the list's title.
   @MainActor
   private final class TitleStack: NSStackView {
     private let title = TitleStack.titleLabel()
@@ -89,7 +88,8 @@
       )
     }
 
-    /// The two lines' type, for a view that lays them out itself.
+    /// The two lines' type, shared with the reader's title — which lays its lines
+    /// out itself — so the toolbar's two titles cannot drift apart in type.
     static func titleLabel() -> NSTextField {
       label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
     }
@@ -173,9 +173,8 @@
   /// nothing rather than overflowing into the toolbar's chevron menu, drawing
   /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises out
   /// from under the toolbar's bottom edge and fades in as the heading passes under
-  /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`. Under it,
-  /// the subtitle names the section being read once the first heading has passed,
-  /// handing over from heading to heading the same way; see `ToolbarSubtitle`.
+  /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`. Its subtitle
+  /// names the section being read; see `ToolbarSubtitle`.
   @MainActor
   private final class DocumentTitleView: NSView {
     private let title = TitleStack.titleLabel()
@@ -224,7 +223,8 @@
       // The clip reaches below this view's bounds, so this view must not cut it
       // off at its own edge. Its size is the item's `minSize` and `maxSize`.
       clipsToBounds = false
-      place()
+      placeContent()
+      placeHandOver()
     }
 
     @available(*, unavailable)
@@ -238,18 +238,22 @@
       applyText()
     }
 
-    func reveal(_ state: ToolbarTitleState) {
-      let textChanged =
-        state.subtitle.outgoing != self.state.subtitle.outgoing
-        || state.subtitle.incoming != self.state.subtitle.incoming
+    /// Only what changed: while the title slides in the hand-over holds still,
+    /// and while a heading hands over the title does, so a scroll tick moves one
+    /// or the other rather than every view in the item.
+    func update(_ state: ToolbarTitleState) {
+      let previous = self.state
       self.state = state
-      // On the text, not on this view: the toolbar sets its items' own alpha
-      // for their enabled state and overrides whatever is set here.
-      content.alphaValue = ToolbarTitleReveal.opacity(atProgress: state.reveal)
-      if textChanged {
+      if state.subtitle.outgoing != previous.subtitle.outgoing
+        || state.subtitle.incoming != previous.subtitle.incoming
+      {
         applyText()
-      } else {
-        place()
+      }
+      if state.reveal != previous.reveal {
+        placeContent()
+      }
+      if state.subtitle.progress != previous.subtitle.progress {
+        placeHandOver()
       }
     }
 
@@ -263,18 +267,29 @@
       }
       clip.frame = CGRect(
         x: 0, y: toolbarBottom, width: bounds.width, height: bounds.height - toolbarBottom)
-      place()
+      // The lines' frames depend on the width alone.
+      let width = lineWidth
+      title.frame = CGRect(x: 0, y: subtitleHeight, width: width, height: titleHeight)
+      subtitleLine.frame = CGRect(x: 0, y: 0, width: width, height: subtitleHeight)
+      placeContent()
+      placeHandOver()
     }
 
-    /// Only when the words change: a label assigned the same string on every
-    /// scroll tick redraws for nothing.
+    private var lineWidth: CGFloat {
+      max(0, bounds.width - ToolbarTitleLayout.padding * 2)
+    }
+
+    /// Each label only when its words change: a label assigned the same string
+    /// redraws for nothing.
     private func applyText() {
-      outgoing.stringValue = state.subtitle.outgoing ?? documentTitle
-      incoming.stringValue = state.subtitle.incoming ?? documentTitle
-      place()
+      let outgoingText = state.subtitle.outgoing ?? documentTitle
+      let incomingText = state.subtitle.incoming ?? documentTitle
+      if outgoing.stringValue != outgoingText { outgoing.stringValue = outgoingText }
+      if incoming.stringValue != incomingText { incoming.stringValue = incomingText }
     }
 
-    private func place() {
+    /// The reveal: title and subtitle, moved and faded as one.
+    private func placeContent() {
       // Not flipped, so up is a larger y. At 0 the text's top is at the
       // toolbar's bottom edge, just out of sight under it; at 1 it rests in the
       // middle of the item.
@@ -282,29 +297,30 @@
       let hidden = toolbarBottom - height
       let resting = (bounds.height - height) / 2
       let y = hidden + (resting - hidden) * state.reveal
-      let padding = ToolbarTitleLayout.padding
-      let width = max(0, bounds.width - padding * 2)
-      content.frame = CGRect(x: padding, y: y - toolbarBottom, width: width, height: height)
-      title.frame = CGRect(x: 0, y: subtitleHeight, width: width, height: titleHeight)
-      subtitleLine.frame = CGRect(x: 0, y: 0, width: width, height: subtitleHeight)
+      content.frame = CGRect(
+        x: ToolbarTitleLayout.padding, y: y - toolbarBottom, width: lineWidth, height: height)
+      // On the text, not on this view: the toolbar sets its items' own alpha
+      // for their enabled state and overrides whatever is set here.
+      content.alphaValue = ToolbarTitleReveal.opacity(atProgress: state.reveal)
+      // Hidden, not only transparent, while out of sight or too narrow to say
+      // anything: VoiceOver reads a transparent label all the same.
+      content.isHidden =
+        state.reveal == 0 || !ToolbarTitleLayout.isWorthDrawing(width: bounds.width)
+    }
 
-      // The hand-over, driven by the scroll like the reveal: the outgoing heading
-      // rises out of the line as the incoming one rises in from below it, each
-      // transparent while the line's edge cuts it. Scrolling back up runs it in
-      // reverse.
+    /// The hand-over: the outgoing heading rises out of the subtitle's line as
+    /// the incoming one rises in, each transparent while the line's edge cuts it.
+    private func placeHandOver() {
       let handOver = state.subtitle.progress
+      let width = lineWidth
       outgoing.frame = CGRect(
         x: 0, y: handOver * subtitleHeight, width: width, height: subtitleHeight)
       incoming.frame = CGRect(
         x: 0, y: (handOver - 1) * subtitleHeight, width: width, height: subtitleHeight)
       outgoing.alphaValue = ToolbarTitleReveal.opacity(atProgress: 1 - handOver)
       incoming.alphaValue = ToolbarTitleReveal.opacity(atProgress: handOver)
-      // Hidden, not only transparent, while out of sight or too narrow to say
-      // anything: VoiceOver reads a transparent label all the same.
       outgoing.isHidden = handOver == 1
       incoming.isHidden = handOver == 0
-      content.isHidden =
-        state.reveal == 0 || !ToolbarTitleLayout.isWorthDrawing(width: bounds.width)
     }
   }
 
@@ -344,8 +360,8 @@
       documentTitleView.show(title, subtitle: subtitle)
     }
 
-    func revealDocumentTitle(_ state: ToolbarTitleState) {
-      documentTitleView.reveal(state)
+    func updateDocumentTitle(_ state: ToolbarTitleState) {
+      documentTitleView.update(state)
     }
 
     /// Keeps the title inside the column it names. Without it a long title ran past

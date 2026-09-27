@@ -82,14 +82,14 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
-  /// How far the document's title has come into the toolbar, and which section
-  /// its subtitle names; see `ToolbarTitleReveal` and `ToolbarSubtitle`. Called
-  /// synchronously, on every scroll tick that moves either: the toolbar's title is coupled to the scroll, and a hop through a `Task`
-  /// would leave it a frame behind the text. That is safe where
-  /// `onVisibleAnchorChange` is not because it touches no SwiftUI state.
-  var onTitleReveal: (ToolbarTitleState) -> Void = { _ in }
+  /// What the toolbar's title shows; see `ToolbarTitleState`. Called
+  /// synchronously, on every scroll tick that changes it: the title is coupled to
+  /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
+  /// That is safe where `onVisibleAnchorChange` is not because it touches no
+  /// SwiftUI state.
+  var onToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
   var heading: HeadingBox?
-  private var lastTitleReveal: ToolbarTitleState?
+  private var lastToolbarTitle: ToolbarTitleState?
 
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
@@ -422,7 +422,7 @@ final class RFCTextViewCoordinator: NSObject {
   func reportVisibleAnchor() {
     // Everything that reports where the viewport is comes through here — scrolls,
     // jumps, restored places — which is every time the title's position can move.
-    updateTitleReveal()
+    updateToolbarTitle()
     guard let textView,
       let built,
       let layout = textView.textLayoutManager
@@ -454,7 +454,7 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// macOS only: iOS has no toolbar title for this to drive, so it neither
   /// measures nor reports there.
-  func updateTitleReveal() {
+  func updateToolbarTitle() {
     #if !canImport(UIKit)
       guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
         return
@@ -466,42 +466,35 @@ final class RFCTextViewCoordinator: NSObject {
           visibleTop: edge,
           distance: Self.headingLineHeight
         ),
-        subtitle: subtitle(atEdge: edge - textView.containerTop, in: textView)
+        subtitle: subtitle(atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
       )
       // Steady for almost all of a document; only a change is news.
-      guard state != lastTitleReveal else { return }
-      lastTitleReveal = state
-      onTitleReveal(state)
+      guard state != lastToolbarTitle else { return }
+      lastToolbarTitle = state
+      onToolbarTitle(state)
     #endif
   }
 
   #if !canImport(UIKit)
     /// The section the toolbar's subtitle names, from the paragraph under the
-    /// toolbar's edge — `edge` is in container coordinates — and how far its last
-    /// line has crossed it.
-    private func subtitle(atEdge edge: CGFloat, in textView: PlatformTextView)
+    /// toolbar's edge — `edge` is in container coordinates.
+    private func subtitle(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
       -> ToolbarSubtitle.State
     {
       // Above the container is the header, which belongs to no section.
-      guard edge >= 0, let layout = textView.textLayoutManager,
+      guard edge >= 0, let layout,
         let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
       else { return .steady(nil) }
       let frame = fragment.layoutFragmentFrame
-      // The last line, not the fragment: a heading's fragment carries the space
-      // above it, and a wrapped heading hands over as its last line passes, the
-      // way the title's reveal does.
-      let line =
-        fragment.textLineFragments.last?.typographicBounds
-        ?? CGRect(origin: .zero, size: frame.size)
-      let crossing = ToolbarTitleReveal.progress(
-        headingBottom: frame.minY + line.maxY,
-        visibleTop: edge,
-        distance: line.height
-      )
       return ToolbarSubtitle.state(
         in: sectionIndex,
         topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
-        crossing: crossing
+        crossing: ToolbarSubtitle.crossing(
+          edge: edge,
+          fragmentTop: frame.minY,
+          fragmentHeight: frame.height,
+          lastLine: fragment.textLineFragments.last?.typographicBounds
+        )
       )
     }
   #endif

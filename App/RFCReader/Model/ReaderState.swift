@@ -57,12 +57,12 @@ final class ReaderState {
   /// A callback, not a property the toolbar observes: it is called on every
   /// scroll tick the title moves in, and observation delivers a change a run-loop
   /// turn later, which leaves a title coupled to the scroll trailing behind it.
-  @ObservationIgnored var revealTitle: (ToolbarTitleState) -> Void = { _ in }
+  @ObservationIgnored var updateToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
 
   func clear() {
     // The next document starts at its top, under its own header, until the reader
     // reports otherwise.
-    revealTitle(.hidden)
+    updateToolbarTitle(.hidden)
     sections = []
     groups = []
     currentAnchor = nil

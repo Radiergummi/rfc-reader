@@ -59,3 +59,45 @@ struct ToolbarSubtitleTests {
     #expect(none == .steady(nil))
   }
 }
+
+@Suite("Toolbar subtitle crossing")
+struct ToolbarSubtitleCrossingTests {
+  /// A heading fragment at y = 100 with 12 pt of space above its one 30 pt line,
+  /// which therefore runs from 112 to 142.
+  private func crossing(atEdge edge: CGFloat) -> CGFloat {
+    ToolbarSubtitle.crossing(
+      edge: edge, fragmentTop: 100, fragmentHeight: 42,
+      lastLine: CGRect(x: 0, y: 12, width: 300, height: 30))
+  }
+
+  /// The space above a heading is not the heading: nothing moves until the line
+  /// itself reaches the edge.
+  @Test func theSpaceAboveTheLineIsNotCounted() {
+    #expect(crossing(atEdge: 100) == 0)
+    #expect(crossing(atEdge: 112) == 0)
+  }
+
+  @Test func followsTheLineAcrossTheEdge() {
+    #expect(crossing(atEdge: 127) == 0.5)
+    #expect(crossing(atEdge: 142) == 1)
+  }
+
+  /// A wrapped heading hands over on its last line: with that line at 142–172,
+  /// the edge halfway down the first line has not started it.
+  @Test func aWrappedHeadingHandsOverOnItsLastLine() {
+    let wrapped: (CGFloat) -> CGFloat = { edge in
+      ToolbarSubtitle.crossing(
+        edge: edge, fragmentTop: 100, fragmentHeight: 72,
+        lastLine: CGRect(x: 0, y: 42, width: 300, height: 30))
+    }
+    #expect(wrapped(127) == 0)
+    #expect(wrapped(157) == 0.5)
+  }
+
+  /// A fragment without lines counts as one line its own height.
+  @Test func aFragmentWithoutLinesIsOneLine() {
+    let bare = ToolbarSubtitle.crossing(
+      edge: 120, fragmentTop: 100, fragmentHeight: 40, lastLine: nil)
+    #expect(bare == 0.5)
+  }
+}

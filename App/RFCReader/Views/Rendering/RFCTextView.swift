@@ -21,7 +21,7 @@ struct RFCTextView: View {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
-  let onTitleReveal: (ToolbarTitleState) -> Void
+  let onToolbarTitle: (ToolbarTitleState) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -39,7 +39,7 @@ struct RFCTextView: View {
     onScrollHandled: @escaping () -> Void,
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
-    onTitleReveal: @escaping (ToolbarTitleState) -> Void,
+    onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -50,7 +50,7 @@ struct RFCTextView: View {
     self.onScrollHandled = onScrollHandled
     self.onVisibleAnchorChange = onVisibleAnchorChange
     self.onLink = onLink
-    self.onTitleReveal = onTitleReveal
+    self.onToolbarTitle = onToolbarTitle
     self.heading = heading
     self.headerIdentity = headerIdentity
     self.header = AnyView(header())
@@ -66,7 +66,7 @@ struct RFCTextView: View {
           onScrollHandled: onScrollHandled,
           onVisibleAnchorChange: onVisibleAnchorChange,
           onLink: onLink,
-          onTitleReveal: onTitleReveal,
+          onToolbarTitle: onToolbarTitle,
           heading: heading,
           library: library,
           header: header,
@@ -88,7 +88,7 @@ struct ReaderInputs {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
-  let onTitleReveal: (ToolbarTitleState) -> Void
+  let onToolbarTitle: (ToolbarTitleState) -> Void
   let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView
@@ -101,10 +101,10 @@ struct ReaderInputs {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
-    coordinator.onTitleReveal = onTitleReveal
+    coordinator.onToolbarTitle = onToolbarTitle
     if coordinator.heading !== heading {
       coordinator.heading = heading
-      heading.didChange = { [weak coordinator] in coordinator?.updateTitleReveal() }
+      heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
     }
     coordinator.library = library
     // Only when it actually changed: the hosting controller is outside SwiftUI's

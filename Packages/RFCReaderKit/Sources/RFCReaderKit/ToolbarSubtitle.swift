@@ -8,6 +8,11 @@ import CoreGraphics
 /// over to the next as it passes. The hand-over scrubs with the scroll like the
 /// title's own reveal (`ToolbarTitleReveal`), so scrolling back up plays it in
 /// reverse without being told which way the reader is going.
+///
+/// Deliberately not the section tracking that feeds the contents' highlight and
+/// the reading position (`ReadingPlaceTracker`): that one counts the abstract as
+/// section one and switches as a heading reaches the top, where this names no
+/// section over the abstract and switches as a heading's last line passes.
 public enum ToolbarSubtitle {
   public struct State: Equatable, Sendable {
     /// The heading on its way out, nil for the document's title.
@@ -42,13 +47,35 @@ public enum ToolbarSubtitle {
     crossing: CGFloat
   ) -> State {
     let entries = sections.entries
-    guard let index = entries.lastIndex(where: { $0.offset <= topFragmentStart }) else {
-      return .steady(nil)
-    }
+    guard let index = sections.index(at: topFragmentStart) else { return .steady(nil) }
     let current = entries[index]
     guard current.offset == topFragmentStart else { return .steady(current.heading) }
     let previous = index > 0 ? entries[index - 1].heading : nil
     return State(outgoing: previous, incoming: current.heading, progress: crossing)
+  }
+
+  /// How far a paragraph's last line has passed under the toolbar's edge: the
+  /// `crossing` that `state` takes. The last line rather than the paragraph,
+  /// because a heading's layout fragment carries the space above it, and a
+  /// wrapped heading hands over as its last line passes, the way the title's
+  /// reveal does.
+  ///
+  /// - Parameters:
+  ///   - edge: the toolbar's bottom edge, in the coordinates `fragmentTop` is in.
+  ///   - lastLine: the last line's bounds, relative to the fragment; nil when the
+  ///     fragment has no lines, which then counts as one line its own height.
+  public static func crossing(
+    edge: CGFloat,
+    fragmentTop: CGFloat,
+    fragmentHeight: CGFloat,
+    lastLine: CGRect?
+  ) -> CGFloat {
+    let line = lastLine ?? CGRect(x: 0, y: 0, width: 0, height: fragmentHeight)
+    return ToolbarTitleReveal.progress(
+      headingBottom: fragmentTop + line.maxY,
+      visibleTop: edge,
+      distance: line.height
+    )
   }
 }
 
