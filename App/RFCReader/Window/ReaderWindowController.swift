@@ -366,6 +366,18 @@
       if let window { applyMinimumWidth(to: window) }
     }
 
+    /// Whether the contents panel is showing.
+    var isPanelOpen: Bool {
+      !panelItem.isCollapsed
+    }
+
+    /// Opens or closes the panel, the way the toolbar's toggle does — so only over
+    /// a document, which is what the toggle's validation allows.
+    func setPanelOpen(_ open: Bool) {
+      guard open != isPanelOpen, !open || reader.hasDocument else { return }
+      togglePanel()
+    }
+
     #if DEBUG
       /// Called from the debugger when a geometry claim needs re-checking: the reader's
       /// own frame must not change when the panel opens, and the panel's width must

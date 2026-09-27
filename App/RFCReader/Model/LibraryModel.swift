@@ -8,49 +8,6 @@ import SwiftData
   import AppKit
 #endif
 
-/// What the list in the middle column shows.
-enum LibraryFilter: Hashable, Identifiable {
-  case all
-  case recent
-  case bookmarks
-  case downloaded
-  case standards
-  case bestCurrentPractice
-  case stream(RFCKit.Stream)
-  case workingGroup(String)
-  case series(DocumentID)
-
-  var id: Self { self }
-
-  var title: String {
-    switch self {
-    case .all: "All RFCs"
-    case .recent: "Recently Read"
-    case .bookmarks: "Bookmarks"
-    case .downloaded: "Available Offline"
-    case .standards: "Internet Standards"
-    case .bestCurrentPractice: "Best Current Practices"
-    case .stream(let stream): stream.displayName
-    case .workingGroup(let group): group.uppercased()
-    case .series(let id): id.displayName
-    }
-  }
-
-  var systemImage: String {
-    switch self {
-    case .all: "books.vertical"
-    case .recent: "clock"
-    case .bookmarks: "bookmark"
-    case .downloaded: "arrow.down.circle"
-    case .standards: "checkmark.seal"
-    case .bestCurrentPractice: "hand.thumbsup"
-    case .stream: "tray"
-    case .workingGroup: "person.2"
-    case .series: "square.stack"
-    }
-  }
-}
-
 /// Application state: the index, navigation, and the document cache.
 ///
 /// One observable object keeps the SwiftUI surface small; SwiftData holds the
@@ -386,6 +343,40 @@ final class LibraryModel {
       AppDelegate.shared?.openTab(inBackground: inBackground)
     #endif
   }
+
+  #if os(macOS)
+    /// Where a document asked for by name opens: by a script today, and by an App
+    /// Intent when one needs the same choice.
+    enum Placement {
+      case frontTab
+      case newTab
+      case newWindow
+    }
+
+    /// Opens `link` where `placement` says.
+    ///
+    /// The front tab is the one the menu acts on (`AppDelegate.activeController`),
+    /// not whichever tab `route(_:)` would pick: a script that says "open this"
+    /// means the window it is looking at. With no window open there is no front
+    /// tab, and the link is routed the way one from outside is, which opens one.
+    func open(_ link: RFCLink, placement: Placement) {
+      switch placement {
+      case .frontTab:
+        guard let scene = AppDelegate.shared?.activeController?.navigation else {
+          route(link)
+          return
+        }
+        scene.open(link, in: index)
+        activate(scene)
+        AppDelegate.shared?.bringForward(scene)
+      case .newTab:
+        openInNewScene(link, inBackground: false)
+      case .newWindow:
+        pendingSceneLink = link
+        AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+      }
+    }
+  #endif
 
   // MARK: - Documents
 
