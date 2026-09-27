@@ -19,25 +19,25 @@ struct RFCXMLSerializerTests {
         "D\(items.count):" + items.map { $0.term.plainText }.joined(separator: "|")
       case .preformatted(let artwork): "A:" + artwork.text
       case .figure(let figure):
-        "F:\(figure.title ?? "")" + figure.blocks.map(blockKind).joined(separator: "|")
+        "F:\(figure.title, default: "")" + figure.blocks.map(blockKind).joined(separator: "|")
       case .table(let table): "T:\(table.header.count)x\(table.rows.count)"
       case .blockQuote(let blocks): "Q:" + blocks.map(blockKind).joined(separator: "|")
       case .aside(let blocks): "S:" + blocks.map(blockKind).joined(separator: "|")
       case .references(let list):
         "R:"
-          + list.entries.map { "\($0.anchor)=\($0.documentID?.description ?? "-")" }.joined(
+          + list.entries.map { "\($0.anchor)=\($0.documentID, default: "-")" }.joined(
             separator: ",")
       }
     }
     func visit(_ section: Section, depth: Int) {
       lines.append(
-        "\(depth) \(section.anchor) [\(section.number ?? "-")] \(section.isAppendix ? "appendix " : "")\(section.title)"
+        "\(depth) \(section.anchor) [\(section.number, default: "-")] \(section.isAppendix ? "appendix " : "")\(section.title)"
       )
       for block in section.blocks { lines.append("  " + blockKind(block)) }
       for sub in section.subsections { visit(sub, depth: depth + 1) }
     }
     lines.append(
-      "title=\(document.header.title) id=\(document.header.id?.description ?? "-") authors=\(document.header.authors.map(\.name))"
+      "title=\(document.header.title) id=\(document.header.id, default: "-") authors=\(document.header.authors.map(\.name))"
     )
     for block in document.header.abstract { lines.append("abstract " + blockKind(block)) }
     for section in document.sections { visit(section, depth: 1) }

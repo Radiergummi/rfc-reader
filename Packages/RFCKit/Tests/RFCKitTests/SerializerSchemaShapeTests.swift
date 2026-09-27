@@ -57,7 +57,7 @@ struct SerializerSchemaShapeTests {
     #expect(cited(document).contains(.rfc(2104)))
     #expect(cited(reparsed) == cited(document))
     let outline = { (document: RFCDocument) in
-      document.allSections.map { "\($0.anchor) \($0.number ?? "-") \($0.subsections.count)" }
+      document.allSections.map { "\($0.anchor) \($0.number, default: "-") \($0.subsections.count)" }
     }
     #expect(outline(reparsed) == outline(document))
   }
