@@ -39,18 +39,6 @@ struct RFCListView: View {
     )
   }
 
-  /// Selecting a row is a navigation, so it goes through the history rather than
-  /// assigning the selection behind its back.
-  private var selectionBinding: Binding<DocumentID?> {
-    Binding(
-      get: { navigation.selection },
-      // Not `library.open(_:activation:in:)` like every other open: a selection
-      // binding is handed the outcome, not the click, and Command-click on a
-      // list row is the platform's multi-select chord rather than ours to take.
-      set: { if let id = $0 { navigation.select(id) } }
-    )
-  }
-
   var body: some View {
     @Bindable var navigation = navigation
     let bookmarked = bookmarkedNumbers
@@ -59,7 +47,11 @@ struct RFCListView: View {
     // memoising.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
-    List(selection: selectionBinding) {
+    // Selecting a row is a navigation: the setter goes through the history. Not
+    // `library.open(_:activation:in:)` like every other open: a selection binding
+    // is handed the outcome, not the click, and Command-click on a list row is the
+    // platform's multi-select chord rather than ours to take.
+    List(selection: $navigation.selection) {
       ForEach(rows.prefix(limit)) { rfc in
         RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
           .tag(rfc.id)
@@ -96,6 +88,9 @@ struct RFCListView: View {
     .onChange(of: navigation.selection) {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
+    #if !os(macOS)
+      .navigationTitle(navigation.filter.title)
+    #endif
   }
 
   /// Where the selected document sits in the list, if it is in it at all.

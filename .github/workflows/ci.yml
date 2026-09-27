@@ -58,16 +58,17 @@ jobs:
 
   rfckit-macos:
     name: RFCKit tests (macOS)
-    # Xcode 16 on purpose, not the app's Xcode 26: both packages declare
-    # swift-tools-version 6.0 and macOS 15, and this is what holds them to it.
-    runs-on: macos-15
+    # Xcode 26.4 on purpose, not the runner's newest: it is the first to ship
+    # Swift 6.3, the swift-tools-version every package declares and the swift:6.3
+    # image the Linux jobs run, and this is what holds the packages to it.
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(printf '%s\n' /Applications/Xcode_16*.app | tail -1)"
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
       - run: swift --version
       - run: swift test --package-path Packages/RFCKit
       - run: make test-app
@@ -96,12 +97,12 @@ jobs:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
           restore-keys: xcode-compilation-cache-
-      # Compiling is the point, so both builds go unsigned; project.yml ships
-      # without a DEVELOPMENT_TEAM and the Makefile turns signing off without one.
+      # Compiling is the point, so both builds go unsigned: the runner has no
+      # certificate for the team project.yml names.
       - name: Build for macOS
-        run: make build-app
+        run: make build-app CODE_SIGNING_ALLOWED=NO
       - name: Build for the iOS Simulator
-        run: make build-ios
+        run: make ios-sim CODE_SIGNING_ALLOWED=NO
       # Saved from main only: a pull request restores main's newest cache, and
       # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache
@@ -115,7 +116,7 @@ jobs:
     name: RFCKit tests (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    container: swift:6.1@sha256:3991e5dd5c40b04580c1e56f1ad6042f3173829b1995ffa53b84957371c25876
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

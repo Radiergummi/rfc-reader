@@ -83,7 +83,11 @@ final class LibraryModel {
     indexState = .loading
     do {
       if let cached = try await store.cachedIndex() {
-        apply(cached.index, updatedAt: cached.updatedAt)
+        // The store parses the cached index on its own actor; the search and the
+        // working groups are built off the main actor as well.
+        let index = cached.index
+        let prepared = await Task.detached { PreparedIndex(index: index) }.value
+        apply(prepared, updatedAt: cached.updatedAt)
         // Refresh in the background if the cache is older than a day.
         if cached.updatedAt.timeIntervalSinceNow < -86_400 {
           Task { await refreshIndex() }
@@ -100,20 +104,22 @@ final class LibraryModel {
   func refreshIndex() async {
     do {
       let data = try await client.fetchIndexData()
-      let parsed = try RFCIndexParser.parse(data)
+      // Off the main actor: the parse alone is about a second (#124).
+      let prepared = try await Task.detached { try PreparedIndex.parse(data) }.value
       try await store.storeIndex(data)
-      apply(parsed, updatedAt: .now)
+      apply(prepared, updatedAt: .now)
     } catch {
       if index == nil { indexState = .failed(error.localizedDescription) }
     }
   }
 
-  private func apply(_ index: RFCIndex, updatedAt: Date) {
-    self.index = index
-    self.search = IndexSearch(index: index)
-    self.topWorkingGroups = Self.workingGroups(in: index)
+  /// Only assigns: everything in `prepared` was built off the main actor.
+  private func apply(_ prepared: PreparedIndex, updatedAt: Date) {
+    self.index = prepared.index
+    self.search = prepared.search
+    self.topWorkingGroups = prepared.topWorkingGroups
     listCache.removeAll()
-    indexState = .ready(count: index.rfcs.count, updatedAt: updatedAt)
+    indexState = .ready(count: prepared.index.rfcs.count, updatedAt: updatedAt)
   }
 
   // MARK: - Lists
@@ -127,15 +133,8 @@ final class LibraryModel {
   /// Derived once per index rather than per read: `SidebarView.body` reads this, so
   /// as a computed property it counted all 9,842 RFCs and sorted them again on every
   /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
+  /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
-
-  private static func workingGroups(in index: RFCIndex) -> [String] {
-    var counts: [String: Int] = [:]
-    for rfc in index.rfcs {
-      if let group = rfc.workingGroup { counts[group, default: 0] += 1 }
-    }
-    return counts.sorted { $0.value > $1.value }.prefix(12).map(\.key)
-  }
 
   /// Everything the list is a function of.
   ///
@@ -161,7 +160,14 @@ final class LibraryModel {
   /// with one slot, two tabs listing different things evict each other on every pass
   /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
   /// -- this is a cache, so losing an entry costs time, never correctness.
-  private var listCache: [ListKey: [RFCMetadata]] = [:]
+  ///
+  /// Not observed: `list` writes it from `RFCListView.body` on a miss, and a write to
+  /// a property the running body read invalidated that body, so every miss rendered
+  /// the list twice (#126). It is a memo of state that is observed, not state itself.
+  /// That makes a hit read nothing observable, though, so `list` reads `index`
+  /// before looking here: the key carries every other input, and those the caller
+  /// reads for itself.
+  @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
   func list(
@@ -171,6 +177,9 @@ final class LibraryModel {
     recentlyRead: [Int],
     downloaded: Set<Int>
   ) -> [RFCMetadata] {
+    // Observed on every call, hit or miss: this is what re-renders the list when
+    // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
+    guard let index else { return [] }
     let key = ListKey(
       filter: filter,
       query: searchText.trimmingCharacters(in: .whitespaces),
@@ -179,7 +188,7 @@ final class LibraryModel {
       downloaded: downloaded
     )
     if let hit = listCache[key] { return hit }
-    let computed = computeList(key)
+    let computed = computeList(key, in: index)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
@@ -187,10 +196,12 @@ final class LibraryModel {
 
   /// Reads every input off the key, so the cache cannot go stale against something
   /// this consults but the key does not carry. The one input not in the key is
-  /// `index`, which is why `apply` empties the cache.
-  private func computeList(_ key: ListKey) -> [RFCMetadata] {
+  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
+  /// empties the cache: that keeps the cache correct, and the read of `index` at the
+  /// top of `list` is what gets the view to ask again. The index is handed in from
+  /// that read rather than read again here, so the observed read is the only one.
+  private func computeList(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     let filter = key.filter
-    guard let index else { return [] }
     let base: [RFCMetadata]
     switch filter {
     case .all: base = index.rfcs.reversed()

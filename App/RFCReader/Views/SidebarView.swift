@@ -6,7 +6,7 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
 
   var body: some View {
-    List(selection: selection) {
+    List(selection: Bindable(navigation).sidebarSelection) {
       Section("Library") {
         row(.bookmarks)
         row(.recent)
@@ -42,6 +42,15 @@ struct SidebarView: View {
           }
         }
       }
+      #if !os(macOS)
+        // The list's last footer, scrolling with it (#251). As a bar on the bottom
+        // edge it sat under iOS 26's floating search field in a strip of old bar
+        // material of its own.
+        Section {
+        } footer: {
+          IndexStatusView()
+        }
+      #endif
     }
     .navigationTitle("RFCs")
     // Search lives on the sidebar, not on the list it filters, and not in the
@@ -59,18 +68,14 @@ struct SidebarView: View {
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
     #endif
     .labelStyle(SidebarLabelStyle())
-    .safeAreaInset(edge: .bottom) {
-      IndexStatusView()
-    }
-  }
-
-  /// iOS only offers `List(selection:)` with an optional binding, and deselecting
-  /// should leave the current filter in place rather than clear it.
-  private var selection: Binding<LibraryFilter?> {
-    Binding(
-      get: { navigation.filter },
-      set: { if let new = $0 { navigation.filter = new } }
-    )
+    #if os(macOS)
+      .safeAreaInset(edge: .bottom) {
+        IndexStatusView()
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+      }
+    #endif
   }
 
   private func row(_ filter: LibraryFilter) -> some View {
@@ -163,8 +168,5 @@ struct IndexStatusView: View {
     }
     .font(.caption)
     .foregroundStyle(.secondary)
-    .padding(8)
-    .frame(maxWidth: .infinity)
-    .background(.bar)
   }
 }

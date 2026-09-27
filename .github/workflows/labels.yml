@@ -1,0 +1,39 @@
+name: Labels
+
+# Creates or updates the issue labels listed in .github/labels.yml. Labels that are not
+# listed there are left alone: nothing is ever deleted.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync labels
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # yq and gh are preinstalled on the runner. --force updates a label that exists.
+      - run: |
+          yq -o=json -I=0 '.[]' .github/labels.yml | while IFS= read -r label; do
+            name=$(jq -r .name <<<"$label")
+            gh label create "$name" \
+              --color "$(jq -r .color <<<"$label")" \
+              --description "$(jq -r .description <<<"$label")" \
+              --force
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
