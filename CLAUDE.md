@@ -53,17 +53,24 @@ Standing constraints those documents establish, which are easy to violate by acc
 
 `LegacyTextParser` recovers structure from plain text by indentation and shape, so every change risks a regression across 8,464 documents. The workflow:
 
-1. Add the minimal input as a fixture in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` and a test first. Findings from full corpus runs live in the `Legacy text parser: corpus findings` suite.
-2. Fix the heuristic when a class of documents is wrong; add a hand-corrected `corpus/overrides/rfcNNNN.xml` when exactly one document is.
+1. Write the test first, as the first of these that can show the problem:
+   1. a guard-level test over hand-written lines (below);
+   2. a test through `parse` over a fixture already committed in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` that has the right shape;
+   3. a corpus-backed test.
+
+   Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and CI skip them. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
+2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 
-Tests use Swift Testing (`@Suite`, `@Test`, `#expect`) with real RFC files loaded through `Fixtures`, not synthetic snippets.
+Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
 
 The rule is about what a **document-shaped** input has to be. Anything fed to `parse` is a real RFC, because a synthetic document is exactly the thing that lacks the quirks these heuristics exist for — the justification, the tab indents, the inverted page furniture. A hand-written document tests the parser against the author's idea of an RFC.
 
-A **guard-level** test of a pure function is the exception, and may take a hand-written `[String]`: `LegacyTextParser.diagnose` over three lines pinning "indent 7 yields exactly `[.indentTooDeep]`" is testing the guard, and routing it through a whole document would test the pipeline instead, needing a fixture file per threshold to say less. Keep those beside the fixture-driven tests that cover the same code through `parse` — `ProseDiagnosticsTests` is the pattern: the guards get line arrays, the invariants get `rfc757`, `rfc1245`, `rfc2119`, `rfc1149`.
+A **guard-level** test of a pure function is the exception, and may take a hand-written `[String]`: `LegacyTextParser.diagnose` over three lines pinning "indent 7 yields exactly `[.indentTooDeep]`" is testing the guard, and routing it through a whole document would test the pipeline instead, needing a fixture file per threshold to say less. Keep those beside the fixture-driven tests that cover the same code through `parse` where a committed fixture of that shape exists, and cover it with a corpus-backed test otherwise — `ProseDiagnosticsTests` is the pattern: the guards get line arrays, the invariants get `rfc757`, `rfc1245`, `rfc2119`, `rfc1149`.
 
-The line is the entry point, not the size of the input. If a test calls `parse`, it uses a fixture.
+The line is the entry point, not the size of the input. If a test calls `parse`, it uses a committed fixture or a corpus document.
+
+**No RFC text is committed to the repository**: no new fixtures, no excerpts or trimmed copies of existing ones, and no override snapshots. The texts are copyrighted, and their licensing is an open question with the IETF Trust. The fixtures already committed on `main` stay and may be read by tests, but they may not be copied or excerpted into new files, another package's fixture directory included. The hand-written lines of a guard-level test are written in the shape of an RFC, never quoted from one, the RFC being fixed included. Any other text a check needs is fetched into the gitignored `corpus/` at run time. Reaching a private classifier from a guard-level test may mean exposing an internal `static` overload over `[String]`, as `numbersHeadingsWithAColon(_: [String])` does.
 
 ## Generated files
 
