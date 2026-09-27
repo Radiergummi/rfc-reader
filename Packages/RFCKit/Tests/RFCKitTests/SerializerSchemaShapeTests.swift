@@ -10,15 +10,15 @@ import Testing
 /// corpus's schema check named for it, through the parser and the serializer.
 @Suite("Serializer: schema shape")
 struct SerializerSchemaShapeTests {
-  private static func converted(_ name: String) throws -> (RFCDocument, RFCKit.XMLElement) {
+  private static func converted(_ name: String) throws -> (RFCDocument, XMLTree.Element) {
     let document = LegacyTextParser.parse(try Fixtures.data(name))
     let xml = RFCXMLSerializer().serialize(document)
-    return (document, try XMLTreeBuilder.parse(Data(xml.utf8)))
+    return (document, try XMLTree.parse(Data(xml.utf8)))
   }
 
   /// Every ID the schema declares below `element`, as `SchemaCheck` counts them: each
   /// element's `anchor`, `pn` and `slugifiedName`, once per element.
-  private static func declaredIDs(in element: RFCKit.XMLElement) -> [String] {
+  private static func declaredIDs(in element: XMLTree.Element) -> [String] {
     element.elements.flatMap { child -> [String] in
       let own = Set([child["anchor"], child["pn"], child["slugifiedName"]].compactMap { $0 })
       return own.sorted() + declaredIDs(in: child)

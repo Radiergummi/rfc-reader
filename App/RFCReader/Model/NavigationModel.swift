@@ -15,7 +15,6 @@ import SwiftUI
 /// The stack itself is `NavigationHistory` in RFCReaderKit, under test. This type is
 /// the observable shell around it, plus the bookkeeping SwiftUI needs.
 @Observable
-@MainActor
 final class NavigationModel: Identifiable {
   /// A request to scroll somewhere, carrying its own identity.
   ///

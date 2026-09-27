@@ -22,6 +22,15 @@ enum Fixtures {
     }.sorted()
   }
 
+  /// Every document fixture, legacy text and RFCXML alike: `rfc<number>.txt` or
+  /// `rfc<number>.xml`, which leaves out the index and feed samples beside them.
+  static func documents() throws -> [String] {
+    let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+    return try FileManager.default.contentsOfDirectory(atPath: directory.path).filter {
+      $0.wholeMatch(of: #/rfc\d+\.(txt|xml)/#) != nil
+    }.sorted()
+  }
+
   static func sampleIndex() throws -> RFCIndex {
     try RFCIndexParser.parse(try data("rfc-index-sample.xml"))
   }

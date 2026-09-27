@@ -172,12 +172,12 @@ extension RFCTextViewCoordinator {
     // `NSAccessibilityCustomRotorItemSearchDelegate` is not itself `@MainActor` —
     // unlike UIKit's rotor search block, it carries no `NS_SWIFT_UI_ACTOR`
     // annotation — so conforming from a `@MainActor` type needs an isolated
-    // conformance (the `@MainActor` before the protocol name below) rather than
-    // plain conformance, which Swift 6 strict concurrency rejects as crossing
-    // into actor-isolated code unsafely. AppKit's `NSAccessibility` bridge methods
-    // are a main-thread-only contract in practice, just not one the compiler can
-    // see, so this asserts what every other AppKit accessibility override here
-    // already assumes.
+    // conformance (the `@MainActor` before the protocol name below). Approachable
+    // concurrency would infer it; it is spelled out because it is a claim about
+    // AppKit, not a default. `NSAccessibility` bridge methods are a
+    // main-thread-only contract in practice, just not one the compiler can see,
+    // so this asserts what every other AppKit accessibility override here already
+    // assumes.
     @objc func rotor(
       _ rotor: NSAccessibilityCustomRotor,
       resultFor searchParameters: NSAccessibilityCustomRotor.SearchParameters
