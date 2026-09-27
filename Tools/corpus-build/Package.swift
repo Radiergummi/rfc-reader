@@ -10,7 +10,8 @@ import PackageDescription
 // concurrency, logging (swift-log) and xmllint.
 let package = Package(
   name: "corpus-build",
-  platforms: [.macOS(.v15)],
+  // RFCKit's floor.
+  platforms: [.macOS(.v26)],
   dependencies: [
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),

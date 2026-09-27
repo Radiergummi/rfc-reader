@@ -3,10 +3,11 @@ import PackageDescription
 
 let package = Package(
   name: "RFCReaderKit",
+  // The app's floors: nothing else consumes this package (#129). No visionOS until
+  // there is a visionOS target.
   platforms: [
-    .iOS(.v18),
-    .macOS(.v15),
-    .visionOS(.v2),
+    .iOS(.v26),
+    .macOS(.v26),
   ],
   products: [
     .library(name: "RFCReaderKit", targets: ["RFCReaderKit"])
