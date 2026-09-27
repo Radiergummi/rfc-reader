@@ -135,8 +135,9 @@ import RFCReaderKit
     /// its length is the character count every range VoiceOver asks for is measured
     /// in.
     override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
-      read(
+      AccessibleReading.reading(
         range,
+        in: attributedString(),
         text: { super.accessibilityAttributedString(for: $0) },
         label: { NSAttributedString(string: $0) },
         join: { parts in
@@ -150,31 +151,12 @@ import RFCReaderKit
     /// whether AppKit builds one from the other is not ours to know, and if it did,
     /// the two overrides would call each other forever.
     override func accessibilityString(for range: NSRange) -> String? {
-      read(
+      AccessibleReading.reading(
         range,
+        in: attributedString(),
         text: { super.accessibilityString(for: $0) },
         label: { $0 },
         join: { $0.joined() })
-    }
-
-    private func read<Reading>(
-      _ range: NSRange,
-      text: (NSRange) -> Reading?,
-      label: (String) -> Reading,
-      join: ([Reading]) -> Reading
-    ) -> Reading? {
-      let pieces = AccessibleReading.pieces(of: range, in: attributedString())
-      // All of it text: the common case, prose, left entirely to AppKit. Not "no
-      // label": a range over a diagram's later lines has none, and must still be
-      // silent rather than read out.
-      if pieces == [.text(range)] { return text(range) }
-      return join(
-        pieces.compactMap { piece in
-          switch piece {
-          case .text(let range): text(range)
-          case .label(let spoken): label(spoken)
-          }
-        })
     }
   }
 #endif

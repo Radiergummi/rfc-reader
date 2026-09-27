@@ -15,13 +15,41 @@ import RFCKit
 /// break is kept, so what follows starts a line of its own.
 ///
 /// A pure function of the text and the range, where it can be tested; the text
-/// view's accessibility overrides assemble the pieces.
+/// view's accessibility overrides call `reading` with their own `super`.
 public enum AccessibleReading {
   public enum Piece: Equatable {
     /// Characters to read as they are.
     case text(NSRange)
     /// A diagram, said in place of its characters.
     case label(String)
+  }
+
+  /// What an accessor returns for `range`: `text` reads characters as they are,
+  /// which is the accessor's `super`, `label` turns a diagram's label into what the
+  /// accessor returns, and `join` puts the pieces back together.
+  ///
+  /// A range that is all text goes to `text` whole, so prose keeps every attribute
+  /// AppKit gives VoiceOver, and so does a range with nothing in it, whose answer is
+  /// AppKit's to give. Not "a range with no label": a diagram's later lines have
+  /// none, and must still be silent rather than read out.
+  public static func reading<Reading>(
+    _ range: NSRange,
+    in text: NSAttributedString,
+    text read: (NSRange) -> Reading?,
+    label: (String) -> Reading,
+    join: ([Reading]) -> Reading
+  ) -> Reading? {
+    guard NSIntersectionRange(range, NSRange(location: 0, length: text.length)).length > 0
+    else { return read(range) }
+    let pieces = pieces(of: range, in: text)
+    if pieces == [.text(range)] { return read(range) }
+    return join(
+      pieces.compactMap { piece in
+        switch piece {
+        case .text(let range): read(range)
+        case .label(let spoken): label(spoken)
+        }
+      })
   }
 
   public static func pieces(of range: NSRange, in text: NSAttributedString) -> [Piece] {
@@ -50,33 +78,13 @@ public enum AccessibleReading {
       if piece.location == diagram.location {
         pieces.append(.label(label(for: box)))
       }
+      // The builder ends every verbatim block with a line break.
       let last = NSMaxRange(diagram) - 1
-      if NSLocationInRange(last, piece), (text.string as NSString).character(at: last) == 0x0A {
+      if NSLocationInRange(last, piece) {
         read(NSRange(location: last, length: 1))
       }
     }
     return pieces
-  }
-
-  /// Every diagram's whole extent, found independently of `pieces`: consecutive
-  /// artwork runs over the same `VerbatimBox` are one diagram.
-  static func diagrams(in text: NSAttributedString) -> [NSRange] {
-    var diagrams: [NSRange] = []
-    var open: ObjectIdentifier?
-    text.enumerateAttribute(.rfcVerbatim, in: NSRange(location: 0, length: text.length)) {
-      value, range, _ in
-      guard let box = value as? VerbatimBox, box.content.kind == .artwork else {
-        open = nil
-        return
-      }
-      if ObjectIdentifier(box) == open, let last = diagrams.popLast() {
-        diagrams.append(NSUnionRange(last, range))
-      } else {
-        diagrams.append(range)
-      }
-      open = ObjectIdentifier(box)
-    }
-    return diagrams
   }
 
   /// The name, when the source gives one: it is the one thing about a diagram the
