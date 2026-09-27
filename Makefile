@@ -1,7 +1,7 @@
 .PHONY: lint fmt build test check test-app xcodeproj build-app build-ios run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
-# -- parsers, index, search, citations -- and builds anywhere a Swift 6 toolchain
+# -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
 # does, including Linux. corpus-build is the offline pipeline that turns the
 # legacy plain-text RFCs into RFCXML packs (docs/DATA_PIPELINE.md).
 RFCKIT       := Packages/RFCKit
@@ -46,12 +46,12 @@ test:
 
 ## Run all checks (lint + packages + tests)
 # Deliberately without build-app: that one needs Xcode and a Mac, while
-# everything here runs in the swift:6.1 container CI uses.
+# everything here runs in the swift:6.3 container CI uses.
 check: lint build test
 
 ## Run the app-side test suite (RFCReaderKit)
 # Not part of `check`: this package imports UIKit/AppKit, so it needs an Apple
-# SDK and cannot run in the swift:6.1 container the Linux job uses.
+# SDK and cannot run in the swift:6.3 container the Linux job uses.
 test-app:
 	swift test --package-path $(RFCREADERKIT)
 

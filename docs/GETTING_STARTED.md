@@ -1,6 +1,6 @@
 # Getting started
 
-You need a Mac with Xcode 26 or newer (the app targets iOS 26 and macOS 26). The Swift package alone builds with any Swift 6 toolchain, including on Linux.
+You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26). The Swift package alone builds with any Swift 6.3 toolchain, including on Linux.
 
 ## 1. Run the core package tests first
 
@@ -71,4 +71,4 @@ Drop `--limit` for the full 8,464 legacy RFCs (about 450 MB, twenty minutes at t
 
 ## Working on RFCKit from Linux or CI
 
-The package has no Apple dependencies. `Foundation`, `FoundationXML` and `FoundationNetworking` are imported conditionally, and the tests run in a `swift:6.1` container (see `.github/workflows/ci.yml`).
+The package has no Apple dependencies. `Foundation`, `FoundationXML` and `FoundationNetworking` are imported conditionally, and the tests run in a `swift:6.3` container (see `.github/workflows/ci.yml`).
