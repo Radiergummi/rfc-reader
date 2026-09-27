@@ -23,7 +23,7 @@ struct RFCListView: View {
   @State private var limit = ListWindow.page
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    /// The row a collapsed split view has pushed. See `selectionBinding`.
+    /// The row a collapsed split view has pushed. See `collapsedSelection`.
     @State private var pushedSelection: DocumentID?
   #endif
 
@@ -48,19 +48,8 @@ struct RFCListView: View {
   /// assigning the selection behind its back.
   private var selectionBinding: Binding<DocumentID?> {
     #if !os(macOS)
-      // In a collapsed split view a row is a push, not a selection, and popping
-      // back writes nil. The history has no "no document" to take it, so the
-      // binding below refused it and the row stayed highlighted for good (#250).
-      // Here the pushed row is kept on its own and cleared by the pop; the history
-      // keeps the document, and the reader keeps what it loaded.
       if horizontalSizeClass == .compact {
-        return Binding(
-          get: { pushedSelection },
-          set: {
-            pushedSelection = $0
-            if let id = $0 { navigation.select(id) }
-          }
-        )
+        return collapsedSelection(pushed: $pushedSelection) { navigation.select($0) }
       }
     #endif
     return Binding(

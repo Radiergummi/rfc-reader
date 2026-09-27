@@ -64,24 +64,13 @@ import SwiftUI
       // and took the room the reader's title needed (#245). The system button
       // leaves the document there, and the reader's More menu holds the pair.
       .toolbar {
-        if DocumentView.hasRoomyToolbar(
-          horizontal: horizontalSizeClass, vertical: verticalSizeClass)
+        if ReaderLayout.toolbarHasRoom(
+          isRegularWidth: horizontalSizeClass == .regular,
+          isCompactHeight: verticalSizeClass == .compact)
         {
           ToolbarItem(placement: .navigation) {
             ControlGroup {
-              Button {
-                navigation.goBack()
-              } label: {
-                Label("Back", systemImage: "chevron.backward")
-              }
-              .disabled(!navigation.canGoBack)
-
-              Button {
-                navigation.goForward()
-              } label: {
-                Label("Forward", systemImage: "chevron.forward")
-              }
-              .disabled(!navigation.canGoForward)
+              HistoryButtons()
             }
             .controlGroupStyle(.navigation)
           }

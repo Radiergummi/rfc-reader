@@ -5,6 +5,20 @@ import Testing
 
 @Suite("Reader layout")
 struct ReaderLayoutTests {
+  @Test func anIPhoneInPortraitKeepsTheBarToContentsAndMore() {
+    #expect(!ReaderLayout.toolbarHasRoom(isRegularWidth: false, isCompactHeight: false))
+  }
+
+  /// Most iPhones report a compact width even in landscape: the height is what
+  /// says there is room.
+  @Test func anIPhoneInLandscapeHasRoom() {
+    #expect(ReaderLayout.toolbarHasRoom(isRegularWidth: false, isCompactHeight: true))
+  }
+
+  @Test func anIPadHasRoom() {
+    #expect(ReaderLayout.toolbarHasRoom(isRegularWidth: true, isCompactHeight: false))
+  }
+
   @Test func aNarrowViewGivesTheColumnEverythingButTheMargins() {
     #expect(ReaderLayout.column(forWidth: 390) == 390 - ReaderLayout.margin * 2)
   }

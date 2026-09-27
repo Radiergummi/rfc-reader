@@ -31,13 +31,9 @@ struct DocumentView: View {
   @State private var built: BuiltDocument?
   @State private var originalText: String?
   @State private var loadError: String?
-  /// Which document `document` is, so a view that appears again keeps what it has
-  /// rather than loading it afresh.
-  @State private var loadedID: DocumentID?
-  /// Counts loads, so the one that finishes last is not mistaken for the one asked
-  /// for last, and so each loaded document triggers its own build. See
-  /// `BuildInputs.generation`.
-  @State private var loadGeneration = 0
+  /// Bumped by Try Again. Part of the load task's id, so a retry is a structured
+  /// task that SwiftUI cancels with the view, like the first load.
+  @State private var loadAttempt = 0
   /// What the document on screen was built from, so appearing again with nothing
   /// changed does not build it again.
   @State private var builtInputs: BuildInputs?
@@ -86,14 +82,9 @@ struct DocumentView: View {
   /// place whatever changed — a new RFC, the font-size slider, or a window resize.
   private struct BuildInputs: Equatable {
     /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
-    /// triggers the build.
+    /// triggers the build. `load()` only ever fetches into a view with no
+    /// document, so every load arrives as a false → true transition.
     let hasDocument: Bool
-    /// Which load the document came from. `hasDocument` alone relied on `load()`
-    /// clearing `document` to make every load arrive as a false → true transition,
-    /// but `.task(id:)` compares only what it sees when `body` runs: a document
-    /// served from the cache comes back before the next render, the cleared state
-    /// is never seen, the build never starts, and the reader spins forever (#253).
-    let generation: Int
     let fontSize: Double
     let column: CGFloat?
 
@@ -102,9 +93,15 @@ struct DocumentView: View {
     }
   }
 
+  /// What the load task is keyed on: the document, and how many times it was
+  /// retried.
+  private struct LoadKey: Equatable {
+    let id: DocumentID
+    let attempt: Int
+  }
+
   private var buildInputs: BuildInputs {
-    BuildInputs(
-      hasDocument: document != nil, generation: loadGeneration, fontSize: fontSize, column: column)
+    BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
   }
 
   /// The reader, and on macOS only the reader.
@@ -140,7 +137,7 @@ struct DocumentView: View {
           .inspectorColumnWidth(min: 260, ideal: 320)
         }
       #endif
-      .task(id: id) {
+      .task(id: LoadKey(id: id, attempt: loadAttempt)) {
         markAsRead()
         await load()
       }
@@ -227,7 +224,7 @@ struct DocumentView: View {
       } description: {
         Text(loadError)
       } actions: {
-        Button("Try Again") { Task { await load() } }
+        Button("Try Again") { loadAttempt += 1 }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else {
@@ -237,17 +234,10 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
-    /// iPad, and every iPhone held sideways: where the bar has room for Share and
-    /// the back/forward pair as well (#245). Most iPhones stay compact in width even
-    /// in landscape, so the vertical class is the one that says there is room.
-    static func hasRoomyToolbar(
-      horizontal: UserInterfaceSizeClass?, vertical: UserInterfaceSizeClass?
-    ) -> Bool {
-      horizontal == .regular || vertical == .compact
-    }
-
     private var hasRoomyToolbar: Bool {
-      Self.hasRoomyToolbar(horizontal: horizontalSizeClass, vertical: verticalSizeClass)
+      ReaderLayout.toolbarHasRoom(
+        isRegularWidth: horizontalSizeClass == .regular,
+        isCompactHeight: verticalSizeClass == .compact)
     }
 
     /// Contents and More, plus Share when there is room; everything else is in
@@ -280,7 +270,9 @@ struct DocumentView: View {
     }
 
     private var moreMenu: some View {
-      Menu {
+      // Read once: a linear scan of the bookmarks, and the label wants it twice.
+      let bookmarked = isBookmarked
+      return Menu {
         Section {
           if !hasRoomyToolbar, let metadata {
             shareLink(metadata)
@@ -290,8 +282,8 @@ struct DocumentView: View {
             toggleBookmark()
           } label: {
             Label(
-              isBookmarked ? "Remove Bookmark" : "Bookmark",
-              systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+              bookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: bookmarked ? "bookmark.fill" : "bookmark")
           }
           .keyboardShortcut("d", modifiers: .command)
 
@@ -313,19 +305,7 @@ struct DocumentView: View {
         // bar instead (`ContentView`).
         if !hasRoomyToolbar {
           Section {
-            Button {
-              navigation.goBack()
-            } label: {
-              Label("Back", systemImage: "chevron.backward")
-            }
-            .disabled(!navigation.canGoBack)
-
-            Button {
-              navigation.goForward()
-            } label: {
-              Label("Forward", systemImage: "chevron.forward")
-            }
-            .disabled(!navigation.canGoForward)
+            HistoryButtons()
           }
         }
 
@@ -359,48 +339,40 @@ struct DocumentView: View {
   ///
   /// `.task` runs this again every time the view appears, and on an iPhone the
   /// reader disappears and appears again whenever the list is popped to and the
-  /// same row pushed. A document already loaded stays as it is.
+  /// same row pushed. A document already loaded stays as it is: clearing it and
+  /// setting it again before the next render, as a cached document did, left the
+  /// build task nothing to see, and the reader spun forever (#253). The view is
+  /// made per document (`.id(selection)`), so a document here is always this one.
   private func load() async {
-    if document != nil, loadedID == id { return }
-    loadGeneration += 1
-    let generation = loadGeneration
+    if document != nil { return }
     loadError = nil
     document = nil
     built = nil
     sectionNumbers = [:]
-    // A reused view must not carry the previous document's place into the new
-    // one; `install()` reports the real anchor a moment later.
+    // The scene's `ReaderState` must not carry the previous document's place into
+    // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     lastVisibleAnchor.anchor = nil
     reader.showOriginal = preferOriginalText
     do {
       let loaded = try await library.document(for: id)
-      guard isCurrent(generation) else { return }
+      // Cancelled when the view disappears, or by Try Again starting over; the
+      // request it cancels fails with `URLError.cancelled`, which was shown as
+      // "Couldn't load RFC … / cancelled" (#252). The next load writes instead.
+      guard !Task.isCancelled else { return }
       reader.groups = ReferenceGroup.groups(in: loaded)
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
-      loadedID = id
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
     } catch {
-      guard isCurrent(generation) else { return }
+      guard !Task.isCancelled else { return }
       loadError = error.localizedDescription
     }
-  }
-
-  /// Whether a load that has just finished may still write its result.
-  ///
-  /// Not when the view's task was cancelled: that happens when the view
-  /// disappears, and the request it cancels fails with `URLError.cancelled`, which
-  /// was then shown as "Couldn't load RFC … / cancelled" (#252). The next
-  /// appearance loads again. And not when another load was started since, such as
-  /// Try Again, whose result is the one to show.
-  private func isCurrent(_ generation: Int) -> Bool {
-    !Task.isCancelled && generation == loadGeneration
   }
 
   /// The one place the document is built.
@@ -415,7 +387,7 @@ struct DocumentView: View {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
     // Appearing again restarts this task with nothing changed.
-    guard built == nil || inputs != builtInputs else { return }
+    guard inputs != builtInputs else { return }
     if built != nil {
       try? await Task.sleep(for: .milliseconds(650))
       guard !Task.isCancelled else { return }

@@ -103,9 +103,6 @@ actor DocumentStore {
         parsed[id] = document
         return document
       }
-      // A cancelled request is not missing XML: asking for the text next would
-      // only fail the same way, and that failure is the one the reader reported.
-      try Task.checkCancellation()
     }
     let data = try await client.fetchDocumentData(id, format: .text)
     try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }

@@ -6,7 +6,7 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    /// The filter a collapsed split view has pushed. See `selection`.
+    /// The filter a collapsed split view has pushed. See `collapsedSelection`.
     @State private var pushedFilter: LibraryFilter?
   #endif
 
@@ -92,18 +92,8 @@ struct SidebarView: View {
   /// should leave the current filter in place rather than clear it.
   private var selection: Binding<LibraryFilter?> {
     #if !os(macOS)
-      // In a collapsed split view a row is a push, not a selection, and popping
-      // back writes nil. The binding below refuses that, because the filter always
-      // has a value, so "All RFCs" stayed highlighted from launch onwards (#250).
-      // Here the pushed filter is kept on its own and cleared by the pop.
       if horizontalSizeClass == .compact {
-        return Binding(
-          get: { pushedFilter },
-          set: {
-            pushedFilter = $0
-            if let new = $0 { navigation.filter = new }
-          }
-        )
+        return collapsedSelection(pushed: $pushedFilter) { navigation.filter = $0 }
       }
     #endif
     return Binding(

@@ -80,13 +80,9 @@ struct PanelHost: View {
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
   /// Called after a choice in the panel has navigated, which is when iOS closes the
-  /// panel's sheet. Nil on macOS, where the panel is a split item beside the text
-  /// and collapses through AppKit, not through a SwiftUI presentation.
-  private let didNavigate: (() -> Void)?
-
-  init(didNavigate: (() -> Void)? = nil) {
-    self.didNavigate = didNavigate
-  }
+  /// panel's sheet. Nothing on macOS, where the panel is a split item beside the
+  /// text and collapses through AppKit, not through a SwiftUI presentation.
+  var didNavigate: () -> Void = {}
 
   var body: some View {
     @Bindable var reader = reader
@@ -98,11 +94,11 @@ struct PanelHost: View {
         current: reader.currentAnchor,
         selectSection: {
           navigation.jump(toSection: $0)
-          didNavigate?()
+          didNavigate()
         },
         openDocument: {
           library.open($0, activation: .current, in: navigation)
-          didNavigate?()
+          didNavigate()
         }
       )
     } else {
@@ -119,6 +115,9 @@ struct PanelHost: View {
 /// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
 /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
 /// divider only between two unselected labels.
+///
+/// macOS only: in an iPhone's sheet the system's own segmented control sits in the
+/// panel's bar instead (#247).
 private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
@@ -173,11 +172,6 @@ struct ReferencesView: View {
           Section(group.title) {
             ForEach(group.entries) { entry in
               ReferenceRow(entry: entry, open: open)
-                #if !os(macOS)
-                  // Room between entries of three lines each (#248). The row's
-                  // own spacing is sized for the denser macOS inspector.
-                  .padding(.vertical, 6)
-                #endif
             }
           }
         }
@@ -208,7 +202,13 @@ struct ReferenceRow: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .padding(.vertical, 2)
+    #if os(macOS)
+      .padding(.vertical, 2)
+    #else
+      // Entries of three lines each, in an inset list, need more room between them
+      // than the denser macOS inspector gives them (#248).
+      .padding(.vertical, 8)
+    #endif
   }
 
   private var entryDescription: some View {
