@@ -28,4 +28,21 @@ struct ReferencedDocumentsTests {
 
     #expect(document.referencedDocuments == [.rfc(793), .rfc(3066), .rfc(9110)])
   }
+
+  /// An annotation is prose the parser linkifies like any other, so it can cite a
+  /// document the entry itself does not name -- a living standard's entry noting the
+  /// RFC it was aligned with. The walk counted an entry's own document but never
+  /// looked inside its annotation.
+  @Test func aCitationInAReferenceAnnotationCounts() {
+    let fetch = Reference(
+      anchor: "FETCH", title: "Fetch Standard",
+      annotation: [.text("Aligned with "), citing(9110), .text(".")])
+    let references = Section(
+      anchor: "section-2", number: "2", title: [.text("References")],
+      blocks: [.references(ReferenceList(title: "References", entries: [fetch]))])
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Example"), sections: [references], source: .xml)
+
+    #expect(document.referencedDocuments == [.rfc(9110)])
+  }
 }
