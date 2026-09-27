@@ -37,9 +37,14 @@ struct DocumentView: View {
   @State private var built: BuiltDocument?
   @State private var originalText: String?
   @State private var loadError: String?
-  /// Bumped by Try Again. Part of the load task's id, so a retry is a structured
-  /// task that SwiftUI cancels with the view, like the first load.
-  @State private var loadAttempt = 0
+  /// The fetch, and the build it triggers. Owned by the view rather than by
+  /// `.task`, which ties them to appearance: in a collapsed split view, a reader
+  /// pushed over one that was popped is told it disappeared the moment it appears,
+  /// and is never told it appeared again. `.task` cancelled the fetch on that
+  /// notice and nothing started it again, so the reader spun forever while on
+  /// screen (#252 was the same cancellation, shown as an error).
+  @State private var loadTask: Task<Void, Never>?
+  @State private var buildTask: Task<Void, Never>?
   /// What the document on screen was built from, so appearing again with nothing
   /// changed does not build it again.
   @State private var builtInputs: BuildInputs?
@@ -101,13 +106,6 @@ struct DocumentView: View {
     }
   }
 
-  /// What the load task is keyed on: the document, and how many times it was
-  /// retried.
-  private struct LoadKey: Equatable {
-    let id: DocumentID
-    let attempt: Int
-  }
-
   private var buildInputs: BuildInputs {
     BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
   }
@@ -161,11 +159,14 @@ struct DocumentView: View {
           .inspectorColumnWidth(min: 260, ideal: 320)
         }
       #endif
-      .task(id: LoadKey(id: id, attempt: loadAttempt)) {
+      .onAppear {
         markAsRead()
-        await load()
+        if loadTask == nil { startLoad() }
       }
-      .task(id: buildInputs) { await rebuild() }
+      .onChange(of: buildInputs, initial: true) {
+        buildTask?.cancel()
+        buildTask = Task { await rebuild() }
+      }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
       }
@@ -248,7 +249,7 @@ struct DocumentView: View {
       } description: {
         Text(loadError)
       } actions: {
-        Button("Try Again") { loadAttempt += 1 }
+        Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
     } else {
@@ -381,21 +382,19 @@ struct DocumentView: View {
 
   // MARK: - Actions
 
+  private func startLoad() {
+    loadTask = Task { await load() }
+  }
+
   /// Fetches. Building is `rebuild()`'s job, which this triggers by setting
   /// `document`.
   ///
-  /// `.task` runs this again every time the view appears, and on an iPhone the
-  /// reader disappears and appears again whenever the list is popped to and the
-  /// same row pushed. A document already loaded stays as it is: clearing it and
-  /// setting it again before the next render, as a cached document did, left the
-  /// build task nothing to see, and the reader spun forever (#253). The view is
-  /// made per document (`.id(selection)`), so a document here is always this one.
+  /// Once per view, plus Try Again after a failure: the view is made per document
+  /// (`.id(selection)`), and appearing again keeps what it loaded. Clearing a
+  /// loaded document and setting it again before the next render, as a cached
+  /// document did, left the build nothing to see, and the reader spun forever
+  /// (#253).
   private func load() async {
-    if document != nil {
-      readerLog.debug(
-        "\(id.displayName, privacy: .public): appeared again, keeping the loaded document")
-      return
-    }
     readerLog.debug("\(id.displayName, privacy: .public): loading")
     loadError = nil
     document = nil
@@ -408,13 +407,6 @@ struct DocumentView: View {
     reader.showOriginal = preferOriginalText
     do {
       let loaded = try await library.document(for: id)
-      // Cancelled when the view disappears, or by Try Again starting over; the
-      // request it cancels fails with `URLError.cancelled`, which was shown as
-      // "Couldn't load RFC … / cancelled" (#252). The next load writes instead.
-      guard !Task.isCancelled else {
-        readerLog.debug("\(id.displayName, privacy: .public): loaded after cancellation, discarded")
-        return
-      }
       reader.groups = ReferenceGroup.groups(in: loaded)
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
@@ -426,12 +418,6 @@ struct DocumentView: View {
       reader.hasDocument = true
       readerLog.debug("\(id.displayName, privacy: .public): loaded")
     } catch {
-      guard !Task.isCancelled else {
-        readerLog.debug(
-          "\(id.displayName, privacy: .public): failed after cancellation, discarded: \(String(describing: error), privacy: .public)"
-        )
-        return
-      }
       readerLog.debug(
         "\(id.displayName, privacy: .public): failed: \(String(describing: error), privacy: .public)"
       )
@@ -443,14 +429,14 @@ struct DocumentView: View {
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
   /// the largest documents in the library — so a change to an *existing* document's
-  /// style waits that long to settle, and `.task(id:)` cancels the pending rebuild
-  /// on every further tick of the font-size slider or the window's edge. The first
-  /// build of a document does not wait: there is nothing on screen to disturb, and
-  /// the column is already known, so it is built once and built right.
+  /// style waits that long to settle, and the next change cancels the pending
+  /// rebuild — every further tick of the font-size slider or the window's edge.
+  /// The first build of a document does not wait: there is nothing on screen to
+  /// disturb, and the column is already known, so it is built once and built right.
   private func rebuild() async {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
-    // Appearing again restarts this task with nothing changed.
+    // `initial:` can start this again when the view appears again, with nothing changed.
     guard inputs != builtInputs else {
       readerLog.debug("\(id.displayName, privacy: .public): build skipped, inputs unchanged")
       return
