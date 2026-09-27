@@ -12,22 +12,12 @@ import Testing
 struct UserDataTests {
   // MARK: - Keys
 
-  @Test func `a document's key is its file stem, and names it again`() {
-    #expect(UserDataKey.key(for: .rfc(9110)) == "rfc9110")
-    #expect(UserDataKey.document(for: "rfc9110") == .rfc(9110))
-  }
-
   /// A bare number could not: RFC 1, BCP 1 and STD 1 all have the number 1.
   @Test func `documents of different series with one number have different keys`() {
     let bcp = DocumentID(series: .bcp, number: 1)
-    #expect(UserDataKey.key(for: .rfc(1)) != UserDataKey.key(for: bcp))
-    #expect(UserDataKey.document(for: UserDataKey.key(for: bcp)) == bcp)
-  }
-
-  @Test func `a key that names no document is nil`() {
-    #expect(UserDataKey.document(for: "") == nil)
-    #expect(UserDataKey.document(for: "notes") == nil)
-    #expect(UserDataKey.document(for: "RFC 9110") == nil)
+    let bookmarks = [Bookmark(document: .rfc(1), title: ""), Bookmark(document: bcp, title: "")]
+    #expect(bookmarks.map(\.documentKey) == ["rfc1", "bcp1"])
+    #expect(bookmarks.map(\.document) == [.rfc(1), bcp])
   }
 
   // MARK: - Reading place
@@ -37,6 +27,13 @@ struct UserDataTests {
       document: .rfc(9110), place: ReadingPlace(anchor: "section-4.2", offset: 118))
     #expect(position.place == ReadingPlace(anchor: "section-4.2", offset: 118))
     #expect(ReadingPosition(document: .rfc(9110), place: nil).place == nil)
+  }
+
+  /// The first character of a document, ahead of its first anchor, is a place, not
+  /// the absence of one.
+  @Test func `a place ahead of the first anchor is kept`() {
+    let start = ReadingPlace(anchor: nil, offset: 0)
+    #expect(ReadingPosition(document: .rfc(9110), place: start).place == start)
   }
 
   // MARK: - Migration
@@ -88,14 +85,46 @@ struct UserDataTests {
     #expect(positions.allSatisfy { $0.updatedAt == read })
   }
 
-  @Test func `a new store opens at version 2`() throws {
+  /// A launch that stopped between the two stages left the store at V2, the
+  /// numbers still beside keys not yet written. The next launch finishes the job.
+  @Test func `a store left between the stages finishes migrating`() throws {
     let url = try temporaryStore()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let container = try UserData.container(configurations: ModelConfiguration(url: url))
-    let context = ModelContext(container)
-    context.insert(Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
-    try context.save()
-    #expect(try context.fetch(FetchDescriptor<Bookmark>()).count == 1)
+    let read = Date(timeIntervalSince1970: 1_750_000_000)
+
+    do {
+      let halfway = try ModelContainer(
+        for: Schema(versionedSchema: SchemaV2.self), configurations: ModelConfiguration(url: url))
+      let context = ModelContext(halfway)
+      context.insert(SchemaV2.Bookmark(number: 9110, title: "HTTP Semantics"))
+      context.insert(
+        SchemaV2.ReadingPosition(number: 9110, sectionAnchor: "section-8.3", updatedAt: read))
+      context.insert(SchemaV2.ReadingPosition(number: 1149, sectionAnchor: nil, updatedAt: read))
+      try context.save()
+    }
+
+    let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
+    let context = ModelContext(migrated)
+    #expect(try context.fetch(FetchDescriptor<Bookmark>()).map(\.document) == [.rfc(9110)])
+    let positions = try context.fetch(
+      FetchDescriptor<ReadingPosition>(sortBy: [SortDescriptor(\.documentKey)]))
+    #expect(positions.map(\.documentKey) == ["rfc1149", "rfc9110"])
+    #expect(positions.map(\.place) == [nil, ReadingPlace(anchor: "section-8.3", offset: 0)])
+    #expect(positions.allSatisfy { $0.updatedAt == read })
+  }
+
+  @Test func `a new store keeps what is written to it`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    do {
+      let container = try UserData.container(configurations: ModelConfiguration(url: url))
+      let context = ModelContext(container)
+      context.insert(Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+      try context.save()
+    }
+    let reopened = try UserData.container(configurations: ModelConfiguration(url: url))
+    let bookmarks = try ModelContext(reopened).fetch(FetchDescriptor<Bookmark>())
+    #expect(bookmarks.map(\.document) == [.rfc(9110)])
   }
 
   // MARK: - Uniqueness

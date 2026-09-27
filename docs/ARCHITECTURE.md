@@ -15,7 +15,7 @@ rfc-reader/
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
 ├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest); see DATA_PIPELINE.md
 ├── App/RFCReader/            SwiftUI multiplatform app (iOS, iPadOS, macOS)
-│   ├── Model/                LibraryModel (@Observable app state), DocumentStore (actor, disk cache), SwiftData models
+│   ├── Model/                LibraryModel (@Observable app state), DocumentStore (actor, disk cache)
 │   ├── Views/                Navigation, list, reader, table of contents
 │   │   └── Rendering/        RFCTextView, RFCTextViewCoordinator, RFCTextLayoutFragment — one TextKit 2 text view over one document text storage
 │   └── Intents/              App Intents (Open RFC)
@@ -90,7 +90,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
                        SwiftUI views ── macOS: NSSplitViewController(sidebar, list, DocumentView, panel)
                                         iOS:   NavigationSplitView(sidebar, list, DocumentView)
                                                           ▼
-                       SwiftData ── Bookmark, ReadingPosition (user data only; iCloud later)
+                       SwiftData ── Bookmark, ReadingPosition (RFCReaderKit's UserData; user data only; iCloud later)
 ```
 
 - Legacy RFCs arrive pre-converted to XML through data packs (DATA_PIPELINE.md); on-device text parsing is the fallback when no pack is installed.
@@ -203,6 +203,12 @@ Verified by measurement rather than by eye, on RFC 9110 in a 1500 pt window with
 The trade-off is staleness. An index is a copy, and the store is not the only thing that can change the directory: it is in Application Support, and Finder will delete from it. Two rules keep the copy honest. Every write and removal goes through `update(_:by:)`, which records what the change *left on disk* rather than what it meant to do, so a body that could not be deleted stays downloaded — it is still what `document` reads. And every question starts with `revalidate()`, which compares the directory's modification date with the one recorded when the index last matched it and scans again only when they differ. That is one `stat` per filter change instead of an enumeration. `update` revalidates before its change and records the date after it, so the store's own writes cost no scan and cannot absorb a change made before them; writing the RFC index into the same directory is not routed through it, so the first question after the daily index refresh scans once.
 
 What is left: two changes within one tick of the file system's clock share a date, so a deletion in the same instant as the store's own write can go unnoticed until the next change or launch. A file-system watcher would close that and report changes sooner, and was not worth a live source kept for a list nobody may be looking at.
+
+## Decision: the user data store is versioned, keyed on the document, and in CloudKit's shape
+
+*Decided September 2026 (issue #152).* Bookmarks and reading positions keyed on a bare, unique RFC number, which cannot tell RFC 1 from BCP 1, and the schema had no version, so any change to it was a store that would not open. The models are now `VersionedSchema`s in `RFCReaderKit` (`UserData.swift`), where the migration is tested against a store written on disk. The one the app uses, `SchemaV3`, keys each row on the document's `fileStem` and is in CloudKit's shape: no `@Attribute(.unique)`, every attribute optional or defaulted. Uniqueness is the code's job instead: `BookmarkStore` looks a document up before inserting, and `UserData.deduplicate` merges rows naming one document, newest first, when the container opens.
+
+The migration never takes a row out of the store. SwiftData's inferred step cannot turn a number into a key, so `SchemaV2` is only a step: V1's rows, with V3's columns beside the number. V1 to V2 is inferred; V2 to V3 writes each row's key from its own number and then drops the number. A launch that stops between the two leaves a V2 store, and the next one finishes the job. An earlier draft carried the rows across one custom stage in memory, which a crash between its halves would have lost for good. A V1 row is read as an RFC, since a number is all it kept.
 
 ## Decision: three things RFCXML says that the model now keeps
 

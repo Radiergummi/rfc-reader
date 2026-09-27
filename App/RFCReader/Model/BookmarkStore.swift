@@ -21,8 +21,8 @@ private let bookmarkLog = Logger(
 /// often to ask a store here.
 @MainActor
 enum BookmarkStore {
-  /// Every bookmarked RFC's number. Only the numbers are fetched: this runs on
-  /// every save of the store, and most of those record a reading position.
+  /// Every bookmarked document. Only the keys are fetched: this runs on every save
+  /// of the store, and most of those record a reading position.
   static func bookmarkedDocuments(in context: ModelContext) -> Set<DocumentID> {
     var descriptor = FetchDescriptor<Bookmark>()
     descriptor.propertiesToFetch = [\.documentKey]
@@ -34,8 +34,10 @@ enum BookmarkStore {
   @discardableResult
   static func toggle(_ id: DocumentID, title: String, in context: ModelContext) -> Bool {
     let bookmarked: Bool
-    if let existing = bookmark(for: id, in: context) {
-      context.delete(existing)
+    let existing = bookmarks(for: id, in: context)
+    if !existing.isEmpty {
+      // Every row naming the document, since nothing stops there being two.
+      existing.forEach(context.delete)
       bookmarked = false
     } else {
       context.insert(Bookmark(document: id, title: title))
@@ -58,9 +60,9 @@ enum BookmarkStore {
 
   /// Looked up by key before every insert: the store has no unique constraint to do
   /// it (#152).
-  private static func bookmark(for id: DocumentID, in context: ModelContext) -> Bookmark? {
-    let key = UserDataKey.key(for: id)
+  private static func bookmarks(for id: DocumentID, in context: ModelContext) -> [Bookmark] {
+    let key = id.fileStem
     let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.documentKey == key })
-    return try? context.fetch(descriptor).first
+    return (try? context.fetch(descriptor)) ?? []
   }
 }

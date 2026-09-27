@@ -116,7 +116,7 @@ public struct DocumentCacheIndex: Sendable {
         continue
       }
       let stem = url.deletingPathExtension().lastPathComponent
-      guard let id = DocumentID(parsing: stem), id.fileStem == stem else {
+      guard let id = DocumentID(fileStem: stem) else {
         continue
       }
       documents.insert(id)

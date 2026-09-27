@@ -105,7 +105,7 @@ struct DocumentView: View {
   private var metadata: RFCMetadata? { library.metadata(id) }
   #if !os(macOS)
     private var isBookmarked: Bool {
-      let key = UserDataKey.key(for: id)
+      let key = id.fileStem
       return bookmarks.contains { $0.documentKey == key }
     }
   #endif
@@ -557,7 +557,7 @@ struct DocumentView: View {
   #endif
 
   private func storedPosition() -> ReadingPosition? {
-    let key = UserDataKey.key(for: id)
+    let key = id.fileStem
     let descriptor = FetchDescriptor<ReadingPosition>(
       predicate: #Predicate { $0.documentKey == key })
     return try? modelContext.fetch(descriptor).first
