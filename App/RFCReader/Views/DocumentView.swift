@@ -263,7 +263,8 @@ struct DocumentView: View {
         } label: {
           Label("Contents", systemImage: "list.bullet.indent")
         }
-        .keyboardShortcut("t", modifiers: [.command, .shift])
+        // The same chord as the Mac's (#157).
+        .keyboardShortcut("i", modifiers: [.command, .option])
       }
     }
   #endif
