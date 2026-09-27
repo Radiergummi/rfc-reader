@@ -111,9 +111,9 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
       context.saveGState()
       switch span.decoration {
       case .artwork, .table:
-        drawCard(at: point, span: span, alpha: 0.3, in: context)
+        drawCard(at: point, span: span, color: RFCColors.cardFill, in: context)
       case .aside:
-        drawCard(at: point, span: span, alpha: 0.4, in: context)
+        drawCard(at: point, span: span, color: RFCColors.asideFill, in: context)
       case .blockQuote:
         drawRule(at: point, span: span, in: context)
       }
@@ -149,7 +149,8 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// are then moved onto the device pixel grid, or both neighbours half-cover the
   /// pixel they share and the band shows a darker line at every seam.
   private func drawCard(
-    at point: CGPoint, span: FragmentGeometry.DecorationSpan, alpha: CGFloat, in context: CGContext
+    at point: CGPoint, span: FragmentGeometry.DecorationSpan, color: PlatformColor,
+    in context: CGContext
   ) {
     let placement = placement(at: point, span: span)
     let card = placement.cardRect(padding: Self.cardPadding, span: span)
@@ -157,7 +158,7 @@ final class RFCTextLayoutFragment: NSTextLayoutFragment {
       joined(card, placement: placement, span: span, in: context),
       radius: 8,
       corners: Corners(first: span.isFirst, last: span.isLast),
-      color: RFCColors.quaternaryFill.withAlphaComponent(alpha).cgColor,
+      color: color.cgColor,
       in: context
     )
   }
