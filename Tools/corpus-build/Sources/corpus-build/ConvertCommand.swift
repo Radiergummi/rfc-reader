@@ -143,7 +143,9 @@ struct ConvertCommand: AsyncParsableCommand {
     for entry in flagged.prefix(40) {
       Self.logger.warning(
         "document has warnings",
-        metadata: ["document": "\(entry.id)", "warnings": .array(entry.warnings.map { "\($0)" })])
+        metadata: [
+          "document": "\(entry.id)", "warnings": .array(entry.warnings.map { .string($0) }),
+        ])
     }
   }
 
