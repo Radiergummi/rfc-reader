@@ -9,6 +9,7 @@ import RFCKit
 //
 //   corpus-build fetch    --out corpus [--format text|xml] [--index rfc-index.xml] [--limit N] [--concurrency 6]
 //   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
+//                         [--index corpus/rfc-index.xml]
 //                         [--diagnostics corpus/prose.json] [--schema Tools/corpus-build/Schema/v3.rng]
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
@@ -202,10 +203,10 @@ enum Convert {
     var sentenceRatio: Double
   }
 
-  static func proseReport(for text: String, id: String) -> ProseReport {
+  static func proseReport(for text: String, id: String, title: String?) -> ProseReport {
     var report = ProseReport()
     report.documents += 1
-    for block in LegacyTextParser.proseDiagnostics(for: text) {
+    for block in LegacyTextParser.proseDiagnostics(for: text, title: title) {
       let diagnosis = block.diagnosis
       report.blocks += 1
       if block.claimedByList {
@@ -255,6 +256,10 @@ enum Convert {
     var wantsDiagnostics: Bool
     var wantsFurniture: Bool
     var schema: URL?
+    /// The RFC index, where one was given: the RFC Editor's own record of each
+    /// document's title and of what it obsoletes and updates, which a title page
+    /// states less reliably than anything else in the document (#170, #171).
+    var index: RFCIndex?
   }
 
   /// One converted document, and where it goes in the run's output.
@@ -273,7 +278,10 @@ enum Convert {
       // it when the report is actually asked for.
       wantsDiagnostics: arguments["diagnostics"] != nil,
       wantsFurniture: arguments["report"] != nil,
-      schema: arguments["schema"].map { URL(fileURLWithPath: $0) }
+      schema: arguments["schema"].map { URL(fileURLWithPath: $0) },
+      index: try arguments["index"].map {
+        try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: $0))
+      }
     )
     try FileManager.default.createDirectory(at: job.outDirectory, withIntermediateDirectories: true)
     if let schema = job.schema { try SchemaCheck.preflight(schema: schema) }
@@ -364,8 +372,14 @@ enum Convert {
       String(data: bytes, encoding: .utf8)
       ?? String(data: bytes, encoding: .windowsCP1252)
       ?? String(decoding: bytes, as: UTF8.self)
-    let document = LegacyTextParser.parse(text)
-    let prose = job.wantsDiagnostics ? proseReport(for: text, id: stem) : nil
+    let metadata = stem.rfcNumber.flatMap { job.index?[$0] }
+    var document = LegacyTextParser.parse(text, title: metadata?.title)
+    if let metadata {
+      document.header.obsoletes = metadata.obsoletes
+      document.header.updates = metadata.updates
+    }
+    let prose =
+      job.wantsDiagnostics ? proseReport(for: text, id: stem, title: metadata?.title) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
     let serializer = RFCXMLSerializer(
       options: .init(

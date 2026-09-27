@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -8,6 +8,11 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
+
+# The corpus working directory (see the corpus targets below). Set here rather
+# than with them because `test-corpus` names files in it as prerequisites, and
+# make expands a prerequisite where it reads the rule.
+CORPUS ?= corpus
 
 # Every Swift source we own. Found rather than handed to swift-format's
 # --recursive, which would also walk the SwiftPM build directories and format
@@ -54,6 +59,25 @@ check: lint build test
 # SDK and cannot run in the swift:6.3 container the Linux job uses.
 test-app:
 	swift test --package-path $(RFCREADERKIT)
+
+# The legacy RFCs the corpus-backed suites read. A finding about what the parser
+# makes of a whole document is tested on that document, and no more RFC text is
+# committed as fixtures, so these are fetched instead.
+CORPUS_TEST_DOCUMENTS := rfc1178 rfc1343 rfc1441 rfc1581 rfc355 rfc674 rfc6614
+
+## Run the corpus-backed RFCKit suites, fetching the documents they read
+# Not part of `check`: it needs the network the first time. The suites read
+# RFC_CORPUS_TEXT, and are skipped wherever it is unset, as in `make test` and on CI.
+# Filtered by their type names, all `CorpusBacked...`: --filter matches a test's
+# identifier, not the `Corpus-backed: ...` name its suite displays.
+test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
+	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) swift test --package-path $(RFCKIT) --filter CorpusBacked
+
+# One legacy RFC, fetched where `make corpus` would have put it. Written to a
+# partial file first, so an interrupted download is not taken for the document.
+$(CORPUS)/text.noindex/%.txt:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
 
 ## Generate the Xcode project from project.yml
 # Phony: XcodeGen's `sources:` entries are folder-based, so a source file added
@@ -163,8 +187,8 @@ corpus-tool:
 # measured 2,294 of 8,457 documents in 2h16m with corespotlightd at 252% -- the
 # conversion queued behind the indexing of its own output (issue #38). The
 # alternative is each developer adding corpus/ to their own privacy list, which
-# fixes one machine; this fixes it for everyone who clones the repo.
-CORPUS         ?= corpus
+# fixes one machine; this fixes it for everyone who clones the repo. CORPUS
+# itself is set at the top of this file.
 CORPUS_LIMIT   ?= 20
 CORPUS_VERSION ?= dev
 
@@ -191,7 +215,7 @@ corpus-fetch-xml: corpus-tool
 # RFCXML; `[]` is a document that validates. A regression is one that stops.
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
-	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json \
+	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
 
 ## Check the schema check: three RFCs as the RFC Editor published them must validate
