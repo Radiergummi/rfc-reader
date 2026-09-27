@@ -99,7 +99,13 @@ private struct DownloadSection: View {
         Text("Not downloaded").foregroundStyle(.secondary)
       }
     }
-    .task(id: DownloadKey(document: document, generation: generation)) {
+    // Also whenever the library's downloads change: opening a document downloads
+    // it, and that finishes after this first read.
+    .task(
+      id: DownloadKey(
+        document: document, generation: generation,
+        isDownloaded: library.downloadedNumbers.contains(document.number))
+    ) {
       size = await library.downloadedSize(document)
     }
   }
@@ -107,5 +113,6 @@ private struct DownloadSection: View {
   private struct DownloadKey: Hashable {
     let document: DocumentID
     let generation: Int
+    let isDownloaded: Bool
   }
 }

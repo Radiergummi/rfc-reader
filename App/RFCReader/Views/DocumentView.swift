@@ -448,10 +448,12 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    // Before the fetch, not after: the index knows the document whether or not its
+    // body arrives, and a failed or offline open still has an Info tab to show.
+    deriveInfo()
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
-      deriveInfo()
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first }
