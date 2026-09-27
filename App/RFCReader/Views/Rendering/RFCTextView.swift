@@ -96,7 +96,6 @@ struct ReaderInputs {
 
   /// Called on every SwiftUI update pass, so it does the cheap assignments first
   /// and only installs when the document itself changed.
-  @MainActor
   func apply(to coordinator: RFCTextViewCoordinator, width: CGFloat) {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange

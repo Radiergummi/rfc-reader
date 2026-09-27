@@ -192,7 +192,7 @@ struct DocumentView: View {
         }
         work.build?.cancel()
         work.buildingFor = buildInputs
-        work.build = Task { await rebuild() }
+        work.build = Task(name: "Build document") { await rebuild() }
       }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
@@ -425,7 +425,7 @@ struct DocumentView: View {
 
   private func startLoad() {
     work.load?.cancel()
-    work.load = Task { await load() }
+    work.load = Task(name: "Load document") { await load() }
   }
 
   private func trace(_ event: String) {
@@ -486,7 +486,7 @@ struct DocumentView: View {
     guard !Task.isCancelled else { return }
     // Off the main actor: this is string assembly and text measurement, and
     // blocking the main thread for it is what made the font-size slider stutter.
-    let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
+    let rebuilt = await Self.build(document, style: style)
     guard !Task.isCancelled else {
       trace("build cancelled, discarded")
       return
@@ -506,6 +506,15 @@ struct DocumentView: View {
     // No place to restore here: the coordinator carries the line at the top of
     // the viewport into the new storage itself, which a section anchor — all
     // this view is told — could only approximate to the section's heading.
+  }
+
+  /// Off the main actor, and structured: unlike a detached task, it inherits the
+  /// caller's priority and its cancellation (#129). The builder never checks for
+  /// cancellation, so a build that has started runs to the end; `rebuild()` is
+  /// what discards a cancelled one.
+  @concurrent
+  private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
+    DocumentTextBuilder.build(document, style: style)
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.

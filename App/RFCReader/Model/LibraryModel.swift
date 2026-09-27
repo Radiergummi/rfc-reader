@@ -17,7 +17,6 @@ private let libraryLog = Logger(
 /// One observable object keeps the SwiftUI surface small; SwiftData holds the
 /// user's own data (bookmarks, reading positions) separately.
 @Observable
-@MainActor
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
   static let shared = LibraryModel()
@@ -90,11 +89,11 @@ final class LibraryModel {
         // The store parses the cached index on its own actor; the search and the
         // working groups are built off the main actor as well.
         let index = cached.index
-        let prepared = await Task.detached { PreparedIndex(index: index) }.value
+        let prepared = await Self.prepare(index)
         apply(prepared, updatedAt: cached.updatedAt)
         // Refresh in the background if the cache is older than a day.
         if cached.updatedAt.timeIntervalSinceNow < -86_400 {
-          Task { await refreshIndex() }
+          Task(name: "Refresh index") { await refreshIndex() }
         }
       } else {
         await refreshIndex()
@@ -104,7 +103,7 @@ final class LibraryModel {
     }
     // Just Published is decoration: a failure leaves it empty, and is logged
     // rather than shown (#125).
-    Task {
+    Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
       } catch {
@@ -114,11 +113,22 @@ final class LibraryModel {
     }
   }
 
+  /// The search and the working groups, built off the main actor.
+  @concurrent
+  private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
+    PreparedIndex(index: index)
+  }
+
+  @concurrent
+  private static func parse(_ data: Data) async throws -> PreparedIndex {
+    try PreparedIndex.parse(data)
+  }
+
   func refreshIndex() async {
     do {
       let data = try await client.fetchIndexData()
       // Off the main actor: the parse alone is about a second (#124).
-      let prepared = try await Task.detached { try PreparedIndex.parse(data) }.value
+      let prepared = try await Self.parse(data)
       try await store.storeIndex(data)
       apply(prepared, updatedAt: .now)
     } catch {
@@ -261,7 +271,7 @@ final class LibraryModel {
   private var scenes: [WeakScene] = []
 
   private struct WeakScene {
-    weak var model: NavigationModel?
+    weak let model: NavigationModel?
   }
 
   /// Waiting for the next scene to appear, because nothing can be handed to a tab

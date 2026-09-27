@@ -10,7 +10,6 @@
   // is in `RFCReaderKit`, where it is tested.
 
   /// An RFC as a script sees it, named by its number: `rfc id 9110`.
-  @MainActor
   @objc(ScriptableRFC)
   final class ScriptableRFC: NSObject {
     let id: DocumentID
@@ -148,22 +147,26 @@
 
   /// Every command in the dictionary: run on the main actor, against the window it
   /// names or the front one.
-  @MainActor
-  class RFCScriptCommand: NSScriptCommand {
+  ///
+  /// The classes are `nonisolated` and their members `@MainActor`, not the other way
+  /// round: under the target's main-actor default, the initializers inherited from
+  /// `NSScriptCommand` would become main-actor isolated, which the compiler rejects
+  /// as overrides of nonisolated ones.
+  nonisolated class RFCScriptCommand: NSScriptCommand {
     /// Cocoa Scripting's entry point, which Swift sees as nonisolated. It is only
     /// ever called on the main thread, and `assumeIsolated` traps rather than races
     /// if that changes; the command itself only crosses to where it already is.
-    nonisolated override func performDefaultImplementation() -> Any? {
+    override func performDefaultImplementation() -> Any? {
       nonisolated(unsafe) let command = self
       MainActor.assumeIsolated { command.perform() }
       return nil
     }
 
-    func perform() {
+    @MainActor func perform() {
       preconditionFailure("\(type(of: self)) must override perform()")
     }
 
-    var targetWindow: ReaderWindowController? {
+    @MainActor var targetWindow: ReaderWindowController? {
       let named = (evaluatedReceivers as? NSWindow) ?? (evaluatedArguments?["window"] as? NSWindow)
       return named.flatMap(ReaderWindowController.controller(for:))
         ?? AppDelegate.shared?.activeController
@@ -172,8 +175,8 @@
 
   /// `open rfc 9110 at section "4.2" placement new tab`.
   @objc(RFCOpenCommand)
-  final class RFCOpenCommand: RFCScriptCommand {
-    override func perform() {
+  nonisolated final class RFCOpenCommand: RFCScriptCommand {
+    @MainActor override func perform() {
       let reference =
         (directParameter as? String) ?? (directParameter as? NSNumber)?.stringValue ?? ""
       let section = evaluatedArguments?["section"] as? String
@@ -193,15 +196,15 @@
   }
 
   @objc(RFCGoBackCommand)
-  final class RFCGoBackCommand: RFCScriptCommand {
-    override func perform() {
+  nonisolated final class RFCGoBackCommand: RFCScriptCommand {
+    @MainActor override func perform() {
       targetWindow?.navigation.goBack()
     }
   }
 
   @objc(RFCGoForwardCommand)
-  final class RFCGoForwardCommand: RFCScriptCommand {
-    override func perform() {
+  nonisolated final class RFCGoForwardCommand: RFCScriptCommand {
+    @MainActor override func perform() {
       targetWindow?.navigation.goForward()
     }
   }
@@ -209,8 +212,8 @@
   /// `jump to section "4.2"`: resolved against the document the window shows, the
   /// way a section link in the prose is, by number or by anchor.
   @objc(RFCJumpToSectionCommand)
-  final class RFCJumpToSectionCommand: RFCScriptCommand {
-    override func perform() {
+  nonisolated final class RFCJumpToSectionCommand: RFCScriptCommand {
+    @MainActor override func perform() {
       guard let section = directParameter as? String, !section.isEmpty else {
         ScriptError.report("Which section?", in: self)
         return

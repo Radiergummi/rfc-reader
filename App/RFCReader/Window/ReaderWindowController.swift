@@ -20,7 +20,6 @@
   /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`. The menu bar
   /// is still SwiftUI's: a `Settings`-only scene keeps `.commands` working, so only
   /// window creation moved to AppKit.
-  @MainActor
   final class ReaderWindowController: NSWindowController, NSWindowDelegate {
     /// This window's own navigation: which document, which filter, what was searched
     /// for, and the back/forward stack that got here. `ContentView` held it as
@@ -482,7 +481,6 @@
 
   /// Reports a column being dragged, so the toolbar can cap the title to the list it
   /// sits over.
-  @MainActor
   final class ReaderSplitViewController: NSSplitViewController {
     var didResizeSubviews: (() -> Void)?
 

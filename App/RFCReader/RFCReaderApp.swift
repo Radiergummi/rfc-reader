@@ -203,7 +203,6 @@ struct DocumentCommands: Commands {
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off
   /// its sender, which is why the sender is this tiny object rather than nil: the
   /// selector alone carries no way to say "show the bar" versus "find next".
-  @MainActor
   final class FindCommand: NSObject {
     static let showFindInterface = FindCommand(.showFindInterface)
     static let nextMatch = FindCommand(.nextMatch)
