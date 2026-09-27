@@ -25,24 +25,20 @@ struct DocumentInspector: View {
   let openDocument: (DocumentID) -> Void
 
   var body: some View {
-    #if os(macOS)
-      VStack(spacing: 0) {
+    VStack(spacing: 0) {
+      #if os(macOS)
         InspectorTabBar(tab: $tab)
           .padding(.horizontal, 10)
           .padding(.vertical, 8)
-
-        selectedTab
-      }
-    #else
-      // The system's segmented control, inside the panel it switches (#247).
-      //
-      // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
-      // reader's own bar, even through a `NavigationStack` of the panel's own, so
-      // the tabs ended up above the reader, apart from the sheet they switch and in
-      // the place of the reader's title. The insets are the sheet's rather than the
-      // inspector column's: 10 and 8 left the control against the sheet's top edge,
-      // its capsule ends inside the sheet's rounded corners.
-      VStack(spacing: 0) {
+      #else
+        // The system's segmented control, inside the panel it switches (#247).
+        //
+        // Not in a toolbar: `.inspector` lifts its content's toolbar items into the
+        // reader's own bar, even through a `NavigationStack` of the panel's own, so
+        // the tabs ended up above the reader, apart from the sheet they switch and
+        // in the place of the reader's title. The insets are the sheet's rather
+        // than the inspector column's: 10 and 8 left the control against the
+        // sheet's top edge, its capsule ends inside the sheet's rounded corners.
         Picker("Panel", selection: $tab) {
           Text("Contents").tag(InspectorTab.contents)
           Text("References").tag(InspectorTab.references)
@@ -52,10 +48,10 @@ struct DocumentInspector: View {
         .padding(.horizontal, 20)
         .padding(.top, 20)
         .padding(.bottom, 8)
+      #endif
 
-        selectedTab
-      }
-    #endif
+      selectedTab
+    }
   }
 
   @ViewBuilder
@@ -67,7 +63,8 @@ struct DocumentInspector: View {
       ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
           .task {
-            // A turn later, once the list has rows to scroll to.
+            // A turn later, once the list has rows to scroll to: a timing guess,
+            // since `List` offers no initial scroll position to declare instead.
             await Task.yield()
             if let current { proxy.scrollTo(current, anchor: .center) }
           }

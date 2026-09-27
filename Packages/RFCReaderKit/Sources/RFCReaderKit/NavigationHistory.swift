@@ -37,18 +37,21 @@ public struct NavigationHistory: Sendable {
   public var canGoBack: Bool { !backward.isEmpty }
   public var canGoForward: Bool { !forward.isEmpty }
 
-  /// Where Back would return to, offered straight after following a link within
-  /// the document on screen (#254).
+  /// Where Back would return to, straight after a jump within the document on
+  /// screen (#254): the place left behind, when it is in the same document.
   ///
-  /// In a single column there is no back/forward pair and the system back button
-  /// leaves the document, so returning from a cross-reference needs an offer of
-  /// its own. Nil when Back
-  /// would leave the document, and after stepping back or forward: the offer is
-  /// for undoing a jump just made, not for walking the history.
+  /// Nil when Back would leave the document, after stepping back or forward, and
+  /// once the offer is settled: it is for undoing a jump just made, not for
+  /// walking the history.
   public var returnOffer: Place? {
     guard arrivedByGoing, let current, let previous = backward.last, previous.id == current.id
     else { return nil }
     return previous
+  }
+
+  /// Withdraws the return offer until the next jump, without moving.
+  public mutating func settleReturnOffer() {
+    arrivedByGoing = false
   }
 
   /// Go to `place`, recording `position` as the spot being left behind.

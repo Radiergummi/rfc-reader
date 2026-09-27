@@ -20,6 +20,7 @@ import RFCReaderKit
     /// bottom is set here, and a bottom inset leaves that origin where it is.
     override func safeAreaInsetsDidChange() {
       super.safeAreaInsetsDidChange()
+      guard contentInset.bottom != safeAreaInsets.bottom else { return }
       contentInset.bottom = safeAreaInsets.bottom
       verticalScrollIndicatorInsets.bottom = safeAreaInsets.bottom
     }

@@ -48,6 +48,10 @@ final class NavigationModel: Identifiable {
   /// Where Back returns to, straight after a jump within the document on screen.
   var returnOffer: Place? { history.returnOffer }
 
+  func settleReturnOffer() {
+    history.settleReturnOffer()
+  }
+
   // MARK: - Navigation
 
   /// A link from outside the current document: the sidebar, a deep link, a citation

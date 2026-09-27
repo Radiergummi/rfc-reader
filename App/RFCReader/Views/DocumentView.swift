@@ -6,7 +6,8 @@ import os
 
 /// The reader's load and build decisions, at debug level: what a device's
 /// Console shows when a document fails to load or never finishes (#252, #253).
-private let readerLog = Logger(subsystem: "me.mazetti.rfc-reader", category: "reader")
+private let readerLog = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -43,15 +44,29 @@ struct DocumentView: View {
   /// and is never told it appeared again. `.task` cancelled the fetch on that
   /// notice and nothing started it again, so the reader spun forever while on
   /// screen (#252 was the same cancellation, shown as an error).
-  @State private var loadTask: Task<Void, Never>?
-  @State private var buildTask: Task<Void, Never>?
-  /// What the document on screen was built from, so appearing again with nothing
-  /// changed does not build it again.
+  @State private var work = Work()
+  /// What the document on screen was built from, so a change that comes back to
+  /// where it started does not build it again.
   @State private var builtInputs: BuildInputs?
+
+  /// The fetch and the build, and the inputs the build under way is for.
+  ///
+  /// A reference, so that it goes when the view's state does, which is when the
+  /// view is replaced by the next document's (`.id(selection)`): the old reader's
+  /// fetch and 650 ms build are cancelled then, rather than running on for a
+  /// document nobody will see. Disappearing is not going (#252).
+  private final class Work {
+    var load: Task<Void, Never>?
+    var build: Task<Void, Never>?
+    var buildingFor: BuildInputs?
+
+    deinit {
+      load?.cancel()
+      build?.cancel()
+    }
+  }
   #if !os(macOS)
     @State private var showTableOfContents = false
-    /// The last return offer shown out its time, so it does not come back.
-    @State private var settledReturn: Place?
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -129,22 +144,25 @@ struct DocumentView: View {
       .navigationTitle(id.displayName)
       #if !os(macOS)
         // The designation as the title, and what it is called beneath it.
-        .navigationSubtitle(metadata?.title ?? reader.documentTitle ?? "")
+        .navigationSubtitle(
+          DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
+        )
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
         // view's frame.
-        .overlay(alignment: .bottom) { returnButton }
-        .animation(.snappy, value: visibleReturn)
+        .overlay(alignment: .bottom) {
+          returnButton.animation(.snappy, value: visibleReturn)
+        }
         // Long enough to decide, without sitting over the text for good. Not under
         // VoiceOver, where a control that leaves on a timer may be gone before it
         // is reached: there it stays until the next navigation replaces it.
         .task(id: visibleReturn) {
-          guard let offer = visibleReturn, !voiceOverEnabled else { return }
+          guard visibleReturn != nil, !voiceOverEnabled else { return }
           try? await Task.sleep(for: .seconds(8))
           guard !Task.isCancelled else { return }
-          settledReturn = offer
+          navigation.settleReturnOffer()
         }
         // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
         // swallows an iPhone, and in compact width the inspector already presents
@@ -161,11 +179,19 @@ struct DocumentView: View {
       #endif
       .onAppear {
         markAsRead()
-        if loadTask == nil { startLoad() }
+        if work.load == nil { startLoad() }
       }
       .onChange(of: buildInputs, initial: true) {
-        buildTask?.cancel()
-        buildTask = Task { await rebuild() }
+        // Appearing again fires this with nothing changed. A build already made,
+        // or under way, for these inputs is left to stand rather than cancelled
+        // and paid for twice.
+        guard buildInputs != builtInputs, buildInputs != work.buildingFor else {
+          trace("build skipped, inputs unchanged")
+          return
+        }
+        work.build?.cancel()
+        work.buildingFor = buildInputs
+        work.build = Task { await rebuild() }
       }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
@@ -353,12 +379,7 @@ struct DocumentView: View {
     /// In a single column only: beside other columns, the back/forward pair is in
     /// the bar.
     private var visibleReturn: Place? {
-      guard horizontalSizeClass == .compact, let offer = navigation.returnOffer,
-        offer != settledReturn
-      else {
-        return nil
-      }
-      return offer
+      horizontalSizeClass == .compact ? navigation.returnOffer : nil
     }
 
     /// "Back to §4.2" after following a link within the document (#254). In a
@@ -390,27 +411,25 @@ struct DocumentView: View {
   // MARK: - Actions
 
   private func startLoad() {
-    loadTask = Task { await load() }
+    work.load?.cancel()
+    work.load = Task { await load() }
+  }
+
+  private func trace(_ event: String) {
+    readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
   }
 
   /// Fetches. Building is `rebuild()`'s job, which this triggers by setting
   /// `document`.
   ///
   /// Once per view, plus Try Again after a failure: the view is made per document
-  /// (`.id(selection)`), and appearing again keeps what it loaded. Clearing a
-  /// loaded document and setting it again before the next render, as a cached
-  /// document did, left the build nothing to see, and the reader spun forever
-  /// (#253).
+  /// (`.id(selection)`), and appearing again keeps what it loaded.
   private func load() async {
-    readerLog.debug("\(id.displayName, privacy: .public): loading")
+    trace("loading")
     loadError = nil
-    document = nil
-    built = nil
-    sectionNumbers = [:]
     // The scene's `ReaderState` must not carry the previous document's place into
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
-    lastVisibleAnchor.anchor = nil
     reader.showOriginal = preferOriginalText
     do {
       let loaded = try await library.document(for: id)
@@ -423,11 +442,9 @@ struct DocumentView: View {
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
-      readerLog.debug("\(id.displayName, privacy: .public): loaded")
+      trace("loaded")
     } catch {
-      readerLog.debug(
-        "\(id.displayName, privacy: .public): failed: \(String(describing: error), privacy: .public)"
-      )
+      trace("failed: \(error)")
       loadError = error.localizedDescription
     }
   }
@@ -443,26 +460,22 @@ struct DocumentView: View {
   private func rebuild() async {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
-    // `initial:` can start this again when the view appears again, with nothing changed.
-    guard inputs != builtInputs else {
-      readerLog.debug("\(id.displayName, privacy: .public): build skipped, inputs unchanged")
-      return
-    }
-    readerLog.debug("\(id.displayName, privacy: .public): building")
+    trace("building")
     if built != nil {
       try? await Task.sleep(for: .milliseconds(650))
-      guard !Task.isCancelled else { return }
     }
+    // Before the build, which cannot be interrupted once it starts.
+    guard !Task.isCancelled else { return }
     // Off the main actor: this is string assembly and text measurement, and
     // blocking the main thread for it is what made the font-size slider stutter.
     let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
     guard !Task.isCancelled else {
-      readerLog.debug("\(id.displayName, privacy: .public): build cancelled, discarded")
+      trace("build cancelled, discarded")
       return
     }
     built = rebuilt
     builtInputs = inputs
-    readerLog.debug("\(id.displayName, privacy: .public): built")
+    trace("built")
     // The sections the storage actually holds, straight from the index the
     // builder just emitted — rather than re-deriving "is this a bibliography?"
     // from the model and hoping the two rules stay in step. A contents row that

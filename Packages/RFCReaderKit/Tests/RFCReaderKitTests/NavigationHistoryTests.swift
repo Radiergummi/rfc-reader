@@ -51,6 +51,21 @@ struct NavigationHistoryTests {
     #expect(history.returnOffer == nil)
   }
 
+  /// Settled is a fact about the history, not about the place offered: the same
+  /// jump taken again, after going back, offers again.
+  @Test func aSettledOfferStaysSettledUntilTheNextJump() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    history.settleReturnOffer()
+    #expect(history.returnOffer == nil)
+    #expect(history.current == place(9110, "section-15"), "settling does not move")
+
+    _ = history.goBack()
+    history.go(to: place(9110, "section-15"), leaving: "section-4")
+    #expect(history.returnOffer == place(9110, "section-4"))
+  }
+
   @Test func aNewJumpAfterSteppingBackOffersAgain() {
     var history = NavigationHistory()
     history.go(to: place(9110))
