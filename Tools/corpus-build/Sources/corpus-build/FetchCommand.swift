@@ -106,8 +106,7 @@ struct FetchCommand: AsyncParsableCommand {
             to: directory.appending(path: "\(id.fileStem).\(suffix)"), options: .atomic)
         case .failure(let error):
           failures += 1
-          Self.logger.error(
-            "download failed", metadata: ["document": "\(id)", "error": "\(error)"])
+          Self.logger.error("download failed", error: error, metadata: ["document": "\(id)"])
         }
         completed += 1
         if completed % 250 == 0 {
