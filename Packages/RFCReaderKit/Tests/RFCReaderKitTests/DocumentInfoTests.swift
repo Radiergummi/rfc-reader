@@ -28,12 +28,15 @@ struct DocumentInfoTests {
     doi: "10.17487/RFC9110"
   )
 
-  private let bare = RFCMetadata(id: .rfc(1149), title: "IP over Avian Carriers", date: PublicationDate(year: 1990, month: 4))
+  private let bare = RFCMetadata(
+    id: .rfc(1149), title: "IP over Avian Carriers", date: PublicationDate(year: 1990, month: 4))
 
   private var index: RFCIndex {
     RFCIndex(
       rfcs: [rich, bare],
-      series: [SeriesEntry(id: DocumentID(series: .std, number: 97), members: [.rfc(9110), .rfc(9111)])])
+      series: [
+        SeriesEntry(id: DocumentID(series: .std, number: 97), members: [.rfc(9110), .rfc(9111)])
+      ])
   }
 
   private func section(_ title: String, of metadata: RFCMetadata) -> DocumentInfo.Section? {
@@ -73,7 +76,8 @@ struct DocumentInfoTests {
   @Test func `the original status is shown only where it differs`() {
     let status = section("Status", of: rich)
     #expect(value("Status", in: status) == .text(PublicationStatus.internetStandard.displayName))
-    #expect(value("Published as", in: status) == .text(PublicationStatus.proposedStandard.displayName))
+    #expect(
+      value("Published as", in: status) == .text(PublicationStatus.proposedStandard.displayName))
     #expect(value("Stream", in: status) == .text("IETF"))
     #expect(value("Working group", in: status) == .text("httpbis"))
     #expect(value("Area", in: status) == .text("art"))
@@ -96,7 +100,9 @@ struct DocumentInfoTests {
   @Test func `identifiers and pages elsewhere are links`() {
     let links = section("Links", of: rich)
     #expect(value("DOI", in: links) == .copyable("10.17487/RFC9110"))
-    #expect(value("Errata", in: links) == .link(URL(string: "https://www.rfc-editor.org/errata/rfc9110")!))
+    #expect(
+      value("Errata", in: links) == .link(URL(string: "https://www.rfc-editor.org/errata/rfc9110")!)
+    )
     #expect(value("RFC Editor", in: links) == .link(RFCEditorEndpoints.infoPage(.rfc(9110))))
     #expect(value("Datatracker", in: links) == .link(RFCEditorEndpoints.datatracker(.rfc(9110))))
   }
@@ -107,13 +113,17 @@ struct DocumentInfoTests {
     let sections = DocumentInfo.sections(for: bare, in: index)
     #expect(sections.map(\.title) == ["Document", "Status", "Links"])
     let rows = sections.flatMap(\.rows).map(\.label)
-    for absent in ["Pages", "Keywords", "Formats", "Working group", "Area", "DOI", "Errata", "Published as"] {
+    for absent in [
+      "Pages", "Keywords", "Formats", "Working group", "Area", "DOI", "Errata", "Published as",
+    ] {
       #expect(!rows.contains(absent), "\(absent) shown for a document that has none")
     }
   }
 
   @Test func `without an index a series has no members to list`() {
-    let relationships = DocumentInfo.sections(for: rich, in: nil).first { $0.title == "Relationships" }
+    let relationships = DocumentInfo.sections(for: rich, in: nil).first {
+      $0.title == "Relationships"
+    }
     #expect(relationships?.rows.contains { $0.label.hasPrefix("Part of") } == false)
   }
 }

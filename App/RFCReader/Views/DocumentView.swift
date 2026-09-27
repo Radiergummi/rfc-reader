@@ -191,6 +191,7 @@ struct DocumentView: View {
         work.buildingFor = buildInputs
         work.build = Task { await rebuild() }
       }
+      .onChange(of: metadata) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section)
       }
@@ -425,6 +426,12 @@ struct DocumentView: View {
     work.load = Task { await load() }
   }
 
+  /// The Info tab's rows. Again whenever the metadata changes: a document opened
+  /// before the index finished loading has none to show until it does.
+  private func deriveInfo() {
+    reader.info = metadata.map { DocumentInfo.sections(for: $0, in: library.index) } ?? []
+  }
+
   private func trace(_ event: String) {
     readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
   }
@@ -444,6 +451,7 @@ struct DocumentView: View {
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
+      deriveInfo()
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first }

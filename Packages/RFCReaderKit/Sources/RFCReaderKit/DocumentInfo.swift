@@ -33,7 +33,9 @@ public enum DocumentInfo {
   public static func sections(for metadata: RFCMetadata, in index: RFCIndex?) -> [Section] {
     [
       section("Document", document(metadata)),
-      section("Authors", metadata.authors.map { Row(label: $0.role == nil ? "" : "Editor", value: .text($0.name)) }),
+      section(
+        "Authors",
+        metadata.authors.map { Row(label: $0.role == nil ? "" : "Editor", value: .text($0.name)) }),
       section("Status", status(metadata)),
       section("Relationships", relationships(metadata, index: index)),
       section("Links", links(metadata)),
@@ -49,12 +51,16 @@ public enum DocumentInfo {
       Row(label: "Number", value: .text(metadata.id.displayName)),
       Row(label: "Published", value: .text(metadata.date.formatted)),
     ]
-    if let pages = metadata.pageCount { rows.append(Row(label: "Pages", value: .text(String(pages)))) }
+    if let pages = metadata.pageCount {
+      rows.append(Row(label: "Pages", value: .text(String(pages))))
+    }
     if !metadata.keywords.isEmpty {
       rows.append(Row(label: "Keywords", value: .text(metadata.keywords.joined(separator: ", "))))
     }
     if !metadata.formats.isEmpty {
-      rows.append(Row(label: "Formats", value: .text(metadata.formats.map(\.rawValue).joined(separator: ", "))))
+      rows.append(
+        Row(
+          label: "Formats", value: .text(metadata.formats.map(\.rawValue).joined(separator: ", "))))
     }
     return rows
   }
@@ -67,11 +73,14 @@ public enum DocumentInfo {
     if metadata.currentStatus != .unknown {
       rows.append(Row(label: "Status", value: .text(metadata.currentStatus.displayName)))
     }
-    if metadata.publicationStatus != .unknown, metadata.publicationStatus != metadata.currentStatus {
-      rows.append(Row(label: "Published as", value: .text(metadata.publicationStatus.displayName)))
+    let original = metadata.publicationStatus
+    if original != .unknown, original != metadata.currentStatus {
+      rows.append(Row(label: "Published as", value: .text(original.displayName)))
     }
     rows.append(Row(label: "Stream", value: .text(metadata.stream.displayName)))
-    if let group = metadata.workingGroup { rows.append(Row(label: "Working group", value: .text(group))) }
+    if let group = metadata.workingGroup {
+      rows.append(Row(label: "Working group", value: .text(group)))
+    }
     if let area = metadata.area { rows.append(Row(label: "Area", value: .text(area))) }
     return rows
   }
@@ -90,7 +99,8 @@ public enum DocumentInfo {
       rows.append(Row(label: label, value: .documents(documents)))
     }
     for series in metadata.isAlso {
-      let others = index?.series.first { $0.id == series }?.members.filter { $0 != metadata.id } ?? []
+      let others =
+        index?.series.first { $0.id == series }?.members.filter { $0 != metadata.id } ?? []
       if !others.isEmpty {
         rows.append(Row(label: "Part of \(series.displayName)", value: .documents(others)))
       }
@@ -104,7 +114,8 @@ public enum DocumentInfo {
     if let doi = metadata.doi { rows.append(Row(label: "DOI", value: .copyable(doi))) }
     if let errata = metadata.errataURL { rows.append(Row(label: "Errata", value: .link(errata))) }
     rows.append(Row(label: "RFC Editor", value: .link(RFCEditorEndpoints.infoPage(metadata.id))))
-    rows.append(Row(label: "Datatracker", value: .link(RFCEditorEndpoints.datatracker(metadata.id))))
+    rows.append(
+      Row(label: "Datatracker", value: .link(RFCEditorEndpoints.datatracker(metadata.id))))
     return rows
   }
 }

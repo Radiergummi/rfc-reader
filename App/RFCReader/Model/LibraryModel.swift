@@ -406,6 +406,10 @@ final class LibraryModel {
     await store.isCached(id)
   }
 
+  func downloadedSize(_ id: DocumentID) async -> Int? {
+    await store.downloadedSize(id)
+  }
+
   /// The documents the reader has opened, most recent first.
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently

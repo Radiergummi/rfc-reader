@@ -5,9 +5,11 @@ import SwiftUI
 enum InspectorTab {
   case contents
   case references
+  case info
 }
 
-/// The document's two navigational views, sharing one panel.
+/// The document's two navigational views, and what is known about it, sharing one
+/// panel.
 ///
 /// The bibliography is here rather than in the reading flow: every citation in the
 /// prose already links straight to the document it names, so the section was several
@@ -19,6 +21,10 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
+  let info: [DocumentInfo.Section]
+  /// For the Info tab's download state, which is the store's rather than derived.
+  let document: DocumentID?
+  let library: LibraryModel
   @Binding var tab: InspectorTab
   let current: String?
   let selectSection: (String) -> Void
@@ -42,6 +48,7 @@ struct DocumentInspector: View {
         Picker("Panel", selection: $tab) {
           Text("Contents").tag(InspectorTab.contents)
           Text("References").tag(InspectorTab.references)
+          Text("Info").tag(InspectorTab.info)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -73,6 +80,8 @@ struct DocumentInspector: View {
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
       ReferencesView(groups: groups, open: openDocument)
+    case .info:
+      InfoView(sections: info, document: document, library: library, open: openDocument)
     }
   }
 }
@@ -109,6 +118,9 @@ struct PanelHost: View {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
+        info: reader.info,
+        document: navigation.selection,
+        library: library,
         tab: $reader.tab,
         current: reader.currentAnchor,
         selectSection: {
@@ -152,6 +164,7 @@ private struct InspectorTabBar: View {
     HStack(spacing: 0) {
       segment(.contents, "Contents")
       segment(.references, "References")
+      segment(.info, "Info")
     }
     // The track the segments sit in, and the inset that keeps the selected pill
     // inside it rather than flush with its edge.

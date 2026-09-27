@@ -21,6 +21,8 @@ final class ReaderState {
   /// Only the sections the storage actually holds; see `DocumentView.rebuild()`.
   var sections: [RFCKit.Section] = []
   var groups: [ReferenceGroup] = []
+  /// The Info tab's rows, derived once per document by `DocumentView` (#25).
+  var info: [DocumentInfo.Section] = []
   /// Which of the two the panel is showing. Both are ways of navigating the
   /// document, so they share one panel rather than competing for the toolbar.
   var tab: InspectorTab = .contents
@@ -65,6 +67,7 @@ final class ReaderState {
     updateToolbarTitle(.hidden)
     sections = []
     groups = []
+    info = []
     currentAnchor = nil
     currentSection = nil
     hasDocument = false

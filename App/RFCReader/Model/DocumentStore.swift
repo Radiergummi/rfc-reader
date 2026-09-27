@@ -59,6 +59,14 @@ actor DocumentStore {
     return cachedDocuments.contains(id)
   }
 
+  /// How much disk the cached body takes, or nil when there is none.
+  func downloadedSize(_ id: DocumentID) -> Int? {
+    let sizes = DocumentCacheIndex.bodyFormats.compactMap { format in
+      (try? fileURL(id, format: format).resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+    }
+    return sizes.isEmpty ? nil : sizes.reduce(0, +)
+  }
+
   /// Numbers of every RFC with a cached body.
   func cachedNumbers() -> Set<Int> {
     cachedDocuments.revalidate()
