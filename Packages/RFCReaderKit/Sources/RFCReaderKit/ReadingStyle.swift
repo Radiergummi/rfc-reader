@@ -138,4 +138,12 @@ public enum ToolbarTitleReveal {
     let travelled = (visibleTop - (headingBottom - distance)) / distance
     return min(1, max(0, travelled))
   }
+
+  /// How opaque the toolbar's title is at a given progress: nothing for the first
+  /// half of its travel, then fading in over the second. It rises from under the
+  /// toolbar's bottom edge, and text faded in from the start is seen being cut by
+  /// that edge; by halfway most of it is clear of it.
+  public static func opacity(atProgress progress: CGFloat) -> CGFloat {
+    min(1, max(0, (progress - 0.5) * 2))
+  }
 }

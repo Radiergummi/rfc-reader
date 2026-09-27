@@ -118,6 +118,14 @@ struct ToolbarTitleRevealTests {
     #expect(wrapped == 0.5)
   }
 
+  /// Invisible while it crosses the toolbar's edge, then fading in to fully opaque.
+  @Test func opacityWaitsForTheFirstHalfOfTheTravel() {
+    #expect(ToolbarTitleReveal.opacity(atProgress: 0) == 0)
+    #expect(ToolbarTitleReveal.opacity(atProgress: 0.5) == 0)
+    #expect(ToolbarTitleReveal.opacity(atProgress: 0.75) == 0.5)
+    #expect(ToolbarTitleReveal.opacity(atProgress: 1) == 1)
+  }
+
   /// A heading with no measurable line switches at its bottom rather than dividing
   /// by zero.
   @Test func aZeroDistanceSwitchesAtTheHeadingsBottom() {

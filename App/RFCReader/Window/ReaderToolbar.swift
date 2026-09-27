@@ -115,17 +115,24 @@
   /// It is the filler between Back/Forward and the document's actions — the item
   /// takes the place of the flexible space that stood there — and it shrinks to
   /// nothing rather than overflowing into the toolbar's chevron menu, drawing
-  /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises in
-  /// from below the item's bottom edge and fades in as the heading passes under the
-  /// toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`.
+  /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises out
+  /// from under the toolbar's bottom edge and fades in as the heading passes under
+  /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`.
   @MainActor
   private final class DocumentTitleView: NSView {
     private let title = TitleView.label(.systemFont(ofSize: 13, weight: .semibold), .labelColor)
     private let subtitle = TitleView.label(.systemFont(ofSize: 11), .secondaryLabelColor)
     private let stack: NSStackView
+    /// What the text is clipped to: from the top of the item down to the toolbar's
+    /// bottom edge, which is below the item's own — the toolbar gives the item 32
+    /// pt in the middle of a taller bar. Clipped at the item's edge instead, the
+    /// text appeared out of a line drawn across the middle of the toolbar.
+    private let clip = NSView()
 
     private var progress: CGFloat = 0
     private var stackHeight: CGFloat = 0
+    /// The toolbar's bottom edge, in this view's coordinates: below zero.
+    private var toolbarBottom: CGFloat = 0
 
     init() {
       stack = NSStackView(views: [title, subtitle])
@@ -140,10 +147,13 @@
       // Placed by frame, not by constraints: it moves on every scroll tick, and a
       // frame set inside a view whose own size does not change dirties nothing
       // outside it.
-      addSubview(stack)
-      // The text slides in from outside the item's bounds, and is not seen there.
-      wantsLayer = true
-      layer?.masksToBounds = true
+      clip.wantsLayer = true
+      clip.layer?.masksToBounds = true
+      clip.addSubview(stack)
+      addSubview(clip)
+      // The clip reaches below this view's bounds, so this view must not cut it
+      // off at its own edge.
+      clipsToBounds = false
       translatesAutoresizingMaskIntoConstraints = false
       // Only the height: the width is the toolbar's to hand out, between the
       // item's `minSize` and `maxSize`.
@@ -168,23 +178,33 @@
       self.progress = progress
       // On the text, not on this view: the toolbar sets its items' own alpha
       // for their enabled state and overrides whatever is set here.
-      stack.alphaValue = progress
+      stack.alphaValue = ToolbarTitleReveal.opacity(atProgress: progress)
       placeStack()
     }
 
     override func layout() {
       super.layout()
+      // Where the toolbar ends, which is where the window's content begins. Only
+      // a layout pass can move it, so it is measured here rather than per tick.
+      if let window {
+        let edge = convert(NSPoint(x: 0, y: window.contentLayoutRect.maxY), from: nil).y
+        toolbarBottom = min(0, edge)
+      }
+      clip.frame = CGRect(
+        x: 0, y: toolbarBottom, width: bounds.width, height: bounds.height - toolbarBottom)
       placeStack()
     }
 
     private func placeStack() {
+      // Not flipped, so down is a smaller y. At 0 the text's top is at the
+      // toolbar's bottom edge, just out of sight under it; at 1 it rests in the
+      // middle of the item.
+      let hidden = toolbarBottom - stackHeight
       let resting = (bounds.height - stackHeight) / 2
-      // Not flipped, so down is a smaller y: at 0 the text sits a whole item's
-      // height below where it rests, just out of sight under the bottom edge.
-      let offset = (1 - progress) * bounds.height
+      let y = hidden + (resting - hidden) * progress
       stack.frame = CGRect(
         x: Self.padding,
-        y: resting - offset,
+        y: y - toolbarBottom,
         width: max(0, bounds.width - Self.padding * 2),
         height: stackHeight
       )
