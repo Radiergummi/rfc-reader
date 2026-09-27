@@ -183,7 +183,10 @@ struct ReferenceRow: View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if entry.documentID != nil {
+          // Decoration: inside the button it would otherwise open the button's
+          // spoken name with the symbol's own.
           Image(systemName: "doc.text").foregroundStyle(.tint).imageScale(.small)
+            .accessibilityHidden(true)
         }
         Text(entry.displayAnchor)
           .font(.subheadline.weight(.semibold))
