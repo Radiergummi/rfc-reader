@@ -34,4 +34,31 @@ struct KeptSelectionTests {
     kept.selection = "bookmarks"
     #expect(kept.selection == "bookmarks")
   }
+
+  /// Choosing the kept value again after a clear is entering it, though `value`
+  /// never changed: that is the iPhone going back to the sidebar and tapping the
+  /// same filter, which has to take a fresh Recently Read order.
+  @Test func choosingTheKeptValueAfterAClearEntersIt() {
+    var kept = KeptSelection("recent")
+    kept.selection = nil
+    let cleared = kept
+    kept.selection = "recent"
+    #expect(kept.enters(since: cleared))
+  }
+
+  @Test func choosingAnotherValueEntersIt() {
+    var kept = KeptSelection("all")
+    let before = kept
+    kept.selection = "recent"
+    #expect(kept.enters(since: before))
+  }
+
+  @Test func clearingOrChoosingTheSameValueEntersNothing() {
+    var kept = KeptSelection("recent")
+    let before = kept
+    kept.selection = "recent"
+    #expect(!kept.enters(since: before))
+    kept.selection = nil
+    #expect(!kept.enters(since: before))
+  }
 }
