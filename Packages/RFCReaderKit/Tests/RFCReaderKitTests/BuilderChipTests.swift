@@ -19,7 +19,7 @@ struct BuilderChipTests {
     Fixtures.inlineRun([.crossReference(xref)], style: style)
   }
 
-  @Test func aCanonicalLabelLosesItsBrackets() {
+  @Test func `a canonical label loses its brackets`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: nil))
     #expect(run(xref).string == "\u{FFFC}\u{2060}RFC\u{00A0}9110")
   }
@@ -27,21 +27,21 @@ struct BuilderChipTests {
   /// A reference to a section of another document is one reference, so it reads as
   /// one chip with the section as a suffix -- not as a sentence fragment with the
   /// document buried in the middle of it.
-  @Test func aSectionReferenceBecomesOneChipWithASectionSuffix() {
+  @Test func `a section reference becomes one chip with a section suffix`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
     #expect(run(xref).string == "\u{FFFC}\u{2060}RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
   }
 
   /// Nothing in the label may break across a line: not the series word from its
   /// number, and not the section mark from its number.
-  @Test func aSectionLabelIsBoundTogether() {
+  @Test func `a section label is bound together`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
     #expect(xref.displayLabel == "RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
     #expect(!xref.displayLabel.contains(" "), "an ordinary space would let the chip wrap mid-label")
   }
 
   /// The screen and a copied selection say the same thing.
-  @Test func whatIsCopiedIsWhatIsShown() {
+  @Test func `what is copied is what is shown`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
     // The rendered run is the display label plus the chip's own symbol and joiner.
     #expect(run(xref).string == Self.chipPrefix + xref.displayLabel)
@@ -50,7 +50,7 @@ struct BuilderChipTests {
 
   /// An author's own words for a link are not a composed label, so they are left
   /// exactly as written — no chip, no restyling.
-  @Test func anAuthorsOwnLinkTextIsLeftAlone() {
+  @Test func `an authors own link text is left alone`() {
     let xref = CrossReference(
       target: .document(.rfc(9110), section: "4.2"), text: "the caching rules")
     #expect(xref.displayLabel == "the caching rules")
@@ -60,7 +60,7 @@ struct BuilderChipTests {
 
   private static let chipPrefix = "\u{FFFC}\u{2060}"
 
-  @Test func theWholeSectionReferenceIsOneChipRun() throws {
+  @Test func `the whole section reference is one chip run`() throws {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
     let attributed = run(xref)
     var range = NSRange(location: 0, length: 0)
@@ -71,7 +71,7 @@ struct BuilderChipTests {
     #expect(range.length == attributed.length, "every character belongs to the one chip")
   }
 
-  @Test func anAuthorTagKeepsItsBracketsAndGetsNoChip() {
+  @Test func `an author tag keeps its brackets and gets no chip`() {
     let xref = CrossReference(target: .document(.rfc(9000), section: nil), text: "[QUIC-TRANSPORT]")
     let attributed = run(xref)
     #expect(attributed.string == "[QUIC-TRANSPORT]")
@@ -82,7 +82,7 @@ struct BuilderChipTests {
   /// equal, so two directly adjacent chips (`[RFC9110][RFC9111]`) sharing
   /// `.rfcChip == true` would report one `effectiveRange` spanning both and draw
   /// as a single rounded rect. Each chip carries its own serial number instead.
-  @Test func adjacentChipsDoNotMergeIntoOneEffectiveRange() throws {
+  @Test func `adjacent chips do not merge into one effective range`() throws {
     let first = CrossReference(target: .document(.rfc(9110), section: nil))
     let second = CrossReference(target: .document(.rfc(9111), section: nil))
     let attributed = Fixtures.inlineRun(
@@ -103,7 +103,7 @@ struct BuilderChipTests {
       "two adjacent chips must draw as two pieces, not one merged blob: \(pieces)")
   }
 
-  @Test func theWholeLabelStaysALinkEitherWay() throws {
+  @Test func `the whole label stays a link either way`() throws {
     let xref = CrossReference(target: .document(.rfc(9110), section: nil))
     let attributed = run(xref)
     let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)

@@ -11,7 +11,7 @@ Everything goes through the `Makefile`:
 | `make check` | `lint build test` — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
 | `make test-app` | RFCReaderKit test suite (needs an Apple SDK, not part of `make check`) |
-| `swift test --package-path Packages/RFCKit --filter <testName>` | one test or suite |
+| `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | both Swift packages (RFCKit, corpus-build) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
@@ -62,7 +62,7 @@ Standing constraints those documents establish, which are easy to violate by acc
 2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 
-Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
+Tests use Swift Testing (`@Suite`, `@Test`, `#expect`). A test is named with a raw identifier that says what it pins, ``@Test func `a canonical label loses its brackets`()``, not a camel-cased sentence and not a display-name string beside a short name. A test that calls `parse` feeds it a real RFC, never a synthetic snippet: a committed fixture loaded through `Fixtures`, or a corpus document loaded through `CorpusText`.
 
 The rule is about what a **document-shaped** input has to be. Anything fed to `parse` is a real RFC, because a synthetic document is exactly the thing that lacks the quirks these heuristics exist for — the justification, the tab indents, the inverted page furniture. A hand-written document tests the parser against the author's idea of an RFC.
 

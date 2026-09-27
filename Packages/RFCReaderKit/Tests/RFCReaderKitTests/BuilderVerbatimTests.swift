@@ -19,7 +19,7 @@ struct BuilderVerbatimTests {
     Fixtures.document(.preformatted(content))
   }
 
-  @Test func artworkSurvivesLineForLine() {
+  @Test func `artwork survives line for line`() {
     let art = "+---+\n| A |\n+---+"
     let built = DocumentTextBuilder.build(
       document(Preformatted(kind: .artwork, text: art)), style: style)
@@ -37,7 +37,7 @@ struct BuilderVerbatimTests {
   /// The spacing belongs after the block, once — also when the block is a single
   /// line, or its text already ends in a newline.
   @Test(arguments: ["+-A-+\n| B |\n+-C-+", "+-A-+\n| B |\n+-C-+\n", "+-A-+"])
-  func artworkIsSpacedAfterTheBlockNotAfterEveryLine(art: String) throws {
+  func `artwork is spaced after the block not after every line`(art: String) throws {
     // Distinct lines, so each is found where it is.
     let built = DocumentTextBuilder.build(
       document(Preformatted(kind: .artwork, text: art)), style: style)
@@ -59,7 +59,7 @@ struct BuilderVerbatimTests {
     (Preformatted.Kind.artwork, ReadingStyle().artworkLineHeightMultiple),
     (Preformatted.Kind.sourceCode, ReadingStyle().lineHeightMultiple),
   ])
-  func artworkIsSetTighterThanCode(kind: Preformatted.Kind, expected: CGFloat) throws {
+  func `artwork is set tighter than code`(kind: Preformatted.Kind, expected: CGFloat) throws {
     let built = DocumentTextBuilder.build(
       document(Preformatted(kind: kind, text: "+-A-+\n| B |\n+-C-+")), style: style)
     for line in ["+-A-+", "| B |", "+-C-+"] {
@@ -71,7 +71,7 @@ struct BuilderVerbatimTests {
     }
   }
 
-  @Test func artworkIsMonospacedAndNeverWraps() throws {
+  @Test func `artwork is monospaced and never wraps`() throws {
     let art = "GET / HTTP/1.1"
     let built = DocumentTextBuilder.build(
       document(Preformatted(kind: .artwork, text: art)), style: style)
@@ -88,7 +88,7 @@ struct BuilderVerbatimTests {
     #expect(paragraph.lineBreakMode == .byClipping)
   }
 
-  @Test func artworkCarriesItsDecorationAndItsSource() throws {
+  @Test func `artwork carries its decoration and its source`() throws {
     let content = Preformatted(kind: .artwork, text: "x", anchor: "figure-1")
     let built = DocumentTextBuilder.build(document(content), style: style)
     let offset = try #require(built.anchors.offset(of: "figure-1"))
@@ -101,12 +101,12 @@ struct BuilderVerbatimTests {
     #expect(box.content.text == "x")
   }
 
-  @Test func narrowArtworkIsNotScaledDown() {
+  @Test func `narrow artwork is not scaled down`() {
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.monospaceScale(for: "short", indent: 0) == 1)
   }
 
-  @Test func wideArtworkScalesToFitTheMeasure() {
+  @Test func `wide artwork scales to fit the measure`() {
     let builder = DocumentTextBuilder(style: style)
     let wide = String(repeating: "#", count: 129)
     let scale = builder.monospaceScale(for: wide, indent: 0)
@@ -117,7 +117,7 @@ struct BuilderVerbatimTests {
     #expect(width <= style.measure + 1, "129 columns must fit the measure after scaling")
   }
 
-  @Test func theWidestLineDrivesTheScale() {
+  @Test func `the widest line drives the scale`() {
     let builder = DocumentTextBuilder(style: style)
     let mixed = "short\n" + String(repeating: "#", count: 120) + "\nshort"
     #expect(
@@ -127,13 +127,13 @@ struct BuilderVerbatimTests {
 
   /// Quotes nested deep enough to eat the whole measure must still leave the
   /// artwork a font size: a scale of zero is a block that draws nothing.
-  @Test func artworkIndentedPastTheMeasureStillHasASize() {
+  @Test func `artwork indented past the measure still has a size`() {
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.monospaceScale(for: "+--+", indent: style.measure) > 0)
     #expect(builder.monospaceScale(for: "+--+", indent: style.measure * 2) > 0)
   }
 
-  @Test func sourceCodeShowsItsLanguage() {
+  @Test func `source code shows its language`() {
     let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
     let built = DocumentTextBuilder.build(document(content), style: style)
     #expect(built.text.string.contains("ABNF"))
@@ -141,7 +141,7 @@ struct BuilderVerbatimTests {
 
   /// The label names the card, so it sits inside it: one decoration run from the
   /// label through the code, or the renderer draws the card starting below it.
-  @Test func theLanguageLabelSitsInsideItsCard() throws {
+  @Test func `the language label sits inside its card`() throws {
     let content = Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf")
     let built = DocumentTextBuilder.build(document(content), style: style)
     let label = try Fixtures.offset(of: "ABNF", in: built.text)
@@ -157,7 +157,7 @@ struct BuilderVerbatimTests {
   /// Artwork inside a quote starts an indent step in, so the widest line has to fit
   /// what is left of the measure — scaled against the whole measure, it overruns
   /// the column by exactly the indent.
-  @Test func indentedArtworkScalesToFitWhatIsLeftOfTheMeasure() throws {
+  @Test func `indented artwork scales to fit what is left of the measure`() throws {
     let wide = String(repeating: "#", count: 129)
     let quoted = Fixtures.document(
       .blockQuote([.preformatted(Preformatted(kind: .artwork, text: wide, anchor: "art"))]))
@@ -175,7 +175,7 @@ struct BuilderVerbatimTests {
 
   /// A caption centres under its figure, and an indented figure's card starts at the
   /// indent — so the caption's paragraph has to start there too.
-  @Test func anIndentedFiguresCaptionIsIndentedWithIt() throws {
+  @Test func `an indented figures caption is indented with it`() throws {
     let figure = Figure(
       title: "Packet", number: 1,
       blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))])
@@ -196,7 +196,7 @@ struct BuilderVerbatimTests {
   /// Quietening the abstract as a second pass over finished attributes got this
   /// wrong: the block was measured at body size, then shrunk again, so its widest
   /// line came out short of the measure by exactly the abstract's scale.
-  @Test func artworkInTheAbstractIsScaledOnceInItsOwnStyle() throws {
+  @Test func `artwork in the abstract is scaled once in its own style`() throws {
     let wide = String(repeating: "#", count: 200)
     let document = RFCDocument(
       header: DocumentHeader(
@@ -237,7 +237,7 @@ struct BuilderVerbatimTests {
 
   /// The column is wider than the page the folds were made for, so the reader
   /// shows what the author wrote, and the header that explained the folds goes.
-  @Test func aFoldedBlockThatFitsIsShownUnfolded() {
+  @Test func `a folded block that fits is shown unfolded`() {
     let unfolded = "{\"key\": \"" + String(repeating: "a", count: 50) + "\"}"
     let content = Self.folded(unfolded)
     let built = DocumentTextBuilder.build(document(content), style: style)
@@ -247,7 +247,7 @@ struct BuilderVerbatimTests {
 
   /// Unfolded, it would have to be scaled down to fit; the published folds read
   /// better than that, and they keep the header that explains them.
-  @Test func aFoldedBlockThatDoesNotFitIsShownAsPublished() {
+  @Test func `a folded block that does not fit is shown as published`() {
     let content = Self.folded(String(repeating: "b", count: 300))
     let built = DocumentTextBuilder.build(document(content), style: style)
     #expect(built.text.string.contains(content.text))
@@ -255,7 +255,7 @@ struct BuilderVerbatimTests {
 
   /// Whether it fits is a question about this column, so a narrow one keeps the
   /// folds that a wide one takes out.
-  @Test func whetherItFitsIsMeasuredAgainstTheColumn() {
+  @Test func `whether it fits is measured against the column`() {
     let unfolded = String(repeating: "c", count: 65)
     let content = Self.folded(unfolded)
     let wide = DocumentTextBuilder(style: style)
@@ -266,7 +266,7 @@ struct BuilderVerbatimTests {
 
   /// What is shown changes; what the block is does not. "Copy Figure" and the
   /// accessibility element read the published block from its box.
-  @Test func theBoxKeepsThePublishedBlock() throws {
+  @Test func `the box keeps the published block`() throws {
     let content = Self.folded("short enough to fit once unfolded, and folded anyway")
     let built = DocumentTextBuilder.build(document(content), style: style)
     let offset = try #require(built.anchors.offset(of: "folded"))
@@ -275,7 +275,7 @@ struct BuilderVerbatimTests {
     #expect(box.content.text == content.text)
   }
 
-  @Test func aBlockThatIsNotFoldedIsShownAsItIs() {
+  @Test func `a block that is not folded is shown as it is`() {
     let content = Preformatted(kind: .artwork, text: "a line ending in a backslash \\\nnext")
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.displayedText(of: content, indent: 0) == content.text)
