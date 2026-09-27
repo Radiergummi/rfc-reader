@@ -160,13 +160,11 @@ struct ProseDiagnosticsTests {
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
   /// report does not diagnose it either: RFC 1441's centred status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
+  /// RFC 757's phone number is the whole of its lead-in, and the report has none.
   @Test func theTitlePagesLeftoversAreNotDiagnosed() throws {
-    let leadIn = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc1441.txt"))
-      .filter { $0.section.isEmpty }.map(\.firstLine)
-    #expect(!leadIn.contains("Status of this Memo"))
-    #expect(!leadIn.contains { $0.hasPrefix("This RFC specifes an IAB standards track") })
-    #expect(!leadIn.contains { $0.hasPrefix("1 Introduction .....") })
-    #expect(leadIn.first?.hasPrefix("1.  Introduction") == true)
+    let leadIn = LegacyTextParser.proseDiagnostics(for: try Fixtures.string("rfc757.txt"))
+      .filter { $0.section.isEmpty }
+    #expect(leadIn.isEmpty, "\(leadIn.map(\.firstLine))")
   }
 
   /// `classify` offers a block to the list parser before it asks the prose test, so a

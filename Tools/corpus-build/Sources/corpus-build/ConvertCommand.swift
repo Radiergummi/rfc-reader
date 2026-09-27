@@ -155,10 +155,10 @@ struct ConvertCommand: AsyncParsableCommand {
     let stem = String(file.dropLast(4))
     let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
-    if let overrides = job.overrides,
-      FileManager.default.fileExists(atPath: overrides.appending(path: "\(stem).xml").path)
+    if let overrideURL = job.overrides?.appending(path: "\(stem).xml"),
+      FileManager.default.fileExists(atPath: overrideURL.path)
     {
-      let data = try Data(contentsOf: overrides.appending(path: "\(stem).xml"))
+      let data = try Data(contentsOf: overrideURL)
       let document = try RFCXMLParser.parse(data)  // overrides must at least parse
       try data.write(to: outputURL, options: .atomic)
       var entry = DocumentReport(document: document, id: stem, overridden: true)
