@@ -147,8 +147,10 @@ private struct InspectorTabBar: View {
     return Button {
       tab = value
     } label: {
+      // A text style rather than a fixed 13 pt, so the tabs follow the text size;
+      // on macOS `.body` is the same 13 pt.
       Text(title)
-        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .font(.body.weight(isSelected ? .semibold : .regular))
         .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
         .lineLimit(1)
         .frame(maxWidth: .infinity)
@@ -164,6 +166,8 @@ private struct InspectorTabBar: View {
         .contentShape(.rect)
     }
     .buttonStyle(.plain)
+    // The pill shows which tab is chosen; this says so to VoiceOver (#156).
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -197,12 +201,22 @@ struct ReferenceRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
-      entryDescription
-        .contentShape(Rectangle())
-        .onTapGesture { if let id = entry.documentID { open(id) } }
+      // A button, not a tap gesture: a gesture is no control, so VoiceOver did
+      // not announce the row as one and Full Keyboard Access could not press it
+      // (#156). An entry that names no RFC opens nothing and stays plain text.
+      if let id = entry.documentID {
+        Button {
+          open(id)
+        } label: {
+          entryDescription.contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      } else {
+        entryDescription
+      }
       // What the author added after the entry, most often the commit a living
       // standard was cited at; its link opens in the browser like any other.
-      // Outside the tap gesture, which would otherwise take the link's click.
+      // Outside the button, which would otherwise take the link's click.
       if let annotation = entry.annotationText {
         Text(annotation)
           .font(.caption)
@@ -223,7 +237,10 @@ struct ReferenceRow: View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if entry.documentID != nil {
+          // Decoration: inside the button it would otherwise open the button's
+          // spoken name with the symbol's own.
           Image(systemName: "doc.text").foregroundStyle(.tint).imageScale(.small)
+            .accessibilityHidden(true)
         }
         Text(entry.displayAnchor)
           .font(.subheadline.weight(.semibold))

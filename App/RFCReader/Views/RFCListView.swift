@@ -177,5 +177,9 @@ struct RFCRow: View {
       }
     }
     .padding(.vertical, 2)
+    // One element, not five: VoiceOver read the number, the year, the title, the
+    // status and the group as separate stops per row (#156).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
   }
 }
