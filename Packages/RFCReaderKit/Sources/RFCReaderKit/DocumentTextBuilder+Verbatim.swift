@@ -34,6 +34,7 @@ extension DocumentTextBuilder {
         ])
     }
 
+    let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
     let body = text.hasSuffix("\n") ? text : text + "\n"
     append(
       body,
@@ -42,8 +43,19 @@ extension DocumentTextBuilder {
         .foregroundColor: bodyColour,
         .rfcVerbatim: box,
         .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: style.paragraphSpacing, wraps: false),
+          indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
       ])
+    // Every line ends a paragraph, so the spacing that separates the block from what
+    // follows goes on its last line alone. On all of them, a figure read double
+    // spaced (#31).
+    let lastLine = output.mutableString.paragraphRange(
+      for: NSRange(location: output.length - 1, length: 0))
+    output.addAttribute(
+      .paragraphStyle,
+      value: paragraphStyle(
+        indent: indent, spacingAfter: style.paragraphSpacing, wraps: false,
+        lineHeightMultiple: lineHeight),
+      range: lastLine)
     decorate(from: start, with: .artwork)
   }
 

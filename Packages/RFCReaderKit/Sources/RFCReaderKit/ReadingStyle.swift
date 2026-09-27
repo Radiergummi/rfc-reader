@@ -12,6 +12,10 @@ public struct ReadingStyle: Sendable, Equatable {
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
 
+  /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
+  /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
+  public var artworkLineHeightMultiple: CGFloat { 1.1 }
+
   public init(bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25) {
     self.bodySize = bodySize
     self.measure = measure
