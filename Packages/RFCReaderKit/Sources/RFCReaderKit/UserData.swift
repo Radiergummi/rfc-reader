@@ -113,9 +113,13 @@ public enum UserDataKey {
   }
 }
 
-/// V1 to V2 (#152). Every row survives: until now only RFCs could be bookmarked or
-/// have a reading position, so a bare number is `rfcN`, and a section anchor is a
+/// V1 to V2 (#152). Every row survives, as `rfcN`, and a section anchor becomes a
 /// place at offset zero.
+///
+/// `rfcN` is an assumption the V1 row cannot confirm: it kept only the number, so a
+/// BCP or STD opened through a deep link and bookmarked is indistinguishable from
+/// the RFC with that number. RFCs are what the library lists and nearly all anyone
+/// opens, so they are the reading of a bare number that is almost always right.
 ///
 /// A custom stage: SwiftData's inferred migration can add V2's defaulted attributes
 /// and drop the unique constraint, but not turn a number into a key. So the V1 rows

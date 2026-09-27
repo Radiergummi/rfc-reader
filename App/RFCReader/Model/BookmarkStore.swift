@@ -23,11 +23,10 @@ private let bookmarkLog = Logger(
 enum BookmarkStore {
   /// Every bookmarked RFC's number. Only the numbers are fetched: this runs on
   /// every save of the store, and most of those record a reading position.
-  static func bookmarkedNumbers(in context: ModelContext) -> Set<Int> {
+  static func bookmarkedDocuments(in context: ModelContext) -> Set<DocumentID> {
     var descriptor = FetchDescriptor<Bookmark>()
     descriptor.propertiesToFetch = [\.documentKey]
-    let documents = ((try? context.fetch(descriptor)) ?? []).compactMap(\.document)
-    return Set(documents.filter { $0.series == .rfc }.map(\.number))
+    return Set(((try? context.fetch(descriptor)) ?? []).compactMap(\.document))
   }
 
   /// Adds the bookmark, or removes the one already there. Answers with the state it

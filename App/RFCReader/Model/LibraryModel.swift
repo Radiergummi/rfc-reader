@@ -37,9 +37,15 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
-  /// Every bookmarked RFC's number, fetched again on every save of the store: one
-  /// set for the lists, the toolbars and scripts alike.
-  private(set) var bookmarkedNumbers: Set<Int> = []
+  /// Every bookmarked document, fetched again on every save of the store: one set
+  /// for the toolbars and scripts alike, which ask about the document on screen, so
+  /// BCP 14 is not answered for by RFC 14 (#152).
+  private(set) var bookmarkedDocuments: Set<DocumentID> = []
+
+  /// The bookmarked RFCs' numbers, for the lists, which list RFCs.
+  var bookmarkedNumbers: Set<Int> {
+    Set(bookmarkedDocuments.filter { $0.series == .rfc }.map(\.number))
+  }
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
   /// Every RFC with a cached body: the Available Offline list. Kept here, and
@@ -57,10 +63,10 @@ final class LibraryModel {
   }
 
   private func refreshBookmarkedNumbers() {
-    let numbers = BookmarkStore.bookmarkedNumbers(in: AppData.container.mainContext)
+    let documents = BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
     // Only a change is news: most saves record a reading position, not a bookmark.
-    guard numbers != bookmarkedNumbers else { return }
-    bookmarkedNumbers = numbers
+    guard documents != bookmarkedDocuments else { return }
+    bookmarkedDocuments = documents
   }
 
   private func refreshDownloadedNumbers() async {

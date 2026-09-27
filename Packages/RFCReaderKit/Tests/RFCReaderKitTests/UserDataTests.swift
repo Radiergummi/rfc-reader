@@ -57,8 +57,12 @@ struct UserDataTests {
     let read = Date(timeIntervalSince1970: 1_750_000_000)
 
     do {
+      // Unversioned, as every install's store was made: `ModelContainer(for:)` over
+      // the models, with no `VersionedSchema`. SwiftData has to recognise it as V1
+      // by its models alone.
       let legacy = try ModelContainer(
-        for: Schema(versionedSchema: SchemaV1.self), configurations: ModelConfiguration(url: url))
+        for: SchemaV1.Bookmark.self, SchemaV1.ReadingPosition.self,
+        configurations: ModelConfiguration(url: url))
       let context = ModelContext(legacy)
       context.insert(SchemaV1.Bookmark(number: 9110, title: "HTTP Semantics", createdAt: created))
       context.insert(SchemaV1.Bookmark(number: 2119, title: "Key words", createdAt: created))

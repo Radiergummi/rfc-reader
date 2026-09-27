@@ -405,7 +405,7 @@
     /// event cycle — asking SwiftData there put a store round trip under every mouse
     /// move.
     var isBookmarked: Bool {
-      navigation.selection.map { library.bookmarkedNumbers.contains($0.number) } ?? false
+      navigation.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
