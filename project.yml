@@ -7,7 +7,7 @@ options:
     iOS: "26.0"
     macOS: "26.0"
   createIntermediateGroups: true
-  xcodeVersion: "26.0"
+  xcodeVersion: "26.4"
 
 settings:
   base:
