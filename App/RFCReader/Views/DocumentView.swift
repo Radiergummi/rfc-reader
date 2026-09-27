@@ -232,7 +232,7 @@ struct DocumentView: View {
         // No header to show the title here, so the toolbar shows it throughout.
         // On `hasDocument` rather than on appearing: loading a document clears
         // the title back to hidden after this view may already have appeared.
-        .onChange(of: reader.hasDocument, initial: true) { reader.revealTitle(1) }
+        .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(
@@ -254,7 +254,7 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onTitleReveal: { reader.revealTitle($0) },
+        onToolbarTitle: { reader.updateToolbarTitle($0) },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to

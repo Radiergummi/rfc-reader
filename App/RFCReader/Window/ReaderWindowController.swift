@@ -169,7 +169,7 @@
       window.titleVisibility = .hidden
 
       self.toolbar = toolbar
-      self.reader.revealTitle = { [weak toolbar] in toolbar?.revealDocumentTitle($0) }
+      self.reader.updateToolbarTitle = { [weak toolbar] in toolbar?.updateDocumentTitle($0) }
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)

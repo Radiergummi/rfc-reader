@@ -61,12 +61,18 @@ public struct AnchorIndex: Sendable, Equatable {
   /// The anchor covering `offset`: the last entry at or before it, or nil if the
   /// offset falls ahead of the first anchor.
   public func anchor(at offset: Int) -> String? {
+    index(at: offset).map { entries[$0].anchor }
+  }
+
+  /// Where in `entries` the anchor covering `offset` is, for a caller that needs
+  /// its neighbours too; see `anchor(at:)`.
+  public func index(at offset: Int) -> Int? {
     var low = 0
     var high = entries.count
     while low < high {
       let middle = (low + high) / 2
       if entries[middle].offset <= offset { low = middle + 1 } else { high = middle }
     }
-    return low > 0 ? entries[low - 1].anchor : nil
+    return low > 0 ? low - 1 : nil
   }
 }
