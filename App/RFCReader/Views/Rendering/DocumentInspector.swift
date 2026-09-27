@@ -62,7 +62,16 @@ struct DocumentInspector: View {
   private var selectedTab: some View {
     switch tab {
     case .contents:
-      TableOfContentsView(sections: sections, current: current, select: selectSection)
+      // Opened at the section being read rather than at the top: from §15 of a long
+      // RFC, the top of the list is a long way from where the reader is.
+      ScrollViewReader { proxy in
+        TableOfContentsView(sections: sections, current: current, select: selectSection)
+          .task {
+            // A turn later, once the list has rows to scroll to.
+            await Task.yield()
+            if let current { proxy.scrollTo(current, anchor: .center) }
+          }
+      }
     case .references:
       // A document with no bibliography says so here rather than being steered
       // away from the tab.

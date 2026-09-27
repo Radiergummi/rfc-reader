@@ -2,6 +2,11 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import os
+
+/// The reader's load and build decisions, at debug level: what a device's
+/// Console shows when a document fails to load or never finishes (#252, #253).
+private let readerLog = Logger(subsystem: "me.mazetti.rfc-reader", category: "reader")
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -18,6 +23,7 @@ struct DocumentView: View {
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
@@ -133,9 +139,11 @@ struct DocumentView: View {
         // view's frame.
         .overlay(alignment: .bottom) { returnButton }
         .animation(.snappy, value: visibleReturn)
-        // Long enough to decide, without sitting over the text for good.
+        // Long enough to decide, without sitting over the text for good. Not under
+        // VoiceOver, where a control that leaves on a timer may be gone before it
+        // is reached: there it stays until the next navigation replaces it.
         .task(id: visibleReturn) {
-          guard let offer = visibleReturn else { return }
+          guard let offer = visibleReturn, !voiceOverEnabled else { return }
           try? await Task.sleep(for: .seconds(8))
           guard !Task.isCancelled else { return }
           settledReturn = offer
@@ -383,7 +391,12 @@ struct DocumentView: View {
   /// build task nothing to see, and the reader spun forever (#253). The view is
   /// made per document (`.id(selection)`), so a document here is always this one.
   private func load() async {
-    if document != nil { return }
+    if document != nil {
+      readerLog.debug(
+        "\(id.displayName, privacy: .public): appeared again, keeping the loaded document")
+      return
+    }
+    readerLog.debug("\(id.displayName, privacy: .public): loading")
     loadError = nil
     document = nil
     built = nil
@@ -398,7 +411,10 @@ struct DocumentView: View {
       // Cancelled when the view disappears, or by Try Again starting over; the
       // request it cancels fails with `URLError.cancelled`, which was shown as
       // "Couldn't load RFC … / cancelled" (#252). The next load writes instead.
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else {
+        readerLog.debug("\(id.displayName, privacy: .public): loaded after cancellation, discarded")
+        return
+      }
       reader.groups = ReferenceGroup.groups(in: loaded)
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
@@ -408,8 +424,17 @@ struct DocumentView: View {
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
+      readerLog.debug("\(id.displayName, privacy: .public): loaded")
     } catch {
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled else {
+        readerLog.debug(
+          "\(id.displayName, privacy: .public): failed after cancellation, discarded: \(String(describing: error), privacy: .public)"
+        )
+        return
+      }
+      readerLog.debug(
+        "\(id.displayName, privacy: .public): failed: \(String(describing: error), privacy: .public)"
+      )
       loadError = error.localizedDescription
     }
   }
@@ -426,7 +451,11 @@ struct DocumentView: View {
     let inputs = buildInputs
     guard let document, let style = inputs.style else { return }
     // Appearing again restarts this task with nothing changed.
-    guard inputs != builtInputs else { return }
+    guard inputs != builtInputs else {
+      readerLog.debug("\(id.displayName, privacy: .public): build skipped, inputs unchanged")
+      return
+    }
+    readerLog.debug("\(id.displayName, privacy: .public): building")
     if built != nil {
       try? await Task.sleep(for: .milliseconds(650))
       guard !Task.isCancelled else { return }
@@ -434,9 +463,13 @@ struct DocumentView: View {
     // Off the main actor: this is string assembly and text measurement, and
     // blocking the main thread for it is what made the font-size slider stutter.
     let rebuilt = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
-    guard !Task.isCancelled else { return }
+    guard !Task.isCancelled else {
+      readerLog.debug("\(id.displayName, privacy: .public): build cancelled, discarded")
+      return
+    }
     built = rebuilt
     builtInputs = inputs
+    readerLog.debug("\(id.displayName, privacy: .public): built")
     // The sections the storage actually holds, straight from the index the
     // builder just emitted — rather than re-deriving "is this a bibliography?"
     // from the model and hoping the two rules stay in step. A contents row that
