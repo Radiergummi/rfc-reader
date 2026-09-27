@@ -36,15 +36,42 @@ final class NavigationModel: Identifiable {
   /// writes it as the reader scrolls; nothing reads it but the navigation methods.
   var visiblePosition: String?
 
-  private var filterChoice = KeptSelection(LibraryFilter.all)
+  /// Takes the list inputs on entering a filter, not on a change of `value`: on
+  /// iPhone, going back to the sidebar clears the selection and keeps `value`, so
+  /// tapping the same filter again leaves `value` as it was.
+  private var filterChoice = KeptSelection(LibraryFilter.all) {
+    didSet {
+      if filterChoice.enters(since: oldValue) { takeListInputs() }
+    }
+  }
   var searchText = ""
   var isShowingGoToSheet = false
 
-  /// How many documents the list shows — after the filter and the search — or nil
-  /// until the index is ready. Written by `RFCListView`, which is the one place the
-  /// list is computed; the window's toolbar reads it for the subtitle under the
-  /// list's title, and has no list of its own to count.
-  var listedCount: Int?
+  /// The library the list is computed from, and which the inputs below are taken
+  /// from on entering a filter.
+  @ObservationIgnored private let library: LibraryModel
+
+  init(library: LibraryModel) {
+    self.library = library
+  }
+
+  /// The Recently Read order, taken once when the filter is entered.
+  ///
+  /// Not live: opening or leaving a document writes its `updatedAt`, so an order
+  /// kept in step with that re-sorted the list the click came from — the row just
+  /// left jumped to the top and everything below it shifted down a place. Taken on
+  /// entering instead, the order is whatever it was on arrival and stays put while
+  /// it is being read through; coming back to the filter takes a fresh one, the
+  /// same way `downloaded` beside it does.
+  private(set) var recentOrder: [Int] = []
+  /// The RFCs available offline, as of entering the filter.
+  private(set) var downloaded: Set<Int> = []
+
+  /// Takes the inputs a list is computed from on entering a filter.
+  private func takeListInputs() {
+    recentOrder = library.recentlyReadNumbers()
+    downloaded = library.downloadedNumbers
+  }
 
   /// What the list lists: the last filter chosen, whether or not the sidebar still
   /// shows it as selected.

@@ -21,4 +21,11 @@ public struct KeptSelection<Value: Equatable & Sendable>: Sendable {
       isCleared = newValue == nil
     }
   }
+
+  /// Whether this selection entered a value that `previous` did not show as
+  /// selected. Not a change of `value`: choosing the kept value again after a
+  /// clear enters it too, and that is how a collapsed split view comes back to it.
+  public func enters(since previous: Self) -> Bool {
+    selection != nil && selection != previous.selection
+  }
 }

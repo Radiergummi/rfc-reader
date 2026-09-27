@@ -26,7 +26,7 @@
     /// for, and the back/forward stack that got here. `ContentView` held it as
     /// `@State`, which is what made a tab a tab; now the window holds it, and every
     /// hosted root is handed the same one.
-    let navigation = NavigationModel()
+    let navigation: NavigationModel
 
     /// What the reader is showing, for the toolbar and the panel — which are not
     /// inside it any more.
@@ -56,6 +56,7 @@
 
     init(library: LibraryModel) {
       self.library = library
+      self.navigation = NavigationModel(library: library)
       let window = ReaderWindow(
         contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -184,7 +185,6 @@
       observeTitle()
       observeListTitle()
       observeDocument()
-      observeStoreSaves()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -250,10 +250,10 @@
           navigation.selection?.displayName ?? "",
           subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
         )
-        // Here because this is already the one place that re-fires when the
-        // selection changes, and the fetch must not be on the toolbar's
-        // validation path; see `isBookmarked`.
-        refreshBookmarked()
+        // The bookmark glyph follows the selection and the bookmarks, and this is
+        // the one place that re-fires when either changes.
+        _ = isBookmarked
+        window?.toolbar?.validateVisibleItems()
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeTitle() }
       }
@@ -270,7 +270,7 @@
       withObservationTracking {
         toolbar?.showTitle(
           navigation.filter.title,
-          subtitle: navigation.listedCount.map { DocumentCount.label($0) } ?? ""
+          subtitle: library.listSubtitle(for: navigation)
         )
       } onChange: { [weak self] in
         Task { @MainActor in self?.observeListTitle() }
@@ -384,37 +384,13 @@
 
     /// Whether the document on screen is bookmarked, for the toolbar's glyph.
     ///
-    /// Stored rather than fetched on demand: `NSToolbar` autovalidates every visible
-    /// item once per event cycle, and asking SwiftData there put a compiled
-    /// `#Predicate` and a store round trip under every mouse move, once per open tab.
-    /// It changes when the selection moves, and whenever a bookmark is saved — by
-    /// this window's `toggleBookmark()`, or by another tab's, which left this one's
-    /// glyph stale while both showed the same RFC (#141).
-    private(set) var isBookmarked = false
-
-    /// The token for `observeStoreSaves()`, removed when the window closes.
-    private var storeSaves: (any NSObjectProtocol)?
-
-    /// Refreshes `isBookmarked` on every save of the store, whoever made it. Saves
-    /// follow what the reader does — a bookmark toggled, a document opened or left,
-    /// which records its reading position — not every event cycle, so the fetch
-    /// stays off the toolbar's validation path, where the comment above wants it.
-    private func observeStoreSaves() {
-      storeSaves = NotificationCenter.default.addObserver(
-        forName: ModelContext.didSave, object: nil, queue: .main
-      ) { [weak self] _ in
-        MainActor.assumeIsolated {
-          self?.refreshBookmarked()
-          self?.window?.toolbar?.validateVisibleItems()
-        }
-      }
-    }
-
-    private func refreshBookmarked() {
-      isBookmarked =
-        navigation.selection.map {
-          BookmarkStore.isBookmarked($0, in: AppData.container.mainContext)
-        } ?? false
+    /// From the library's one set of bookmarked numbers, which every tab reads, so
+    /// a bookmark toggled in another tab shows here too (#141). A set lookup is
+    /// cheap enough for `NSToolbar`, which autovalidates every visible item once per
+    /// event cycle — asking SwiftData there put a store round trip under every mouse
+    /// move.
+    var isBookmarked: Bool {
+      navigation.selection.map { library.bookmarkedNumbers.contains($0.number) } ?? false
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
@@ -426,7 +402,7 @@
         documentTitle: reader.documentTitle,
         id: id
       )
-      isBookmarked = BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     }
 
     // MARK: - Lifetime
@@ -447,9 +423,6 @@
     }
 
     func windowWillClose(_ notification: Notification) {
-      if let storeSaves {
-        NotificationCenter.default.removeObserver(storeSaves)
-      }
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
