@@ -72,6 +72,12 @@ public struct NavigationHistory: Sendable {
   public mutating func go(to place: Place, leaving position: String? = nil) {
     defer { isHidden = false }
     guard place != current else { return }
+    // Reopening the hidden document from its row, which names no section: back
+    // where it was, and not a jump to offer a way back from.
+    if isHidden, place.section == nil, place.id == current?.id {
+      arrivedByGoing = false
+      return
+    }
     if var previous = current {
       previous.section = position ?? previous.section
       backward.append(previous)

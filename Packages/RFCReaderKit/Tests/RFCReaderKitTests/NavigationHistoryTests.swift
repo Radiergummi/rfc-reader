@@ -103,6 +103,29 @@ struct NavigationHistoryTests {
     #expect(!history.canGoBack)
   }
 
+  /// The row carries no section, and the place left behind usually does: after a
+  /// jump, a deep link, or Back and Forward.
+  @Test func reopeningTheHiddenDocumentShowsItWhereItWas() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    history.go(to: place(9110))
+    #expect(history.shown == place(9110, "section-15.5"))
+    #expect(history.goBack() == place(9110, "section-4.2"))
+    #expect(!history.canGoBack)
+  }
+
+  /// Reopening is not a jump to undo, even though Back stays in the document.
+  @Test func reopeningTheHiddenDocumentOffersNothing() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"), leaving: "section-4.2")
+    history.hide()
+    history.go(to: place(9110))
+    #expect(history.returnOffer == nil)
+  }
+
   @Test func goingSomewhereElseRecordsTheHiddenPlace() {
     var history = NavigationHistory()
     history.go(to: place(9110))
