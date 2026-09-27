@@ -403,7 +403,9 @@
     }
 
     func windowWillClose(_ notification: Notification) {
-      if let storeSaves { NotificationCenter.default.removeObserver(storeSaves) }
+      if let storeSaves {
+        NotificationCenter.default.removeObserver(storeSaves)
+      }
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
