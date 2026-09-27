@@ -4,8 +4,9 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// Downloads the store has running (#116): a second open joins the first, and a
-/// removal made while one is in flight keeps its result off the disk.
+/// Downloads the store has running (#116): a second open joins the first, a
+/// removal made while one is in flight keeps its result off the disk, and one that
+/// no reader waits for any more is cancelled.
 @Suite("In-flight downloads")
 struct InFlightDownloadsTests {
   /// Holds a fetch in flight until the test lets it finish.
@@ -36,22 +37,38 @@ struct InFlightDownloadsTests {
     /// Opens that have reached `join`, so a test can wait for a second one to have
     /// joined rather than guess when it has.
     private(set) var joins = 0
+    /// Every fetch started, in order, so a test can ask whether one was cancelled.
+    private(set) var started: [Task<Data, any Error>] = []
 
+    /// The fetch does not look at cancellation, as a parse does not: a cancelled
+    /// one still finishes once the gate opens, and must still not be written.
     func open(_ id: DocumentID, gate: Gate) async throws -> Data {
       joins += 1
       let (task, generation) = downloads.join(id) {
         fetches += 1
-        return Task {
+        let task = Task<Data, any Error> {
           await gate.wait()
           return Data("\(id)".utf8)
         }
+        started.append(task)
+        return task
       }
-      let data = try await task.value
+      let data: Data
+      do {
+        data = try await InFlightDownloads.value(of: task) { await self.leave(id, task) }
+      } catch {
+        downloads.finish(id, task)
+        throw error
+      }
       downloads.finish(id, task)
       if downloads.isCurrent(id, since: generation) {
         written.append(id)
       }
       return data
+    }
+
+    private func leave(_ id: DocumentID, _ task: Task<Data, any Error>) {
+      downloads.leave(id, task)
     }
 
     func remove(_ id: DocumentID) {
@@ -61,12 +78,24 @@ struct InFlightDownloadsTests {
     func isRunning(_ id: DocumentID) -> Bool {
       downloads.isRunning(id)
     }
+
+    func waiters(_ id: DocumentID) -> Int {
+      downloads.waiters(id)
+    }
   }
 
   /// Until the store's fetch for `id` is in flight: a task started is not yet a task
   /// that has reached the gate.
   private func untilRunning(_ id: DocumentID, in store: Store) async {
     while await !store.isRunning(id) {
+      await Task.yield()
+    }
+  }
+
+  /// Until as many readers wait for the fetch for `id` as `count`: a reader
+  /// cancelled has not left until the store has heard about it.
+  private func untilWaiting(_ count: Int, for id: DocumentID, in store: Store) async {
+    while await store.waiters(id) != count {
       await Task.yield()
     }
   }
@@ -135,5 +164,53 @@ struct InFlightDownloadsTests {
     await gate.open()
     _ = try await store.open(.rfc(9110), gate: gate)
     #expect(await !store.isRunning(.rfc(9110)))
+  }
+
+  /// Nobody is waiting for it, so it no longer spends the reader's bandwidth (#116).
+  @Test func `a download nobody waits for is cancelled`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let opening = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    opening.cancel()
+    await untilWaiting(0, for: .rfc(9110), in: store)
+    await gate.open()
+
+    await #expect(throws: CancellationError.self) { try await opening.value }
+    #expect(await store.started.first?.isCancelled == true)
+    #expect(await store.written.isEmpty)
+    #expect(await !store.isRunning(.rfc(9110)))
+  }
+
+  /// Two tabs on the same document: closing one keeps the other's download going.
+  @Test func `a download another reader still waits for goes on`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let first = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    let second = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilWaiting(2, for: .rfc(9110), in: store)
+    first.cancel()
+    await untilWaiting(1, for: .rfc(9110), in: store)
+    await gate.open()
+
+    #expect(try await second.value == Data("\(DocumentID.rfc(9110))".utf8))
+    #expect(await store.started.first?.isCancelled == false)
+    #expect(await store.written.contains(.rfc(9110)))
+  }
+
+  @Test func `an open after a cancelled download starts a new one`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let cancelled = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    cancelled.cancel()
+    await untilWaiting(0, for: .rfc(9110), in: store)
+    await gate.open()
+    _ = try? await cancelled.value
+
+    _ = try await store.open(.rfc(9110), gate: gate)
+    #expect(await store.fetches == 2)
+    #expect(await store.written == [.rfc(9110)])
   }
 }

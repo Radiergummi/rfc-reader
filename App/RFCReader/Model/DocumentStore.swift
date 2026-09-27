@@ -20,9 +20,10 @@ actor DocumentStore {
   /// changed some other way, such as a file deleted in Finder.
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
 
-  /// The fetches running, so a second open joins the first and a removal made
-  /// during one keeps its result off the disk (#116). Original Text fetches the
-  /// `.txt` on its own, so it has its own.
+  /// The fetches running, so a second open joins the first, a removal made during
+  /// one keeps its result off the disk, and one nobody waits for any more is
+  /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
+  /// own.
   private var downloads = InFlightDownloads<Fetched>()
   private var originalTexts = InFlightDownloads<Data>()
 
@@ -118,7 +119,7 @@ actor DocumentStore {
     }
     let fetched: Fetched
     do {
-      fetched = try await task.value
+      fetched = try await InFlightDownloads.value(of: task) { await self.leaveDownload(id, task) }
     } catch {
       downloads.finish(id, task)
       throw error
@@ -131,6 +132,15 @@ actor DocumentStore {
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     parsed[id] = fetched.document
     return fetched.document
+  }
+
+  /// The reader waiting for `task` was cancelled; the last to leave cancels it.
+  private func leaveDownload(_ id: DocumentID, _ task: Task<Fetched, any Error>) {
+    downloads.leave(id, task)
+  }
+
+  private func leaveOriginalText(_ id: DocumentID, _ task: Task<Data, any Error>) {
+    originalTexts.leave(id, task)
   }
 
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
@@ -159,7 +169,7 @@ actor DocumentStore {
     }
     let data: Data
     do {
-      data = try await task.value
+      data = try await InFlightDownloads.value(of: task) { await self.leaveOriginalText(id, task) }
     } catch {
       originalTexts.finish(id, task)
       throw error
