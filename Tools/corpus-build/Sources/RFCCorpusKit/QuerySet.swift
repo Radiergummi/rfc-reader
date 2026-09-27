@@ -13,7 +13,7 @@ import RFCKit
 public struct QuerySet {
   /// Function words carry no discrimination over a corpus of specifications; a
   /// sentence made only of these describes nothing and cannot identify a section.
-  public static let stopwords: Set<String> = [
+  private static let stopwords: Set<String> = [
     "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "do", "does", "did",
     "how", "what", "when", "where", "why", "which", "who", "whom", "whose", "that", "this",
     "these", "those", "i", "it", "its", "he", "she", "they", "them", "their", "you", "your",

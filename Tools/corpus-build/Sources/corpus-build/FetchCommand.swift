@@ -25,6 +25,14 @@ struct FetchCommand: AsyncParsableCommand {
       case .xml: .xml
       }
     }
+
+    /// The directory inside `--out` this half of the corpus lands in.
+    var directoryName: String {
+      switch self {
+      case .text: "text.noindex"
+      case .xml: "xml.noindex"
+      }
+    }
   }
 
   @Option(help: "The corpus directory. Documents land in text.noindex or xml.noindex inside it.")
@@ -44,8 +52,8 @@ struct FetchCommand: AsyncParsableCommand {
 
   func run() async throws {
     let outDirectory = URL(fileURLWithPath: out)
-    let format = format.fileFormat
-    let directory = outDirectory.appending(path: format == .xml ? "xml.noindex" : "text.noindex")
+    let fileFormat = format.fileFormat
+    let directory = outDirectory.appending(path: format.directoryName)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
     let index: RFCIndex
@@ -59,8 +67,8 @@ struct FetchCommand: AsyncParsableCommand {
       index = try RFCIndexParser.parse(data)
     }
 
-    let wanted = FetchPlan.wanted(in: index, format: format, limit: limit)
-    let suffix = format.pathExtension
+    let wanted = FetchPlan.wanted(in: index, format: fileFormat, limit: limit)
+    let suffix = fileFormat.pathExtension
     let missing = wanted.filter {
       !FileManager.default.fileExists(
         atPath: directory.appending(path: "\($0.fileStem).\(suffix)").path)
@@ -76,7 +84,8 @@ struct FetchCommand: AsyncParsableCommand {
         group.addTask {
           do {
             return (
-              id, .success(try await Self.download(RFCEditorEndpoints.document(id, format: format)))
+              id,
+              .success(try await Self.download(RFCEditorEndpoints.document(id, format: fileFormat)))
             )
           } catch { return (id, .failure(error)) }
         }
