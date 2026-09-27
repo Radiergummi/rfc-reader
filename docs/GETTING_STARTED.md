@@ -1,6 +1,6 @@
 # Getting started
 
-You need a Mac with Xcode 26 or newer (the app targets iOS 26 and macOS 26). The Swift package alone builds with any Swift 6 toolchain, including on Linux.
+You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26). The Swift package alone builds with any Swift 6.3 toolchain, including on Linux.
 
 ## 1. Run the core package tests first
 
@@ -20,7 +20,7 @@ xcodegen generate
 open RFCReader.xcodeproj
 ```
 
-Before generating, edit `project.yml`: set `bundleIdPrefix` and `PRODUCT_BUNDLE_IDENTIFIER` to your own reverse-DNS names and uncomment `DEVELOPMENT_TEAM` with your team ID (Xcode ▸ Settings ▸ Accounts shows it). The generated `.xcodeproj`, `Info.plist` and entitlements file are git-ignored; `project.yml` is the source of truth. If you would rather commit a hand-maintained project, delete those three lines from `.gitignore`.
+`project.yml` signs with the maintainer's team. To build under your own, set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` to your reverse-DNS names and team ID (Xcode ▸ Settings ▸ Accounts shows it) before generating, or build unsigned with `make build-app CODE_SIGNING_ALLOWED=NO`. The generated `.xcodeproj`, `Info.plist` and entitlements file are git-ignored; `project.yml` is the source of truth. If you would rather commit a hand-maintained project, delete those three lines from `.gitignore`.
 
 ### Option B: by hand in Xcode
 
@@ -54,7 +54,7 @@ Add the file to the target's resources. `DocumentStore` picks it up when no down
 
 1. Typography pass on `DocumentView` and `BlockView` (fonts, measure, spacing, dark mode).
 2. Reference peek popover on cross-reference links.
-3. Definition-list detection in `LegacyTextParser` (add a fixture that exercises it and a test first).
+3. Definition-list detection in `LegacyTextParser` (a test first; no RFC text is committed, so `CLAUDE.md` says where its input comes from).
 4. Spotlight indexing of the index in `LibraryModel.apply`.
 5. iCloud sync: add the iCloud capability and a CloudKit container; SwiftData does the rest.
 
@@ -71,4 +71,4 @@ Drop `--limit` for the full 8,464 legacy RFCs (about 450 MB, twenty minutes at t
 
 ## Working on RFCKit from Linux or CI
 
-The package has no Apple dependencies. `Foundation`, `FoundationXML` and `FoundationNetworking` are imported conditionally, and the tests run in a `swift:6.1` container (see `.github/workflows/ci.yml`).
+The package has no Apple dependencies. `Foundation`, `FoundationXML` and `FoundationNetworking` are imported conditionally, and the tests run in a `swift:6.3` container (see `.github/workflows/ci.yml`).

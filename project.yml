@@ -2,19 +2,19 @@
 # RFCReader.xcodeproj, or create the project by hand as described in docs/GETTING_STARTED.md.
 name: RFCReader
 options:
-  bundleIdPrefix: com.example.rfcreader   # change to your own reverse-DNS prefix
+  bundleIdPrefix: me.mazetti
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
   createIntermediateGroups: true
-  xcodeVersion: "26.0"
+  xcodeVersion: "26.4"
 
 settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     CODE_SIGN_STYLE: Automatic
-    # DEVELOPMENT_TEAM: YOURTEAMID
+    DEVELOPMENT_TEAM: TH593VRB6W
 
 packages:
   RFCKit:
@@ -59,7 +59,7 @@ targets:
         com.apple.security.files.user-selected.read-write: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.rfcreader.app
+        PRODUCT_BUNDLE_IDENTIFIER: me.mazetti.rfc-reader
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_PREVIEWS: YES

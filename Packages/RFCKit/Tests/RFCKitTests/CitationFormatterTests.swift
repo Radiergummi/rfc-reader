@@ -47,4 +47,37 @@ struct CitationFormatterTests {
     #expect(entry.contains("    author = {R. Fielding and M. Nottingham and J. Reschke},"))
     #expect(entry.hasSuffix("}"))
   }
+
+  /// A brace ends a BibTeX field early, `%` starts a comment and `&` is LaTeX's
+  /// alignment character, so a title holding any of them made the entry invalid
+  /// (#150). They are escaped the way LaTeX expects.
+  @Test func bibtexEscapesItsSpecialCharacters() {
+    let rfc = RFCMetadata(
+      id: .rfc(1), title: "Sets {A & B} at 100%", date: PublicationDate(year: 1969),
+      abstract: "Uses % and {braces}.")
+    let entry = formatter.cite(rfc, style: .bibtex)
+    #expect(
+      entry.contains(#"    title = {{Sets \textbraceleft{}A \& B\textbraceright{} at 100\%}},"#))
+    #expect(
+      entry.contains(#"    abstract = {Uses \% and \textbraceleft{}braces\textbraceright{}.},"#))
+
+    // A backslash of the text's own must not start a command with what follows it.
+    let slashed = RFCMetadata(
+      id: .rfc(2), title: #"Paths like C:\ and {x\}"#, date: PublicationDate(year: 1969))
+    #expect(
+      formatter.cite(slashed, style: .bibtex).contains(
+        #"    title = {{Paths like C:\textbackslash{} and \textbraceleft{}x\textbackslash{}\textbraceright{}}},"#
+      ))
+  }
+
+  /// BibTeX counts braces whether or not a backslash precedes them, so `\{` only
+  /// works for braces that already pair up. A lone one in a title has to leave the
+  /// entry's braces balanced, or the field runs on into the rest of the entry.
+  @Test func bibtexKeepsItsBracesBalancedAroundALoneBrace() {
+    for title in ["Syntax for {", "Closing } early"] {
+      let rfc = RFCMetadata(id: .rfc(1), title: title, date: PublicationDate(year: 1969))
+      let entry = formatter.cite(rfc, style: .bibtex)
+      #expect(entry.filter { $0 == "{" }.count == entry.filter { $0 == "}" }.count, "\(title)")
+    }
+  }
 }
