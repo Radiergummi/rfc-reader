@@ -249,6 +249,9 @@ struct DocumentView: View {
             Button("Errata") { systemOpenURL(url) }
           }
           Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
+          if let draft = reader.precedingDraft {
+            Button("Preceding Draft") { systemOpenURL(draft) }
+          }
         } label: {
           Label("More", systemImage: "ellipsis.circle")
         }
@@ -288,6 +291,7 @@ struct DocumentView: View {
       )
       document = loaded
       reader.documentTitle = loaded.header.title
+      reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
     } catch {
       loadError = error.localizedDescription

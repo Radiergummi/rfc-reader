@@ -78,3 +78,7 @@ corpus/*
 RFCReader.xcodeproj/
 App/RFCReader/Info.plist
 App/RFCReader/RFCReader.entitlements
+
+# Claude Code: worktrees and personal settings stay local; skills and settings.json are shared
+.claude/worktrees/
+.claude/settings.local.json

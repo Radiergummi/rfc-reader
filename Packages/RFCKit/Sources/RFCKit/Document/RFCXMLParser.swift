@@ -32,8 +32,11 @@ public struct RFCXMLParser: Sendable {
     guard root.name == "rfc" else { throw ParseError.notAnRFC(rootElement: root.name) }
 
     // References first, so cross references in the body resolve to RFC numbers.
+    // Every list, not only the back's: a converted legacy document can hold one in
+    // `<middle>` (RFC 2511's `9. References`, ahead of its appendices), or in a
+    // chapter, and a citation into it is as much a link as one into the back.
     let back = root.first("back")
-    let builder = Builder(referenceTargets: back.map(Builder.referenceTargets(in:)) ?? [:])
+    let builder = Builder(referenceTargets: Builder.referenceTargets(in: root))
 
     let header = builder.parseHeader(root)
     var sections: [Section] = []
@@ -52,7 +55,21 @@ public struct RFCXMLParser: Sendable {
         }
       }
     }
-    return RFCDocument(header: header, sections: sections, source: .xml)
+    var document = RFCDocument(header: header, sections: sections, source: .xml)
+    document.abbreviations = Abbreviations.defined(in: document)
+    return document
+  }
+
+  /// Whether a `<link rel>` names `token`. RFCXML takes `rel` from HTML, where it is a
+  /// set of space-separated keywords compared without regard to ASCII case, so
+  /// `rel="Prev"` and `rel="prev alternate"` both name the preceding draft. The prep
+  /// tool writes exactly `prev` today; this is what the attribute means, not a
+  /// guess at what it might write.
+  static func relation(_ rel: String?, includes token: String) -> Bool {
+    guard let rel else { return false }
+    return rel.split(whereSeparator: \.isWhitespace).contains {
+      $0.lowercased() == token.lowercased()
+    }
   }
 
   // MARK: - Builder
@@ -88,7 +105,7 @@ public struct RFCXMLParser: Sendable {
         for child in element.elements {
           switch child.name {
           case "reference":
-            if let anchor = child["anchor"], let id = parseReference(child).documentID {
+            if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
               targets[anchor] = id
             }
           case "referencegroup":
@@ -96,7 +113,7 @@ public struct RFCXMLParser: Sendable {
               targets[anchor] = id
             }
             walk(child)
-          case "references":
+          case "middle", "back", "section", "references":
             walk(child)
           default:
             break
@@ -137,6 +154,9 @@ public struct RFCXMLParser: Sendable {
       header.updates = parseDocumentList(rfc["updates"])
       header.category = rfc["category"].flatMap(categoryName)
       header.draftName = rfc["docName"]
+      header.precedingDraft =
+        rfc.all("link").first { RFCXMLParser.relation($0["rel"], includes: "prev") }?["href"]
+        .flatMap(URL.init(string:))
       return header
     }
 
@@ -171,7 +191,49 @@ public struct RFCXMLParser: Sendable {
       }
       guard let name, !name.isEmpty else { return nil }
       let role = element["role"] == "editor" ? "Editor" : nil
-      return Author(name: name, role: role)
+      return Author(name: name, role: role, contact: parseContact(element))
+    }
+
+    /// `<organization>` and `<address>`, when the author has either. Every element
+    /// is optional in the schema, and empty ones are common in the published
+    /// series (`<organization/>`), so an empty one counts as absent.
+    private static func parseContact(_ element: XMLElement) -> AuthorContact? {
+      let address = element.first("address")
+      let contact = AuthorContact(
+        organization: nonEmpty(element.first("organization")),
+        postal: address?.first("postal").flatMap(parsePostal),
+        phone: nonEmpty(address?.first("phone")),
+        facsimile: nonEmpty(address?.first("facsimile")),
+        emails: (address?.all("email") ?? []).compactMap(nonEmpty),
+        uri: nonEmpty(address?.first("uri"))
+      )
+      return contact.isEmpty ? nil : contact
+    }
+
+    /// Structured fields where the author gave them, or the author's own lines.
+    /// A field given twice is given once and left empty once in the published
+    /// series (RFC 9269's `<city/><city>Munich</city>`), so the first with text
+    /// is the one kept.
+    private static func parsePostal(_ element: XMLElement) -> PostalAddress? {
+      func values(_ name: String) -> [String] { element.all(name).compactMap(nonEmpty) }
+      let postal = PostalAddress(
+        street: values("street"),
+        extendedAddress: values("extaddr"),
+        postOfficeBox: values("pobox").first,
+        cityArea: values("cityarea").first,
+        city: values("city").first,
+        region: values("region").first,
+        code: values("code").first,
+        sortingCode: values("sortingcode").first,
+        country: values("country").first,
+        postalLines: values("postalLine")
+      )
+      return postal.lines.isEmpty ? nil : postal
+    }
+
+    private static func nonEmpty(_ element: XMLElement?) -> String? {
+      guard let text = element?.normalizedText, !text.isEmpty else { return nil }
+      return text
     }
 
     private static func parseDate(_ element: XMLElement) -> PublicationDate? {
@@ -248,9 +310,9 @@ public struct RFCXMLParser: Sendable {
       for child in element.elements {
         switch child.name {
         case "reference":
-          entries.append(Self.parseReference(child))
+          entries.append(parseReference(child))
         case "referencegroup":
-          entries.append(Self.parseReferenceGroup(child))
+          entries.append(parseReferenceGroup(child))
         case "references":
           subsections.append(parseReferencesSection(child))
         default:
@@ -269,7 +331,18 @@ public struct RFCXMLParser: Sendable {
       )
     }
 
-    static func parseReference(_ element: XMLElement) -> Reference {
+    func parseReference(_ element: XMLElement) -> Reference {
+      var reference = Self.parseEntryMetadata(element)
+      if let annotation = element.first("annotation") {
+        reference.annotation = normalize(parseInlines(annotation.children))
+      }
+      return reference
+    }
+
+    /// Everything about an entry that is not prose. Static because
+    /// `referenceTargets(in:)` needs it before there is a builder to link prose
+    /// with; the annotation, which is prose, is read by the instance method.
+    static func parseEntryMetadata(_ element: XMLElement) -> Reference {
       let front = element.first("front")
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
         author.role == nil ? author.name : "\(author.name), Ed."
@@ -300,7 +373,7 @@ public struct RFCXMLParser: Sendable {
       element["derivedAnchor"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private static func parseReferenceGroup(_ element: XMLElement) -> Reference {
+    private func parseReferenceGroup(_ element: XMLElement) -> Reference {
       let anchor = element["anchor"] ?? ""
       let members = element.all("reference").map(parseReference)
       let memberNames = members.compactMap { $0.documentID?.displayName }
@@ -316,8 +389,24 @@ public struct RFCXMLParser: Sendable {
         authors: members.count == 1 ? members[0].authors : [],
         date: members.count == 1 ? members[0].date : nil,
         seriesInfo: seriesInfo,
-        url: element["target"].flatMap(URL.init(string:))
+        url: element["target"].flatMap(URL.init(string:)),
+        annotation: groupAnnotation(of: members)
       )
+    }
+
+    /// The schema gives `<referencegroup>` no annotation of its own; its members each
+    /// may have one. A group of one is its member, annotation and all. A group of
+    /// several is one entry in the panel, so every member's annotation is kept on it,
+    /// each on its own line after the name of the member it belongs to -- a commit
+    /// snapshot is no use unless it says which standard it pins.
+    private func groupAnnotation(of members: [Reference]) -> [Inline] {
+      if members.count == 1 { return members[0].annotation }
+      let named = members.filter { !$0.annotation.isEmpty }.enumerated().flatMap {
+        index, member -> [Inline] in
+        let name = member.documentID?.displayName ?? member.displayAnchor
+        return (index == 0 ? [] : [.lineBreak]) + [.text("\(name): ")] + member.annotation
+      }
+      return normalize(named)
     }
 
     // MARK: Blocks
@@ -326,6 +415,13 @@ public struct RFCXMLParser: Sendable {
       "xref", "eref", "em", "strong", "tt", "sup", "sub", "bcp14", "br", "u",
       "spanx", "cref", "iref", "contact", "relref",
     ]
+
+    /// `<contact>` is inline in prose ("thanks to <contact fullname=…/>") and a
+    /// block of its own directly in a section, where a Contributors section lists
+    /// people with their addresses. The schema allows it as a block nowhere else.
+    private static func isBlockContact(_ child: XMLElement, in parent: XMLElement) -> Bool {
+      child.name == "contact" && parent.name == "section"
+    }
 
     /// Converts the children of a container element into blocks. Runs of loose text
     /// and inline elements (as found inside `<li>` or `<dd>`) become implicit paragraphs.
@@ -347,7 +443,7 @@ public struct RFCXMLParser: Sendable {
         case .text:
           pendingInline.append(node)
         case .element(let child):
-          if Self.inlineElements.contains(child.name) {
+          if Self.inlineElements.contains(child.name), !Self.isBlockContact(child, in: element) {
             pendingInline.append(node)
             continue
           }
@@ -366,7 +462,12 @@ public struct RFCXMLParser: Sendable {
       case "t":
         let inlines = normalize(parseInlines(element.children))
         guard !inlines.isEmpty else { return nil }
-        return .paragraph(Paragraph(inlines, anchor: element["anchor"] ?? element["pn"]))
+        return .paragraph(
+          Paragraph(
+            inlines,
+            anchor: element["anchor"] ?? element["pn"],
+            indent: element["indent"].flatMap(Int.init).map { max($0, 0) } ?? 0
+          ))
       case "ul":
         let style: ListBlock.Style = element["empty"] == "true" ? .bare : .bullet
         return .list(
@@ -425,15 +526,33 @@ public struct RFCXMLParser: Sendable {
         return .blockQuote(parseBlocks(in: element))
       case "aside":
         return .aside(parseBlocks(in: element))
+      case "author", "contact":
+        // Prep's "Authors' Addresses" section is made of `<author>`s, and a
+        // Contributors section of `<contact>`s, which the schema gives the same
+        // content. Read as the person's details, one paragraph each, rather than as
+        // unknown containers, which nested an aside per level of
+        // `<author><address><postal>` (#113).
+        return Self.parseAuthor(element).map {
+          .paragraph(Paragraph(RFCXMLParser.addressInlines($0)))
+        }
       case "name", "section", "references", "toc", "boilerplate":
         return nil
       case "texttable", "list", "vspace", "preamble", "postamble", "ttcol", "c":
         // RFCXML v2 leftovers; the prepped RFC Editor output does not contain them.
         return nil
       default:
-        // Unknown container: keep its content rather than dropping text.
+        // Unknown container: keep its content rather than dropping text, and set
+        // more than one block apart as an aside. That aside is the parser's, so an
+        // aside inside it is spliced in, because an aside may not hold another
+        // (#113); content that is a single block, an authored aside too, is kept
+        // as it is.
         let blocks = parseBlocks(in: element)
-        return blocks.count == 1 ? blocks[0] : (blocks.isEmpty ? nil : .aside(blocks))
+        guard blocks.count > 1 else { return blocks.first }
+        return .aside(
+          blocks.flatMap { block -> [Block] in
+            if case .aside(let inner) = block { return inner }
+            return [block]
+          })
       }
     }
 
@@ -457,7 +576,8 @@ public struct RFCXMLParser: Sendable {
             DefinitionItem(
               term: pendingTerm ?? [],
               definition: parseBlocks(in: child),
-              anchor: pendingAnchor
+              anchor: pendingAnchor,
+              definitionAnchor: child["anchor"] ?? child["pn"]
             ))
           pendingTerm = nil
           pendingAnchor = nil
@@ -483,12 +603,24 @@ public struct RFCXMLParser: Sendable {
     }
 
     private func parseTable(_ element: XMLElement) -> Table {
-      func rows(in container: XMLElement?) -> [[[Inline]]] {
-        (container?.all("tr") ?? []).map { row in
+      func cells(of rows: [XMLElement]) -> [[[Inline]]] {
+        rows.map { row in
           row.elements.filter { $0.name == "th" || $0.name == "td" }
             .map { normalize(parseInlines($0.children)) }
         }
       }
+      // Empty unless some row has one, as `Table.rowAnchors` documents.
+      func anchors(of rows: [XMLElement]) -> [String?] {
+        rows.contains { $0["anchor"] != nil } ? rows.map { $0["anchor"] } : []
+      }
+      // RFC 7991 allows more than one `<tbody>`: RFC 9911's tables of YANG types
+      // put each group of related types in its own, and reading only the first
+      // dropped all but the counters. The cells and the anchors are read from the
+      // same list of rows, so they cannot fall out of step.
+      let headerRows = element.first("thead")?.all("tr") ?? []
+      let bodyRows = element.elements
+        .filter { $0.name == "tbody" || $0.name == "tfoot" }
+        .flatMap { $0.all("tr") }
       let number = element["pn"].flatMap { partNumber -> Int? in
         guard partNumber.hasPrefix("table-") else { return nil }
         return Int(partNumber.dropFirst("table-".count))
@@ -496,9 +628,11 @@ public struct RFCXMLParser: Sendable {
       return Table(
         title: element.first("name")?.normalizedText,
         number: number,
-        header: rows(in: element.first("thead")),
-        rows: rows(in: element.first("tbody")) + rows(in: element.first("tfoot")),
-        anchor: element["anchor"]
+        header: cells(of: headerRows),
+        rows: cells(of: bodyRows),
+        anchor: element["anchor"],
+        rowAnchors: anchors(of: bodyRows),
+        headerRowAnchors: anchors(of: headerRows)
       )
     }
 
@@ -632,6 +766,11 @@ public struct RFCXMLParser: Sendable {
             continue
           }
           if case .text(let previous)? = result.last {
+            // An element that yields nothing (an empty `<u>`, a `<cref>`) leaves
+            // the spaces on either side of it meeting here.
+            if previous.hasSuffix(" "), collapsed.hasPrefix(" ") {
+              collapsed.removeFirst()
+            }
             result[result.count - 1] = .text(previous + collapsed)
           } else {
             result.append(.text(collapsed))
@@ -662,5 +801,51 @@ public struct RFCXMLParser: Sendable {
       }
       return result
     }
+  }
+}
+
+extension RFCXMLParser {
+  /// An author as the RFC Editor's rendering of an Authors' Addresses entry
+  /// sets it, one detail per line, with the email and web addresses as links.
+  static func addressInlines(_ author: Author) -> [Inline] {
+    var lines: [[Inline]] = [
+      [.text(author.role == "Editor" ? "\(author.name) (editor)" : author.name)]
+    ]
+    if let contact = author.contact {
+      // An organization's own entry names it already: `parseAuthor` falls back to
+      // the organization for a name when there is no person's.
+      if let organization = contact.organization, organization != author.name {
+        lines.append([.text(organization)])
+      }
+      for line in contact.postal?.lines ?? [] { lines.append([.text(line)]) }
+      if let phone = contact.phone { lines.append([.text("Phone: \(phone)")]) }
+      if let facsimile = contact.facsimile { lines.append([.text("Fax: \(facsimile)")]) }
+      for email in contact.emails {
+        lines.append([.text("Email: "), link(mailto(email), email)])
+      }
+      // A URI without a scheme (RFC 9517's `ddialliance.org`) would be a relative
+      // link, to nowhere; it and one `URL` cannot read are shown as written.
+      if let uri = contact.uri {
+        lines.append([
+          .text("URI: "), link(URL(string: uri).flatMap { $0.scheme == nil ? nil : $0 }, uri),
+        ])
+      }
+    }
+    return Array(lines.joined(separator: [Inline.lineBreak]))
+  }
+
+  private static func link(_ url: URL?, _ text: String) -> Inline {
+    url.map { .link($0, [.text(text)]) } ?? .text(text)
+  }
+
+  /// A `mailto:` URL for an address as written. The address is the URL's path,
+  /// so the characters a path may not hold are escaped: an address with a `?`,
+  /// `#` or `%` in it would otherwise begin a query or a fragment, or be read as
+  /// an escape, and link somewhere else.
+  static func mailto(_ address: String) -> URL? {
+    var components = URLComponents()
+    components.scheme = "mailto"
+    components.path = address
+    return components.url
   }
 }

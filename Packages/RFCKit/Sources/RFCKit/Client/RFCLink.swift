@@ -21,9 +21,28 @@ public struct RFCLink: Hashable, Sendable {
   public static let scheme = "rfc"
 
   public var appURL: URL {
-    var string = "\(Self.scheme)://\(id.series == .rfc ? String(id.number) : id.fileStem)"
-    if let section { string += "#\(Self.fragment(for: section))" }
-    return URL(string: string)!
+    var components = URLComponents()
+    components.scheme = Self.scheme
+    components.host = id.series == .rfc ? String(id.number) : id.fileStem
+    components.fragment = section.map(Self.fragment(for:))
+    // Unwrapped because nothing here can fail: the host is a document ID's own
+    // letters and digits, and the one caller-supplied part, the section, goes in
+    // as a fragment, which `URLComponents` percent-encodes (#150).
+    return components.url!
+  }
+
+  /// `url` with `section`'s fragment, the one way every web builder attaches a section.
+  ///
+  /// Through `URLComponents`, which percent-encodes the fragment. A section is
+  /// caller-supplied text, and splicing it into a string gave a URL that
+  /// `URL(string:)` refused wherever it contained a space or a reserved character
+  /// (#150): `appURL` trapped, and the web builders silently dropped the section.
+  static func url(_ url: URL, section: String?) -> URL {
+    guard let section,
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return url }
+    components.fragment = fragment(for: section)
+    return components.url ?? url
   }
 
   public var webURL: URL {
@@ -33,7 +52,9 @@ public struct RFCLink: Hashable, Sendable {
   public init?(url: URL) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
-    let fragmentSection = Self.section(fromFragment: url.fragment)
+    // Decoded, which `url.fragment` is not: the builders percent-encode a section,
+    // and `section-4.2%20draft` has to come back as the section it was.
+    let fragmentSection = Self.section(fromFragment: url.fragment(percentEncoded: false))
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }

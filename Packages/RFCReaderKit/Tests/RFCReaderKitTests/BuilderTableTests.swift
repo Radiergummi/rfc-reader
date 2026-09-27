@@ -122,4 +122,33 @@ struct BuilderTableTests {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.anchors.offset(of: "table-1") != nil)
   }
+
+  /// A row a document cites is indexed where the row starts, in either shape (#166).
+  /// The cited row is the second, so the grid's step past its header row is pinned
+  /// too: the header and the body share one enumeration there.
+  @Test(arguments: [TableShape.grid, .stacked])
+  func aRowsAnchorIsIndexedAtTheRow(shape expected: TableShape) throws {
+    var table = expected == .grid ? narrow : prose
+    if expected == .stacked { table.rows.append(cells(["410", "gone", "6.5.9"])) }
+    table.rowAnchors = [nil, "cited-row"]
+    #expect(shape(table) == expected)
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let offset = try #require(built.anchors.offset(of: "cited-row"))
+    let rowStart = expected == .grid ? "POST" : "Code  410"
+    #expect(try Fixtures.offset(of: rowStart, in: built.text) == offset)
+  }
+
+  /// A header row's anchor is indexed at the header: its own row in the grid, and
+  /// the first label in the stacked shape, where the header labels every cell
+  /// instead of standing as a row.
+  @Test(arguments: [TableShape.grid, .stacked])
+  func aHeaderRowsAnchorIsIndexedAtTheHeader(shape expected: TableShape) throws {
+    var table = expected == .grid ? narrow : prose
+    table.headerRowAnchors = ["cited-header"]
+    #expect(shape(table) == expected)
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let offset = try #require(built.anchors.offset(of: "cited-header"))
+    let header = expected == .grid ? "Method" : "Code"
+    #expect(try Fixtures.offset(of: header, in: built.text) == offset)
+  }
 }

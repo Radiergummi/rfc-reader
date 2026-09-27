@@ -180,4 +180,64 @@ struct BuilderVerbatimTests {
       abs(rendered - style.measure) < 1,
       "the widest line fills the measure: \(rendered) vs \(style.measure)")
   }
+
+  // MARK: - RFC 8792 folding (issue #64)
+
+  private static let header =
+    "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
+
+  /// A block folded to fit the page, whose single unfolded line is `unfolded`.
+  private static func folded(_ unfolded: String) -> Preformatted {
+    let pieces = stride(from: 0, to: unfolded.count, by: 60).map { start in
+      String(unfolded.dropFirst(start).prefix(60))
+    }
+    let text = header + "\n\n" + pieces.joined(separator: "\\\n")
+    return Preformatted(kind: .sourceCode, text: text, anchor: "folded")
+  }
+
+  /// The column is wider than the page the folds were made for, so the reader
+  /// shows what the author wrote, and the header that explained the folds goes.
+  @Test func aFoldedBlockThatFitsIsShownUnfolded() {
+    let unfolded = "{\"key\": \"" + String(repeating: "a", count: 50) + "\"}"
+    let content = Self.folded(unfolded)
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    #expect(built.text.string.contains(unfolded))
+    #expect(!built.text.string.contains("line wrapping per RFC 8792"))
+  }
+
+  /// Unfolded, it would have to be scaled down to fit; the published folds read
+  /// better than that, and they keep the header that explains them.
+  @Test func aFoldedBlockThatDoesNotFitIsShownAsPublished() {
+    let content = Self.folded(String(repeating: "b", count: 300))
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    #expect(built.text.string.contains(content.text))
+  }
+
+  /// Whether it fits is a question about this column, so a narrow one keeps the
+  /// folds that a wide one takes out.
+  @Test func whetherItFitsIsMeasuredAgainstTheColumn() {
+    let unfolded = String(repeating: "c", count: 65)
+    let content = Self.folded(unfolded)
+    let wide = DocumentTextBuilder(style: style)
+    let narrow = DocumentTextBuilder(style: ReadingStyle(measure: 300))
+    #expect(wide.displayedText(of: content, indent: 0) == unfolded)
+    #expect(narrow.displayedText(of: content, indent: 0) == content.text)
+  }
+
+  /// What is shown changes; what the block is does not. "Copy Figure" and the
+  /// accessibility element read the published block from its box.
+  @Test func theBoxKeepsThePublishedBlock() throws {
+    let content = Self.folded("short enough to fit once unfolded, and folded anyway")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let offset = try #require(built.anchors.offset(of: "folded"))
+    let box = try #require(
+      built.text.attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox)
+    #expect(box.content.text == content.text)
+  }
+
+  @Test func aBlockThatIsNotFoldedIsShownAsItIs() {
+    let content = Preformatted(kind: .artwork, text: "a line ending in a backslash \\\nnext")
+    let builder = DocumentTextBuilder(style: style)
+    #expect(builder.displayedText(of: content, indent: 0) == content.text)
+  }
 }
