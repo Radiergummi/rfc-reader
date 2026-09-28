@@ -148,7 +148,7 @@ struct AccessibleReadingTests {
   @Test(arguments: [("rfc8999.xml", 4), ("rfc2119.txt", 0)])
   func `nothing is skipped or read twice`(fixture: String, diagrams: Int) throws {
     let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
-    let text = DocumentTextBuilder.build(document, style: style).text
+    let text = built(document)
     var covered = IndexSet()
     var labels = 0
     for piece in AccessibleReading.pieces(of: whole(text), in: text) {
