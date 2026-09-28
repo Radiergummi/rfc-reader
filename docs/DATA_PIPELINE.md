@@ -4,18 +4,19 @@
 
 ## The facts that shape everything
 
-Numbers from the RFC Editor index as of 20 September 2026.
+Numbers from the RFC Editor index as of 20 September 2026, and unchanged on 28 September. The other documents quote these.
 
 | | RFCs | Pages | Text size (est.) |
 |---|---|---|---|
 | Total | 9,842 | 245,324 | ~530 MB |
 | With RFCXML v3 source (RFC 8650 onward, every one of them) | 1,378 | 36,462 | |
 | Legacy, text only (everything before RFC 8650) | 8,464 | 208,862 | ~450 MB |
+| … of which a plain-text file exists (the rest are PDF only, #207) | 8,457 | | |
 
 Two consequences:
 
 1. **The legacy set is closed.** No RFC below 8650 will ever gain XML, and no new RFC will ever lack it. Whatever we do to the legacy set is a one-time job, plus an occasional re-run when the heuristics improve.
-2. **Structure for legacy RFCs must be recovered heuristically**, and heuristics belong where they can be run over all 8,464 files at once, diffed against the previous run, and hand-corrected. That is a pipeline, not a phone.
+2. **Structure for legacy RFCs must be recovered heuristically**, and heuristics belong where they can be run over all 8,457 files at once, diffed against the previous run, and hand-corrected. That is a pipeline, not a phone.
 
 ## Why the RFC Editor never made this XML
 
@@ -72,8 +73,12 @@ rfc-index.xml ──▶ fetch --format xml ─┘                          (1,37
                             manifest ──▶ manifest.json  (sha256 + size per file, pack version)
                               │
                               ▼
-                     tar --zstd ──▶ legacy-xml-<version>.tar.zst ──▶ GitHub Release / R2
+                     tar --zstd ──▶ legacy-xml-<version>.tar.zst  (RFCs before 8650) ──┐
+                                ──▶ modern-xml-<version>.tar.zst  (RFC 8650 onwards)  ─┼──▶ GitHub Release / R2
+                                    manifest.json, beside them ────────────────────────┘
 ```
+
+The packs split at RFC 8650 so that the RFC Editor's own RFCXML, already licensed for redistribution, never waits on the licensing question the converted legacy documents are held by.
 
 - **fetch** reads the index, picks every RFC without an XML format, and downloads the `.txt` with bounded concurrency (default 6, be polite to the RFC Editor). Existing files are skipped, so re-runs only fetch what is new or missing. `--limit N` for smoke tests.
 - **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). `--only 5 822` converts just those documents from `--in`, and fails if one has no text there; it refuses `--report`, which would replace the corpus report with one that holds only those documents. An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, and correct a single document with an override. No new override is committed until #197 makes one a patch on the converter's output rather than a whole converted document, which is RFC text. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes: `make corpus-overrides-check` reruns every such script against the current converter and fails on any difference. It needs the source text, so it is not part of `make check`; what is, is corpus-build's `Corpus overrides` suite, which parses every committed override and pins what RFC 1142's script recovers.
@@ -91,7 +96,7 @@ Rendering is never precomputed. Fonts, widths, Dynamic Type and dark mode differ
 | `index` | Compact form of the RFC Editor index: metadata for all documents, series groupings | 14 MB XML | ~1 MB | **In the app bundle**, refreshed at runtime from the RSS feed and the live index |
 | `graph` | Citation graph (who cites whom, from every References section), obsoletes/updates edges | a few MB | <1 MB | In the bundle or first optional pack |
 | `errata` | Normalized errata: RFC, section, status, original and corrected text | 12 MB JSON | <1 MB | Bundle or fetched on first use |
-| `legacy-xml` | RFCXML for the 8,464 legacy RFCs | ~480 MB | ~100 MB | Optional download, "Read everything offline" |
+| `legacy-xml` | RFCXML for the 8,457 legacy RFCs with a text file | ~480 MB | ~100 MB | Optional download, "Read everything offline" |
 | `modern-xml` | Mirror of the RFC Editor's XML for RFCs ≥ 8650 | ~60 MB | ~15 MB | Optional; otherwise fetched per document |
 | `fts` | SQLite FTS5 database, one row per section, BM25 ranking, over the whole corpus | 150–250 MB | ~80 MB | Optional, requires the XML packs |
 | `embeddings-abstracts` | One vector per RFC abstract | ~10 MB | ~10 MB | Optional, enables semantic search over the whole series |
@@ -118,7 +123,7 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 
 `.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest`, compresses the packs and attaches them to a release. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack simply reproduces byte-for-byte unless the code changed.
 
-The full text fetch is about 450 MB and 8,464 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
+The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
 
 ## Repository layout for the data
 

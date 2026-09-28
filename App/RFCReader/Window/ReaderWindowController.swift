@@ -232,7 +232,7 @@
     private func observeTitle() {
       withObservationTracking {
         // Still set on the window, because the tab bar reads it from there.
-        let title = navigation.selection?.displayName ?? navigation.filter.title
+        let title = navigation.selection?.displayName ?? library.title(for: navigation.filter)
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
         let subtitle =
@@ -269,7 +269,7 @@
     private func observeListTitle() {
       withObservationTracking {
         toolbar?.showTitle(
-          navigation.filter.title,
+          library.title(for: navigation.filter),
           subtitle: library.listSubtitle(for: navigation)
         )
       } onChange: { [weak self] in
@@ -369,6 +369,14 @@
       // Before AppKit gets a chance to enforce the old minimum against the new
       // arrangement.
       if let window { applyMinimumWidth(to: window) }
+    }
+
+    /// A pane's toolbar button: opens the panel on that pane, swaps an open panel to
+    /// it, or closes the panel showing it (`InspectorPane.pressing`).
+    func press(_ pane: InspectorPane) {
+      let result = InspectorPane.pressing(pane, isOpen: isPanelOpen, showing: reader.pane)
+      reader.pane = result.pane
+      if result.isOpen != isPanelOpen { togglePanel() }
     }
 
     /// Whether the contents panel is showing.
@@ -519,6 +527,9 @@
       }
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
+      }
+      .sheet(item: $navigation.collectionEditor) { mode in
+        CollectionEditorSheet(mode: mode)
       }
     }
   }

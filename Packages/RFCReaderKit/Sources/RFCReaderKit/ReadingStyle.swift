@@ -188,15 +188,6 @@ public enum ReaderLayout {
   public static func column(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
     width - gutter(forWidth: width, measure: measure) * 2
   }
-
-  /// Whether the reader's bar has room for Share beside Contents and More (#245).
-  ///
-  /// A regular width, which is an iPad, or a compact height, which is any iPhone
-  /// held sideways. Most iPhones stay compact in width even in landscape, so width
-  /// alone would keep them to the portrait bar.
-  public static func toolbarHasRoom(isRegularWidth: Bool, isCompactHeight: Bool) -> Bool {
-    isRegularWidth || isCompactHeight
-  }
 }
 
 /// How wide the window's own title is drawn, given the column it sits over.

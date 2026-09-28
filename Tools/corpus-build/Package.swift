@@ -10,7 +10,8 @@ let swiftSettings: [SwiftSetting] = [
 ]
 
 // Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
-// RFCKit's parsers, and writes a signed manifest for the data packs the app downloads.
+// RFCKit's parsers, and writes a manifest of SHA-256 hashes for the data packs the app
+// downloads.
 //
 // RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
 // the report and manifest types, the schema check's causes -- so tests call it rather
