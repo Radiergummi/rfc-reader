@@ -22,6 +22,9 @@ struct DocumentPreview: View {
 
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("underlineLinks") private var underlineLinks = false
+  /// The reader's own preference, so the preview's build and its text view agree
+  /// on the column, as `DocumentView` and the reader's do (#32).
+  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?
@@ -31,6 +34,8 @@ struct DocumentPreview: View {
   private struct Loaded {
     let document: RFCDocument
     let built: BuiltDocument
+    /// What a citation of a bibliography entry in the preview previews (#198).
+    let bibliography: [ReferenceGroup]
   }
 
   var body: some View {
@@ -68,6 +73,8 @@ struct DocumentPreview: View {
     if let loaded {
       RFCTextView(
         built: loaded.built,
+        bibliography: loaded.bibliography,
+        measure: measure,
         documentID: id,
         commitsOnClick: commit,
         lastVisibleAnchor: lastVisibleAnchor,
@@ -95,11 +102,12 @@ struct DocumentPreview: View {
   private func load() async {
     do {
       let document = try await library.document(for: id)
-      let column = ReaderLayout.column(forWidth: Self.size.width)
+      let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
       let built = await Self.build(
         document,
         style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
-      loaded = Loaded(document: document, built: built)
+      loaded = Loaded(
+        document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
