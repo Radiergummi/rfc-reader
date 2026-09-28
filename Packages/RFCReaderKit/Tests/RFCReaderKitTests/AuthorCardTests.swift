@@ -104,6 +104,13 @@ struct AuthorCardTests {
     #expect(AuthorCard.contact(for: author(nil)).jobTitle == "")
   }
 
+  /// "Editor" is the one role the index and both parsers record; another role is
+  /// not promoted to it.
+  @Test func `only an editor's role makes an editor`() {
+    #expect(AuthorCard.contact(for: author(nil, role: "Ed.")).jobTitle == "Editor")
+    #expect(AuthorCard.contact(for: author(nil, role: "contributor")).jobTitle == "")
+  }
+
   @Test func `every published field reaches the card`() {
     let card = AuthorCard.contact(
       for: author(

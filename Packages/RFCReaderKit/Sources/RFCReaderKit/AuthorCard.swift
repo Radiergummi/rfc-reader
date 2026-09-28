@@ -119,8 +119,8 @@ public enum AuthorCard {
     } else {
       card.familyName = author.name
     }
-    // The one role RFCXML gives an author.
-    if author.role != nil {
+    // The one role the index and both parsers record.
+    if author.isEditor {
       card.jobTitle = "Editor"
     }
     guard let contact = author.contact else { return card }
