@@ -122,34 +122,34 @@ import RFCReaderKit
     /// whose own tracking loop takes a force click's pressure events off the queue:
     /// logged on a Force Touch trackpad, stage 2 never reached `pressureChange(with:)`
     /// or `quickLook(with:)`, and a force click on a reference showed nothing (#29).
-    /// Here the deep press previews the reference and its mouse-up is swallowed; a
+    /// Here the deep press previews the reference — or, when it has no preview, is
+    /// Look Up's, as it is on any other word — and its mouse-up is swallowed; a
     /// plain release follows the link through `clicked(onLink:at:)`, as `NSTextView`
     /// would have; and a drag is handed back to `NSTextView` from the mouse-down, so
     /// a selection can still start on a reference.
     private func trackReferenceClick(_ down: NSEvent, link: Any, at index: Int) {
       guard let window else { return }
-      // Asked once, at the first event of stage 2. Not on `stageTransition`, which
+      // Decided once, at the first event of stage 2. Not on `stageTransition`, which
       // measures the way to the next stage rather than the step into this one: it
       // reads 0 on the first event of stage 2, logged on the trackpad.
-      var askedForPreview = false
-      var previewed = false
+      var forceClicked = false
       while let event = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged, .pressure]) {
         switch event.type {
         case .pressure:
-          if !askedForPreview, event.stage >= 2 {
-            askedForPreview = true
-            previewed = quickLookReference(event)
+          if !forceClicked, event.stage >= 2 {
+            forceClicked = true
+            if !quickLookReference(event) { super.quickLook(with: event) }
           }
         case .leftMouseDragged:
           let distance = hypot(
             event.locationInWindow.x - down.locationInWindow.x,
             event.locationInWindow.y - down.locationInWindow.y)
-          if !previewed, distance > Self.dragThreshold {
+          if !forceClicked, distance > Self.dragThreshold {
             super.mouseDown(with: down)
             return
           }
         case .leftMouseUp:
-          if !previewed { clicked(onLink: link, at: index) }
+          if !forceClicked { clicked(onLink: link, at: index) }
           return
         default:
           break
