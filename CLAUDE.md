@@ -8,12 +8,12 @@ Everything goes through the `Makefile`:
 
 | Command | What |
 |---|---|
-| `make check` | `lint build test` — the gate before committing |
+| `make check` | `lint build test`, plus `test-app` on a Mac — the gate before committing |
 | `make test` | RFCKit and corpus-build test suites (no simulator) |
-| `make test-app` | RFCReaderKit test suite (needs an Apple SDK, not part of `make check`) |
+| `make test-app` | RFCReaderKit test suite (needs an Apple SDK; part of `make check` on a Mac) |
 | `swift test --package-path Packages/RFCKit --filter "parses the spellings"` | one test (a phrase from its name) or suite (`--filter DocumentIDTests`) |
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
-| `make build` | both Swift packages (RFCKit, corpus-build) |
+| `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
 | `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |

@@ -1,12 +1,16 @@
 .PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
-# The two Swift packages. RFCKit holds everything the app and the pipeline share
+# The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
-# does, including Linux. corpus-build is the offline pipeline that turns the
-# legacy plain-text RFCs into RFCXML packs (docs/DATA_PIPELINE.md).
+# does, including Linux. RFCReaderKit is the app's testable half, and imports
+# UIKit/AppKit, so it needs an Apple SDK. corpus-build is the offline pipeline that
+# turns the legacy plain-text RFCs into RFCXML packs (docs/DATA_PIPELINE.md).
 RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
+
+# Whether this machine has an Apple SDK, so RFCReaderKit can build here.
+DARWIN := $(filter Darwin,$(shell uname -s))
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
 # The corpus working directory (see the corpus targets below). Set here rather
@@ -45,9 +49,13 @@ fmt:
 	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
+# RFCReaderKit only on a Mac; elsewhere it cannot build.
 build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
+ifneq ($(DARWIN),)
+	swift build --package-path $(RFCREADERKIT)
+endif
 
 ## Run the RFCKit and corpus-build test suites
 # The fast loop: no simulator, no Xcode project.
@@ -56,14 +64,21 @@ test:
 	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
-# The gate before committing. CI does not call this: it runs the same commands as
-# separate jobs, each in its own pinned environment (see `lint` above, and
-# .github/workflows/ci.yml). Deliberately without build-app, which needs Xcode.
+# The gate before committing. On a Mac it also builds and tests RFCReaderKit, as
+# CI's macOS job does; elsewhere it cannot, and is weaker than CI by that package.
+# CI does not call this: it runs the same commands as separate jobs, each in its
+# own pinned environment (see `lint` above, and .github/workflows/ci.yml).
+# Deliberately without build-app, which needs Xcode.
+ifneq ($(DARWIN),)
+check: lint build test test-app
+else
 check: lint build test
+endif
 
 ## Run the app-side test suite (RFCReaderKit)
-# Not part of `check`: this package imports UIKit/AppKit, so it needs an Apple
-# SDK and cannot run in the swift:6.3 container the Linux job uses.
+# Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
+# SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
+# it on a Mac.
 test-app:
 	swift test --package-path $(RFCREADERKIT)
 
