@@ -5,6 +5,9 @@ import SwiftUI
 struct SidebarView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
+  #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  #endif
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -28,21 +31,11 @@ struct SidebarView: View {
           }
         }
       }
-      if !library.recent.isEmpty {
-        Section("Just Published") {
-          ForEach(library.recent.prefix(5)) { recent in
-            Button {
-              library.open(recent.id, activation: .current, in: navigation)
-            } label: {
-              VStack(alignment: .leading, spacing: 2) {
-                Text(recent.id.displayName).font(.caption).foregroundStyle(.secondary)
-                Text(recent.title).lineLimit(2)
-              }
-            }
-            .buttonStyle(.plain)
-          }
-        }
-      }
+      // Not on iOS, where the sidebar is a list of places to go and this puts
+      // documents among them (#343). It is the top of All RFCs anyway.
+      #if os(macOS)
+        justPublished
+      #endif
     }
     .navigationTitle("RFCs")
     // Search lives on the sidebar, not on the list it filters, and not in the
@@ -62,13 +55,52 @@ struct SidebarView: View {
       }
     #else
       .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
+      // A list of places, titled and headed the way Notes' folders are (#343).
+      .navigationBarTitleDisplayMode(.large)
+      .headerProminence(.increased)
     #endif
     .labelStyle(SidebarLabelStyle())
   }
 
   private func row(_ filter: LibraryFilter) -> some View {
-    Label(filter.title, systemImage: filter.systemImage).tag(filter)
+    HStack {
+      Label(filter.title, systemImage: filter.systemImage)
+      #if !os(macOS)
+        // Collapsed, a row pushes the list, and nothing said so: the rows are
+        // selection-tagged rather than `NavigationLink`s, which is what draws the
+        // system's own chevron.
+        if horizontalSizeClass == .compact {
+          Spacer()
+          Image(systemName: "chevron.forward")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
+        }
+      #endif
+    }
+    .tag(filter)
   }
+
+  #if os(macOS)
+    @ViewBuilder
+    private var justPublished: some View {
+      if !library.recent.isEmpty {
+        Section("Just Published") {
+          ForEach(library.recent.prefix(5)) { recent in
+            Button {
+              library.open(recent.id, activation: .current, in: navigation)
+            } label: {
+              VStack(alignment: .leading, spacing: 2) {
+                Text(recent.id.displayName).font(.caption).foregroundStyle(.secondary)
+                Text(recent.title).lineLimit(2)
+              }
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+    }
+  #endif
 }
 
 #if os(macOS)
@@ -139,7 +171,14 @@ private struct SidebarLabelStyle: LabelStyle {
 
     var body: some View {
       HStack(spacing: 6) {
-        icon.frame(width: column)
+        icon
+          .frame(width: column)
+          #if !os(macOS)
+            // In the accent colour, as Notes draws its folders (#343). Not on
+            // macOS, whose sidebar tints its icons already and turns them white
+            // on a selected row, which an explicit style would override.
+            .foregroundStyle(.tint)
+          #endif
         title
       }
     }
