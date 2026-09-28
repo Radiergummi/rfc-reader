@@ -126,4 +126,15 @@ struct ReadingStyleTests {
     let code = style.codeFont(matching: style.headingFont(depth: 1))
     #expect(stated(code) == stated(.monospacedSystemFont(ofSize: 17, weight: .semibold)))
   }
+
+  /// Each text size reads its own column of the tables, smallest to largest.
+  @Test func `each text size reads its own entry of the body table`() {
+    let sizes: [DynamicTypeSize] = [.xSmall, .large, .xxxLarge, .accessibility1, .accessibility5]
+    #expect(sizes.map(TextSizeMetrics.body) == [14, 17, 23, 28, 53])
+  }
+
+  /// The column the reader caps at is the one a default style is built for.
+  @Test func `a default style is set to the ideal measure`() {
+    #expect(ReadingStyle().measure == ReaderLayout.idealMeasure)
+  }
 }

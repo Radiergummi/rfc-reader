@@ -40,7 +40,8 @@ public struct ReadingStyle: Sendable, Equatable {
   ///   default text size. The two multiply (#153): someone at an accessibility size
   ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
-    bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
+    bodySize: CGFloat = 17, measure: CGFloat = ReaderLayout.idealMeasure,
+    lineHeightMultiple: CGFloat = 1.25,
     underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
@@ -154,7 +155,7 @@ public enum ReaderLayout {
   /// The design ceiling on the column: below this width the column tracks the view
   /// exactly (less `margin` on each side); above it the gutters grow instead, so
   /// the measure never exceeds what is comfortable to read.
-  public static let idealMeasure = ReadingStyle().measure
+  public static let idealMeasure: CGFloat = 712
 
   /// The smallest gutter beside the column, and the padding under the last line.
   public static let margin: CGFloat = 24
@@ -267,24 +268,10 @@ enum TextSizeMetrics {
     points(size, [17, 18, 19, 20, 22, 24, 26, 31, 37, 43, 49, 55])
   }
 
-  /// `table` has one entry per size, from `.xSmall` to `.accessibility5`.
+  /// `table` has one entry per size, in `DynamicTypeSize.allCases` order: from
+  /// `.xSmall` to `.accessibility5`. A size added later reads as `.large`.
   private static func points(_ size: DynamicTypeSize, _ table: [CGFloat]) -> CGFloat {
-    let index =
-      switch size {
-      case .xSmall: 0
-      case .small: 1
-      case .medium: 2
-      case .large: 3
-      case .xLarge: 4
-      case .xxLarge: 5
-      case .xxxLarge: 6
-      case .accessibility1: 7
-      case .accessibility2: 8
-      case .accessibility3: 9
-      case .accessibility4: 10
-      case .accessibility5: 11
-      @unknown default: 3
-      }
+    let index = DynamicTypeSize.allCases.firstIndex(of: size) ?? 3
     return table[index]
   }
 }

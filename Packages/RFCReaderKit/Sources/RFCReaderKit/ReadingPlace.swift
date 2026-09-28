@@ -69,12 +69,7 @@ extension AnchorIndex {
   /// there ends. A binary search, like `anchor(at:)`, because tracking runs it on
   /// every scroll report.
   fileprivate func firstOffset(after offset: Int) -> Int? {
-    var low = 0
-    var high = entries.count
-    while low < high {
-      let middle = (low + high) / 2
-      if entries[middle].offset <= offset { low = middle + 1 } else { high = middle }
-    }
-    return low < entries.count ? entries[low].offset : nil
+    let after = entries.partitioningIndex { $0.offset > offset }
+    return after < entries.endIndex ? entries[after].offset : nil
   }
 }
