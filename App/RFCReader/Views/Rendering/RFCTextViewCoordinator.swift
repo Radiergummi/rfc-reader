@@ -361,7 +361,8 @@ final class RFCTextViewCoordinator: NSObject {
     // out again now and the place restored, rather than left on estimates until
     // a rebuild that changes nothing. That a storage installed before the first
     // layout belongs to this column rests on this view and `DocumentView`
-    // deriving the column from the same width.
+    // deriving the column from the same width and the same measure preference:
+    // `DocumentView` is the one reader of `readerMeasure`, and hands it down here.
     if columnChanged {
       #if canImport(UIKit)
         textView.textContainer.size = CGSize(width: column, height: .greatestFiniteMagnitude)

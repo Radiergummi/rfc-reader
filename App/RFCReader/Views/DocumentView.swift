@@ -87,10 +87,9 @@ struct DocumentView: View {
   /// and table shape are measured against the column, so it has to be settled
   /// *before* the first build or the document is built against a guess and
   /// immediately thrown away. It is a pure function of the width and the measure
-  /// preference (`ReaderLayout`),
-  /// so this view can work it out for itself rather than waiting to be told by the
-  /// text view it has not created yet — which is why nothing is built until the
-  /// geometry reader has run once.
+  /// preference (`ReaderLayout`), so this view can work it out for itself rather
+  /// than waiting to be told by the text view it has not created yet — which is
+  /// why nothing is built until the geometry reader has run once.
   @State private var paneWidth: CGFloat?
 
   /// Derived from the pane's width and the measure preference, and nothing else.
