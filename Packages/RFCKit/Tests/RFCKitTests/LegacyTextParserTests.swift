@@ -1632,6 +1632,37 @@ struct LegacyTextCorpusFindingsTests {
     #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
     #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
   }
+
+  @Test func `a references heading names references as a word`() {
+    for title in [
+      "References", "REFERENCES", "Normative References", "References:",
+      "Acknowledgments and References", "References and Bibliography",
+    ] {
+      #expect(LegacyTextParser.isReferencesTitle(title), "\(title)")
+    }
+    for title in ["Router Preferences", "Priority for Domain Preferences", "Conferences"] {
+      #expect(!LegacyTextParser.isReferencesTitle(title), "\(title)")
+    }
+  }
+
+  /// A references section's own text before its first entry, in the shape of a
+  /// bibliography's opening note: kept as its own blocks, split from the entry's
+  /// block where the entry starts inside it.
+  @Test func `what precedes a references section's first entry is its own`() {
+    let note = LegacyTextParser.RawBlock(lines: [
+      "   The documents below are listed for background only."
+    ])
+    let entries = LegacyTextParser.RawBlock(lines: [
+      "   Documents marked with a star are drafts.",
+      "   [ONE]  Someone, \"A Title\", May 1990.",
+      "   [TWO]  Someone Else, \"Another Title\", June 1991.",
+    ])
+    let leading = LegacyTextParser.blocksBeforeFirstEntry([note, entries])
+    #expect(leading.map(\.lines) == [note.lines, ["   Documents marked with a star are drafts."]])
+    #expect(
+      LegacyTextParser.parseReferences([note, entries]).map(\.displayAnchor) == ["ONE", "TWO"])
+    #expect(LegacyTextParser.blocksBeforeFirstEntry([entries]).map(\.lines) == [[entries.lines[0]]])
+  }
 }
 
 extension RFCDocument {

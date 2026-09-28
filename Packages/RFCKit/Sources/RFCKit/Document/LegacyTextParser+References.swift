@@ -29,6 +29,33 @@ extension LegacyTextParser {
   /// whatever the footer's author column said.
   nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
 
+  /// The anchor and the rest of the line, where `line` opens a reference entry.
+  private static func entryStart(_ line: String) -> (anchor: String, text: Substring)? {
+    guard let match = line.firstMatch(of: referenceStartPattern) else { return nil }
+    let anchor = String(match.anchor).trimmingCharacters(in: .whitespaces)
+    guard anchor.wholeMatch(of: pageFooterAnchorPattern) == nil else { return nil }
+    return (anchor, match.text)
+  }
+
+  /// A references section's own text, ahead of its first entry: a note on where the
+  /// documents can be had, why there are so few, or which of them are normative. It
+  /// was dropped, because a references section kept only its entries (74 documents).
+  /// A block the first entry starts inside is cut where the entry starts.
+  static func blocksBeforeFirstEntry(_ rawBlocks: [RawBlock]) -> [RawBlock] {
+    var leading: [RawBlock] = []
+    for block in rawBlocks {
+      guard let start = block.lines.firstIndex(where: { entryStart($0) != nil }) else {
+        leading.append(block)
+        continue
+      }
+      if start > 0 {
+        leading.append(RawBlock(lines: Array(block.lines[..<start])))
+      }
+      return leading
+    }
+    return leading
+  }
+
   static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
     var references: [Reference] = []
     var currentAnchor: String?
@@ -44,13 +71,10 @@ extension LegacyTextParser {
 
     for block in rawBlocks {
       for line in block.lines {
-        if let match = line.firstMatch(of: referenceStartPattern),
-          case let anchor = String(match.anchor).trimmingCharacters(in: .whitespaces),
-          anchor.wholeMatch(of: pageFooterAnchorPattern) == nil
-        {
+        if let (anchor, text) = entryStart(line) {
           flush()
           currentAnchor = anchor
-          currentLines = match.text.isEmpty ? [] : [String(match.text)]
+          currentLines = text.isEmpty ? [] : [String(text)]
         } else if currentAnchor != nil {
           currentLines.append(line.trimmingCharacters(in: .whitespaces))
         }

@@ -434,7 +434,10 @@ public struct LegacyTextParser: Sendable {
       )
       if let references = bibliographies[index] {
         if !references.isEmpty {
-          section.blocks = [.references(ReferenceList(title: heading.title, entries: references))]
+          let leading = Self.blocks(
+            from: Self.blocksBeforeFirstEntry(raw.blocks), proseIndent: proseIndent, linker: linker)
+          section.blocks =
+            leading + [.references(ReferenceList(title: heading.title, entries: references))]
         } else {
           section.blocks = Self.blocks(from: raw.blocks, proseIndent: proseIndent, linker: linker)
         }

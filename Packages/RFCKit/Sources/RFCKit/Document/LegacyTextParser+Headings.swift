@@ -125,7 +125,15 @@ extension LegacyTextParser {
   }
 
   static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {
-    heading.title.lowercased().contains("references")
+    isReferencesTitle(heading.title)
+  }
+
+  /// Whether a heading's title names references, as a word: `Priority for Domain
+  /// Preferences` (RFC 6186) and `Router Preferences and More-Specific Routes` (RFC
+  /// 7066) hold the letters and were read as bibliographies from their first
+  /// bracketed line.
+  static func isReferencesTitle(_ title: String) -> Bool {
+    title.lowercased().contains(#/\breferences\b/#)
   }
 
   static func nest(_ flat: [Section]) -> [Section] {

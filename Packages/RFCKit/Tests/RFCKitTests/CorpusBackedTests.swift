@@ -213,3 +213,50 @@ struct CorpusBackedCatalogueTests {
     }
   }
 }
+
+@Suite("Corpus-backed: references sections", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedReferencesSectionTests {
+  /// The first section of that title with anything in it: RFC 2196's contents
+  /// listing leaves an empty `9. References` of its own ahead of the real one.
+  private static func section(titled title: String, in stem: String) throws -> Section {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    return try #require(
+      document.firstSection { $0.title.plainText == title && !$0.blocks.isEmpty })
+  }
+
+  private static func holdsEntries(_ block: Block) -> Bool {
+    if case .references(let list) = block { return !list.entries.isEmpty }
+    return false
+  }
+
+  /// RFC 1958 opens its references with a note on why there are only two, and RFC
+  /// 2196 with a warning that some may be hard to find. A references section kept
+  /// only its entries, so what came before the first one was dropped (74 documents).
+  @Test func `the text before the first entry is kept`() throws {
+    for (stem, opening) in [
+      ("rfc1958", "Note that the references have been deliberately limited"),
+      ("rfc2196", "The following references may not be available"),
+    ] {
+      let references = try Self.section(titled: "References", in: stem)
+      guard case .paragraph(let first)? = references.blocks.first else {
+        Issue.record(
+          "\(stem) opens its references with \(String(describing: references.blocks.first))")
+        continue
+      }
+      #expect(first.plainText.hasPrefix(opening), "\(stem)")
+      #expect(references.blocks.contains(where: Self.holdsEntries), "\(stem) lost its entries")
+    }
+  }
+
+  /// RFC 6186's `Priority for Domain Preferences` has `references` inside
+  /// `preferences`, and was read as a bibliography from its first bracketed line.
+  @Test func `a heading that says preferences is not a bibliography`() throws {
+    let section = try Self.section(titled: "Priority for Domain Preferences", in: "rfc6186")
+    #expect(!section.blocks.contains { if case .references = $0 { true } else { false } })
+    #expect(
+      section.blocks.contains {
+        guard case .paragraph(let paragraph) = $0 else { return false }
+        return paragraph.plainText.hasPrefix("The priority field in the SRV RR")
+      })
+  }
+}
