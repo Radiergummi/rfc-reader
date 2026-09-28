@@ -8,6 +8,7 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.editMode) private var editMode
     /// For Recently Read's count, which is every document with a place kept.
     @Query private var readingPositions: [ReadingPosition]
   #endif
@@ -81,6 +82,10 @@ struct SidebarView: View {
           ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
       }
+      // Edit leaves with the last collection, since its button does.
+      .onChange(of: library.collections.collections.isEmpty) {
+        if library.collections.collections.isEmpty { editMode?.wrappedValue = .inactive }
+      }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
       .searchable(text: Bindable(navigation).searchText, prompt: "Search")
@@ -112,8 +117,11 @@ struct SidebarView: View {
         library.editCollections { try CollectionStore.delete(entry.id, in: $0) }
       }
     } message: { entry in
+      // The count the sidebar shows, in words that agree with it: "The 1
+      // documents" was what a one-document collection said.
+      let count = library.count(of: entry) ?? entry.rfcNumbers.count
       Text(
-        "The \(entry.members.count) documents in it stay in the library. Only the collection is removed."
+        "It holds ^[\(count) document](inflect: true). Only the collection is removed; the documents stay in the library."
       )
     }
   }

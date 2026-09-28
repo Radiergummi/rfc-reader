@@ -13,8 +13,9 @@ struct AddToCollectionItems: View {
   let library: LibraryModel
   let navigation: NavigationModel
   var undoManager: UndoManager?
-  /// Called after New Collection has asked for the editor, so a sheet showing
-  /// these items can get out of the editor's way.
+  /// Asks for the editor in place of these items, where they are on a sheet: the
+  /// sheet has to be gone before the window's root can present another, or UIKit
+  /// refuses it and nothing appears.
   var onNewCollection: (() -> Void)?
 
   var body: some View {
@@ -33,8 +34,11 @@ struct AddToCollectionItems: View {
     }
     if !library.collections.collections.isEmpty { Divider() }
     Button("New Collection…") {
-      navigation.collectionEditor = .create(adding: document)
-      onNewCollection?()
+      if let onNewCollection {
+        onNewCollection()
+      } else {
+        navigation.collectionEditor = .create(adding: document)
+      }
     }
   }
 }
@@ -42,6 +46,8 @@ struct AddToCollectionItems: View {
 /// The same choice as a sheet, for a swipe action, which cannot open a menu.
 struct AddToCollectionSheet: View {
   let document: DocumentID
+  /// New Collection, asked for once this sheet has been dismissed.
+  let onNewCollection: () -> Void
 
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
@@ -52,10 +58,14 @@ struct AddToCollectionSheet: View {
     NavigationStack {
       List {
         // The editor is presented by the window's root, so this sheet steps aside
-        // for it.
+        // for it: its presenter asks for the editor once it has gone.
         AddToCollectionItems(
           document: document, library: library, navigation: navigation,
-          undoManager: undoManager, onNewCollection: { dismiss() })
+          undoManager: undoManager,
+          onNewCollection: {
+            onNewCollection()
+            dismiss()
+          })
       }
       .navigationTitle("Add to Collection")
       #if !os(macOS)

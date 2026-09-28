@@ -17,6 +17,9 @@ struct RFCListView: View {
   }
 
   @Environment(\.undoManager) private var undoManager
+  #if !os(macOS)
+    @Environment(\.editMode) private var editMode
+  #endif
 
   /// The collection the list shows, if it shows one.
   private var collection: UUID? {
@@ -203,6 +206,11 @@ struct RFCListView: View {
     #endif
     .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
+      #if !os(macOS)
+        // Edit belongs to a collection's list, and its button goes with it: left
+        // on, a list beside the sidebar stayed in Edit with no way out.
+        editMode?.wrappedValue = .inactive
+      #endif
     }
     .onChange(of: navigation.listOptions) {
       limit = ListWindow.initialLimit(covering: selectedRow())
@@ -421,6 +429,8 @@ struct RFCRow: View {
     @Environment(\.undoManager) private var undoManager
     /// The Add to Collection sheet a swipe opens, which cannot open a menu (#349).
     @State private var isChoosingCollection = false
+    /// New Collection was chosen on that sheet: asked for once the sheet is gone.
+    @State private var wantsNewCollection = false
 
     func body(content: Content) -> some View {
       content
@@ -439,7 +449,11 @@ struct RFCRow: View {
           .tint(.indigo)
         }
         .sheet(isPresented: $isChoosingCollection) {
-          AddToCollectionSheet(document: rfc.id)
+          guard wantsNewCollection else { return }
+          wantsNewCollection = false
+          navigation.collectionEditor = .create(adding: rfc.id)
+        } content: {
+          AddToCollectionSheet(document: rfc.id) { wantsNewCollection = true }
         }
         .contextMenu {
           Button(action: toggleBookmark) {
