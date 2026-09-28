@@ -72,11 +72,14 @@ public enum CollectionStore {
 
   // MARK: - Members
 
-  /// At the end. A document already in the collection stays where it is.
+  /// At the end. A document already in the collection stays where it is, and one
+  /// that is not an RFC is not added: collections list RFCs, and a drop can carry
+  /// any text that happens to read as a document.
   public static func add(
     _ document: DocumentID, to identifier: UUID, in context: ModelContext
   ) throws {
     _ = try collection(identifier, in: context)
+    guard document.series == .rfc else { return }
     let items = try items(in: identifier, context: context)
     guard !items.contains(where: { $0.documentKey == document.fileStem }) else { return }
     context.insert(
@@ -101,10 +104,33 @@ public enum CollectionStore {
     try context.save()
     undoManager?.registerUndo(withTarget: context) { context in
       MainActor.assumeIsolated {
-        context.insert(
-          DocumentCollectionItem(
-            collection: identifier, document: document, position: position, addedAt: addedAt))
-        try? context.save()
+        restore(
+          document, to: identifier, at: (position, addedAt), undoManager: undoManager,
+          in: context)
+      }
+    }
+    undoManager?.setActionName("Remove from Collection")
+  }
+
+  /// Undoing a removal: the item back where it was, and the removal again as the
+  /// redo. Nothing is put back into a collection that has gone since, or next to a
+  /// copy of the document added since — either would leave a row nothing removes.
+  private static func restore(
+    _ document: DocumentID, to identifier: UUID, at place: (position: Double, addedAt: Date),
+    undoManager: UndoManager?, in context: ModelContext
+  ) {
+    guard (try? collection(identifier, in: context)) != nil,
+      let items = try? items(in: identifier, context: context),
+      !items.contains(where: { $0.documentKey == document.fileStem })
+    else { return }
+    context.insert(
+      DocumentCollectionItem(
+        collection: identifier, document: document, position: place.position,
+        addedAt: place.addedAt))
+    try? context.save()
+    undoManager?.registerUndo(withTarget: context) { context in
+      MainActor.assumeIsolated {
+        try? remove(document, from: identifier, undoManager: undoManager, in: context)
       }
     }
     undoManager?.setActionName("Remove from Collection")

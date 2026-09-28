@@ -158,6 +158,62 @@ struct CollectionStoreTests {
       CollectionSnapshot.fetch(in: context).collections.map(\.id) == [third, first, second])
   }
 
+  /// Collections list RFCs: a series, or text dropped from another app that happens
+  /// to read as one, is not added.
+  @Test func `only RFCs are added`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    try CollectionStore.add(DocumentID(series: .bcp, number: 14), to: id, in: context)
+    try CollectionStore.add(.rfc(9000), to: id, in: context)
+
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
+    #expect(members(of: id, in: context) == [.rfc(9000)])
+  }
+
+  /// Undoing a removal after the collection went, or after the document came back,
+  /// must not leave an orphan or a duplicate behind.
+  @Test func `an undone removal puts back nothing that is no longer missing`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    try CollectionStore.add(.rfc(9000), to: id, in: context)
+
+    undoManager.beginUndoGrouping()
+    try CollectionStore.remove(.rfc(9000), from: id, undoManager: undoManager, in: context)
+    undoManager.endUndoGrouping()
+    try CollectionStore.add(.rfc(9000), to: id, in: context)
+    undoManager.undo()
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
+
+    undoManager.beginUndoGrouping()
+    try CollectionStore.remove(.rfc(9000), from: id, undoManager: undoManager, in: context)
+    undoManager.endUndoGrouping()
+    try CollectionStore.delete(id, in: context)
+    undoManager.undo()
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).isEmpty)
+  }
+
+  @Test func `an undone removal can be redone`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let undoManager = UndoManager()
+    undoManager.groupsByEvent = false
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    for number in [1, 2] { try CollectionStore.add(.rfc(number), to: id, in: context) }
+
+    undoManager.beginUndoGrouping()
+    try CollectionStore.remove(.rfc(1), from: id, undoManager: undoManager, in: context)
+    undoManager.endUndoGrouping()
+    undoManager.undo()
+    #expect(undoManager.canRedo)
+    undoManager.redo()
+
+    #expect(members(of: id, in: context) == [.rfc(2)])
+  }
+
   /// A reading path must not lose its place to a mistaken tap.
   @Test func `an undone removal returns to its old place`() throws {
     let container = try makeContainer()
