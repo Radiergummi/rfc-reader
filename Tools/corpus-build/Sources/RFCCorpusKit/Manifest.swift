@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 
 /// `manifest.json`: every file of a data pack, with its size and SHA-256, so the app
@@ -12,7 +13,10 @@ public struct Manifest: Codable, Sendable {
     public init(path: String, data: Data) {
       self.path = path
       self.bytes = data.count
-      self.sha256 = SHA256.hex(data)
+      self.sha256 = SHA256.hash(data: data).map { byte in
+        let digits = String(byte, radix: 16)
+        return byte < 0x10 ? "0" + digits : digits
+      }.joined()
     }
   }
 

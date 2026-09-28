@@ -990,6 +990,26 @@ struct LegacyTextCorpusFindingsTests {
         })
   }
 
+  /// `Appendix A: Title` is how about 150 legacy RFCs head an appendix (#200). The
+  /// `Appendix` has to be there: without it a letter and a colon at column 0 is as
+  /// often a question and its answer, and a title-less or lower-case line is not an
+  /// appendix heading: it stays the unnumbered heading it was. The shapes the parser
+  /// already knew keep reading as before.
+  @Test func `an appendix may be headed with a colon after its letter`() {
+    let colon = LegacyTextParser.appendixHeading(in: "Appendix A: Protocol State Tables")
+    #expect(colon?.number == "A")
+    #expect(colon?.title == "Protocol State Tables")
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix E.1: Timer Details")?.number == "E.1")
+
+    #expect(LegacyTextParser.appendixHeading(in: "A: Only when the sender asks.") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A:") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A: examples follow") == nil)
+
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix B. Examples")?.number == "B")
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix C Change Log")?.number == "C")
+    #expect(LegacyTextParser.appendixHeading(in: "D.2. Second Example")?.number == "D.2")
+  }
+
   /// A colon number counts only where the number before it, or the one it is under, is
   /// a heading number too: without that, a document with one stray `11:` and no `11.`
   /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the

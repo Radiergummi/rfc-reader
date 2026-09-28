@@ -20,6 +20,13 @@ actor DocumentStore {
   /// changed some other way, such as a file deleted in Finder.
   private lazy var cachedDocuments = DocumentCacheIndex(scanning: directory)
 
+  /// The fetches running, so a second open joins the first, a removal made during
+  /// one keeps its result off the disk, and one nobody waits for any more is
+  /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
+  /// own.
+  private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
+  private let originalTexts = InFlightDownloads<Data>()
+
   /// Whether a body has been written since eviction last looked, so a cache that
   /// has not grown is not enumerated again.
   private var hasGrown = true
@@ -84,6 +91,8 @@ actor DocumentStore {
   /// A body that cannot be deleted is left where it is, and stays cached: the
   /// index records what the removal left on disk, not what it set out to do.
   func remove(_ id: DocumentID) {
+    downloads.removed(id)
+    originalTexts.removed(id)
     parsed[id] = nil
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
@@ -111,8 +120,25 @@ actor DocumentStore {
       return document
     }
 
-    // Not cached: the XML when the index says it exists, otherwise the text, and
-    // the text only when there is no XML (#125).
+    let (fetched, isKept) = try await downloads.value(for: id) {
+      Task { try await Self.fetch(id, formats: formats, client: client) }
+    }
+    // A removal while this was in flight, or another reader of the same fetch has
+    // kept it: the document is shown, and not written here (#116).
+    guard isKept else { return fetched.document }
+    let url = fileURL(id, format: fetched.format)
+    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
+    hasGrown = true
+    parsed[id] = fetched.document
+    return fetched.document
+  }
+
+  /// Not cached: the XML when the index says it exists, otherwise the text, and the
+  /// text only when there is no XML (#125). Off the actor, parse included, so the
+  /// store answers other calls meanwhile.
+  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+    async throws -> RFCEditorClient.FetchedDocument
+  {
     let fetched = try await client.fetchPreferredDocument(
       id, availableFormats: formats.isEmpty ? nil : formats)
     if let failure = fetched.xmlParseFailure {
@@ -120,11 +146,7 @@ actor DocumentStore {
         "\(id.displayName, privacy: .public): XML did not parse, shown from the text: \(String(describing: failure), privacy: .public)"
       )
     }
-    let url = fetched.format == .xml ? xmlURL : textURL
-    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
-    hasGrown = true
-    parsed[id] = fetched.document
-    return fetched.document
+    return fetched
   }
 
   // MARK: - Eviction (#39)
@@ -164,9 +186,13 @@ actor DocumentStore {
     if let data = try? Data(contentsOf: textURL) {
       return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
     }
-    let data = try await client.fetchDocumentData(id, format: .text)
-    try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
-    hasGrown = true
+    let (data, isKept) = try await originalTexts.value(for: id) {
+      Task { try await client.fetchDocumentData(id, format: .text) }
+    }
+    if isKept {
+      try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
+      hasGrown = true
+    }
     return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
   }
 }

@@ -12,10 +12,13 @@ import SwiftUI
 struct ReferencePreview: View {
   let reference: CrossReference
   let library: LibraryModel
-  /// The section heading an in-document reference points at. The coordinator
-  /// shows no card for one without, so this is set exactly when the target is an
-  /// anchor.
+  /// The section heading an in-document reference points at.
   var heading: String?
+  /// The bibliography entry a citation names, for one that names no RFC (#198).
+  /// The body leaves the bibliography to the panel, so this card is the only place
+  /// the entry shows beside its citation. The coordinator sets this or `heading`
+  /// for an anchor, and shows no card when it has neither.
+  var entry: Reference?
 
   /// The card's fixed width, which the iOS preview is also sized at.
   static let width: CGFloat = 280
@@ -45,9 +48,35 @@ struct ReferencePreview: View {
         // A section of this document: "Section 4.2" says where, the heading
         // says what.
         Text(heading).font(.headline)
+      } else if let entry {
+        entryDescription(entry)
       }
     }
     .padding(12)
     .frame(width: Self.width, alignment: .leading)
+  }
+
+  /// What the References panel shows for the entry, without its button: the tag
+  /// the document cites it by, the title — or, for a legacy entry that could not be
+  /// structured, its own words — the authors and where it was published, and the
+  /// host it links to.
+  @ViewBuilder
+  private func entryDescription(_ entry: Reference) -> some View {
+    Text(entry.displayAnchor).font(.subheadline.weight(.semibold))
+    if entry.title.isEmpty {
+      if let raw = entry.rawText {
+        Text(raw).font(.callout).foregroundStyle(.secondary).lineLimit(6)
+      }
+    } else {
+      Text(entry.title).font(.headline).lineLimit(3)
+      let byline = entry.authors.joined(separator: ", ")
+      let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
+      if !detail.isEmpty {
+        Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+      }
+    }
+    if let host = entry.url?.host() {
+      Text(host).font(.caption).foregroundStyle(.secondary)
+    }
   }
 }

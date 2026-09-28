@@ -6,7 +6,7 @@ import Testing
 /// The committed overrides in `corpus/overrides/`, which `convert` publishes in place of
 /// its own output. It checks them only during a corpus run, so this is what notices a
 /// broken one before then. Whether a scripted override is still what its script makes
-/// is `make overrides-check`, which needs the source text.
+/// is `make corpus-overrides-check`, which needs the source text.
 @Suite("Corpus overrides")
 struct OverridesTests {
   private static let directory = URL(fileURLWithPath: #filePath)

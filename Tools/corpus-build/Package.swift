@@ -10,7 +10,8 @@ let swiftSettings: [SwiftSetting] = [
 ]
 
 // Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
-// RFCKit's parsers, and writes a signed manifest for the data packs the app downloads.
+// RFCKit's parsers, and writes a manifest of SHA-256 hashes for the data packs the app
+// downloads.
 //
 // RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
 // the report and manifest types, the schema check's causes -- so tests call it rather
@@ -24,11 +25,16 @@ let package = Package(
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
     .package(url: "https://github.com/apple/swift-log", exact: "1.15.1"),
+    // SHA-256 for the manifest: CryptoKit on Apple platforms, BoringSSL on Linux.
+    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.0"),
   ],
   targets: [
     .target(
       name: "RFCCorpusKit",
-      dependencies: [.product(name: "RFCKit", package: "RFCKit")],
+      dependencies: [
+        .product(name: "RFCKit", package: "RFCKit"),
+        .product(name: "Crypto", package: "swift-crypto"),
+      ],
       swiftSettings: swiftSettings
     ),
     .executableTarget(

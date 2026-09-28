@@ -79,6 +79,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
+  /// See `RFCTextView.bibliography`.
+  var bibliography: [ReferenceGroup] = []
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
   /// synchronously, on every scroll tick that changes it: the title is coupled to
   /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
@@ -201,19 +203,11 @@ final class RFCTextViewCoordinator: NSObject {
     lastReportedAnchor = nil
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
-    // Written through the backing `NSTextStorage`, never by assigning
-    // `storage.attributedString`.
-    //
-    // That assignment *discards* the `NSTextStorage` — measured: non-nil before,
-    // nil immediately after, and `textView.textStorage` nil with it. TextKit 2
-    // lays out and draws from `attributedString` alone, so the document still
-    // renders perfectly and the damage is invisible: what breaks is everything
-    // AppKit still routes through the text storage. Dragging computed a correct
-    // selection and then discarded it at mouse-up, and `clickedOnLink` never
-    // fired, so the reader could be read but not selected, copied, or clicked.
-    storage.performEditingTransaction {
-      storage.textStorage?.setAttributedString(built.text)
-    }
+    // Through `install`, never by assigning `storage.attributedString`, which
+    // discards the text storage that selection and link clicks go through while
+    // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
+    // `StorageInstallTests` pins it.
+    storage.install(built.text)
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
@@ -309,12 +303,18 @@ final class RFCTextViewCoordinator: NSObject {
   /// This runs on every update pass — and an update pass happens on every section
   /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
   /// the gutter, the column or the header's height moved. A relayout costs more
-  /// still, and only the column can force one: a window wider than the measure
-  /// moves the gutters, not the text.
-  func layOut(width: CGFloat) {
+  /// still, and only the column can force one: under the recommended measure, a
+  /// window wider than it moves the gutters, not the text. Full width has no such
+  /// slack — every change of width is a change of column, and re-wraps.
+  ///
+  /// `measure` is the live preference, which runs ahead of the storage for as long
+  /// as a flip takes to rebuild, exactly as the width does during a resize: the
+  /// text re-wraps at the new column at once and the rebuild re-measures artwork
+  /// and tables for it when it lands.
+  func layOut(width: CGFloat, measure: MeasurePreference) {
     guard let textView, width > 0 else { return }
-    let gutter = ReaderLayout.gutter(forWidth: width)
-    let column = ReaderLayout.column(forWidth: width)
+    let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)
+    let column = ReaderLayout.column(forWidth: width, measure: measure)
     // Measured every pass, deliberately: the height depends on the width, on the
     // content size category, and on metadata that can arrive after the first
     // layout, and a cache keyed on any one of those goes stale as a header
@@ -361,7 +361,8 @@ final class RFCTextViewCoordinator: NSObject {
     // out again now and the place restored, rather than left on estimates until
     // a rebuild that changes nothing. That a storage installed before the first
     // layout belongs to this column rests on this view and `DocumentView`
-    // deriving the column from the same width.
+    // deriving the column from the same width and the same measure preference:
+    // `DocumentView` is the one reader of `readerMeasure`, and hands it down here.
     if columnChanged {
       #if canImport(UIKit)
         textView.textContainer.size = CGSize(width: column, height: .greatestFiniteMagnitude)
@@ -533,16 +534,20 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// The card for a reference, on either platform, or nil when it would say no
   /// more than the reference already does. Another document has its title and
-  /// abstract; a place in this one has only its section's heading, and a figure
-  /// or a table has not even that.
+  /// abstract; a place in this one has only its section's heading; a bibliography
+  /// entry that names no RFC has its title, authors and where it was published
+  /// (#198); and a figure or a table has none of those.
   private func preview(for reference: CrossReference) -> ReferencePreview? {
     guard let library else { return nil }
     switch reference.target {
     case .document:
       return ReferencePreview(reference: reference, library: library)
     case .anchor(let anchor):
-      return built?.anchors.heading(of: anchor).map {
-        ReferencePreview(reference: reference, library: library, heading: $0)
+      if let heading = built?.anchors.heading(of: anchor) {
+        return ReferencePreview(reference: reference, library: library, heading: heading)
+      }
+      return bibliography.entry(anchor: anchor).map {
+        ReferencePreview(reference: reference, library: library, entry: $0)
       }
     }
   }

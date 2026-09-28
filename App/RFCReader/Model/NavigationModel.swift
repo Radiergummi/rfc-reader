@@ -6,11 +6,12 @@ import SwiftUI
 /// Everything one tab is looking at: which document, which sidebar filter, what was
 /// typed into search, and the back/forward stack that got it here.
 ///
-/// One of these per scene, held as `@State` in `ContentView`, which is what makes a
-/// tab a tab. All of this used to live on `LibraryModel.shared`, so every window and
-/// tab in the process shared one selection: opening an RFC in one tab switched every
-/// other tab to it. `LibraryModel` keeps only what genuinely is process-wide — the
-/// index, the document cache, the search index.
+/// One of these per tab — held by its `ReaderWindowController` on macOS, and as
+/// `@State` in `ContentView` on iOS — which is what makes a tab a tab. All of this
+/// used to live on `LibraryModel.shared`, so every window and tab in the process
+/// shared one selection: opening an RFC in one tab switched every other tab to it.
+/// `LibraryModel` keeps only what genuinely is process-wide — the index, the
+/// document cache, the search index.
 ///
 /// The stack itself is `NavigationHistory` in RFCReaderKit, under test. This type is
 /// the observable shell around it, plus the bookkeeping SwiftUI needs.
@@ -44,7 +45,14 @@ final class NavigationModel: Identifiable {
     }
   }
   var searchText = ""
+  /// The iOS list's view options, for this tab (#348).
+  var listOptions = ListOptions()
   var isShowingGoToSheet = false
+  /// The collection sheet on show, if any: creating one — perhaps to add a document
+  /// to — or editing one (#349). On the model rather than a view's state so the
+  /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
+  /// it, and the one view that presents it is in the window.
+  var collectionEditor: CollectionEditorMode?
 
   /// The library the list is computed from, and which the inputs below are taken
   /// from on entering a filter.
@@ -89,6 +97,19 @@ final class NavigationModel: Identifiable {
         guard newValue != nil else { return }
       #endif
       filterChoice.selection = newValue
+    }
+  }
+
+  /// Leaves a collection that no longer exists (#349). A cleared selection stays
+  /// cleared, so a collapsed sidebar does not push a list; a shown one moves to the
+  /// fallback.
+  func keepFilter(in snapshot: CollectionSnapshot) {
+    let kept = KeptFilter.filter(filter, keeping: snapshot)
+    guard kept != filter else { return }
+    if filterChoice.selection == nil {
+      filterChoice.replaceValue(kept)
+    } else {
+      sidebarSelection = kept
     }
   }
 
