@@ -147,18 +147,17 @@ extension PlatformFont {
     #endif
   }
 
-  /// The font's weight as its descriptor states it, regular where it states none.
-  /// A heading is `.semibold`, which is no symbolic trait, so this is what lets a
-  /// run inside one keep its weight. A bold italic face states no weight at all,
-  /// only the bold trait, so the trait counts as at least bold.
+  /// The font's weight as its descriptor states it. This is what lets a run inside
+  /// a semibold heading keep its weight. A face that states no weight at all is
+  /// bold if it carries the bold trait and regular otherwise. The trait alone is
+  /// not the weight: a semibold face carries it too, and reading that as bold set
+  /// inline code in a heading heavier than the heading around it (#153).
   var weight: PlatformFont.Weight {
     let traits = fontDescriptor.object(forKey: .traits) as? [PlatformFontDescriptor.TraitKey: Any]
-    let stated = (traits?[.weight] as? CGFloat).map(PlatformFont.Weight.init(rawValue:)) ?? .regular
-    let isBold = fontDescriptor.symbolicTraits.contains(RFCTraits.bold)
-    if isBold && stated.rawValue < PlatformFont.Weight.bold.rawValue {
-      return .bold
+    if let stated = traits?[.weight] as? CGFloat, stated != 0 {
+      return PlatformFont.Weight(rawValue: stated)
     }
-    return stated
+    return fontDescriptor.symbolicTraits.contains(RFCTraits.bold) ? .bold : .regular
   }
 
   /// This font's face and traits at another size.

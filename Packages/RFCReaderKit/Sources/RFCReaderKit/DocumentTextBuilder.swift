@@ -138,7 +138,7 @@ extension DocumentTextBuilder {
         .foregroundColor: RFCColors.label,
         .rfcAnchor: Self.abstractAnchor,
         .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6),
-      ])
+      ].merging(Self.headingLevel(depth: 1)) { current, _ in current })
     // Emitted quiet, rather than emitted and then quietened. A post-pass has to
     // guess which runs "count" — matching against a dynamic colour to find the
     // ones to step back — and anything the builder *measures* against the style
@@ -147,6 +147,17 @@ extension DocumentTextBuilder {
     emitting(in: style.scaled(by: Self.abstractScale), colour: RFCColors.secondaryLabel) {
       appendBlocks(blocks, indent: 0)
     }
+  }
+
+  /// A heading's level, in the text itself, where UIKit looks for it: that is what
+  /// gives `UITextView`'s own heading navigation something to move between, beside
+  /// the custom rotor that `.rfcAnchor` feeds. AppKit reads no such key.
+  static func headingLevel(depth: Int) -> [NSAttributedString.Key: Any] {
+    #if canImport(UIKit)
+      [.accessibilityTextHeadingLevel: min(depth, 6)]
+    #else
+      [:]
+    #endif
   }
 
   /// The abstract introduces the document rather than being part of it, so it is
@@ -182,7 +193,7 @@ extension DocumentTextBuilder {
       .rfcAnchor: section.anchor,
       .paragraphStyle: paragraphStyle(
         spacingBefore: style.paragraphSpacing * 1.6, spacingAfter: style.paragraphSpacing * 0.6),
-    ]
+    ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
     output.append(inlineRuns(section.displayTitleInlines, base: headingAttributes))
     append("\n", headingAttributes)
     appendBlocks(section.blocks, indent: 0)
