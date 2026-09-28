@@ -30,6 +30,22 @@ public enum PublicationStatus: String, Sendable, Codable, CaseIterable, Hashable
     case .unknown: "Unknown"
     }
   }
+
+  /// Short enough for a list row's badge, and a word: "STD" is the series' name
+  /// rather than a status, and "Info" was a clipped word. BCP stays, being what the
+  /// IETF itself calls them.
+  public var shortName: String {
+    switch self {
+    case .internetStandard: "Standard"
+    case .draftStandard: "Draft Standard"
+    case .proposedStandard: "Proposed"
+    case .bestCurrentPractice: "BCP"
+    case .informational: "Informational"
+    case .experimental: "Experimental"
+    case .historic: "Historic"
+    case .unknown: "Unknown"
+    }
+  }
 }
 
 /// The publication stream an RFC came through.
