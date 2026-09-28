@@ -16,6 +16,7 @@ struct InfoView: View {
   let document: DocumentID?
   let library: LibraryModel
   let open: (DocumentID) -> Void
+  let search: (String) -> Void
 
   var body: some View {
     if let info {
@@ -25,7 +26,7 @@ struct InfoView: View {
           FactStrip(facts: info.facts)
           ForEach(info.sections, id: \.title) { section in
             InfoSection(title: section.title) {
-              SectionRows(section: section, open: open)
+              SectionRows(section: section, library: library, open: open, search: search)
             }
           }
           if let document {
@@ -43,29 +44,50 @@ struct InfoView: View {
   }
 
   private func header(_ info: DocumentInfo) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(info.number)
-        .font(.subheadline.weight(.medium))
-        .foregroundStyle(.secondary)
-      Text(info.title)
-        .font(.title3.weight(.semibold))
-        .fixedSize(horizontal: false, vertical: true)
-        .textSelection(.enabled)
-      HStack(spacing: 6) {
-        if info.status != .unknown {
-          StatusBadge(status: info.status)
-        }
-        if info.isObsolete {
-          Text("Obsolete")
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.red.opacity(0.15), in: Capsule())
-            .foregroundStyle(.red)
-        }
+    VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 4) {
+        Text(info.number)
+          .font(.subheadline.weight(.medium))
+          .foregroundStyle(.secondary)
+        Text(info.title)
+          .font(.title3.weight(.semibold))
+          .fixedSize(horizontal: false, vertical: true)
+          .textSelection(.enabled)
       }
-      .padding(.top, 2)
+      if let summary = info.statusSummary {
+        StandingBox(
+          title: info.status.displayName, summary: summary,
+          color: StatusBadge.color(for: info.status))
+      }
+      if let summary = info.obsoleteSummary {
+        StandingBox(title: "Obsolete", summary: summary, color: .red)
+      }
     }
+  }
+}
+
+/// A status, named in full and explained in a sentence, in its tint: what the
+/// list's short badge stands for, where there is room to say it.
+private struct StandingBox: View {
+  let title: String
+  let summary: String
+  let color: Color
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title)
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(color)
+      Text(summary)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(color.opacity(0.12), in: .rect(cornerRadius: 8))
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -106,33 +128,38 @@ private struct InfoSection<Content: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      // Semibold, not `.headline`'s bold: against the pane's regular text and its
+      // cards, bold section titles outweighed what they head.
       Text(title)
-        .font(.headline)
+        .font(.body.weight(.semibold))
         .accessibilityAddTraits(.isHeader)
       content
     }
   }
 }
 
-/// A section's rows, in the shape their values call for: links as a card of rows,
-/// related documents as chips under their relationship, and anything else as a
-/// caption over its value.
+/// A section's rows, set the way the section says: a card of link rows, or a list
+/// with related documents as chips under their relationship, keywords as tags, and
+/// anything else as a caption over its value.
 private struct SectionRows: View {
   let section: DocumentInfo.Section
+  let library: LibraryModel
   let open: (DocumentID) -> Void
+  let search: (String) -> Void
 
   var body: some View {
-    if section.rows.allSatisfy({ $0.symbol != nil }) {
+    switch section.style {
+    case .card:
       VStack(spacing: 0) {
         ForEach(Array(section.rows.enumerated()), id: \.offset) { index, row in
           if index > 0 {
             Divider().padding(.leading, 38)
           }
-          LinkRow(row: row)
+          LinkRow(row: row, library: library)
         }
       }
       .background(.fill.quaternary, in: .rect(cornerRadius: 10))
-    } else {
+    case .list:
       VStack(alignment: .leading, spacing: 10) {
         ForEach(Array(section.rows.enumerated()), id: \.offset) { _, row in
           rowView(row)
@@ -149,24 +176,31 @@ private struct SectionRows: View {
         caption(row.label)
         // A list, not a sentence: "obsoletes RFC 2616, 7230, 7231, 7232" is several
         // documents, each one to open.
-        LazyVGrid(
-          columns: [GridItem(.adaptive(minimum: 76), spacing: 6, alignment: .leading)],
-          alignment: .leading, spacing: 6
-        ) {
+        WrappingRowLayout(spacing: 6) {
           ForEach(documents, id: \.self) { id in
             DocumentChip(id: id) { open(id) }
           }
         }
       }
-    case .text(let text), .copyable(let text):
+    case .keywords(let keywords):
+      VStack(alignment: .leading, spacing: 4) {
+        caption(row.label)
+        WrappingRowLayout(spacing: 6) {
+          ForEach(Array(keywords.enumerated()), id: \.offset) { _, keyword in
+            KeywordTag(keyword: keyword) { search(keyword) }
+          }
+        }
+      }
+    case .text(let text):
       VStack(alignment: .leading, spacing: 1) {
         caption(row.label)
         Text(text)
           .textSelection(.enabled)
           .fixedSize(horizontal: false, vertical: true)
       }
-    case .link(let url):
-      Link(row.label, destination: url)
+    case .link, .file, .copyable:
+      // A card's rows, which a list section does not hold.
+      EmptyView()
     }
   }
 
@@ -204,10 +238,46 @@ private struct DocumentChip: View {
   }
 }
 
-/// A page elsewhere, or the DOI to copy: an icon, the label, and what the row does.
+/// A keyword, set as Apple sets tags: a capsule in the secondary fill, searching the
+/// library for itself.
+private struct KeywordTag: View {
+  let keyword: String
+  let search: () -> Void
+
+  var body: some View {
+    Button(action: search) {
+      Text(keyword)
+        .font(.callout)
+        .lineLimit(1)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 3)
+        .background(.fill.secondary, in: .capsule)
+    }
+    .buttonStyle(.plain)
+    .focusEffectDisabled()
+    .help("Search the library for “\(keyword)”")
+    .accessibilityHint("Searches the library for it")
+  }
+}
+
+/// A page elsewhere, a file, or the DOI to copy: an icon, the label, and what the
+/// row does.
+///
+/// A file opens in the browser like a page, and on a Mac Option-click saves it to
+/// Downloads instead, as it does in Safari; while Option is held its arrow turns into
+/// a download, so the row says what a click will do.
 private struct LinkRow: View {
   let row: DocumentInfo.Row
-  @State private var copied = false
+  let library: LibraryModel
+  /// A check for a moment after a copy or a download, a warning after a failed one.
+  @State private var outcome: Outcome?
+  @State private var isOptionHeld = false
+  @Environment(\.openURL) private var openURL
+
+  private enum Outcome {
+    case done
+    case failed
+  }
 
   var body: some View {
     switch row.value {
@@ -218,24 +288,78 @@ private struct LinkRow: View {
       .buttonStyle(.plain)
       .focusEffectDisabled()
       .help(url.absoluteString)
+    case .file(let document, let format):
+      let url = RFCEditorEndpoints.document(document, format: format)
+      Button {
+        open(url, saving: (document, format))
+      } label: {
+        content(
+          detail: nil, trailing: outcomeSymbol ?? (isOptionHeld ? "arrow.down" : "arrow.up.right"))
+      }
+      .buttonStyle(.plain)
+      .focusEffectDisabled()
+      #if os(macOS)
+        .onModifierKeysChanged(mask: .option, initial: true) { _, keys in
+          isOptionHeld = keys.contains(.option)
+        }
+        .help("Open \(url.lastPathComponent) on rfc-editor.org. Option-click to download it.")
+        .contextMenu {
+          Button("Download") { save(document, format) }
+        }
+      #endif
+      .task(id: outcome) { await settle() }
     case .copyable(let text):
       Button {
         Clipboard.copy(text)
-        copied = true
+        outcome = .done
       } label: {
-        content(detail: text, trailing: copied ? "checkmark" : "doc.on.doc")
+        content(detail: text, trailing: outcomeSymbol ?? "doc.on.doc")
       }
       .buttonStyle(.plain)
       .focusEffectDisabled()
       .help("Copy \(row.label)")
-      .task(id: copied) {
-        guard copied else { return }
-        try? await Task.sleep(for: .seconds(1.5))
-        copied = false
-      }
+      .task(id: outcome) { await settle() }
     default:
       content(detail: nil, trailing: nil)
     }
+  }
+
+  private var outcomeSymbol: String? {
+    switch outcome {
+    case .done: "checkmark"
+    case .failed: "exclamationmark.triangle"
+    case nil: nil
+    }
+  }
+
+  /// The check or the warning stands for a moment, then the row's own icon returns.
+  private func settle() async {
+    guard outcome != nil else { return }
+    try? await Task.sleep(for: .seconds(1.5))
+    outcome = nil
+  }
+
+  private func open(_ url: URL, saving file: (DocumentID, FileFormat)) {
+    #if os(macOS)
+      if NSEvent.modifierFlags.contains(.option) {
+        save(file.0, file.1)
+        return
+      }
+    #endif
+    openURL(url)
+  }
+
+  private func save(_ document: DocumentID, _ format: FileFormat) {
+    #if os(macOS)
+      Task {
+        do {
+          try await library.saveToDownloads(document, format: format)
+          outcome = .done
+        } catch {
+          outcome = .failed
+        }
+      }
+    #endif
   }
 
   private func content(detail: String?, trailing: String?) -> some View {
@@ -268,20 +392,24 @@ private struct LinkRow: View {
   }
 }
 
-/// Whether the document is kept offline, how much it takes, and removing the copy:
-/// the one part of the pane that is the store's rather than the index's.
+/// Whether the document is kept offline, and how much it takes: the one part of the
+/// pane that is the store's rather than the index's.
 ///
-/// Removing it leaves the document on screen — it is already in memory — and
-/// deletes the file, so the next open downloads it again; the footnote says so,
-/// because otherwise the button looks like it did nothing. Whether it is kept is the
-/// library's set, so it is right the moment the pane shows, and a download or a
-/// removal re-reads the size. Only an RFC has a body of its own; a series number the
-/// index has not resolved yet has none.
+/// One row whose icon is the control, as a download is in Safari's list: the filled
+/// arrow turns to a cross under the pointer and removes the copy, and the outline
+/// arrow of a document not kept downloads it. Removing leaves the document on
+/// screen, since it is already in memory, and deletes the file, so the next open
+/// downloads it again; the tooltip says so. Whether it is kept is the library's set,
+/// so it is right the moment the pane shows, and a download or a removal re-reads
+/// the size. Only an RFC has a body of its own; a series number the index has not
+/// resolved yet has none.
 private struct OfflineSection: View {
   let document: DocumentID
   let library: LibraryModel
   /// Nil until read, and for as long as there is nothing to read.
   @State private var size: Int?
+  @State private var isHovering = false
+  @State private var isWorking = false
 
   private var isKept: Bool {
     document.series == .rfc && library.downloadedNumbers.contains(document.number)
@@ -289,40 +417,55 @@ private struct OfflineSection: View {
 
   var body: some View {
     InfoSection(title: "Offline") {
-      if isKept {
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(spacing: 10) {
-            Image(systemName: "arrow.down.circle.fill")
-              .foregroundStyle(.tint)
-              .accessibilityHidden(true)
-            Text("Kept offline")
-            Spacer()
-            Text(size?.formatted(.byteCount(style: .file)) ?? "")
-              .foregroundStyle(.secondary)
-          }
-          Button("Remove Offline Copy", role: .destructive) {
-            Task { await library.removeDownload(document) }
-          }
-          .buttonStyle(.bordered)
-          .focusEffectDisabled()
-          Text("It stays open here, and is downloaded again the next time you open it.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+      HStack(spacing: 10) {
+        Button(action: toggle) {
+          Image(systemName: symbol)
+            .font(.title3)
+            .foregroundStyle(isKept && isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
+            .contentTransition(.symbolEffect(.replace))
         }
-      } else {
-        Text("Not kept offline. Opening it downloads it again.")
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(isWorking || document.series != .rfc)
+        .onHover { isHovering = $0 }
+        .help(help)
+        .accessibilityLabel(isKept ? "Remove Offline Copy" : "Keep Offline")
+        .accessibilityHint(help)
+        Text(isKept ? "Kept offline" : "Not kept offline")
+          .foregroundStyle(isKept ? .primary : .secondary)
+        Spacer()
+        if isKept, let size {
+          Text(size.formatted(.byteCount(style: .file)))
+            .foregroundStyle(.secondary)
+        }
       }
     }
-    .task(id: OfflineKey(document: document, isKept: isKept)) {
+    // Per document already: the section is given the document's identity.
+    .task(id: isKept) {
       size = isKept ? await library.downloadedSize(document) : nil
     }
   }
 
-  private struct OfflineKey: Hashable {
-    let document: DocumentID
-    let isKept: Bool
+  private var symbol: String {
+    if isKept { return isHovering ? "xmark.circle.fill" : "arrow.down.circle.fill" }
+    return "arrow.down.circle"
+  }
+
+  private var help: String {
+    isKept
+      ? "Remove the offline copy. It stays open here, and is downloaded again the next time you open it."
+      : "Keep a copy to read offline."
+  }
+
+  private func toggle() {
+    isWorking = true
+    Task {
+      if isKept {
+        await library.removeDownload(document)
+      } else {
+        try? await library.download(document)
+      }
+      isWorking = false
+    }
   }
 }

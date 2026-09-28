@@ -31,11 +31,15 @@ struct DocumentInspector: View {
   let revealed: ReaderState.RevealedReference?
   let selectSection: (String) -> Void
   let openDocument: (DocumentID) -> Void
+  /// Searches the library, for a keyword chosen in the Info pane.
+  let search: (String) -> Void
 
   var body: some View {
     switch pane {
     case .navigation: navigation
-    case .info: InfoView(info: info, document: document, library: library, open: openDocument)
+    case .info:
+      InfoView(
+        info: info, document: document, library: library, open: openDocument, search: search)
     }
   }
 
@@ -129,7 +133,9 @@ struct PanelHost: View {
         library: library,
         pane: reader.pane,
         tab: $reader.tab,
-        current: reader.currentAnchor,
+        // Read only while the navigation pane shows: it changes on every section
+        // crossing, and read under the Info pane it re-rendered that pane each time.
+        current: reader.pane == .navigation ? reader.currentAnchor : nil,
         revealed: reader.revealedReference,
         selectSection: {
           navigation.jump(toSection: $0)
@@ -137,6 +143,10 @@ struct PanelHost: View {
         },
         openDocument: {
           library.open($0, activation: .current, in: navigation)
+          didNavigate()
+        },
+        search: {
+          navigation.search($0)
           didNavigate()
         }
       )

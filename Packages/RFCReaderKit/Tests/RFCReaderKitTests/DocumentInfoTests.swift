@@ -60,6 +60,36 @@ struct DocumentInfoTests {
     #expect(!info.isObsolete)
   }
 
+  /// The header says what the status means, not only its name: "Internet Standard"
+  /// is jargon to most readers, and "STD" more so.
+  @Test(arguments: PublicationStatus.allCases.filter { $0 != .unknown })
+  func `every status is explained in a sentence`(status: PublicationStatus) {
+    var metadata = bare
+    metadata.currentStatus = status
+    let summary = info(metadata).statusSummary
+    #expect(summary?.isEmpty == false)
+    #expect(summary?.hasSuffix(".") == true)
+  }
+
+  @Test func `an unknown status is not explained`() {
+    #expect(info(bare).statusSummary == nil)
+  }
+
+  /// Said beside the status, from the same model, so the header has two boxes of one
+  /// kind rather than one from the model and one from the view.
+  @Test func `an obsolete document says so in a sentence, and a current one does not`() {
+    var obsolete = bare
+    obsolete.obsoletedBy = [.rfc(9999)]
+    #expect(info(obsolete).obsoleteSummary?.isEmpty == false)
+    #expect(info(rich).obsoleteSummary == nil)
+  }
+
+  /// Links and files are a card of rows; the rest a list of captioned values. Said by
+  /// the section, not guessed by the view from its rows.
+  @Test func `a section says how it is set`() {
+    #expect(info(rich).sections.map(\.style) == [.list, .list, .card, .card, .list])
+  }
+
   /// The strip under the header: what someone deciding whether this is the right
   /// document looks for first, each a short value over its caption.
   @Test func `the key facts are when, how long, from whom and which group`() {
@@ -68,7 +98,7 @@ struct DocumentInfoTests {
         DocumentInfo.Fact(value: "2022", label: "Published"),
         DocumentInfo.Fact(value: "194", label: "Pages"),
         DocumentInfo.Fact(value: "IETF", label: "Stream"),
-        DocumentInfo.Fact(value: "httpbis", label: "Working Group"),
+        DocumentInfo.Fact(value: "httpbis", label: "Group"),
       ])
   }
 
@@ -80,7 +110,9 @@ struct DocumentInfoTests {
   }
 
   @Test func `the sections come in a fixed order`() {
-    #expect(info(rich).sections.map(\.title) == ["Authors", "Relationships", "Links", "Details"])
+    #expect(
+      info(rich).sections.map(\.title)
+        == ["Authors", "Relationships", "Links", "Formats", "Details"])
   }
 
   @Test func `authors are listed by name, an editor marked as one`() {
@@ -113,9 +145,9 @@ struct DocumentInfoTests {
     #expect(
       value("Published as", in: details) == .text(PublicationStatus.proposedStandard.displayName))
     #expect(value("Published", in: details) == .text("June 2022"))
-    #expect(value("Area", in: details) == .text("art"))
-    #expect(value("Keywords", in: details) == .text("HTTP, semantics"))
-    #expect(value("Formats", in: details) == .text("TXT, HTML, XML, PDF"))
+    #expect(value("Area", in: details) == .text("Applications and Real-Time"))
+    #expect(value("Keywords", in: details) == .keywords(["HTTP", "semantics"]))
+    #expect(value("Formats", in: details) == nil)
 
     var unchanged = rich
     unchanged.publicationStatus = unchanged.currentStatus
@@ -127,7 +159,7 @@ struct DocumentInfoTests {
   @Test func `a document from no working group has no working group fact`() {
     var metadata = rich
     metadata.workingGroup = "NON WORKING GROUP"
-    #expect(!info(metadata).facts.contains { $0.label == "Working Group" })
+    #expect(!info(metadata).facts.contains { $0.label == "Group" })
   }
 
   /// A series member links to the others, not to itself.
@@ -152,6 +184,15 @@ struct DocumentInfoTests {
     #expect(value("Datatracker", in: links) == .link(RFCEditorEndpoints.datatracker(.rfc(9110))))
   }
 
+  /// Set as the links are, each opening the file where the RFC Editor hosts it, or
+  /// saving it with Option held.
+  @Test func `each format is a file to open or save`() {
+    let formats = section("Formats", of: rich)
+    #expect(formats?.rows.map(\.label) == ["Plain Text", "HTML", "XML", "PDF"])
+    #expect(formats?.rows.allSatisfy { $0.symbol != nil } == true)
+    #expect(value("PDF", in: formats) == .file(.rfc(9110), .pdf))
+  }
+
   /// A legacy document knows little, and its panel is short rather than full of
   /// dashes: an empty field has no fact or row, and a section with no rows is not
   /// shown.
@@ -160,7 +201,7 @@ struct DocumentInfoTests {
     #expect(info.facts.map(\.label) == ["Published", "Stream"])
     #expect(info.sections.map(\.title) == ["Links", "Details"])
     let rows = info.sections.flatMap(\.rows).map(\.label)
-    for absent in ["Keywords", "Formats", "Area", "DOI", "Errata", "Published as"] {
+    for absent in ["Keywords", "Area", "DOI", "Errata", "Published as"] {
       #expect(!rows.contains(absent), "\(absent) shown for a document that has none")
     }
   }
@@ -192,5 +233,49 @@ struct InspectorPaneTests {
     let result = InspectorPane.pressing(.navigation, isOpen: true, showing: .navigation)
     #expect(!result.isOpen)
     #expect(result.pane == .navigation)
+  }
+}
+
+/// The IETF's areas, which the index records by their short codes (#25).
+@Suite("Area names")
+struct AreaNameTests {
+  @Test(arguments: [
+    ("art", "Applications and Real-Time"), ("wit", "Web and Internet Transport"),
+    ("rtg", "Routing"), ("sec", "Security"), ("int", "Internet"),
+    ("ops", "Operations and Management"), ("tsv", "Transport"), ("gen", "General"),
+  ])
+  func `a known area is written out`(code: String, name: String) {
+    #expect(DocumentInfo.areaName(code) == name)
+  }
+
+  /// Codes are not always lower case in the index.
+  @Test func `an area is found whatever its case`() {
+    #expect(DocumentInfo.areaName("SEC") == "Security")
+  }
+
+  /// A retired or unknown area keeps its code, in capitals, as the IETF writes it.
+  @Test func `an unknown area keeps its code`() {
+    #expect(DocumentInfo.areaName("xyz") == "XYZ")
+  }
+}
+
+/// The name a file saved to Downloads gets: its own, or with a number when that is
+/// taken, as Safari names a second download of the same file. Asked name by name,
+/// so a folder of thousands is never listed to save one file.
+@Suite("Download name")
+struct DownloadNameTests {
+  @Test func `a free name is kept`() {
+    #expect(DownloadName.unique("rfc9110.pdf", isTaken: { _ in false }) == "rfc9110.pdf")
+  }
+
+  @Test func `a taken name gets the next free number`() {
+    #expect(DownloadName.unique("rfc9110.pdf", isTaken: { $0 == "rfc9110.pdf" }) == "rfc9110 2.pdf")
+    #expect(
+      DownloadName.unique("rfc9110.pdf", isTaken: ["rfc9110.pdf", "rfc9110 2.pdf"].contains)
+        == "rfc9110 3.pdf")
+  }
+
+  @Test func `a name without an extension is numbered at its end`() {
+    #expect(DownloadName.unique("README", isTaken: { $0 == "README" }) == "README 2")
   }
 }

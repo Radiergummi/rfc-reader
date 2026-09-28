@@ -68,7 +68,7 @@ struct DocumentView: View {
     }
   }
   #if !os(macOS)
-    @State private var showTableOfContents = false
+    @State private var showsInspector = false
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -178,9 +178,9 @@ struct DocumentView: View {
         // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
         // swallows an iPhone, and in compact width the inspector already presents
         // itself as a sheet.
-        .inspector(isPresented: $showTableOfContents) {
+        .inspector(isPresented: $showsInspector) {
           PanelHost(
-            isPresented: $showTableOfContents,
+            isPresented: $showsInspector,
             closesAfterChoice: horizontalSizeClass == .compact
           )
           .inspectorColumnWidth(min: 260, ideal: 320)
@@ -189,7 +189,7 @@ struct DocumentView: View {
       .onAppear {
         if work.load == nil { startLoad() }
         #if !os(macOS)
-          reader.openPanel = { [isPresented = $showTableOfContents] in
+          reader.openPanel = { [isPresented = $showsInspector] in
             withAnimation(.snappy) { isPresented.wrappedValue = true }
           }
         #endif
@@ -402,9 +402,9 @@ struct DocumentView: View {
     /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
     private func press(_ pane: InspectorPane) {
       let result = InspectorPane.pressing(
-        pane, isOpen: showTableOfContents, showing: reader.pane)
+        pane, isOpen: showsInspector, showing: reader.pane)
       reader.pane = result.pane
-      withAnimation(.snappy) { showTableOfContents = result.isOpen }
+      withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
     /// What is used least: the original text, and the document's pages elsewhere.

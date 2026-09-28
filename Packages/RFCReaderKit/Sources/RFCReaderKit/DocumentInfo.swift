@@ -26,9 +26,26 @@ public struct DocumentInfo: Equatable, Sendable {
     public let label: String
   }
 
+  /// What the status means, in a sentence, for the header; nil when the index
+  /// does not know it.
+  public var statusSummary: String? { Self.summary(of: status) }
+
+  /// The header's second box, for a document a later one replaces.
+  public var obsoleteSummary: String? {
+    isObsolete ? "A later RFC replaces it; Relationships names which." : nil
+  }
+
   public struct Section: Equatable, Sendable {
     public let title: String
+    public let style: Style
     public let rows: [Row]
+  }
+
+  /// How a section is set: links and files as a card of rows with an icon, as
+  /// Settings and the App Store set theirs; everything else as captioned values.
+  public enum Style: Equatable, Sendable {
+    case list
+    case card
   }
 
   public struct Row: Equatable, Sendable {
@@ -53,6 +70,12 @@ public struct DocumentInfo: Equatable, Sendable {
     case documents([DocumentID])
     /// A page elsewhere.
     case link(URL)
+    /// A format of the document, where the RFC Editor hosts it
+    /// (`RFCEditorEndpoints.document`): opened in the browser, or saved to Downloads
+    /// with Option.
+    case file(DocumentID, FileFormat)
+    /// Keywords, set as tags, each searching the library for itself.
+    case keywords([String])
   }
 
   public init(_ metadata: RFCMetadata, in index: RFCIndex?) {
@@ -62,15 +85,16 @@ public struct DocumentInfo: Equatable, Sendable {
     isObsolete = metadata.isObsolete
     facts = Self.facts(metadata)
     sections = [
-      Self.section("Authors", metadata.authors.map(Self.author)),
-      Self.section("Relationships", Self.relationships(metadata, index: index)),
-      Self.section("Links", Self.links(metadata)),
-      Self.section("Details", Self.details(metadata)),
+      Self.section("Authors", .list, metadata.authors.map(Self.author)),
+      Self.section("Relationships", .list, Self.relationships(metadata, index: index)),
+      Self.section("Links", .card, Self.links(metadata)),
+      Self.section("Formats", .card, Self.formats(metadata)),
+      Self.section("Details", .list, Self.details(metadata)),
     ].compactMap { $0 }
   }
 
-  private static func section(_ title: String, _ rows: [Row]) -> Section? {
-    rows.isEmpty ? nil : Section(title: title, rows: rows)
+  private static func section(_ title: String, _ style: Style, _ rows: [Row]) -> Section? {
+    rows.isEmpty ? nil : Section(title: title, style: style, rows: rows)
   }
 
   private static func facts(_ metadata: RFCMetadata) -> [Fact] {
@@ -82,7 +106,8 @@ public struct DocumentInfo: Equatable, Sendable {
     let stream = metadata.stream == .independent ? "Independent" : metadata.stream.displayName
     facts.append(Fact(value: stream, label: "Stream"))
     if let group = metadata.namedWorkingGroup {
-      facts.append(Fact(value: group, label: "Working Group"))
+      // "Working Group" is wider than a quarter of the panel.
+      facts.append(Fact(value: group, label: "Group"))
     }
     return facts
   }
@@ -135,6 +160,22 @@ public struct DocumentInfo: Equatable, Sendable {
     return rows
   }
 
+  /// Each format the RFC Editor publishes, set as the links are: the file where it
+  /// is hosted, which the reader already keeps its own copy of the text of.
+  private static func formats(_ metadata: RFCMetadata) -> [Row] {
+    metadata.formats.map { format in
+      let (label, symbol) =
+        switch format {
+        case .text: ("Plain Text", "doc.plaintext")
+        case .html: ("HTML", "doc.richtext")
+        case .xml: ("XML", "chevron.left.forwardslash.chevron.right")
+        case .pdf: ("PDF", "doc.text")
+        case .postScript: ("PostScript", "doc.text")
+        }
+      return Row(label: label, value: .file(metadata.id, format), symbol: symbol)
+    }
+  }
+
   /// What the header and the strip leave out. The status it was published with
   /// only where it differs from today's: that is the interesting case, a Proposed
   /// Standard since advanced, or a document since made historic.
@@ -145,17 +186,54 @@ public struct DocumentInfo: Equatable, Sendable {
       rows.append(Row(label: "Published as", value: .text(original.displayName)))
     }
     if let area = metadata.area {
-      rows.append(Row(label: "Area", value: .text(area)))
+      rows.append(Row(label: "Area", value: .text(areaName(area))))
     }
     if !metadata.keywords.isEmpty {
-      rows.append(Row(label: "Keywords", value: .text(metadata.keywords.joined(separator: ", "))))
-    }
-    if !metadata.formats.isEmpty {
-      rows.append(
-        Row(
-          label: "Formats", value: .text(metadata.formats.map(\.rawValue).joined(separator: ", "))))
+      rows.append(Row(label: "Keywords", value: .keywords(metadata.keywords)))
     }
     return rows
+  }
+
+  /// The status in a sentence: the name alone is jargon to most readers.
+  private static func summary(of status: PublicationStatus) -> String? {
+    switch status {
+    case .internetStandard:
+      "The IETF's highest maturity level: a stable standard, widely implemented and deployed."
+    case .draftStandard:
+      "A standard at a maturity level the IETF has since retired, between Proposed and Internet Standard."
+    case .proposedStandard:
+      "A standard the IETF has approved. Most of the Internet's standards remain at this level."
+    case .bestCurrentPractice:
+      "Guidance the IETF recommends, for operating the Internet or for its own processes."
+    case .informational:
+      "Published for information. Not a standard, and not a recommendation."
+    case .experimental:
+      "Published for experimentation and evaluation. Not a standard."
+    case .historic:
+      "Superseded or no longer in use, kept for the record."
+    case .unknown:
+      nil
+    }
+  }
+
+  /// An area's name for the short code the index records it by, or the code in
+  /// capitals, as the IETF writes it, for one this list does not know.
+  public static func areaName(_ code: String) -> String {
+    switch code.lowercased() {
+    case "app": "Applications"
+    case "art": "Applications and Real-Time"
+    case "gen": "General"
+    case "int": "Internet"
+    case "ops": "Operations and Management"
+    case "rai": "Real-Time Applications and Infrastructure"
+    case "rtg": "Routing"
+    case "sec": "Security"
+    case "sub": "Sub-IP"
+    case "tsv": "Transport"
+    case "usv": "User Services"
+    case "wit": "Web and Internet Transport"
+    default: code.uppercased()
+    }
   }
 }
 
