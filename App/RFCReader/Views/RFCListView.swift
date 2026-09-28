@@ -247,7 +247,13 @@ struct RFCListView: View {
     private var optionsMenu: some View {
       @Bindable var navigation = navigation
       return Menu {
-        if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
+        if case .collection = navigation.filter {
+          Picker("Sort", selection: $navigation.listOptions.collectionSort) {
+            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { sort in
+              Text(sort.title)
+            }
+          }
+        } else if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
           Picker("Sort", selection: $navigation.listOptions.order) {
             ForEach(ListOptions.Order.allCases, id: \.self) { order in
               Text(order.title)

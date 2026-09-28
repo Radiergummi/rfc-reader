@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -132,6 +133,15 @@ struct DocumentCommands: Commands {
         }
       }
     #endif
+    #if os(macOS)
+      // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
+      // list's view options before.
+      CommandGroup(after: .toolbar) {
+        if let navigation {
+          ListViewOptions(navigation: navigation)
+        }
+      }
+    #endif
     CommandGroup(before: .sidebar) {
       #if os(macOS)
         // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
@@ -203,6 +213,27 @@ struct DocumentCommands: Commands {
 }
 
 #if os(macOS)
+  /// View > Sort By and View > Show Obsolete, for the key window's list (#349).
+  private struct ListViewOptions: View {
+    @Bindable var navigation: NavigationModel
+
+    var body: some View {
+      Section {
+        if case .collection = navigation.filter {
+          Picker("Sort By", selection: $navigation.listOptions.collectionSort) {
+            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+          }
+        } else {
+          Picker("Sort By", selection: $navigation.listOptions.order) {
+            ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+          }
+          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.searchText))
+        }
+        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      }
+    }
+  }
+
   /// One find-bar action, sent to the first responder that can perform it.
   ///
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off
