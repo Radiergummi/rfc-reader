@@ -1010,6 +1010,45 @@ struct LegacyTextCorpusFindingsTests {
     #expect(LegacyTextParser.appendixHeading(in: "D.2. Second Example")?.number == "D.2")
   }
 
+  /// A catalogue entry is a number, a dash and the entry, with anything further hung
+  /// past the number (#204): the RFC index of RFC 1012, the standards summaries'
+  /// `2352 - A Convention ...`, numbered steps, value tables. The lines here are
+  /// written in that shape, not quoted.
+  @Test func `a numbered catalogue entry is split into its number and its text`() throws {
+    let one = try #require(
+      LegacyTextParser.catalogueEntries([
+        "   7   - Someone, A., \"A Title\", RFC 7 (NIC 101),",
+        "         Somewhere, 1 April 1969.",
+      ]))
+    #expect(one.map(\.term) == ["7"])
+    #expect(one.first?.text == "Someone, A., \"A Title\", RFC 7 (NIC 101), Somewhere, 1 April 1969.")
+
+    let two = try #require(
+      LegacyTextParser.catalogueEntries([
+        "      0 - Reserved",
+        "      1 - First Value",
+      ]))
+    #expect(two.map(\.term) == ["0", "1"])
+    #expect(two.map(\.text) == ["Reserved", "First Value"])
+  }
+
+  @Test func `lines that only look like catalogue entries are not`() {
+    // Arithmetic, not an entry.
+    #expect(LegacyTextParser.catalogueEntries(["   3 - 2 leaves one"]) == nil)
+    // A continuation must hang past the number.
+    #expect(LegacyTextParser.catalogueEntries(["   1 - Title", "back at the margin"]) == nil)
+    // Nothing after the dash.
+    #expect(LegacyTextParser.catalogueEntries(["   1 -"]) == nil)
+    // Prose that mentions a number and a dash.
+    #expect(LegacyTextParser.catalogueEntries(["   The value 1 - the default - is kept."]) == nil)
+    // Entries at two different indents.
+    #expect(LegacyTextParser.catalogueEntries(["   1 - One", "      2 - Two"]) == nil)
+  }
+
+  @Test func `a lettered catalogue number keeps its letter`() {
+    #expect(LegacyTextParser.catalogueEntries(["   17a - Amended Entry"])?.first?.term == "17a")
+  }
+
   /// A colon number counts only where the number before it, or the one it is under, is
   /// a heading number too: without that, a document with one stray `11:` and no `11.`
   /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the
