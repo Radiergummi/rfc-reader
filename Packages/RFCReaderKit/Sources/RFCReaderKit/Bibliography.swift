@@ -33,6 +33,17 @@ public struct ReferenceGroup: Identifiable, Sendable {
   }
 }
 
+extension [ReferenceGroup] {
+  /// The entry a citation names by `anchor`, from whichever bibliography holds it:
+  /// what a preview of the citation shows, since the body leaves the entries out.
+  public func entry(anchor: String) -> Reference? {
+    for group in self {
+      if let entry = group.entries.first(where: { $0.anchor == anchor }) { return entry }
+    }
+    return nil
+  }
+}
+
 extension Reference {
   /// The entry's `<annotation>`, for the panel to show under its provenance line,
   /// or nil when it has none. External links stay links, since the usual annotation

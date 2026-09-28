@@ -15,6 +15,9 @@ struct RFCTextView: View {
   // library handed to it explicitly, the same way it is here.
   @Environment(LibraryModel.self) private var library
   let built: BuiltDocument
+  /// The document's bibliographies, which the body leaves out: what a citation
+  /// of an entry previews (#198).
+  let bibliography: [ReferenceGroup]
   /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
@@ -34,6 +37,7 @@ struct RFCTextView: View {
 
   init(
     built: BuiltDocument,
+    bibliography: [ReferenceGroup],
     lastVisibleAnchor: VisibleAnchorBox,
     scrollTarget: ReaderScrollTarget?,
     onScrollHandled: @escaping () -> Void,
@@ -45,6 +49,7 @@ struct RFCTextView: View {
     @ViewBuilder header: () -> some View
   ) {
     self.built = built
+    self.bibliography = bibliography
     self.lastVisibleAnchor = lastVisibleAnchor
     self.scrollTarget = scrollTarget
     self.onScrollHandled = onScrollHandled
@@ -61,6 +66,7 @@ struct RFCTextView: View {
       Representable(
         inputs: ReaderInputs(
           built: built,
+          bibliography: bibliography,
           lastVisibleAnchor: lastVisibleAnchor,
           scrollTarget: scrollTarget,
           onScrollHandled: onScrollHandled,
@@ -93,6 +99,7 @@ struct ReaderScrollTarget: Equatable {
 /// is added once instead of in both platform structs and both update bodies.
 struct ReaderInputs {
   let built: BuiltDocument
+  let bibliography: [ReferenceGroup]
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
@@ -110,6 +117,7 @@ struct ReaderInputs {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
+    coordinator.bibliography = bibliography
     coordinator.onToolbarTitle = onToolbarTitle
     if coordinator.heading !== heading {
       coordinator.heading = heading
