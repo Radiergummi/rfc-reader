@@ -260,6 +260,22 @@ final class LibraryModel {
     return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
+  /// The Go to RFC palette's candidates for what was typed, best first.
+  ///
+  /// Off the main actor: a short query like `http` scans every title and abstract,
+  /// measured at 107 ms (#22), and this runs as the reader types.
+  func suggestions(for query: String, limit: Int) async -> [DocumentID] {
+    guard let search else { return [] }
+    return await Self.suggestions(in: search, for: query, limit: limit)
+  }
+
+  @concurrent
+  private static func suggestions(
+    in search: IndexSearch, for query: String, limit: Int
+  ) async -> [DocumentID] {
+    search.search(query, limit: limit).map(\.id)
+  }
+
   // MARK: - Scene routing
 
   /// The open scenes, most recently used first.

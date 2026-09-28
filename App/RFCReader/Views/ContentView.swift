@@ -144,64 +144,23 @@ struct EmptyDetailView: View {
   }
 }
 
-/// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, or any RFC Editor / Datatracker URL.
-struct GoToDocumentSheet: View {
-  @Environment(LibraryModel.self) private var library
-  @Environment(NavigationModel.self) private var navigation
-  @Environment(\.dismiss) private var dismiss
-  @State private var input = ""
-  @FocusState private var focused: Bool
+#if !os(macOS)
+  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, or any RFC Editor / Datatracker URL.
+  ///
+  /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
+  /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
+  struct GoToDocumentSheet: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(\.dismiss) private var dismiss
+    @State private var input = ""
+    @FocusState private var focused: Bool
 
-  private var resolved: RFCLink? {
-    DocumentReference.link(from: input)
-  }
-
-  var body: some View {
-    #if os(macOS)
-      macOSBody
-    #else
-      iOSBody
-    #endif
-  }
-
-  #if os(macOS)
-    /// Laid out by hand rather than by `Form`, because a form in a sheet is a
-    /// settings window's layout in a dialog's frame: it puts the field's label in a
-    /// column of its own — hard against the sheet's left edge, with no margin to sit
-    /// in — and stretches the field to the opposite edge. What a macOS dialog does
-    /// instead is what this does: 20 pt of margin all round, the question at the
-    /// top, the default button bottom trailing with Cancel to its left.
-    private var macOSBody: some View {
-      VStack(alignment: .leading, spacing: 10) {
-        Text("Go to RFC")
-          .font(.headline)
-        TextField("RFC number or link", text: $input)
-          .textFieldStyle(.roundedBorder)
-          .focused($focused)
-          .onSubmit(open)
-        // Always present, so the sheet does not grow and shrink under the
-        // pointer as what was typed starts and stops resolving.
-        status
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        HStack(spacing: 12) {
-          Spacer()
-          Button("Cancel", role: .cancel) { dismiss() }
-            .keyboardShortcut(.cancelAction)
-          Button("Open", action: open)
-            .keyboardShortcut(.defaultAction)
-            .disabled(resolved == nil)
-        }
-        .padding(.top, 6)
-      }
-      .padding(20)
-      .frame(width: 420)
-      .onAppear { focused = true }
+    private var resolved: RFCLink? {
+      DocumentReference.link(from: input)
     }
-  #else
-    private var iOSBody: some View {
+
+    var body: some View {
       NavigationStack {
         Form {
           TextField("RFC number or link", text: $input)
@@ -221,25 +180,25 @@ struct GoToDocumentSheet: View {
       }
       .onAppear { focused = true }
     }
-  #endif
 
-  /// What the typed text resolves to, or what it would take to resolve: the one
-  /// line under the field that turns a blind text box into something that tells
-  /// the reader whether it understood them.
-  @ViewBuilder
-  private var status: some View {
-    if let link = resolved, let metadata = library.metadata(link.id) {
-      Text("\(link.id.displayName) — \(metadata.title)")
-    } else if !input.isEmpty {
-      Text("Not something I recognise as an RFC.")
-    } else {
-      Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
+    /// What the typed text resolves to, or what it would take to resolve: the one
+    /// line under the field that turns a blind text box into something that tells
+    /// the reader whether it understood them.
+    @ViewBuilder
+    private var status: some View {
+      if let link = resolved, let metadata = library.metadata(link.id) {
+        Text("\(link.id.displayName) — \(metadata.title)")
+      } else if !input.isEmpty {
+        Text("Not something I recognise as an RFC.")
+      } else {
+        Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
+      }
+    }
+
+    private func open() {
+      guard let link = resolved else { return }
+      library.open(link, activation: .current, in: navigation)
+      dismiss()
     }
   }
-
-  private func open() {
-    guard let link = resolved else { return }
-    library.open(link, activation: .current, in: navigation)
-    dismiss()
-  }
-}
+#endif
