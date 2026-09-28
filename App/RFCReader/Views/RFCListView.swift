@@ -77,6 +77,9 @@ struct RFCListView: View {
         filter: navigation.filter
       )
       .tag(rfc.id)
+      // An item provider rather than `.draggable`: it cooperates with `.onMove`,
+      // which a collection's own list also uses (#349).
+      .itemProvider { NSItemProvider(object: rfc.id.fileStem as NSString) }
       #if os(macOS)
         .modifier(
           MacRowActions(

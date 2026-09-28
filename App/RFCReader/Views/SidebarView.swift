@@ -295,6 +295,17 @@ struct SidebarView: View {
         accessories(count: library.count(of: entry))
       #endif
     }
+    // List rows dropped here join the collection at its end.
+    .dropDestination(for: String.self) { keys, _ in
+      let documents = keys.compactMap(DocumentID.init(fileStem:))
+      guard !documents.isEmpty else { return false }
+      library.editCollections { context in
+        for document in documents {
+          try CollectionStore.add(document, to: entry.id, in: context)
+        }
+      }
+      return true
+    }
     .tag(filter)
     .contextMenu {
       Button("Rename…") { navigation.collectionEditor = .edit(entry.id) }
