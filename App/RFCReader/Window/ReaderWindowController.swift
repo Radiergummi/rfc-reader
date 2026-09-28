@@ -534,6 +534,9 @@
   }
 
   /// What the detail column of `NavigationSplitView` used to hold.
+  ///
+  /// The collection editor's sheet is declared here rather than on the scene, because
+  /// a presentation has to be declared by a view that is actually in the window.
   struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation

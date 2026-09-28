@@ -145,7 +145,7 @@ final class NavigationModel: Identifiable {
   // MARK: - Navigation
 
   /// A link from outside the current document: the sidebar, a deep link, a citation
-  /// in the prose, or the Go to RFC sheet.
+  /// in the prose, or Go to RFC.
   func open(_ link: RFCLink, in index: RFCIndex?) {
     var id = link.id
     // BCP/STD links open their first member RFC.
