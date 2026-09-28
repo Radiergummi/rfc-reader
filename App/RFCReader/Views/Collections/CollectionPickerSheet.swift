@@ -6,10 +6,11 @@ import SwiftUI
 /// a result toggles it, and the sheet stays open for more.
 struct CollectionPickerSheet: View {
   let collection: UUID
+  /// The presenter's, so a removal can still be undone once the sheet is gone.
+  let undoManager: UndoManager?
 
   @Environment(LibraryModel.self) private var library
   @Environment(\.dismiss) private var dismiss
-  @Environment(\.undoManager) private var undoManager
   @State private var query = ""
   @State private var limit = ListWindow.page
 

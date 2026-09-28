@@ -181,7 +181,11 @@ struct RFCListView: View {
         }
       }
     }
-    .sheet(item: $addingTo) { CollectionPickerSheet(collection: $0.id) }
+    .sheet(item: $addingTo) {
+      // The list's undo manager, not the sheet's: on a Mac the sheet is a window
+      // of its own, and what it registered went with it when it closed.
+      CollectionPickerSheet(collection: $0.id, undoManager: undoManager)
+    }
     #if os(macOS)
       // Delete takes the selected document out of the collection shown.
       .onDeleteCommand {
