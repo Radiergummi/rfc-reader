@@ -66,12 +66,4 @@ public struct DocumentConverter: Sendable {
     }
     return Conversion(xml: xml, report: report, prose: prose)
   }
-
-  /// The text of a legacy RFC file. 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather
-  /// than UTF-8 (accented names, curly quotes).
-  public static func text(decoding bytes: Data) -> String {
-    String(data: bytes, encoding: .utf8)
-      ?? String(data: bytes, encoding: .windowsCP1252)
-      ?? String(decoding: bytes, as: UTF8.self)
-  }
 }
