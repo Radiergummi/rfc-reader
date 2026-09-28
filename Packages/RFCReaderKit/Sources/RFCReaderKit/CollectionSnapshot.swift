@@ -31,11 +31,21 @@ public struct CollectionSnapshot: Equatable, Sendable {
 
   /// In sidebar order.
   public let collections: [Entry]
+  /// The collections each document is in: asked once per list row, by the Add to
+  /// Collection menus' checkmarks.
+  private let memberships: [DocumentID: Set<UUID>]
 
   public static let empty = CollectionSnapshot(collections: [])
 
   public init(collections: [Entry]) {
     self.collections = collections
+    var memberships: [DocumentID: Set<UUID>] = [:]
+    for entry in collections {
+      for document in entry.members {
+        memberships[document, default: []].insert(entry.id)
+      }
+    }
+    self.memberships = memberships
   }
 
   /// From the store's rows: collections in `(position, createdAt, identifier)`
@@ -47,11 +57,12 @@ public struct CollectionSnapshot: Equatable, Sendable {
       ($0.position, $0.addedAt, $0.documentKey) < ($1.position, $1.addedAt, $1.documentKey)
     }
     var membersByCollection: [UUID: [DocumentID]] = [:]
+    var seen: Set<Pair> = []
     for item in orderedItems {
       guard let collection = item.collectionIdentifier, let document = item.document else {
         continue
       }
-      if membersByCollection[collection]?.contains(document) != true {
+      if seen.insert(Pair(collection: collection, document: document)).inserted {
         membersByCollection[collection, default: []].append(document)
       }
     }
@@ -59,11 +70,18 @@ public struct CollectionSnapshot: Equatable, Sendable {
       ($0.position, $0.createdAt, $0.identifier.uuidString)
         < ($1.position, $1.createdAt, $1.identifier.uuidString)
     }
-    self.collections = orderedCollections.map {
-      Entry(
-        id: $0.identifier, name: $0.name, color: $0.color,
-        members: membersByCollection[$0.identifier] ?? [])
-    }
+    self.init(
+      collections: orderedCollections.map {
+        Entry(
+          id: $0.identifier, name: $0.name, color: $0.color,
+          members: membersByCollection[$0.identifier] ?? [])
+      })
+  }
+
+  /// A document in a collection, for keeping each document once per collection.
+  private struct Pair: Hashable {
+    let collection: UUID
+    let document: DocumentID
   }
 
   public subscript(_ identifier: UUID) -> Entry? {
@@ -72,7 +90,7 @@ public struct CollectionSnapshot: Equatable, Sendable {
 
   /// The collections `document` is in, for the Add to Collection menus' checkmarks.
   public func collections(containing document: DocumentID) -> Set<UUID> {
-    Set(collections.filter { $0.members.contains(document) }.map(\.id))
+    memberships[document] ?? []
   }
 
   /// The store's collections, now. Only the fields a snapshot reads: this runs
