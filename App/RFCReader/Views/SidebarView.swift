@@ -63,39 +63,59 @@ struct SidebarView: View {
       .onAppear {
         if horizontalSizeClass == .compact { navigation.searchText = "" }
       }
-      // A list of places, titled and headed the way Notes' folders are (#343).
+      // A list of places, titled the way Notes' folders are (#343).
       .navigationBarTitleDisplayMode(.large)
-      .headerProminence(.increased)
     #endif
     .labelStyle(SidebarLabelStyle())
   }
 
   @ViewBuilder
   private var places: some View {
-    Section("Library", isExpanded: $libraryExpanded) {
+    Section(isExpanded: $libraryExpanded) {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
+    } header: {
+      header("Library")
     }
-    Section("Browse", isExpanded: $browseExpanded) {
+    Section(isExpanded: $browseExpanded) {
       row(.all)
       row(.standards)
       row(.bestCurrentPractice)
       ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
         row(.stream(stream))
       }
+    } header: {
+      header("Browse")
     }
     if !library.topWorkingGroups.isEmpty {
-      Section("Working Groups", isExpanded: $workingGroupsExpanded) {
+      Section(isExpanded: $workingGroupsExpanded) {
         ForEach(library.topWorkingGroups, id: \.self) { group in
           row(.workingGroup(group))
         }
+      } header: {
+        header("Working Groups")
       }
     }
     // Not on iOS, where the sidebar is a list of places to go and this puts
     // documents among them (#343). It is the top of All RFCs anyway.
     #if os(macOS)
       justPublished
+    #endif
+  }
+
+  /// Bold and title-sized on iOS, as Notes heads its folder groups (#343).
+  /// `.headerProminence(.increased)` does not reach a sidebar list's collapsible
+  /// headers: measured on an iPhone, they stayed small and grey.
+  private func header(_ title: String) -> some View {
+    #if os(macOS)
+      Text(title)
+    #else
+      Text(title)
+        .font(.title2.bold())
+        // The label colour itself: `.primary` resolves against the header's own
+        // style, which is grey.
+        .foregroundStyle(Color(uiColor: .label))
     #endif
   }
 
