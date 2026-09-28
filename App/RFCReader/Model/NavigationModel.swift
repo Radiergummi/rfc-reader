@@ -6,11 +6,12 @@ import SwiftUI
 /// Everything one tab is looking at: which document, which sidebar filter, what was
 /// typed into search, and the back/forward stack that got it here.
 ///
-/// One of these per scene, held as `@State` in `ContentView`, which is what makes a
-/// tab a tab. All of this used to live on `LibraryModel.shared`, so every window and
-/// tab in the process shared one selection: opening an RFC in one tab switched every
-/// other tab to it. `LibraryModel` keeps only what genuinely is process-wide — the
-/// index, the document cache, the search index.
+/// One of these per tab — held by its `ReaderWindowController` on macOS, and as
+/// `@State` in `ContentView` on iOS — which is what makes a tab a tab. All of this
+/// used to live on `LibraryModel.shared`, so every window and tab in the process
+/// shared one selection: opening an RFC in one tab switched every other tab to it.
+/// `LibraryModel` keeps only what genuinely is process-wide — the index, the
+/// document cache, the search index.
 ///
 /// The stack itself is `NavigationHistory` in RFCReaderKit, under test. This type is
 /// the observable shell around it, plus the bookkeeping SwiftUI needs.

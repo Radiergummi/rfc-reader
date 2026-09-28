@@ -74,7 +74,7 @@ Design choices worth knowing:
 
 **Serializing back** (`RFCXMLSerializer`): the document model can be written out as RFCXML v3 using the RFC Editor's conventions (`pn` part numbers, anchors). This is how the corpus pipeline turns legacy text into XML once, offline, so the app needs only the XML path at runtime. Cross references to documents without a bibliography entry become `<eref>`s to rfc-editor.org, which the parser resolves back into document references; the round trip is tested on both a text-derived and a native XML document.
 
-The index (`RFCIndexParser`) is different: 14 MB and flat, so it is a streaming SAX state machine rather than a DOM. About one second for ~9,850 entries.
+The index (`RFCIndexParser`) is different: 14 MB and flat, so it is a streaming SAX state machine rather than a DOM. About one second for its 9,842 RFCs (`DATA_PIPELINE.md` has the counts, dated).
 
 Both XML parsers ignore a parser error reported *after* the root element has closed. swift-corelibs-foundation emits one on large inputs even for valid XML (verified with `xmllint`); a truncated file still fails because its root never closes, and there is a test for that.
 
@@ -102,7 +102,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
 
 ## Testing
 
-`swift test --package-path Packages/RFCKit` runs 65 Swift Testing cases in about 0.1 s on real fixtures: the full RFC 8999 XML, RFCs 1149, 2119 and 5234 as text, a trimmed index, the RSS feed and a per-RFC JSON record. Each parser has a truncated-input test. `swift test --package-path Packages/RFCReaderKit` (`make test-app`) runs 70 Swift Testing cases over the app-side package's own suite — `DocumentTextBuilder`, the chip and completeness guards, `FragmentGeometry`, `ReaderLayout`, platform helpers — against the same harness; it needs an Apple SDK, so it is not part of `make check`.
+`swift test --package-path Packages/RFCKit` runs RFCKit's Swift Testing suites in a few seconds on the committed fixtures: RFC documents in both formats, a trimmed index, the RSS feed and a per-RFC JSON record. Each parser has a truncated-input test. `swift test --package-path Packages/RFCReaderKit` (`make test-app`) runs the app-side package's own suites — `DocumentTextBuilder`, the chip and completeness guards, `FragmentGeometry`, `ReaderLayout`, platform helpers — against the same harness; it needs an Apple SDK, so it is not part of `make check`.
 
 The App target has no test bundle of its own, so **nothing that can be tested is allowed to live there**. The rule that keeps this honest: anything in the reader that is a pure function of its inputs belongs in `RFCReaderKit`, and the App target keeps only what genuinely needs UIKit/AppKit object graphs — the two representables, the coordinator's view wiring, and drawing. Where a decoration goes (`FragmentGeometry`), how wide the column is (`ReaderLayout`) and what the text says (`DocumentTextBuilder`) are all in the package, under test. This is not cosmetic: both of the reader's hardest bugs were index arithmetic that had been written in the App target, where the only thing a test could do was re-implement it and check the copy.
 

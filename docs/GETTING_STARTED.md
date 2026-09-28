@@ -1,73 +1,39 @@
 # Getting started
 
-You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26). The Swift package alone builds with any Swift 6.3 toolchain, including on Linux.
-
-## 1. Run the core package tests first
+You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26), [XcodeGen](https://github.com/yonaskolb/XcodeGen) for the project and [SwiftLint](https://github.com/realm/SwiftLint) for `make lint`; swift-format comes with the toolchain. RFCKit alone builds with any Swift 6.3 toolchain, including on Linux.
 
 ```sh
-swift test --package-path Packages/RFCKit
+brew install xcodegen swiftlint
+make check      # lint, build and test both Swift packages: the gate before committing
+make run        # generate the Xcode project, build the macOS app and launch it
 ```
 
-Forty-plus tests should pass in well under a second. This is the fast loop: parsers, search, citations and link handling are all here and need no simulator.
+Everything goes through the `Makefile`; `CLAUDE.md` has the table of its targets — the app-side test suite (`make test-app`), the iOS builds, formatting, and the corpus pipeline. `RFCReader.xcodeproj` is generated from `project.yml` (`make xcodeproj`) and is not committed: edit `project.yml`, never the project.
 
-## 2. Create the Xcode project
+`project.yml` signs with the maintainer's team, so outside it `make run` fails at signing. Either set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` there to your own, or build unsigned, as CI does: `make run CODE_SIGNING_ALLOWED=NO`.
 
-### Option A: XcodeGen (recommended, reproducible)
-
-```sh
-brew install xcodegen
-xcodegen generate
-open RFCReader.xcodeproj
-```
-
-`project.yml` signs with the maintainer's team. To build under your own, set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` to your reverse-DNS names and team ID (Xcode ▸ Settings ▸ Accounts shows it) before generating, or build unsigned with `make build-app CODE_SIGNING_ALLOWED=NO`. The generated `.xcodeproj`, `Info.plist` and entitlements file are git-ignored; `project.yml` is the source of truth. If you would rather commit a hand-maintained project, delete those three lines from `.gitignore`.
-
-### Option B: by hand in Xcode
-
-1. File ▸ New ▸ Project ▸ **Multiplatform ▸ App**. Product name `RFCReader`, interface SwiftUI, storage SwiftData, language Swift. Save it in the repository root.
-2. Delete the generated `ContentView.swift`, `RFCReaderApp.swift` and `Item.swift`, then drag the `App/RFCReader` folder into the target (choose "Create folder references" or "Create groups", either works).
-3. File ▸ Add Package Dependencies ▸ **Add Local…** ▸ pick `Packages/RFCKit` ▸ add the `RFCKit` library to the `RFCReader` target.
-4. Target ▸ Info ▸ URL Types: add a type with scheme `rfc`.
-5. Target ▸ Signing & Capabilities: App Sandbox with **Outgoing Connections (Client)** for macOS.
-6. Build and run. The first launch downloads the 14 MB index; give it a few seconds.
-
-## 3. Bundle an index snapshot (optional, recommended before shipping)
+The first launch downloads the 14 MB RFC index. An `rfc-index.xml` added to the app's resources is used until the download lands, so a build that bundles one works offline from the start:
 
 ```sh
 curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 ```
 
-Add the file to the target's resources. `DocumentStore` picks it up when no downloaded index exists, so first launch works offline and the download becomes a background refresh.
-
-## 4. Things to try once it runs
+## Things to try once it runs
 
 - Press ⌘L, type `9110`, press Return.
-- In RFC 9110 tap any `[RFC7231]`; note the red "Obsoleted by RFC 9110" banner on the old document, and tap it to come back.
-- Open RFC 1149 (text only) and toggle *Original Text* from the ⋯ menu to compare the reflowed rendering with the file as published.
+- In RFC 9110 click any `[RFC7231]`; note the "Obsoleted by RFC 9110" banner on the old document, and click it to come back.
+- Open RFC 1149 (text only) and choose *Original Text* from the ⋯ menu to compare the reflowed rendering with the file as published.
 - Search `wg:httpbis status:current cache`.
 - From Terminal: `open "rfc://9110#section-9.3.1"`.
-- Ask Siri "Open RFC 9000 in RFC Reader" (App Shortcuts need one launch to register).
+- Ask Siri "Open an RFC in RFC Reader"; it asks which number. (App Shortcuts need one launch to register. Siri cannot hear the number in the phrase itself until there is an `RFCEntity`, #192.)
 
-## 5. Where to go next
+## Where to go next
 
-`docs/VISION.md` has the feature tiers; `docs/ARCHITECTURE.md` explains the model the UI renders and the known gaps. Good first tasks, roughly in order of payoff:
+`docs/VISION.md` has the feature tiers and the principles the UI is held to; `docs/ARCHITECTURE.md` is the decision record for the document model, the two parsers and the reader; `docs/DATA_PIPELINE.md` covers the corpus packs. `CLAUDE.md` lists the standing constraints that are easy to break by accident, and how to work on the legacy text heuristics. Work in progress is tracked in the GitHub issues.
 
-1. Typography pass on `DocumentView` and `BlockView` (fonts, measure, spacing, dark mode).
-2. Reference peek popover on cross-reference links.
-3. Definition-list detection in `LegacyTextParser` (a test first; no RFC text is committed, so `CLAUDE.md` says where its input comes from).
-4. Spotlight indexing of the index in `LibraryModel.apply`.
-5. iCloud sync: add the iCloud capability and a CloudKit container; SwiftData does the rest.
+## The corpus pipeline
 
-## Running the corpus pipeline
-
-```sh
-swift build -c release --package-path Tools/corpus-build
-Tools/corpus-build/.build/release/corpus-build fetch --out corpus --limit 20
-Tools/corpus-build/.build/release/corpus-build convert --in corpus/text.noindex --out corpus/xml.noindex --report corpus/report.json
-Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version dev
-```
-
-Drop `--limit` for the full 8,464 legacy RFCs (about 450 MB, twenty minutes at the default concurrency). `docs/DATA_PIPELINE.md` explains the packs this produces.
+`make corpus` fetches, converts and writes the manifest for 20 legacy and 20 RFCXML documents; `make corpus CORPUS_LIMIT=` does all of them (about 450 MB, twenty minutes). `docs/DATA_PIPELINE.md` explains the stages and the packs they produce.
 
 ## Working on RFCKit from Linux or CI
 

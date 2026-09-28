@@ -4,18 +4,19 @@
 
 ## The facts that shape everything
 
-Numbers from the RFC Editor index as of 20 September 2026.
+Numbers from the RFC Editor index as of 20 September 2026, and unchanged on 28 September. The other documents quote these.
 
 | | RFCs | Pages | Text size (est.) |
 |---|---|---|---|
 | Total | 9,842 | 245,324 | ~530 MB |
 | With RFCXML v3 source (RFC 8650 onward, every one of them) | 1,378 | 36,462 | |
 | Legacy, text only (everything before RFC 8650) | 8,464 | 208,862 | ~450 MB |
+| … of which a plain-text file exists (the rest are PDF only, #207) | 8,457 | | |
 
 Two consequences:
 
 1. **The legacy set is closed.** No RFC below 8650 will ever gain XML, and no new RFC will ever lack it. Whatever we do to the legacy set is a one-time job, plus an occasional re-run when the heuristics improve.
-2. **Structure for legacy RFCs must be recovered heuristically**, and heuristics belong where they can be run over all 8,464 files at once, diffed against the previous run, and hand-corrected. That is a pipeline, not a phone.
+2. **Structure for legacy RFCs must be recovered heuristically**, and heuristics belong where they can be run over all 8,457 files at once, diffed against the previous run, and hand-corrected. That is a pipeline, not a phone.
 
 ## Why the RFC Editor never made this XML
 
@@ -91,7 +92,7 @@ Rendering is never precomputed. Fonts, widths, Dynamic Type and dark mode differ
 | `index` | Compact form of the RFC Editor index: metadata for all documents, series groupings | 14 MB XML | ~1 MB | **In the app bundle**, refreshed at runtime from the RSS feed and the live index |
 | `graph` | Citation graph (who cites whom, from every References section), obsoletes/updates edges | a few MB | <1 MB | In the bundle or first optional pack |
 | `errata` | Normalized errata: RFC, section, status, original and corrected text | 12 MB JSON | <1 MB | Bundle or fetched on first use |
-| `legacy-xml` | RFCXML for the 8,464 legacy RFCs | ~480 MB | ~100 MB | Optional download, "Read everything offline" |
+| `legacy-xml` | RFCXML for the 8,457 legacy RFCs with a text file | ~480 MB | ~100 MB | Optional download, "Read everything offline" |
 | `modern-xml` | Mirror of the RFC Editor's XML for RFCs ≥ 8650 | ~60 MB | ~15 MB | Optional; otherwise fetched per document |
 | `fts` | SQLite FTS5 database, one row per section, BM25 ranking, over the whole corpus | 150–250 MB | ~80 MB | Optional, requires the XML packs |
 | `embeddings-abstracts` | One vector per RFC abstract | ~10 MB | ~10 MB | Optional, enables semantic search over the whole series |
@@ -118,7 +119,7 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 
 `.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest`, compresses the packs and attaches them to a release. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack simply reproduces byte-for-byte unless the code changed.
 
-The full text fetch is about 450 MB and 8,464 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
+The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
 
 ## Repository layout for the data
 
