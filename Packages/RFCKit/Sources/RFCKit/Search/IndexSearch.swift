@@ -64,7 +64,7 @@ public struct IndexSearch: Sendable {
   }
 
   /// Parses `wg:httpbis status:std author:fielding year:2020-2022 tls` into filters plus free text.
-  public static func parseQuery(_ query: String) -> (text: String, filters: SearchFilters) {
+  public static func parseQuery(_ query: String) -> SearchQuery.Parsed {
     var filters = SearchFilters()
     var words: [String] = []
     for token in query.split(separator: " ") {
@@ -110,12 +110,12 @@ public struct IndexSearch: Sendable {
         words.append(String(token))
       }
     }
-    return (words.joined(separator: " "), filters)
+    return SearchQuery.Parsed(text: words.joined(separator: " "), filters: filters)
   }
 
   public func search(_ query: String, limit: Int = 100) -> [SearchHit] {
-    let (text, filters) = Self.parseQuery(query)
-    return search(text: text, filters: filters, limit: limit)
+    let parsed = Self.parseQuery(query)
+    return search(text: parsed.text, filters: parsed.filters, limit: limit)
   }
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
@@ -133,10 +133,11 @@ public struct IndexSearch: Sendable {
     // would cost 9,842 allocations per term and undo the point of the exercise.
     let needles = terms.map(SearchText.init)
     let lowered = SearchText(trimmed.lowercased())
+    let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]
-      guard matches(rfc, filters: filters) else { continue }
+      guard filter.matches(entry, rfc: rfc) else { continue }
       if terms.isEmpty {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
@@ -152,19 +153,35 @@ public struct IndexSearch: Sendable {
     return Array(hits.prefix(limit))
   }
 
-  private func matches(_ rfc: RFCMetadata, filters: SearchFilters) -> Bool {
-    if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
-    if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
-    if let group = filters.workingGroup, rfc.workingGroup?.lowercased() != group { return false }
-    if let author = filters.author,
-      !rfc.authors.contains(where: { $0.name.lowercased().contains(author) })
-    {
-      return false
+  /// The filters with their text made into needles once per query, matched against
+  /// an entry's prepared fields (#151). Lowercasing every author and working group
+  /// on every query was the whole cost of an `author:` search: 6.6 ms in release
+  /// over the full index, twice a free-text query's.
+  private struct PreparedFilters {
+    let filters: SearchFilters
+    let group: SearchText?
+    let author: SearchText?
+
+    init(_ filters: SearchFilters) {
+      self.filters = filters
+      // `parseQuery` lowercases both already; a caller building filters by hand
+      // may not have.
+      group = filters.workingGroup.map { SearchText($0.lowercased()) }
+      author = filters.author.map { SearchText($0.lowercased()) }
     }
-    if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
-    if filters.excludeObsolete, rfc.isObsolete { return false }
-    if filters.requiresXML, !rfc.hasXMLSource { return false }
-    return true
+
+    func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
+      if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
+      if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
+      // A document with no working group has an empty prepared group, which no
+      // needle `parseQuery` makes can equal.
+      if let group, entry.group != group { return false }
+      if let author, !entry.authors.contains(where: { $0.contains(author) }) { return false }
+      if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
+      if filters.excludeObsolete, rfc.isObsolete { return false }
+      if filters.requiresXML, !rfc.hasXMLSource { return false }
+      return true
+    }
   }
 
   /// Every term must match somewhere; where it matches decides the weight.

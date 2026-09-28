@@ -8,7 +8,24 @@ import Foundation
 /// removed from the field is exactly the query on screen, and completion for the
 /// qualifier being typed.
 public enum SearchQuery {
+  /// A query as `IndexSearch.parseQuery` reads it: the filters its qualifiers name,
+  /// and the free text left over.
+  public struct Parsed: Sendable, Hashable {
+    public var text: String
+    public var filters: SearchFilters
+
+    public init(text: String, filters: SearchFilters) {
+      self.text = text
+      self.filters = filters
+    }
+  }
+
   // MARK: - Writing a query back out
+
+  /// The canonical form of a parsed query; see `format(text:filters:)`.
+  public static func format(_ query: Parsed) -> String {
+    format(text: query.text, filters: query.filters)
+  }
 
   /// The canonical form of a parsed query: one qualifier per filter, long spellings,
   /// in a fixed order, then the free text. `parseQuery` reads it back to the same

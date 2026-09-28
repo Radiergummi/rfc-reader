@@ -38,7 +38,8 @@ struct SearchQueryTests {
   @Test func `the canonical form is the one written back`() {
     let parsed = IndexSearch.parseQuery(
       "cache by:Fielding is:standard group:HTTPBIS year:2022-2020")
-    #expect(SearchQuery.format(parsed) == "wg:httpbis status:std author:fielding year:2020-2022 cache")
+    #expect(
+      SearchQuery.format(parsed) == "wg:httpbis status:std author:fielding year:2020-2022 cache")
   }
 
   @Test func `an empty query formats as nothing`() {
