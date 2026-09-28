@@ -20,7 +20,6 @@ import Testing
 /// Laid out for real rather than with hand-made frames: whether the frames touch is
 /// TextKit's answer, not this suite's.
 @Suite("Decoration geometry: adjacent cards do not overlap")
-@MainActor
 struct AdjacentCardTests {
   private let style = ReadingStyle()
 
