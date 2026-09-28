@@ -28,29 +28,16 @@ public struct DocumentReport: Codable, Sendable {
     var lists = 0
     var artwork = 0
     var references = 0
-    func count(_ blocks: [Block]) {
-      for block in blocks {
-        switch block {
-        case .paragraph: paragraphs += 1
-        case .list(let list):
-          lists += 1
-          for item in list.items {
-            count(item.blocks)
-          }
-        case .definitionList(let items):
-          for item in items {
-            count(item.definition)
-          }
-        case .preformatted: artwork += 1
-        case .figure(let figure): count(figure.blocks)
-        case .blockQuote(let inner), .aside(let inner): count(inner)
-        case .references(let list): references += list.entries.count
-        case .table: break
-        }
+    // The sections' blocks, not `document.blocks`: the abstract has never been counted,
+    // and counting it now would move every document's numbers against older reports.
+    for block in document.allSections.flatMap(\.blocks).flattened {
+      switch block {
+      case .paragraph: paragraphs += 1
+      case .list: lists += 1
+      case .preformatted: artwork += 1
+      case .references(let list): references += list.entries.count
+      case .definitionList, .figure, .blockQuote, .aside, .table: break
       }
-    }
-    for section in document.allSections {
-      count(section.blocks)
     }
 
     var warnings: [String] = []
