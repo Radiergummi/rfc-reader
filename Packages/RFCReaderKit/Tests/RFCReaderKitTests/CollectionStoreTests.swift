@@ -134,6 +134,24 @@ struct CollectionStoreTests {
     #expect(members(of: id, in: context) == [.rfc(2), .rfc(1), .rfc(3)])
   }
 
+  /// Sync can leave two items naming one document. The list shows the first, so
+  /// a move that left the other behind would leave the document where it was.
+  @Test func `a move takes every copy of a document with it`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    context.insert(DocumentCollectionItem(collection: id, document: .rfc(1), position: 1))
+    context.insert(DocumentCollectionItem(collection: id, document: .rfc(2), position: 2))
+    context.insert(DocumentCollectionItem(collection: id, document: .rfc(1), position: 2.5))
+    context.insert(DocumentCollectionItem(collection: id, document: .rfc(3), position: 3))
+    try context.save()
+
+    try CollectionStore.move(
+      .rfc(1), in: id, afterVisible: .rfc(3), beforeVisible: nil, in: context)
+
+    #expect(members(of: id, in: context) == [.rfc(2), .rfc(3), .rfc(1)])
+  }
+
   /// A gap halved until it cannot be split again, and two items at one position:
   /// both renumber rather than collapse.
   @Test func `a move into a gap too narrow renumbers first`() throws {

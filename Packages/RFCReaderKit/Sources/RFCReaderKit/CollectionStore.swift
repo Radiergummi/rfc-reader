@@ -159,18 +159,23 @@ public enum CollectionStore {
   }
 
   /// Between the rows either side of the drop point in the visible list, which may
-  /// hide obsolete documents or hold only the rows paged in so far.
+  /// hide obsolete documents or hold only the rows paged in so far. Every item
+  /// naming the document moves: sync can leave two, and the list shows the first.
   public static func move(
     _ document: DocumentID, in identifier: UUID, afterVisible above: DocumentID?,
     beforeVisible below: DocumentID?, in context: ModelContext
   ) throws {
     var rows = try items(in: identifier, context: context)
-    guard let moving = rows.first(where: { $0.documentKey == document.fileStem }) else { return }
-    rows.removeAll { $0 === moving }
+    let moving = rows.filter { $0.documentKey == document.fileStem }
+    guard !moving.isEmpty else { return }
+    rows.removeAll { $0.documentKey == document.fileStem }
     let neighbours = CollectionOrder.neighbours(
       above: above?.fileStem, below: below?.fileStem, in: rows.map(\.documentKey))
-    moving.position = place(
+    let position = place(
       between: neighbours, in: rows, key: \.documentKey, position: \.position)
+    for item in moving {
+      item.position = position
+    }
     try context.save()
   }
 
