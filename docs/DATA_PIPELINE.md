@@ -72,8 +72,12 @@ rfc-index.xml ──▶ fetch --format xml ─┘                          (1,37
                             manifest ──▶ manifest.json  (sha256 + size per file, pack version)
                               │
                               ▼
-                     tar --zstd ──▶ legacy-xml-<version>.tar.zst ──▶ GitHub Release / R2
+                     tar --zstd ──▶ legacy-xml-<version>.tar.zst  (RFCs before 8650) ──┐
+                                ──▶ modern-xml-<version>.tar.zst  (RFC 8650 onwards)  ─┼──▶ GitHub Release / R2
+                                    manifest.json, beside them ────────────────────────┘
 ```
+
+The packs split at RFC 8650 so that the RFC Editor's own RFCXML, already licensed for redistribution, never waits on the licensing question the converted legacy documents are held by.
 
 - **fetch** reads the index, picks every RFC without an XML format, and downloads the `.txt` with bounded concurrency (default 6, be polite to the RFC Editor). Existing files are skipped, so re-runs only fetch what is new or missing. `--limit N` for smoke tests.
 - **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). `--only 5 822` converts just those documents from `--in`, and fails if one has no text there; it refuses `--report`, which would replace the corpus report with one that holds only those documents. An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, and correct a single document with an override. No new override is committed until #197 makes one a patch on the converter's output rather than a whole converted document, which is RFC text. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes: `make corpus-overrides-check` reruns every such script against the current converter and fails on any difference. It needs the source text, so it is not part of `make check`; what is, is corpus-build's `Corpus overrides` suite, which parses every committed override and pins what RFC 1142's script recovers.
