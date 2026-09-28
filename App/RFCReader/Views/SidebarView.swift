@@ -1,5 +1,6 @@
 import RFCKit
 import RFCReaderKit
+import SwiftData
 import SwiftUI
 
 struct SidebarView: View {
@@ -7,16 +8,22 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// For Recently Read's count, which is every document with a place kept.
+    @Query private var readingPositions: [ReadingPosition]
   #endif
+  // Which sections are open, kept across launches (#344).
+  @AppStorage("sidebar.libraryExpanded") private var libraryExpanded = true
+  @AppStorage("sidebar.browseExpanded") private var browseExpanded = true
+  @AppStorage("sidebar.workingGroupsExpanded") private var workingGroupsExpanded = true
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
-      Section("Library") {
+      Section("Library", isExpanded: $libraryExpanded) {
         row(.bookmarks)
         row(.recent)
         row(.downloaded)
       }
-      Section("Browse") {
+      Section("Browse", isExpanded: $browseExpanded) {
         row(.all)
         row(.standards)
         row(.bestCurrentPractice)
@@ -25,7 +32,7 @@ struct SidebarView: View {
         }
       }
       if !library.topWorkingGroups.isEmpty {
-        Section("Working Groups") {
+        Section("Working Groups", isExpanded: $workingGroupsExpanded) {
           ForEach(library.topWorkingGroups, id: \.self) { group in
             row(.workingGroup(group))
           }
@@ -66,11 +73,17 @@ struct SidebarView: View {
     HStack {
       Label(filter.title, systemImage: filter.systemImage)
       #if !os(macOS)
+        Spacer()
+        // Written out rather than `.badge`, which would draw after the chevron.
+        if let count = count(filter) {
+          Text(count, format: .number)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
         // Collapsed, a row pushes the list, and nothing said so: the rows are
         // selection-tagged rather than `NavigationLink`s, which is what draws the
         // system's own chevron.
         if horizontalSizeClass == .compact {
-          Spacer()
           Image(systemName: "chevron.forward")
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.tertiary)
@@ -80,6 +93,20 @@ struct SidebarView: View {
     }
     .tag(filter)
   }
+
+  #if !os(macOS)
+    /// How many documents a row leads to (#344): the index's own count, or the
+    /// reader's data for the Library rows. Nil while the index loads, and for a
+    /// filter it lists nothing in.
+    private func count(_ filter: LibraryFilter) -> Int? {
+      switch filter {
+      case .bookmarks: library.bookmarkedNumbers.count
+      case .downloaded: library.downloadedNumbers.count
+      case .recent: readingPositions.count { $0.document?.series == .rfc }
+      default: library.indexCounts[filter]
+      }
+    }
+  #endif
 
   #if os(macOS)
     @ViewBuilder

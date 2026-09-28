@@ -43,6 +43,23 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     }
   }
 
+  /// Whether `rfc` is in this filter's list, for the filters the index alone
+  /// decides: nil for those the reader's own data decides, and for a series, whose
+  /// members the index lists rather than marks.
+  ///
+  /// One predicate for the list and for the sidebar's count of it, so the two
+  /// cannot disagree.
+  public func includes(_ rfc: RFCMetadata) -> Bool? {
+    switch self {
+    case .all: true
+    case .standards: rfc.currentStatus == .internetStandard
+    case .bestCurrentPractice: rfc.currentStatus == .bestCurrentPractice
+    case .stream(let stream): rfc.stream == stream
+    case .workingGroup(let group): rfc.workingGroup == group
+    case .recent, .bookmarks, .downloaded, .series: nil
+    }
+  }
+
   /// The collection a script names, by the title the sidebar shows for it — the
   /// same string a script reads back — without regard to case: "All RFCs",
   /// "bookmarks", "IETF", "BCP 14", "httpbis".

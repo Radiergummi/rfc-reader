@@ -141,6 +141,7 @@ final class LibraryModel {
     self.index = prepared.index
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
+    self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
   }
@@ -158,6 +159,10 @@ final class LibraryModel {
   /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
+
+  /// How many RFCs each filter the index decides lists, derived with the index for
+  /// the same reason `topWorkingGroups` is (#344).
+  private(set) var indexCounts: [LibraryFilter: Int] = [:]
 
   /// Everything the list is a function of.
   ///
@@ -240,11 +245,9 @@ final class LibraryModel {
     case .recent: base = key.recentlyRead.compactMap { index[$0] }
     case .bookmarks: base = key.bookmarked.sorted(by: >).compactMap { index[$0] }
     case .downloaded: base = key.downloaded.sorted(by: >).compactMap { index[$0] }
-    case .standards: base = index.rfcs.reversed().filter { $0.currentStatus == .internetStandard }
-    case .bestCurrentPractice:
-      base = index.rfcs.reversed().filter { $0.currentStatus == .bestCurrentPractice }
-    case .stream(let stream): base = index.rfcs.reversed().filter { $0.stream == stream }
-    case .workingGroup(let group): base = index.rfcs.reversed().filter { $0.workingGroup == group }
+    // Through the predicate the sidebar's counts use, so the two cannot disagree.
+    case .standards, .bestCurrentPractice, .stream, .workingGroup:
+      base = index.rfcs.reversed().filter { filter.includes($0) == true }
     case .series(let id): base = index.series(id)?.members.compactMap { index[$0] } ?? []
     }
 

@@ -44,6 +44,49 @@ struct PreparedIndexTests {
       ])
   }
 
+  /// The sidebar's counts (#344), for every filter the index alone decides.
+  @Test func `every filter the index decides is counted`() {
+    let index = RFCIndex(rfcs: [
+      RFCMetadata(
+        id: .rfc(9110), title: "HTTP Semantics", date: PublicationDate(year: 2022),
+        currentStatus: .internetStandard, stream: .ietf, workingGroup: "httpbis"),
+      RFCMetadata(
+        id: .rfc(9111), title: "HTTP Caching", date: PublicationDate(year: 2022),
+        currentStatus: .internetStandard, stream: .ietf, workingGroup: "httpbis"),
+      RFCMetadata(
+        id: .rfc(2119), title: "Key words", date: PublicationDate(year: 1997),
+        currentStatus: .bestCurrentPractice, stream: .ietf),
+      RFCMetadata(
+        id: .rfc(9000), title: "QUIC", date: PublicationDate(year: 2021),
+        currentStatus: .proposedStandard, stream: .ietf, workingGroup: "quic"),
+      RFCMetadata(
+        id: .rfc(1149), title: "Avian carriers", date: PublicationDate(year: 1990),
+        currentStatus: .experimental, stream: .legacy),
+    ])
+
+    let counts = PreparedIndex(index: index).counts
+
+    #expect(counts[.all] == 5)
+    #expect(counts[.standards] == 2)
+    #expect(counts[.bestCurrentPractice] == 1)
+    #expect(counts[.stream(.ietf)] == 4)
+    #expect(counts[.stream(.legacy)] == 1)
+    #expect(counts[.workingGroup("httpbis")] == 2)
+    #expect(counts[.workingGroup("quic")] == 1)
+  }
+
+  /// No entry rather than a zero, and none for the filters the reader's own data
+  /// decides: those the index cannot count.
+  @Test func `a filter nothing is in has no count`() {
+    let index = RFCIndex(rfcs: [rfc(9110, group: "httpbis")])
+
+    let counts = PreparedIndex(index: index).counts
+
+    #expect(counts[.stream(.iab)] == nil)
+    #expect(counts[.bookmarks] == nil)
+    #expect(counts[.recent] == nil)
+  }
+
   @Test func `the search is over the same index`() {
     let index = RFCIndex(rfcs: [
       rfc(9110, title: "HTTP Semantics"), rfc(791, title: "Internet Protocol"),
