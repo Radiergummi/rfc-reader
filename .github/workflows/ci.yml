@@ -78,8 +78,8 @@ jobs:
             Packages/RFCKit/.build
             Packages/RFCReaderKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-macos-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-${{ github.sha }}
-          restore-keys: swiftpm-macos-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-
+          key: swiftpm-macos-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-macos-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
       - run: swift test --package-path Packages/RFCKit
       - run: make test-app
       # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
@@ -93,7 +93,7 @@ jobs:
             Packages/RFCKit/.build
             Packages/RFCReaderKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-macos-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-${{ github.sha }}
+          key: swiftpm-macos-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
 
   app-build:
     name: App build (macOS + iOS)
@@ -147,14 +147,17 @@ jobs:
       # main, like the compilation cache above. Keyed on the manifests and pins, so a
       # dependency change starts cold rather than from a build of other versions;
       # sources are not in the key, since SwiftPM rebuilds what changed on its own.
+      # The paths are one level deep on purpose: `**/Package.swift` also matches the
+      # dependencies' manifests under .build once a build has run, so the key the
+      # save step computed would never be the key a later restore asks for.
       - name: Restore the SwiftPM builds
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             Packages/RFCKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-linux-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-${{ github.sha }}
-          restore-keys: swiftpm-linux-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-
+          key: swiftpm-linux-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-linux-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
       - name: Save the SwiftPM builds
@@ -164,7 +167,7 @@ jobs:
           path: |
             Packages/RFCKit/.build
             Tools/corpus-build/.build
-          key: swiftpm-linux-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}-${{ github.sha }}
+          key: swiftpm-linux-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
 
   swift-format:
     name: swift-format
