@@ -25,7 +25,10 @@ struct ConvertCommand: AsyncParsableCommand {
   @Option(help: "Where to write the per-document report.")
   var report: String?
 
-  @Option(help: "The RFC index, for each document's title and what it obsoletes and updates.")
+  @Option(
+    help:
+      "The RFC index, for each document's title, number, authors and date, and what it obsoletes and updates."
+  )
   var index: String?
 
   @Option(help: "Where to write what the prose test decided. Roughly doubles the run.")
