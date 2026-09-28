@@ -56,29 +56,75 @@ import RFCReaderKit
     /// representable, and a closure rather than the coordinator so this view stays
     /// about text.
     var quickLookReference: (NSEvent) -> Bool = { _ in false }
+    /// The link, and the character it is on, that a click at a mouse-down follows
+    /// when the mouse-down is on a reference, or nil anywhere else.
+    var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
     var willTrackMouseDown: () -> Bool = { false }
 
-    /// Only a reference is taken over. Everywhere else a force click is AppKit's
-    /// Look Up, which a reader of dense technical prose uses on any word.
-    ///
-    /// On Force Touch hardware this appears to be reached (#29): the force click
-    /// showed a reference's card before it showed the document preview. Should
-    /// `NSTextView`'s own immediate-action recognizer ever claim the gesture first,
-    /// the fallback is `pressureChange(with:)` at stage 2; see ARCHITECTURE.md.
+    /// Look Up from the menu or the keyboard: a reference under the selection is
+    /// still previewed rather than looked up. A force click never arrives here; see
+    /// `trackReferenceClick(_:link:at:)`.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }
       super.quickLook(with: event)
     }
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
-    /// own tracking loop and does not return until the button is up.
+    /// own tracking loop and does not return until the button is up. A click that
+    /// starts on a reference is tracked here instead.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
-      super.mouseDown(with: event)
+      guard let (link, index) = referenceLink(event) else {
+        super.mouseDown(with: event)
+        return
+      }
+      trackReferenceClick(event, link: link, at: index)
     }
+
+    /// A click that starts on a reference, tracked here rather than by `NSTextView`,
+    /// whose own tracking loop takes a force click's pressure events off the queue:
+    /// logged on a Force Touch trackpad, stage 2 never reached `pressureChange(with:)`
+    /// or `quickLook(with:)`, and a force click on a reference showed nothing (#29).
+    /// Here the deep press previews the reference and its mouse-up is swallowed; a
+    /// plain release follows the link through `clicked(onLink:at:)`, as `NSTextView`
+    /// would have; and a drag is handed back to `NSTextView` from the mouse-down, so
+    /// a selection can still start on a reference.
+    private func trackReferenceClick(_ down: NSEvent, link: Any, at index: Int) {
+      guard let window else { return }
+      // Asked once, at the first event of stage 2. Not on `stageTransition`, which
+      // measures the way to the next stage rather than the step into this one: it
+      // reads 0 on the first event of stage 2, logged on the trackpad.
+      var askedForPreview = false
+      var previewed = false
+      while let event = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged, .pressure]) {
+        switch event.type {
+        case .pressure:
+          if !askedForPreview, event.stage >= 2 {
+            askedForPreview = true
+            previewed = quickLookReference(event)
+          }
+        case .leftMouseDragged:
+          let distance = hypot(
+            event.locationInWindow.x - down.locationInWindow.x,
+            event.locationInWindow.y - down.locationInWindow.y)
+          if !previewed, distance > Self.dragThreshold {
+            super.mouseDown(with: down)
+            return
+          }
+        case .leftMouseUp:
+          if !previewed { clicked(onLink: link, at: index) }
+          return
+        default:
+          break
+        }
+      }
+    }
+
+    /// How far, in points, a press on a reference moves before it is a drag.
+    private static let dragThreshold: CGFloat = 3
 
     /// AppKit asks for each declared type in turn. Only the plain-text flavour is
     /// rewritten -- that is the one a terminal, a mail body or a code editor reads,

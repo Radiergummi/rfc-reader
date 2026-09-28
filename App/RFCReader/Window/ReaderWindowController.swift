@@ -506,6 +506,9 @@
         if let selection = navigation.selection {
           DocumentView(id: selection)
             .id(selection)
+            // Faded only when the change is animated: following a document preview
+            // (`RFCTextViewCoordinator.documentCrossFade`). Every other open cuts.
+            .transition(.opacity)
         } else {
           EmptyDetailView()
         }

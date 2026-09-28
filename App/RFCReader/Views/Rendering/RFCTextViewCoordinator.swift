@@ -168,6 +168,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// it moves from there, a scroll does not look for a reference under it: the
     /// jump the click caused is not the reader resting on whatever it landed on.
     private var linkClickPointer: NSPoint?
+    /// Short, so following a preview to another document feels immediate: the old
+    /// reader and the new one cross-fade rather than cut.
+    static let documentCrossFade = Animation.easeInOut(duration: 0.1)
   #endif
 
   // MARK: - Storage
@@ -326,9 +329,15 @@ final class RFCTextViewCoordinator: NSObject {
     // content size category, and on metadata that can arrive after the first
     // layout, and a cache keyed on any one of those goes stale as a header
     // overlapping the first paragraph. Only the writes below are conditional.
-    let headerHeight =
-      headerHost?.sizeThatFits(in: CGSize(width: column, height: .greatestFiniteMagnitude)).height
-      ?? 0
+    //
+    // A header with no height of its own — `EmptyView`, as a link preview's reader
+    // has — answers with the height it was offered, 1.8e308, and that inset made
+    // the text view's frame height NaN, which AppKit traps on (#29). Such a header
+    // has no height.
+    let offered = CGFloat.greatestFiniteMagnitude
+    let measured =
+      headerHost?.sizeThatFits(in: CGSize(width: column, height: offered)).height ?? 0
+    let headerHeight = measured < offered ? measured : 0
     guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
     else { return }
     let columnChanged = column != laidOutColumn
@@ -675,7 +684,8 @@ final class RFCTextViewCoordinator: NSObject {
     /// began on a reference would otherwise open its card wherever the drag ended.
     func mouseDownInText() -> Bool {
       cancelHover()
-      guard let commitsOnClick else { return false }
+      // A control-click is the context menu, in a preview as anywhere else.
+      guard let commitsOnClick, !NSEvent.modifierFlags.contains(.control) else { return false }
       commitsOnClick()
       return true
     }
@@ -776,6 +786,9 @@ final class RFCTextViewCoordinator: NSObject {
         forceClickedBox = box
         showPopover(for: box, range: range)
       case .document(let id, let place):
+        // Already open from this force click: the stage-2 pressure step and a
+        // `quickLook(with:)` can both arrive for one force click.
+        if forceClickedBox === box, isShowingDocumentPreview { return true }
         // Over a hover card too: this is the bigger answer to the same question.
         guard let library, let rect = referenceRect(for: range) else { return false }
         cancelHover()
@@ -784,6 +797,18 @@ final class RFCTextViewCoordinator: NSObject {
         showDocumentPreview(of: id, at: place, following: url, at: rect, library: library)
       }
       return true
+    }
+
+    /// The link a click on the reference under `event` follows, and the character
+    /// it is on, or nil when the mouse-down is on no reference. `ReaderTextView`
+    /// tracks a click on a reference itself, to see its force click (#29). Not in a
+    /// link preview's reader, whose clicks commit the preview.
+    func referenceLink(under event: NSEvent) -> (link: Any, characterIndex: Int)? {
+      guard commitsOnClick == nil, let textView, event.window === textView.window,
+        let (_, range) = reference(atWindowPoint: event.locationInWindow),
+        let url = link(at: range.location)
+      else { return nil }
+      return (url, range.location)
     }
 
     /// The link a reference's runs carry.
@@ -808,11 +833,20 @@ final class RFCTextViewCoordinator: NSObject {
     ) {
       let preview = DocumentPreview(library: library, id: id, place: place) { [weak self] in
         guard let self else { return }
+        let sameDocument = id == self.documentID
+        // The popover fades out as the reader moves, not before it: waiting for the
+        // fade to finish left the reader standing still behind it.
         self.cancelHover()
         // A click, as far as the reader is concerned: the scroll it causes must not
         // preview whatever lands under the pointer, which is now over the reader.
         self.linkClickPointer = NSEvent.mouseLocation
-        _ = self.onLink(url, .current)
+        if sameDocument {
+          // The reader's own jump is animated already.
+          _ = self.onLink(url, .current)
+        } else {
+          // Another document replaces this one; `ReaderHost` cross-fades the two.
+          withAnimation(Self.documentCrossFade) { _ = self.onLink(url, .current) }
+        }
       }
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
@@ -932,6 +966,7 @@ final class RFCTextViewCoordinator: NSObject {
       guard let closed = notification.object as? NSPopover, closed === popover else { return }
       popover = nil
       hoveredBox = nil
+      forceClickedBox = nil
       isShowingDocumentPreview = false
     }
   }
