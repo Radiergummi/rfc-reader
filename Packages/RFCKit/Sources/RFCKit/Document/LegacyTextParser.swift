@@ -1472,6 +1472,8 @@ public struct LegacyTextParser: Sendable {
       depth: 1)
   }
 
+  static func refusesUnnumberedHeading(_ title: String) -> Bool { false }
+
   private static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {
     heading.title.lowercased().contains("references")
   }

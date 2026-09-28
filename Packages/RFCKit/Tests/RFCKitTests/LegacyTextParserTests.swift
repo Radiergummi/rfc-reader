@@ -272,6 +272,71 @@ struct LegacyTextParserTests {
       check(InlineLinker.urlPattern)
     }
   }
+
+  // MARK: Unnumbered headings (#201)
+
+  /// A column-0 line that starts in lower case is a MIB line, wrapped prose or an `o`
+  /// list item, never a heading.
+  @Test func `a line starting in lower case is not an unnumbered heading`() {
+    #expect(LegacyTextParser.refusesUnnumberedHeading("fooTableEntry OBJECT-TYPE"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("continued from the line above it"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("o  An item of a list"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("Security Considerations"))
+  }
+
+  @Test func `code or diagram punctuation is not an unnumbered heading`() {
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Example-MIB DEFINITIONS ::= BEGIN"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Message ::= SEQUENCE {"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("}"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Field    | Value"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("+--------+-------+"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Client -> Server"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Totals ======"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("Appendix -- Examples"))
+  }
+
+  @Test func `a sentence's end is not an unnumbered heading`() {
+    #expect(LegacyTextParser.refusesUnnumberedHeading("This memo describes nothing new."))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Commands, replies and codes;"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Hosts, gateways,"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("Commands, Replies, etc."))
+  }
+
+  /// Past 50 characters sentence case turns from titles into prose; title case and all
+  /// capitals are headings at any length, and short sentence case still is.
+  @Test func `long sentence case is not an unnumbered heading`() {
+    #expect(
+      LegacyTextParser.refusesUnnumberedHeading(
+        "This document describes the way hosts exchange their tables"))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading(
+        "Transmission of Datagrams over Networks with Long Headers"))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading(
+        "TRANSMISSION OF DATAGRAMS OVER NETWORKS WITH LONG HEADERS"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("How to use this document"))
+  }
+
+  /// Through `parse`: a MIB set at column 0 opens no sections.
+  @Test func `MIB lines at column 0 open no sections`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+    let titles = document.allSections.map(\.title.plainText)
+    #expect(!titles.contains("UDP-MIB DEFINITIONS ::= BEGIN"))
+    #expect(!titles.contains("udpMIB MODULE-IDENTITY"))
+    #expect(!titles.contains { $0.hasPrefix("udpInDatagrams") })
+  }
+
+  @Test func `ASN.1 definitions at column 0 open no sections`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc2511.txt"))
+    #expect(!document.allSections.contains { $0.title.plainText.contains("::=") })
+  }
+
+  @Test func `wrapped prose at column 0 opens no sections`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let titles = document.allSections.map(\.title.plainText)
+    #expect(!titles.contains { $0.first?.isLowercase == true })
+    #expect(titles.contains("INTRODUCTION"))
+  }
 }
 
 @Suite("Legacy text parser: corpus findings")
@@ -1706,4 +1771,5 @@ extension RFCDocument {
       return nil
     }
   }
+
 }
