@@ -503,7 +503,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// Which is the same question as whether the source had anything to say about the
   /// wording. An author's own words and a document's own tag are both answers a
   /// renderer must not overrule; everything else is ours.
-  public var isCanonicalLabel: Bool { text == nil }
+  var isCanonicalLabel: Bool { text == nil }
 
   /// The label this reference shows in plain text: the source's words when it has
   /// them, otherwise the one composed from the target. `[Inline].plainText` and the
@@ -587,8 +587,6 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// One predicate for both parsers on purpose: they each used to decide it, and
   /// they disagreed, so the same reference could draw as a chip from one source
   /// format and as plain text from the other.
-  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
-
   public static func isCanonicalTag(_ tag: String, for id: DocumentID) -> Bool {
     // One pass, no `CharacterSet`: this runs per bracket match over every document
     // in the corpus, and `id.description` ("RFC9110") already has the separator
@@ -601,6 +599,10 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
     return squeezed.caseInsensitiveCompare(id.description) == .orderedSame
   }
+
+  /// What `isCanonicalTag` strips from a tag before comparing: the brackets and
+  /// either kind of space, which are presentation, not the name.
+  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
 }
 
 public enum Inline: Sendable, Hashable, Codable {

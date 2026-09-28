@@ -18,7 +18,7 @@ public enum RFCIndexParser {
     } catch {
       throw .malformed(error)
     }
-    return RFCIndex(rfcs: reader.rfcs, series: reader.series, notIssued: reader.notIssued)
+    return RFCIndex(rfcs: reader.rfcs, series: reader.series)
   }
 
   /// Untyped, since reading the file can fail as well as parsing it.
@@ -31,15 +31,11 @@ public enum RFCIndexParser {
 private final class Reader: XMLEvents {
   private(set) var rfcs: [RFCMetadata] = []
   private(set) var series: [SeriesEntry] = []
-  private(set) var notIssued: [Int] = []
 
   private var path: [String] = []
   private var text = ""
 
   private var entry = EntryBuilder()
-  private var entryKind: EntryKind?
-
-  private enum EntryKind { case rfc, series, notIssued }
 
   private struct EntryBuilder {
     var docID: DocumentID?
@@ -102,15 +98,8 @@ private final class Reader: XMLEvents {
     path.append(elementName)
     text = ""
     switch elementName {
-    case "rfc-entry":
+    case "rfc-entry", "bcp-entry", "std-entry", "fyi-entry":
       entry = EntryBuilder()
-      entryKind = .rfc
-    case "bcp-entry", "std-entry", "fyi-entry":
-      entry = EntryBuilder()
-      entryKind = .series
-    case "rfc-not-issued-entry":
-      entry = EntryBuilder()
-      entryKind = .notIssued
     case "author":
       entry.currentAuthorName = ""
       entry.currentAuthorRole = nil
@@ -134,13 +123,8 @@ private final class Reader: XMLEvents {
     switch elementName {
     case "rfc-entry":
       if let rfc = entry.build() { rfcs.append(rfc) }
-      entryKind = nil
     case "bcp-entry", "std-entry", "fyi-entry":
       if let id = entry.docID { series.append(SeriesEntry(id: id, members: entry.isAlso)) }
-      entryKind = nil
-    case "rfc-not-issued-entry":
-      if let id = entry.docID { notIssued.append(id.number) }
-      entryKind = nil
 
     case "doc-id":
       guard let id = DocumentID(parsing: value) else { return }

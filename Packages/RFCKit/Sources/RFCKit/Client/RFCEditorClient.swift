@@ -127,17 +127,6 @@ public struct RFCEditorClient: Sendable {
   }
 
   @concurrent
-  public func fetchMetadata(_ id: DocumentID) async throws -> RFCEditorMetadataRecord {
-    let url = RFCEditorEndpoints.metadata(id)
-    let data = try await fetch(url, notFoundAs: id)
-    do {
-      return try JSONDecoder().decode(RFCEditorMetadataRecord.self, from: data)
-    } catch {
-      throw ClientError.decoding(url, error)
-    }
-  }
-
-  @concurrent
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)
     return try RecentFeedParser.parse(data)
@@ -157,49 +146,6 @@ public struct RFCEditorClient: Sendable {
       throw ClientError.httpStatus(response.statusCode, url)
     }
   }
-}
-
-/// The RFC Editor's per-document JSON (`/rfc/rfc9110.json`).
-public struct RFCEditorMetadataRecord: Codable, Sendable {
-  public var docID: String
-  public var title: String
-  public var authors: [String]
-  public var format: [String]
-  public var pageCount: String?
-  public var pubStatus: String
-  public var status: String
-  public var source: String?
-  public var abstract: String?
-  public var pubDate: String
-  public var keywords: [String]
-  public var obsoletes: [String]
-  public var obsoletedBy: [String]
-  public var updates: [String]
-  public var updatedBy: [String]
-  public var seeAlso: [String]
-  public var doi: String?
-  public var errataURL: String?
-  public var draft: String?
-
-  enum CodingKeys: String, CodingKey {
-    case docID = "doc_id"
-    case title, authors, format
-    case pageCount = "page_count"
-    case pubStatus = "pub_status"
-    case status, source, abstract
-    case pubDate = "pub_date"
-    case keywords, obsoletes
-    case obsoletedBy = "obsoleted_by"
-    case updates
-    case updatedBy = "updated_by"
-    case seeAlso = "see_also"
-    case doi
-    case errataURL = "errata_url"
-    case draft
-  }
-
-  public var id: DocumentID? { DocumentID(parsing: docID) }
-  public var currentStatus: PublicationStatus { PublicationStatus(rawValue: status) ?? .unknown }
 }
 
 /// One entry of the "Recent RFCs" RSS feed.
