@@ -44,7 +44,7 @@ public struct RFCXMLParser: Sendable {
         switch element.name {
         case "references":
           count += 1
-          sections.append(builder.parseReferencesSection(element))
+          sections.append(builder.parseReferencesSection(element, position: "back-\(count)"))
         case "section":
           count += 1
           sections.append(builder.parseSection(element, appendix: true, position: "back-\(count)"))
@@ -245,18 +245,20 @@ public struct RFCXMLParser: Sendable {
 
     /// Sections of `parent`, whose own position is `position` (nil for `<middle>`).
     func parseSections(in parent: XMLTree.Element, appendix: Bool, position: String?) -> [Section] {
+      func childPosition(_ count: Int) -> String {
+        position.map { "\($0).\(count)" } ?? "\(count)"
+      }
       var count = 0
       return parent.elements.compactMap { child in
         switch child.name {
         case "section":
           count += 1
-          let childPosition = position.map { "\($0).\(count)" } ?? "\(count)"
-          return parseSection(child, appendix: appendix, position: childPosition)
+          return parseSection(child, appendix: appendix, position: childPosition(count))
         // Not valid RFCXML, but our serializer emits it for a references subsection
         // whose siblings are ordinary sections; keep it as a subsection.
         case "references":
           count += 1
-          return parseReferencesSection(child)
+          return parseReferencesSection(child, position: childPosition(count))
         default:
           return nil
         }
@@ -312,12 +314,14 @@ public struct RFCXMLParser: Sendable {
       return (nil, false)
     }
 
-    func parseReferencesSection(_ element: XMLTree.Element) -> Section {
+    /// `position` names an anchorless list, as it does a section in `parseSection`.
+    func parseReferencesSection(_ element: XMLTree.Element, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let title = parseHeadingTitle(element, fallback: "References")
       var entries: [Reference] = []
       var subsections: [Section] = []
+      var count = 0
       for child in element.elements {
         switch child.name {
         case "reference":
@@ -325,7 +329,8 @@ public struct RFCXMLParser: Sendable {
         case "referencegroup":
           entries.append(parseReferenceGroup(child))
         case "references":
-          subsections.append(parseReferencesSection(child))
+          count += 1
+          subsections.append(parseReferencesSection(child, position: "\(position).\(count)"))
         default:
           break
         }
@@ -334,7 +339,7 @@ public struct RFCXMLParser: Sendable {
         entries.isEmpty
         ? [] : [.references(ReferenceList(title: title.plainText, entries: entries))]
       return Section(
-        anchor: element["anchor"] ?? partNumber ?? "references",
+        anchor: element["anchor"] ?? partNumber ?? "unanchored-references-\(position)",
         number: numbering.number,
         title: title,
         blocks: blocks,

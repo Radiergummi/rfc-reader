@@ -86,6 +86,33 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// Two anchorless reference lists -- normative and informative, in unprepped XML --
+  /// would otherwise share one fallback anchor, and a link to the second would land on
+  /// the first.
+  @Test func `unprepped reference lists get distinct anchors`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle><section anchor="intro"><name>Intro</name></section></middle>
+        <back>
+          <references><name>Normative References</name>
+            <reference anchor="A"><front><title>A</title></front></reference>
+          </references>
+          <references><name>Informative References</name>
+            <reference anchor="B"><front><title>B</title></front></reference>
+          </references>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 3)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
