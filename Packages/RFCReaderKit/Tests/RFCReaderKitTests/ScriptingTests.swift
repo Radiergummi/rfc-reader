@@ -24,6 +24,27 @@ struct LibraryFilterScriptNameTests {
     }
   }
 
+  private let http3 = CollectionSnapshot.Entry(
+    id: UUID(), name: "HTTP/3", color: .blue, members: [])
+  private let secondHTTP3 = CollectionSnapshot.Entry(
+    id: UUID(), name: "HTTP/3", color: .green, members: [])
+  private let shadowing = CollectionSnapshot.Entry(
+    id: UUID(), name: "Bookmarks", color: .red, members: [])
+
+  /// Among collections of one name, the first in the sidebar.
+  @Test func `a user collection is named as the sidebar names it`() {
+    let filter = LibraryFilter(
+      scriptName: "http/3", workingGroups: groups, collections: [http3, secondHTTP3])
+    #expect(filter == .collection(http3.id))
+  }
+
+  /// No existing script changes meaning because a collection took a name.
+  @Test func `built-in names win over a collection's`() {
+    let filter = LibraryFilter(
+      scriptName: "Bookmarks", workingGroups: groups, collections: [shadowing])
+    #expect(filter == .bookmarks)
+  }
+
   @Test func `case does not matter`() {
     #expect(filter("bookmarks") == .bookmarks)
     #expect(filter("ALL RFCS") == .all)

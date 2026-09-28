@@ -52,7 +52,7 @@ public struct ReadingPlaceTracker: Sendable, Equatable {
   ///
   /// A storage installed before any column is taken to be built at the first one,
   /// which holds only while the reader and the view that builds it derive the
-  /// column from the same width.
+  /// column from the same width and the same measure preference.
   public mutating func columnChanged(to column: CGFloat) -> Bool {
     isTracking = false
     restoredTop = nil

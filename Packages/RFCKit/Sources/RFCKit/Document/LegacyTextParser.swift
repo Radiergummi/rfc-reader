@@ -385,6 +385,26 @@ public struct LegacyTextParser: Sendable {
     #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
   nonisolated(unsafe) private static let appendixHeadingPattern =
     #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
+  /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
+  /// pattern of its own rather than a colon allowed in the one above, whose
+  /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
+  /// column 0 is as often a question's answer.
+  nonisolated(unsafe) private static let colonAppendixHeadingPattern =
+    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#
+
+  /// The number and title of an appendix heading, in any shape the parser reads one:
+  /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
+  /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
+  /// lines rather than through a whole document.
+  static func appendixHeading(in line: String) -> (number: String, title: String)? {
+    if let match = line.firstMatch(of: appendixHeadingPattern) {
+      return (String(match.number), String(match.title))
+    }
+    if let match = line.firstMatch(of: colonAppendixHeadingPattern) {
+      return (String(match.number), String(match.title))
+    }
+    return nil
+  }
 
   /// Diagnoses every block of a document without building one: what the prose test
   /// decided about each, and why.
@@ -1428,9 +1448,8 @@ public struct LegacyTextParser: Sendable {
         number: number, title: title, isAppendix: false, anchor: "section-\(number)",
         depth: number.split(separator: ".").count)
     }
-    if let match = trimmed.firstMatch(of: appendixHeadingPattern) {
-      let number = String(match.number)
-      let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
+    if let (number, matched) = appendixHeading(in: trimmed) {
+      let title = matched.trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
         number: number, title: title, isAppendix: true, anchor: "appendix-\(number)",
         depth: number.split(separator: ".").count)

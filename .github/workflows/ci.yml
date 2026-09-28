@@ -69,9 +69,37 @@ jobs:
           persist-credentials: false
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
-      - run: swift --version
+      # In the SwiftPM keys, so a new Xcode starts from a clean .build rather than
+      # restoring one another compiler made.
+      - name: Toolchain
+        id: toolchain
+        run: |
+          swift --version
+          echo "hash=$(swift --version 2>&1 | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      # Each package's .build, from main's newest run; see the Linux job.
+      - name: Restore the SwiftPM builds
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/RFCKit/.build
+            Packages/RFCReaderKit/.build
+            Tools/corpus-build/.build
+          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
       - run: swift test --package-path Packages/RFCKit
       - run: make test-app
+      # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
+      # run on both.
+      - run: swift test --package-path Tools/corpus-build
+      - name: Save the SwiftPM builds
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/RFCKit/.build
+            Packages/RFCReaderKit/.build
+            Tools/corpus-build/.build
+          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
 
   app-build:
     name: App build (macOS + iOS)
@@ -92,7 +120,7 @@ jobs:
       # The newest cache any earlier run saved: entries are keyed on their inputs,
       # so a stale one is never used, only not hit.
       - name: Restore the compilation cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
@@ -107,7 +135,7 @@ jobs:
       # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache
         if: github.event_name == 'push'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
@@ -121,8 +149,64 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # In the SwiftPM keys, so a new image starts from a clean .build rather than
+      # restoring one another compiler made.
+      - name: Toolchain
+        id: toolchain
+        run: |
+          swift --version
+          echo "hash=$(swift --version 2>&1 | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      # Each package's .build, restored from main's newest run and saved only from
+      # main, like the compilation cache above. Keyed on the manifests and pins, so a
+      # dependency change starts cold rather than from a build of other versions;
+      # sources are not in the key, since SwiftPM rebuilds what changed on its own.
+      # Older entries are deleted by the prune job below.
+      # The paths are one level deep on purpose: `**/Package.swift` also matches the
+      # dependencies' manifests under .build once a build has run, so the key the
+      # save step computed would never be the key a later restore asks for.
+      - name: Restore the SwiftPM builds
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/RFCKit/.build
+            Tools/corpus-build/.build
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
+      - name: Save the SwiftPM builds
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            Packages/RFCKit/.build
+            Tools/corpus-build/.build
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved') }}-${{ github.sha }}
+
+  prune-caches:
+    name: Prune caches
+    # Every save above keys its entry on the commit, so each push to main adds one
+    # per job, and the repository's 10 GB went to 36 compilation caches with nothing
+    # pruned. A restore only ever takes the newest entry of a kind, so the rest are
+    # deleted. After the saves, and on main only, where the saves happen.
+    if: ${{ !cancelled() && github.event_name == 'push' }}
+    needs: [rfckit-macos, app-build, rfckit-linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # To delete caches; the job checks nothing out.
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Keep the newest cache of each kind
+        run: |
+          for prefix in xcode-compilation-cache- swiftpm-macos- swiftpm-linux-; do
+            gh cache list --key "$prefix" --ref refs/heads/main --sort created_at --order desc \
+              --limit 100 --json id --jq '.[1:][].id' |
+              xargs -r -n1 gh cache delete
+          done
 
   swift-format:
     name: swift-format

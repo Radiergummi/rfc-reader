@@ -1,7 +1,9 @@
 import AppIntents
 import RFCKit
 
-/// "Open RFC 9110 in RFC Reader" from Siri, Spotlight, Shortcuts and the Action button.
+/// "Open an RFC in RFC Reader" from Siri, Spotlight, Shortcuts and the Action button,
+/// which then asks for the number: a phrase can only carry one once there is an
+/// `RFCEntity` (#192).
 struct OpenRFCIntent: AppIntent {
   static let title: LocalizedStringResource = "Open RFC"
   static let description = IntentDescription("Opens an RFC by number.")

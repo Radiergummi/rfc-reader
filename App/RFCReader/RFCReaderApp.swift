@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -41,7 +42,7 @@ struct RFCReaderApp: App {
           .environment(library)
           .task { await library.bootstrap() }
           .onOpenURL { url in
-            // rfc://9110/section/4.2, plus rfc-editor.org and datatracker
+            // rfc://9110#section-4.2, plus rfc-editor.org and datatracker
             // links handed over via the share sheet or Universal Links later.
             //
             // Every open scene receives this, so the routing decision cannot
@@ -112,6 +113,11 @@ struct DocumentCommands: Commands {
       Button("Go to RFC…") { openDocument?() }
         .keyboardShortcut("l", modifiers: .command)
         .disabled(openDocument == nil)
+      #if os(macOS)
+        Button("New Collection…") { navigation?.collectionEditor = .create(adding: nil) }
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .disabled(navigation == nil)
+      #endif
     }
     #if os(macOS)
       // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
@@ -124,6 +130,24 @@ struct DocumentCommands: Commands {
           Button("Bookmark") { active.controller?.toggleBookmark() }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(navigation?.selection == nil)
+          // The key window's undo manager, so Edit > Undo puts back a document
+          // removed from here, as it does for a removal in the list (#349).
+          if let navigation, let document = navigation.selection {
+            Menu("Add to Collection") {
+              AddToCollectionItems(
+                document: document, library: .shared, navigation: navigation,
+                undoManager: active.controller?.window?.undoManager)
+            }
+          }
+        }
+      }
+    #endif
+    #if os(macOS)
+      // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
+      // list's view options before.
+      CommandGroup(after: .toolbar) {
+        if let navigation {
+          ListViewOptions(navigation: navigation)
         }
       }
     #endif
@@ -198,6 +222,27 @@ struct DocumentCommands: Commands {
 }
 
 #if os(macOS)
+  /// View > Sort By and View > Show Obsolete, for the key window's list (#349).
+  private struct ListViewOptions: View {
+    @Bindable var navigation: NavigationModel
+
+    var body: some View {
+      Section {
+        if case .collection = navigation.filter {
+          Picker("Sort By", selection: $navigation.listOptions.collectionSort) {
+            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+          }
+        } else {
+          Picker("Sort By", selection: $navigation.listOptions.order) {
+            ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+          }
+          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.searchText))
+        }
+        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      }
+    }
+  }
+
   /// One find-bar action, sent to the first responder that can perform it.
   ///
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off
@@ -246,20 +291,61 @@ struct DocumentCommands: Commands {
   }
 #endif
 
+/// The app's settings, tabbed the way a Mac app's are. A tab joins as a feature
+/// arrives that has something worth configuring, rather than ahead of it.
 struct SettingsView: View {
+  var body: some View {
+    TabView {
+      Tab("Reading", systemImage: "textformat.size") {
+        ReadingSettings()
+      }
+      Tab("General", systemImage: "gearshape") {
+        GeneralSettings()
+      }
+    }
+    // A grouped form is scroll-backed and has no height of its own to offer, so
+    // the window is told to size to it rather than left to guess.
+    .frame(width: 460)
+    .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+private struct ReadingSettings: View {
   @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
   @AppStorage("underlineLinks") private var underlineLinks = false
+
+  /// A toggle over the preference rather than a picker: there are two choices,
+  /// and one of them is the default the reader opts out of.
+  private var usesFullWidth: Binding<Bool> {
+    Binding(
+      get: { measure == .fullWidth },
+      set: { measure = $0 ? .fullWidth : .recommended }
+    )
+  }
 
   var body: some View {
     Form {
       Slider(value: $fontSize, in: 12...28, step: 1) {
         Text("Reading font size: \(Int(fontSize))")
       }
-      Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
+      Toggle(isOn: usesFullWidth) {
+        Text("Use the full window width for text")
+        Text("Otherwise lines stop at a comfortable reading length, and the text is centred.")
+      }
       Toggle("Underline links", isOn: $underlineLinks)
     }
-    .padding()
-    .frame(width: 420)
+    .formStyle(.grouped)
+  }
+}
+
+private struct GeneralSettings: View {
+  @AppStorage("preferOriginalText") private var preferOriginalText = false
+
+  var body: some View {
+    Form {
+      Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
+    }
+    .formStyle(.grouped)
   }
 }

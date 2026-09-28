@@ -333,6 +333,8 @@
     /// the document, and the document changes under them.
     private let citeMenu = NSMenu()
     private let moreMenu = NSMenu()
+    /// Add to Collection, on the Bookmark item's indicator (#349).
+    private let collectionMenu = NSMenu()
 
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
@@ -343,6 +345,7 @@
       self.controller = controller
       super.init()
       citeMenu.delegate = self
+      collectionMenu.delegate = self
       moreMenu.delegate = self
     }
 
@@ -470,7 +473,15 @@
         return item
 
       case .rfcBookmark:
-        return button(identifier, "Bookmark", "bookmark", #selector(toggleBookmark))
+        // A click bookmarks; the indicator opens Add to Collection (#349).
+        let item = NSMenuToolbarItem(itemIdentifier: identifier)
+        item.label = "Bookmark"
+        item.image = NSImage(systemSymbolName: "bookmark", accessibilityDescription: "Bookmark")
+        item.showsIndicator = true
+        item.target = self
+        item.action = #selector(toggleBookmark)
+        item.menu = collectionMenu
+        return item
 
       case .rfcCite:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
@@ -555,6 +566,20 @@
           add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
         }
 
+      case collectionMenu:
+        let library = LibraryModel.shared
+        let containing = id.map { library.collections.collections(containing: $0) } ?? []
+        for entry in library.collections.collections {
+          let item = NSMenuItem(
+            title: entry.name, action: #selector(toggleCollection), keyEquivalent: "")
+          item.target = self
+          item.representedObject = entry.id
+          item.state = containing.contains(entry.id) ? .on : .off
+          menu.addItem(item)
+        }
+        if !library.collections.collections.isEmpty { menu.addItem(.separator()) }
+        add(to: menu, "New Collection…", #selector(newCollection))
+
       default:
         break
       }
@@ -598,6 +623,18 @@
     @objc private func goForward() { navigation.goForward() }
     @objc private func togglePanel() { controller.togglePanel() }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
+
+    @objc private func toggleCollection(_ sender: NSMenuItem) {
+      guard let document = id, let collection = sender.representedObject as? UUID else { return }
+      LibraryModel.shared.editCollections {
+        try CollectionStore.toggle(
+          document, in: collection, undoManager: controller.window?.undoManager, in: $0)
+      }
+    }
+
+    @objc private func newCollection() {
+      navigation.collectionEditor = .create(adding: id)
+    }
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
 
     @objc private func copyCitation(_ sender: NSMenuItem) {

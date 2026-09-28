@@ -124,3 +124,18 @@ struct CorpusBackedTitlePageTests {
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }
 }
+
+@Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedAppendixHeadingTests {
+  /// RFC 2326 heads its appendices `Appendix A: Title`, as about 150 legacy RFCs do.
+  /// They were unnumbered sections titled with the whole line; they are appendices
+  /// now, lettered, with the title alone (#200).
+  @Test func `an appendix headed with a colon is an appendix`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2326"))
+    let appendix = try #require(document.section(anchor: "appendix-A"))
+    #expect(appendix.number == "A")
+    #expect(!appendix.titleText.hasPrefix("Appendix"))
+    #expect(document.section(anchor: "appendix-B") != nil)
+    #expect(document.section(anchor: "appendix-C") != nil)
+  }
+}

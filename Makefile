@@ -27,6 +27,12 @@ SCHEME  := RFCReader
 # left enabled holds today, so a warning is something this change introduced
 # rather than backlog to scroll past. swift-format checks layout against its
 # own defaults (.swift-format), which is what `make fmt` produces.
+#
+# Both tools are whatever is installed here: SwiftLint from Homebrew, swift-format
+# from the selected Xcode. CI pins its own -- SwiftLint 0.65.1 in its container,
+# swift-format from the swift:6.3 image -- so a local lint that disagrees with CI
+# is a version difference first. swift-format 6.3 and Xcode 27's format this tree
+# byte for byte alike; an older Xcode's may not.
 lint:
 	swiftlint lint --strict
 	swift format lint --strict --parallel $(SWIFT_SOURCES)
@@ -50,8 +56,9 @@ test:
 	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
-# Deliberately without build-app: that one needs Xcode and a Mac, while
-# everything here runs in the swift:6.3 container CI uses.
+# The gate before committing. CI does not call this: it runs the same commands as
+# separate jobs, each in its own pinned environment (see `lint` above, and
+# .github/workflows/ci.yml). Deliberately without build-app, which needs Xcode.
 check: lint build test
 
 ## Run the app-side test suite (RFCReaderKit)
@@ -63,7 +70,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1178 rfc1343 rfc1441 rfc1581 rfc355 rfc674 rfc6614
+CORPUS_TEST_DOCUMENTS := rfc1178 rfc1343 rfc1441 rfc1581 rfc2326 rfc355 rfc674 rfc6614
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read

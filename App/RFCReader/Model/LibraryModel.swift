@@ -44,6 +44,11 @@ final class LibraryModel {
   /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
   /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
+
+  /// Every collection and its members, fetched again on every save of the store and
+  /// published only when it changed (#349). The sidebar, a collection's list, the
+  /// Add to Collection menus, the Mac's menu bar and scripts all read it.
+  private(set) var collections = CollectionSnapshot.empty
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
   /// Every RFC with a cached body: the Available Offline list. Kept here, and
@@ -53,10 +58,55 @@ final class LibraryModel {
 
   private init() {
     refreshBookmarks()
+    refreshCollections()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.refreshBookmarks() }
+      MainActor.assumeIsolated {
+        self?.refreshBookmarks()
+        self?.refreshCollections()
+      }
+    }
+  }
+
+  private func refreshCollections() {
+    let snapshot = CollectionSnapshot.fetch(in: AppData.container.mainContext)
+    // Only a change is news: most saves record a reading position.
+    guard snapshot != collections else { return }
+    collections = snapshot
+    // A collection deleted in another tab, or on another device, is not left on
+    // screen with no name and nothing in it.
+    for scene in scenes.compactMap(\.model) {
+      scene.keepFilter(in: snapshot)
+    }
+  }
+
+  /// What a filter is called, wherever it is shown: a collection's name, or the
+  /// filter's own title. Every title goes through here, so a collection is never
+  /// shown by the empty title its filter carries.
+  func title(for filter: LibraryFilter) -> String {
+    if case .collection(let identifier) = filter {
+      return collections[identifier]?.name ?? ""
+    }
+    return filter.title
+  }
+
+  /// How many of a collection's documents the index knows, for the sidebar. Nil
+  /// until the index has loaded.
+  func count(of entry: CollectionSnapshot.Entry) -> Int? {
+    guard let index else { return nil }
+    return entry.rfcNumbers.count(where: { index[$0] != nil })
+  }
+
+  /// Runs a change to collections on the app's context. A failure is logged rather
+  /// than shown (#125): every change the interface offers is one the store accepts,
+  /// and an empty name is refused before it gets here.
+  func editCollections(_ change: (ModelContext) throws -> Void) {
+    do {
+      try change(AppData.container.mainContext)
+    } catch {
+      libraryLog.error(
+        "changing a collection failed: \(String(describing: error), privacy: .public)")
     }
   }
 
@@ -141,6 +191,7 @@ final class LibraryModel {
     self.index = prepared.index
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
+    self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
   }
@@ -159,6 +210,10 @@ final class LibraryModel {
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
+  /// How many RFCs each filter the index decides lists, derived with the index for
+  /// the same reason `topWorkingGroups` is (#344).
+  private(set) var indexCounts: [LibraryFilter: Int] = [:]
+
   /// Everything the list is a function of.
   ///
   /// The filter and the query are passed in rather than read off `self`: they belong
@@ -170,6 +225,10 @@ final class LibraryModel {
     let bookmarked: Set<Int>
     let recentlyRead: [Int]
     let downloaded: Set<Int>
+    let options: ListOptions
+    /// A collection's members in order, so adding, removing or reordering changes
+    /// the key and the cache cannot serve a stale list (#349).
+    let members: [Int]
   }
 
   /// Answers remembered against their inputs.
@@ -210,10 +269,36 @@ final class LibraryModel {
       query: scene.searchText.trimmingCharacters(in: .whitespaces),
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
-      downloaded: filter == .downloaded ? scene.downloaded : []
+      downloaded: filter == .downloaded ? scene.downloaded : [],
+      options: scene.listOptions,
+      members: members(of: filter)
     )
+    return list(key, in: index)
+  }
+
+  /// The whole library searched for `query`, whatever filter a scene is on: what the
+  /// sidebar lists while it is searched on an iPhone, where the list is not on
+  /// screen beside it (#345).
+  func librarySearch(_ query: String) -> [RFCMetadata] {
+    // Observed on every call, for the reason `list(for:)` gives.
+    guard let index else { return [] }
+    let key = ListKey(
+      filter: .all, query: query.trimmingCharacters(in: .whitespaces),
+      bookmarked: [], recentlyRead: [], downloaded: [], options: ListOptions(), members: [])
+    return list(key, in: index)
+  }
+
+  /// A collection's members, read here — an observed read — so a change to them
+  /// re-renders the list showing it.
+  private func members(of filter: LibraryFilter) -> [Int] {
+    guard case .collection(let identifier) = filter else { return [] }
+    return collections[identifier]?.rfcNumbers ?? []
+  }
+
+  private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     if let hit = listCache[key] { return hit }
-    let computed = computeList(key, in: index)
+    let computed = key.options.apply(
+      to: computeList(key, in: index), filter: key.filter, query: key.query)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
@@ -240,12 +325,11 @@ final class LibraryModel {
     case .recent: base = key.recentlyRead.compactMap { index[$0] }
     case .bookmarks: base = key.bookmarked.sorted(by: >).compactMap { index[$0] }
     case .downloaded: base = key.downloaded.sorted(by: >).compactMap { index[$0] }
-    case .standards: base = index.rfcs.reversed().filter { $0.currentStatus == .internetStandard }
-    case .bestCurrentPractice:
-      base = index.rfcs.reversed().filter { $0.currentStatus == .bestCurrentPractice }
-    case .stream(let stream): base = index.rfcs.reversed().filter { $0.stream == stream }
-    case .workingGroup(let group): base = index.rfcs.reversed().filter { $0.workingGroup == group }
+    // Through the predicate the sidebar's counts use, so the two cannot disagree.
+    case .standards, .bestCurrentPractice, .stream, .workingGroup:
+      base = index.rfcs.reversed().filter { filter.includes($0) == true }
     case .series(let id): base = index.series(id)?.members.compactMap { index[$0] } ?? []
+    case .collection: base = key.members.compactMap { index[$0] }
     }
 
     guard !key.query.isEmpty, let search else { return base }
