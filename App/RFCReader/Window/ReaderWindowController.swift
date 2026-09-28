@@ -185,10 +185,41 @@
 
       // Takes the link a new tab was opened for, if it was opened for one.
       library.register(navigation)
-      observeTitle()
-      observeListTitle()
-      observeDocument()
-      observeQuickOpen()
+      // Once now, so the window is never shown untitled, and then on every change.
+      apply(windowTitle)
+      apply(listTitle)
+      observe()
+    }
+
+    // MARK: - Observation
+
+    /// What this window follows in its models: its title, the list's, the panel's
+    /// rule and the palette. A task per sequence, all cancelled as the window
+    /// closes; each holds the controller weakly.
+    private var observations: [Task<Void, Never>] = []
+
+    /// Each sequence yields its value now and again after every change to what it
+    /// read, a turn later — which `updateToolbarTitle` cannot wait for, so the title
+    /// coupled to the scroll is a callback instead (see `ReaderState`).
+    private func observe() {
+      let titles = Observations { [weak self] in self?.windowTitle }
+      let listTitles = Observations { [weak self] in self?.listTitle }
+      let hasDocument = Observations { [weak self] in self?.reader.hasDocument }
+      let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
+      observations = [
+        Task(name: "Observe window title") { [weak self] in
+          for await title in titles { if let title { self?.apply(title) } }
+        },
+        Task(name: "Observe list title") { [weak self] in
+          for await title in listTitles { if let title { self?.apply(title) } }
+        },
+        Task(name: "Observe document") { [weak self] in
+          for await _ in hasDocument { self?.closePanelWithoutDocument() }
+        },
+        Task(name: "Observe Go to RFC") { [weak self] in
+          for await _ in showsQuickOpen { self?.showOrHideQuickOpen() }
+        },
+      ]
     }
 
     /// Every hosted root is handed the models by hand.
@@ -228,57 +259,67 @@
 
     // MARK: - Title
 
-    /// The window's title, and therefore the tab's.
+    /// The window's title, and therefore the tab's; the reader's own copy of it in
+    /// the toolbar; and the bookmark glyph, which follows the selection and the
+    /// bookmarks.
     ///
     /// `navigationTitle` reached the window through the scene, and macOS has no scene
-    /// any more, so the window is titled directly. `withObservationTracking` fires
-    /// once, which is why it re-arms itself.
-    private func observeTitle() {
-      withObservationTracking {
+    /// any more, so the window is titled directly.
+    private struct WindowTitle: Sendable {
+      var title: String
+      var subtitle: String
+      var documentTitle: String
+      var documentSubtitle: String
+      var isBookmarked: Bool
+    }
+
+    private var windowTitle: WindowTitle {
+      WindowTitle(
         // Still set on the window, because the tab bar reads it from there.
-        let title = navigation.selection?.displayName ?? library.title(for: navigation.filter)
+        title: navigation.selection?.displayName ?? library.title(for: navigation.filter),
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
-        let subtitle =
-          navigation.selection
+        subtitle: navigation.selection
           .flatMap {
             DocumentActions.subtitle(
               metadata: library.metadata($0), documentTitle: reader.documentTitle)
           }?
-          .truncated(to: Self.subtitleLimit) ?? ""
-        window?.title = title
-        window?.subtitle = subtitle
+          .truncated(to: Self.subtitleLimit) ?? "",
         // The reader's own copy, shown once its header scrolls away. Whole, not
         // truncated like the tab's: the item ellipsises to whatever room it has.
-        toolbar?.showDocumentTitle(
-          navigation.selection?.displayName ?? "",
-          subtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? ""
-        )
-        // The bookmark glyph follows the selection and the bookmarks, and this is
-        // the one place that re-fires when either changes.
-        _ = isBookmarked
-        window?.toolbar?.validateVisibleItems()
-      } onChange: { [weak self] in
-        Task { @MainActor in self?.observeTitle() }
-      }
+        documentTitle: navigation.selection?.displayName ?? "",
+        documentSubtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? "",
+        isBookmarked: isBookmarked
+      )
+    }
+
+    private func apply(_ title: WindowTitle) {
+      window?.title = title.title
+      window?.subtitle = title.subtitle
+      toolbar?.showDocumentTitle(title.documentTitle, subtitle: title.documentSubtitle)
+      window?.toolbar?.validateVisibleItems()
     }
 
     /// The title over the list names the list: the collection the sidebar chose and
     /// how many documents it holds after the search. The document is the tab's to
     /// name, and the reader's own.
     ///
-    /// Its own loop, apart from `observeTitle`: the count changes with most
+    /// Its own sequence, apart from the window's title: the count changes with most
     /// keystrokes in the search field, and nothing else there — the window's
-    /// title, the reader's, the bookmark fetch — depends on it.
-    private func observeListTitle() {
-      withObservationTracking {
-        toolbar?.showTitle(
-          library.title(for: navigation.filter),
-          subtitle: library.listSubtitle(for: navigation)
-        )
-      } onChange: { [weak self] in
-        Task { @MainActor in self?.observeListTitle() }
-      }
+    /// title, the reader's, the bookmark glyph — depends on it.
+    private struct ListTitle: Sendable {
+      var title: String
+      var subtitle: String
+    }
+
+    private var listTitle: ListTitle {
+      ListTitle(
+        title: library.title(for: navigation.filter),
+        subtitle: library.listSubtitle(for: navigation))
+    }
+
+    private func apply(_ title: ListTitle) {
+      toolbar?.showTitle(title.title, subtitle: title.subtitle)
     }
 
     /// Long enough that most RFC titles survive whole, short enough that the series'
@@ -314,21 +355,10 @@
     }
 
     /// Keeps the panel shut while there is nothing for it to describe: an inspector's
-    /// glass over a tab with no document in it is a strip of nothing.
-    private func observeDocument() {
-      withObservationTracking {
-        _ = reader.hasDocument
-      } onChange: { [weak self] in
-        Task { @MainActor in
-          self?.closePanelWithoutDocument()
-          self?.observeDocument()
-        }
-      }
-    }
-
-    /// The same rule, applied from outside for the one case the observation cannot
-    /// see: nothing about this window changed, its sibling's panel state was copied
-    /// onto it.
+    /// glass over a tab with no document in it is a strip of nothing. `observe()`
+    /// applies it whenever `hasDocument` changes, and `AppDelegate` from outside for
+    /// the one case observation cannot see: nothing about this window changed, its
+    /// sibling's panel state was copied onto it.
     ///
     /// A window ordered into a tab group adopts the group's inspector state. Measured
     /// on this build: `isCollapsed` is still the one this controller set immediately
@@ -462,17 +492,6 @@
 
     /// ⌘L, the menu and the empty reader's button all ask for the palette the same
     /// way, by setting `isShowingGoToSheet`; this is what answers on the Mac.
-    private func observeQuickOpen() {
-      withObservationTracking {
-        _ = navigation.isShowingGoToSheet
-      } onChange: { [weak self] in
-        Task { @MainActor in
-          self?.showOrHideQuickOpen()
-          self?.observeQuickOpen()
-        }
-      }
-    }
-
     private func showOrHideQuickOpen() {
       if navigation.isShowingGoToSheet {
         guard quickOpen == nil, let window else { return }
@@ -523,6 +542,10 @@
     }
 
     func windowWillClose(_ notification: Notification) {
+      for observation in observations {
+        observation.cancel()
+      }
+      observations = []
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
