@@ -12,6 +12,9 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
   case stream(RFCKit.Stream)
   case workingGroup(String)
   case series(DocumentID)
+  /// A collection the reader made (#349). Its name is the collection's and not the
+  /// filter's to carry: `LibraryModel.title(for:)` answers it.
+  case collection(UUID)
 
   public var id: Self { self }
 
@@ -26,6 +29,8 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     case .stream(let stream): stream.displayName
     case .workingGroup(let group): group.uppercased()
     case .series(let id): id.displayName
+    // Never shown: every title goes through `LibraryModel.title(for:)`.
+    case .collection: ""
     }
   }
 
@@ -40,6 +45,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     case .stream: "tray"
     case .workingGroup: "person.2"
     case .series: "square.stack"
+    case .collection: "folder"
     }
   }
 
@@ -56,7 +62,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     case .bestCurrentPractice: rfc.currentStatus == .bestCurrentPractice
     case .stream(let stream): rfc.stream == stream
     case .workingGroup(let group): rfc.workingGroup == group
-    case .recent, .bookmarks, .downloaded, .series: nil
+    case .recent, .bookmarks, .downloaded, .series, .collection: nil
     }
   }
 
@@ -84,7 +90,13 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
   /// the index spells it, because that is the string the list compares its rows'
   /// groups against. Nil for anything else, which a script hears as an error
   /// rather than as a collection that quietly lists nothing.
-  public init?(scriptName: String, workingGroups: Set<String>) {
+  ///
+  /// Then a collection the reader made (#349), the first in sidebar order among any
+  /// of one name. A built-in name, a series or a working group wins a clash, so no
+  /// script changes meaning because a collection took its name.
+  public init?(
+    scriptName: String, workingGroups: Set<String>, collections: [CollectionSnapshot.Entry] = []
+  ) {
     let name = scriptName.trimmingCharacters(in: .whitespacesAndNewlines)
     let fixed: [LibraryFilter] = [
       .all, .recent, .bookmarks, .downloaded, .standards, .bestCurrentPractice,
@@ -100,6 +112,10 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
       $0.caseInsensitiveCompare(name) == .orderedSame
     }) {
       self = .workingGroup(group)
+    } else if let collection = collections.first(where: {
+      $0.name.caseInsensitiveCompare(name) == .orderedSame
+    }) {
+      self = .collection(collection.id)
     } else {
       return nil
     }

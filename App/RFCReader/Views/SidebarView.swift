@@ -8,6 +8,7 @@ struct SidebarView: View {
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.editMode) private var editMode
     /// For Recently Read's count, which is every document with a place kept.
     @Query private var readingPositions: [ReadingPosition]
   #endif
@@ -15,6 +16,9 @@ struct SidebarView: View {
   @AppStorage("sidebar.libraryExpanded") private var libraryExpanded = true
   @AppStorage("sidebar.browseExpanded") private var browseExpanded = true
   @AppStorage("sidebar.workingGroupsExpanded") private var workingGroupsExpanded = true
+  @AppStorage("sidebar.collectionsExpanded") private var collectionsExpanded = true
+  /// The collection whose deletion is being confirmed (#349).
+  @State private var deleting: CollectionSnapshot.Entry?
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -45,7 +49,26 @@ struct SidebarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
       }
+    // New Collection is File > New Collection… on the Mac, and nowhere in the
+    // sidebar: a fixed button at its foot read as out of place (#349).
     #else
+      // Beside Edit, as Notes keeps New Folder (#349).
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            navigation.collectionEditor = .create(adding: nil)
+          } label: {
+            Label("New Collection", systemImage: "folder.badge.plus")
+          }
+        }
+        if !library.collections.collections.isEmpty {
+          ToolbarItem(placement: .topBarTrailing) { EditButton() }
+        }
+      }
+      // Edit leaves with the last collection, since its button does.
+      .onChange(of: library.collections.collections.isEmpty) {
+        if library.collections.collections.isEmpty { editMode?.wrappedValue = .inactive }
+      }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
       .searchable(text: Bindable(navigation).searchText, prompt: "Search")
@@ -67,6 +90,23 @@ struct SidebarView: View {
       .navigationBarTitleDisplayMode(.large)
     #endif
     .labelStyle(SidebarLabelStyle())
+    .confirmationDialog(
+      "Delete “\(deleting?.name ?? "")”?",
+      isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+      titleVisibility: .visible,
+      presenting: deleting
+    ) { entry in
+      Button("Delete Collection", role: .destructive) {
+        library.editCollections { try CollectionStore.delete(entry.id, in: $0) }
+      }
+    } message: { entry in
+      // The count the sidebar shows, in words that agree with it: "The 1
+      // documents" was what a one-document collection said.
+      let count = library.count(of: entry) ?? entry.rfcNumbers.count
+      Text(
+        "It holds ^[\(count) document](inflect: true). Only the collection is removed; the documents stay in the library."
+      )
+    }
   }
 
   @ViewBuilder
@@ -75,6 +115,19 @@ struct SidebarView: View {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
+    }
+    if !library.collections.collections.isEmpty {
+      group("Collections", isExpanded: $collectionsExpanded) {
+        ForEach(library.collections.collections) { entry in
+          collectionRow(entry)
+        }
+        .onMove(perform: moveCollections)
+        #if !os(macOS)
+          .onDelete { offsets in
+            deleting = offsets.first.map { library.collections.collections[$0] }
+          }
+        #endif
+      }
     }
     group("Browse", isExpanded: $browseExpanded) {
       row(.all)
@@ -179,27 +232,84 @@ struct SidebarView: View {
 
   private func row(_ filter: LibraryFilter) -> some View {
     HStack {
-      Label(filter.title, systemImage: filter.systemImage)
-      #if !os(macOS)
-        Spacer()
-        // Written out rather than `.badge`, which would draw after the chevron.
-        if let count = count(filter) {
-          Text(count, format: .number)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-        }
-        // Collapsed, a row pushes the list, and nothing said so: the rows are
-        // selection-tagged rather than `NavigationLink`s, which is what draws the
-        // system's own chevron.
-        if horizontalSizeClass == .compact {
-          Image(systemName: "chevron.forward")
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.tertiary)
-            .accessibilityHidden(true)
-        }
+      Label(library.title(for: filter), systemImage: filter.systemImage)
+      #if os(macOS)
+        accessories(count: nil)
+      #else
+        accessories(count: count(filter))
       #endif
     }
     .tag(filter)
+  }
+
+  /// The count and, collapsed, the chevron, after a row's label. Nothing on a Mac.
+  @ViewBuilder
+  private func accessories(count: Int?) -> some View {
+    #if !os(macOS)
+      Spacer()
+      // Written out rather than `.badge`, which would draw after the chevron.
+      if let count {
+        Text(count, format: .number)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
+      // Collapsed, a row pushes the list, and nothing said so: the rows are
+      // selection-tagged rather than `NavigationLink`s, which is what draws the
+      // system's own chevron.
+      if horizontalSizeClass == .compact {
+        Image(systemName: "chevron.forward")
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(.tertiary)
+          .accessibilityHidden(true)
+      }
+    #endif
+  }
+
+  // MARK: - Collections
+
+  private func collectionRow(_ entry: CollectionSnapshot.Entry) -> some View {
+    let filter = LibraryFilter.collection(entry.id)
+    return HStack {
+      Label {
+        Text(entry.name)
+      } icon: {
+        CollectionFolderIcon(color: entry.color)
+      }
+      #if os(macOS)
+        accessories(count: nil)
+      #else
+        accessories(count: library.count(of: entry))
+      #endif
+    }
+    // List rows dropped here join the collection at its end.
+    .dropDestination(for: String.self) { keys, _ in
+      let documents = keys.compactMap(DocumentID.init(fileStem:))
+      guard !documents.isEmpty else { return false }
+      library.editCollections { context in
+        for document in documents {
+          try CollectionStore.add(document, to: entry.id, in: context)
+        }
+      }
+      return true
+    }
+    .tag(filter)
+    .contextMenu {
+      // The editor holds the name and the color both: one place to change either.
+      Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
+      Divider()
+      Button("Delete…", role: .destructive) { deleting = entry }
+    }
+  }
+
+  private func moveCollections(from source: IndexSet, to destination: Int) {
+    let identifiers = library.collections.collections.map(\.id)
+    guard let drop = CollectionOrder.drop(from: source, to: destination, in: identifiers) else {
+      return
+    }
+    library.editCollections {
+      try CollectionStore.moveCollection(
+        drop.moved, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
+    }
   }
 
   #if !os(macOS)
@@ -326,5 +436,30 @@ private struct SidebarLabelStyle: LabelStyle {
         title
       }
     }
+  }
+}
+
+/// A collection's folder, in its color (#349).
+private struct CollectionFolderIcon: View {
+  let color: CollectionColor
+
+  #if os(macOS)
+    @Environment(\.backgroundProminence) private var prominence
+  #endif
+
+  var body: some View {
+    Image(systemName: "folder")
+      .foregroundStyle(style)
+  }
+
+  /// On a Mac a row drawn with the accent behind it turns its icons white, and an
+  /// explicit color would override that: `.primary` there follows the row. Only
+  /// that row — a selection in an inactive window or an unfocused sidebar is drawn
+  /// gray, and keeps the folder's color, as Finder's tags do.
+  private var style: AnyShapeStyle {
+    #if os(macOS)
+      if prominence == .increased { return AnyShapeStyle(.primary) }
+    #endif
+    return AnyShapeStyle(color.color)
   }
 }

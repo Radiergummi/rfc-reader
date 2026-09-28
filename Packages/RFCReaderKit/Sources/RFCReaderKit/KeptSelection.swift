@@ -22,6 +22,13 @@ public struct KeptSelection<Value: Equatable & Sendable>: Sendable {
     }
   }
 
+  /// Replaces the kept value without selecting it, so a cleared selection stays
+  /// cleared: a collapsed split view must not push a list because the value it
+  /// kept went away (#349).
+  public mutating func replaceValue(_ newValue: Value) {
+    value = newValue
+  }
+
   /// Whether this selection entered a value that `previous` did not show as
   /// selected. Not a change of `value`: choosing the kept value again after a
   /// clear enters it too, and that is how a collapsed split view comes back to it.

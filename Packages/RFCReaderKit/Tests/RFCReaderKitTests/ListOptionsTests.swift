@@ -48,4 +48,47 @@ struct ListOptionsTests {
     #expect(!ListOptions.canReorder(.recent, query: ""))
     #expect(!ListOptions.canReorder(.all, query: "http"))
   }
+
+  private let dated = [
+    RFCMetadata(id: .rfc(2616), title: "HTTP/1.1", date: PublicationDate(year: 1999)),
+    RFCMetadata(id: .rfc(9110), title: "HTTP Semantics", date: PublicationDate(year: 2022)),
+    RFCMetadata(id: .rfc(7231), title: "HTTP/1.1 Semantics", date: PublicationDate(year: 2014)),
+  ]
+
+  @Test func `a collection keeps its own order by default`() {
+    let listed = ListOptions().apply(to: dated, filter: .collection(UUID()), query: "")
+    #expect(listed.map(\.number) == [2616, 9110, 7231])
+  }
+
+  @Test func `a collection sorts by publication date, not by reversing`() {
+    let collection = LibraryFilter.collection(UUID())
+    let newest = ListOptions(collectionSort: .newestFirst)
+      .apply(to: dated, filter: collection, query: "")
+    let oldest = ListOptions(collectionSort: .oldestFirst)
+      .apply(to: dated, filter: collection, query: "")
+    #expect(newest.map(\.number) == [9110, 7231, 2616])
+    #expect(oldest.map(\.number) == [2616, 7231, 9110])
+  }
+
+  /// A tab set to Oldest First for the library still opens a collection in its
+  /// own order.
+  @Test func `the library's order leaves a collection alone`() {
+    let options = ListOptions(order: .oldestFirst)
+    let listed = options.apply(to: dated, filter: .collection(UUID()), query: "")
+    #expect(listed.map(\.number) == [2616, 9110, 7231])
+  }
+
+  @Test func `a searched collection stays in order of relevance`() {
+    let options = ListOptions(collectionSort: .oldestFirst)
+    let listed = options.apply(to: dated, filter: .collection(UUID()), query: "http")
+    #expect(listed.map(\.number) == [2616, 9110, 7231])
+  }
+
+  @Test func `only an unsearched collection in its own order can be rearranged`() {
+    let collection = LibraryFilter.collection(UUID())
+    #expect(ListOptions().allowsMoving(in: collection, query: ""))
+    #expect(!ListOptions().allowsMoving(in: collection, query: "quic"))
+    #expect(!ListOptions(collectionSort: .newestFirst).allowsMoving(in: collection, query: ""))
+    #expect(!ListOptions().allowsMoving(in: .all, query: ""))
+  }
 }

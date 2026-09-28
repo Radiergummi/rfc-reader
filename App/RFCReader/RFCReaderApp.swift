@@ -113,6 +113,11 @@ struct DocumentCommands: Commands {
       Button("Go to RFC…") { openDocument?() }
         .keyboardShortcut("l", modifiers: .command)
         .disabled(openDocument == nil)
+      #if os(macOS)
+        Button("New Collection…") { navigation?.collectionEditor = .create(adding: nil) }
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .disabled(navigation == nil)
+      #endif
     }
     #if os(macOS)
       // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
@@ -125,6 +130,24 @@ struct DocumentCommands: Commands {
           Button("Bookmark") { active.controller?.toggleBookmark() }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(navigation?.selection == nil)
+          // The key window's undo manager, so Edit > Undo puts back a document
+          // removed from here, as it does for a removal in the list (#349).
+          if let navigation, let document = navigation.selection {
+            Menu("Add to Collection") {
+              AddToCollectionItems(
+                document: document, library: .shared, navigation: navigation,
+                undoManager: active.controller?.window?.undoManager)
+            }
+          }
+        }
+      }
+    #endif
+    #if os(macOS)
+      // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
+      // list's view options before.
+      CommandGroup(after: .toolbar) {
+        if let navigation {
+          ListViewOptions(navigation: navigation)
         }
       }
     #endif
@@ -199,6 +222,27 @@ struct DocumentCommands: Commands {
 }
 
 #if os(macOS)
+  /// View > Sort By and View > Show Obsolete, for the key window's list (#349).
+  private struct ListViewOptions: View {
+    @Bindable var navigation: NavigationModel
+
+    var body: some View {
+      Section {
+        if case .collection = navigation.filter {
+          Picker("Sort By", selection: $navigation.listOptions.collectionSort) {
+            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+          }
+        } else {
+          Picker("Sort By", selection: $navigation.listOptions.order) {
+            ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+          }
+          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.searchText))
+        }
+        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      }
+    }
+  }
+
   /// One find-bar action, sent to the first responder that can perform it.
   ///
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off

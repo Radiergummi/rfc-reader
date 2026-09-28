@@ -9,9 +9,49 @@ struct RFCListView: View {
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
+  /// The collection the picker adds to, while it is on show (#349).
+  @State private var addingTo: PickerTarget?
 
   private var rfcs: [RFCMetadata] {
     library.list(for: navigation)
+  }
+
+  @Environment(\.undoManager) private var undoManager
+  #if !os(macOS)
+    @Environment(\.editMode) private var editMode
+  #endif
+
+  /// The collection the list shows, if it shows one.
+  private var collection: UUID? {
+    if case .collection(let identifier) = navigation.filter { identifier } else { nil }
+  }
+
+  /// A drag in the visible rows, resolved by their documents rather than their
+  /// offsets: the rows on screen may hide obsolete documents or be only the first
+  /// pages (`CollectionOrder.neighbors`).
+  private func move(from source: IndexSet, to destination: Int, in visible: [RFCMetadata]) {
+    place(CollectionOrder.drop(from: source, to: destination, in: visible.map(\.id)))
+  }
+
+  private func place(_ drop: CollectionOrder.Drop<DocumentID>?) {
+    guard let collection, let drop else { return }
+    library.editCollections {
+      try CollectionStore.move(
+        drop.moved, in: collection, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
+    }
+  }
+
+  /// Out of the collection, undoably, back to the same place.
+  private func remove(_ document: DocumentID) {
+    guard let collection else { return }
+    library.editCollections {
+      try CollectionStore.remove(document, from: collection, undoManager: undoManager, in: $0)
+    }
+  }
+
+  /// VoiceOver's Move Up and Move Down, one row at a time.
+  private func step(_ rfc: RFCMetadata, by offset: Int, in visible: [RFCMetadata]) {
+    place(CollectionOrder.step(rfc.id, by: offset, in: visible.map(\.id)))
   }
 
   var body: some View {
@@ -36,7 +76,15 @@ struct RFCListView: View {
         filter: navigation.filter
       )
       .tag(rfc.id)
-      #if !os(macOS)
+      // An item provider rather than `.draggable`: it cooperates with `.onMove`,
+      // which a collection's own list also uses (#349).
+      .itemProvider { NSItemProvider(object: rfc.id.fileStem as NSString) }
+      #if os(macOS)
+        .modifier(
+          MacRowActions(
+            rfc: rfc, collection: collection, library: library, navigation: navigation,
+            undoManager: undoManager, remove: remove))
+      #else
         .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
       #endif
       .onAppear {
@@ -44,9 +92,28 @@ struct RFCListView: View {
         limit = ListWindow.extendedLimit(from: limit, total: rows.count)
       }
     }
+    // A collection in its own order can be rearranged and emptied (#349). Never
+    // sectioned by year, so this is the branch a collection uses.
+    let allowsMoving = navigation.listOptions.allowsMoving(
+      in: navigation.filter, query: navigation.searchText)
+    let visible = Array(window)
+    let unsectioned = ForEach(window) { rfc in
+      row(rfc, true)
+        .accessibilityActions {
+          if allowsMoving {
+            Button("Move Up") { step(rfc, by: -1, in: visible) }
+            Button("Move Down") { step(rfc, by: 1, in: visible) }
+          }
+        }
+    }
+    .onMove(perform: allowsMoving ? { move(from: $0, to: $1, in: visible) } : nil)
+    .onDelete(
+      perform: collection == nil
+        ? nil
+        : { offsets in offsets.map { visible[$0].id }.forEach(remove) })
     List(selection: $navigation.selection) {
       #if os(macOS)
-        ForEach(window) { row($0, true) }
+        unsectioned
       #else
         // By year where the list is in order of publication, as Notes sections
         // its lists by date (#347). Over the window only: a later page's row may
@@ -61,7 +128,7 @@ struct RFCListView: View {
             }
           }
         } else {
-          ForEach(window) { row($0, true) }
+          unsectioned
         }
       #endif
       // Where Mail says when it last checked: after the last row, scrolled to
@@ -91,16 +158,63 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+        let isUnsearched = navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        if isUnsearched, let collection {
+          ContentUnavailableView {
+            Label("No Documents", systemImage: "folder")
+          } description: {
+            Text("Add RFCs from the reader, from any list, or here.")
+          } actions: {
+            Button("Add RFCs…") { addingTo = PickerTarget(id: collection) }
+          }
+        } else if isUnsearched {
           ContentUnavailableView(
-            "No \(navigation.filter.title)", systemImage: navigation.filter.systemImage)
+            "No \(library.title(for: navigation.filter))",
+            systemImage: navigation.filter.systemImage)
         } else {
           ContentUnavailableView.search(text: navigation.searchText)
         }
       }
     }
+    .sheet(item: $addingTo) {
+      // The list's undo manager, not the sheet's: on a Mac the sheet is a window
+      // of its own, and what it registered went with it when it closed.
+      CollectionPickerSheet(collection: $0.id, undoManager: undoManager)
+    }
+    #if os(macOS)
+      // Delete takes the selected document out of the collection shown, and is
+      // disabled everywhere else.
+      .onDeleteCommand(
+        perform: collection == nil
+          ? nil
+          : {
+            if let selection = navigation.selection { remove(selection) }
+          }
+      )
+      // The Mac's list has no toolbar of its own to put Add in.
+      .safeAreaInset(edge: .bottom) {
+        if let collection {
+          HStack {
+            Button {
+              addingTo = PickerTarget(id: collection)
+            } label: {
+              Label("Add RFCs…", systemImage: "plus")
+            }
+            .buttonStyle(.borderless)
+            Spacer()
+          }
+          .padding(8)
+          .background(.bar)
+        }
+      }
+    #endif
     .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
+      #if !os(macOS)
+        // Edit belongs to a collection's list, and its button goes with it: left
+        // on, a list beside the sidebar stayed in Edit with no way out.
+        editMode?.wrappedValue = .inactive
+      #endif
     }
     .onChange(of: navigation.listOptions) {
       limit = ListWindow.initialLimit(covering: selectedRow())
@@ -117,16 +231,28 @@ struct RFCListView: View {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
     #if !os(macOS)
-      .navigationTitle(navigation.filter.title)
+      .navigationTitle(library.title(for: navigation.filter))
       .navigationSubtitle(library.listSubtitle(for: navigation))
       // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
       // under it whenever the list was short enough not to scroll.
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
-      .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
+      .searchable(
+        text: $navigation.searchText, prompt: "Search \(library.title(for: navigation.filter))"
+      )
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
+        if let collection {
+          ToolbarItem(placement: .primaryAction) {
+            Button {
+              addingTo = PickerTarget(id: collection)
+            } label: {
+              Label("Add", systemImage: "plus")
+            }
+          }
+          ToolbarItem(placement: .topBarTrailing) { EditButton() }
+        }
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
@@ -139,7 +265,13 @@ struct RFCListView: View {
     private var optionsMenu: some View {
       @Bindable var navigation = navigation
       return Menu {
-        if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
+        if case .collection = navigation.filter {
+          Picker("Sort", selection: $navigation.listOptions.collectionSort) {
+            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { sort in
+              Text(sort.title)
+            }
+          }
+        } else if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
           Picker("Sort", selection: $navigation.listOptions.order) {
             ForEach(ListOptions.Order.allCases, id: \.self) { order in
               Text(order.title)
@@ -296,6 +428,13 @@ struct RFCRow: View {
     let rfc: RFCMetadata
     let isBookmarked: Bool
     @Environment(\.modelContext) private var modelContext
+    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(\.undoManager) private var undoManager
+    /// The Add to Collection sheet a swipe opens, which cannot open a menu (#349).
+    @State private var isChoosingCollection = false
+    /// New Collection was chosen on that sheet: asked for once the sheet is gone.
+    @State private var wantsNewCollection = false
 
     func body(content: Content) -> some View {
       content
@@ -306,12 +445,30 @@ struct RFCRow: View {
               systemImage: isBookmarked ? "bookmark.slash" : "bookmark")
           }
           .tint(.accentColor)
+          Button {
+            isChoosingCollection = true
+          } label: {
+            Label("Add to Collection", systemImage: "folder.badge.plus")
+          }
+          .tint(.indigo)
+        }
+        .sheet(isPresented: $isChoosingCollection) {
+          guard wantsNewCollection else { return }
+          wantsNewCollection = false
+          navigation.collectionEditor = .create(adding: rfc.id)
+        } content: {
+          AddToCollectionSheet(document: rfc.id) { wantsNewCollection = true }
         }
         .contextMenu {
           Button(action: toggleBookmark) {
             Label(
               isBookmarked ? "Remove Bookmark" : "Bookmark",
               systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+          }
+          Menu("Add to Collection") {
+            AddToCollectionItems(
+              document: rfc.id, library: library, navigation: navigation,
+              undoManager: undoManager)
           }
           ShareLink(
             item: RFCEditorEndpoints.infoPage(rfc.id),
@@ -342,6 +499,36 @@ struct RFCRow: View {
     private func toggleBookmark() {
       let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
       BookmarkStore.toggle(rfc.id, title: title, in: modelContext)
+    }
+  }
+#endif
+
+/// A collection to add to, as a sheet's item (#349).
+private struct PickerTarget: Identifiable {
+  let id: UUID
+}
+
+#if os(macOS)
+  /// What a Mac list row offers on a right click (#349).
+  struct MacRowActions: ViewModifier {
+    let rfc: RFCMetadata
+    let collection: UUID?
+    let library: LibraryModel
+    let navigation: NavigationModel
+    let undoManager: UndoManager?
+    let remove: (DocumentID) -> Void
+
+    func body(content: Content) -> some View {
+      content.contextMenu {
+        Menu("Add to Collection") {
+          AddToCollectionItems(
+            document: rfc.id, library: library, navigation: navigation,
+            undoManager: undoManager)
+        }
+        if collection != nil {
+          Button("Remove from Collection") { remove(rfc.id) }
+        }
+      }
     }
   }
 #endif

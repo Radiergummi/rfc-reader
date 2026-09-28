@@ -2,18 +2,20 @@ import Foundation
 import RFCKit
 import SwiftData
 
-/// The reader's own data: bookmarks and reading positions (#152).
+/// The reader's own data: bookmarks, reading positions (#152) and collections (#349).
 ///
 /// Versioned from the start, so a change to the schema is a migration rather than a
-/// store that no longer opens. `SchemaV3` is the one the app uses: it is CloudKit's
-/// shape — no `@Attribute(.unique)`, every attribute optional or defaulted — so
+/// store that no longer opens. `SchemaV4` is the one the app uses, V3's keys and
+/// shape carried over unchanged: it is CloudKit's shape — no `@Attribute(.unique)`, every attribute optional or defaulted — so
 /// turning sync on later is configuration, not another migration. Uniqueness is the
 /// stores' job instead (a lookup by the document's `fileStem`, and `deduplicate`),
 /// since CloudKit can deliver two rows for one document.
 ///
 /// Here rather than in the App target so the migration can be tested.
-public typealias Bookmark = SchemaV3.Bookmark
-public typealias ReadingPosition = SchemaV3.ReadingPosition
+public typealias Bookmark = SchemaV4.Bookmark
+public typealias ReadingPosition = SchemaV4.ReadingPosition
+public typealias DocumentCollection = SchemaV4.DocumentCollection
+public typealias DocumentCollectionItem = SchemaV4.DocumentCollectionItem
 
 /// Today's models as they were before #152, exactly: a bare RFC number, unique.
 public enum SchemaV1: VersionedSchema {
@@ -139,6 +141,109 @@ public enum SchemaV3: VersionedSchema {
   }
 }
 
+/// V3 and the collections (#349). Its own copies of V3's two models, identical to
+/// them: reusing one schema's classes in another is a known source of failed
+/// staged migrations in SwiftData.
+public enum SchemaV4: VersionedSchema {
+  public static let versionIdentifier = Schema.Version(4, 0, 0)
+  public static var models: [any PersistentModel.Type] {
+    [Bookmark.self, ReadingPosition.self, DocumentCollection.self, DocumentCollectionItem.self]
+  }
+
+  @Model
+  public final class Bookmark {
+    /// The document's `fileStem`: `rfc9110`, `bcp14`.
+    public var documentKey: String = ""
+    public var title: String = ""
+    public var createdAt: Date = Date.distantPast
+
+    public init(document: DocumentID, title: String, createdAt: Date = .now) {
+      self.documentKey = document.fileStem
+      self.title = title
+      self.createdAt = createdAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+
+  /// V3's, `originalName` included: without it the migration drops every reading
+  /// position's anchor — measured, on V1, V2 and V3 stores alike.
+  @Model
+  public final class ReadingPosition {
+    public var documentKey: String = ""
+    /// The nearest anchor at or above the place the reader left, as a
+    /// `ReadingPlace` has it. V1 and V2 called it the section anchor.
+    @Attribute(originalName: "sectionAnchor") public var anchor: String?
+    /// Characters past `anchor`, or nil when no place is recorded.
+    public var offset: Int?
+    public var updatedAt: Date = Date.distantPast
+
+    public init(document: DocumentID, place: ReadingPlace?, updatedAt: Date = .now) {
+      self.documentKey = document.fileStem
+      self.anchor = place?.anchor
+      self.offset = place?.offset
+      self.updatedAt = updatedAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+
+    public var place: ReadingPlace? {
+      get { offset.map { ReadingPlace(anchor: anchor, offset: $0) } }
+      set {
+        anchor = newValue?.anchor
+        offset = newValue?.offset
+      }
+    }
+  }
+
+  /// A named, user-made list of documents. Its members are `DocumentCollectionItem`
+  /// rows naming it by `identifier`, not a relationship: two devices adding to one
+  /// collection then each insert a row, and nothing is lost when they meet.
+  @Model
+  public final class DocumentCollection {
+    public var identifier: UUID = UUID()
+    public var name: String = ""
+    /// A `CollectionColor` raw value. An unknown name reads as the default.
+    public var colorName: String = CollectionColor.default.rawValue
+    /// Where the collection sits in the sidebar, ascending.
+    public var position: Double = 0
+    public var createdAt: Date = Date.distantPast
+
+    public init(name: String, color: CollectionColor, position: Double, createdAt: Date = .now) {
+      self.identifier = UUID()
+      self.name = name
+      self.colorName = color.rawValue
+      self.position = position
+      self.createdAt = createdAt
+    }
+
+    public var color: CollectionColor {
+      get { CollectionColor(name: colorName) }
+      set { colorName = newValue.rawValue }
+    }
+  }
+
+  /// One document in one collection.
+  @Model
+  public final class DocumentCollectionItem {
+    public var collectionIdentifier: UUID?
+    /// The document's `fileStem`, as `Bookmark.documentKey` is: `rfc9110`.
+    public var documentKey: String = ""
+    /// Where the item sits in its collection, ascending.
+    public var position: Double = 0
+    public var addedAt: Date = Date.distantPast
+
+    public init(collection: UUID, document: DocumentID, position: Double, addedAt: Date = .now) {
+      self.collectionIdentifier = collection
+      self.documentKey = document.fileStem
+      self.position = position
+      self.addedAt = addedAt
+    }
+
+    public var document: DocumentID? { DocumentID(fileStem: documentKey) }
+  }
+}
+
 /// V1 to V3 by way of V2 (#152). Every row survives, as `rfcN`, and a section
 /// anchor becomes a place at offset zero.
 ///
@@ -154,12 +259,16 @@ public enum SchemaV3: VersionedSchema {
 /// left alone, so running the second stage again changes nothing.
 public enum UserDataMigrationPlan: SchemaMigrationPlan {
   public static var schemas: [any VersionedSchema.Type] {
-    [SchemaV1.self, SchemaV2.self, SchemaV3.self]
+    [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self]
   }
-  public static var stages: [MigrationStage] { [v1ToV2, v2ToV3] }
+  public static var stages: [MigrationStage] { [v1ToV2, v2ToV3, v3ToV4] }
 
   static let v1ToV2 = MigrationStage.lightweight(
     fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
+
+  /// Adds the collections' two entities and changes nothing else (#349).
+  static let v3ToV4 = MigrationStage.lightweight(
+    fromVersion: SchemaV3.self, toVersion: SchemaV4.self)
 
   static let v2ToV3 = MigrationStage.custom(
     fromVersion: SchemaV2.self, toVersion: SchemaV3.self,
@@ -182,14 +291,15 @@ public enum UserDataMigrationPlan: SchemaMigrationPlan {
 
 /// Opening the store, and keeping it one row per document.
 public enum UserData {
-  /// The app's container: V3, migrated from whatever version is on disk.
+  /// The app's container: V4, migrated from whatever version is on disk.
   public static func container(configurations: ModelConfiguration...) throws -> ModelContainer {
     try ModelContainer(
-      for: Schema(versionedSchema: SchemaV3.self), migrationPlan: UserDataMigrationPlan.self,
+      for: Schema(versionedSchema: SchemaV4.self), migrationPlan: UserDataMigrationPlan.self,
       configurations: configurations)
   }
 
-  /// Merges rows that name the same document, keeping the newest. Without a unique
+  /// Merges rows that name the same document — keeping the newest bookmark and
+  /// reading position, and the earliest item in a collection. Without a unique
   /// constraint — CloudKit refuses one — two devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
@@ -199,6 +309,16 @@ public enum UserData {
     let positions = try context.fetch(
       FetchDescriptor<ReadingPosition>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))
     removeDuplicates(positions, keyedBy: \.documentKey, in: context)
+    // The earliest first, so the place the reader first gave a document survives.
+    // Items whose collection is not in the store are left alone: under sync they
+    // may have arrived before it (#349).
+    let items = try context.fetch(
+      FetchDescriptor<DocumentCollectionItem>(sortBy: [
+        SortDescriptor(\.addedAt), SortDescriptor(\.position),
+      ]))
+    removeDuplicates(
+      items, keyedBy: { "\($0.collectionIdentifier?.uuidString ?? "")/\($0.documentKey)" },
+      in: context)
     if context.hasChanges { try context.save() }
   }
 

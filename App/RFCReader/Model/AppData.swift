@@ -68,6 +68,6 @@ enum AppData {
   static let storeWarning = (
     title: "Your bookmarks couldn't be loaded",
     message:
-      "Reading works as usual, but bookmarks and reading positions changed in this session won't be saved. Nothing already saved has been touched."
+      "Reading works as usual, but bookmarks, reading positions and collections changed in this session won't be saved. Nothing already saved has been touched."
   )
 }
