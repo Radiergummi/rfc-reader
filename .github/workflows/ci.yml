@@ -92,7 +92,7 @@ jobs:
       # The newest cache any earlier run saved: entries are keyed on their inputs,
       # so a stale one is never used, only not hit.
       - name: Restore the compilation cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
@@ -107,7 +107,7 @@ jobs:
       # one saved per pull request would only crowd main's out of the quota.
       - name: Save the compilation cache
         if: github.event_name == 'push'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compilation-cache-${{ github.sha }}
