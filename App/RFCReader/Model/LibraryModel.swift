@@ -133,16 +133,18 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    // Before anything is awaited, so that the parse is under way by the time this
+    // first suspends. `AppDelegate` starts this with `Task.immediate` and makes the
+    // first window once it does: the window is about 255 ms of the main thread, and
+    // the parse, which needs nothing from it, now runs beside it rather than after
+    // it (#367).
+    async let cached = Self.loadCachedIndex(from: store)
     await refreshDownloadedNumbers()
     do {
-      if let cached = try await store.cachedIndex() {
-        // The store parses the cached index on its own actor; the search and the
-        // working groups are built off the main actor as well.
-        let index = cached.index
-        let prepared = await Self.prepare(index)
-        apply(prepared, updatedAt: cached.updatedAt)
+      if let (prepared, updatedAt) = try await cached {
+        apply(prepared, updatedAt: updatedAt)
         // Refresh in the background if the cache is older than a day.
-        if cached.updatedAt.timeIntervalSinceNow < -86_400 {
+        if updatedAt.timeIntervalSinceNow < -86_400 {
           Task(name: "Refresh index") { await refreshIndex() }
         }
       } else {
@@ -163,10 +165,14 @@ final class LibraryModel {
     }
   }
 
-  /// The search and the working groups, built off the main actor.
+  /// The cached index, parsed on the store's actor and prepared off the main actor
+  /// — the search and the working groups with it. Nil when there is none.
   @concurrent
-  private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
-    PreparedIndex(index: index)
+  private static func loadCachedIndex(from store: DocumentStore) async throws
+    -> (PreparedIndex, updatedAt: Date)?
+  {
+    guard let cached = try await store.cachedIndex() else { return nil }
+    return (PreparedIndex(index: cached.index), cached.updatedAt)
   }
 
   @concurrent
