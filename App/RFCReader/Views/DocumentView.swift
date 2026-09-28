@@ -32,9 +32,12 @@ struct DocumentView: View {
   @AppStorage("underlineLinks") private var underlineLinks = false
   @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
   /// The system's text size, which the reader follows (#153). The Mac has no
-  /// Dynamic Type, and reports the default size. Bold Text needs nothing here:
-  /// UIKit applies it to the system font by itself.
+  /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
+  /// Bold Text. UIKit applies it to the system font by itself, as it makes the
+  /// font, and a built document's fonts are made once: a change is a reason to
+  /// build again, never an input to the style.
+  @Environment(\.legibilityWeight) private var legibilityWeight
 
   let id: DocumentID
 
@@ -129,6 +132,7 @@ struct DocumentView: View {
     let fontSize: Double
     let underlineLinks: Bool
     let textSize: DynamicTypeSize
+    let legibilityWeight: LegibilityWeight?
     let column: CGFloat?
 
     var style: ReadingStyle? {
@@ -142,7 +146,7 @@ struct DocumentView: View {
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: document != nil, fontSize: fontSize, underlineLinks: underlineLinks,
-      textSize: textSize, column: column)
+      textSize: textSize, legibilityWeight: legibilityWeight, column: column)
   }
 
   /// The reader, and on macOS only the reader.
