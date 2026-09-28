@@ -11,10 +11,10 @@ extension DocumentTextBuilder {
   /// Artwork and source code go into the storage verbatim, non-wrapping, in a
   /// monospace font scaled so the widest line fits the measure.
   ///
-  /// Scaling replaces the horizontal scroll view the old `PreformattedView` had.
-  /// Across the 8,457-document converted corpus, 97.8% of artwork blocks are 69
-  /// columns or narrower and 99.998% are 79 or narrower; the widest line anywhere
-  /// is 129 columns, in RFC 2124.
+  /// Scaled rather than scrolled sideways: the body is one text storage, and no
+  /// block of it scrolls on its own. Across the 8,457-document converted corpus,
+  /// 97.8% of artwork blocks are 69 columns or narrower and 99.998% are 79 or
+  /// narrower; the widest line anywhere is 129 columns, in RFC 2124.
   func appendVerbatim(_ content: Preformatted, indent: CGFloat) {
     mark(content.anchor)
     let text = displayedText(of: content, indent: indent)
