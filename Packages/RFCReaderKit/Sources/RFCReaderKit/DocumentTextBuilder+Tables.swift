@@ -121,10 +121,12 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// `Figure 3: Packet layout`, or just the title when the block is unnumbered.
+  /// `Figure 3: Packet layout`; `Figure 3` when the block has no title, as xml2rfc's
+  /// text and HTML writers caption every numbered figure and table, so the prose's
+  /// "see Figure 3" has something to find; just the title when it is unnumbered.
   static func caption(_ kind: String, number: Int?, title: String?) -> String? {
-    guard let title else { return nil }
-    return number.map { "\(kind) \($0): \(title)" } ?? title
+    guard let number else { return title }
+    return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
   }
 
   func appendCaption(_ caption: String?, indent: CGFloat) {

@@ -54,6 +54,22 @@ struct BuilderCompletenessTests {
     #expect(built.anchors.offset(of: "figure-3") != nil)
   }
 
+  /// xml2rfc's text and HTML writers caption every numbered figure, and with its
+  /// number alone when it has no name, so "see Figure 3" in the prose finds it.
+  @Test func `an untitled numbered figure is captioned by its number`() throws {
+    let figure = Figure(
+      title: nil,
+      number: 3,
+      blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))],
+      anchor: "figure-3"
+    )
+    let built = DocumentTextBuilder.build(Fixtures.document(.figure(figure)), style: style)
+    #expect(built.text.string.hasSuffix("Figure 3\n"))
+    let offset = try Fixtures.offset(of: "+--+", in: built.text)
+    #expect(
+      built.text.attribute(.rfcCaption, at: offset, effectiveRange: nil) as? String == "Figure 3")
+  }
+
   @Test func `a captioned figure tags its artwork with the caption`() throws {
     let figure = Figure(
       title: "Packet layout",

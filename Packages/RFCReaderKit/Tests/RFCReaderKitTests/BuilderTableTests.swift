@@ -118,6 +118,15 @@ struct BuilderTableTests {
     #expect(built.text.string.contains("Table 1: Methods"))
   }
 
+  /// As xml2rfc writes it: the number and the name, the number alone, the name
+  /// alone, and nothing for a block that has neither.
+  @Test func `a caption is the number, the name, or both`() {
+    #expect(DocumentTextBuilder.caption("Table", number: 2, title: "Codes") == "Table 2: Codes")
+    #expect(DocumentTextBuilder.caption("Table", number: 2, title: nil) == "Table 2")
+    #expect(DocumentTextBuilder.caption("Table", number: nil, title: "Codes") == "Codes")
+    #expect(DocumentTextBuilder.caption("Table", number: nil, title: nil) == nil)
+  }
+
   @Test func `the anchor is indexed`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.anchors.offset(of: "table-1") != nil)
