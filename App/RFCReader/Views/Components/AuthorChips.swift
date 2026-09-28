@@ -149,8 +149,7 @@ private struct WrappingRowLayout: Layout {
   /// card reaches over the sheet's grabber. That is so however the card is
   /// presented — SwiftUI popover, UIKit popover, page sheet — and Notes does the
   /// same on iOS 27. Without its navigation controller the card does not appear.
-  /// A drag that starts on a view of this process does reach the sheet, so the
-  /// card gets a strip of one across its top, the one place it can be swiped from.
+  /// Hence the Close button.
   private struct ContactCardPresenter: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let author: Author
@@ -179,17 +178,6 @@ private struct WrappingRowLayout: Layout {
       // New Contact, Add to Existing Contact — push their screens.
       let navigation = UINavigationController(rootViewController: card)
       navigation.modalPresentationStyle = .popover
-      let handle = UIView()
-      handle.translatesAutoresizingMaskIntoConstraints = false
-      // Below the bar, which passes a touch through wherever it has no button, so
-      // Close still wins.
-      navigation.view.insertSubview(handle, belowSubview: navigation.navigationBar)
-      NSLayoutConstraint.activate([
-        handle.topAnchor.constraint(equalTo: navigation.view.topAnchor),
-        handle.leadingAnchor.constraint(equalTo: navigation.view.leadingAnchor),
-        handle.trailingAnchor.constraint(equalTo: navigation.view.trailingAnchor),
-        handle.bottomAnchor.constraint(equalTo: navigation.navigationBar.bottomAnchor),
-      ])
       navigation.preferredContentSize = CGSize(width: 340, height: 540)
       navigation.popoverPresentationController?.sourceView = anchor.view
       navigation.delegate = context.coordinator
