@@ -71,30 +71,24 @@ struct SidebarView: View {
 
   @ViewBuilder
   private var places: some View {
-    Section(isExpanded: $libraryExpanded) {
+    group("Library", isExpanded: $libraryExpanded) {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
-    } header: {
-      header("Library")
     }
-    Section(isExpanded: $browseExpanded) {
+    group("Browse", isExpanded: $browseExpanded) {
       row(.all)
       row(.standards)
       row(.bestCurrentPractice)
       ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
         row(.stream(stream))
       }
-    } header: {
-      header("Browse")
     }
     if !library.topWorkingGroups.isEmpty {
-      Section(isExpanded: $workingGroupsExpanded) {
+      group("Working Groups", isExpanded: $workingGroupsExpanded) {
         ForEach(library.topWorkingGroups, id: \.self) { group in
           row(.workingGroup(group))
         }
-      } header: {
-        header("Working Groups")
       }
     }
     // Not on iOS, where the sidebar is a list of places to go and this puts
@@ -104,18 +98,43 @@ struct SidebarView: View {
     #endif
   }
 
-  /// Bold and title-sized on iOS, as Notes heads its folder groups (#343).
-  /// `.headerProminence(.increased)` does not reach a sidebar list's collapsible
-  /// headers: measured on an iPhone, they stayed small and grey.
-  private func header(_ title: String) -> some View {
+  /// A section that collapses (#344).
+  ///
+  /// On iOS the header is drawn here rather than by `Section(isExpanded:)`, whose
+  /// header could not be made to look like Notes': `.headerProminence(.increased)`
+  /// left it small and grey, its toggle came out black where Notes' is a dimmed
+  /// grey, and it sat inset from the cards' edge, where Notes' is level with it.
+  @ViewBuilder
+  private func group<Content: View>(
+    _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
+  ) -> some View {
     #if os(macOS)
-      Text(title)
+      Section(title, isExpanded: isExpanded, content: content)
     #else
-      Text(title)
-        .font(.title2.bold())
-        // The label colour itself: `.primary` resolves against the header's own
-        // style, which is grey.
-        .foregroundStyle(Color(uiColor: .label))
+      Section {
+        if isExpanded.wrappedValue { content() }
+      } header: {
+        Button {
+          withAnimation(.snappy) { isExpanded.wrappedValue.toggle() }
+        } label: {
+          HStack {
+            Text(title)
+              .font(.title2.bold())
+              // The label colour itself: `.primary` resolves against the
+              // header's own style, which is grey.
+              .foregroundStyle(Color(uiColor: .label))
+            Spacer()
+            Image(systemName: "chevron.down.circle.fill")
+              .font(.title3)
+              .foregroundStyle(.white, Color(uiColor: .systemGray2))
+              .rotationEffect(.degrees(isExpanded.wrappedValue ? 0 : -90))
+          }
+        }
+        .buttonStyle(.plain)
+        .levelWithCards()
+        .accessibilityValue(isExpanded.wrappedValue ? "Expanded" : "Collapsed")
+        .accessibilityAddTraits(.isHeader)
+      }
     #endif
   }
 
