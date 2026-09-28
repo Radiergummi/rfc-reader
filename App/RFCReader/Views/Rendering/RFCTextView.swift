@@ -1,3 +1,4 @@
+import RFCKit
 import RFCReaderKit
 import SwiftUI
 
@@ -21,6 +22,11 @@ struct RFCTextView: View {
   /// The same preference `DocumentView` derives the build's column from, so the
   /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
+  /// The document on screen, which a force click on an anchor previews (#29).
+  let documentID: DocumentID
+  /// Set only for the reader inside a link preview (#29): a click anywhere in it
+  /// commits the preview rather than selecting, and it previews nothing itself.
+  let commitsOnClick: (() -> Void)?
   /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
@@ -42,6 +48,8 @@ struct RFCTextView: View {
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
     measure: MeasurePreference,
+    documentID: DocumentID,
+    commitsOnClick: (() -> Void)? = nil,
     lastVisibleAnchor: VisibleAnchorBox,
     scrollTarget: ReaderScrollTarget?,
     onScrollHandled: @escaping () -> Void,
@@ -55,6 +63,8 @@ struct RFCTextView: View {
     self.built = built
     self.bibliography = bibliography
     self.measure = measure
+    self.documentID = documentID
+    self.commitsOnClick = commitsOnClick
     self.lastVisibleAnchor = lastVisibleAnchor
     self.scrollTarget = scrollTarget
     self.onScrollHandled = onScrollHandled
@@ -73,6 +83,8 @@ struct RFCTextView: View {
           built: built,
           bibliography: bibliography,
           measure: measure,
+          documentID: documentID,
+          commitsOnClick: commitsOnClick,
           lastVisibleAnchor: lastVisibleAnchor,
           scrollTarget: scrollTarget,
           onScrollHandled: onScrollHandled,
@@ -107,6 +119,8 @@ struct ReaderInputs {
   let built: BuiltDocument
   let bibliography: [ReferenceGroup]
   let measure: MeasurePreference
+  let documentID: DocumentID
+  let commitsOnClick: (() -> Void)?
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
@@ -125,6 +139,8 @@ struct ReaderInputs {
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
+    coordinator.documentID = documentID
+    coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
     if coordinator.heading !== heading {
       coordinator.heading = heading
@@ -251,8 +267,11 @@ struct ReaderInputs {
       textView.quickLookReference = { [weak coordinator = context.coordinator] event in
         coordinator?.quickLookReference(with: event) ?? false
       }
+      textView.referenceLink = { [weak coordinator = context.coordinator] event in
+        coordinator?.referenceLink(under: event)
+      }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
-        coordinator?.mouseDownInText()
+        coordinator?.mouseDownInText() ?? false
       }
 
       let host = NSHostingController(rootView: inputs.header)

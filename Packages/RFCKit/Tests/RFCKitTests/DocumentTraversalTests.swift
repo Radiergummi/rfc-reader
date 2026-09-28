@@ -110,4 +110,12 @@ struct DocumentTraversalTests {
     #expect(document.section(number: "2")?.anchor == "s2")
     #expect(document.section(anchor: "missing") == nil)
   }
+
+  /// A link names a place by section number or by anchor, and the reader and the
+  /// link preview must land on the same one (#29).
+  @Test func `a place resolves to its section's anchor, or stands as an anchor`() {
+    #expect(document.anchor(forPlace: "1.1") == "s1.1")
+    #expect(document.anchor(forPlace: "s2") == "s2")
+    #expect(document.anchor(forPlace: "figure-3") == "figure-3")
+  }
 }

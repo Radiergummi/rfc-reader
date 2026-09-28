@@ -72,6 +72,16 @@ struct ReaderLayoutTests {
     #expect(column == ReaderLayout.minimumPaneWidth - ReaderLayout.margin * 2)
     #expect(column > 300)
   }
+
+  /// A header with no height of its own — a link preview's `EmptyView` (#29) —
+  /// answers with the height it was offered, and as an inset that unbounded height
+  /// made the text view's frame NaN, which AppKit traps on.
+  @Test func `a header that answers with the height it was offered has none`() {
+    #expect(ReaderLayout.headerHeight(measured: 84, offered: .greatestFiniteMagnitude) == 84)
+    #expect(
+      ReaderLayout.headerHeight(
+        measured: .greatestFiniteMagnitude, offered: .greatestFiniteMagnitude) == 0)
+  }
 }
 
 @Suite("Toolbar title layout")
