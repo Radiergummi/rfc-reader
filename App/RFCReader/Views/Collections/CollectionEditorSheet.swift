@@ -20,6 +20,11 @@ struct CollectionEditorSheet: View {
     if case .edit = mode { "Save" } else { "Create" }
   }
 
+  /// Deleted elsewhere while being edited — another window, a script, sync.
+  private var isGone: Bool {
+    if case .edit(let identifier) = mode { library.collections[identifier] == nil } else { false }
+  }
+
   /// The store refuses a name of only spaces; the button says so first.
   private var canSave: Bool {
     !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -42,6 +47,9 @@ struct CollectionEditorSheet: View {
       .padding(20)
       .frame(width: 360)
       .onAppear(perform: load)
+      .onChange(of: isGone) { _, isGone in
+        if isGone { dismiss() }
+      }
     #else
       NavigationStack {
         Form { fields }
@@ -56,6 +64,9 @@ struct CollectionEditorSheet: View {
       }
       .presentationDetents([.medium])
       .onAppear(perform: load)
+      .onChange(of: isGone) { _, isGone in
+        if isGone { dismiss() }
+      }
     #endif
   }
 

@@ -44,6 +44,11 @@ struct CollectionPickerSheet: View {
       }
       .searchable(text: $query, prompt: "Search RFCs")
       .onChange(of: query) { limit = ListWindow.page }
+      // Deleted elsewhere — another window, a script, sync — there is nothing left
+      // to add to.
+      .onChange(of: library.collections[collection] == nil) { _, isGone in
+        if isGone { dismiss() }
+      }
       .navigationTitle("Add to \(library.title(for: .collection(collection)))")
       #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
