@@ -113,7 +113,7 @@ Ideas from the first brainstorm session and where each one lands.
 
 | What | URL | Notes |
 |---|---|---|
-| Full index | `https://www.rfc-editor.org/rfc-index.xml` | ~14 MB, ~9,850 RFCs plus BCP/STD/FYI groups; parses in about a second |
+| Full index | `https://www.rfc-editor.org/rfc-index.xml` | ~14 MB, 9,842 RFCs (counts dated in `DATA_PIPELINE.md`) plus BCP/STD/FYI groups; parses in about a second |
 | Document, semantic | `https://www.rfc-editor.org/rfc/rfcNNNN.xml` | RFCXML v3; available for ~1,400 RFCs (roughly 8650 onwards) |
 | Document, text | `https://www.rfc-editor.org/rfc/rfcNNNN.txt` | Available for every RFC |
 | Per-RFC metadata | `https://www.rfc-editor.org/rfc/rfcNNNN.json` | Small; status, obsoletes, updates, errata URL |

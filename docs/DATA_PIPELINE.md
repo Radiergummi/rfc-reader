@@ -4,13 +4,14 @@
 
 ## The facts that shape everything
 
-Numbers from the RFC Editor index as of 20 September 2026.
+Numbers from the RFC Editor index as of 20 September 2026, and unchanged on 28 September. This is the one place they are stated; elsewhere they are quoted from here.
 
 | | RFCs | Pages | Text size (est.) |
 |---|---|---|---|
 | Total | 9,842 | 245,324 | ~530 MB |
 | With RFCXML v3 source (RFC 8650 onward, every one of them) | 1,378 | 36,462 | |
 | Legacy, text only (everything before RFC 8650) | 8,464 | 208,862 | ~450 MB |
+| … of which a plain-text file exists (the rest are PDF or PostScript only, #207) | 8,457 | | |
 
 Two consequences:
 
