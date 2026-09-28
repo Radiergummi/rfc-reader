@@ -18,6 +18,9 @@ struct RFCTextView: View {
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
+  /// The same preference `DocumentView` derives the build's column from, so the
+  /// inset settles on the column the next build measures against.
+  let measure: MeasurePreference
   /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
@@ -38,6 +41,7 @@ struct RFCTextView: View {
   init(
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
+    measure: MeasurePreference,
     lastVisibleAnchor: VisibleAnchorBox,
     scrollTarget: ReaderScrollTarget?,
     onScrollHandled: @escaping () -> Void,
@@ -50,6 +54,7 @@ struct RFCTextView: View {
   ) {
     self.built = built
     self.bibliography = bibliography
+    self.measure = measure
     self.lastVisibleAnchor = lastVisibleAnchor
     self.scrollTarget = scrollTarget
     self.onScrollHandled = onScrollHandled
@@ -67,6 +72,7 @@ struct RFCTextView: View {
         inputs: ReaderInputs(
           built: built,
           bibliography: bibliography,
+          measure: measure,
           lastVisibleAnchor: lastVisibleAnchor,
           scrollTarget: scrollTarget,
           onScrollHandled: onScrollHandled,
@@ -100,6 +106,7 @@ struct ReaderScrollTarget: Equatable {
 struct ReaderInputs {
   let built: BuiltDocument
   let bibliography: [ReferenceGroup]
+  let measure: MeasurePreference
   let lastVisibleAnchor: VisibleAnchorBox
   let scrollTarget: ReaderScrollTarget?
   let onScrollHandled: () -> Void
@@ -132,7 +139,7 @@ struct ReaderInputs {
       coordinator.headerIdentity = headerIdentity
       coordinator.headerHost?.rootView = header
     }
-    coordinator.layOut(width: width)
+    coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
       coordinator.install(built)
     }
@@ -182,7 +189,7 @@ struct ReaderInputs {
       // reader runs under, is `ReaderTextView.safeAreaInsetsDidChange`'s.
       textView.contentInsetAdjustmentBehavior = .never
       textView.textContainer.lineFragmentPadding = 0
-      // The coordinator sizes the container to the column; see `layOut(width:)`.
+      // The coordinator sizes the container to the column; see `layOut(width:measure:)`.
       textView.textContainer.widthTracksTextView = false
       // Find-in-document, which is half of why the reader is a text view at all.
       textView.isFindInteractionEnabled = true
@@ -225,7 +232,7 @@ struct ReaderInputs {
         width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
       textView.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
       textView.textContainer?.lineFragmentPadding = 0
-      // The coordinator sizes the container to the column; see `layOut(width:)`.
+      // The coordinator sizes the container to the column; see `layOut(width:measure:)`.
       textView.textContainer?.widthTracksTextView = false
       // The find bar lives in the scroll view, so `usesFindBar` needs the text view
       // to already be inside one — see where the scroll view is assembled below.
