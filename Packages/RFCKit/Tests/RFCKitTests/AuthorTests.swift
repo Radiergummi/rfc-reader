@@ -13,4 +13,11 @@ struct AuthorTests {
     #expect(Author(name: "C. Author", role: "contributor").displayName == "C. Author")
     #expect(Author(name: "D. Author").displayName == "D. Author")
   }
+
+  /// What a citation inverts and a printed page's footer names (#375).
+  @Test func `a surname is the name's last word`() {
+    #expect(Author(name: "A. Writer").surname == "Writer")
+    #expect(Author(name: "Anne B. Writer", role: "editor").surname == "Writer")
+    #expect(Author(name: "Writer").surname == "Writer")
+  }
 }

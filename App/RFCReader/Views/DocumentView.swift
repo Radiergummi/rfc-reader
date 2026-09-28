@@ -4,10 +4,6 @@ import SwiftData
 import SwiftUI
 import os
 
-#if canImport(UIKit)
-  import UIKit
-#endif
-
 /// The reader's load and build decisions, at debug level: what a device's
 /// Console shows when a document fails to load or never finishes (#252, #253).
 private let readerLog = Logger(
@@ -741,11 +737,13 @@ struct DocumentHeaderView: View {
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
 
+    /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(header: DocumentHeader, metadata: RFCMetadata?) {
-      title = header.title
-      date = (header.date ?? metadata?.date)?.formatted
-      workingGroup = header.workingGroup ?? metadata?.workingGroup
-      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
+      let summary = HeaderSummary(header: header, metadata: metadata)
+      title = summary.title
+      date = summary.date
+      workingGroup = summary.workingGroup
+      authors = summary.authors
       self.metadata = metadata
     }
   }

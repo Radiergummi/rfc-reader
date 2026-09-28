@@ -1,15 +1,19 @@
 import CoreGraphics
+import CoreText
 import Foundation
 import RFCKit
 import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Print: page layout")
 struct PrintLayoutTests {
-  static let isoA4 = PrintLayout.isoA4
-  static let letter = PrintLayout.letter
-
   @Test func `the US prints on Letter and everywhere else on A4`() {
     #expect(PrintLayout.paperSize(for: Locale(identifier: "en_US")) == PrintLayout.letter)
     #expect(PrintLayout.paperSize(for: Locale(identifier: "de_DE")) == PrintLayout.isoA4)
@@ -17,15 +21,15 @@ struct PrintLayoutTests {
   }
 
   @Test func `the text sits inside the margins`() {
-    let layout = PrintLayout(paperSize: Self.isoA4)
+    let layout = PrintLayout(paperSize: PrintLayout.isoA4)
     #expect(layout.contentRect.minX == PrintLayout.sideMargin)
-    #expect(layout.contentRect.maxX == Self.isoA4.width - PrintLayout.sideMargin)
+    #expect(layout.contentRect.maxX == PrintLayout.isoA4.width - PrintLayout.sideMargin)
     #expect(layout.contentRect.minY == PrintLayout.verticalMargin)
-    #expect(layout.contentRect.maxY == Self.isoA4.height - PrintLayout.verticalMargin)
+    #expect(layout.contentRect.maxY == PrintLayout.isoA4.height - PrintLayout.verticalMargin)
   }
 
   @Test func `the header and footer sit in the margins, not over the text`() {
-    let layout = PrintLayout(paperSize: Self.letter)
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
     #expect(layout.headerRect.maxY <= layout.contentRect.minY)
     #expect(layout.footerRect.minY >= layout.contentRect.maxY)
     #expect(layout.headerRect.minX == layout.contentRect.minX)
@@ -33,10 +37,24 @@ struct PrintLayoutTests {
   }
 
   @Test func `the document is built to the paper's column, at the print size`() {
-    let layout = PrintLayout(paperSize: Self.letter)
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
     #expect(layout.style.measure == layout.contentRect.width)
     #expect(layout.style.bodySize == PrintLayout.bodySize)
-    #expect(!layout.style.underlinesLinks)
+    #expect(!layout.style.emitsLinks)
+  }
+
+  /// The published text's artwork only reads at its own 72 columns, so they have to
+  /// fit the narrower of the two papers without wrapping.
+  @Test func `the original text's 72 columns fit the narrowest paper`() {
+    let font = PlatformFont.monospacedSystemFont(
+      ofSize: PrintLayout.originalTextSize, weight: .regular)
+    let line = CTLineCreateWithAttributedString(
+      NSAttributedString(string: String(repeating: "0", count: 72), attributes: [.font: font]))
+    let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+    let narrowest = min(
+      PrintLayout(paperSize: PrintLayout.letter).contentRect.width,
+      PrintLayout(paperSize: PrintLayout.isoA4).contentRect.width)
+    #expect(width <= narrowest)
   }
 
   @Test func `paper too small for the margins has an empty column, not a negative one`() {
@@ -67,15 +85,11 @@ struct PrintPaginationTests {
 
   @Test func `a page ends before the first line that would run past its foot`() {
     let pages = PrintPagination.pages(of: lines(25), pageHeight: 100)
+    // The tenth line ends exactly at the page's foot, and stays on it.
     #expect(
       pages == [
         Page(top: 0, bottom: 100), Page(top: 100, bottom: 200), Page(top: 200, bottom: 250),
       ])
-  }
-
-  @Test func `a line that fills the page exactly stays on it`() {
-    let pages = PrintPagination.pages(of: lines(10), pageHeight: 100)
-    #expect(pages == [Page(top: 0, bottom: 100)])
   }
 
   /// A page's slice runs from the top of its first line, so the space between
@@ -144,17 +158,52 @@ struct PrintPaginationTests {
     #expect(pages.allSatisfy { $0.height <= 700 })
   }
 
-  @Test func `every section heading keeps with what follows`() throws {
+  typealias Span = PrintPagination.Span
+
+  @Test func `a page draws the paragraphs that reach into it`() {
+    let spans = [
+      Span(minY: 0, maxY: 40),
+      Span(minY: 40, maxY: 120),
+      Span(minY: 120, maxY: 150),
+      Span(minY: 150, maxY: 260),
+    ]
+    #expect(PrintPagination.spans(spans, on: Page(top: 0, bottom: 100)) == 0..<2)
+    // The second paragraph continues onto this page, and is drawn on both.
+    #expect(PrintPagination.spans(spans, on: Page(top: 100, bottom: 200)) == 1..<4)
+    #expect(PrintPagination.spans(spans, on: Page(top: 200, bottom: 260)) == 3..<4)
+  }
+
+  /// A paragraph that ends where a page starts, or starts where it ends, is not on it.
+  @Test func `a paragraph touching a page's edge is not on it`() {
+    let spans = [Span(minY: 0, maxY: 100), Span(minY: 100, maxY: 200), Span(minY: 200, maxY: 300)]
+    #expect(PrintPagination.spans(spans, on: Page(top: 100, bottom: 200)) == 1..<2)
+  }
+
+  @Test func `no paragraphs, no range`() {
+    #expect(PrintPagination.spans([], on: Page(top: 0, bottom: 100)).isEmpty)
+  }
+}
+
+@Suite("Builder: what keeps with the next paragraph")
+@MainActor
+struct BuilderKeepsWithNextTests {
+  @Test func `every heading keeps with what follows, the abstract's included`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: ReadingStyle())
-    let offsets = PrintPagination.headingOffsets(in: built)
     for entry in built.anchors.entries where entry.heading != nil {
-      #expect(offsets.contains(entry.offset))
+      #expect(built.keepsWithNext.contains(entry.offset))
     }
     let abstract = try #require(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor))
-    #expect(offsets.contains(abstract))
+    #expect(built.keepsWithNext.contains(abstract))
     // A figure is anchored, but it is not a heading.
     let figure = try #require(built.anchors.offset(of: "fig-long"))
-    #expect(!offsets.contains(figure))
+    #expect(!built.keepsWithNext.contains(figure))
+  }
+
+  @Test func `a title block's title keeps with what follows`() throws {
+    let title = DocumentTextBuilder.TitleBlock(title: "A Protocol for Examples", details: [])
+    let built = DocumentTextBuilder.build(
+      try Fixtures.rfc8999(), style: ReadingStyle(), title: title)
+    #expect(built.keepsWithNext.contains(0))
   }
 }
 
@@ -195,21 +244,35 @@ struct PrintFurnitureTests {
       ]) == "Writer, et al.")
   }
 
-  @Test func `an editor's role is not their surname`() {
-    #expect(PrintFurniture.surname(of: "A. Writer, Ed.") == "Writer")
-    #expect(PrintFurniture.surname(of: "Writer") == "Writer")
-  }
-
   @Test func `the title block carries the identity line and the authors`() {
     let furniture = PrintFurniture(
-      header: header(authors: [Author(name: "A. Writer"), Author(name: "B. Scribe")]),
+      header: header(authors: [
+        Author(name: "A. Writer", role: "editor"), Author(name: "B. Scribe"),
+      ]),
       metadata: nil)
     #expect(furniture.titleBlock.title == "A Protocol for Examples")
     #expect(
       furniture.titleBlock.details == [
         "RFC 9999 · Standards Track · June 2026 · Example Working Group",
-        "A. Writer, B. Scribe",
+        "A. Writer, Ed., B. Scribe",
       ])
+  }
+
+  /// What the document's header leaves out, the index fills in; what it says, wins.
+  @Test func `the header and the index merge as they do on screen`() {
+    let metadata = RFCMetadata(
+      id: .rfc(9999), title: "Index Title", authors: [Author(name: "I. Ndex")],
+      date: PublicationDate(year: 2025, month: 1), workingGroup: "Index Group")
+    let bare = HeaderSummary(header: DocumentHeader(title: "A Protocol"), metadata: metadata)
+    #expect(bare.title == "A Protocol")
+    #expect(bare.date == "January 2025")
+    #expect(bare.workingGroup == "Index Group")
+    #expect(bare.authors == [Author(name: "I. Ndex")])
+    let full = HeaderSummary(
+      header: header(authors: [Author(name: "A. Writer")]), metadata: metadata)
+    #expect(full.date == "June 2026")
+    #expect(full.workingGroup == "Example Working Group")
+    #expect(full.authors == [Author(name: "A. Writer")])
   }
 
   @Test func `pages are numbered as an RFC numbers them`() {
@@ -222,6 +285,22 @@ struct PrintFurnitureTests {
 struct BuilderTitleTests {
   private let title = DocumentTextBuilder.TitleBlock(
     title: "A Protocol for Examples", details: ["RFC 9999 · June 2026", "", "A. Writer"])
+
+  @Test func `a print's build has no links, and keeps its chips`() throws {
+    let built = DocumentTextBuilder.build(
+      try Fixtures.rfc8999(), style: PrintLayout(paperSize: PrintLayout.letter).style)
+    let whole = NSRange(location: 0, length: built.text.length)
+    var links = 0
+    var chips = 0
+    built.text.enumerateAttribute(.link, in: whole) { value, _, _ in
+      if value != nil { links += 1 }
+    }
+    built.text.enumerateAttribute(.rfcChip, in: whole) { value, _, _ in
+      if value != nil { chips += 1 }
+    }
+    #expect(links == 0)
+    #expect(chips > 0)
+  }
 
   @Test func `the reader's build has no title block`() throws {
     let document = try Fixtures.rfc8999()

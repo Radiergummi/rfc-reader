@@ -33,11 +33,6 @@ public enum PrintPagination {
     public let top: CGFloat
     public let bottom: CGFloat
 
-    public init(top: CGFloat, bottom: CGFloat) {
-      self.top = top
-      self.bottom = bottom
-    }
-
     public var height: CGFloat { bottom - top }
   }
 
@@ -82,16 +77,46 @@ public enum PrintPagination {
     return pages
   }
 
-  /// Where every paragraph that keeps with the next one starts, as UTF-16 offsets
-  /// into the built text: the headings, the abstract's included. A renderer marks
-  /// the lines of the layout fragments starting at these offsets `keepsWithNext`.
+  /// A laid-out paragraph's vertical extent, in document coordinates: what a
+  /// page draws, whole, and clips to itself.
+  public struct Span: Equatable, Sendable {
+    public let minY: CGFloat
+    public let maxY: CGFloat
+
+    public init(minY: CGFloat, maxY: CGFloat) {
+      self.minY = minY
+      self.maxY = maxY
+    }
+  }
+
+  /// Which of `spans` reach into `page`, for it to draw: every one that ends
+  /// below the page's top and starts above its foot. A paragraph that continues
+  /// onto the next page is drawn on both, each clipping it to its own lines.
   ///
-  /// Read off the anchor index rather than the text's fonts, because the index is
-  /// where the builder already says which anchors are headings.
-  public static func headingOffsets(in document: BuiltDocument) -> Set<Int> {
-    Set(
-      document.anchors.entries
-        .filter { $0.heading != nil || $0.anchor == DocumentTextBuilder.abstractAnchor }
-        .map(\.offset))
+  /// - Parameter spans: in document order, top-down, as a layout manager
+  ///   enumerates its fragments. Searched by bisection, so a page of a long
+  ///   document does not walk every paragraph before it.
+  public static func spans(_ spans: [Span], on page: Page) -> Range<Int> {
+    let first = boundary(in: spans[...]) { $0.maxY > page.top }
+    let end = boundary(in: spans[first...]) { $0.minY >= page.bottom }
+    return first..<end
+  }
+
+  /// The first index of `spans` whose span satisfies `isPast`, which is false up
+  /// to some index and true from there on; the end index when it never holds.
+  private static func boundary(
+    in spans: ArraySlice<Span>, where isPast: (Span) -> Bool
+  ) -> Int {
+    var low = spans.startIndex
+    var high = spans.endIndex
+    while low < high {
+      let middle = low + (high - low) / 2
+      if isPast(spans[middle]) {
+        high = middle
+      } else {
+        low = middle + 1
+      }
+    }
+    return low
   }
 }

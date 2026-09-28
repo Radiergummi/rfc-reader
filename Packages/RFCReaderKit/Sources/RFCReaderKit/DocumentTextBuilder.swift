@@ -34,6 +34,8 @@ public final class DocumentTextBuilder {
   private(set) var bodyColour: PlatformColor = RFCColors.label
   let output = NSMutableAttributedString()
   var entries: [AnchorIndex.Entry] = []
+  /// See `BuiltDocument.keepsWithNext`.
+  var keepsWithNext: Set<Int> = []
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -80,7 +82,9 @@ public final class DocumentTextBuilder {
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
-    return BuiltDocument(text: builder.output, anchors: AnchorIndex(builder.entries))
+    return BuiltDocument(
+      text: builder.output, anchors: AnchorIndex(builder.entries),
+      keepsWithNext: builder.keepsWithNext)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -121,11 +125,6 @@ extension DocumentTextBuilder {
     public let title: String
     /// Set smaller and quieter, a line each: identity, date, authors.
     public let details: [String]
-
-    public init(title: String, details: [String]) {
-      self.title = title
-      self.details = details
-    }
   }
 
   /// The title's size against the body's: as large on paper as a large title is
@@ -134,6 +133,7 @@ extension DocumentTextBuilder {
 
   func appendTitle(_ title: TitleBlock) {
     let details = title.details.filter { !$0.isEmpty }
+    keepsWithNext.insert(output.length)
     append(
       title.title + "\n",
       [
@@ -178,6 +178,7 @@ extension DocumentTextBuilder {
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
     mark(Self.abstractAnchor)
+    keepsWithNext.insert(output.length)
     append(
       "Abstract\n",
       [
@@ -230,6 +231,7 @@ extension DocumentTextBuilder {
     // and all, rather than left behind as an empty "9. References".
     guard !Self.holdsOnlyReferences(section) else { return }
     mark(section.anchor, heading: section.displayTitle)
+    keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
     // is in `base`, so the anchor, the font and the spacing carry across the

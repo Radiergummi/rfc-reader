@@ -31,6 +31,11 @@ public struct ReadingStyle: Sendable, Equatable {
   /// An underline is the reader's to ask for, and then it goes under every link,
   /// chips included.
   public var underlinesLinks: Bool
+  /// Whether a link is a link at all. On by default; off for a print, where a link
+  /// cannot be followed and a text layout manager with no text view to say
+  /// otherwise underlines and recolours every `.link` run (#375). The text of a
+  /// link stays, and so does a reference's chip.
+  public var emitsLinks: Bool
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
@@ -41,13 +46,14 @@ public struct ReadingStyle: Sendable, Equatable {
   ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
     bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
-    underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large
+    underlinesLinks: Bool = false, emitsLinks: Bool = true, textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
     self.textSize = textSize
     self.measure = measure
     self.lineHeightMultiple = lineHeightMultiple
     self.underlinesLinks = underlinesLinks
+    self.emitsLinks = emitsLinks
   }
 
   /// The same style at a different size — everything else about reading it is

@@ -153,8 +153,6 @@ struct DocumentCommands: Commands {
           .keyboardShortcut("p", modifiers: .command)
           .disabled(!showsDocument)
       }
-    #endif
-    #if os(macOS)
       // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
       // list's view options before.
       CommandGroup(after: .toolbar) {

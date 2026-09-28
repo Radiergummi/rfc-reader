@@ -82,9 +82,8 @@ public struct CitationFormatter: Sendable {
     func inverted(_ author: Author) -> String {
       let name = author.name
       guard let lastSpace = name.lastIndex(of: " ") else { return name + roleSuffix(author) }
-      let surname = String(name[name.index(after: lastSpace)...])
       let initials = String(name[..<lastSpace])
-      return "\(surname), \(initials)\(roleSuffix(author))"
+      return "\(author.surname), \(initials)\(roleSuffix(author))"
     }
     func roleSuffix(_ author: Author) -> String {
       author.isEditor ? ", Ed." : ""

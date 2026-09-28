@@ -16,24 +16,31 @@ public struct PrintLayout: Sendable, Equatable {
 
   /// The body text's size on paper. Print is read closer than a screen, and a
   /// 10.5 pt body is what a typeset standard is set in.
-  public static let bodySize: CGFloat = 10.5
+  static let bodySize: CGFloat = 10.5
 
   /// Three quarters of an inch at the sides, which every printer can reach and
   /// which leaves a Letter page's column close to the reader's own measure.
-  public static let sideMargin: CGFloat = 54
+  static let sideMargin: CGFloat = 54
   /// Room above and below the text for the running header and footer.
-  public static let verticalMargin: CGFloat = 64
+  static let verticalMargin: CGFloat = 64
   /// How far the running header's and footer's lines sit from the paper's edge.
-  public static let furnitureInset: CGFloat = 32
+  static let furnitureInset: CGFloat = 32
+  /// The height of the running header's and footer's line.
+  static let furnitureHeight: CGFloat = 12
+
+  /// The size the RFC as published is set in, when Original Text is what prints:
+  /// small enough that its 72 columns fit the narrowest paper's column without
+  /// wrapping, which is what its artwork needs to read.
+  public static let originalTextSize: CGFloat = 9
 
   public init(paperSize: CGSize) {
     self.paperSize = paperSize
   }
 
   /// US Letter, in points.
-  public static let letter = CGSize(width: 612, height: 792)
+  static let letter = CGSize(width: 612, height: 792)
   /// ISO A4, in points.
-  public static let isoA4 = CGSize(width: 595, height: 842)
+  static let isoA4 = CGSize(width: 595, height: 842)
 
   /// The paper a region prints on when nothing has said otherwise: Letter where
   /// measurements are US customary, A4 everywhere else. For iOS, whose print sheet
@@ -54,24 +61,25 @@ public struct PrintLayout: Sendable, Equatable {
 
   /// The running header's line: as wide as the text, near the top edge.
   public var headerRect: CGRect {
-    CGRect(x: contentRect.minX, y: Self.furnitureInset, width: contentRect.width, height: 12)
+    CGRect(
+      x: contentRect.minX, y: Self.furnitureInset, width: contentRect.width,
+      height: Self.furnitureHeight)
   }
 
   /// The running footer's line: as wide as the text, near the bottom edge.
   public var footerRect: CGRect {
     CGRect(
-      x: contentRect.minX, y: paperSize.height - Self.furnitureInset - 12,
-      width: contentRect.width, height: 12)
+      x: contentRect.minX, y: paperSize.height - Self.furnitureInset - Self.furnitureHeight,
+      width: contentRect.width, height: Self.furnitureHeight)
   }
 
   /// The style a document is built in for this paper: the print body size, set to
-  /// the page's column. Links are not underlined, as they are not on screen: on
-  /// paper a link cannot be followed, and the chip's tint already marks a
-  /// reference. The system's text size is left at its default: it is a setting for
-  /// the screen, and paper has one size.
+  /// the page's column, with no links, since paper cannot follow one. The system's
+  /// text size is left at its default: it is a setting for the screen, and paper
+  /// has one size.
   public var style: ReadingStyle {
     ReadingStyle(
       bodySize: Self.bodySize, measure: contentRect.width, lineHeightMultiple: 1.2,
-      underlinesLinks: false)
+      emitsLinks: false)
   }
 }

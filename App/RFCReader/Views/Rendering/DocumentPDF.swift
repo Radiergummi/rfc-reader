@@ -35,15 +35,16 @@ nonisolated enum DocumentPDF {
   /// The open document, fetched and rendered as the reader is showing it. Fetched
   /// again rather than handed over by the reader: the library has it cached, and
   /// `ReaderState` deliberately carries strings out of the document, not the
-  /// document itself.
+  /// document itself. With Original Text showing, both are fetched at once.
   @MainActor
   static func make(
     for id: DocumentID, original: Bool, paperSize: CGSize, library: LibraryModel
   ) async throws -> Data {
-    let document = try await library.document(for: id)
+    async let fetched = library.document(for: id)
+    let source: String? = if original { try await library.originalText(for: id) } else { nil }
+    let document = try await fetched
     let furniture = PrintFurniture(header: document.header, metadata: library.metadata(id))
-    let content: Content =
-      original ? .original(try await library.originalText(for: id)) : .document(document)
+    let content: Content = source.map { .original($0) } ?? .document(document)
     return await render(content, furniture: furniture, paperSize: paperSize)
   }
 
@@ -58,28 +59,17 @@ nonisolated enum DocumentPDF {
       let built = DocumentTextBuilder.build(
         document, style: layout.style, title: furniture.titleBlock)
       return draw(
-        withoutLinks(built.text), headings: PrintPagination.headingOffsets(in: built),
-        layout: layout, furniture: furniture)
+        built.text, keepingWithNext: built.keepsWithNext, layout: layout, furniture: furniture)
     case .original(let source):
-      // The published text is set in 72 columns, which fits the narrowest paper's
-      // column at this size without wrapping.
       let text = NSAttributedString(
         string: source,
         attributes: [
-          .font: PlatformFont.monospacedSystemFont(ofSize: 9, weight: .regular),
+          .font: PlatformFont.monospacedSystemFont(
+            ofSize: PrintLayout.originalTextSize, weight: .regular),
           .foregroundColor: RFCColors.label,
         ])
-      return draw(text, headings: [], layout: layout, furniture: furniture)
+      return draw(text, keepingWithNext: [], layout: layout, furniture: furniture)
     }
-  }
-
-  /// Paper cannot follow a link, and TextKit 2 underlines and recolours every
-  /// `.link` run it lays out unless a text view says otherwise, which there is none
-  /// of here. A copy, so the build's own text is never written (`BuiltDocument`).
-  private static func withoutLinks(_ text: NSAttributedString) -> NSAttributedString {
-    let copy = NSMutableAttributedString(attributedString: text)
-    copy.removeAttribute(.link, range: NSRange(location: 0, length: copy.length))
-    return copy
   }
 
   // MARK: - Layout
@@ -90,7 +80,7 @@ nonisolated enum DocumentPDF {
   /// a fragment reaches its text through its layout manager, weakly, and draws its
   /// decorations from what it finds there.
   private static func draw(
-    _ text: NSAttributedString, headings: Set<Int>, layout: PrintLayout,
+    _ text: NSAttributedString, keepingWithNext: Set<Int>, layout: PrintLayout,
     furniture: PrintFurniture
   ) -> Data {
     let storage = NSTextContentStorage()
@@ -103,15 +93,15 @@ nonisolated enum DocumentPDF {
     container.lineFragmentPadding = 0
     manager.textContainer = container
     storage.install(text)
-    manager.ensureLayout(for: manager.documentRange)
 
     var fragments: [NSTextLayoutFragment] = []
+    var spans: [PrintPagination.Span] = []
     var lines: [PrintPagination.Line] = []
     _ = manager.enumerateTextLayoutFragments(
       from: manager.documentRange.location, options: [.ensuresLayout]
     ) { fragment in
       let frame = fragment.layoutFragmentFrame
-      let keeps = headings.contains(manager.offset(of: fragment.rangeInElement.location))
+      let keeps = keepingWithNext.contains(manager.offset(of: fragment.rangeInElement.location))
       for line in fragment.textLineFragments {
         let bounds = line.typographicBounds
         lines.append(
@@ -119,10 +109,12 @@ nonisolated enum DocumentPDF {
             minY: frame.minY + bounds.minY, maxY: frame.minY + bounds.maxY, keepsWithNext: keeps))
       }
       fragments.append(fragment)
+      spans.append(PrintPagination.Span(minY: frame.minY, maxY: frame.maxY))
       return true
     }
     let pages = PrintPagination.pages(of: lines, pageHeight: layout.contentRect.height)
-    return pdf(pages: pages, fragments: fragments, layout: layout, furniture: furniture)
+    return pdf(
+      pages: pages, fragments: fragments, spans: spans, layout: layout, furniture: furniture)
   }
 
   /// The reader's own fragment class, so a print has the cards, rules and chips the
@@ -133,15 +125,15 @@ nonisolated enum DocumentPDF {
       textLayoutFragmentFor location: any NSTextLocation,
       in textElement: NSTextElement
     ) -> NSTextLayoutFragment {
-      RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
+      RFCTextLayoutFragment.make(for: textElement)
     }
   }
 
   // MARK: - Drawing
 
   private static func pdf(
-    pages: [PrintPagination.Page], fragments: [NSTextLayoutFragment], layout: PrintLayout,
-    furniture: PrintFurniture
+    pages: [PrintPagination.Page], fragments: [NSTextLayoutFragment],
+    spans: [PrintPagination.Span], layout: PrintLayout, furniture: PrintFurniture
   ) -> Data {
     let data = NSMutableData()
     var mediaBox = CGRect(origin: .zero, size: layout.paperSize)
@@ -151,30 +143,23 @@ nonisolated enum DocumentPDF {
     let column = layout.contentRect
     inLightAppearance {
       withCurrentContext(context) {
-        // Fragments are in document order, and so are pages, so the first one a
-        // page can hold never moves back.
-        var first = 0
+        // Inside the light appearance, which the furniture's colour resolves in.
+        let running = RunningLines(furniture, layout: layout)
         for (index, page) in pages.enumerated() {
           context.beginPDFPage(nil)
           context.saveGState()
           // Top-down, as the text view the fragments were written for draws.
           context.translateBy(x: 0, y: layout.paperSize.height)
           context.scaleBy(x: 1, y: -1)
-          drawFurniture(furniture, page: index + 1, layout: layout, in: context)
+          running.draw(page: index + 1, in: context)
           context.clip(
             to: CGRect(x: column.minX, y: column.minY, width: column.width, height: page.height))
-          while first < fragments.count, fragments[first].layoutFragmentFrame.maxY <= page.top {
-            first += 1
-          }
-          var next = first
-          while next < fragments.count, fragments[next].layoutFragmentFrame.minY < page.bottom {
-            let fragment = fragments[next]
+          for fragment in fragments[PrintPagination.spans(spans, on: page)] {
             let frame = fragment.layoutFragmentFrame
             let origin = CGPoint(
               x: column.minX + frame.minX, y: column.minY + frame.minY - page.top)
             fragment.draw(at: origin, in: context)
             drawAttachments(of: fragment, at: origin)
-            next += 1
           }
           context.restoreGState()
           context.endPDFPage()
@@ -201,55 +186,6 @@ nonisolated enum DocumentPDF {
           hints: nil)
       #endif
     }
-  }
-
-  /// The running header and footer, in the page's top-down coordinates.
-  private static func drawFurniture(
-    _ furniture: PrintFurniture, page: Int, layout: PrintLayout, in context: CGContext
-  ) {
-    context.saveGState()
-    context.setFillColor(RFCColors.secondaryLabel.cgColor)
-    let header = layout.headerRect
-    let footer = layout.footerRect
-    drawLine(furniture.headerLeading, in: header, alignment: .left, context: context)
-    drawLine(furniture.headerCenter, in: header, alignment: .center, context: context)
-    drawLine(furniture.headerTrailing, in: header, alignment: .right, context: context)
-    drawLine(furniture.footerLeading, in: footer, alignment: .left, context: context)
-    drawLine(furniture.footerCenter, in: footer, alignment: .center, context: context)
-    drawLine(PrintFurniture.pageLabel(page), in: footer, alignment: .right, context: context)
-    context.restoreGState()
-  }
-
-  /// One line of furniture, through CoreText rather than string drawing, in the
-  /// context's fill colour. The middle of the line gets half its width and each end
-  /// a quarter, so a long title is truncated rather than run over the date.
-  private static func drawLine(
-    _ text: String, in rect: CGRect, alignment: NSTextAlignment, context: CGContext
-  ) {
-    guard !text.isEmpty else { return }
-    let attributes: [NSAttributedString.Key: Any] = [
-      .font: PlatformFont.systemFont(ofSize: 8.5),
-      NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
-    ]
-    let full = CTLineCreateWithAttributedString(
-      NSAttributedString(string: text, attributes: attributes))
-    let room = rect.width * (alignment == .center ? 0.5 : 0.25)
-    let token = CTLineCreateWithAttributedString(
-      NSAttributedString(string: "…", attributes: attributes))
-    let line = CTLineCreateTruncatedLine(full, room, .end, token) ?? full
-    var ascent: CGFloat = 0
-    let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, nil, nil))
-    let x: CGFloat =
-      switch alignment {
-      case .center: rect.midX - width / 2
-      case .right: rect.maxX - width
-      default: rect.minX
-      }
-    // The context is flipped, and CoreText sets glyphs upright only in an unflipped
-    // one, so the text matrix flips them back.
-    context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-    context.textPosition = CGPoint(x: x, y: rect.minY + ascent)
-    CTLineDraw(line, context)
   }
 
   // MARK: - Drawing environment
@@ -281,5 +217,86 @@ nonisolated enum DocumentPDF {
       body()
       NSGraphicsContext.restoreGraphicsState()
     #endif
+  }
+}
+
+/// The running header and footer, set once per document: only the page number
+/// changes from page to page.
+nonisolated private struct RunningLines {
+  /// A line set, and where its baseline starts, in the page's top-down
+  /// coordinates.
+  struct Placed {
+    let line: CTLine
+    let origin: CGPoint
+  }
+
+  let fixed: [Placed]
+  let footer: CGRect
+  let attributes: [NSAttributedString.Key: Any]
+  let colour: CGColor
+
+  init(_ furniture: PrintFurniture, layout: PrintLayout) {
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: PlatformFont.systemFont(ofSize: 8.5),
+      NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
+    ]
+    let header = layout.headerRect
+    let footer = layout.footerRect
+    let token = CTLineCreateWithAttributedString(
+      NSAttributedString(string: "…", attributes: attributes))
+    func place(_ text: String, _ rect: CGRect, _ alignment: NSTextAlignment) -> Placed? {
+      Self.place(text, in: rect, alignment: alignment, attributes: attributes, token: token)
+    }
+    fixed = [
+      place(furniture.headerLeading, header, .left),
+      place(furniture.headerCenter, header, .center),
+      place(furniture.headerTrailing, header, .right),
+      place(furniture.footerLeading, footer, .left),
+      place(furniture.footerCenter, footer, .center),
+    ].compactMap { $0 }
+    self.attributes = attributes
+    self.footer = footer
+    colour = RFCColors.secondaryLabel.cgColor
+  }
+
+  func draw(page: Int, in context: CGContext) {
+    let number = Self.place(
+      PrintFurniture.pageLabel(page), in: footer, alignment: .right, attributes: attributes,
+      token: nil)
+    context.saveGState()
+    context.setFillColor(colour)
+    // The context is flipped, and CoreText sets glyphs upright only in an
+    // unflipped one, so the text matrix flips them back.
+    context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+    var lines = fixed
+    if let number { lines.append(number) }
+    for placed in lines {
+      context.textPosition = placed.origin
+      CTLineDraw(placed.line, context)
+    }
+    context.restoreGState()
+  }
+
+  /// One line of furniture, in the context's fill colour. The middle of the line
+  /// gets half its width and each end a quarter, so a long title is truncated
+  /// rather than run over the date.
+  private static func place(
+    _ text: String, in rect: CGRect, alignment: NSTextAlignment,
+    attributes: [NSAttributedString.Key: Any], token: CTLine?
+  ) -> Placed? {
+    guard !text.isEmpty else { return nil }
+    let full = CTLineCreateWithAttributedString(
+      NSAttributedString(string: text, attributes: attributes))
+    let room = rect.width * (alignment == .center ? 0.5 : 0.25)
+    let line = CTLineCreateTruncatedLine(full, room, .end, token) ?? full
+    var ascent: CGFloat = 0
+    let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, nil, nil))
+    let x: CGFloat =
+      switch alignment {
+      case .center: rect.midX - width / 2
+      case .right: rect.maxX - width
+      default: rect.minX
+      }
+    return Placed(line: line, origin: CGPoint(x: x, y: rect.minY + ascent))
   }
 }
