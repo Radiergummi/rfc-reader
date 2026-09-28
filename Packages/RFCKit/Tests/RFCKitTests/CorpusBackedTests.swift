@@ -182,4 +182,34 @@ struct CorpusBackedCatalogueTests {
     #expect(lists.count < 20, "\(lists.count) catalogues")
     #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
   }
+
+  /// RFC 793 sets a legend under each sequence-space diagram, one line to an entry,
+  /// and centres the figure's captions under it. A caption is not the last entry's
+  /// second paragraph.
+  @Test func `a caption centred under a legend stays out of it`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
+    let entries = catalogues(in: document).flatMap { $0 }
+    #expect(!entries.isEmpty)
+    #expect(entries.allSatisfy { $0.definition.count == 1 }, "an entry took a second paragraph")
+  }
+
+  /// RFC 1140 right-aligns its numbers, so `996` stands a column deeper than `1006`,
+  /// its text in the same column. One catalogue still.
+  @Test func `right-aligned numbers stay one catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1140"))
+    let holding996 = try #require(
+      catalogues(in: document).first { $0.contains { $0.term.plainText == "996" } })
+    #expect(holding996.contains { $0.term.plainText == "1006" })
+  }
+
+  /// RFC 206 sets three error-code tables one after another, each under its own
+  /// caption. They are three catalogues, not one that runs its numbering again.
+  @Test func `tables under their own captions are separate catalogues`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc206"))
+    for entries in catalogues(in: document) {
+      let terms = entries.compactMap { Int($0.term.plainText) }
+      #expect(terms == terms.sorted(), "a catalogue restarts its numbering: \(terms)")
+      #expect(entries.allSatisfy { $0.definition.count == 1 })
+    }
+  }
 }

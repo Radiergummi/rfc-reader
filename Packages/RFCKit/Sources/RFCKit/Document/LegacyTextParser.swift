@@ -1511,6 +1511,22 @@ public struct LegacyTextParser: Sendable {
   /// (#204). The text may not start with a digit, or `3 - 2` would be an entry.
   nonisolated(unsafe) private static let catalogueEntryPattern =
     #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#
+  /// A column gap in a catalogue entry's text: a run of three spaces or more after a
+  /// word. After a colon it is no column: `3 - NAME:   description` is a name and its
+  /// description, the spaces aligning the descriptions (RFC 5412, 5416, 8231).
+  /// `internalGapPattern` counted four spaces after a colon and not three, so RFC
+  /// 8231 came out as one row a list among rows kept as artwork.
+  nonisolated(unsafe) private static let catalogueGapPattern = #/[^.?!:\s]\s{3,}\S/#
+  /// Arithmetic in an entry's text: a formula set on a line of its own opens with a
+  /// number and a minus as well (RFC 5879's `1 - (1 - x / y) ^ 4 == ...`).
+  nonisolated(unsafe) private static let formulaPattern = #/==|\s\^\s/#
+  /// A second entry on the entry's line (RFC 3423's `1 - TCP, 2 - SCTP`), which is
+  /// not the first one's text.
+  nonisolated(unsafe) private static let secondEntryPattern = #/,\s*\d+[a-z]? +- +\S/#
+  /// How far past an entry's text column a continuation may stand: a column or two
+  /// either way is how a description under an entry is set, and a caption centred
+  /// under a legend stands well past it (RFC 793's at 26 against 12).
+  private static let catalogueContinuationSlack = 2
   nonisolated(unsafe) private static let numberedItemPattern =
     #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
   /// `containsArtwork` answers the same question byte by byte; an alternative added
@@ -1641,8 +1657,9 @@ public struct LegacyTextParser: Sendable {
     var result: [Block] = []
     // The marker indent of the list `result.last` holds, while it holds one.
     var openListIndent: Int?
-    // The same for a catalogue: the column its numbers stand in.
-    var openCatalogueIndent: Int?
+    // The same for a catalogue: the column its numbers stand in, and the column the
+    // text of its last entry starts in.
+    var openCatalogue: (indent: Int, textColumn: Int)?
     for block in merged {
       // Probed once: the continuation test needs to know the block opens with no
       // marker, and a list the block produces needs the column of its own.
@@ -1652,9 +1669,9 @@ public struct LegacyTextParser: Sendable {
       {
         continue
       }
-      if let indent = openCatalogueIndent,
+      if let catalogue = openCatalogue,
         attachContinuation(
-          block, toCatalogueAt: indent, marker: marker, in: &result, linker: linker)
+          block, toCatalogue: catalogue, marker: marker, in: &result, linker: linker)
       {
         continue
       }
@@ -1668,19 +1685,29 @@ public struct LegacyTextParser: Sendable {
           previous.items += list.items
           result[result.count - 1] = .list(previous)
         } else if case .definitionList(let items) = parsed,
-          case .definitionList(let previous)? = result.last, openCatalogueIndent != nil
+          case .definitionList(let previous)? = result.last,
+          let catalogue = openCatalogue,
+          block.lines.first?.leadingSpaceCount == catalogue.indent
+            || block.lines.first.flatMap(catalogueTextColumn(of:)) == catalogue.textColumn
         {
+          // At the same column only, of its numbers or of its text: a catalogue set
+          // deeper is not the one above, and right-aligned numbers (RFC 1140's `1006`
+          // over `996`) move the number's column but not the text's.
           result[result.count - 1] = .definitionList(previous + items)
         } else {
           result.append(parsed)
         }
       }
       openListIndent = if case .list? = result.last { marker?.indent } else { nil }
-      openCatalogueIndent =
-        if case .definitionList? = result.last, catalogueEntries(block.lines) != nil {
-          block.lines.first?.leadingSpaceCount
+      openCatalogue =
+        if case .definitionList? = result.last, catalogueEntries(block.lines) != nil,
+          let indent = block.lines.first?.leadingSpaceCount,
+          let textColumn = block.lines.last(where: { catalogueTextColumn(of: $0) != nil })
+            .flatMap(catalogueTextColumn(of:))
+        {
+          (indent, textColumn)
         } else if case .definitionList? = result.last {
-          openCatalogueIndent
+          openCatalogue
         } else {
           nil
         }
@@ -1703,7 +1730,7 @@ public struct LegacyTextParser: Sendable {
   /// refusal -- artwork punctuation, a column gap, a ragged indent -- still stands.
   private static func attachContinuation(
     _ block: RawBlock,
-    toCatalogueAt numberIndent: Int,
+    toCatalogue catalogue: (indent: Int, textColumn: Int),
     marker: ListMarker?,
     in result: inout [Block],
     linker: InlineLinker
@@ -1711,17 +1738,36 @@ public struct LegacyTextParser: Sendable {
     guard case .definitionList(var items)? = result.last, var item = items.last else {
       return false
     }
-    guard block.indent > numberIndent, marker == nil, catalogueEntries(block.lines) == nil
+    guard marker == nil,
+      continuesCatalogueEntry(
+        block.lines, numberIndent: catalogue.indent, textColumn: catalogue.textColumn)
     else { return false }
-    let refusals = diagnose(block.lines, maxIndent: .max, thorough: true).rejections
-    let excused = block.lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
-    guard refusals.allSatisfy(excused.contains) else { return false }
     let inlines = linker.link(joinWrappedLines(block.lines))
     guard !inlines.isEmpty else { return false }
     item.definition.append(.paragraph(Paragraph(inlines)))
     items[items.count - 1] = item
     result[result.count - 1] = .definitionList(items)
     return true
+  }
+
+  /// Whether `lines`, with no marker of their own, are the rest of the catalogue
+  /// entry above them: `attachContinuation`'s test, without the document around it.
+  /// They stand past the entry's number and no further past its text than a column
+  /// or two (`catalogueContinuationSlack`): a caption centred under a legend (RFC
+  /// 793's figures, RFC 206's error tables) is short enough for the excuse below
+  /// and was taken for the last entry's second paragraph, and in RFC 206 it kept
+  /// the catalogue open, so three tables ran into one. Internal, so the test can be
+  /// pinned on hand-written lines.
+  static func continuesCatalogueEntry(_ lines: [String], numberIndent: Int, textColumn: Int)
+    -> Bool
+  {
+    let indent = lines.map(\.leadingSpaceCount).min() ?? 0
+    guard indent > numberIndent, indent <= textColumn + catalogueContinuationSlack,
+      catalogueEntries(lines) == nil
+    else { return false }
+    let refusals = diagnose(lines, maxIndent: .max, thorough: true).rejections
+    let excused = lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
+    return refusals.allSatisfy(excused.contains)
   }
 
   /// A block indented past a list's marker and carrying no marker of its own is the
@@ -2108,7 +2154,10 @@ public struct LegacyTextParser: Sendable {
         // A column gap in the entry is a table with a column of its own after the
         // name (RFC 1058's `1 - request     A request ...`): joined as prose, the
         // columns would run together into one sentence. Artwork keeps them apart.
-        guard match.indent.count == indent, !match.text.contains(internalGapPattern) else {
+        // A formula, or a second entry on the line, is not an entry's text either.
+        guard match.indent.count == indent, !match.text.contains(catalogueGapPattern),
+          !match.text.contains(formulaPattern), !match.text.contains(secondEntryPattern)
+        else {
           return nil
         }
         entries.append((String(match.term), [String(match.text)]))
@@ -2119,6 +2168,13 @@ public struct LegacyTextParser: Sendable {
       }
     }
     return entries.map { ($0.term, joinWrappedLines($0.lines)) }
+  }
+
+  /// The column an entry line's text starts in, past its number and dash, or nil
+  /// when the line is no entry. Internal, so it can be pinned on hand-written lines.
+  static func catalogueTextColumn(of line: String) -> Int? {
+    guard let match = line.firstMatch(of: catalogueEntryPattern) else { return nil }
+    return line.distance(from: line.startIndex, to: match.text.startIndex)
   }
 
   private static func parseList(_ lines: [String], marker: ListMarker?, linker: InlineLinker)
