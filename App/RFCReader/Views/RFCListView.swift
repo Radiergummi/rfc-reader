@@ -187,10 +187,15 @@ struct RFCListView: View {
       CollectionPickerSheet(collection: $0.id, undoManager: undoManager)
     }
     #if os(macOS)
-      // Delete takes the selected document out of the collection shown.
-      .onDeleteCommand {
-        if let selection = navigation.selection { remove(selection) }
-      }
+      // Delete takes the selected document out of the collection shown, and is
+      // disabled everywhere else.
+      .onDeleteCommand(
+        perform: collection == nil
+          ? nil
+          : {
+            if let selection = navigation.selection { remove(selection) }
+          }
+      )
       // The Mac's list has no toolbar of its own to put Add in.
       .safeAreaInset(edge: .bottom) {
         if let collection {
