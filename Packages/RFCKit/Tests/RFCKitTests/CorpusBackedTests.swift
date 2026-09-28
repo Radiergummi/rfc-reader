@@ -124,3 +124,92 @@ struct CorpusBackedTitlePageTests {
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }
 }
+
+@Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedAppendixHeadingTests {
+  /// RFC 2326 heads its appendices `Appendix A: Title`, as about 150 legacy RFCs do.
+  /// They were unnumbered sections titled with the whole line; they are appendices
+  /// now, lettered, with the title alone (#200).
+  @Test func `an appendix headed with a colon is an appendix`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2326"))
+    let appendix = try #require(document.section(anchor: "appendix-A"))
+    #expect(appendix.number == "A")
+    #expect(!appendix.titleText.hasPrefix("Appendix"))
+    #expect(document.section(anchor: "appendix-B") != nil)
+    #expect(document.section(anchor: "appendix-C") != nil)
+  }
+}
+
+@Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCatalogueTests {
+  private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
+    document.everyBlock.compactMap {
+      if case .definitionList(let items) = $0 { return items }
+      return nil
+    }
+  }
+
+  /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
+  /// each hung past its number. They were artwork, every reference in them unlinked;
+  /// they are one catalogue now, numbered as the document numbers them (#204).
+  @Test func `the RFC index of RFC 1012 is a catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
+    let entries = try #require(catalogues(in: document).max { $0.count < $1.count })
+    #expect(entries.count > 900)
+    #expect(entries.first?.term.plainText == "1")
+    #expect(
+      document.artworkText.allSatisfy { !$0.contains("  - Crocker, Steve") },
+      "no entry is left as artwork")
+  }
+
+  /// The standards summaries set a new RFC's number and title on one line and its
+  /// description under it. The title was a paragraph and the description artwork;
+  /// the description is the entry's second paragraph now.
+  @Test func `an entry's indented description joins the entry`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
+    let entry = try #require(
+      catalogues(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
+    #expect(entry.definition.count == 2)
+  }
+
+  /// Most of those descriptions are a short phrase in title case (`A Draft Standard
+  /// protocol.`), which the sentence test a list item's continuation asks refuses.
+  /// Kept as artwork, each one ended the catalogue above it, and the summary came
+  /// out as one list per entry or two.
+  @Test func `a short description does not break the catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
+    let lists = catalogues(in: document)
+    #expect(lists.count < 20, "\(lists.count) catalogues")
+    #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
+  }
+
+  /// RFC 793 sets a legend under each sequence-space diagram, one line to an entry,
+  /// and centres the figure's captions under it. A caption is not the last entry's
+  /// second paragraph.
+  @Test func `a caption centred under a legend stays out of it`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
+    let entries = catalogues(in: document).flatMap { $0 }
+    #expect(!entries.isEmpty)
+    #expect(entries.allSatisfy { $0.definition.count == 1 }, "an entry took a second paragraph")
+  }
+
+  /// RFC 1140 right-aligns its numbers, so `996` stands a column deeper than `1006`,
+  /// its text in the same column. One catalogue still.
+  @Test func `right-aligned numbers stay one catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1140"))
+    let holding996 = try #require(
+      catalogues(in: document).first { $0.contains { $0.term.plainText == "996" } })
+    #expect(holding996.contains { $0.term.plainText == "1006" })
+  }
+
+  /// RFC 206 sets three error-code tables one after another, each under its own
+  /// caption. They are three catalogues, not one that runs its numbering again.
+  @Test func `tables under their own captions are separate catalogues`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc206"))
+    for entries in catalogues(in: document) {
+      let terms = entries.compactMap { Int($0.term.plainText) }
+      #expect(terms == terms.sorted(), "a catalogue restarts its numbering: \(terms)")
+      #expect(entries.allSatisfy { $0.definition.count == 1 })
+    }
+  }
+}

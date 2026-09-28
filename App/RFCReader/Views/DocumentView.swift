@@ -23,13 +23,14 @@ struct DocumentView: View {
     // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
   @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
 
   let id: DocumentID
 
@@ -67,7 +68,10 @@ struct DocumentView: View {
     }
   }
   #if !os(macOS)
-    @State private var showTableOfContents = false
+    @State private var showsInspector = false
+
+    /// Whether the panel is a sheet over the reader rather than a column beside it.
+    private var isCompact: Bool { horizontalSizeClass == .compact }
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -85,13 +89,13 @@ struct DocumentView: View {
   /// The column is derived from this rather than stored beside it. Artwork scaling
   /// and table shape are measured against the column, so it has to be settled
   /// *before* the first build or the document is built against a guess and
-  /// immediately thrown away. It is a pure function of the width (`ReaderLayout`),
-  /// so this view can work it out for itself rather than waiting to be told by the
-  /// text view it has not created yet — which is why nothing is built until the
-  /// geometry reader has run once.
+  /// immediately thrown away. It is a pure function of the width and the measure
+  /// preference (`ReaderLayout`), so this view can work it out for itself rather
+  /// than waiting to be told by the text view it has not created yet — which is
+  /// why nothing is built until the geometry reader has run once.
   @State private var paneWidth: CGFloat?
 
-  /// Derived from the pane's width, and nothing else.
+  /// Derived from the pane's width and the measure preference, and nothing else.
   ///
   /// The panel does not appear here and must not: on macOS the reader's pane spans
   /// it — the panel is a full-height inspector item drawn over the top — so the
@@ -100,7 +104,7 @@ struct DocumentView: View {
   /// rebuilding it and losing the reader's place. What the panel overlaps, it
   /// covers, and closing it uncovers.
   private var column: CGFloat? {
-    paneWidth.map { ReaderLayout.column(forWidth: $0) }
+    paneWidth.map { ReaderLayout.column(forWidth: $0, measure: measure) }
   }
 
   private var metadata: RFCMetadata? { library.metadata(id) }
@@ -174,21 +178,24 @@ struct DocumentView: View {
           guard !Task.isCancelled else { return }
           navigation.settleReturnOffer()
         }
-        // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
-        // swallows an iPhone, and in compact width the inspector already presents
-        // itself as a sheet.
-        .inspector(isPresented: $showTableOfContents) {
-          PanelHost(
-            isPresented: $showTableOfContents,
-            closesAfterChoice: horizontalSizeClass == .compact
-          )
+        // iOS keeps the inspector as a column beside the reader where there is
+        // room for one. In compact width it is a sheet, and a `.sheet` of our own
+        // rather than the one `.inspector` turns itself into: that one, swiped
+        // away, set the binding back to false but dropped the next request to
+        // show it, so the panel's buttons opened it only on every other tap.
+        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
           .inspectorColumnWidth(min: 260, ideal: 320)
+        }
+        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
+          .presentationDetents([.medium, .large])
         }
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
         #if !os(macOS)
-          reader.openPanel = { [isPresented = $showTableOfContents] in
+          reader.openPanel = { [isPresented = $showsInspector] in
             withAnimation(.snappy) { isPresented.wrappedValue = true }
           }
         #endif
@@ -205,6 +212,10 @@ struct DocumentView: View {
         work.buildingFor = buildInputs
         work.build = Task(name: "Build document") { await rebuild() }
       }
+      // The index state, not the metadata: a refresh can change a series' members
+      // without changing this document's entry, and comparing the state is cheaper
+      // on a body the reader re-evaluates on every section crossing.
+      .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -249,6 +260,8 @@ struct DocumentView: View {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(
         built: built,
+        bibliography: reader.groups,
+        measure: measure,
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
@@ -315,75 +328,99 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
-    private var hasRoomyToolbar: Bool {
-      ReaderLayout.toolbarHasRoom(
-        isRegularWidth: horizontalSizeClass == .regular,
-        isCompactHeight: verticalSizeClass == .compact)
-    }
-
-    /// Contents and More, plus Share when there is room; everything else is in
-    /// More (#245).
+    /// Share and More at the top; Contents and Cite leading the bottom bar, and
+    /// Bookmark trailing it as the view's primary action, the way Notes puts
+    /// Compose there (#342).
     ///
-    /// The inline title has the lowest priority in the bar. Five actions beside the
-    /// back button left an iPhone's bar no room for it, and it collapsed to "…".
-    /// Contents stays out of the menu because jumping to a section is what a long
-    /// RFC is read by.
+    /// The inline title has the lowest priority in the top bar, which is why only
+    /// two actions stay up there: five beside the back button left an iPhone's bar
+    /// no room for it, and it collapsed to "…" (#245).
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-      if hasRoomyToolbar, let metadata {
+      if let metadata {
         ToolbarItem(placement: .primaryAction) {
           shareLink(metadata)
         }
       }
 
       ToolbarItem(placement: .primaryAction) {
+        moreMenu
+      }
+
+      ToolbarItemGroup(placement: .bottomBar) {
         Button {
-          withAnimation(.snappy) { showTableOfContents.toggle() }
+          press(.navigation)
         } label: {
           Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
         // The same chord as the Mac's (#157).
         .keyboardShortcut("i", modifiers: [.command, .option])
+
+        Button {
+          press(.info)
+        } label: {
+          Label("Info", systemImage: "info.circle")
+        }
+        .keyboardShortcut("i", modifiers: .command)
+
+        citeMenu
       }
 
-      ToolbarItem(placement: .primaryAction) {
-        moreMenu
+      ToolbarSpacer(.flexible, placement: .bottomBar)
+
+      ToolbarItem(placement: .bottomBar) {
+        bookmarkButton
       }
     }
 
-    private var moreMenu: some View {
+    private var bookmarkButton: some View {
       // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
+      // A tap bookmarks, as before; a long press adds to a collection (#349).
       return Menu {
+        AddToCollectionItems(
+          document: id, library: library, navigation: navigation, undoManager: undoManager)
+      } label: {
+        Label(
+          bookmarked ? "Remove Bookmark" : "Bookmark",
+          systemImage: bookmarked ? "bookmark.fill" : "bookmark")
+      } primaryAction: {
+        toggleBookmark()
+      }
+      .keyboardShortcut("d", modifiers: .command)
+    }
+
+    private var citeMenu: some View {
+      Menu {
+        ForEach(CitationStyle.allCases) { style in
+          Button(style.displayName) { copyCitation(style) }
+        }
+        Divider()
+        Button("Copy Link to Current Section") {
+          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+        }
+      } label: {
+        Label("Cite", systemImage: "quote.opening")
+      }
+    }
+
+    /// A pane's button: opens the inspector on that pane, swaps an open one to it,
+    /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
+    private func press(_ pane: InspectorPane) {
+      let result = InspectorPane.pressing(
+        pane, isOpen: showsInspector, showing: reader.pane)
+      reader.pane = result.pane
+      withAnimation(.snappy) { showsInspector = result.isOpen }
+    }
+
+    /// What is used least: the original text, and the document's pages elsewhere.
+    private var moreMenu: some View {
+      Menu {
         Section {
-          if !hasRoomyToolbar, let metadata {
-            shareLink(metadata)
-          }
-
-          Button {
-            toggleBookmark()
-          } label: {
-            Label(
-              bookmarked ? "Remove Bookmark" : "Bookmark",
-              systemImage: bookmarked ? "bookmark.fill" : "bookmark")
-          }
-          .keyboardShortcut("d", modifiers: .command)
-
-          Menu {
-            ForEach(CitationStyle.allCases) { style in
-              Button(style.displayName) { copyCitation(style) }
-            }
-            Divider()
-            Button("Copy Link to Current Section") {
-              Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-            }
-          } label: {
-            Label("Cite", systemImage: "quote.opening")
-          }
+          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
         }
 
         Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
           Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
           if let url = metadata?.errataURL {
             Button("Errata") { systemOpenURL(url) }
@@ -394,7 +431,7 @@ struct DocumentView: View {
           }
         }
       } label: {
-        Label("More", systemImage: "ellipsis.circle")
+        Label("More", systemImage: "ellipsis")
       }
     }
 
@@ -439,6 +476,16 @@ struct DocumentView: View {
     work.load = Task(name: "Load document") { await load() }
   }
 
+  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
+  /// opened before the index finished loading has none to show until it does. And
+  /// again once the document is here, whose own authors carry the contact details
+  /// their chips open.
+  private func deriveInfo() {
+    reader.info = metadata.map {
+      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+    }
+  }
+
   private func trace(_ event: String) {
     readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
   }
@@ -455,6 +502,9 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    // Before the fetch, not after: the index knows the document before its body
+    // arrives, so the tab is ready the moment the panel is.
+    deriveInfo()
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
@@ -463,6 +513,7 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      deriveInfo()
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
@@ -641,7 +692,8 @@ struct DocumentHeaderView: View {
     let title: String
     let date: String?
     let workingGroup: String?
-    let authors: [String]
+    /// Whole, not pre-joined names: a chip needs the author's contact (#19).
+    let authors: [Author]
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
@@ -650,8 +702,7 @@ struct DocumentHeaderView: View {
       title = header.title
       date = (header.date ?? metadata?.date)?.formatted
       workingGroup = header.workingGroup ?? metadata?.workingGroup
-      let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
-      self.authors = authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }
+      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
       self.metadata = metadata
     }
   }
@@ -691,7 +742,7 @@ struct DocumentHeaderView: View {
       .font(.subheadline)
       .foregroundStyle(.secondary)
       if !identity.authors.isEmpty {
-        Text(identity.authors.joined(separator: ", "))
+        AuthorChips(authors: identity.authors)
           .font(.subheadline)
       }
       if let metadata = identity.metadata {

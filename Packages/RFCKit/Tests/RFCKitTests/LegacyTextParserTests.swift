@@ -990,6 +990,118 @@ struct LegacyTextCorpusFindingsTests {
         })
   }
 
+  /// `Appendix A: Title` is how about 150 legacy RFCs head an appendix (#200). The
+  /// `Appendix` has to be there: without it a letter and a colon at column 0 is as
+  /// often a question and its answer, and a title-less or lower-case line is not an
+  /// appendix heading: it stays the unnumbered heading it was. The shapes the parser
+  /// already knew keep reading as before.
+  @Test func `an appendix may be headed with a colon after its letter`() {
+    let colon = LegacyTextParser.appendixHeading(in: "Appendix A: Protocol State Tables")
+    #expect(colon?.number == "A")
+    #expect(colon?.title == "Protocol State Tables")
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix E.1: Timer Details")?.number == "E.1")
+
+    #expect(LegacyTextParser.appendixHeading(in: "A: Only when the sender asks.") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A:") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A: examples follow") == nil)
+
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix B. Examples")?.number == "B")
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix C Change Log")?.number == "C")
+    #expect(LegacyTextParser.appendixHeading(in: "D.2. Second Example")?.number == "D.2")
+  }
+
+  /// A catalogue entry is a number, a dash and the entry, with anything further hung
+  /// past the number (#204): the RFC index of RFC 1012, the standards summaries'
+  /// `2352 - A Convention ...`, numbered steps, value tables. The lines here are
+  /// written in that shape, not quoted.
+  @Test func `a numbered catalogue entry is split into its number and its text`() throws {
+    let one = try #require(
+      LegacyTextParser.catalogueEntries([
+        "   7   - Someone, A., \"A Title\", RFC 7 (NIC 101),",
+        "         Somewhere, 1 April 1969.",
+      ]))
+    #expect(one.map(\.term) == ["7"])
+    #expect(
+      one.first?.text == "Someone, A., \"A Title\", RFC 7 (NIC 101), Somewhere, 1 April 1969.")
+
+    let two = try #require(
+      LegacyTextParser.catalogueEntries([
+        "      0 - Reserved",
+        "      1 - First Value",
+      ]))
+    #expect(two.map(\.term) == ["0", "1"])
+    #expect(two.map(\.text) == ["Reserved", "First Value"])
+  }
+
+  @Test func `lines that only look like catalogue entries are not`() {
+    // Arithmetic, not an entry.
+    #expect(LegacyTextParser.catalogueEntries(["   3 - 2 leaves one"]) == nil)
+    // A continuation must hang past the number.
+    #expect(LegacyTextParser.catalogueEntries(["   1 - Title", "back at the margin"]) == nil)
+    // Nothing after the dash.
+    #expect(LegacyTextParser.catalogueEntries(["   1 -"]) == nil)
+    // Prose that mentions a number and a dash.
+    #expect(LegacyTextParser.catalogueEntries(["   The value 1 - the default - is kept."]) == nil)
+    // Entries at two different indents.
+    #expect(LegacyTextParser.catalogueEntries(["   1 - One", "      2 - Two"]) == nil)
+    // A table with a column of its own after the name: joining it would run the
+    // columns together into one sentence.
+    #expect(
+      LegacyTextParser.catalogueEntries([
+        "      1 - query      A request for the whole table.",
+        "      2 - answer     The table itself.",
+      ]) == nil)
+  }
+
+  @Test func `a lettered catalogue number keeps its letter`() {
+    #expect(LegacyTextParser.catalogueEntries(["   17a - Amended Entry"])?.first?.term == "17a")
+  }
+
+  /// A formula set on a line of its own opens with a number and a minus too.
+  @Test func `a formula is not a catalogue entry`() {
+    #expect(LegacyTextParser.catalogueEntries(["   1 - (1 - a / b) ^ 2 == c"]) == nil)
+    #expect(LegacyTextParser.catalogueEntries(["   1 - (a + b) == c"]) == nil)
+    // A parenthesis alone is no formula: a reserved value is written that way.
+    #expect(
+      LegacyTextParser.catalogueEntries(["      0 - (reserved)"])?.first?.text == "(reserved)")
+  }
+
+  /// Two values on one line: the second is not the first one's text.
+  @Test func `two entries on one line are not a catalogue`() {
+    #expect(LegacyTextParser.catalogueEntries(["   1 - FIRST, 2 - SECOND"]) == nil)
+  }
+
+  /// After a colon, spaces align the descriptions of a name and its description,
+  /// however many there are; after a word they are a column of their own.
+  @Test func `a gap after a colon is not a column in a catalogue`() {
+    #expect(LegacyTextParser.catalogueEntries(["      3 - STOPPING:   It is stopping."]) != nil)
+    #expect(LegacyTextParser.catalogueEntries(["      3 - STOPPING:      It is stopping."]) != nil)
+    #expect(LegacyTextParser.catalogueEntries(["      3 - stopping   It is stopping."]) == nil)
+  }
+
+  /// Where an entry's text starts: the column a description under it stands in.
+  @Test func `a catalogue entry's text column is past its number and dash`() {
+    #expect(LegacyTextParser.catalogueTextColumn(of: "   7   - Someone") == 9)
+    #expect(LegacyTextParser.catalogueTextColumn(of: "      2349 - A Title") == 13)
+    #expect(LegacyTextParser.catalogueTextColumn(of: "not an entry") == nil)
+  }
+
+  /// A description stands at the entry's text column, give or take a column; a
+  /// caption centred under a legend stands far past it, and is not the last entry's
+  /// second paragraph.
+  @Test func `a continuation stands at the entry's text column, not past it`() {
+    let description = ["             A Short Title In Title Case."]
+    #expect(
+      LegacyTextParser.continuesCatalogueEntry(description, numberIndent: 6, textColumn: 13))
+    let nearly = ["           A description set two columns short."]
+    #expect(LegacyTextParser.continuesCatalogueEntry(nearly, numberIndent: 6, textColumn: 13))
+    let caption = ["                          Figure 9."]
+    #expect(!LegacyTextParser.continuesCatalogueEntry(caption, numberIndent: 8, textColumn: 12))
+    // At the number or before it is a new paragraph, not a continuation.
+    let atNumber = ["      Back at the number."]
+    #expect(!LegacyTextParser.continuesCatalogueEntry(atNumber, numberIndent: 6, textColumn: 13))
+  }
+
   /// A colon number counts only where the number before it, or the one it is under, is
   /// a heading number too: without that, a document with one stray `11:` and no `11.`
   /// to repeat passed the gate. RFC 526's agenda sets a time that way, and only the

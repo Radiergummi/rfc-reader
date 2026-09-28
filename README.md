@@ -4,13 +4,14 @@ A gorgeous browser and viewer for Internet standards RFCs, native on iPhone, iPa
 
 Every RFC, beautifully readable, instantly searchable, and one tap from any reference. Semantic RFCXML documents are rendered natively; the eight thousand legacy plain-text RFCs get their structure back (no page footers, reflowed paragraphs, linked references) with the original text one toggle away. The first thing you see on any document is whether it is still current.
 
-**Status:** early scaffold. The core library is implemented and tested; the SwiftUI app is a first pass that needs an Xcode project generated around it. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+**Status:** early. The core library is implemented and tested; the app runs on macOS and iOS as a developer build, its Xcode project generated from `project.yml` with `make xcodeproj`. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `Packages/RFCKit` | Swift package with the index parser, RFCXML and legacy-text document parsers, RFC Editor client, link handling, citations and search. No UI, builds on Linux and macOS, 48 tests. |
+| `Packages/RFCKit` | Swift package with the index parser, RFCXML and legacy-text document parsers, RFC Editor client, link handling, citations and search. No UI, builds and is tested on Linux and macOS. |
+| `Packages/RFCReaderKit` | The app's testable core: `DocumentTextBuilder`, which turns a document into the reader's attributed text, the reader's layout and decoration geometry, the user-data store's models, and the app's pure logic. Needs an Apple SDK. |
 | `App/RFCReader` | SwiftUI multiplatform app: three-column navigation, native document renderer, table of contents, cite menu, bookmarks, reading positions, `rfc://` URL scheme, App Intent. |
 | `Tools/corpus-build` | Offline pipeline: fetches legacy text RFCs, converts them to RFCXML v3, writes pack manifests. |
 | `project.yml` | XcodeGen spec for the app project. |
