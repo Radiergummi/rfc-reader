@@ -187,6 +187,57 @@ struct UserDataTests {
 
   // MARK: - Uniqueness
 
+  /// The earliest item stays, so the place the reader first gave the document does.
+  @Test func `duplicate items in one collection are merged, keeping the earliest`() throws {
+    let container = try UserData.container(
+      configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let collection = DocumentCollection(name: "HTTP/3", color: .blue, position: 1)
+    context.insert(collection)
+    let id = collection.identifier
+    context.insert(
+      DocumentCollectionItem(
+        collection: id, document: .rfc(9114), position: 5,
+        addedAt: Date(timeIntervalSince1970: 2_000)))
+    context.insert(
+      DocumentCollectionItem(
+        collection: id, document: .rfc(9114), position: 1,
+        addedAt: Date(timeIntervalSince1970: 1_000)))
+    try context.save()
+
+    try UserData.deduplicate(context)
+
+    let items = try context.fetch(FetchDescriptor<DocumentCollectionItem>())
+    #expect(items.map(\.position) == [1])
+  }
+
+  @Test func `one document in two collections is not a duplicate`() throws {
+    let container = try UserData.container(
+      configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    context.insert(DocumentCollectionItem(collection: UUID(), document: .rfc(9114), position: 1))
+    context.insert(DocumentCollectionItem(collection: UUID(), document: .rfc(9114), position: 1))
+    try context.save()
+
+    try UserData.deduplicate(context)
+
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 2)
+  }
+
+  /// Under sync, items can arrive before their collection. Deleting them would
+  /// sync the deletion back and empty the collection where it was made.
+  @Test func `items of a collection not in the store are kept`() throws {
+    let container = try UserData.container(
+      configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    context.insert(DocumentCollectionItem(collection: UUID(), document: .rfc(9114), position: 1))
+    try context.save()
+
+    try UserData.deduplicate(context)
+
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).count == 1)
+  }
+
   /// With no unique constraint, two rows can name one document; the newest stays.
   @Test func `duplicates are merged, keeping the newest`() throws {
     let container = try UserData.container(

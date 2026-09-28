@@ -298,7 +298,8 @@ public enum UserData {
       configurations: configurations)
   }
 
-  /// Merges rows that name the same document, keeping the newest. Without a unique
+  /// Merges rows that name the same document — keeping the newest bookmark and
+  /// reading position, and the earliest item in a collection. Without a unique
   /// constraint — CloudKit refuses one — two devices, or a race, can leave two.
   @MainActor
   public static func deduplicate(_ context: ModelContext) throws {
@@ -308,6 +309,16 @@ public enum UserData {
     let positions = try context.fetch(
       FetchDescriptor<ReadingPosition>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))
     removeDuplicates(positions, keyedBy: \.documentKey, in: context)
+    // The earliest first, so the place the reader first gave a document survives.
+    // Items whose collection is not in the store are left alone: under sync they
+    // may have arrived before it (#349).
+    let items = try context.fetch(
+      FetchDescriptor<DocumentCollectionItem>(sortBy: [
+        SortDescriptor(\.addedAt), SortDescriptor(\.position),
+      ]))
+    removeDuplicates(
+      items, keyedBy: { "\($0.collectionIdentifier?.uuidString ?? "")/\($0.documentKey)" },
+      in: context)
     if context.hasChanges { try context.save() }
   }
 
