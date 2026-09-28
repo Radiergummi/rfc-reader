@@ -34,7 +34,8 @@ struct IndexHeaderTests {
       Author(name: "B. Second", role: "Editor"), Author(name: "A. First"),
     ])
     let header = Self.applied(index, to: page).header
-    #expect(header.authors == [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")])
+    #expect(
+      header.authors == [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")])
   }
 
   @Test func `the year and month come from the index, and a day from another month is dropped`() {
