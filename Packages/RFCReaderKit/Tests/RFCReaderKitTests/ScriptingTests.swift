@@ -20,8 +20,19 @@ struct LibraryFilterScriptNameTests {
       .series(DocumentID(series: .bcp, number: 14)),
     ]
     for filter in filters {
-      #expect(self.filter(filter.title) == filter, "\(filter.title)")
+      let title = filter.title(in: .empty)
+      #expect(self.filter(title) == filter, "\(title)")
     }
+  }
+
+  /// A collection's title too: its name, which a script can set it by.
+  @Test func `a collection's title names it`() {
+    let title = LibraryFilter.collection(http3.id).title(
+      in: CollectionSnapshot(collections: [http3]))
+    #expect(title == "HTTP/3")
+    #expect(
+      LibraryFilter(scriptName: title, workingGroups: groups, collections: [http3])
+        == .collection(http3.id))
   }
 
   private let http3 = CollectionSnapshot.Entry(

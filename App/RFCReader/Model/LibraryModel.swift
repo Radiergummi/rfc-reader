@@ -81,14 +81,10 @@ final class LibraryModel {
     }
   }
 
-  /// What a filter is called, wherever it is shown: a collection's name, or the
-  /// filter's own title. Every title goes through here, so a collection is never
-  /// shown by the empty title its filter carries.
+  /// What a filter is called, wherever it is shown, against the collections as they
+  /// are now.
   func title(for filter: LibraryFilter) -> String {
-    if case .collection(let identifier) = filter {
-      return collections[identifier]?.name ?? ""
-    }
-    return filter.title
+    filter.title(in: collections)
   }
 
   /// How many of a collection's documents the index knows, for the sidebar. Nil
