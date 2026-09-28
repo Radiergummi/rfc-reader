@@ -24,7 +24,8 @@ public struct ReadingStyle: Sendable, Equatable {
   /// The system's text size, which headings are scaled for on their own curve:
   /// at the accessibility sizes a title grows less than the body does.
   public private(set) var textSize: DynamicTypeSize
-  /// Width available to text: the reader's 760 pt frame less its horizontal padding.
+  /// Width available to text: the column `ReaderLayout` derives from the view's
+  /// width, `ReaderLayout.idealMeasure` unless given.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
   /// Off by default: colour marks a link, and a chip's tint marks a reference.
@@ -271,7 +272,9 @@ enum TextSizeMetrics {
   /// `table` has one entry per size, in `DynamicTypeSize.allCases` order: from
   /// `.xSmall` to `.accessibility5`. A size added later reads as `.large`.
   private static func points(_ size: DynamicTypeSize, _ table: [CGFloat]) -> CGFloat {
-    let index = DynamicTypeSize.allCases.firstIndex(of: size) ?? 3
+    guard let index = DynamicTypeSize.allCases.firstIndex(of: size) else {
+      return points(.large, table)
+    }
     return table[index]
   }
 }
