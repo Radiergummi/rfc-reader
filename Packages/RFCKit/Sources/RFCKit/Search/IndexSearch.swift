@@ -173,10 +173,13 @@ public struct IndexSearch: Sendable {
     func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
       if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
       if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
-      // A document with no working group has an empty prepared group, which no
-      // needle `parseQuery` makes can equal.
-      if let group, entry.group != group { return false }
-      if let author, !entry.authors.contains(where: { $0.contains(author) }) { return false }
+      // An empty value matches nothing, as it did when the filters went through
+      // Foundation: a document with no working group has an empty prepared group,
+      // and an empty needle is contained in every name.
+      if let group, group.isEmpty || entry.group != group { return false }
+      if let author, author.isEmpty || !entry.authors.contains(where: { $0.contains(author) }) {
+        return false
+      }
       if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
       if filters.excludeObsolete, rfc.isObsolete { return false }
       if filters.requiresXML, !rfc.hasXMLSource { return false }
@@ -242,6 +245,8 @@ struct SearchText: Hashable, Sendable {
   init(_ string: String) {
     bytes = Array(string.utf8)
   }
+
+  var isEmpty: Bool { bytes.isEmpty }
 
   func hasPrefix(_ other: SearchText) -> Bool {
     guard other.bytes.count <= bytes.count else { return false }

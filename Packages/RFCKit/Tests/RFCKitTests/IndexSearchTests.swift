@@ -18,8 +18,7 @@ struct IndexSearchTests {
   }
 
   @Test func `filters parse`() {
-    let parsed: SearchQuery.Parsed = IndexSearch.parseQuery(
-      "wg:httpbis status:std year:2020-2022 cache")
+    let parsed = IndexSearch.parseQuery("wg:httpbis status:std year:2020-2022 cache")
     #expect(parsed.text == "cache")
     #expect(parsed.filters.workingGroup == "httpbis")
     #expect(parsed.filters.statuses == [.internetStandard, .draftStandard, .proposedStandard])
@@ -43,15 +42,20 @@ struct IndexSearchTests {
     #expect(xmlOnly.allSatisfy { $0.rfc.hasXMLSource })
   }
 
-  /// The filters match the prepared, lowercased fields (#151), so a value typed in
-  /// capitals finds what the same value in lower case finds.
-  @Test func `a filter value matches whatever its case`() throws {
+  /// Filters built by hand, not by `parseQuery`, which lowercases what it reads:
+  /// the prepared fields are lowercased, so the needles have to be as well (#151).
+  @Test func `a filter value built in capitals matches`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
-    for (upper, lower) in [("wg:HTTPBIS", "wg:httpbis"), ("author:FIELDING", "author:fielding")] {
-      let shouted = search.search(upper, limit: .max).map(\.rfc.number)
-      #expect(!shouted.isEmpty)
-      #expect(shouted == search.search(lower, limit: .max).map(\.rfc.number))
+    func numbers(group: String? = nil, author: String? = nil) -> [Int] {
+      var filters = SearchFilters()
+      filters.workingGroup = group
+      filters.author = author
+      return search.search(text: "", filters: filters, limit: .max).map(\.rfc.number)
     }
+    #expect(!numbers(group: "httpbis").isEmpty)
+    #expect(numbers(group: "HTTPBIS") == numbers(group: "httpbis"))
+    #expect(!numbers(author: "fielding").isEmpty)
+    #expect(numbers(author: "FIELDING") == numbers(author: "fielding"))
   }
 
   /// A working group matches as a whole name, and an author as part of one, as they
@@ -59,9 +63,20 @@ struct IndexSearchTests {
   @Test func `a working group matches whole and an author in part`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     #expect(search.search("wg:httpb", limit: .max).isEmpty)
-    #expect(
-      search.search("author:field", limit: .max).map(\.rfc.number)
-        == search.search("author:fielding", limit: .max).map(\.rfc.number))
+    let whole = Set(search.search("author:fielding", limit: .max).map(\.rfc.number))
+    #expect(!whole.isEmpty)
+    #expect(whole.isSubset(of: search.search("author:field", limit: .max).map(\.rfc.number)))
+  }
+
+  /// An empty value filters out everything, as it did through Foundation, rather
+  /// than matching every document with no working group, or with any author.
+  @Test func `an empty filter value matches nothing`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    for keyPath in [\SearchFilters.workingGroup, \SearchFilters.author] {
+      var filters = SearchFilters()
+      filters[keyPath: keyPath] = ""
+      #expect(search.search(text: "", filters: filters, limit: .max).isEmpty)
+    }
   }
 
   @Test func `no match is empty`() throws {
