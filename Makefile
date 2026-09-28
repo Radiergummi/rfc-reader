@@ -255,10 +255,11 @@ corpus-manifest: corpus-tool
 
 ## Rebuild the cross-reference judgement set used to measure search ranking
 # Not part of `corpus`: it reads the converted corpus rather than producing it, and
-# the set only changes when the corpus or the filtering does. See
-# Tools/corpus-build/Evaluation/README.md for which query set measures what.
+# the set only changes when the corpus or the filtering does. It is written into the
+# gitignored corpus directory, never the tree, because its queries are RFC sentences.
+# See Tools/corpus-build/Evaluation/README.md for which query set measures what.
 corpus-queries: corpus-tool
-	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
+	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out $(CORPUS)/queries-xref.json
 
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion

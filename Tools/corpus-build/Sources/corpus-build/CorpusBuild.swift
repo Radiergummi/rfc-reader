@@ -9,7 +9,7 @@ import Logging
 //                         [--index corpus/rfc-index.xml] [--only 5 822 ...]
 //                         [--diagnostics corpus/prose.json] [--schema Tools/corpus-build/Schema/v3.rng]
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
-//   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
+//   corpus-build queries  --in corpus/xml.noindex --out corpus/queries-xref.json
 //                         [--limit 4000] [--seed 11] [--min-words 8]
 //
 // `corpus-build help <command>` says what each option does. See docs/DATA_PIPELINE.md

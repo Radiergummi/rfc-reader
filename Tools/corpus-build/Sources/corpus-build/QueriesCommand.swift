@@ -23,7 +23,7 @@ struct QueriesCommand: ParsableCommand {
   @Option(help: "How many queries to sample.")
   var limit = 4000
 
-  @Option(help: "The seed of the sample, so a committed set can be reproduced.")
+  @Option(help: "The seed of the sample, so the set can be reproduced.")
   var seed: UInt64 = 11
 
   @Option(help: "The fewest content words a query may have.")
