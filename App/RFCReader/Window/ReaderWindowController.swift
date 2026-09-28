@@ -40,6 +40,8 @@
     private let library: LibraryModel
     /// See `placeInitialFocus()`.
     private var hasPlacedInitialFocus = false
+    /// The Go to RFC palette, while it is showing.
+    private var quickOpen: QuickOpenPanel?
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -185,6 +187,7 @@
       observeTitle()
       observeListTitle()
       observeDocument()
+      observeQuickOpen()
     }
 
     /// Every hosted root is handed the models by hand.
@@ -454,6 +457,48 @@
       BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     }
 
+    // MARK: - Go to RFC
+
+    /// ⌘L, the menu and the empty reader's button all ask for the palette the same
+    /// way, by setting `isShowingGoToSheet`; this is what answers on the Mac.
+    private func observeQuickOpen() {
+      withObservationTracking {
+        _ = navigation.isShowingGoToSheet
+      } onChange: { [weak self] in
+        Task { @MainActor in
+          self?.showOrHideQuickOpen()
+          self?.observeQuickOpen()
+        }
+      }
+    }
+
+    private func showOrHideQuickOpen() {
+      if navigation.isShowingGoToSheet {
+        guard quickOpen == nil, let window else { return }
+        // ⌘L reaches the last reader window that was key, which may since have been
+        // minimised: the palette hangs from it, so it comes back first. The palette
+        // waits for it, since the window takes key back as it lands, and a panel that
+        // loses key closes.
+        if window.isMiniaturized {
+          window.deminiaturize(nil)
+          return
+        }
+        let hide: () -> Void = { [weak self] in self?.navigation.isShowingGoToSheet = false }
+        let panel = QuickOpenPanel(
+          content: QuickOpenPalette(library: library, navigation: navigation, dismiss: hide),
+          onClose: hide
+        )
+        quickOpen = panel
+        // A window left on another Space comes forward too, rather than the palette
+        // floating alone where the window used to be.
+        window.makeKeyAndOrderFront(nil)
+        panel.show(over: window)
+      } else {
+        quickOpen?.dismiss()
+        quickOpen = nil
+      }
+    }
+
     // MARK: - Lifetime
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -469,6 +514,11 @@
     private func placeInitialFocus() {
       guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
       hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
+    }
+
+    /// Where a palette asked for while the window was minimised is shown.
+    func windowDidDeminiaturize(_ notification: Notification) {
+      showOrHideQuickOpen()
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -501,8 +551,8 @@
 
   /// What the detail column of `NavigationSplitView` used to hold.
   ///
-  /// The sheet is declared here rather than on the scene, because a presentation has to
-  /// be declared by a view that is actually in the window.
+  /// The collection editor's sheet is declared here rather than on the scene, because
+  /// a presentation has to be declared by a view that is actually in the window.
   struct ReaderHost: View {
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
@@ -527,9 +577,6 @@
         // A deselected row leaves nothing on screen, and the panel and the toolbar
         // must not go on describing the document that was.
         if navigation.selection == nil { reader.clear() }
-      }
-      .sheet(isPresented: $navigation.isShowingGoToSheet) {
-        GoToDocumentSheet()
       }
       .sheet(item: $navigation.collectionEditor) { mode in
         CollectionEditorSheet(mode: mode)
