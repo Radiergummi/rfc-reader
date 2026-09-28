@@ -18,6 +18,11 @@ CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 # make expands a prerequisite where it reads the rule.
 CORPUS ?= corpus
 
+# What every download below sends, as corpus-build's fetch does
+# (`RetryingTransport.userAgent`): a bulk fetch the RFC Editor can tell apart. curl
+# retries what can pass -- a timeout, a 429, a 5xx -- three times with backoff.
+CURL := curl -fsS --retry 3 -A 'rfc-reader corpus-build (+https://github.com/Radiergummi/rfc-reader)'
+
 # Every Swift source we own. Found rather than handed to swift-format's
 # --recursive, which would also walk the SwiftPM build directories and format
 # the files they generate.
@@ -99,7 +104,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 # partial file first, so an interrupted download is not taken for the document.
 $(CORPUS)/text.noindex/%.txt:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
 
 ## Generate the Xcode project from project.yml
 # Phony: XcodeGen's `sources:` entries are folder-based, so a source file added
@@ -254,7 +259,7 @@ corpus-schema-control: $(SCHEMA_CONTROL_DOCUMENTS)
 # One RFC as published in RFCXML, fetched where `corpus-fetch-xml` would have put it.
 $(CORPUS)/xml.noindex/%.xml:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 ## Check that each scripted override is still what its script makes
 # An override corrected by a script (corpus/overrides/rfcNNNN.py) is a snapshot of
@@ -266,7 +271,7 @@ corpus-overrides-check: corpus-tool
 	@status=0; for script in $(CORPUS)/overrides/rfc*.py; do \
 	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
 	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
-	    curl -fsS -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
+	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \

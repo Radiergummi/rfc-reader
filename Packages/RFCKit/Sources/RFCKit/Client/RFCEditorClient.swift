@@ -12,14 +12,19 @@ public protocol HTTPTransport: Sendable {
 /// The transport over a `URLSession`, asking for the formats the RFC Editor serves.
 public struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
+  private let userAgent: String?
 
-  public init(session: URLSession = .shared) {
+  /// `userAgent` names a client that fetches in bulk, so the server's operators can
+  /// tell who it is; nil keeps the session's own.
+  public init(session: URLSession = .shared, userAgent: String? = nil) {
     self.session = session
+    self.userAgent = userAgent
   }
 
   public func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
     var request = URLRequest(url: url)
     request.setValue("application/xml, text/plain, application/json", forHTTPHeaderField: "Accept")
+    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
       throw RFCEditorClient.ClientError.invalidResponse(url)

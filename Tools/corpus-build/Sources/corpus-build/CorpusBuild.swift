@@ -28,16 +28,6 @@ struct CorpusBuild: AsyncParsableCommand {
 
 // MARK: - Support
 
-enum PipelineError: Error, CustomStringConvertible {
-  case http(Int, URL)
-
-  var description: String {
-    switch self {
-    case .http(let status, let url): "HTTP \(status) for \(url)"
-    }
-  }
-}
-
 /// `.sortedKeys` is what makes these files diffable between corpus runs, so the encoder
 /// is configured in one place rather than at each of the three call sites.
 func writeJSON(_ value: some Encodable, to path: String) throws {
