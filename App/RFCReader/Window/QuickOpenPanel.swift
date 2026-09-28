@@ -95,11 +95,15 @@
 
     /// Takes the panel down and, if the keyboard was in it, hands the keyboard back
     /// to the window it came from rather than to whichever window AppKit picks.
+    ///
+    /// The palette goes with it: ordering out leaves its view alive, and with it a
+    /// search whose ↵ was pending, which would open a document after Esc.
     func dismiss() {
       let parent = parent
       let wasKey = isKeyWindow
       parent?.removeChildWindow(self)
       orderOut(nil)
+      contentView = nil
       if wasKey { parent?.makeKey() }
     }
   }
