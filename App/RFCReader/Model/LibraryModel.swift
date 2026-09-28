@@ -111,7 +111,14 @@ final class LibraryModel {
   }
 
   private func refreshBookmarks() {
-    let documents = BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
+    let documents: Set<DocumentID>
+    do {
+      documents = try BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
+    } catch {
+      // The last set read stands until a fetch succeeds.
+      libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     // Only a change is news: most saves record a reading position, not a bookmark.
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
@@ -182,6 +189,10 @@ final class LibraryModel {
       try await store.storeIndex(data)
       apply(prepared, updatedAt: .now)
     } catch {
+      // With an index already showing, the failure is not shown, but it is not
+      // discarded either.
+      libraryLog.error(
+        "refreshing the index failed: \(String(describing: error), privacy: .public)")
       if index == nil { indexState = .failed(error.localizedDescription) }
     }
   }
@@ -537,18 +548,30 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    // No pinned set, no eviction: an empty one would let it delete exactly the
+    // documents it promises to keep. The cache has still grown, so the next open
+    // tries again.
+    let pinned: Set<DocumentID>
+    do {
+      pinned = try pinnedDocuments()
+    } catch {
+      libraryLog.error(
+        "eviction skipped, reading what it keeps failed: \(String(describing: error), privacy: .public)"
+      )
+      return
+    }
+    await store.evict(pinned: pinned, bound: CacheEviction.defaultBound)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
   /// keep the document offline; what was read in the last month; and whatever a
   /// window has open, which includes the document just fetched.
-  private func pinnedDocuments() -> Set<DocumentID> {
+  private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = AppData.container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
-    let read = ((try? context.fetch(recent)) ?? []).compactMap(\.document)
-    let bookmarked = BookmarkStore.bookmarkedDocuments(in: context)
+    let read = try context.fetch(recent).compactMap(\.document)
+    let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     let open = scenes.compactMap { $0.model?.selection }
     return bookmarked.union(read).union(open)
   }

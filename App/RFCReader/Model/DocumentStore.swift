@@ -109,9 +109,18 @@ actor DocumentStore {
     if let cached = parsed[id] { return cached }
 
     let xmlURL = fileURL(id, format: .xml)
-    if let data = try? Data(contentsOf: xmlURL), let document = try? RFCXMLParser.parse(data) {
-      parsed[id] = document
-      return document
+    if let data = try? Data(contentsOf: xmlURL) {
+      do {
+        let document = try RFCXMLParser.parse(data)
+        parsed[id] = document
+        return document
+      } catch {
+        // On to the text, if one is kept, else to the network; but a cached body
+        // that no longer parses is worth knowing about.
+        storeLog.error(
+          "\(id.displayName, privacy: .public): cached XML did not parse: \(String(describing: error), privacy: .public)"
+        )
+      }
     }
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {

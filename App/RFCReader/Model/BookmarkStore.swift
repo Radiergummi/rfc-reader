@@ -22,25 +22,34 @@ private let bookmarkLog = Logger(
 enum BookmarkStore {
   /// Every bookmarked document. Only the keys are fetched: this runs on every save
   /// of the store, and most of those record a reading position.
-  static func bookmarkedDocuments(in context: ModelContext) -> Set<DocumentID> {
+  ///
+  /// Throws rather than answering with an empty set, which would read as "nothing is
+  /// bookmarked": eviction would take that as leave to delete the bookmarked
+  /// documents' offline copies.
+  static func bookmarkedDocuments(in context: ModelContext) throws -> Set<DocumentID> {
     var descriptor = FetchDescriptor<Bookmark>()
     descriptor.propertiesToFetch = [\.documentKey]
-    return Set(((try? context.fetch(descriptor)) ?? []).compactMap(\.document))
+    return Set(try context.fetch(descriptor).compactMap(\.document))
   }
 
-  /// Adds the bookmark, or removes the one already there. Answers with the state it
-  /// leaves behind, so a caller that displays it need not go back and ask.
-  @discardableResult
-  static func toggle(_ id: DocumentID, title: String, in context: ModelContext) -> Bool {
-    let bookmarked: Bool
-    let existing = bookmarks(for: id, in: context)
+  /// Adds the bookmark, or removes the one already there.
+  ///
+  /// When the lookup fails, it changes nothing: not knowing whether the document is
+  /// bookmarked, inserting would add a second bookmark beside the one there.
+  static func toggle(_ id: DocumentID, title: String, in context: ModelContext) {
+    let existing: [Bookmark]
+    do {
+      existing = try bookmarks(for: id, in: context)
+    } catch {
+      bookmarkLog.error(
+        "looking up a bookmark failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     if !existing.isEmpty {
       // Every row naming the document, since nothing stops there being two.
       existing.forEach(context.delete)
-      bookmarked = false
     } else {
       context.insert(Bookmark(document: id, title: title))
-      bookmarked = true
     }
     // Explicitly, rather than leaving it to autosave on one platform and not the
     // other: on macOS the sidebar's list and the reader's toolbar are separate
@@ -54,14 +63,13 @@ enum BookmarkStore {
       // leave a trace.
       bookmarkLog.error("saving a bookmark failed: \(String(describing: error), privacy: .public)")
     }
-    return bookmarked
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do
   /// it (#152).
-  private static func bookmarks(for id: DocumentID, in context: ModelContext) -> [Bookmark] {
+  private static func bookmarks(for id: DocumentID, in context: ModelContext) throws -> [Bookmark] {
     let key = id.fileStem
     let descriptor = FetchDescriptor<Bookmark>(predicate: #Predicate { $0.documentKey == key })
-    return (try? context.fetch(descriptor)) ?? []
+    return try context.fetch(descriptor)
   }
 }
