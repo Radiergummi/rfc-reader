@@ -294,20 +294,8 @@ struct SidebarView: View {
     }
     .tag(filter)
     .contextMenu {
-      Button("Rename…") { navigation.collectionEditor = .edit(entry.id) }
-      Menu("Colour") {
-        ForEach(CollectionColor.allCases) { color in
-          Button {
-            library.editCollections { try CollectionStore.setColor(entry.id, to: color, in: $0) }
-          } label: {
-            if color == entry.color {
-              Label(color.title, systemImage: "checkmark")
-            } else {
-              Text(color.title)
-            }
-          }
-        }
-      }
+      // The editor holds the name and the colour both: one place to change either.
+      Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
       Divider()
       Button("Delete…", role: .destructive) { deleting = entry }
     }

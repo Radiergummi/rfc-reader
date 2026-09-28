@@ -43,13 +43,6 @@ public enum CollectionStore {
     try context.save()
   }
 
-  public static func setColor(
-    _ identifier: UUID, to color: CollectionColor, in context: ModelContext
-  ) throws {
-    try collection(identifier, in: context).color = color
-    try context.save()
-  }
-
   /// The collection and its items, in one save. The documents are untouched.
   public static func delete(_ identifier: UUID, in context: ModelContext) throws {
     context.delete(try collection(identifier, in: context))

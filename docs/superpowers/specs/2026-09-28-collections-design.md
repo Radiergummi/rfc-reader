@@ -123,7 +123,8 @@ a store on disk as `UserData.deduplicate` is:
 
 - `create(name:color:)` — trims the name; refuses an empty one; appends at the end of the
   sidebar; returns the collection.
-- `rename`, `setColor`, `delete` — delete removes the collection and all its items in one save.
+- `update(name:color:)` — the editor's name and colour, in one save.
+- `delete` — removes the collection and all its items in one save.
 - `add(_:to:)` — appends at the end; adding a document already in the collection changes
   nothing.
 - `toggle(_:in:)` — removes **every** item naming the document in that collection, or adds it;
@@ -218,8 +219,10 @@ items of a missing collection ignored, duplicate items collapsed.
 - **Edit** (iOS) makes the Collections section reorderable and deletable; the fixed sections are
   unaffected. Entering and leaving Edit must neither push nor clear the sidebar's selection,
   which drives navigation in compact width — to verify on the device before step 2 closes.
-- A collection row's context menu (long press on iOS, right click on the Mac): **Rename…**,
-  **Colour** (a submenu of the palette), **Delete**. iOS also offers delete by trailing swipe.
+- A collection row's context menu (long press on iOS, right click on the Mac): **Edit…**, which
+  opens the editor with the name and the colour, and **Delete**. The colour is not offered
+  again as a submenu: two places to change it, one of them behind a dialog titled for the
+  name, was what the device check found. iOS also offers delete by trailing swipe.
 - **Delete** asks first, saying how many documents the collection holds and that the documents
   themselves are not affected.
 

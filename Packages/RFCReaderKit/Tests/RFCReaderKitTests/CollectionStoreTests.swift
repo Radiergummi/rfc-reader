@@ -60,15 +60,6 @@ struct CollectionStoreTests {
     #expect(saves == 1)
   }
 
-  @Test func `a colour changes what the snapshot says`() throws {
-    let container = try makeContainer()
-    let context = container.mainContext
-    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.setColor(id, to: .orange, in: context)
-
-    #expect(CollectionSnapshot.fetch(in: context)[id]?.color == .orange)
-  }
-
   @Test func `adding appends, and adding again changes nothing`() throws {
     let container = try makeContainer()
     let context = container.mainContext
