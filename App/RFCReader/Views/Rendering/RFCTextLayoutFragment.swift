@@ -136,8 +136,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chips {
       fill(
         chip.rect.offsetBy(dx: point.x, dy: point.y),
-        radius: 6,
-        corners: Corners(leading: chip.roundsLeading, trailing: chip.roundsTrailing),
+        radius: FragmentGeometry.chipRadius,
+        corners: FragmentGeometry.Corners(
+          leading: chip.roundsLeading, trailing: chip.roundsTrailing),
         color: tint,
         in: context
       )
@@ -159,8 +160,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let card = placement.cardRect(padding: Self.cardPadding, span: span)
     fill(
       joined(card, placement: placement, span: span, in: context),
-      radius: 8,
-      corners: Corners(first: span.isFirst, last: span.isLast),
+      radius: FragmentGeometry.cardRadius,
+      corners: FragmentGeometry.Corners(first: span.isFirst, last: span.isLast),
       color: color.cgColor,
       in: context
     )
@@ -175,7 +176,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     fill(
       joined(rule, placement: placement, span: span, in: context),
       radius: 1.5,
-      corners: Corners(first: span.isFirst, last: span.isLast),
+      corners: FragmentGeometry.Corners(first: span.isFirst, last: span.isLast),
       color: RFCColors.rule.cgColor,
       in: context
     )
@@ -199,76 +200,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   /// The tail every decoration shares: pick the corners, fill the rounded path.
   private func fill(
-    _ rect: CGRect, radius: CGFloat, corners: Corners, color: CGColor, in context: CGContext
+    _ rect: CGRect, radius: CGFloat, corners: FragmentGeometry.Corners, color: CGColor,
+    in context: CGContext
   ) {
     context.setFillColor(color)
-    context.addPath(Self.roundedPath(in: rect, cornerRadius: radius, corners: corners))
+    context.addPath(FragmentGeometry.roundedPath(in: rect, cornerRadius: radius, corners: corners))
     context.fillPath()
-  }
-
-  /// Which corners `roundedPath` should round.
-  struct Corners: OptionSet {
-    let rawValue: Int
-    static let topLeft = Corners(rawValue: 1 << 0)
-    static let topRight = Corners(rawValue: 1 << 1)
-    static let bottomLeft = Corners(rawValue: 1 << 2)
-    static let bottomRight = Corners(rawValue: 1 << 3)
-    static let top: Corners = [.topLeft, .topRight]
-    static let bottom: Corners = [.bottomLeft, .bottomRight]
-    static let left: Corners = [.topLeft, .bottomLeft]
-    static let right: Corners = [.topRight, .bottomRight]
-  }
-
-  /// `rect`, rounded only on the corners named — square where a decoration's band
-  /// continues into the next or previous fragment, rounded where the band starts
-  /// or ends. `CGPath(roundedRect:cornerWidth:cornerHeight:transform:)` has no
-  /// per-corner variant, hence the manual path. The reference chip needs this at
-  /// a finer grain than the card and the rule do: a chip that wraps across a
-  /// line break rounds the left two corners on its first line and the right two
-  /// on its last, which top/bottom rounding alone cannot express.
-  static func roundedPath(in rect: CGRect, cornerRadius: CGFloat, corners: Corners) -> CGPath {
-    let radius = max(0, min(cornerRadius, min(rect.width, rect.height) / 2))
-    let topLeftRadius = corners.contains(.topLeft) ? radius : 0
-    let topRightRadius = corners.contains(.topRight) ? radius : 0
-    let bottomRightRadius = corners.contains(.bottomRight) ? radius : 0
-    let bottomLeftRadius = corners.contains(.bottomLeft) ? radius : 0
-    let path = CGMutablePath()
-    path.move(to: CGPoint(x: rect.minX, y: rect.minY + topLeftRadius))
-    path.addArc(
-      tangent1End: CGPoint(x: rect.minX, y: rect.minY),
-      tangent2End: CGPoint(x: rect.minX + topLeftRadius, y: rect.minY), radius: topLeftRadius)
-    path.addLine(to: CGPoint(x: rect.maxX - topRightRadius, y: rect.minY))
-    path.addArc(
-      tangent1End: CGPoint(x: rect.maxX, y: rect.minY),
-      tangent2End: CGPoint(x: rect.maxX, y: rect.minY + topRightRadius), radius: topRightRadius)
-    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRightRadius))
-    path.addArc(
-      tangent1End: CGPoint(x: rect.maxX, y: rect.maxY),
-      tangent2End: CGPoint(x: rect.maxX - bottomRightRadius, y: rect.maxY),
-      radius: bottomRightRadius)
-    path.addLine(to: CGPoint(x: rect.minX + bottomLeftRadius, y: rect.maxY))
-    path.addArc(
-      tangent1End: CGPoint(x: rect.minX, y: rect.maxY),
-      tangent2End: CGPoint(x: rect.minX, y: rect.maxY - bottomLeftRadius), radius: bottomLeftRadius)
-    path.closeSubpath()
-    return path
-  }
-}
-
-nonisolated extension RFCTextLayoutFragment.Corners {
-  /// A band that runs down the page: rounded where the run starts and ends,
-  /// square where it continues into the next fragment.
-  init(first: Bool, last: Bool) {
-    self = []
-    if first { formUnion(.top) }
-    if last { formUnion(.bottom) }
-  }
-
-  /// A chip that runs along a line: rounded at the ends of the run, square where
-  /// it continues onto the next line.
-  init(leading: Bool, trailing: Bool) {
-    self = []
-    if leading { formUnion(.left) }
-    if trailing { formUnion(.right) }
   }
 }

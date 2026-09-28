@@ -1,6 +1,12 @@
 import Foundation
 import RFCKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// What VoiceOver is given for a range of the reader's text (#12).
 ///
 /// The body is one text view, so a diagram is just characters in it, and VoiceOver
@@ -163,5 +169,80 @@ public enum AccessibleReading {
   /// and which is what tells one figure from the next; `label` without one.
   public static func rotorLabel(at location: Int, in text: NSAttributedString) -> String {
     text.attribute(.rfcCaption, at: location, effectiveRange: nil) as? String ?? label
+  }
+}
+
+// MARK: - Rotors
+
+extension AccessibleReading {
+  /// One rotor stop: the run's extent, and — for diagrams only — what VoiceOver
+  /// says about it. Headings and links keep `label` nil and let VoiceOver read the
+  /// text at `range`, which already says the right thing.
+  public struct RotorItem: Equatable, Sendable {
+    public let range: NSRange
+    public let label: String?
+
+    public init(range: NSRange, label: String?) {
+      self.range = range
+      self.label = label
+    }
+  }
+
+  /// The stops of the three rotors that restore jump navigation to the one text
+  /// view: headings, links and diagrams, read straight off the attributes the
+  /// builder tags runs with. Made once per installed document, so a rotor search
+  /// is a lookup in a small array rather than a walk of the whole text.
+  ///
+  /// `.rfcAnchor` is set on heading runs only — not on every anchor `AnchorIndex`
+  /// carries, which also covers figures, tables and reference rows — so it is both
+  /// the right filter and the only source of a text *range* per heading.
+  public struct Rotors: Equatable, Sendable {
+    public var headings: [RotorItem]
+    public var links: [RotorItem]
+    /// Only what VoiceOver says as a diagram (`isDiagram`): code and artwork that
+    /// is not a drawing are read as text. One stop per block: the enumeration's
+    /// runs are the longest ranges of one `VerbatimBox`, which compares by
+    /// identity, so a block of many storage runs is one run here (`BoxExtentTests`).
+    public var diagrams: [RotorItem]
+
+    public static let empty = Rotors(headings: [], links: [], diagrams: [])
+
+    public init(headings: [RotorItem], links: [RotorItem], diagrams: [RotorItem]) {
+      self.headings = headings
+      self.links = links
+      self.diagrams = diagrams
+    }
+
+    public init(_ text: NSAttributedString) {
+      let whole = NSRange(location: 0, length: text.length)
+      func items(carrying key: NSAttributedString.Key) -> [RotorItem] {
+        var items: [RotorItem] = []
+        text.enumerateAttribute(key, in: whole) { value, range, _ in
+          guard value != nil else { return }
+          items.append(RotorItem(range: range, label: nil))
+        }
+        return items
+      }
+      var diagrams: [RotorItem] = []
+      text.enumerateAttribute(.rfcVerbatim, in: whole) { value, range, _ in
+        guard let box = value as? VerbatimBox, isDiagram(box) else { return }
+        diagrams.append(RotorItem(range: range, label: rotorLabel(at: range.location, in: text)))
+      }
+      self.init(
+        headings: items(carrying: .rfcAnchor), links: items(carrying: .link), diagrams: diagrams)
+    }
+  }
+
+  /// The stop strictly after (or before) `location`, or the first (or last) when
+  /// there is no current stop — both platforms' contract for a search that starts
+  /// from nothing. Nil past either end, which VoiceOver marks with a boundary
+  /// sound rather than repeating the last stop.
+  public static func nextRotorItem(
+    in items: [RotorItem], after location: Int?, forward: Bool
+  ) -> RotorItem? {
+    guard let location, location != NSNotFound else { return forward ? items.first : items.last }
+    return forward
+      ? items.first { $0.range.location > location }
+      : items.last { $0.range.location < location }
   }
 }
