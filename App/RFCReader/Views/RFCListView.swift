@@ -78,7 +78,10 @@ struct RFCListView: View {
       )
       .tag(rfc.id)
       #if os(macOS)
-        .modifier(MacRowActions(rfc: rfc, collection: collection, remove: remove))
+        .modifier(
+          MacRowActions(
+            rfc: rfc, collection: collection, library: library, navigation: navigation,
+            undoManager: undoManager, remove: remove))
       #else
         .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
       #endif
@@ -410,6 +413,11 @@ struct RFCRow: View {
     let rfc: RFCMetadata
     let isBookmarked: Bool
     @Environment(\.modelContext) private var modelContext
+    @Environment(LibraryModel.self) private var library
+    @Environment(NavigationModel.self) private var navigation
+    @Environment(\.undoManager) private var undoManager
+    /// The Add to Collection sheet a swipe opens, which cannot open a menu (#349).
+    @State private var isChoosingCollection = false
 
     func body(content: Content) -> some View {
       content
@@ -420,12 +428,26 @@ struct RFCRow: View {
               systemImage: isBookmarked ? "bookmark.slash" : "bookmark")
           }
           .tint(.accentColor)
+          Button {
+            isChoosingCollection = true
+          } label: {
+            Label("Add to Collection", systemImage: "folder.badge.plus")
+          }
+          .tint(.indigo)
+        }
+        .sheet(isPresented: $isChoosingCollection) {
+          AddToCollectionSheet(document: rfc.id)
         }
         .contextMenu {
           Button(action: toggleBookmark) {
             Label(
               isBookmarked ? "Remove Bookmark" : "Bookmark",
               systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+          }
+          Menu("Add to Collection") {
+            AddToCollectionItems(
+              document: rfc.id, library: library, navigation: navigation,
+              undoManager: undoManager)
           }
           ShareLink(
             item: RFCEditorEndpoints.infoPage(rfc.id),
@@ -470,10 +492,18 @@ private struct PickerTarget: Identifiable {
   struct MacRowActions: ViewModifier {
     let rfc: RFCMetadata
     let collection: UUID?
+    let library: LibraryModel
+    let navigation: NavigationModel
+    let undoManager: UndoManager?
     let remove: (DocumentID) -> Void
 
     func body(content: Content) -> some View {
       content.contextMenu {
+        Menu("Add to Collection") {
+          AddToCollectionItems(
+            document: rfc.id, library: library, navigation: navigation,
+            undoManager: undoManager)
+        }
         if collection != nil {
           Button("Remove from Collection") { remove(rfc.id) }
         }

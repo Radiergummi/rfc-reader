@@ -23,6 +23,7 @@ struct DocumentView: View {
     // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Query private var bookmarks: [Bookmark]
   #endif
@@ -355,12 +356,16 @@ struct DocumentView: View {
     private var bookmarkButton: some View {
       // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
-      return Button {
-        toggleBookmark()
+      // A tap bookmarks, as before; a long press adds to a collection (#349).
+      return Menu {
+        AddToCollectionItems(
+          document: id, library: library, navigation: navigation, undoManager: undoManager)
       } label: {
         Label(
           bookmarked ? "Remove Bookmark" : "Bookmark",
           systemImage: bookmarked ? "bookmark.fill" : "bookmark")
+      } primaryAction: {
+        toggleBookmark()
       }
       .keyboardShortcut("d", modifiers: .command)
     }

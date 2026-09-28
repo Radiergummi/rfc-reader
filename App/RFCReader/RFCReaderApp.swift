@@ -130,6 +130,15 @@ struct DocumentCommands: Commands {
           Button("Bookmark") { active.controller?.toggleBookmark() }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(navigation?.selection == nil)
+          // The key window's undo manager, so Edit > Undo puts back a document
+          // removed from here, as it does for a removal in the list (#349).
+          if let navigation, let document = navigation.selection {
+            Menu("Add to Collection") {
+              AddToCollectionItems(
+                document: document, library: .shared, navigation: navigation,
+                undoManager: active.controller?.window?.undoManager)
+            }
+          }
         }
       }
     #endif
