@@ -309,6 +309,7 @@ struct ReaderInputs {
     /// tracking area does not retain the coordinator it reports to.
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
       coordinator.tearDownHoverTracking()
+      coordinator.releaseDocument()
     }
   }
 #endif
