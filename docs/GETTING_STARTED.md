@@ -33,7 +33,7 @@ curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 
 ## The corpus pipeline
 
-`make corpus` fetches, converts and writes the manifest for 20 documents; `make corpus CORPUS_LIMIT=` does all of them (about 450 MB, twenty minutes). `docs/DATA_PIPELINE.md` explains the stages and the packs they produce.
+`make corpus` fetches, converts and writes the manifest for 20 legacy and 20 RFCXML documents; `make corpus CORPUS_LIMIT=` does all of them (about 450 MB, twenty minutes). `docs/DATA_PIPELINE.md` explains the stages and the packs they produce.
 
 ## Working on RFCKit from Linux or CI
 
