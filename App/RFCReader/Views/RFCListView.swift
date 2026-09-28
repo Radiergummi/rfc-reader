@@ -158,7 +158,7 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        let isUnsearched = navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        let isUnsearched = navigation.searchText.isUnsearchedQuery
         if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")

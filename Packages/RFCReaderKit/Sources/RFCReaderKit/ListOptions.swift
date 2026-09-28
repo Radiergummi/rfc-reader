@@ -67,14 +67,14 @@ public struct ListOptions: Hashable, Sendable {
   /// neighbors are not the collection's.
   public func allowsMoving(in filter: LibraryFilter, query: String) -> Bool {
     guard case .collection = filter else { return false }
-    return collectionSort == .manual && query.trimmingCharacters(in: .whitespaces).isEmpty
+    return collectionSort == .manual && query.isUnsearchedQuery
   }
 
   /// By publication date, then number: a collection is in the reader's order, so
   /// reversing it would not put the oldest first. A search stays in order of
   /// relevance.
   private func sortedCollection(_ rows: [RFCMetadata], query: String) -> [RFCMetadata] {
-    guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return rows }
+    guard query.isUnsearchedQuery else { return rows }
     switch collectionSort {
     case .manual: return rows
     case .newestFirst: return rows.sorted { ($0.date, $0.number) > ($1.date, $1.number) }

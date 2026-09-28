@@ -16,7 +16,7 @@ public enum YearSections {
   /// Offline and a series are the reader's own lists or short ones, and stay
   /// unsectioned for now.
   public static func apply(to filter: LibraryFilter, query: String) -> Bool {
-    guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+    guard query.isUnsearchedQuery else { return false }
     switch filter {
     case .all, .standards, .bestCurrentPractice, .stream, .workingGroup: return true
     case .recent, .bookmarks, .downloaded, .series, .collection: return false

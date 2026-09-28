@@ -32,11 +32,7 @@
 
     /// What is typed, less the spaces around it, which change nothing it finds.
     private var query: String {
-      Self.query(from: input)
-    }
-
-    private static func query(from text: String) -> String {
-      text.trimmingCharacters(in: .whitespacesAndNewlines)
+      input.normalizedQuery
     }
 
     /// Resolves on the keystroke itself, before any ↵ queued behind it can read the
@@ -46,7 +42,7 @@
         input
       } set: { text in
         input = text
-        resolve(Self.query(from: text))
+        resolve(text.normalizedQuery)
       }
     }
 

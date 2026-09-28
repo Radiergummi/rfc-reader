@@ -236,23 +236,6 @@ final class LibraryModel {
   /// the same reason `topWorkingGroups` is (#344).
   private(set) var indexCounts: [LibraryFilter: Int] = [:]
 
-  /// Everything the list is a function of.
-  ///
-  /// The filter and the query are passed in rather than read off `self`: they belong
-  /// to one tab (`NavigationModel`), and two tabs may be listing different things at
-  /// the same time. Gathering them into one value also gives the cache its key.
-  private struct ListKey: Hashable {
-    let filter: LibraryFilter
-    let query: String
-    let bookmarked: Set<Int>
-    let recentlyRead: [Int]
-    let downloaded: Set<Int>
-    let options: ListOptions
-    /// A collection's members in order, so adding, removing or reordering changes
-    /// the key and the cache cannot serve a stale list (#349).
-    let members: [Int]
-  }
-
   /// Answers remembered against their inputs.
   ///
   /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
@@ -272,7 +255,7 @@ final class LibraryModel {
   /// That makes a hit read nothing observable, though, so `list` reads `index`
   /// before looking here: the key carries every other input, and those the caller
   /// reads for itself.
-  @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
+  @ObservationIgnored private var listCache: [LibraryList: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
@@ -286,9 +269,9 @@ final class LibraryModel {
     // bookmark toggled, and an order hashed on every lookup for a filter that
     // ignores it.
     let filter = scene.filter
-    let key = ListKey(
+    let key = LibraryList(
       filter: filter,
-      query: scene.searchText.trimmingCharacters(in: .whitespaces),
+      query: scene.searchText,
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : [],
@@ -304,9 +287,7 @@ final class LibraryModel {
   func librarySearch(_ query: String) -> [RFCMetadata] {
     // Observed on every call, for the reason `list(for:)` gives.
     guard let index else { return [] }
-    let key = ListKey(
-      filter: .all, query: query.trimmingCharacters(in: .whitespaces),
-      bookmarked: [], recentlyRead: [], downloaded: [], options: ListOptions(), members: [])
+    let key = LibraryList(filter: .all, query: query)
     return list(key, in: index)
   }
 
@@ -317,10 +298,15 @@ final class LibraryModel {
     return collections[identifier]?.rfcNumbers ?? []
   }
 
-  private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
+  /// Every input is read off the key, so the cache cannot go stale against something
+  /// the list consults but the key does not carry. The one input not in the key is
+  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
+  /// empties the cache: that keeps the cache correct, and the read of `index` at the
+  /// top of `list` is what gets the view to ask again. The index is handed in from
+  /// that read rather than read again here, so the observed read is the only one.
+  private func list(_ key: LibraryList, in index: RFCIndex) -> [RFCMetadata] {
     if let hit = listCache[key] { return hit }
-    let computed = key.options.apply(
-      to: computeList(key, in: index), filter: key.filter, query: key.query)
+    let computed = key.rows(in: index, search: search)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
@@ -331,39 +317,6 @@ final class LibraryModel {
   /// list that has not arrived yet.
   func listSubtitle(for scene: NavigationModel) -> String {
     indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
-  }
-
-  /// Reads every input off the key, so the cache cannot go stale against something
-  /// this consults but the key does not carry. The one input not in the key is
-  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
-  /// empties the cache: that keeps the cache correct, and the read of `index` at the
-  /// top of `list` is what gets the view to ask again. The index is handed in from
-  /// that read rather than read again here, so the observed read is the only one.
-  private func computeList(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
-    let filter = key.filter
-    let base: [RFCMetadata]
-    switch filter {
-    case .all: base = index.rfcs.reversed()
-    case .recent: base = key.recentlyRead.compactMap { index[$0] }
-    case .bookmarks: base = key.bookmarked.sorted(by: >).compactMap { index[$0] }
-    case .downloaded: base = key.downloaded.sorted(by: >).compactMap { index[$0] }
-    // Through the predicate the sidebar's counts use, so the two cannot disagree.
-    case .standards, .bestCurrentPractice, .stream, .workingGroup:
-      base = index.rfcs.reversed().filter { filter.includes($0) == true }
-    case .series(let id): base = index.series(id)?.members.compactMap { index[$0] } ?? []
-    case .collection: base = key.members.compactMap { index[$0] }
-    }
-
-    guard !key.query.isEmpty, let search else { return base }
-    // Every hit, not the top few hundred: the search scores and sorts all of them
-    // anyway, the list windows its rows itself (`ListWindow`), and the count over
-    // the list says how many there are. A cap also cut before the filter below,
-    // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = search.search(key.query, limit: .max)
-    // Everything is allowed in the whole library, so there is nothing to filter.
-    if case .all = filter { return hits.map(\.rfc) }
-    let allowed = Set(base.map(\.number))
-    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
