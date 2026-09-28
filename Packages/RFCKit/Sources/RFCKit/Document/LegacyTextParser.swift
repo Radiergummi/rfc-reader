@@ -1467,12 +1467,57 @@ public struct LegacyTextParser: Sendable {
     else { return nil }
     let lowered = trimmed.lowercased()
     guard !headerLinePrefixes.contains(where: { lowered.hasPrefix($0) }) else { return nil }
+    guard !refusesUnnumberedHeading(trimmed) else { return nil }
     return HeadingInfo(
       number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())",
       depth: 1)
   }
 
-  static func refusesUnnumberedHeading(_ title: String) -> Bool { false }
+  /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
+  /// definitions, braces, table rules and box drawing, arrows.
+  private static let codePunctuation = ["::=", "{", "}", "|", "+--", "---", "===", "->"]
+
+  /// Words a title-cased heading leaves in lower case: `Transmission of IP Datagrams
+  /// over Ethernet` is title case all the same.
+  private static let minorWords: Set<String> = [
+    "a", "an", "the", "and", "or", "but", "nor", "for", "of", "in", "on", "at", "to", "by",
+    "with", "from", "into", "onto", "over", "upon", "via", "as", "per", "vs",
+  ]
+
+  /// True for a column-0 line that passed every other test for an unnumbered heading,
+  /// but reads as something else: prose, a MIB line, a grammar or a drawing (#201).
+  ///
+  /// Measured over the legacy corpus, half of the 61,858 unnumbered headings the parser
+  /// made were one of these, and every sample of them was wrong:
+  ///
+  /// - a lower-case start: MIB lines (`dot1qTpGroupLearnt OBJECT-TYPE`), wrapped prose,
+  ///   `o` list items;
+  /// - code or diagram punctuation (`codePunctuation`): ASN.1, ABNF, table rules, boxes;
+  /// - a sentence's end, `.`, `;` or `,`: prose, protocol traces, data lines. `etc.`
+  ///   ends a heading's list as often as a sentence, and is let through;
+  /// - sentence case past 50 characters, where the samples turn from titles into prose.
+  ///
+  /// Title case, all capitals and short sentence case (`How to use this document`) are
+  /// where the real headings are. Their false positives, table rows and header-field
+  /// lines, need the neighbouring lines to judge, which is a second pass.
+  static func refusesUnnumberedHeading(_ title: String) -> Bool {
+    guard let first = title.first else { return true }
+    if first.isLowercase { return true }
+    if codePunctuation.contains(where: { title.contains($0) }) { return true }
+    if let last = title.last, ".;,".contains(last), !title.hasSuffix("etc.") { return true }
+    return title.count > 50 && isSentenceCase(title)
+  }
+
+  /// Neither all capitals nor title case: some word of four letters or more that is not
+  /// a minor word starts in lower case.
+  private static func isSentenceCase(_ title: String) -> Bool {
+    guard title.contains(where: \.isLowercase) else { return false }
+    return title.split(separator: " ").contains { word in
+      let letters = word.filter(\.isLetter)
+      guard letters.count >= 4, !minorWords.contains(letters.lowercased()) else { return false }
+      return letters.first?.isLowercase == true
+    }
+  }
 
   private static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {
     heading.title.lowercased().contains("references")
