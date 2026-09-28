@@ -141,4 +141,17 @@ struct DocumentFallbackTests {
       _ = try await RFCEditorClient(transport: failing).fetchIndexData()
     }
   }
+
+  /// A body that does not decode keeps the decoder's own error, typed, beside the URL
+  /// it came from, rather than a description of it.
+  @Test func `a decoding failure keeps the decoder's error`() async throws {
+    let transport = Transport(xml: .body(Data("<rfc-index>".utf8)))
+    do {
+      _ = try await RFCEditorClient(transport: transport).fetchIndex()
+      Issue.record("expected a decoding failure")
+    } catch RFCEditorClient.ClientError.decoding(let url, let underlying) {
+      #expect(url == RFCEditorEndpoints.index)
+      #expect(underlying is RFCIndexParser.ParseError)
+    }
+  }
 }
