@@ -13,18 +13,25 @@
 /// whole of the difference, and it stops here.
 extension PlatformTextView {
   /// The top of the viewport, in text-container coordinates.
+  ///
+  /// On macOS, the top of the part the toolbar leaves uncovered: the window's
+  /// content runs under the toolbar and the tab bar, so the clip view's own top
+  /// edge is behind them. Measured from there, a jump put its heading under the
+  /// toolbar and tracking named the section scrolled past as the one being read.
+  /// `scroll(toY:)` and `viewportHeight` are measured the same way, so a jump
+  /// lands where tracking then reads.
   var viewportTop: CGFloat {
     #if canImport(UIKit)
       return contentOffset.y - textContainerInset.top
     #else
-      return visibleRect.minY - textContainerOrigin.y
+      return unobscuredTop - textContainerOrigin.y
     #endif
   }
 
   #if !canImport(UIKit)
     /// The top of the part of the viewport nothing covers — the toolbar's bottom
-    /// edge — in the text view's own coordinates. Not `viewportTop` moved by an
-    /// inset: the text view's `visibleRect` stops at its own top, so at the top of
+    /// edge — in the text view's own coordinates. Not `visibleRect.minY` moved by
+    /// an inset: the text view's `visibleRect` stops at its own top, so at the top of
     /// a document it reads 0 where the clip view is showing the toolbar's height
     /// above it.
     var unobscuredTop: CGFloat {
@@ -58,7 +65,8 @@ extension PlatformTextView {
     #if canImport(UIKit)
       return bounds.height
     #else
-      return enclosingScrollView?.contentView.bounds.height ?? bounds.height
+      guard let clip = enclosingScrollView?.contentView else { return bounds.height }
+      return clip.bounds.height - clip.contentInsets.top
     #endif
   }
 
@@ -73,13 +81,30 @@ extension PlatformTextView {
     #endif
   }
 
-  func scroll(toY y: CGFloat) {
+  /// `animated` is a request, not a promise: with Reduce Motion on, every jump is
+  /// instant.
+  func scroll(toY y: CGFloat, animated: Bool = false) {
     #if canImport(UIKit)
-      setContentOffset(CGPoint(x: 0, y: y), animated: false)
+      let animated = animated && !UIAccessibility.isReduceMotionEnabled
+      setContentOffset(CGPoint(x: 0, y: y), animated: animated)
     #else
       guard let scroll = enclosingScrollView else { return }
-      scroll.contentView.scroll(to: NSPoint(x: 0, y: y))
-      scroll.reflectScrolledClipView(scroll.contentView)
+      let clip = scroll.contentView
+      // `y` is where the uncovered viewport starts; see `viewportTop`.
+      let target = NSPoint(x: 0, y: y - clip.contentInsets.top)
+      guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+        clip.scroll(to: target)
+        scroll.reflectScrolledClipView(clip)
+        return
+      }
+      // The clip view's animator moves its bounds; the scroll view follows each
+      // step through the bounds-change notifications it already observes, so the
+      // scroller and the reader's own tracking see the motion as a scroll.
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.3
+        context.allowsImplicitAnimation = true
+        clip.animator().setBoundsOrigin(target)
+      }
     #endif
   }
 }

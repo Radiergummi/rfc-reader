@@ -27,6 +27,8 @@ struct DocumentInspector: View {
   let library: LibraryModel
   @Binding var tab: InspectorTab
   let current: String?
+  /// The bibliography entry a citation asked to see, if any.
+  let revealed: ReaderState.RevealedReference?
   let selectSection: (String) -> Void
   let openDocument: (DocumentID) -> Void
 
@@ -79,7 +81,7 @@ struct DocumentInspector: View {
     case .references:
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
-      ReferencesView(groups: groups, open: openDocument)
+      ReferencesView(groups: groups, revealed: revealed, open: openDocument)
     case .info:
       InfoView(sections: info, document: document, library: library, open: openDocument)
     }
@@ -123,6 +125,7 @@ struct PanelHost: View {
         library: library,
         tab: $reader.tab,
         current: reader.currentAnchor,
+        revealed: reader.revealedReference,
         selectSection: {
           navigation.jump(toSection: $0)
           didNavigate()
@@ -212,22 +215,46 @@ private struct InspectorTabBar: View {
 
 struct ReferencesView: View {
   let groups: [ReferenceGroup]
+  let revealed: ReaderState.RevealedReference?
   let open: (DocumentID) -> Void
+
+  /// The revealed entry, marked for a moment so the eye finds it in the list.
+  @State private var highlighted: String?
 
   var body: some View {
     if groups.isEmpty {
       ContentUnavailableView("No References", systemImage: "book.closed")
     } else {
-      List {
-        ForEach(groups) { group in
-          Section(group.title) {
-            ForEach(group.entries) { entry in
-              ReferenceRow(entry: entry, open: open)
+      ScrollViewReader { proxy in
+        List {
+          ForEach(groups) { group in
+            Section(group.title) {
+              ForEach(group.entries) { entry in
+                // Identified by its anchor already (`Reference.id`), which is
+                // what the reveal scrolls to.
+                ReferenceRow(entry: entry, open: open)
+                  .listRowBackground(
+                    highlighted == entry.anchor
+                      ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
+              }
             }
           }
         }
+        .listStyle(.sidebar)
+        // Initial as well: a citation usually switches the panel to this tab, and
+        // the list is new when the request arrives.
+        .task(id: revealed) {
+          guard let revealed else { return }
+          // A turn later, once the list has rows to scroll to; see the contents
+          // tab, which waits for the same reason.
+          await Task.yield()
+          withAnimation { proxy.scrollTo(revealed.anchor, anchor: .center) }
+          highlighted = revealed.anchor
+          try? await Task.sleep(for: .seconds(1.5))
+          guard !Task.isCancelled else { return }
+          withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
+        }
       }
-      .listStyle(.sidebar)
     }
   }
 }
@@ -252,6 +279,15 @@ struct ReferenceRow: View {
         .buttonStyle(.plain)
       } else {
         entryDescription
+        // An entry that names no RFC opens nothing in the reader, so where it
+        // lives is the one way on from it — and what a citation of it reveals the
+        // row for.
+        if let url = entry.url {
+          Link(destination: url) {
+            Text(url.absoluteString).lineLimit(1).truncationMode(.middle)
+          }
+          .font(.caption)
+        }
       }
       // What the author added after the entry, most often the commit a living
       // standard was cited at; its link opens in the browser like any other.

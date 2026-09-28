@@ -112,9 +112,9 @@ struct ChipLineGeometryTests {
       origin: .zero
     )
 
-    // The chip on the later line, found by the y its own line was laid out at.
-    let expectedY = fixture.laterLine.typographicBounds.minY
-    let onLaterLine = chips.filter { abs($0.rect.minY - (expectedY + 1)) < 0.5 }
+    // The chip on the later line, found by the line its centre falls on.
+    let lineBounds = fixture.laterLine.typographicBounds
+    let onLaterLine = chips.filter { lineBounds.minY..<lineBounds.maxY ~= $0.rect.midY }
     #expect(!onLaterLine.isEmpty, "the wrapped line's chips must be among the rects")
 
     // A line-relative index base clamps `locationForCharacter` to 0 for any piece
@@ -166,6 +166,91 @@ struct ChipLineGeometryTests {
     for middle in chips.dropFirst().dropLast() {
       #expect(!middle.roundsLeading && !middle.roundsTrailing, "a middle line rounds neither end")
     }
+  }
+
+  /// The line box is not the glyph box: `lineHeightMultiple` puts all of a body
+  /// line's extra leading above its ascender, so a tint filling the line had
+  /// room above the label and none below its descenders. The tint is centred on
+  /// the chip font's own ascender and descender instead.
+  @Test func `a chip is padded equally above and below its glyphs`() throws {
+    let paragraph = try chipParagraph([
+      .text("see "), .crossReference(CrossReference(target: .document(.rfc(8402), section: nil))),
+      .text(" for more"),
+    ])
+    defer { withExtendedLifetime(paragraph.storage) {} }
+    let line = try #require(paragraph.lines.first)
+    let chip = try #require(paragraph.chips.first)
+
+    let font = ReadingStyle().bodyFont
+    let baseline = line.typographicBounds.minY + line.glyphOrigin.y
+    let above = (baseline - font.ascender) - chip.rect.minY
+    let below = chip.rect.maxY - (baseline - font.descender)
+    #expect(abs(above - below) < 0.01, "above: \(above), below: \(below)")
+    #expect(below >= FragmentGeometry.chipVerticalPadding - 0.01)
+  }
+
+  /// `BCP 14 [RFC2119] [RFC8174]` is in nearly every RFC. A chip's tint reaches
+  /// past its glyphs, and a space is narrower than two paddings, so adjacent chips
+  /// overlapped, and a chip's tint covered the space before it. The padding takes
+  /// up room in the line instead: every tint clears its neighbours' glyphs.
+  @Test(arguments: [" ", ""])
+  func `a chip's tint clears the text and chips beside it`(separator: String) throws {
+    let chip = { (number: Int) in
+      Inline.crossReference(CrossReference(target: .document(.rfc(number), section: nil)))
+    }
+    let paragraph = try chipParagraph([
+      .text("described in BCP 14 "), chip(2119), .text(separator), chip(8174), .text(" when"),
+    ])
+    defer { withExtendedLifetime(paragraph.storage) {} }
+    let chips = paragraph.chips.sorted { $0.rect.minX < $1.rect.minX }
+    try #require(chips.count == 2)
+
+    let line = try #require(paragraph.lines.first)
+    func x(_ needle: String) throws -> CGFloat {
+      let offset = try Fixtures.offset(of: needle, in: paragraph.text) - paragraph.range.location
+      return line.typographicBounds.minX + line.locationForCharacter(at: offset).x
+    }
+    // "14" ends where the space after it starts; " when" starts at its space.
+    #expect(
+      chips[0].rect.minX >= (try x(" \u{FFFC}")) - 0.01, "the tint covers the space before it")
+    #expect(chips[0].rect.maxX <= chips[1].rect.minX + 0.01, "adjacent chips overlap")
+    #expect(chips[1].rect.maxX <= (try x(" when")) + 0.01, "the tint runs into the text after it")
+  }
+
+  /// One paragraph of `inlines`, built the way the reader builds a document — its
+  /// paragraph style and the room `reserveChipPadding` makes included — laid out
+  /// on one line, with the chip rects its fragment draws. `storage` must outlive
+  /// every use: the layout manager holds it weakly.
+  private struct ChipParagraph {
+    let text: NSAttributedString
+    let storage: NSTextContentStorage
+    let range: NSRange
+    let lines: [NSTextLineFragment]
+    let chips: [FragmentGeometry.ChipRect]
+  }
+
+  private func chipParagraph(_ inlines: [Inline]) throws -> ChipParagraph {
+    let text = DocumentTextBuilder.build(
+      Fixtures.document(.paragraph(Paragraph(inlines))), style: ReadingStyle()
+    ).text
+    let (storage, layout) = layOut(text, width: 2000)
+    var found: (fragment: NSTextLayoutFragment, range: NSRange)?
+    layout.enumerateTextLayoutFragments(
+      from: layout.documentRange.location, options: [.ensuresLayout]
+    ) { fragment in
+      guard let range = layout.range(of: fragment.rangeInElement) else { return true }
+      text.enumerateAttribute(.rfcChip, in: range) { value, _, stop in
+        guard value != nil else { return }
+        found = (fragment, range)
+        stop.pointee = true
+      }
+      return found == nil
+    }
+    let (fragment, range) = try #require(found, "the paragraph must hold a chip")
+    let lines = fragment.textLineFragments
+    return ChipParagraph(
+      text: text, storage: storage, range: range, lines: lines,
+      chips: FragmentGeometry.chipRects(in: text, lines: lines, fragment: range, origin: .zero))
   }
 
   @Test func `every chip rect sits over its own glyphs`() throws {

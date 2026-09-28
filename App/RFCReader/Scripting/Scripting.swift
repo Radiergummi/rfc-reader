@@ -31,7 +31,7 @@
     @objc var isObsolete: Bool { metadata?.isObsolete ?? false }
 
     @objc var isBookmarked: Bool {
-      get { LibraryModel.shared.bookmarkedNumbers.contains(id.number) }
+      get { LibraryModel.shared.bookmarkedDocuments.contains(id) }
       set {
         guard newValue != isBookmarked else { return }
         let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: nil, id: id)
