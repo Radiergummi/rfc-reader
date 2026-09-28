@@ -7,7 +7,8 @@ enum InspectorTab {
   case references
 }
 
-/// The document's two navigational views, sharing one panel.
+/// The inspector beside the reader: the document's two navigational views, or what
+/// is known about it (#25), whichever `pane` says.
 ///
 /// The bibliography is here rather than in the reading flow: every citation in the
 /// prose already links straight to the document it names, so the section was several
@@ -19,14 +20,30 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
+  let info: DocumentInfo?
+  /// For the Info pane's offline copy, which is the store's rather than derived.
+  let document: DocumentID?
+  let library: LibraryModel
+  let pane: InspectorPane
   @Binding var tab: InspectorTab
   let current: String?
   /// The bibliography entry a citation asked to see, if any.
   let revealed: ReaderState.RevealedReference?
   let selectSection: (String) -> Void
   let openDocument: (DocumentID) -> Void
+  /// Searches the library, for a keyword chosen in the Info pane.
+  let search: (String) -> Void
 
   var body: some View {
+    switch pane {
+    case .navigation: navigation
+    case .info:
+      InfoView(
+        info: info, document: document, library: library, open: openDocument, search: search)
+    }
+  }
+
+  private var navigation: some View {
     VStack(spacing: 0) {
       #if os(macOS)
         InspectorTabBar(tab: $tab)
@@ -111,16 +128,31 @@ struct PanelHost: View {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
+        info: reader.info,
+        document: navigation.selection,
+        library: library,
+        pane: reader.pane,
         tab: $reader.tab,
-        current: reader.currentAnchor,
+        // Read only while the navigation pane shows: it changes on every section
+        // crossing, and read under the Info pane it re-rendered that pane each time.
+        current: reader.pane == .navigation ? reader.currentAnchor : nil,
         revealed: reader.revealedReference,
         selectSection: {
           navigation.jump(toSection: $0)
           didNavigate()
         },
-        openDocument: {
-          library.open($0, activation: .current, in: navigation)
-          didNavigate()
+        openDocument: { id in
+          leave { library.open(id, activation: .current, in: navigation) }
+        },
+        search: { text in
+          leave {
+            navigation.search(text)
+            #if !os(macOS)
+              // An iPhone shows the list or the reader, not both: the results are
+              // the list's, so the reader steps back to it.
+              if closesAfterChoice { navigation.selection = nil }
+            #endif
+          }
         }
       )
     } else {
@@ -133,9 +165,24 @@ struct PanelHost: View {
       if closesAfterChoice { isPresented = false }
     #endif
   }
+
+  /// A choice that leaves this document: another RFC, or the list. The sheet is
+  /// closed first and the choice made a turn later (#298). Made at once, it replaced
+  /// the reader, whose view owns the sheet, before the sheet heard it should close,
+  /// so the sheet stayed up with nothing in it.
+  private func leave(_ choice: @escaping () -> Void) {
+    #if !os(macOS)
+      if closesAfterChoice {
+        isPresented = false
+        DispatchQueue.main.async(execute: choice)
+        return
+      }
+    #endif
+    choice()
+  }
 }
 
-/// The panel's two tabs, drawn the way an inspector's are rather than as a segmented
+/// The navigation pane's tabs, drawn the way an inspector's are rather than as a segmented
 /// control.
 ///
 /// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which

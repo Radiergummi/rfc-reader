@@ -68,7 +68,10 @@ struct DocumentView: View {
     }
   }
   #if !os(macOS)
-    @State private var showTableOfContents = false
+    @State private var showsInspector = false
+
+    /// Whether the panel is a sheet over the reader rather than a column beside it.
+    private var isCompact: Bool { horizontalSizeClass == .compact }
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -175,21 +178,24 @@ struct DocumentView: View {
           guard !Task.isCancelled else { return }
           navigation.settleReturnOffer()
         }
-        // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
-        // swallows an iPhone, and in compact width the inspector already presents
-        // itself as a sheet.
-        .inspector(isPresented: $showTableOfContents) {
-          PanelHost(
-            isPresented: $showTableOfContents,
-            closesAfterChoice: horizontalSizeClass == .compact
-          )
+        // iOS keeps the inspector as a column beside the reader where there is
+        // room for one. In compact width it is a sheet, and a `.sheet` of our own
+        // rather than the one `.inspector` turns itself into: that one, swiped
+        // away, set the binding back to false but dropped the next request to
+        // show it, so the panel's buttons opened it only on every other tap.
+        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
           .inspectorColumnWidth(min: 260, ideal: 320)
+        }
+        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
+          .presentationDetents([.medium, .large])
         }
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
         #if !os(macOS)
-          reader.openPanel = { [isPresented = $showTableOfContents] in
+          reader.openPanel = { [isPresented = $showsInspector] in
             withAnimation(.snappy) { isPresented.wrappedValue = true }
           }
         #endif
@@ -206,6 +212,10 @@ struct DocumentView: View {
         work.buildingFor = buildInputs
         work.build = Task(name: "Build document") { await rebuild() }
       }
+      // The index state, not the metadata: a refresh can change a series' members
+      // without changing this document's entry, and comparing the state is cheaper
+      // on a body the reader re-evaluates on every section crossing.
+      .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -339,12 +349,19 @@ struct DocumentView: View {
 
       ToolbarItemGroup(placement: .bottomBar) {
         Button {
-          withAnimation(.snappy) { showTableOfContents.toggle() }
+          press(.navigation)
         } label: {
           Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
         // The same chord as the Mac's (#157).
         .keyboardShortcut("i", modifiers: [.command, .option])
+
+        Button {
+          press(.info)
+        } label: {
+          Label("Info", systemImage: "info.circle")
+        }
+        .keyboardShortcut("i", modifiers: .command)
 
         citeMenu
       }
@@ -385,6 +402,15 @@ struct DocumentView: View {
       } label: {
         Label("Cite", systemImage: "quote.opening")
       }
+    }
+
+    /// A pane's button: opens the inspector on that pane, swaps an open one to it,
+    /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
+    private func press(_ pane: InspectorPane) {
+      let result = InspectorPane.pressing(
+        pane, isOpen: showsInspector, showing: reader.pane)
+      reader.pane = result.pane
+      withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
     /// What is used least: the original text, and the document's pages elsewhere.
@@ -450,6 +476,12 @@ struct DocumentView: View {
     work.load = Task(name: "Load document") { await load() }
   }
 
+  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
+  /// opened before the index finished loading has none to show until it does.
+  private func deriveInfo() {
+    reader.info = metadata.map { DocumentInfo($0, in: library.index) }
+  }
+
   private func trace(_ event: String) {
     readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
   }
@@ -466,6 +498,9 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    // Before the fetch, not after: the index knows the document before its body
+    // arrives, so the tab is ready the moment the panel is.
+    deriveInfo()
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
