@@ -227,12 +227,15 @@ struct RFCRow: View {
         title.font(.headline)
         HStack(alignment: .firstTextBaseline, spacing: 12) {
           Group {
-            Text(rfc.id.displayName).monospacedDigit()
+            // Proportional digits: tabular ones are for a column, and the number
+            // leads a line of text now rather than standing in one.
+            Text(rfc.id.displayName)
             if showsYear {
-              Text(String(rfc.date.year)).monospacedDigit()
+              Text(String(rfc.date.year))
             }
+            // Spelled as the sidebar and the list's title spell it.
             if let workingGroup {
-              Text(workingGroup)
+              Text(workingGroup.uppercased())
             }
             if rfc.isObsolete {
               Text("Obsolete")
