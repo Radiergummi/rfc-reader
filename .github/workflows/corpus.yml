@@ -42,25 +42,19 @@ jobs:
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
-      - name: Build corpus-build
-        run: swift build -c release --package-path Tools/corpus-build
+      # make for the Makefile, xmllint for the schema check, zstd for the pack. The
+      # image carries none of them.
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils zstd >/dev/null
 
-      - name: Fetch legacy RFCs
-        run: Tools/corpus-build/.build/release/corpus-build fetch --out corpus ${LIMIT:+--limit "$LIMIT"}
-
-      - name: Convert to RFCXML
-        run: |
-          apt-get update -qq && apt-get install -y -qq libxml2-utils >/dev/null
-          Tools/corpus-build/.build/release/corpus-build convert \
-            --in corpus/text.noindex --out corpus/xml.noindex --overrides corpus/overrides --report corpus/report.json \
-            --index corpus/rfc-index.xml --schema Tools/corpus-build/Schema/v3.rng
-
-      - name: Manifest
-        run: Tools/corpus-build/.build/release/corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version "$VERSION"
+      # The same entry point as a local `make corpus`, so CI builds the corpus a
+      # developer does: the modern RFCXML documents fetched beside the converted
+      # ones, and the prose diagnostics written. An empty LIMIT is the full set.
+      - name: Fetch, convert, manifest
+        run: make corpus CORPUS_LIMIT="$LIMIT" CORPUS_VERSION="$VERSION"
 
       - name: Pack
         run: |
-          apt-get update -qq && apt-get install -y -qq zstd >/dev/null
           # convert writes xml.noindex (kept out of Spotlight); the pack's directory is xml.
           tar --zstd -cf "legacy-xml-$VERSION.tar.zst" -C corpus --transform 's,^xml\.noindex,xml,' xml.noindex manifest.json
           ls -la ./*.tar.zst
@@ -71,6 +65,7 @@ jobs:
           name: corpus-${{ inputs.version }}
           path: |
             corpus/report.json
+            corpus/prose.json
             corpus/manifest.json
             legacy-xml-*.tar.zst
 
