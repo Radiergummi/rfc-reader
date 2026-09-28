@@ -17,12 +17,15 @@ public struct ReadingStyle: Sendable, Equatable {
   /// The body text's point size: the reader's own size, scaled for the system's
   /// text size. Everything else measured from the body — captions, code, spacing,
   /// indents — follows from this.
-  public var bodySize: CGFloat
+  ///
+  /// Set once, from the reader's size and `textSize` together; only `scaled(by:)`
+  /// moves it afterwards, so the two cannot disagree.
+  public private(set) var bodySize: CGFloat
   /// The system's text size, which headings are scaled for on their own curve:
   /// at the accessibility sizes a title grows less than the body does.
-  public var textSize: DynamicTypeSize
-  /// Bold Text: every weight one step heavier, as the system's own text is.
-  public var boldText: Bool
+  public private(set) var textSize: DynamicTypeSize
+  /// Bold Text: prose weights one step heavier, as the system's own text is.
+  public private(set) var boldText: Bool
   /// Width available to text: the reader's 760 pt frame less its horizontal padding.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
@@ -59,10 +62,20 @@ public struct ReadingStyle: Sendable, Equatable {
     return scaled
   }
 
-  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize, weight: legible(.regular)) }
-  public var boldBodyFont: PlatformFont { .systemFont(ofSize: bodySize, weight: legible(.bold)) }
-  public var captionFont: PlatformFont {
-    .systemFont(ofSize: bodySize * 0.88, weight: legible(.regular))
+  public var bodyFont: PlatformFont { systemFont(ofSize: bodySize, weight: .regular) }
+  public var boldBodyFont: PlatformFont { systemFont(ofSize: bodySize, weight: .bold) }
+  public var captionFont: PlatformFont { systemFont(ofSize: bodySize * 0.88, weight: .regular) }
+
+  /// Strong text in `surrounding`: a step heavier than it and at least bold, at
+  /// its size and slant. A bold trait added to the face is not enough — on a
+  /// semibold face, which is what the body is under Bold Text, it changes nothing,
+  /// and strong text would read the same as the prose around it.
+  public func strongFont(matching surrounding: PlatformFont) -> PlatformFont {
+    let heavier = Self.heavier(than: surrounding.weight)
+    let weight = heavier.rawValue > PlatformFont.Weight.bold.rawValue ? heavier : .bold
+    let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
+    return PlatformFont.systemFont(ofSize: surrounding.pointSize, weight: weight)
+      .adding(traits: slant)
   }
   /// Inline code set in `surrounding` prose: monospaced, a little smaller, and at
   /// the surrounding weight and slant, so code in a heading stays heading-sized and
@@ -75,6 +88,9 @@ public struct ReadingStyle: Sendable, Equatable {
     .adding(traits: slant)
   }
 
+  /// Verbatim blocks — artwork and source code — stay regular under Bold Text:
+  /// they are drawn with the characters, and a heavier stroke closes up a diagram's
+  /// box-drawing without making it any easier to read.
   public func monospacedFont(scale: CGFloat) -> PlatformFont {
     .monospacedSystemFont(ofSize: bodySize * 0.82 * scale, weight: .regular)
   }
@@ -83,22 +99,31 @@ public struct ReadingStyle: Sendable, Equatable {
   /// `.title2`, `.title3` and `.headline`, in proportion to the body at the current
   /// text size, so they keep the system's relationship to it at every size.
   public func headingFont(depth: Int) -> PlatformFont {
-    let size =
+    // A headline is the body's size at every text size, so the deepest headings
+    // need no table of their own.
+    let ratio: CGFloat =
       switch depth {
-      case 1: TextSizeMetrics.title2(textSize)
-      case 2: TextSizeMetrics.title3(textSize)
-      default: TextSizeMetrics.headline(textSize)
+      case 1: TextSizeMetrics.title2(textSize) / TextSizeMetrics.body(textSize)
+      case 2: TextSizeMetrics.title3(textSize) / TextSizeMetrics.body(textSize)
+      default: 1
       }
-    return .systemFont(
-      ofSize: bodySize * size / TextSizeMetrics.body(textSize), weight: legible(.semibold))
+    return systemFont(ofSize: bodySize * ratio, weight: .semibold)
   }
 
-  /// Bold Text steps prose weights up the way the system's text styles do:
-  /// regular to semibold, semibold to bold, bold to heavy.
-  private func legible(_ weight: PlatformFont.Weight) -> PlatformFont.Weight {
-    guard boldText else { return weight }
-    if weight.rawValue >= PlatformFont.Weight.bold.rawValue { return .heavy }
-    if weight.rawValue >= PlatformFont.Weight.semibold.rawValue { return .bold }
+  /// The system font at `weight`, a step heavier under Bold Text — unless the
+  /// system has already made it heavier itself, as UIKit may for its own font:
+  /// a face heavier than was asked for is Bold Text applied once already.
+  private func systemFont(ofSize size: CGFloat, weight: PlatformFont.Weight) -> PlatformFont {
+    let asked = PlatformFont.systemFont(ofSize: size, weight: weight)
+    guard boldText, asked.weight.rawValue < weight.rawValue + 0.05 else { return asked }
+    return .systemFont(ofSize: size, weight: Self.heavier(than: weight))
+  }
+
+  /// One step up the weights the reader uses: regular to semibold, semibold to
+  /// bold, bold to heavy.
+  private static func heavier(than weight: PlatformFont.Weight) -> PlatformFont.Weight {
+    if weight.rawValue >= PlatformFont.Weight.bold.rawValue - 0.05 { return .heavy }
+    if weight.rawValue >= PlatformFont.Weight.semibold.rawValue - 0.05 { return .bold }
     return .semibold
   }
 
@@ -223,7 +248,8 @@ public enum ToolbarTitleReveal {
 }
 
 /// The system's text style sizes, in points, at each text size: Apple's Dynamic
-/// Type tables for `.body`, `.title2`, `.title3` and `.headline` on iOS.
+/// Type tables for `.body`, `.title2` and `.title3` on iOS. (`.headline` is the
+/// body's size throughout.)
 ///
 /// Tabled rather than asked of `UIFontMetrics`, which exists only under UIKit: the
 /// Mac has no Dynamic Type and always reports `.large`, and this package's tests
@@ -239,10 +265,6 @@ enum TextSizeMetrics {
 
   static func title3(_ size: DynamicTypeSize) -> CGFloat {
     points(size, [17, 18, 19, 20, 22, 24, 26, 31, 37, 43, 49, 55])
-  }
-
-  static func headline(_ size: DynamicTypeSize) -> CGFloat {
-    points(size, [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53])
   }
 
   /// `table` has one entry per size, from `.xSmall` to `.accessibility5`.

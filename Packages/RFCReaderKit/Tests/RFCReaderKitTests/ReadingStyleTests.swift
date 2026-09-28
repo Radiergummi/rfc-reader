@@ -7,8 +7,9 @@ import Testing
 /// the reader's own size as a multiplier on top (#153).
 @Suite("Reading style")
 struct ReadingStyleTests {
-  /// The system's default size changes nothing, so the Mac — which has no Dynamic
-  /// Type and always reports it — reads exactly as it did.
+  /// The system's default size changes nothing about the body, so the Mac — which
+  /// has no Dynamic Type and always reports it — reads at the size it did. Its
+  /// headings moved by a fraction of a point, to the system's own title sizes.
   @Test func `at the default text size the body is the reader's own size`() {
     #expect(ReadingStyle(bodySize: 17).bodySize == 17)
     #expect(ReadingStyle(bodySize: 20, textSize: .large).bodySize == 20)
@@ -79,5 +80,39 @@ struct ReadingStyleTests {
     #expect(scaled.bodySize == 26.5)
     #expect(scaled.headingFont(depth: 1).pointSize == 28)
     #expect(stated(scaled.bodyFont) == stated(style.bodyFont))
+  }
+
+  /// Strong text has to stand out from whatever it is in. Under Bold Text the body
+  /// is already semibold, and the bold trait on a semibold face leaves it semibold.
+  @Test func `strong text is heavier than the body under bold text`() {
+    for boldText in [false, true] {
+      let style = ReadingStyle(bodySize: 17, boldText: boldText)
+      let strong = style.strongFont(matching: style.bodyFont)
+      #expect(stated(strong) > stated(style.bodyFont))
+    }
+  }
+
+  @Test func `strong text is heavier than a heading around it`() {
+    for boldText in [false, true] {
+      let style = ReadingStyle(bodySize: 17, boldText: boldText)
+      let heading = style.headingFont(depth: 1)
+      #expect(stated(style.strongFont(matching: heading)) > stated(heading))
+      #expect(style.strongFont(matching: heading).pointSize == heading.pointSize)
+    }
+  }
+
+  @Test func `strong text keeps an italic slant`() {
+    let style = ReadingStyle(bodySize: 17)
+    let italic = style.bodyFont.adding(traits: RFCTraits.italic)
+    #expect(
+      style.strongFont(matching: italic).fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
+  }
+
+  /// Code takes the weight of the prose around it, and a semibold face is not a
+  /// bold one just because it carries the bold trait.
+  @Test func `inline code matches a semibold body under bold text`() {
+    let style = ReadingStyle(bodySize: 17, boldText: true)
+    let code = style.codeFont(matching: style.bodyFont)
+    #expect(stated(code) == stated(.monospacedSystemFont(ofSize: 17, weight: .semibold)))
   }
 }

@@ -248,12 +248,17 @@ struct DocumentView: View {
   @ViewBuilder
   private var states: some View {
     if reader.showOriginal {
-      OriginalTextView(text: originalText, fontSize: fontSize)
-        .task { originalText = try? await library.originalText(for: id) }
-        // No header to show the title here, so the toolbar shows it throughout.
-        // On `hasDocument` rather than on appearing: loading a document clears
-        // the title back to hidden after this view may already have appeared.
-        .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
+      // At the size the reader sets its body, the system's text size included, so
+      // switching to the original does not drop someone back to 17 pt.
+      OriginalTextView(
+        text: originalText,
+        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize
+      )
+      .task { originalText = try? await library.originalText(for: id) }
+      // No header to show the title here, so the toolbar shows it throughout.
+      // On `hasDocument` rather than on appearing: loading a document clears
+      // the title back to hidden after this view may already have appeared.
+      .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(

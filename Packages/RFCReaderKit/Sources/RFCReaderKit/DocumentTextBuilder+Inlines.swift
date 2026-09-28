@@ -28,7 +28,9 @@ extension DocumentTextBuilder {
       return inlineRuns(inner, base: base.adding(trait: RFCTraits.italic, style: style))
 
     case .strong(let inner):
-      return inlineRuns(inner, base: base.adding(trait: RFCTraits.bold, style: style))
+      var attributes = base
+      attributes[.font] = style.strongFont(matching: font(in: base))
+      return inlineRuns(inner, base: attributes)
 
     // Code and scripts are made from the font in effect, not from the body's: code
     // in a heading dropped to body size, and a superscript in strong text lost its
