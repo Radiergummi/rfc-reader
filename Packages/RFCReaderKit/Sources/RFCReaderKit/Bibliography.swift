@@ -36,7 +36,23 @@ public struct ReferenceGroup: Identifiable, Sendable {
 }
 
 extension [ReferenceGroup] {
-  public func kind(of target: CrossReference.Target) -> ReferenceList.Kind { .unknown }
+  /// Whether a citation of `target` is normative or informative: the kind of the
+  /// list holding its entry, found by anchor or by the document the entry names.
+  /// Normative where a document lists the entry in both, since it is then part of
+  /// the specification; unknown where no list holds it or no list says.
+  public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
+    let holding = filter { group in
+      group.entries.contains { entry in
+        switch target {
+        case .anchor(let anchor): entry.anchor == anchor
+        case .document(let id, _): entry.documentID == id
+        }
+      }
+    }
+    if holding.contains(where: { $0.kind == .normative }) { return .normative }
+    if holding.contains(where: { $0.kind == .informative }) { return .informative }
+    return .unknown
+  }
 
   /// The entry a citation names by `anchor`, from whichever bibliography holds it:
   /// what a preview of the citation shows, since the body leaves the entries out.

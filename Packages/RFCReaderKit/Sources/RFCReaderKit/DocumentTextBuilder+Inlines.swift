@@ -85,7 +85,11 @@ extension DocumentTextBuilder {
         NSAttributedString(
           string: String(display.text[display.text.startIndex..<chip.lowerBound]),
           attributes: attributes))
-      result.append(chipRun(String(display.text[chip]), attributes: attributes))
+      var chipAttributes = attributes
+      if bibliography.kind(of: xref.target) == .informative {
+        chipAttributes[.rfcInformative] = "informative"
+      }
+      result.append(chipRun(String(display.text[chip]), attributes: chipAttributes))
       result.append(
         NSAttributedString(string: String(display.text[chip.upperBound...]), attributes: attributes)
       )

@@ -16,6 +16,9 @@ extension NSAttributedString.Key {
   /// merges contiguous runs whose values compare equal and two adjacent chips must
   /// stay two runs. Only its distinctness is meaningful; nothing reads the number.
   public static let rfcChip = NSAttributedString.Key("rfcChip")
+  /// Set on the chip of a citation that only an informative list holds, which is
+  /// drawn with a lighter tint than a normative one (#184). A `String`, so adjacent
+  /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it

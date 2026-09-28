@@ -400,17 +400,40 @@ public struct ReferenceList: Sendable, Hashable, Codable {
     self.entries = entries
   }
 
+  /// Whether the documents a list names are part of the specification or background
+  /// to it: what "read this next" means for a citation (#184).
   public enum Kind: Sendable, Hashable {
     case normative
     case informative
+    /// A list whose title says neither: the single `References` of a document from
+    /// before about RFC 2200, and anything else a document calls its bibliography.
     case unknown
 
+    /// The kind a list's title names. The whole title is matched, numbering and a
+    /// trailing colon aside, because a title that merely contains the word says
+    /// nothing: the corpus has a section headed `BCP, Experimental Protocols, and
+    /// Normative References`, which is about the rule and lists nothing.
     public init(title: String) {
-      self = .unknown
+      let words = title.lowercased()
+        .drop { $0.isNumber || $0 == "." || $0.isWhitespace }
+        .trimmingCharacters(in: CharacterSet(charactersIn: ":.").union(.whitespaces))
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+      switch words {
+      case "normative references", "normative":
+        self = .normative
+      case "informative references", "informational references", "non-normative references",
+        "informative":
+        self = .informative
+      default:
+        self = .unknown
+      }
     }
   }
 
-  public var kind: Kind { .unknown }
+  /// Derived from the title rather than stored, so the two cannot disagree and
+  /// neither parser nor the serializer has anything more to carry.
+  public var kind: Kind { Kind(title: title) }
 }
 
 /// One bibliographic entry, e.g. `[RFC7301]`.
