@@ -50,10 +50,12 @@ struct RFCListView: View {
         // join a year already on screen, which is above the reader by then.
         if YearSections.apply(to: navigation.filter, query: navigation.searchText) {
           ForEach(YearSections.sections(of: window)) { section in
-            Section(String(section.year)) {
+            Section {
               ForEach(section.rfcs) { row($0, false) }
+            } header: {
+              Text(String(section.year))
+                .levelWithCards()
             }
-            .sectionIndexLabel(String(section.year))
           }
         } else {
           ForEach(window) { row($0, true) }
@@ -81,11 +83,17 @@ struct RFCListView: View {
       // On iOS, cards with a margin round them, as Notes' lists are (#346).
       .listStyle(.insetGrouped)
       .headerProminence(.increased)
-      .listSectionIndexVisibility(.visible)
     #endif
     .overlay {
       if rows.isEmpty, library.indexState.isReady {
-        ContentUnavailableView.search(text: navigation.searchText)
+        // "No Results" only for a search: an empty Bookmarks list was told to
+        // check its spelling.
+        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+          ContentUnavailableView(
+            "No \(navigation.filter.title)", systemImage: navigation.filter.systemImage)
+        } else {
+          ContentUnavailableView.search(text: navigation.searchText)
+        }
       }
     }
     .onChange(of: navigation.filter, initial: true) {
@@ -108,6 +116,9 @@ struct RFCListView: View {
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
       .navigationSubtitle(library.listSubtitle(for: navigation))
+      // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
+      // under it whenever the list was short enough not to scroll.
+      .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
       .toolbar {
