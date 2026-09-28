@@ -94,10 +94,19 @@ CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
-# RFC_CORPUS_TEXT, and are skipped wherever it is unset, as in `make test` and on CI.
-# Filtered by their type names, all `CorpusBacked...`: --filter matches a test's
-# identifier, not the `Corpus-backed: ...` name its suite displays.
+# RFC_CORPUS_TEXT, and are skipped wherever it is unset, as in `make test`; CI runs
+# them weekly (.github/workflows/corpus-tests.yml). Filtered by their type names,
+# all `CorpusBacked...`: --filter matches a test's identifier, not the
+# `Corpus-backed: ...` name its suite displays.
+#
+# The list above is kept by hand, so the recipe first checks that every document a
+# test reads through `CorpusText.text("rfcNNNN")` is on it: a test added without
+# its document would otherwise fail on a missing file rather than say why.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
+	@for stem in $$(grep -rhoE 'CorpusText\.text\("rfc[0-9]+"\)' $(RFCKIT)/Tests | grep -oE 'rfc[0-9]+' | sort -u); do \
+	  case " $(CORPUS_TEST_DOCUMENTS) " in *" $$stem "*) ;; \
+	  *) echo "$$stem is read by a corpus-backed test but not in CORPUS_TEST_DOCUMENTS"; exit 1;; esac; \
+	done
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) swift test --package-path $(RFCKIT) --filter CorpusBacked
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a

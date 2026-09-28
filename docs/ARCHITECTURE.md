@@ -106,7 +106,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient ──────────byt
 
 The App target has no test bundle of its own, so **nothing that can be tested is allowed to live there**. The rule that keeps this honest: anything in the reader that is a pure function of its inputs belongs in `RFCReaderKit`, and the App target keeps only what genuinely needs UIKit/AppKit object graphs — the two representables, the coordinator's view wiring, and drawing. Where a decoration goes (`FragmentGeometry`), how wide the column is (`ReaderLayout`) and what the text says (`DocumentTextBuilder`) are all in the package, under test. This is not cosmetic: both of the reader's hardest bugs were index arithmetic that had been written in the App target, where the only thing a test could do was re-implement it and check the copy.
 
-CI (`.github/workflows/ci.yml`) runs `Packages/RFCKit`'s tests on both macOS and in a Linux Swift container; the macOS job also runs `make test-app` for `RFCReaderKit`. A third job builds the app itself, unsigned, for macOS and the iOS Simulator.
+CI (`.github/workflows/ci.yml`) runs `Packages/RFCKit`'s tests on both macOS and in a Linux Swift container; the macOS job also runs `make test-app` for `RFCReaderKit`. A third job builds the app itself, unsigned, for macOS and the iOS Simulator with Xcode 26.6, and a fourth does the same with Xcode 27 on GitHub's preview image, reported without failing the run. The corpus-backed suites run weekly in their own workflow (`corpus-tests.yml`).
 
 ## Decision: TextKit 2 for the reader body
 
