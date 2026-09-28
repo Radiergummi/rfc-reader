@@ -60,6 +60,22 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     }
   }
 
+  /// Whether every RFC this filter lists has the same status, which its rows then
+  /// need not each show.
+  public var fixesStatus: Bool {
+    switch self {
+    case .standards, .bestCurrentPractice: true
+    default: false
+    }
+  }
+
+  /// Whether every RFC this filter lists is from the same working group, which its
+  /// rows then need not each show: PPPEXT's rows need not each say "pppext".
+  public var fixesWorkingGroup: Bool {
+    if case .workingGroup = self { return true }
+    return false
+  }
+
   /// The collection a script names, by the title the sidebar shows for it — the
   /// same string a script reads back — without regard to case: "All RFCs",
   /// "bookmarks", "IETF", "BCP 14", "httpbis".

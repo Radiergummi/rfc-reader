@@ -31,15 +31,18 @@ struct RFCListView: View {
     // platform's multi-select chord rather than ours to take.
     let window = rows.prefix(limit)
     let row = { (rfc: RFCMetadata, showsYear: Bool) in
-      RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear)
-        .tag(rfc.id)
-        #if !os(macOS)
-          .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
-        #endif
-        .onAppear {
-          guard rfc.id == trigger else { return }
-          limit = ListWindow.extendedLimit(from: limit, total: rows.count)
-        }
+      RFCRow(
+        rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear,
+        filter: navigation.filter
+      )
+      .tag(rfc.id)
+      #if !os(macOS)
+        .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
+      #endif
+      .onAppear {
+        guard rfc.id == trigger else { return }
+        limit = ListWindow.extendedLimit(from: limit, total: rows.count)
+      }
     }
     List(selection: $navigation.selection) {
       #if os(macOS)
@@ -191,6 +194,14 @@ struct RFCRow: View {
   let isBookmarked: Bool
   /// False under a year's header, which already says it (#347).
   var showsYear = true
+  /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
+  /// not each say "pppext", nor the Internet Standards' each say "STD".
+  var filter: LibraryFilter?
+
+  private var showsStatus: Bool { filter?.fixesStatus != true }
+  private var workingGroup: String? {
+    filter?.fixesWorkingGroup == true ? nil : rfc.workingGroup
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -198,34 +209,44 @@ struct RFCRow: View {
         designation
         title
         HStack(spacing: 6) {
-          StatusBadge(status: rfc.currentStatus)
+          if showsStatus {
+            StatusBadge(status: rfc.currentStatus)
+          }
           if rfc.isObsolete {
             Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
           }
-          if let group = rfc.workingGroup {
-            Text(group).font(.caption2).foregroundStyle(.tertiary)
+          if let workingGroup {
+            Text(workingGroup).font(.caption2).foregroundStyle(.tertiary)
           }
         }
       #else
         // The title leads, in bold, as a note's title leads its row in Notes
-        // (#346), and everything else shares one line beneath it, the
-        // designation in its trailing corner.
+        // (#346), and everything else follows on one line beneath it, read from
+        // the start: a gap between the parts rather than a separator, and
+        // nothing pushed out to the far edge.
         title.font(.headline)
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-          StatusBadge(status: rfc.currentStatus)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
           Group {
+            Text(rfc.id.displayName).monospacedDigit()
+            if showsYear {
+              Text(String(rfc.date.year)).monospacedDigit()
+            }
+            if let workingGroup {
+              Text(workingGroup)
+            }
             if rfc.isObsolete {
               Text("Obsolete")
-            }
-            if let group = rfc.workingGroup {
-              Text(group)
             }
           }
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .lineLimit(1)
-          Spacer(minLength: 8)
-          designation
+          if showsStatus {
+            StatusBadge(status: rfc.currentStatus)
+          }
+          if isBookmarked {
+            Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
+          }
         }
       #endif
     }
@@ -236,23 +257,22 @@ struct RFCRow: View {
     .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
   }
 
-  private var designation: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text(rfc.id.displayName)
-        .font(.subheadline.monospacedDigit())
-        .foregroundStyle(.secondary)
-      // On iOS the row's own line places it, in its trailing corner.
-      #if os(macOS)
+  #if os(macOS)
+    private var designation: some View {
+      HStack(alignment: .firstTextBaseline) {
+        Text(rfc.id.displayName)
+          .font(.subheadline.monospacedDigit())
+          .foregroundStyle(.secondary)
         Spacer()
-      #endif
-      if isBookmarked {
-        Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
-      }
-      if showsYear {
-        Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+        if isBookmarked {
+          Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
+        }
+        if showsYear {
+          Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+        }
       }
     }
-  }
+  #endif
 
   private var title: some View {
     Text(rfc.title)
