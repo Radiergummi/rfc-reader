@@ -411,9 +411,9 @@ struct RFCXMLParserTests {
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
     #expect(table.rows.count == 32)
-    #expect(table.rows.first?.first?.plainText == "counter32")
-    #expect(table.rows[6].first?.plainText == "object-identifier")
-    #expect(table.rows.last?.first?.plainText == "yang-identifier")
+    #expect(table.rows.first?.cells.first?.plainText == "counter32")
+    #expect(table.rows[6].cells.first?.plainText == "object-identifier")
+    #expect(table.rows.last?.cells.first?.plainText == "yang-identifier")
   }
 
   /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,

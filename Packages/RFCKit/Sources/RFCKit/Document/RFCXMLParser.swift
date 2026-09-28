@@ -621,20 +621,17 @@ public struct RFCXMLParser: Sendable {
     }
 
     private func parseTable(_ element: XMLTree.Element) -> Table {
-      func cells(of rows: [XMLTree.Element]) -> [[[Inline]]] {
-        rows.map { row in
-          row.elements.filter { $0.name == "th" || $0.name == "td" }
-            .map { normalize(parseInlines($0.children)) }
+      func rows(_ elements: [XMLTree.Element]) -> [Table.Row] {
+        elements.map { row in
+          Table.Row(
+            cells: row.elements.filter { $0.name == "th" || $0.name == "td" }
+              .map { normalize(parseInlines($0.children)) },
+            anchor: row["anchor"])
         }
-      }
-      // Empty unless some row has one, as `Table.rowAnchors` documents.
-      func anchors(of rows: [XMLTree.Element]) -> [String?] {
-        rows.contains { $0["anchor"] != nil } ? rows.map { $0["anchor"] } : []
       }
       // RFC 7991 allows more than one `<tbody>`: RFC 9911's tables of YANG types
       // put each group of related types in its own, and reading only the first
-      // dropped all but the counters. The cells and the anchors are read from the
-      // same list of rows, so they cannot fall out of step.
+      // dropped all but the counters.
       let headerRows = element.first("thead")?.all("tr") ?? []
       let bodyRows = element.elements
         .filter { $0.name == "tbody" || $0.name == "tfoot" }
@@ -646,11 +643,9 @@ public struct RFCXMLParser: Sendable {
       return Table(
         title: element.first("name")?.normalizedText,
         number: number,
-        header: cells(of: headerRows),
-        rows: cells(of: bodyRows),
-        anchor: element["anchor"],
-        rowAnchors: anchors(of: bodyRows),
-        headerRowAnchors: anchors(of: headerRows)
+        header: rows(headerRows),
+        rows: rows(bodyRows),
+        anchor: element["anchor"]
       )
     }
 

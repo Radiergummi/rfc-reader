@@ -73,7 +73,7 @@ enum Abbreviations {
       case .figure(let figure):
         visit(figure.blocks, found)
       case .table(let table):
-        for cell in (table.header + table.rows).joined() {
+        for cell in (table.header + table.rows).flatMap(\.cells) {
           found(expansions(in: cell.plainText))
         }
       case .blockQuote(let inner), .aside(let inner):

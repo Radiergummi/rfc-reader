@@ -77,9 +77,9 @@ struct UnicodeNotationTests {
       if case .table(let table) = block { return table }
       return nil
     }
-    let table = try #require(tables.first { $0.header.first?.first?.plainText == "Bit Seq." })
+    let table = try #require(tables.first { $0.header.first?.cells.first?.plainText == "Bit Seq." })
     #expect(
-      table.rows.map { $0[1].plainText } == [
+      table.rows.map { $0.cells[1].plainText } == [
         "U+0063 (LATIN SMALL LETTER C)",
         "U+000C (FORM FEED (FF))",
         "U+006C (LATIN SMALL LETTER L)",

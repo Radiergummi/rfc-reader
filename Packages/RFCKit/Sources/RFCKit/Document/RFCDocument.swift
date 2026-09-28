@@ -328,41 +328,33 @@ public struct Figure: Sendable, Hashable, Codable {
 }
 
 public struct Table: Sendable, Hashable, Codable {
+  /// One row: its cells, and its anchor (`<tr anchor>`) if it has one. A document
+  /// can cite a row, as RFC 9271 does its `EventFSD` (#166), and the schema lets a
+  /// `<thead>` row carry an anchor just as a body row can.
+  public struct Row: Sendable, Hashable, Codable {
+    public var cells: [[Inline]]
+    public var anchor: String?
+
+    public init(cells: [[Inline]], anchor: String? = nil) {
+      self.cells = cells
+      self.anchor = anchor
+    }
+  }
+
   public var title: String?
   public var number: Int?
-  public var header: [[[Inline]]]
-  public var rows: [[[Inline]]]
+  public var header: [Row]
+  public var rows: [Row]
   public var anchor: String?
-  /// Each body row's anchor (`<tr anchor>`), by index into `rows`; shorter than
-  /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
-  /// `EventFSD` (#166).
-  public var rowAnchors: [String?]
-  /// The same for the header rows, by index into `header`. The schema lets a
-  /// `<thead>` row carry an anchor just as a body row can, and a link to one
-  /// should land as surely.
-  public var headerRowAnchors: [String?]
 
   public init(
-    title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil, rowAnchors: [String?] = [], headerRowAnchors: [String?] = []
+    title: String?, number: Int? = nil, header: [Row], rows: [Row], anchor: String? = nil
   ) {
     self.title = title
     self.number = number
     self.header = header
     self.rows = rows
     self.anchor = anchor
-    self.rowAnchors = rowAnchors
-    self.headerRowAnchors = headerRowAnchors
-  }
-
-  /// The anchor of body row `index`, if it has one.
-  public func anchor(ofRow index: Int) -> String? {
-    rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
-  }
-
-  /// The anchor of header row `index`, if it has one.
-  public func anchor(ofHeaderRow index: Int) -> String? {
-    headerRowAnchors.indices.contains(index) ? headerRowAnchors[index] : nil
   }
 }
 

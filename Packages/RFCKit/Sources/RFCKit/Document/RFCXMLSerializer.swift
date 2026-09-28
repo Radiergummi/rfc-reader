@@ -382,17 +382,17 @@ public struct RFCXMLSerializer: Sendable {
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for (index, row) in table.header.enumerated() {
-          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
-          for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
+        for row in table.header {
+          writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+          for cell in row.cells { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
         writer.close("thead")
       }
       writer.open("tbody")
-      for (index, row) in table.rows.enumerated() {
-        writer.open("tr", table.anchor(ofRow: index).map { [("anchor", $0)] } ?? [])
-        for cell in row { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
+      for row in table.rows {
+        writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+        for cell in row.cells { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
         writer.close("tr")
       }
       writer.close("tbody")
