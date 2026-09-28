@@ -82,6 +82,17 @@ public struct ReadingStyle: Sendable, Equatable {
 /// rather than inside the text view: the reader has to know the column *before* it
 /// builds, because artwork scaling and table shape are measured against it, and a
 /// document built against a guess has to be thrown away and built again.
+/// How wide the reader sets its text.
+///
+/// A setting, stored by its raw value. An enum rather than a flag, so a third
+/// choice — an explicit measure — does not change every signature again.
+public enum MeasurePreference: String, CaseIterable, Sendable {
+  /// Capped at `ReaderLayout.idealMeasure`, the gutters growing beyond it.
+  case recommended
+  /// Out to the margins however wide the window is, the way `less` does.
+  case fullWidth
+}
+
 public enum ReaderLayout {
   /// The design ceiling on the column: below this width the column tracks the view
   /// exactly (less `margin` on each side); above it the gutters grow instead, so
@@ -100,12 +111,17 @@ public enum ReaderLayout {
   /// three columns showing.
   public static let minimumPaneWidth: CGFloat = 420
 
-  public static func gutter(forWidth width: CGFloat) -> CGFloat {
-    max(margin, (width - idealMeasure) / 2)
+  /// Both the build and the text view's inset ask this, with the same two inputs;
+  /// the column is only ever what the gutters leave, so the two cannot drift.
+  public static func gutter(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
+    switch measure {
+    case .recommended: max(margin, (width - idealMeasure) / 2)
+    case .fullWidth: margin
+    }
   }
 
-  public static func column(forWidth width: CGFloat) -> CGFloat {
-    width - gutter(forWidth: width) * 2
+  public static func column(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
+    width - gutter(forWidth: width, measure: measure) * 2
   }
 
   /// Whether the reader's bar has room for Share beside Contents and More (#245).
