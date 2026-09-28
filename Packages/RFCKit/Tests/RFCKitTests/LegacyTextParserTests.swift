@@ -992,8 +992,9 @@ struct LegacyTextCorpusFindingsTests {
 
   /// `Appendix A: Title` is how about 150 legacy RFCs head an appendix (#200). The
   /// `Appendix` has to be there: without it a letter and a colon at column 0 is as
-  /// often a question and its answer, and a title-less or lower-case line is not a
-  /// heading at all. The shapes the parser already knew keep reading as before.
+  /// often a question and its answer, and a title-less or lower-case line is not an
+  /// appendix heading: it stays the unnumbered heading it was. The shapes the parser
+  /// already knew keep reading as before.
   @Test func `an appendix may be headed with a colon after its letter`() {
     let colon = LegacyTextParser.appendixHeading(in: "Appendix A: Protocol State Tables")
     #expect(colon?.number == "A")
