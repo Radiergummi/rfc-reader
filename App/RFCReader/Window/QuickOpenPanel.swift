@@ -83,6 +83,12 @@
       onClose()
     }
 
+    /// File ▸ Close is how ⌘W arrives, and AppKit disables it for a window with no
+    /// close button — so without this, `performClose(_:)` is never called.
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+      menuItem.action == #selector(performClose(_:)) || super.validateMenuItem(menuItem)
+    }
+
     func windowDidResignKey(_ notification: Notification) {
       onClose()
     }
