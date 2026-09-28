@@ -20,10 +20,6 @@
 
     @State private var input = ""
     @State private var results = QuickOpenResults()
-    /// ↵ was pressed while the selection was a hit of an earlier query: open what
-    /// the search for the current one selects, as soon as it lands, the way the key
-    /// press asked for — its modifiers are long released by then.
-    @State private var pendingActivation: LinkActivation?
     @FocusState private var isFocused: Bool
 
     static let width: CGFloat = 620
@@ -73,6 +69,8 @@
       }
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
+      // A series typed before the index loaded is listed as its members once it has.
+      .onChange(of: library.index != nil) { resolve(query) }
       .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
       .onAppear { isFocused = true }
     }
@@ -134,7 +132,7 @@
           .fontWeight(.semibold)
           .monospacedDigit()
           .frame(width: 84, alignment: .leading)
-        Text(library.summary(of: link.id) ?? "Not in the index")
+        Text(library.metadata(link.id)?.title ?? "Not in the index")
           .lineLimit(1)
           .truncationMode(.tail)
           .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
@@ -173,9 +171,9 @@
 
     /// What was typed, resolved exactly.
     private func resolve(_ query: String) {
-      // Typing on after ↵ is a change of mind.
-      pendingActivation = nil
-      results.show(query: query, exact: DocumentReference.link(from: query))
+      let exact = DocumentReference.link(from: query)
+      let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
+      results.show(query: query, exact: exact, members: members)
     }
 
     /// Runs per change of the query and is cancelled by the next, which is the debounce:
@@ -203,23 +201,18 @@
     }
 
     private func finish(with hits: [DocumentID], for query: String) {
-      results.show(hits: hits, for: query)
-      if let activation = pendingActivation, !results.isSearching {
-        pendingActivation = nil
-        open(results.openable, activation: activation)
+      if let opening = results.show(hits: hits, for: query) {
+        open(opening.link, activation: opening.activation)
       }
     }
 
     private func openSelection() {
-      if let link = results.openable {
-        open(link)
-      } else if results.isSearching {
-        pendingActivation = .current
+      if let opening = results.activate(.current) {
+        open(opening.link, activation: opening.activation)
       }
     }
 
-    private func open(_ link: RFCLink?, activation: LinkActivation = .current) {
-      guard let link else { return }
+    private func open(_ link: RFCLink, activation: LinkActivation = .current) {
       library.open(link, activation: activation, in: navigation)
       dismiss()
     }

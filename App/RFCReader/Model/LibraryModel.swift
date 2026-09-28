@@ -344,12 +344,6 @@ final class LibraryModel {
     return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
-  /// What a Go to RFC row says about a document: an RFC's title, or what a series
-  /// number stands for now — `BCP 14` is not in the index as a document of its own.
-  func summary(of id: DocumentID) -> String? {
-    QuickOpenResults.summary(of: id, members: index?.series(id)?.members ?? [], metadata: metadata)
-  }
-
   /// The Go to RFC palette's candidates for what was typed, best first.
   ///
   /// Off the main actor: a short query like `http` scans every title and abstract,

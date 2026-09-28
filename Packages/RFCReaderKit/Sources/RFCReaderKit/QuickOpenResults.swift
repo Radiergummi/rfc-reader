@@ -1,4 +1,3 @@
-import Foundation
 import RFCKit
 
 /// The rows under the Go to RFC palette's field, and which one ↵ would open.
@@ -12,22 +11,37 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// As many rows as a palette shows before it stops being a glance.
   public static let limit = 8
 
+  /// What ↵ asked for: a row, and how to open it.
+  public struct Opening: Equatable, Sendable {
+    public let link: RFCLink
+    public let activation: LinkActivation
+
+    public init(link: RFCLink, activation: LinkActivation) {
+      self.link = link
+      self.activation = activation
+    }
+  }
+
   /// What is typed now.
   public private(set) var query = ""
-  private var exact: RFCLink?
+  /// What is typed, resolved exactly: one row, or one per member of a series.
+  private var exact: [RFCLink] = []
   private var hits: [DocumentID] = []
   /// The query `hits` were found for, which lags `query` while a search runs.
   private var hitsQuery = ""
   /// Held as the row, not its position: the rows change under it as hits arrive,
   /// and the reader's choice has to survive that.
   public private(set) var selected: RFCLink?
+  /// ↵ was pressed while a search for what is typed was still running: the search
+  /// opens what it selects when it lands, the way the key press asked for.
+  private var pendingActivation: LinkActivation?
 
   public init() {}
 
   /// The exact resolution first, then every hit it does not already name.
   public var rows: [RFCLink] {
-    var rows = exact.map { [$0] } ?? []
-    for id in hits where id != exact?.id {
+    var rows = exact
+    for id in hits where !exact.contains(where: { $0.id == id }) {
       rows.append(RFCLink(id: id))
     }
     return Array(rows.prefix(Self.limit))
@@ -42,23 +56,37 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// typed a keystroke ago: opening it would open something the reader did not ask
   /// for. The exact row belongs to what is typed now, so it never waits.
   public var openable: RFCLink? {
-    guard let selected, selected == exact || !isSearching else { return nil }
+    guard let selected, exact.contains(selected) || !isSearching else { return nil }
     return selected
   }
 
   /// What was just typed, and what it resolves to exactly, if anything. A new
   /// resolution is the reader's most direct request, so it takes the selection; the
   /// same one again, after a trailing space, leaves it where the reader put it.
-  public mutating func show(query: String, exact: RFCLink?) {
+  ///
+  /// A series is listed as its members, each a row that opens what it names: `BCP 14`
+  /// stands for RFC 2119 and RFC 8174, and a single row could only open one of them.
+  ///
+  /// - Parameter members: The series' current members, empty for an RFC, or while
+  ///   the index that knows them is still loading.
+  public mutating func show(query: String, exact: RFCLink?, members: [DocumentID] = []) {
     self.query = query
+    // Typing on after ↵ is a change of mind.
+    pendingActivation = nil
     if query.isEmpty {
       hits = []
       hitsQuery = query
     }
-    let isNew = exact != self.exact
-    self.exact = exact
-    if isNew, let exact {
-      selected = exact
+    let rows: [RFCLink]
+    if let exact, !members.isEmpty {
+      rows = members.map { RFCLink(id: $0, section: exact.section) }
+    } else {
+      rows = exact.map { [$0] } ?? []
+    }
+    let isNew = rows != self.exact
+    self.exact = rows
+    if isNew, let first = rows.first {
+      selected = first
     } else {
       keepSelection()
     }
@@ -66,11 +94,30 @@ public struct QuickOpenResults: Equatable, Sendable {
 
   /// What the search found for `query`. Ignored when the reader has typed on since:
   /// a newer search is on its way.
-  public mutating func show(hits: [DocumentID], for query: String) {
-    guard query == self.query else { return }
+  ///
+  /// - Returns: What to open now, when ↵ was waiting for these hits.
+  @discardableResult
+  public mutating func show(hits: [DocumentID], for query: String) -> Opening? {
+    guard query == self.query else { return nil }
     self.hits = hits
     hitsQuery = query
     keepSelection()
+    guard let activation = pendingActivation else { return nil }
+    pendingActivation = nil
+    return openable.map { Opening(link: $0, activation: activation) }
+  }
+
+  /// ↵: the selection, if it can be opened now. If it is a hit of an earlier query
+  /// instead, the key press is kept for the search still running, and
+  /// `show(hits:for:)` returns it once that search lands.
+  public mutating func activate(_ activation: LinkActivation) -> Opening? {
+    if let openable {
+      return Opening(link: openable, activation: activation)
+    }
+    if isSearching {
+      pendingActivation = activation
+    }
+    return nil
   }
 
   /// Arrow keys: one row up or down, stopping at either end.
@@ -79,25 +126,6 @@ public struct QuickOpenResults: Equatable, Sendable {
     guard !rows.isEmpty else { return }
     let current = selected.flatMap { rows.firstIndex(of: $0) } ?? 0
     selected = rows[min(max(current + offset, 0), rows.count - 1)]
-  }
-
-  /// What a row says about a document: an RFC's title, or what a series number
-  /// stands for now — `BCP 14` is not in the index as a document of its own.
-  ///
-  /// - Parameters:
-  ///   - members: The series' current members, empty for an RFC.
-  ///   - metadata: The index's entry for a document, if it has one.
-  public static func summary(
-    of id: DocumentID,
-    members: [DocumentID],
-    metadata: (DocumentID) -> RFCMetadata?
-  ) -> String? {
-    if let own = metadata(id) { return own.title }
-    guard !members.isEmpty else { return nil }
-    if members.count == 1, let only = metadata(members[0]) {
-      return "\(only.id.displayName): \(only.title)"
-    }
-    return members.map(\.displayName).formatted(.list(type: .and))
   }
 
   /// The selected row stays selected if it is still listed; otherwise the top one is.
