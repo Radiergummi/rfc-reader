@@ -481,6 +481,11 @@
           onClose: hide
         )
         quickOpen = panel
+        // ⌘L reaches the last reader window that was key, which may since have been
+        // minimised or left on another Space: the palette hangs from it, so it comes
+        // forward first rather than the palette floating alone where it used to be.
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
         panel.show(over: window)
       } else {
         quickOpen?.dismiss()
