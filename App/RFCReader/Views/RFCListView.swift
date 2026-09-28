@@ -158,9 +158,8 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty,
-          let collection
-        {
+        let isUnsearched = navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
           } description: {
@@ -168,7 +167,7 @@ struct RFCListView: View {
           } actions: {
             Button("Add RFCs…") { addingTo = PickerTarget(id: collection) }
           }
-        } else if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+        } else if isUnsearched {
           ContentUnavailableView(
             "No \(library.title(for: navigation.filter))",
             systemImage: navigation.filter.systemImage)
