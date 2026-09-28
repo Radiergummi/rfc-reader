@@ -16,9 +16,9 @@ struct AmendmentsTests {
     let document = try Self.document("rfc9283.xml")
     let links = Amendments.links(in: document)
     #expect(Set(links.map(\.section)) == ["1.2", "2"])
-    #expect(links.allSatisfy { $0.amended == .rfc(2850) && $0.by == .rfc(9283) })
+    #expect(links.allSatisfy { $0.amended == .rfc(2850) && $0.amending == .rfc(9283) })
     #expect(
-      links.allSatisfy { $0.from != nil },
+      links.allSatisfy { $0.amendingSection != nil },
       "every citation sits in a section of the amending document")
   }
 
@@ -58,7 +58,7 @@ struct AmendmentsTests {
   /// One link per place, however often that section cites the same section.
   @Test func `a section amending the same section twice is one link`() throws {
     let links = Amendments.links(in: try Self.document("rfc9682.xml"))
-    let keys = links.map { "\($0.amended) \($0.section) \($0.from ?? "")" }
+    let keys = links.map { "\($0.amended) \($0.section) \($0.amendingSection ?? "")" }
     #expect(keys.count == Set(keys).count)
     #expect(!links.isEmpty)
   }
