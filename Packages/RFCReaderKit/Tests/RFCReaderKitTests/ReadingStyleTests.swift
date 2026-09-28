@@ -47,17 +47,28 @@ struct ReadingStyleTests {
     #expect(large.captionFont.pointSize == small.captionFont.pointSize * ratio)
   }
 
-  @Test func `bold text makes the body semibold and headings bold`() {
-    let style = ReadingStyle(bodySize: 17, boldText: true)
-    #expect(style.bodyFont.weight == .semibold)
-    #expect(style.headingFont(depth: 1).weight == .bold)
-    #expect(style.headingFont(depth: 3).weight == .bold)
+  /// The weight the face states, read off its descriptor. Not `PlatformFont.weight`,
+  /// which counts anything carrying the bold trait — semibold included — as bold.
+  private func stated(_ font: PlatformFont) -> CGFloat {
+    let traits =
+      font.fontDescriptor.object(forKey: .traits) as? [PlatformFontDescriptor.TraitKey: Any]
+    return traits?[.weight] as? CGFloat ?? 0
   }
 
   @Test func `without bold text the body is regular and headings semibold`() {
     let style = ReadingStyle(bodySize: 17)
-    #expect(style.bodyFont.weight == .regular)
-    #expect(style.headingFont(depth: 1).weight == .semibold)
+    #expect(stated(style.bodyFont) == stated(.systemFont(ofSize: 17, weight: .regular)))
+    #expect(
+      stated(style.headingFont(depth: 1)) == stated(.systemFont(ofSize: 17, weight: .semibold)))
+  }
+
+  @Test func `bold text makes the body semibold and headings bold`() {
+    let style = ReadingStyle(bodySize: 17, boldText: true)
+    #expect(stated(style.bodyFont) == stated(.systemFont(ofSize: 17, weight: .semibold)))
+    for depth in 1...3 {
+      #expect(
+        stated(style.headingFont(depth: depth)) == stated(.systemFont(ofSize: 17, weight: .bold)))
+    }
   }
 
   /// The abstract is set a little smaller; scaling must not apply the text size a
@@ -67,6 +78,6 @@ struct ReadingStyleTests {
     let scaled = style.scaled(by: 0.5)
     #expect(scaled.bodySize == 26.5)
     #expect(scaled.headingFont(depth: 1).pointSize == 28)
-    #expect(scaled.bodyFont.weight == .semibold)
+    #expect(stated(scaled.bodyFont) == stated(style.bodyFont))
   }
 }

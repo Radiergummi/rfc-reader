@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 #if canImport(UIKit)
   import UIKit
@@ -13,7 +14,15 @@ import Foundation
 /// rebuilding. Only a change here costs a rebuild, and a rebuild loses the reader's
 /// place until the anchor index puts it back.
 public struct ReadingStyle: Sendable, Equatable {
+  /// The body text's point size: the reader's own size, scaled for the system's
+  /// text size. Everything else measured from the body — captions, code, spacing,
+  /// indents — follows from this.
   public var bodySize: CGFloat
+  /// The system's text size, which headings are scaled for on their own curve:
+  /// at the accessibility sizes a title grows less than the body does.
+  public var textSize: DynamicTypeSize
+  /// Bold Text: every weight one step heavier, as the system's own text is.
+  public var boldText: Bool
   /// Width available to text: the reader's 760 pt frame less its horizontal padding.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
@@ -26,27 +35,35 @@ public struct ReadingStyle: Sendable, Equatable {
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
   public var artworkLineHeightMultiple: CGFloat { 1.1 }
 
+  /// - Parameter bodySize: the reader's own size, as it reads at the system's
+  ///   default text size. The two multiply (#153): someone at an accessibility size
+  ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
     bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
-    underlinesLinks: Bool = false
+    underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large, boldText: Bool = false
   ) {
-    self.bodySize = bodySize
+    self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
+    self.textSize = textSize
+    self.boldText = boldText
     self.measure = measure
     self.lineHeightMultiple = lineHeightMultiple
     self.underlinesLinks = underlinesLinks
   }
 
   /// The same style at a different size — everything else about reading it is
-  /// unchanged, so only the body size moves and the rest follows from it.
+  /// unchanged, so only the body size moves and the rest follows from it. The text
+  /// size is already in `bodySize`, so it is carried over, not applied again.
   public func scaled(by scale: CGFloat) -> ReadingStyle {
-    ReadingStyle(
-      bodySize: bodySize * scale, measure: measure, lineHeightMultiple: lineHeightMultiple,
-      underlinesLinks: underlinesLinks)
+    var scaled = self
+    scaled.bodySize = bodySize * scale
+    return scaled
   }
 
-  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
-  public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
-  public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
+  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize, weight: legible(.regular)) }
+  public var boldBodyFont: PlatformFont { .systemFont(ofSize: bodySize, weight: legible(.bold)) }
+  public var captionFont: PlatformFont {
+    .systemFont(ofSize: bodySize * 0.88, weight: legible(.regular))
+  }
   /// Inline code set in `surrounding` prose: monospaced, a little smaller, and at
   /// the surrounding weight and slant, so code in a heading stays heading-sized and
   /// code in emphasis stays italic (#154).
@@ -62,14 +79,27 @@ public struct ReadingStyle: Sendable, Equatable {
     .monospacedSystemFont(ofSize: bodySize * 0.82 * scale, weight: .regular)
   }
 
-  /// `1.` is a title, `1.1.` a subtitle, deeper is a headline. Mirrors what
-  /// `SectionView` did with `Font.title2` / `.title3` / `.headline`.
+  /// `1.` is a title, `1.1.` a subtitle, deeper is a headline: the system's
+  /// `.title2`, `.title3` and `.headline`, in proportion to the body at the current
+  /// text size, so they keep the system's relationship to it at every size.
   public func headingFont(depth: Int) -> PlatformFont {
-    switch depth {
-    case 1: .systemFont(ofSize: bodySize * 1.3, weight: .semibold)
-    case 2: .systemFont(ofSize: bodySize * 1.15, weight: .semibold)
-    default: .systemFont(ofSize: bodySize, weight: .semibold)
-    }
+    let size =
+      switch depth {
+      case 1: TextSizeMetrics.title2(textSize)
+      case 2: TextSizeMetrics.title3(textSize)
+      default: TextSizeMetrics.headline(textSize)
+      }
+    return .systemFont(
+      ofSize: bodySize * size / TextSizeMetrics.body(textSize), weight: legible(.semibold))
+  }
+
+  /// Bold Text steps prose weights up the way the system's text styles do:
+  /// regular to semibold, semibold to bold, bold to heavy.
+  private func legible(_ weight: PlatformFont.Weight) -> PlatformFont.Weight {
+    guard boldText else { return weight }
+    if weight.rawValue >= PlatformFont.Weight.bold.rawValue { return .heavy }
+    if weight.rawValue >= PlatformFont.Weight.semibold.rawValue { return .bold }
+    return .semibold
   }
 
   public var paragraphSpacing: CGFloat { bodySize * 0.7 }
@@ -189,5 +219,50 @@ public enum ToolbarTitleReveal {
   /// that edge; by halfway most of it is clear of it.
   public static func opacity(atProgress progress: CGFloat) -> CGFloat {
     min(1, max(0, (progress - 0.5) * 2))
+  }
+}
+
+/// The system's text style sizes, in points, at each text size: Apple's Dynamic
+/// Type tables for `.body`, `.title2`, `.title3` and `.headline` on iOS.
+///
+/// Tabled rather than asked of `UIFontMetrics`, which exists only under UIKit: the
+/// Mac has no Dynamic Type and always reports `.large`, and this package's tests
+/// run there. The numbers are what `UIFontMetrics` scales to.
+enum TextSizeMetrics {
+  static func body(_ size: DynamicTypeSize) -> CGFloat {
+    points(size, [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53])
+  }
+
+  static func title2(_ size: DynamicTypeSize) -> CGFloat {
+    points(size, [19, 20, 21, 22, 24, 26, 28, 34, 39, 44, 50, 56])
+  }
+
+  static func title3(_ size: DynamicTypeSize) -> CGFloat {
+    points(size, [17, 18, 19, 20, 22, 24, 26, 31, 37, 43, 49, 55])
+  }
+
+  static func headline(_ size: DynamicTypeSize) -> CGFloat {
+    points(size, [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53])
+  }
+
+  /// `table` has one entry per size, from `.xSmall` to `.accessibility5`.
+  private static func points(_ size: DynamicTypeSize, _ table: [CGFloat]) -> CGFloat {
+    let index =
+      switch size {
+      case .xSmall: 0
+      case .small: 1
+      case .medium: 2
+      case .large: 3
+      case .xLarge: 4
+      case .xxLarge: 5
+      case .xxxLarge: 6
+      case .accessibility1: 7
+      case .accessibility2: 8
+      case .accessibility3: 9
+      case .accessibility4: 10
+      case .accessibility5: 11
+      @unknown default: 3
+      }
+    return table[index]
   }
 }
