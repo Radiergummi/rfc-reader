@@ -46,6 +46,7 @@ struct DocumentView: View {
   /// `rebuild()` — never in `body`, which would rebuild on every redraw.
   @State private var built: BuiltDocument?
   @State private var originalText: String?
+  @State private var originalTextError: String?
   @State private var loadError: String?
   /// The fetch, and the build it triggers. Owned by the view rather than by
   /// `.task`, which ties them to appearance: in a collapsed split view, a reader
@@ -68,10 +69,15 @@ struct DocumentView: View {
     var load: Task<Void, Never>?
     var build: Task<Void, Never>?
     var buildingFor: BuildInputs?
+    /// The original text's fetch, for the same reason as `load`: a `.task` on the
+    /// original text view was cancelled by the spurious disappearance, and its
+    /// failure left the view spinning with nothing to try again.
+    var originalText: Task<Void, Never>?
 
     deinit {
       load?.cancel()
       build?.cancel()
+      originalText?.cancel()
     }
   }
   #if !os(macOS)
@@ -264,9 +270,13 @@ struct DocumentView: View {
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
         text: originalText,
-        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize
+        error: originalTextError,
+        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
+        tryAgain: startOriginalTextLoad
       )
-      .task { originalText = try? await library.originalText(for: id) }
+      .onAppear {
+        if work.originalText == nil { startOriginalTextLoad() }
+      }
       // No header to show the title here, so the toolbar shows it throughout.
       // On `hasDocument` rather than on appearing: loading a document clears
       // the title back to hidden after this view may already have appeared.
@@ -490,6 +500,24 @@ struct DocumentView: View {
   private func startLoad() {
     work.load?.cancel()
     work.load = Task(name: "Load document") { await load() }
+  }
+
+  /// Fetches the original text: once per view, the first time it is shown, plus
+  /// Try Again after a failure.
+  private func startOriginalTextLoad() {
+    work.originalText?.cancel()
+    originalTextError = nil
+    work.originalText = Task(name: "Load original text") {
+      do {
+        originalText = try await library.originalText(for: id)
+      } catch {
+        // Cancelled only when the view goes, or when Try Again replaces this
+        // fetch, and neither wants an error on screen.
+        guard !Task.isCancelled else { return }
+        trace("original text failed: \(error)")
+        originalTextError = error.localizedDescription
+      }
+    }
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document
@@ -827,7 +855,9 @@ struct StatusBanner: View {
 
 struct OriginalTextView: View {
   let text: String?
+  let error: String?
   let fontSize: Double
+  let tryAgain: () -> Void
 
   var body: some View {
     if let text {
@@ -844,6 +874,14 @@ struct OriginalTextView: View {
             .padding(24)
         }
       #endif
+    } else if let error {
+      ContentUnavailableView {
+        Label("Couldn't load the original text", systemImage: "wifi.exclamationmark")
+      } description: {
+        Text(error)
+      } actions: {
+        Button("Try Again", action: tryAgain)
+      }
     } else {
       ProgressView()
     }
