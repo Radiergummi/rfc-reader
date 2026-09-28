@@ -33,16 +33,9 @@ private struct AuthorChip: View {
       }
       .buttonStyle(.plain)
       .help("Show contact details")
-      #if os(macOS)
-        .popover(isPresented: $showsCard) {
-          ContactCard(contact: AuthorCard.contact(for: author))
-          .frame(minWidth: 320, idealWidth: 340, minHeight: 480, idealHeight: 540)
-        }
-      #else
-        .background {
-          ContactCardPresenter(isPresented: $showsCard, author: author)
-        }
-      #endif
+      .background {
+        ContactCardPresenter(isPresented: $showsCard, author: author)
+      }
     } else {
       label
     }
@@ -91,16 +84,57 @@ extension Color {
 /// Apple's own card for a contact that is not in the address book: the native
 /// layout, working email and phone links, and Add to Contacts.
 #if os(macOS)
-  private struct ContactCard: NSViewControllerRepresentable {
-    let contact: CNMutableContact
+  /// Presents the card in an `NSPopover` rather than SwiftUI's, whose arrow is
+  /// drawn in the popover's material while the card paints its own poster beneath
+  /// it: a grey tip on a coloured card. `hasFullSizeContent` lets the card reach
+  /// into the arrow, the way Contacts' own popovers look.
+  private struct ContactCardPresenter: NSViewRepresentable {
+    @Binding var isPresented: Bool
+    let author: Author
 
-    func makeNSViewController(context: Context) -> CNContactViewController {
-      let card = CNContactViewController()
-      card.contact = contact
-      return card
+    func makeNSView(context: Context) -> NSView {
+      NSView()
     }
 
-    func updateNSViewController(_ card: CNContactViewController, context: Context) {}
+    func updateNSView(_ anchor: NSView, context: Context) {
+      context.coordinator.isPresented = $isPresented
+      guard isPresented, context.coordinator.popover == nil else { return }
+
+      let card = CNContactViewController()
+      card.contact = AuthorCard.contact(for: author)
+
+      let popover = NSPopover()
+      popover.contentViewController = card
+      popover.contentSize = NSSize(width: 340, height: 540)
+      popover.behavior = .transient
+      popover.hasFullSizeContent = true
+      popover.delegate = context.coordinator
+      context.coordinator.popover = popover
+      popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+    }
+
+    static func dismantleNSView(_ anchor: NSView, coordinator: Coordinator) {
+      coordinator.popover?.close()
+    }
+
+    func makeCoordinator() -> Coordinator {
+      Coordinator(isPresented: $isPresented)
+    }
+
+    /// Hears the popover close, so the chip can open the card again.
+    final class Coordinator: NSObject, NSPopoverDelegate {
+      var isPresented: Binding<Bool>
+      var popover: NSPopover?
+
+      init(isPresented: Binding<Bool>) {
+        self.isPresented = isPresented
+      }
+
+      func popoverDidClose(_ notification: Notification) {
+        popover = nil
+        isPresented.wrappedValue = false
+      }
+    }
   }
 #else
   /// Presents the card from UIKit: a popover on an iPad, a sheet on an iPhone.
