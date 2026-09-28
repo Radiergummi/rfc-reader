@@ -477,9 +477,13 @@ struct DocumentView: View {
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document
-  /// opened before the index finished loading has none to show until it does.
+  /// opened before the index finished loading has none to show until it does. And
+  /// again once the document is here, whose own authors carry the contact details
+  /// their chips open.
   private func deriveInfo() {
-    reader.info = metadata.map { DocumentInfo($0, in: library.index) }
+    reader.info = metadata.map {
+      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+    }
   }
 
   private func trace(_ event: String) {
@@ -509,6 +513,7 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      deriveInfo()
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
@@ -687,7 +692,8 @@ struct DocumentHeaderView: View {
     let title: String
     let date: String?
     let workingGroup: String?
-    let authors: [String]
+    /// Whole, not pre-joined names: a chip needs the author's contact (#19).
+    let authors: [Author]
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
@@ -696,8 +702,7 @@ struct DocumentHeaderView: View {
       title = header.title
       date = (header.date ?? metadata?.date)?.formatted
       workingGroup = header.workingGroup ?? metadata?.workingGroup
-      let authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
-      self.authors = authors.map { $0.role == nil ? $0.name : "\($0.name), Ed." }
+      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
       self.metadata = metadata
     }
   }
@@ -737,7 +742,7 @@ struct DocumentHeaderView: View {
       .font(.subheadline)
       .foregroundStyle(.secondary)
       if !identity.authors.isEmpty {
-        Text(identity.authors.joined(separator: ", "))
+        AuthorChips(authors: identity.authors)
           .font(.subheadline)
       }
       if let metadata = identity.metadata {

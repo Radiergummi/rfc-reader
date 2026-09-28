@@ -115,27 +115,23 @@ struct DocumentInfoTests {
         == ["Authors", "Relationships", "Links", "Formats", "Details"])
   }
 
-  @Test func `authors are listed by name, an editor marked as one`() {
+  /// One row of people, drawn as the header's chips (#19).
+  @Test func `the authors are one row of people`() {
     #expect(
-      section("Authors", of: rich)?.rows
-        == [
-          DocumentInfo.Row(label: "", value: .text("R. Fielding, Ed.")),
-          DocumentInfo.Row(label: "", value: .text("M. Nottingham")),
-        ])
+      section("Authors", of: rich)?.rows == [
+        DocumentInfo.Row(label: "", value: .authors(rich.authors))
+      ])
   }
 
-  /// The legacy parser records an editor as "Editor" and the index as whatever it
-  /// says; both mean the same, and an unknown role is not promoted to one.
-  @Test func `an editor is recognised however the role is spelled`() {
-    var metadata = bare
-    metadata.authors = [
-      Author(name: "A. Author", role: "Ed."),
-      Author(name: "B. Author", role: "Editor"),
-      Author(name: "C. Author", role: "contributor"),
-    ]
-    #expect(
-      section("Authors", of: metadata)?.rows.map(\.value)
-        == [.text("A. Author, Ed."), .text("B. Author, Ed."), .text("C. Author")])
+  /// The document's own authors carry the contact details a chip opens, which the
+  /// index never has; the index's names stand in until the document is here, as
+  /// they do in the header.
+  @Test func `the document's own authors stand in for the index's`() {
+    let own = [Author(name: "Roy T. Fielding", role: "editor")]
+    let info = DocumentInfo(rich, authors: own, in: index)
+    #expect(info.sections.first?.rows.first?.value == .authors(own))
+    let unknown = DocumentInfo(rich, authors: [], in: index)
+    #expect(unknown.sections.first?.rows.first?.value == .authors(rich.authors))
   }
 
   /// The status it was published with only where it differs from the current one:
