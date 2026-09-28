@@ -37,7 +37,8 @@
     private(set) var readerItem: NSSplitViewItem!
     private(set) var panelItem: NSSplitViewItem!
 
-    private let library: LibraryModel
+    /// The library this window was made with, which its toolbar reads too.
+    let library: LibraryModel
     /// See `placeInitialFocus()`.
     private var hasPlacedInitialFocus = false
     /// The Go to RFC palette, while it is showing.

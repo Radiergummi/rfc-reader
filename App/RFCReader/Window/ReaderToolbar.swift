@@ -340,7 +340,8 @@
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
     private var id: DocumentID? { navigation.selection }
-    private var metadata: RFCMetadata? { id.flatMap { LibraryModel.shared.metadata($0) } }
+    private var library: LibraryModel { controller.library }
+    private var metadata: RFCMetadata? { id.flatMap { library.metadata($0) } }
 
     init(controller: ReaderWindowController) {
       self.controller = controller
@@ -573,7 +574,6 @@
         }
 
       case collectionMenu:
-        let library = LibraryModel.shared
         let containing = id.map { library.collections.collections(containing: $0) } ?? []
         for entry in library.collections.collections {
           let item = NSMenuItem(
@@ -634,7 +634,7 @@
 
     @objc private func toggleCollection(_ sender: NSMenuItem) {
       guard let document = id, let collection = sender.representedObject as? UUID else { return }
-      LibraryModel.shared.editCollections {
+      library.editCollections {
         try CollectionStore.toggle(
           document, in: collection, undoManager: controller.window?.undoManager, in: $0)
       }

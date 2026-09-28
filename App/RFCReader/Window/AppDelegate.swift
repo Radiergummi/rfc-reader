@@ -9,13 +9,15 @@
   /// everything `.commands` declares — measured — but contributes no windows. Every
   /// reader window is created here and kept here: an `NSWindowController` with no owner
   /// is deallocated the moment the call that made it returns.
-  final class AppDelegate: NSObject, NSApplicationDelegate {
+  final class AppDelegate: NSObject, NSApplicationDelegate, WindowOpening {
     private(set) static weak var shared: AppDelegate?
 
     private var controllers: [ReaderWindowController] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self
+      // Before anything can route a link, since routing may need a window.
+      LibraryModel.shared.windows = self
       // The scene's `.task` did this; there is no scene on macOS any more.
       Task(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
@@ -71,6 +73,12 @@
     func openTab(inBackground: Bool) {
       openWindow(tabbedWith: activeController, inBackground: inBackground)
     }
+
+    func openWindow() {
+      openWindow(tabbedWith: nil, inBackground: false)
+    }
+
+    var activeNavigation: NavigationModel? { activeController?.navigation }
 
     /// Brings the window showing `scene` forward, selecting it within its tab group.
     func bringForward(_ scene: NavigationModel) {

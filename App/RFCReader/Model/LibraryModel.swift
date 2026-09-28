@@ -12,10 +12,30 @@ private let libraryLog = Logger(
   import AppKit
 #endif
 
-/// Application state: the index, navigation, and the document cache.
+#if os(macOS)
+  /// What the library asks of the window layer, which on macOS is the app's own:
+  /// `AppDelegate` makes every window, and answers these when it sets itself as
+  /// `LibraryModel.windows`. The library says what it needs, and never reaches for
+  /// the delegate itself.
+  protocol WindowOpening: AnyObject {
+    /// A window of its own, in front.
+    func openWindow()
+    /// A tab of the window the user is looking at.
+    func openTab(inBackground: Bool)
+    /// The window showing `scene`, made key and its tab selected.
+    func bringForward(_ scene: NavigationModel)
+    /// The tab the menu acts on: the front tab of the window the user is looking at.
+    var activeNavigation: NavigationModel? { get }
+  }
+#endif
+
+/// The library, one per process: the index and its search, the lists drawn from
+/// it, the document cache, and the registry of open tabs a link is routed through.
 ///
-/// One observable object keeps the SwiftUI surface small; SwiftData holds the
-/// user's own data (bookmarks, reading positions) separately.
+/// Navigation is each tab's own (`NavigationModel`), and what the reader shows is
+/// each window's (`ReaderState`). The user's own data — bookmarks, reading
+/// positions, collections — is SwiftData's; this holds the sets read from it that
+/// every tab shows.
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
@@ -355,6 +375,12 @@ final class LibraryModel {
   /// cleared there, so no later window picks up a stale one.
   private var pendingSceneLink: RFCLink?
 
+  #if os(macOS)
+    /// The window layer, set by `AppDelegate` at launch. Weak: the delegate owns the
+    /// windows, and the library only asks it for them.
+    @ObservationIgnored weak var windows: (any WindowOpening)?
+  #endif
+
   /// Registers a new scene, and gives it the link it was opened for if it was
   /// opened for one. Nil for a window from the menu or at launch, which lands on
   /// the library as before.
@@ -399,8 +425,8 @@ final class LibraryModel {
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
-    let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
-    guard let target else {
+    let open = scenes.compactMap(\.model)
+    guard let target = LinkRouting.target(for: link.id, in: open, showing: \.selection) else {
       openInNewWindow(link)
       return
     }
@@ -415,7 +441,7 @@ final class LibraryModel {
     // its selection did not change and `activate` was not called for it.
     activate(scene)
     #if os(macOS)
-      AppDelegate.shared?.bringForward(scene)
+      windows?.bringForward(scene)
     #endif
   }
 
@@ -423,7 +449,7 @@ final class LibraryModel {
   private func openInNewWindow(_ link: RFCLink) {
     pendingSceneLink = link
     #if os(macOS)
-      AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+      windows?.openWindow()
     #endif
   }
 
@@ -457,7 +483,7 @@ final class LibraryModel {
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
       pendingSceneLink = link
-      AppDelegate.shared?.openTab(inBackground: inBackground)
+      windows?.openTab(inBackground: inBackground)
     #endif
   }
 
@@ -471,14 +497,14 @@ final class LibraryModel {
 
     /// Opens `link` where `placement` says.
     ///
-    /// The front tab is the one the menu acts on (`AppDelegate.activeController`),
+    /// The front tab is the one the menu acts on (`WindowOpening.activeNavigation`),
     /// not whichever tab `route(_:)` would pick: a script that says "open this"
     /// means the window it is looking at. With no window open there is no front
     /// tab, and the link is routed the way one from outside is, which opens one.
     func open(_ link: RFCLink, placement: Placement) {
       switch placement {
       case .frontTab:
-        if let scene = AppDelegate.shared?.activeController?.navigation {
+        if let scene = windows?.activeNavigation {
           deliver(link, to: scene)
         } else {
           route(link)
