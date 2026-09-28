@@ -79,6 +79,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
+  /// See `RFCTextView.bibliography`.
+  var bibliography: [ReferenceGroup] = []
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
   /// synchronously, on every scroll tick that changes it: the title is coupled to
   /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
@@ -533,16 +535,20 @@ final class RFCTextViewCoordinator: NSObject {
 
   /// The card for a reference, on either platform, or nil when it would say no
   /// more than the reference already does. Another document has its title and
-  /// abstract; a place in this one has only its section's heading, and a figure
-  /// or a table has not even that.
+  /// abstract; a place in this one has only its section's heading; a bibliography
+  /// entry that names no RFC has its title, authors and where it was published
+  /// (#198); and a figure or a table has none of those.
   private func preview(for reference: CrossReference) -> ReferencePreview? {
     guard let library else { return nil }
     switch reference.target {
     case .document:
       return ReferencePreview(reference: reference, library: library)
     case .anchor(let anchor):
-      return built?.anchors.heading(of: anchor).map {
-        ReferencePreview(reference: reference, library: library, heading: $0)
+      if let heading = built?.anchors.heading(of: anchor) {
+        return ReferencePreview(reference: reference, library: library, heading: heading)
+      }
+      return bibliography.entry(anchor: anchor).map {
+        ReferencePreview(reference: reference, library: library, entry: $0)
       }
     }
   }

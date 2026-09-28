@@ -11,7 +11,7 @@ struct BibliographyTests {
     let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
     let entry = try #require(groups.entry(anchor: "QUIC-TRANSPORT"))
     #expect(entry.title == "QUIC: A UDP-Based Multiplexed and Secure Transport")
-    #expect(entry.authors.contains("Martin Thomson"))
+    #expect(entry.authors == ["Jana Iyengar, Ed.", "Martin Thomson, Ed."])
   }
 
   @Test func `an anchor no bibliography holds finds nothing`() throws {

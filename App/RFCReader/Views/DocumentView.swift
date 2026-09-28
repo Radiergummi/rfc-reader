@@ -249,6 +249,7 @@ struct DocumentView: View {
       let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
       RFCTextView(
         built: built,
+        bibliography: reader.groups,
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
