@@ -73,4 +73,51 @@ struct CollectionOrderTests {
     #expect(neighbors.before == nil)
     #expect(neighbors.after == "a")
   }
+
+  /// `List.onMove` reports the offset the row is dropped *before*, counted before
+  /// the row is taken out: dragging the first of four rows below the third is a
+  /// drop at 3.
+  @Test func `a drag down lands between the rows it was dropped between`() {
+    let drop = CollectionOrder.drop(from: [0], to: 3, in: ["a", "b", "c", "d"])
+    #expect(drop?.moved == "a")
+    #expect(drop?.above == "c")
+    #expect(drop?.below == "d")
+  }
+
+  @Test func `a drag up to the top has nothing above it`() {
+    let drop = CollectionOrder.drop(from: [3], to: 0, in: ["a", "b", "c", "d"])
+    #expect(drop?.moved == "d")
+    #expect(drop?.above == nil)
+    #expect(drop?.below == "a")
+  }
+
+  @Test func `a drag to the end has nothing below it`() {
+    let drop = CollectionOrder.drop(from: [0], to: 4, in: ["a", "b", "c", "d"])
+    #expect(drop?.moved == "a")
+    #expect(drop?.above == "d")
+    #expect(drop?.below == nil)
+  }
+
+  @Test func `a drag of nothing, or from outside the rows, is no drop`() {
+    #expect(CollectionOrder.drop(from: [], to: 1, in: ["a", "b"]) == nil)
+    #expect(CollectionOrder.drop(from: [5], to: 1, in: ["a", "b"]) == nil)
+  }
+
+  /// VoiceOver's Move Up and Move Down.
+  @Test func `a step moves one row past its neighbor`() {
+    let downward = CollectionOrder.step("b", by: 1, in: ["a", "b", "c"])
+    #expect(downward?.moved == "b")
+    #expect(downward?.above == "c")
+    #expect(downward?.below == nil)
+
+    let upward = CollectionOrder.step("b", by: -1, in: ["a", "b", "c"])
+    #expect(upward?.above == nil)
+    #expect(upward?.below == "a")
+  }
+
+  @Test func `a step past either end is no drop`() {
+    #expect(CollectionOrder.step("a", by: -1, in: ["a", "b"]) == nil)
+    #expect(CollectionOrder.step("b", by: 1, in: ["a", "b"]) == nil)
+    #expect(CollectionOrder.step("z", by: 1, in: ["a", "b"]) == nil)
+  }
 }

@@ -60,4 +60,43 @@ public enum CollectionOrder {
     }
     return (nil, full.first)
   }
+
+  /// A row moved in a visible list, and the visible rows either side of where it
+  /// landed: what `neighbors(above:below:in:)` places it by.
+  public struct Drop<Key: Equatable>: Equatable {
+    public let moved: Key
+    public let above: Key?
+    public let below: Key?
+  }
+
+  /// What `List.onMove` reports, resolved to rows: `destination` is the offset the
+  /// rows are dropped before, counted before they are taken out. Nil when `source`
+  /// names no row.
+  public static func drop<Key: Equatable>(
+    from source: IndexSet, to destination: Int, in visible: [Key]
+  ) -> Drop<Key>? {
+    guard let first = source.first, source.allSatisfy(visible.indices.contains) else {
+      return nil
+    }
+    let moving = source.map { visible[$0] }
+    var reordered = visible.indices.filter { !source.contains($0) }.map { visible[$0] }
+    let insertion = destination - source.count(in: 0..<destination)
+    reordered.insert(contentsOf: moving, at: insertion)
+    let index = insertion + moving.count - 1
+    return Drop(
+      moved: visible[first],
+      above: insertion > 0 ? reordered[insertion - 1] : nil,
+      below: index + 1 < reordered.count ? reordered[index + 1] : nil)
+  }
+
+  /// VoiceOver's Move Up and Move Down: `key` one row past its neighbor, as a drop.
+  /// Nil past either end, or for a key not among `visible`.
+  public static func step<Key: Equatable>(
+    _ key: Key, by offset: Int, in visible: [Key]
+  ) -> Drop<Key>? {
+    guard let index = visible.firstIndex(of: key) else { return nil }
+    let target = index + offset
+    guard visible.indices.contains(target) else { return nil }
+    return drop(from: [index], to: offset > 0 ? target + 1 : target, in: visible)
+  }
 }

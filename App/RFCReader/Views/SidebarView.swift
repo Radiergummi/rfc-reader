@@ -302,15 +302,13 @@ struct SidebarView: View {
   }
 
   private func moveCollections(from source: IndexSet, to destination: Int) {
-    var entries = library.collections.collections
-    guard let moved = source.first.map({ entries[$0] }) else { return }
-    entries.move(fromOffsets: source, toOffset: destination)
-    guard let index = entries.firstIndex(of: moved) else { return }
-    let above = index > 0 ? entries[index - 1].id : nil
-    let below = index + 1 < entries.count ? entries[index + 1].id : nil
+    let identifiers = library.collections.collections.map(\.id)
+    guard let drop = CollectionOrder.drop(from: source, to: destination, in: identifiers) else {
+      return
+    }
     library.editCollections {
       try CollectionStore.moveCollection(
-        moved.id, afterVisible: above, beforeVisible: below, in: $0)
+        drop.moved, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
   }
 

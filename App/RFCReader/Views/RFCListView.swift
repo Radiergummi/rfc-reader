@@ -30,15 +30,14 @@ struct RFCListView: View {
   /// offsets: the rows on screen may hide obsolete documents or be only the first
   /// pages (`CollectionOrder.neighbors`).
   private func move(from source: IndexSet, to destination: Int, in visible: [RFCMetadata]) {
-    guard let collection, let moved = source.first.map({ visible[$0] }) else { return }
-    var reordered = visible
-    reordered.move(fromOffsets: source, toOffset: destination)
-    guard let index = reordered.firstIndex(where: { $0.id == moved.id }) else { return }
-    let above = index > 0 ? reordered[index - 1].id : nil
-    let below = index + 1 < reordered.count ? reordered[index + 1].id : nil
+    place(CollectionOrder.drop(from: source, to: destination, in: visible.map(\.id)))
+  }
+
+  private func place(_ drop: CollectionOrder.Drop<DocumentID>?) {
+    guard let collection, let drop else { return }
     library.editCollections {
       try CollectionStore.move(
-        moved.id, in: collection, afterVisible: above, beforeVisible: below, in: $0)
+        drop.moved, in: collection, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
   }
 
@@ -52,10 +51,7 @@ struct RFCListView: View {
 
   /// VoiceOver's Move Up and Move Down, one row at a time.
   private func step(_ rfc: RFCMetadata, by offset: Int, in visible: [RFCMetadata]) {
-    guard let index = visible.firstIndex(where: { $0.id == rfc.id }) else { return }
-    let target = index + offset
-    guard visible.indices.contains(target) else { return }
-    move(from: [index], to: offset > 0 ? target + 1 : target, in: visible)
+    place(CollectionOrder.step(rfc.id, by: offset, in: visible.map(\.id)))
   }
 
   var body: some View {
