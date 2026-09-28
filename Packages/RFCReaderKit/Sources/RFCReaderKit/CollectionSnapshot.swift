@@ -75,11 +75,20 @@ public struct CollectionSnapshot: Equatable, Sendable {
     Set(collections.filter { $0.members.contains(document) }.map(\.id))
   }
 
-  /// The store's collections, now.
+  /// The store's collections, now. Only the fields a snapshot reads: this runs
+  /// on every save, and most of those record a reading position.
   @MainActor
   public static func fetch(in context: ModelContext) -> CollectionSnapshot {
-    let collections = (try? context.fetch(FetchDescriptor<DocumentCollection>())) ?? []
-    let items = (try? context.fetch(FetchDescriptor<DocumentCollectionItem>())) ?? []
+    var collectionFetch = FetchDescriptor<DocumentCollection>()
+    collectionFetch.propertiesToFetch = [
+      \.identifier, \.name, \.colorName, \.position, \.createdAt,
+    ]
+    var itemFetch = FetchDescriptor<DocumentCollectionItem>()
+    itemFetch.propertiesToFetch = [
+      \.collectionIdentifier, \.documentKey, \.position, \.addedAt,
+    ]
+    let collections = (try? context.fetch(collectionFetch)) ?? []
+    let items = (try? context.fetch(itemFetch)) ?? []
     return CollectionSnapshot(collections: collections, items: items)
   }
 }
