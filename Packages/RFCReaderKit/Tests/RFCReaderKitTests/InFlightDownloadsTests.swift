@@ -211,6 +211,25 @@ struct InFlightDownloadsTests {
     #expect(await store.written == [.rfc(9110)])
   }
 
+  /// A reader who leaves is done waiting then, not when the download it left ends
+  /// for the reader who stayed: the gate is still shut when the first returns.
+  @Test(.timeLimit(.minutes(1)))
+  func `a cancelled reader returns while the download goes on`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let first = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    let second = Task { try await store.open(.rfc(9110), gate: gate) }
+    await untilWaiting(2, for: .rfc(9110), in: store)
+    first.cancel()
+
+    await #expect(throws: CancellationError.self) { try await first.value }
+    #expect(await store.started.first?.isCancelled == false)
+    await gate.open()
+    #expect(try await second.value == Data("\(DocumentID.rfc(9110))".utf8))
+    #expect(await store.written == [.rfc(9110)])
+  }
+
   @Test func `an open after a cancelled download starts a new one`() async throws {
     let store = Store()
     let gate = Gate()
