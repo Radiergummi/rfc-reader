@@ -9,9 +9,16 @@ struct RFCListView: View {
   /// once is one large diff on the main thread, and AppKit then scans every row to
   /// build its type-ahead strings — measurably, until it gives up and says so.
   @State private var limit = ListWindow.page
+  /// The collection the picker adds to, while it is on show (#349).
+  @State private var addingTo: PickerTarget?
 
   private var rfcs: [RFCMetadata] {
     library.list(for: navigation)
+  }
+
+  /// The collection the list shows, if it shows one.
+  private var collection: UUID? {
+    if case .collection(let identifier) = navigation.filter { identifier } else { nil }
   }
 
   var body: some View {
@@ -91,7 +98,17 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty,
+          let collection
+        {
+          ContentUnavailableView {
+            Label("No Documents", systemImage: "folder")
+          } description: {
+            Text("Add RFCs from the reader, from any list, or here.")
+          } actions: {
+            Button("Add RFCs…") { addingTo = PickerTarget(id: collection) }
+          }
+        } else if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
           ContentUnavailableView(
             "No \(library.title(for: navigation.filter))",
             systemImage: navigation.filter.systemImage)
@@ -100,6 +117,25 @@ struct RFCListView: View {
         }
       }
     }
+    .sheet(item: $addingTo) { CollectionPickerSheet(collection: $0.id) }
+    #if os(macOS)
+      // The Mac's list has no toolbar of its own to put Add in.
+      .safeAreaInset(edge: .bottom) {
+        if let collection {
+          HStack {
+            Button {
+              addingTo = PickerTarget(id: collection)
+            } label: {
+              Label("Add RFCs…", systemImage: "plus")
+            }
+            .buttonStyle(.borderless)
+            Spacer()
+          }
+          .padding(8)
+          .background(.bar)
+        }
+      }
+    #endif
     .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
@@ -130,6 +166,15 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
+        if let collection {
+          ToolbarItem(placement: .primaryAction) {
+            Button {
+              addingTo = PickerTarget(id: collection)
+            } label: {
+              Label("Add", systemImage: "plus")
+            }
+          }
+        }
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
@@ -348,3 +393,8 @@ struct RFCRow: View {
     }
   }
 #endif
+
+/// A collection to add to, as a sheet's item (#349).
+private struct PickerTarget: Identifiable {
+  let id: UUID
+}
