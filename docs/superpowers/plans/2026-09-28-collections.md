@@ -82,7 +82,7 @@ The inputs most likely to bite a person, each pinned by a test in the task named
 - Test: `Packages/RFCReaderKit/Tests/RFCReaderKitTests/CollectionOrderTests.swift`
 
 **Interfaces:**
-- Produces: `CollectionColor` (`CaseIterable`, `rawValue: String`, `static let default`, `init(name: String)`, `title: String`); `CollectionOrder.spacing`, `.minimumGap`, `.Placement { case at(Double), renumberFirst }`, `appending(after: Double?) -> Double`, `placement(between: Double?, and: Double?) -> Placement`, `renumbered(count: Int) -> [Double]`, `neighbours<Key: Equatable>(above: Key?, below: Key?, in: [Key]) -> (before: Key?, after: Key?)`.
+- Produces: `CollectionColor` (`CaseIterable`, `rawValue: String`, `static let default`, `init(name: String)`, `title: String`); `CollectionOrder.spacing`, `.minimumGap`, `.Placement { case position(Double), renumberFirst }`, `appending(after: Double?) -> Double`, `placement(between: Double?, and: Double?) -> Placement`, `renumbered(count: Int) -> [Double]`, `neighbours<Key: Equatable>(above: Key?, below: Key?, in: [Key]) -> (before: Key?, after: Key?)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1247,7 +1247,7 @@ public enum CollectionStore {
     func current(_ wanted: Key?) -> Double? {
       wanted.flatMap { wanted in rows.first { $0[keyPath: key] == wanted }?[keyPath: position] }
     }
-    if case .at(let value) = CollectionOrder.placement(
+    if case .position(let value) = CollectionOrder.placement(
       between: current(neighbours.before), and: current(neighbours.after))
     {
       return value
@@ -1256,7 +1256,7 @@ public enum CollectionStore {
       row[keyPath: position] = value
     }
     guard
-      case .at(let value) = CollectionOrder.placement(
+      case .position(let value) = CollectionOrder.placement(
         between: current(neighbours.before), and: current(neighbours.after))
     else {
       preconditionFailure("renumbered neighbours are a spacing apart")
