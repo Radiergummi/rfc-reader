@@ -371,6 +371,14 @@
       if let window { applyMinimumWidth(to: window) }
     }
 
+    /// A pane's toolbar button: opens the panel on that pane, swaps an open panel to
+    /// it, or closes the panel showing it (`InspectorPane.pressing`).
+    func press(_ pane: InspectorPane) {
+      let result = InspectorPane.pressing(pane, isOpen: isPanelOpen, showing: reader.pane)
+      reader.pane = result.pane
+      if result.isOpen != isPanelOpen { togglePanel() }
+    }
+
     /// Whether the contents panel is showing.
     var isPanelOpen: Bool {
       !panelItem.isCollapsed

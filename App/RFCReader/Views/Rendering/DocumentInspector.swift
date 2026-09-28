@@ -5,11 +5,10 @@ import SwiftUI
 enum InspectorTab {
   case contents
   case references
-  case info
 }
 
-/// The document's two navigational views, and what is known about it, sharing one
-/// panel.
+/// The inspector beside the reader: the document's two navigational views, or what
+/// is known about it (#25), whichever `pane` says.
 ///
 /// The bibliography is here rather than in the reading flow: every citation in the
 /// prose already links straight to the document it names, so the section was several
@@ -21,10 +20,11 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
-  let info: [DocumentInfo.Section]
-  /// For the Info tab's download state, which is the store's rather than derived.
+  let info: DocumentInfo?
+  /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
+  let pane: InspectorPane
   @Binding var tab: InspectorTab
   let current: String?
   /// The bibliography entry a citation asked to see, if any.
@@ -33,6 +33,13 @@ struct DocumentInspector: View {
   let openDocument: (DocumentID) -> Void
 
   var body: some View {
+    switch pane {
+    case .navigation: navigation
+    case .info: InfoView(info: info, document: document, library: library, open: openDocument)
+    }
+  }
+
+  private var navigation: some View {
     VStack(spacing: 0) {
       #if os(macOS)
         InspectorTabBar(tab: $tab)
@@ -50,7 +57,6 @@ struct DocumentInspector: View {
         Picker("Panel", selection: $tab) {
           Text("Contents").tag(InspectorTab.contents)
           Text("References").tag(InspectorTab.references)
-          Text("Info").tag(InspectorTab.info)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -82,8 +88,6 @@ struct DocumentInspector: View {
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
       ReferencesView(groups: groups, revealed: revealed, open: openDocument)
-    case .info:
-      InfoView(sections: info, document: document, library: library, open: openDocument)
     }
   }
 }
@@ -123,6 +127,7 @@ struct PanelHost: View {
         info: reader.info,
         document: navigation.selection,
         library: library,
+        pane: reader.pane,
         tab: $reader.tab,
         current: reader.currentAnchor,
         revealed: reader.revealedReference,
@@ -147,7 +152,7 @@ struct PanelHost: View {
   }
 }
 
-/// The panel's tabs, drawn the way an inspector's are rather than as a segmented
+/// The navigation pane's tabs, drawn the way an inspector's are rather than as a segmented
 /// control.
 ///
 /// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which
@@ -162,26 +167,16 @@ private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
   var body: some View {
+    // No rule between the two: Pages draws one only between labels that are both
+    // unselected, and with two tabs one of them always is the pill.
     HStack(spacing: 0) {
       segment(.contents, "Contents")
-      rule(between: .contents, and: .references)
       segment(.references, "References")
-      rule(between: .references, and: .info)
-      segment(.info, "Info")
     }
     // The track the segments sit in, and the inset that keeps the selected pill
     // inside it rather than flush with its edge.
     .padding(2)
     .background(.quaternary.opacity(0.7), in: .capsule)
-  }
-
-  /// Pages draws a rule only between two labels that are both unselected; beside
-  /// the pill there is none. Hidden rather than removed, so choosing a tab does
-  /// not move the labels.
-  private func rule(between leading: InspectorTab, and trailing: InspectorTab) -> some View {
-    Divider()
-      .frame(height: 12)
-      .opacity(tab != leading && tab != trailing ? 1 : 0)
   }
 
   private func segment(_ value: InspectorTab, _ title: String) -> some View {

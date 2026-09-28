@@ -173,12 +173,16 @@ struct DocumentCommands: Commands {
           // ⌥⌘I, the inspector's chord in Pages, Keynote and Finder. It was ⌘⇧T,
           // which every tabbed Mac app gives to reopening the last closed tab
           // (#157).
-          Button("Contents") { active.controller?.togglePanel() }
+          Button("Contents") { active.controller?.press(.navigation) }
             .keyboardShortcut("i", modifiers: [.command, .option])
             // As the toolbar's button is: opened with no document, the panel is an
             // empty strip, and nothing closes it again until a document arrives.
             // Not `showsDocument`: clearing the selection leaves `hasDocument` set
             // and the panel open, and the chord has to be able to close it.
+            .disabled(reader?.hasDocument != true)
+          // ⌘I, Get Info in Finder and Preview.
+          Button("Info") { active.controller?.press(.info) }
+            .keyboardShortcut("i", modifiers: .command)
             .disabled(reader?.hasDocument != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.

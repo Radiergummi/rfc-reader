@@ -343,12 +343,19 @@ struct DocumentView: View {
 
       ToolbarItemGroup(placement: .bottomBar) {
         Button {
-          withAnimation(.snappy) { showTableOfContents.toggle() }
+          press(.navigation)
         } label: {
           Label("Contents", systemImage: "list.bullet.rectangle.portrait")
         }
         // The same chord as the Mac's (#157).
         .keyboardShortcut("i", modifiers: [.command, .option])
+
+        Button {
+          press(.info)
+        } label: {
+          Label("Info", systemImage: "info.circle")
+        }
+        .keyboardShortcut("i", modifiers: .command)
 
         citeMenu
       }
@@ -389,6 +396,15 @@ struct DocumentView: View {
       } label: {
         Label("Cite", systemImage: "quote.opening")
       }
+    }
+
+    /// A pane's button: opens the inspector on that pane, swaps an open one to it,
+    /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
+    private func press(_ pane: InspectorPane) {
+      let result = InspectorPane.pressing(
+        pane, isOpen: showTableOfContents, showing: reader.pane)
+      reader.pane = result.pane
+      withAnimation(.snappy) { showTableOfContents = result.isOpen }
     }
 
     /// What is used least: the original text, and the document's pages elsewhere.
@@ -454,10 +470,10 @@ struct DocumentView: View {
     work.load = Task(name: "Load document") { await load() }
   }
 
-  /// The Info tab's rows. Again whenever the index loads or refreshes: a document
+  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
   /// opened before the index finished loading has none to show until it does.
   private func deriveInfo() {
-    reader.info = metadata.map { DocumentInfo.sections(for: $0, in: library.index) } ?? []
+    reader.info = metadata.map { DocumentInfo($0, in: library.index) }
   }
 
   private func trace(_ event: String) {
