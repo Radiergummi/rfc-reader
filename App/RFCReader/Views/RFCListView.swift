@@ -35,9 +35,6 @@ struct RFCListView: View {
         .tag(rfc.id)
         #if !os(macOS)
           .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
-          // Closer than the default, as Notes sets its rows: measured on the same
-          // phone, ours stood about 8 pt taller above and 5 pt below.
-          .listRowInsets(.vertical, 6)
         #endif
         .onAppear {
           guard rfc.id == trigger else { return }
@@ -118,6 +115,7 @@ struct RFCListView: View {
     }
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
+      .navigationSubtitle(library.listSubtitle(for: navigation))
       // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
       // under it whenever the list was short enough not to scroll.
       .navigationBarTitleDisplayMode(.inline)
@@ -126,19 +124,6 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
-        // Written out rather than `.navigationSubtitle`, whose inline subtitle is
-        // a caption: Notes sets its count a size up, measured on the same phone.
-        ToolbarItem(placement: .principal) {
-          VStack(spacing: 0) {
-            Text(navigation.filter.title).font(.headline)
-            let subtitle = library.listSubtitle(for: navigation)
-            if !subtitle.isEmpty {
-              Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
-            }
-          }
-          .accessibilityElement(children: .combine)
-          .accessibilityAddTraits(.isHeader)
-        }
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
@@ -244,9 +229,7 @@ struct RFCRow: View {
         }
       #endif
     }
-    #if os(macOS)
-      .padding(.vertical, 2)
-    #endif
+    .padding(.vertical, 2)
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)

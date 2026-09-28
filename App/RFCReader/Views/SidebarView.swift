@@ -119,7 +119,7 @@ struct SidebarView: View {
         } label: {
           HStack {
             Text(title)
-              .font(.title2.bold())
+              .font(.title2.weight(.semibold))
               // The label colour itself: `.primary` resolves against the
               // header's own style, which is grey.
               .foregroundStyle(Color(uiColor: .label))
