@@ -21,8 +21,11 @@ struct ClientTransportTests {
 
     override func startLoading() {
       Self.lastRequest = request
+      // `URLResponse()` exists on Apple platforms only; FoundationNetworking needs a URL.
+      let fallback = URLResponse(
+        url: request.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
       client?.urlProtocol(
-        self, didReceive: Self.response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
+        self, didReceive: Self.response ?? fallback, cacheStoragePolicy: .notAllowed)
       client?.urlProtocol(self, didLoad: Data("body".utf8))
       client?.urlProtocolDidFinishLoading(self)
     }
