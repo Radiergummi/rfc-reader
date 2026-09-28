@@ -90,7 +90,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ Docu
                        SwiftUI views ── macOS: NSSplitViewController(sidebar, list, DocumentView, panel)
                                         iOS:   NavigationSplitView(sidebar, list, DocumentView)
                                                           ▼
-                       SwiftData ── Bookmark, ReadingPosition (RFCReaderKit's UserData; user data only; iCloud later)
+                       SwiftData ── Bookmark, ReadingPosition, DocumentCollection, DocumentCollectionItem (RFCReaderKit's UserData; user data only; iCloud later)
 ```
 
 - Legacy RFCs arrive pre-converted to XML through data packs (DATA_PIPELINE.md); on-device text parsing is the fallback when no pack is installed.
@@ -211,6 +211,16 @@ What is left: two changes within one tick of the file system's clock share a dat
 *Decided September 2026 (issue #152).* Bookmarks and reading positions keyed on a bare, unique RFC number, which cannot tell RFC 1 from BCP 1, and the schema had no version, so any change to it was a store that would not open. The models are now `VersionedSchema`s in `RFCReaderKit` (`UserData.swift`), where the migration is tested against a store written on disk. The one the app uses, `SchemaV3`, keys each row on the document's `fileStem` and is in CloudKit's shape: no `@Attribute(.unique)`, every attribute optional or defaulted. Uniqueness is the code's job instead: `BookmarkStore` looks a document up before inserting, and `UserData.deduplicate` merges rows naming one document, newest first, when the container opens.
 
 The migration never takes a row out of the store. SwiftData's inferred step cannot turn a number into a key, so `SchemaV2` is only a step: V1's rows, with V3's columns beside the number. V1 to V2 is inferred; V2 to V3 writes each row's key from its own number and then drops the number. A launch that stops between the two leaves a V2 store, and the next one finishes the job. An earlier draft carried the rows across one custom stage in memory, which a crash between its halves would have lost for good. A V1 row is read as an RFC, since a number is all it kept.
+
+## Decision: collections are rows linked by identifier, ordered by position
+
+*Decided September 2026 (issue #349).* A collection is a `DocumentCollection` and its members are `DocumentCollectionItem` rows naming it by identifier, in `SchemaV4`. Not a SwiftData relationship: with one, the collection's to-many side is what two devices both edit once sync is on; as independent rows, two devices adding to one collection each insert a row and nothing is lost. `SchemaV4` declares its own copies of V3's models, and `ReadingPosition` keeps its `originalName: "sectionAnchor"`: without it, the migration drops every anchor, measured on V1, V2 and V3 stores.
+
+Items are ordered by `(position, addedAt, documentKey)`. Positions are `Double`s, so a move takes the midpoint of its neighbours and writes one row; a gap too narrow to split, or two equal positions after offline appends, renumbers the collection first (`CollectionOrder`). A move made in a list that hides rows resolves by the visible neighbours' documents, never by offset. A reorder racing a renumber on another device may misplace one item; that is accepted.
+
+Items whose collection is missing are not deleted. Under sync they may simply have arrived before it, and deleting them would sync back and empty the collection where it was made; nothing shows them, since every list and count is computed per existing collection. A sweep with a grace period belongs to the sync work.
+
+Every change is made by `CollectionStore` and read through `CollectionSnapshot`, both in `RFCReaderKit` and tested there; `LibraryModel` publishes the snapshot, keys a collection's list on its members, and answers every title through `title(for:)`, since a collection's filter does not carry its name. A colour is stored by name from a fixed palette (`CollectionColor`), so it adapts to dark mode and an older device reads a name it does not know as the default.
 
 ## Decision: the document cache is bounded by size, and evicts the least recently opened
 
