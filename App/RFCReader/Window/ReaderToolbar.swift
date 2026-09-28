@@ -4,6 +4,7 @@
   import RFCReaderKit
 
   extension NSToolbarItem.Identifier {
+    static let rfcNewCollection = NSToolbarItem.Identifier("rfc.newCollection")
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
@@ -382,8 +383,10 @@
         // Over the sidebar, beside the traffic lights, where Notes and Mail put
         // it: a tracking separator on the sidebar's own divider gives the toolbar
         // a section that ends with the sidebar, and what is declared before it
-        // lands inside that section.
-        .toggleSidebar, .rfcSidebarSeparator,
+        // lands inside that section. New Collection stands before the toggle, as
+        // Shortcuts keeps New Folder: the sidebar's one action, over the sidebar
+        // it adds to (#349).
+        .rfcNewCollection, .toggleSidebar, .rfcSidebarSeparator,
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
@@ -508,6 +511,10 @@
         item.menu = moreMenu
         return item
 
+      case .rfcNewCollection:
+        return button(
+          identifier, "New Collection", "folder.badge.plus", #selector(newCollectionInSidebar))
+
       case .rfcPanelToggle:
         return button(
           identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
@@ -619,6 +626,9 @@
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
+      case NSToolbarItem.Identifier.rfcNewCollection.rawValue:
+        // Acts on the library, not the document, so a window without one has it too.
+        return true
       default:
         return id != nil
       }
@@ -642,6 +652,12 @@
 
     @objc private func newCollection() {
       navigation.collectionEditor = .create(adding: id)
+    }
+
+    /// The sidebar's button, which makes an empty collection as File > New
+    /// Collection… does; only the Bookmark menu's adds the open document.
+    @objc private func newCollectionInSidebar() {
+      navigation.collectionEditor = .create(adding: nil)
     }
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
 
