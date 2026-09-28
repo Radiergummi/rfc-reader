@@ -68,13 +68,12 @@ public enum AccessibleReading {
     }
 
     text.enumerateAttribute(.rfcVerbatim, in: range) { value, piece, _ in
-      guard let box = value as? VerbatimBox, isDiagram(box) else {
+      guard let box = value as? VerbatimBox, isDiagram(box),
+        let diagram = text.extent(ofBox: .rfcVerbatim, at: piece.location)
+      else {
         read(piece)
         return
       }
-      var diagram = NSRange()
-      _ = text.attribute(
-        .rfcVerbatim, at: piece.location, longestEffectiveRange: &diagram, in: whole)
       if piece.location == diagram.location {
         pieces.append(.label(label))
       }
