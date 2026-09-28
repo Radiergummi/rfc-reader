@@ -118,6 +118,7 @@ struct SearchQueryTests {
   /// its last space.
   @Test func `a quoted value being typed is completed as one word`() throws {
     #expect(try completions(#"cache by:"Roy s"#) == [])
+    #expect(try completions(#"cache by:"Roy "#) == [], "a space inside the quote is the value's")
     #expect(try completions(#"cache wg:"http"#) == ["cache wg:httpbis"])
   }
 

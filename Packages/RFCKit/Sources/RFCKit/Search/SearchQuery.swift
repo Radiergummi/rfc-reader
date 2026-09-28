@@ -18,7 +18,7 @@ public enum SearchQuery {
     if let group = filters.workingGroup { words.append("wg:\(group)") }
     words += statusWords(filters.statuses).map { "status:\($0)" }
     if filters.excludeObsolete { words.append("status:current") }
-    if let author = filters.author { words.append("author:\(author)") }
+    if let author = filters.author { words.append("author:\(written(author))") }
     words += Stream.allCases.filter(filters.streams.contains).map {
       "stream:\($0.rawValue.lowercased())"
     }
@@ -52,6 +52,50 @@ public enum SearchQuery {
     ("current", []),
   ]
 
+  // MARK: - Words
+
+  /// The characters that open or close a quoted run: the straight quote, and the
+  /// typographic pair iOS types for it with Smart Punctuation on, which is the default.
+  static let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
+
+  /// The words of `query`, split at spaces outside quotes, each as typed. A quoted run
+  /// is one word with its quotes (`author:"Roy Fielding"`, `"key words"`), and an
+  /// unclosed one runs to the end of the query, which is still being typed (#177).
+  static func words(in query: String) -> [String] {
+    var words: [String] = []
+    var word = ""
+    var quoted = false
+    for character in query {
+      if character == " ", !quoted {
+        if !word.isEmpty { words.append(word) }
+        word = ""
+        continue
+      }
+      if quotes.contains(character) {
+        // The typographic pair says which end it is; the straight quote toggles.
+        switch character {
+        case "\u{201C}": quoted = true
+        case "\u{201D}": quoted = false
+        default: quoted.toggle()
+        }
+      }
+      word.append(character)
+    }
+    if !word.isEmpty { words.append(word) }
+    return words
+  }
+
+  /// `word` without its quotes: a quoted value's text, or a phrase's.
+  static func unquoted(_ word: some StringProtocol) -> String {
+    String(word.filter { !quotes.contains($0) })
+  }
+
+  /// A qualifier's value as written back: in quotes when it has a space, or it would
+  /// read back as a shorter value and a word of free text.
+  private static func written(_ value: String) -> String {
+    value.contains(" ") ? "\"\(value)\"" : value
+  }
+
   // MARK: - Completion
 
   public struct Suggestion: Sendable, Hashable {
@@ -79,15 +123,12 @@ public enum SearchQuery {
   /// `index`, statuses and streams from their vocabulary, `has:xml`. Authors and
   /// years are free-form, and get nothing.
   public static func suggestions(for query: String, in index: RFCIndex) -> [Suggestion] {
-    let head: String
-    let word: String
-    if let space = query.lastIndex(of: " ") {
-      head = String(query[...space])
-      word = String(query[query.index(after: space)...])
-    } else {
-      head = ""
-      word = query
-    }
+    // The word being typed is the last one `words(in:)` finds, so an open quote
+    // keeps its spaces: in `by:"Roy s` it is the whole value, not `s`. A query that
+    // does not end with it ends with a space outside quotes, and a new word begins.
+    let last = words(in: query).last ?? ""
+    let word = query.hasSuffix(last) ? last : ""
+    let head = String(query.dropLast(word.count))
     func offer(_ words: [String]) -> [Suggestion] {
       words.map { Suggestion(completion: head + $0, isUnknown: false) }
     }
@@ -100,7 +141,7 @@ public enum SearchQuery {
       return offer(begun.map { $0.name == "has" ? "has:xml" : "\($0.name):" })
     }
     let key = word[..<colon].lowercased()
-    let typed = word[word.index(after: colon)...].lowercased()
+    let typed = unquoted(word[word.index(after: colon)...]).lowercased()
     guard let qualifier = qualifiers.first(where: { $0.name == key || $0.aliases.contains(key) })
     else {
       return [Suggestion(completion: query, isUnknown: true)]

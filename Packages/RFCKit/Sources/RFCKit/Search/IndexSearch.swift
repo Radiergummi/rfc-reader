@@ -64,17 +64,22 @@ public struct IndexSearch: Sendable {
   }
 
   /// Parses `wg:httpbis status:std author:fielding year:2020-2022 tls` into filters plus free text.
+  ///
+  /// A value with spaces is quoted, `author:"Roy Fielding"`, and loses its quotes. A
+  /// quoted phrase of free text keeps them, so `search(text:filters:)` reads it as one
+  /// term (#177).
   public static func parseQuery(_ query: String) -> (text: String, filters: SearchFilters) {
     var filters = SearchFilters()
     var words: [String] = []
-    for token in query.split(separator: " ") {
+    for token in SearchQuery.words(in: query) {
       let parts = token.split(separator: ":", maxSplits: 1)
-      guard parts.count == 2 else {
-        words.append(String(token))
+      // A colon inside a quoted phrase is the phrase's, not a qualifier's.
+      guard parts.count == 2, !parts[0].contains(where: SearchQuery.quotes.contains) else {
+        words.append(token)
         continue
       }
       let key = parts[0].lowercased()
-      let value = String(parts[1])
+      let value = SearchQuery.unquoted(parts[1])
       switch key {
       case "wg", "group":
         filters.workingGroup = value.lowercased()
@@ -95,7 +100,7 @@ public struct IndexSearch: Sendable {
         case "exp", "experimental": filters.statuses.insert(.experimental)
         case "historic": filters.statuses.insert(.historic)
         case "current": filters.excludeObsolete = true
-        default: words.append(String(token))
+        default: words.append(token)
         }
       case "year":
         let bounds = value.split(separator: "-").compactMap { Int($0) }
@@ -107,7 +112,7 @@ public struct IndexSearch: Sendable {
       case "has" where value.lowercased() == "xml":
         filters.requiresXML = true
       default:
-        words.append(String(token))
+        words.append(token)
       }
     }
     return (words.joined(separator: " "), filters)
@@ -120,7 +125,9 @@ public struct IndexSearch: Sendable {
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
-    let terms = trimmed.lowercased().split(separator: " ").map(String.init).filter { !$0.isEmpty }
+    // A quoted phrase is one term, so it has to match as it is written.
+    let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
+      .filter { !$0.isEmpty }
 
     // A query that is just a document number goes straight there.
     if let id = DocumentID(parsing: trimmed), id.series == .rfc, let exact = index[id.number],
