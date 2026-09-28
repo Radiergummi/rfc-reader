@@ -541,6 +541,10 @@ final class LibraryModel {
     await store.isCached(id)
   }
 
+  func downloadedSize(_ id: DocumentID) async -> Int? {
+    await store.downloadedSize(id)
+  }
+
   /// The documents the reader has opened, most recent first.
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
@@ -558,6 +562,35 @@ final class LibraryModel {
   func download(_ id: DocumentID) async throws {
     _ = try await document(for: id)
   }
+
+  #if os(macOS)
+    /// A format of a document saved to Downloads, as Safari saves a file: under its
+    /// own name, or numbered when that is taken, and the Dock's Downloads stack told,
+    /// so it bounces. What Option-clicking a format in the Info pane does (#25).
+    func saveToDownloads(_ id: DocumentID, format: FileFormat) async throws {
+      let data = try await client.fetchDocumentData(id, format: format)
+      let name = RFCEditorEndpoints.document(id, format: format).lastPathComponent
+      let file = try await Self.writeToDownloads(data, named: name)
+      DistributedNotificationCenter.default().post(
+        name: Notification.Name("com.apple.DownloadFileFinished"), object: file.path)
+    }
+
+    /// Off the main actor: a PDF is a few megabytes to write.
+    @concurrent
+    private nonisolated static func writeToDownloads(_ data: Data, named name: String) async throws
+      -> URL
+    {
+      let files = FileManager.default
+      let downloads = try files.url(
+        for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      let unique = DownloadName.unique(name) {
+        files.fileExists(atPath: downloads.appending(path: $0).path)
+      }
+      let file = downloads.appending(path: unique)
+      try data.write(to: file, options: .withoutOverwriting)
+      return file
+    }
+  #endif
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)

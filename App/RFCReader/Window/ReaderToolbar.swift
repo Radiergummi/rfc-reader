@@ -15,6 +15,7 @@
     static let rfcMore = NSToolbarItem.Identifier("rfc.more")
     static let rfcPanelSeparator = NSToolbarItem.Identifier("rfc.panelSeparator")
     static let rfcPanelToggle = NSToolbarItem.Identifier("rfc.panelToggle")
+    static let rfcInfoToggle = NSToolbarItem.Identifier("rfc.infoToggle")
   }
 
   /// `NSToolbarItem.minSize` and `maxSize`, reached without the deprecation warning
@@ -391,10 +392,12 @@
         // what holds the actions against the panel's edge.
         .rfcNavigation, .rfcDocumentTitle,
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
-        // The panel's own section. The flexible space holds the toggle against
-        // the window's trailing corner, so it stays in the corner whether the
+        // The panel's own section. The flexible space holds the toggles against
+        // the window's trailing corner, so they stay in the corner whether the
         // panel is showing or not rather than travelling with the panel's edge.
-        .rfcPanelSeparator, .flexibleSpace, .rfcPanelToggle,
+        // Two, as Pages has Format and Document: each shows its own pane in the
+        // one panel (#25).
+        .rfcPanelSeparator, .flexibleSpace, .rfcInfoToggle, .rfcPanelToggle,
       ]
     }
 
@@ -509,6 +512,9 @@
         return button(
           identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
 
+      case .rfcInfoToggle:
+        return button(identifier, "Info", "info.circle", #selector(toggleInfo))
+
       default:
         return nil
       }
@@ -610,7 +616,8 @@
           item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
         }
         return id != nil
-      case NSToolbarItem.Identifier.rfcPanelToggle.rawValue:
+      case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
+        NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
       default:
         return id != nil
@@ -621,7 +628,8 @@
 
     @objc private func goBack() { navigation.goBack() }
     @objc private func goForward() { navigation.goForward() }
-    @objc private func togglePanel() { controller.togglePanel() }
+    @objc private func togglePanel() { controller.press(.navigation) }
+    @objc private func toggleInfo() { controller.press(.info) }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
 
     @objc private func toggleCollection(_ sender: NSMenuItem) {

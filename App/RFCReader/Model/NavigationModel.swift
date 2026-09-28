@@ -162,6 +162,14 @@ final class NavigationModel: Identifiable {
     open(RFCLink(id: id, section: section), in: index)
   }
 
+  /// Searches the whole library: a question asked from one document, such as a
+  /// keyword chosen in the Info pane (#25), is about every RFC, not about the
+  /// collection the list happens to show.
+  func search(_ text: String) {
+    sidebarSelection = .all
+    searchText = text
+  }
+
   /// A row picked in the document list.
   ///
   /// Unlike `open`, it leaves the filter alone. The row is in the list the reader
