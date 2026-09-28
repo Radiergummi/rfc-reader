@@ -127,6 +127,64 @@ struct UserDataTests {
     #expect(bookmarks.map(\.document) == [.rfc(9110)])
   }
 
+  /// V3 to V4 only adds the collections' tables: every existing row survives.
+  @Test func `a version 3 store migrates to version 4 without losing a row`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let read = Date(timeIntervalSince1970: 1_750_000_000)
+
+    do {
+      let previous = try ModelContainer(
+        for: Schema(versionedSchema: SchemaV3.self), configurations: ModelConfiguration(url: url))
+      let context = ModelContext(previous)
+      context.insert(SchemaV3.Bookmark(document: .rfc(9110), title: "HTTP Semantics"))
+      context.insert(
+        SchemaV3.ReadingPosition(
+          document: .rfc(9110), place: ReadingPlace(anchor: "section-8.3", offset: 4),
+          updatedAt: read))
+      try context.save()
+    }
+
+    let migrated = try UserData.container(configurations: ModelConfiguration(url: url))
+    let context = ModelContext(migrated)
+    #expect(try context.fetch(FetchDescriptor<Bookmark>()).map(\.document) == [.rfc(9110)])
+    let positions = try context.fetch(FetchDescriptor<ReadingPosition>())
+    #expect(positions.map(\.place) == [ReadingPlace(anchor: "section-8.3", offset: 4)])
+    #expect(try context.fetch(FetchDescriptor<DocumentCollection>()).isEmpty)
+    #expect(try context.fetch(FetchDescriptor<DocumentCollectionItem>()).isEmpty)
+  }
+
+  /// A constant default would give every row one identifier.
+  @Test func `two new collections get different identifiers`() {
+    let first = DocumentCollection(name: "HTTP/3", color: .blue, position: 1)
+    let second = DocumentCollection(name: "DNS", color: .green, position: 2)
+    #expect(first.identifier != second.identifier)
+  }
+
+  @Test func `a new store keeps a collection and its items`() throws {
+    let url = try temporaryStore()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let identifier: UUID
+    do {
+      let container = try UserData.container(configurations: ModelConfiguration(url: url))
+      let context = ModelContext(container)
+      let collection = DocumentCollection(name: "HTTP/3", color: .teal, position: 1)
+      identifier = collection.identifier
+      context.insert(collection)
+      context.insert(
+        DocumentCollectionItem(collection: identifier, document: .rfc(9114), position: 1))
+      try context.save()
+    }
+    let reopened = ModelContext(
+      try UserData.container(configurations: ModelConfiguration(url: url)))
+    let collections = try reopened.fetch(FetchDescriptor<DocumentCollection>())
+    #expect(collections.map(\.name) == ["HTTP/3"])
+    #expect(collections.map(\.color) == [.teal])
+    let items = try reopened.fetch(FetchDescriptor<DocumentCollectionItem>())
+    #expect(items.map(\.collectionIdentifier) == [identifier])
+    #expect(items.map(\.document) == [.rfc(9114)])
+  }
+
   // MARK: - Uniqueness
 
   /// With no unique constraint, two rows can name one document; the newest stays.
