@@ -73,41 +73,43 @@ public struct IndexSearch: Sendable {
         words.append(String(token))
         continue
       }
-      let key = parts[0].lowercased()
+      guard let qualifier = SearchQuery.Qualifier(spelling: parts[0]) else {
+        words.append(String(token))
+        continue
+      }
       let value = String(parts[1])
-      switch key {
-      case "wg", "group":
+      switch qualifier {
+      case .workingGroup:
         filters.workingGroup = value.lowercased()
-      case "author", "by":
+      case .author:
         filters.author = value.lowercased()
-      case "stream":
-        if let stream = Stream.allCases.first(where: {
-          $0.rawValue.lowercased() == value.lowercased()
-        }) {
+      case .stream:
+        if let stream = SearchQuery.stream(spelled: value) {
           filters.streams.insert(stream)
         }
-      case "status", "is":
-        switch value.lowercased() {
-        case "std", "standard", "standards":
-          filters.statuses.formUnion([.internetStandard, .draftStandard, .proposedStandard])
-        case "bcp": filters.statuses.insert(.bestCurrentPractice)
-        case "info", "informational": filters.statuses.insert(.informational)
-        case "exp", "experimental": filters.statuses.insert(.experimental)
-        case "historic": filters.statuses.insert(.historic)
-        case "current": filters.excludeObsolete = true
-        default: words.append(String(token))
+      case .status:
+        if let status = SearchQuery.StatusValue(spelling: value) {
+          if status.excludesObsolete {
+            filters.excludeObsolete = true
+          } else {
+            filters.statuses.formUnion(status.statuses)
+          }
+        } else {
+          words.append(String(token))
         }
-      case "year":
+      case .year:
         let bounds = value.split(separator: "-").compactMap { Int($0) }
         if bounds.count == 2 {
           filters.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
         } else if bounds.count == 1 {
           filters.yearRange = bounds[0]...bounds[0]
         }
-      case "has" where value.lowercased() == "xml":
-        filters.requiresXML = true
-      default:
-        words.append(String(token))
+      case .has:
+        if value.lowercased() == SearchQuery.xmlValue {
+          filters.requiresXML = true
+        } else {
+          words.append(String(token))
+        }
       }
     }
     return (words.joined(separator: " "), filters)
