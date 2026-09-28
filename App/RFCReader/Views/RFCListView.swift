@@ -93,7 +93,8 @@ struct RFCListView: View {
         // check its spelling.
         if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
           ContentUnavailableView(
-            "No \(navigation.filter.title)", systemImage: navigation.filter.systemImage)
+            "No \(library.title(for: navigation.filter))",
+            systemImage: navigation.filter.systemImage)
         } else {
           ContentUnavailableView.search(text: navigation.searchText)
         }
@@ -117,13 +118,15 @@ struct RFCListView: View {
       limit = max(limit, ListWindow.initialLimit(covering: selectedRow()))
     }
     #if !os(macOS)
-      .navigationTitle(navigation.filter.title)
+      .navigationTitle(library.title(for: navigation.filter))
       .navigationSubtitle(library.listSubtitle(for: navigation))
       // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
       // under it whenever the list was short enough not to scroll.
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
-      .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
+      .searchable(
+        text: $navigation.searchText, prompt: "Search \(library.title(for: navigation.filter))"
+      )
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }

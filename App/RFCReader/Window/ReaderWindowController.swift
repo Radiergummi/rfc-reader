@@ -232,7 +232,7 @@
     private func observeTitle() {
       withObservationTracking {
         // Still set on the window, because the tab bar reads it from there.
-        let title = navigation.selection?.displayName ?? navigation.filter.title
+        let title = navigation.selection?.displayName ?? library.title(for: navigation.filter)
         // The prose title, where macOS has room for it — truncated, because a tab
         // is far narrower than the window and clips rather than eliding.
         let subtitle =
@@ -269,7 +269,7 @@
     private func observeListTitle() {
       withObservationTracking {
         toolbar?.showTitle(
-          navigation.filter.title,
+          library.title(for: navigation.filter),
           subtitle: library.listSubtitle(for: navigation)
         )
       } onChange: { [weak self] in

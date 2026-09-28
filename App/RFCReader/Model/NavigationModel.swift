@@ -47,6 +47,11 @@ final class NavigationModel: Identifiable {
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
+  /// The collection sheet on show, if any: creating one — perhaps to add a document
+  /// to — or editing one (#349). On the model rather than a view's state so the
+  /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
+  /// it, and the one view that presents it is in the window.
+  var collectionEditor: CollectionEditorMode?
 
   /// The library the list is computed from, and which the inputs below are taken
   /// from on entering a filter.
@@ -91,6 +96,19 @@ final class NavigationModel: Identifiable {
         guard newValue != nil else { return }
       #endif
       filterChoice.selection = newValue
+    }
+  }
+
+  /// Leaves a collection that no longer exists (#349). A cleared selection stays
+  /// cleared, so a collapsed sidebar does not push a list; a shown one moves to the
+  /// fallback.
+  func keepFilter(in snapshot: CollectionSnapshot) {
+    let kept = KeptFilter.filter(filter, keeping: snapshot)
+    guard kept != filter else { return }
+    if filterChoice.selection == nil {
+      filterChoice.replaceValue(kept)
+    } else {
+      sidebarSelection = kept
     }
   }
 

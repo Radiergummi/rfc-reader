@@ -179,7 +179,7 @@ struct SidebarView: View {
 
   private func row(_ filter: LibraryFilter) -> some View {
     HStack {
-      Label(filter.title, systemImage: filter.systemImage)
+      Label(library.title(for: filter), systemImage: filter.systemImage)
       #if !os(macOS)
         Spacer()
         // Written out rather than `.badge`, which would draw after the chevron.

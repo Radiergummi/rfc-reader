@@ -25,7 +25,7 @@ import SwiftUI
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
-      navigation.selection?.displayName ?? navigation.filter.title
+      navigation.selection?.displayName ?? library.title(for: navigation.filter)
     }
 
     var body: some View {
