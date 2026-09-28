@@ -316,9 +316,11 @@ struct SettingsView: View {
 }
 
 private struct ReadingSettings: View {
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
-  @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
 
   /// A toggle over the preference rather than a picker: there are two choices,
   /// and one of them is the default the reader opts out of.
@@ -345,7 +347,8 @@ private struct ReadingSettings: View {
 }
 
 private struct GeneralSettings: View {
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
+    ReaderPreferences.defaultPreferOriginalText
 
   var body: some View {
     Form {

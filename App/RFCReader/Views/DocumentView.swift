@@ -25,10 +25,13 @@ struct DocumentView: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
   #endif
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
-  @AppStorage("underlineLinks") private var underlineLinks = false
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
+    ReaderPreferences.defaultPreferOriginalText
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -140,8 +143,8 @@ struct DocumentView: View {
 
     var style: ReadingStyle? {
       column.map {
-        ReadingStyle(
-          bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
+        ReaderPreferences.style(
+          fontSize: fontSize, underlineLinks: underlineLinks, column: $0, textSize: textSize)
       }
     }
   }

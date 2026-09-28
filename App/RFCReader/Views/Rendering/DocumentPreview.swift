@@ -20,11 +20,13 @@ struct DocumentPreview: View {
 
   static let size = CGSize(width: 560, height: 620)
 
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
   /// The reader's own preference, so the preview's build and its text view agree
   /// on the column, as `DocumentView` and the reader's do (#32).
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?
@@ -105,7 +107,8 @@ struct DocumentPreview: View {
       let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
       let built = await DocumentView.build(
         document,
-        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
+        style: ReaderPreferences.style(
+          fontSize: fontSize, underlineLinks: underlineLinks, column: column))
       loaded = Loaded(
         document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
       // Resolved the way the reader resolves a jump, so the preview opens where a
