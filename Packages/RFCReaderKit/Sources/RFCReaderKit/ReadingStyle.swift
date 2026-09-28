@@ -63,13 +63,13 @@ public struct ReadingStyle: Sendable, Equatable {
   public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
   public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
 
-  /// Strong text in `surrounding`: a step heavier than it and at least bold, at
-  /// its size and slant. A bold trait added to the face is not enough — on a
-  /// semibold face, which is what a heading is, it changes nothing, and strong
-  /// text would read the same as the heading around it.
+  /// Strong text in `surrounding`: bold, or heavy where the surrounding text is
+  /// already bold, at its size and slant. A bold trait added to the face is not
+  /// enough — on a semibold face, which is what a heading is, it changes nothing,
+  /// and strong text would read the same as the heading around it.
   public func strongFont(matching surrounding: PlatformFont) -> PlatformFont {
-    let heavier = Self.heavier(than: surrounding.weight)
-    let weight = heavier.rawValue > PlatformFont.Weight.bold.rawValue ? heavier : .bold
+    let isBold = surrounding.weight.rawValue >= PlatformFont.Weight.bold.rawValue - 0.05
+    let weight: PlatformFont.Weight = isBold ? .heavy : .bold
     let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
     return PlatformFont.systemFont(ofSize: surrounding.pointSize, weight: weight)
       .adding(traits: slant)
@@ -117,14 +117,6 @@ public struct ReadingStyle: Sendable, Equatable {
         }
     #endif
     return .systemFont(ofSize: bodySize * ratio, weight: .semibold)
-  }
-
-  /// One step up the weights the reader uses: regular to semibold, semibold to
-  /// bold, bold to heavy.
-  private static func heavier(than weight: PlatformFont.Weight) -> PlatformFont.Weight {
-    if weight.rawValue >= PlatformFont.Weight.bold.rawValue - 0.05 { return .heavy }
-    if weight.rawValue >= PlatformFont.Weight.semibold.rawValue - 0.05 { return .bold }
-    return .semibold
   }
 
   public var paragraphSpacing: CGFloat { bodySize * 0.7 }
