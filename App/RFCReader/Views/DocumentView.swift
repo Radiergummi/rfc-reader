@@ -417,13 +417,7 @@ struct DocumentView: View {
 
     private var citeMenu: some View {
       Menu {
-        ForEach(CitationStyle.allCases) { style in
-          Button(style.displayName) { copyCitation(style) }
-        }
-        Divider()
-        Button("Copy Link to Current Section") {
-          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-        }
+        MenuSections(sections: DocumentMenus.cite(), perform: perform)
       } label: {
         Label("Cite", systemImage: "quote.opening")
       }
@@ -441,22 +435,28 @@ struct DocumentView: View {
     /// What is used least: the original text, and the document's pages elsewhere.
     private var moreMenu: some View {
       Menu {
-        Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
-        }
-
-        Section {
-          Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
-          if let url = metadata?.errataURL {
-            Button("Errata") { systemOpenURL(url) }
-          }
-          Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
-          if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { systemOpenURL(draft) }
-          }
-        }
+        MenuSections(
+          sections: DocumentMenus.more(
+            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            precedingDraft: reader.precedingDraft),
+          perform: perform)
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// What an item of Cite or More does. Add to Collection's are
+    /// `AddToCollectionItems`' own.
+    private func perform(_ action: DocumentMenus.Action) {
+      switch action {
+      case .copyCitation(let style): copyCitation(style)
+      case .copySectionLink:
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+      case .toggleOriginalText: reader.showOriginal.toggle()
+      case .openInfoPage: systemOpenURL(RFCEditorEndpoints.infoPage(id))
+      case .openErrata(let url), .openPrecedingDraft(let url): systemOpenURL(url)
+      case .openDatatracker: systemOpenURL(RFCEditorEndpoints.datatracker(id))
+      case .toggleCollection, .newCollection: break
       }
     }
 

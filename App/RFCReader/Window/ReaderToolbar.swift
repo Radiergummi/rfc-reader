@@ -546,55 +546,31 @@
       let title = NSMenuItem()
       title.isHidden = true
       menu.addItem(title)
+      let sections: DocumentMenus.Sections
       switch menu {
       case citeMenu:
-        for style in CitationStyle.allCases {
-          let item = NSMenuItem(
-            title: style.displayName, action: #selector(copyCitation), keyEquivalent: "")
-          item.target = self
-          item.representedObject = style
-          menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        add(to: menu, "Copy Link to Current Section", #selector(copySectionLink))
-
+        sections = DocumentMenus.cite()
       case moreMenu:
-        let original = NSMenuItem(
-          title: "Original Text", action: #selector(toggleOriginalText), keyEquivalent: "")
-        original.target = self
-        original.state = reader.showOriginal ? .on : .off
-        menu.addItem(original)
-        add(to: menu, "Open on rfc-editor.org", #selector(openInfoPage))
-        if metadata?.errataURL != nil {
-          add(to: menu, "Errata", #selector(openErrata))
-        }
-        add(to: menu, "Datatracker", #selector(openDatatracker))
-        if reader.precedingDraft != nil {
-          add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
-        }
-
+        sections = DocumentMenus.more(
+          showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+          precedingDraft: reader.precedingDraft)
       case collectionMenu:
-        let containing = id.map { library.collections.collections(containing: $0) } ?? []
-        for entry in library.collections.collections {
+        guard let id else { return }
+        sections = DocumentMenus.addToCollection(id, in: library.collections)
+      default:
+        return
+      }
+      for (index, items) in sections.enumerated() {
+        if index > 0 { menu.addItem(.separator()) }
+        for entry in items {
           let item = NSMenuItem(
-            title: entry.name, action: #selector(toggleCollection), keyEquivalent: "")
+            title: entry.title, action: #selector(performMenuAction), keyEquivalent: "")
           item.target = self
-          item.representedObject = entry.id
-          item.state = containing.contains(entry.id) ? .on : .off
+          item.representedObject = entry.action
+          if let isOn = entry.isOn { item.state = isOn ? .on : .off }
           menu.addItem(item)
         }
-        if !library.collections.collections.isEmpty { menu.addItem(.separator()) }
-        add(to: menu, "New Collection…", #selector(newCollection))
-
-      default:
-        break
       }
-    }
-
-    private func add(to menu: NSMenu, _ title: String, _ action: Selector) {
-      let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-      item.target = self
-      menu.addItem(item)
     }
 
     // MARK: - Validation
@@ -632,48 +608,32 @@
     @objc private func toggleInfo() { controller.press(.info) }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
 
-    @objc private func toggleCollection(_ sender: NSMenuItem) {
-      guard let document = id, let collection = sender.representedObject as? UUID else { return }
-      library.editCollections {
-        try CollectionStore.toggle(
-          document, in: collection, undoManager: controller.window?.undoManager, in: $0)
+    /// What an item of Cite, More or Add to Collection does.
+    @objc private func performMenuAction(_ sender: NSMenuItem) {
+      guard let id, let action = sender.representedObject as? DocumentMenus.Action else { return }
+      switch action {
+      case .copyCitation(let style):
+        guard let metadata else { return }
+        Clipboard.copy(
+          DocumentActions.citation(metadata, section: reader.currentSection, style: style))
+      case .copySectionLink:
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+      case .toggleOriginalText:
+        reader.showOriginal.toggle()
+      case .openInfoPage:
+        NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
+      case .openErrata(let url), .openPrecedingDraft(let url):
+        NSWorkspace.shared.open(url)
+      case .openDatatracker:
+        NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
+      case .toggleCollection(let collection):
+        library.editCollections {
+          try CollectionStore.toggle(
+            id, in: collection, undoManager: controller.window?.undoManager, in: $0)
+        }
+      case .newCollection:
+        navigation.collectionEditor = .create(adding: id)
       }
-    }
-
-    @objc private func newCollection() {
-      navigation.collectionEditor = .create(adding: id)
-    }
-    @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
-
-    @objc private func copyCitation(_ sender: NSMenuItem) {
-      guard let metadata, let style = sender.representedObject as? CitationStyle else { return }
-      Clipboard.copy(
-        DocumentActions.citation(metadata, section: reader.currentSection, style: style))
-    }
-
-    @objc private func copySectionLink() {
-      guard let id else { return }
-      Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-    }
-
-    @objc private func openInfoPage() {
-      guard let id else { return }
-      NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
-    }
-
-    @objc private func openErrata() {
-      guard let url = metadata?.errataURL else { return }
-      NSWorkspace.shared.open(url)
-    }
-
-    @objc private func openDatatracker() {
-      guard let id else { return }
-      NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
-    }
-
-    @objc private func openPrecedingDraft() {
-      guard let draft = reader.precedingDraft else { return }
-      NSWorkspace.shared.open(draft)
     }
   }
 
