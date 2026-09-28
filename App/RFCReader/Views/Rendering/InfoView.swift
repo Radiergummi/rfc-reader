@@ -36,6 +36,10 @@ struct InfoView: View {
           }
         }
         .padding(16)
+        #if !os(macOS)
+          // Clear of the sheet's rounded top edge and its grabber.
+          .padding(.top, 16)
+        #endif
         .frame(maxWidth: .infinity, alignment: .leading)
       }
     } else {
@@ -47,10 +51,10 @@ struct InfoView: View {
     VStack(alignment: .leading, spacing: 10) {
       VStack(alignment: .leading, spacing: 4) {
         Text(info.number)
-          .font(.subheadline.weight(.medium))
+          .font(.infoNumber)
           .foregroundStyle(.secondary)
         Text(info.title)
-          .font(.title3.weight(.semibold))
+          .font(.infoTitle)
           .fixedSize(horizontal: false, vertical: true)
           .textSelection(.enabled)
       }
@@ -79,7 +83,7 @@ private struct StandingBox: View {
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(color)
       Text(summary)
-        .font(.caption)
+        .font(.infoCaption)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -104,11 +108,11 @@ private struct FactStrip: View {
         }
         VStack(spacing: 2) {
           Text(fact.value)
-            .font(.headline)
+            .font(.infoFact)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
           Text(fact.label)
-            .font(.caption2)
+            .font(.infoFactCaption)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -128,10 +132,8 @@ private struct InfoSection<Content: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      // Semibold, not `.headline`'s bold: against the pane's regular text and its
-      // cards, bold section titles outweighed what they head.
       Text(title)
-        .font(.body.weight(.semibold))
+        .font(.infoHeading)
         .accessibilityAddTraits(.isHeader)
       content
     }
@@ -208,7 +210,7 @@ private struct SectionRows: View {
   private func caption(_ label: String) -> some View {
     if !label.isEmpty {
       Text(label)
-        .font(.caption)
+        .font(.infoCaption)
         .foregroundStyle(.secondary)
     }
   }
@@ -372,7 +374,7 @@ private struct LinkRow: View {
         Text(row.label)
         if let detail {
           Text(detail)
-            .font(.caption)
+            .font(.infoCaption)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .truncationMode(.middle)
@@ -467,5 +469,62 @@ private struct OfflineSection: View {
       }
       isWorking = false
     }
+  }
+}
+
+/// The pane's type, a size larger on iOS. The Mac's inspector is a narrow column of
+/// 13 pt text, where a `.title3` title already stands out; an iPhone's sheet is the
+/// width of the screen, where the same styles read small beside the rest of iOS,
+/// whose item pages (the App Store's, Books') set the name in `.title2` bold and
+/// their section headings in `.title3`.
+extension Font {
+  fileprivate static var infoNumber: Font {
+    #if os(macOS)
+      .subheadline.weight(.medium)
+    #else
+      .headline
+    #endif
+  }
+
+  fileprivate static var infoTitle: Font {
+    #if os(macOS)
+      .title3.weight(.semibold)
+    #else
+      .title2.bold()
+    #endif
+  }
+
+  /// Semibold, not bold, on the Mac: against the pane's regular text and its cards,
+  /// bold section headings outweighed what they head.
+  fileprivate static var infoHeading: Font {
+    #if os(macOS)
+      .body.weight(.semibold)
+    #else
+      .title3.weight(.semibold)
+    #endif
+  }
+
+  fileprivate static var infoFact: Font {
+    #if os(macOS)
+      .headline
+    #else
+      .title3.weight(.semibold)
+    #endif
+  }
+
+  fileprivate static var infoFactCaption: Font {
+    #if os(macOS)
+      .caption2
+    #else
+      .caption
+    #endif
+  }
+
+  fileprivate static var infoCaption: Font {
+    #if os(macOS)
+      .caption
+    #else
+      .footnote
+    #endif
   }
 }
