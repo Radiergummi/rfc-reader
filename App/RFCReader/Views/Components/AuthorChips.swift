@@ -33,10 +33,16 @@ private struct AuthorChip: View {
       }
       .buttonStyle(.plain)
       .help("Show contact details")
-      .popover(isPresented: $showsCard) {
-        ContactCard(contact: AuthorCard.contact(for: author))
+      #if os(macOS)
+        .popover(isPresented: $showsCard) {
+          ContactCard(contact: AuthorCard.contact(for: author))
           .frame(minWidth: 320, idealWidth: 340, minHeight: 480, idealHeight: 540)
-      }
+        }
+      #else
+        .background {
+          ContactCardPresenter(isPresented: $showsCard, author: author)
+        }
+      #endif
     } else {
       label
     }
@@ -135,19 +141,93 @@ private struct WrappingRowLayout: Layout {
     func updateNSViewController(_ card: CNContactViewController, context: Context) {}
   }
 #else
-  private struct ContactCard: UIViewControllerRepresentable {
-    let contact: CNMutableContact
+  /// Presents the card from UIKit: a popover on an iPad, a sheet on an iPhone.
+  ///
+  /// On an iPhone the sheet cannot be swiped away by its card. Contacts draws the
+  /// card in its own process, and every touch on it goes there: none of this
+  /// process's gesture recognizers sees one, the sheet's pan included, and the
+  /// card reaches over the sheet's grabber. That is so however the card is
+  /// presented — SwiftUI popover, UIKit popover, page sheet — and Notes does the
+  /// same on iOS 27. Without its navigation controller the card does not appear.
+  /// A drag that starts on a view of this process does reach the sheet, so the
+  /// card gets a strip of one across its top, the one place it can be swiped from.
+  private struct ContactCardPresenter: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    let author: Author
 
-    /// In a navigation controller, which is where the card's own actions — Create
-    /// New Contact, Add to Existing Contact — push their screens.
-    func makeUIViewController(context: Context) -> UINavigationController {
-      let card = CNContactViewController(forUnknownContact: contact)
+    func makeUIViewController(context: Context) -> UIViewController {
+      UIViewController()
+    }
+
+    func updateUIViewController(_ anchor: UIViewController, context: Context) {
+      context.coordinator.isPresented = $isPresented
+      guard isPresented, anchor.presentedViewController == nil else { return }
+
+      let card = CNContactViewController(forUnknownContact: AuthorCard.contact(for: author))
       card.allowsEditing = false
       // Without a store the card hides its own add actions.
       card.contactStore = CNContactStore()
-      return UINavigationController(rootViewController: card)
+      // A card for an unknown contact has no Done button of its own.
+      card.navigationItem.rightBarButtonItem = UIBarButtonItem(
+        systemItem: .close,
+        primaryAction: UIAction { [weak anchor] _ in
+          anchor?.dismiss(animated: true)
+          isPresented = false
+        })
+
+      // In a navigation controller, which is where the card's own actions — Create
+      // New Contact, Add to Existing Contact — push their screens.
+      let navigation = UINavigationController(rootViewController: card)
+      navigation.modalPresentationStyle = .popover
+      let handle = UIView()
+      handle.translatesAutoresizingMaskIntoConstraints = false
+      // Below the bar, which passes a touch through wherever it has no button, so
+      // Close still wins.
+      navigation.view.insertSubview(handle, belowSubview: navigation.navigationBar)
+      NSLayoutConstraint.activate([
+        handle.topAnchor.constraint(equalTo: navigation.view.topAnchor),
+        handle.leadingAnchor.constraint(equalTo: navigation.view.leadingAnchor),
+        handle.trailingAnchor.constraint(equalTo: navigation.view.trailingAnchor),
+        handle.bottomAnchor.constraint(equalTo: navigation.navigationBar.bottomAnchor),
+      ])
+      navigation.preferredContentSize = CGSize(width: 340, height: 540)
+      navigation.popoverPresentationController?.sourceView = anchor.view
+      navigation.delegate = context.coordinator
+      navigation.presentationController?.delegate = context.coordinator
+      anchor.present(navigation, animated: true)
     }
 
-    func updateUIViewController(_ navigation: UINavigationController, context: Context) {}
+    func makeCoordinator() -> Coordinator {
+      Coordinator(isPresented: $isPresented)
+    }
+
+    /// Hears a swipe or a tap outside end the presentation, so the chip can open
+    /// the card again, and dresses the navigation bar for the screen beneath it.
+    final class Coordinator: NSObject, UIAdaptivePresentationControllerDelegate,
+      UINavigationControllerDelegate
+    {
+      var isPresented: Binding<Bool>
+
+      init(isPresented: Binding<Bool>) {
+        self.isPresented = isPresented
+      }
+
+      func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        isPresented.wrappedValue = false
+      }
+
+      /// The card draws its poster in dark style, but only inside its own view; the
+      /// bar is the navigation controller's, and left alone its Close button is
+      /// light glass with a dark glyph over the poster, where Apple's is clear with
+      /// a white one. The screens the card pushes have ordinary backgrounds, so the
+      /// bar goes back to the app's own style for them.
+      func navigationController(
+        _ navigationController: UINavigationController, willShow viewController: UIViewController,
+        animated: Bool
+      ) {
+        navigationController.navigationBar.overrideUserInterfaceStyle =
+          viewController is CNContactViewController ? .dark : .unspecified
+      }
+    }
   }
 #endif
