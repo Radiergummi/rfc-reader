@@ -1,7 +1,7 @@
 import Foundation
 import RFCKit
 
-/// The document someone asks for by typing or scripting it: the Go to RFC sheet,
+/// The document someone asks for by typing or scripting it: Go to RFC,
 /// and `open rfc` in the scripting dictionary.
 public enum DocumentReference {
   /// A number (`9110`), a name (`"RFC 9110"`, `"BCP 14"`), or a link the app
