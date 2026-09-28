@@ -552,13 +552,16 @@ final class RFCTextViewCoordinator: NSObject {
     guard let library else { return nil }
     switch reference.target {
     case .document:
-      return ReferencePreview(reference: reference, library: library)
+      return ReferencePreview(
+        reference: reference, library: library, kind: bibliography.kind(of: reference.target))
     case .anchor(let anchor):
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
       return bibliography.entry(anchor: anchor).map {
-        ReferencePreview(reference: reference, library: library, entry: $0)
+        ReferencePreview(
+          reference: reference, library: library, entry: $0,
+          kind: bibliography.kind(of: reference.target))
       }
     }
   }

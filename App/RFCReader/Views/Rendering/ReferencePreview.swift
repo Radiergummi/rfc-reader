@@ -19,6 +19,10 @@ struct ReferencePreview: View {
   /// the entry shows beside its citation. The coordinator sets this or `heading`
   /// for an anchor, and shows no card when it has neither.
   var entry: Reference?
+  /// Whether the document cites it as part of the specification or as background
+  /// (#184), which the card says under its title. Nothing for `.unknown`: a list that
+  /// says neither, and every in-document reference.
+  var kind: ReferenceList.Kind = .unknown
 
   /// The card's fixed width, which the iOS preview is also sized at.
   static let width: CGFloat = 280
@@ -36,6 +40,7 @@ struct ReferencePreview: View {
           Spacer()
           StatusBadge(status: metadata.currentStatus)
         }
+        kindLine
         if let abstract = metadata.abstract {
           Text(abstract).font(.callout).foregroundStyle(.secondary).lineLimit(4)
         }
@@ -43,6 +48,7 @@ struct ReferencePreview: View {
         // Referenced but not in the library's index — an unpublished draft,
         // or a corpus gap. Never a blank card: name what we do know.
         Text(documentID.displayName).font(.headline)
+        kindLine
         Text("Not available in the library.").font(.callout).foregroundStyle(.secondary)
       } else if let heading {
         // A section of this document: "Section 4.2" says where, the heading
@@ -50,10 +56,23 @@ struct ReferencePreview: View {
         Text(heading).font(.headline)
       } else if let entry {
         entryDescription(entry)
+        kindLine
       }
     }
     .padding(12)
     .frame(width: Self.width, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private var kindLine: some View {
+    switch kind {
+    case .normative:
+      Text("Normative reference").font(.caption).foregroundStyle(.secondary)
+    case .informative:
+      Text("Informative reference").font(.caption).foregroundStyle(.secondary)
+    case .unknown:
+      EmptyView()
+    }
   }
 
   /// What the References panel shows for the entry, without its button: the tag
