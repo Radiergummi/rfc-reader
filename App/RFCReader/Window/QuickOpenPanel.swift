@@ -70,6 +70,11 @@
       setFrameOrigin(origin)
       parent.addChildWindow(self, ordered: .above)
       makeKeyAndOrderFront(nil)
+      // The field takes the keyboard here, not from SwiftUI: a `@FocusState` set as
+      // the palette appears lands before this panel is key, and is dropped. The
+      // field only exists as a view once the hosting view has laid out.
+      contentView?.layoutSubtreeIfNeeded()
+      if let contentView { selectKeyView(following: contentView) }
     }
 
     /// Esc, whether or not SwiftUI's field saw it first.

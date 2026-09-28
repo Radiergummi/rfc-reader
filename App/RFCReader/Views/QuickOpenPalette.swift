@@ -20,7 +20,6 @@
 
     @State private var input = ""
     @State private var results = QuickOpenResults()
-    @FocusState private var isFocused: Bool
 
     static let width: CGFloat = 620
 
@@ -72,7 +71,6 @@
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { resolve(query) }
       .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
-      .onAppear { isFocused = true }
     }
 
     /// Said in place of rows, once there is something to say: not while a search is
@@ -93,7 +91,6 @@
         TextField("RFC number, BCP 14, or a link", text: text)
           .textFieldStyle(.plain)
           .font(.title2)
-          .focused($isFocused)
           .accessibilityLabel("Go to RFC")
           .onKeyPress(.upArrow) { moveSelection(by: -1) }
           .onKeyPress(.downArrow) { moveSelection(by: 1) }
