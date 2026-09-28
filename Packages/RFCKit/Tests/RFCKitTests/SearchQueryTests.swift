@@ -27,6 +27,8 @@ struct SearchQueryTests {
     "year:1997",
     "has:xml",
     "wg:httpbis status:std author:fielding year:2020-2022 has:xml status:current HTTP caching",
+    #"author:"Roy Fielding" semantics"#,
+    #""key words" status:bcp"#,
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
@@ -44,6 +46,14 @@ struct SearchQueryTests {
     #expect(
       SearchQuery.format(text: parsed.text, filters: parsed.filters)
         == "wg:httpbis status:std author:fielding year:2020-2022 cache")
+  }
+
+  /// A value with a space in it is written back in quotes, or it would read back as a
+  /// shorter value and a word of free text.
+  @Test func `a value with a space is written back in quotes`() {
+    let parsed = IndexSearch.parseQuery("author:\u{201C}Roy Fielding\u{201D}")
+    #expect(
+      SearchQuery.format(text: parsed.text, filters: parsed.filters) == #"author:"roy fielding""#)
   }
 
   @Test func `an empty query formats as nothing`() {
@@ -102,6 +112,13 @@ struct SearchQueryTests {
       try completions("stream:i") == [
         "stream:ietf", "stream:irtf", "stream:iab", "stream:independent",
       ])
+  }
+
+  /// Inside an open quote the word being typed is the quoted value, not what follows
+  /// its last space.
+  @Test func `a quoted value being typed is completed as one word`() throws {
+    #expect(try completions(#"cache by:"Roy s"#) == [])
+    #expect(try completions(#"cache wg:"http"#) == ["cache wg:httpbis"])
   }
 
   @Test func `a free-form value is offered nothing`() throws {
