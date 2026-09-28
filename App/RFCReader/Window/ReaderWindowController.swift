@@ -17,7 +17,7 @@
   /// controller is reconciled away (issue #34), and replacing a `WindowGroup` window's
   /// `contentViewController` makes SwiftUI destroy the window and open a replacement —
   /// measured at 24 windows in 0.9 s, in
-  /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`. The menu bar
+  /// `docs/decisions/2026-09-22-window-hijack-probe-results.md`. The menu bar
   /// is still SwiftUI's: a `Settings`-only scene keeps `.commands` working, so only
   /// window creation moved to AppKit.
   final class ReaderWindowController: NSWindowController, NSWindowDelegate {
@@ -391,7 +391,7 @@
       /// own frame must not change when the panel opens, and the panel's width must
       /// come back as a safe-area inset rather than as lost width. The readings this
       /// produced are written up in
-      /// `docs/superpowers/specs/2026-09-22-window-hijack-probe-results.md`.
+      /// `docs/decisions/2026-09-22-window-hijack-probe-results.md`.
       func logGeometry(_ label: String) {
         guard let window else { return }
         let readerView = readerItem.viewController.view
