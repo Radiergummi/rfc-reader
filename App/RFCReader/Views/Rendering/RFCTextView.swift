@@ -276,6 +276,7 @@ struct ReaderInputs {
 
       let host = NSHostingController(rootView: inputs.header)
       textView.addSubview(host.view)
+      textView.header = host.view
 
       let scroll = ReaderScrollView()
       scroll.documentView = textView

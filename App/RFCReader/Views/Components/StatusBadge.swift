@@ -5,29 +5,17 @@ struct StatusBadge: View {
   let status: PublicationStatus
 
   var body: some View {
-    Text(shortName)
+    Text(status.shortName)
       .font(.caption2.weight(.medium))
       .padding(.horizontal, 6)
       .padding(.vertical, 2)
-      .background(color.opacity(0.15), in: Capsule())
-      .foregroundStyle(color)
+      .background(Self.color(for: status).opacity(0.15), in: Capsule())
+      .foregroundStyle(Self.color(for: status))
       .accessibilityLabel(status.displayName)
   }
 
-  private var shortName: String {
-    switch status {
-    case .internetStandard: "STD"
-    case .draftStandard: "Draft STD"
-    case .proposedStandard: "Proposed"
-    case .bestCurrentPractice: "BCP"
-    case .informational: "Info"
-    case .experimental: "Experimental"
-    case .historic: "Historic"
-    case .unknown: "Unknown"
-    }
-  }
-
-  private var color: Color {
+  /// The status's tint, shared with the Info pane's status box.
+  static func color(for status: PublicationStatus) -> Color {
     switch status {
     case .internetStandard, .draftStandard: .green
     case .proposedStandard: .blue

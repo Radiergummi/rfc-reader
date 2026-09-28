@@ -100,10 +100,15 @@
     }
 
     @objc var scriptCollection: String {
-      get { controller?.navigation.filter.title ?? "" }
+      get { controller.map { LibraryModel.shared.title(for: $0.navigation.filter) } ?? "" }
       set {
-        let groups = Set(LibraryModel.shared.index?.rfcs.compactMap(\.workingGroup) ?? [])
-        guard let filter = LibraryFilter(scriptName: newValue, workingGroups: groups) else {
+        let library = LibraryModel.shared
+        let groups = Set(library.index?.rfcs.compactMap(\.workingGroup) ?? [])
+        guard
+          let filter = LibraryFilter(
+            scriptName: newValue, workingGroups: groups,
+            collections: library.collections.collections)
+        else {
           ScriptError.report("There is no collection named “\(newValue)”.")
           return
         }
@@ -140,8 +145,24 @@
 
     /// An enumeration's value crosses as its four-character code.
     @objc var scriptInspectorPane: FourCharCode {
-      get { controller?.reader.tab == .references ? ScriptCode.references : ScriptCode.contents }
-      set { controller?.reader.tab = newValue == ScriptCode.references ? .references : .contents }
+      get {
+        guard let reader = controller?.reader else { return ScriptCode.contents }
+        if reader.pane == .info { return ScriptCode.info }
+        return reader.tab == .references ? ScriptCode.references : ScriptCode.contents
+      }
+      set {
+        guard let reader = controller?.reader else { return }
+        switch newValue {
+        case ScriptCode.info:
+          reader.pane = .info
+        case ScriptCode.references:
+          reader.pane = .navigation
+          reader.tab = .references
+        default:
+          reader.pane = .navigation
+          reader.tab = .contents
+        }
+      }
     }
   }
 
@@ -230,6 +251,7 @@
   enum ScriptCode {
     static let contents = code("RIpC")
     static let references = code("RIpR")
+    static let info = code("RIpI")
     static let newTab = code("RPnT")
     static let newWindow = code("RPnW")
 

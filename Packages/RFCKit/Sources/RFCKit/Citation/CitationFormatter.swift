@@ -87,7 +87,7 @@ public struct CitationFormatter: Sendable {
       return "\(surname), \(initials)\(roleSuffix(author))"
     }
     func roleSuffix(_ author: Author) -> String {
-      author.role?.lowercased().hasPrefix("ed") == true ? ", Ed." : ""
+      author.isEditor ? ", Ed." : ""
     }
     switch authors.count {
     case 0: return "IETF"

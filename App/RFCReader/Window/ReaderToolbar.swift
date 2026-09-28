@@ -15,6 +15,7 @@
     static let rfcMore = NSToolbarItem.Identifier("rfc.more")
     static let rfcPanelSeparator = NSToolbarItem.Identifier("rfc.panelSeparator")
     static let rfcPanelToggle = NSToolbarItem.Identifier("rfc.panelToggle")
+    static let rfcInfoToggle = NSToolbarItem.Identifier("rfc.infoToggle")
   }
 
   /// `NSToolbarItem.minSize` and `maxSize`, reached without the deprecation warning
@@ -333,6 +334,8 @@
     /// the document, and the document changes under them.
     private let citeMenu = NSMenu()
     private let moreMenu = NSMenu()
+    /// Add to Collection, on the Bookmark item's indicator (#349).
+    private let collectionMenu = NSMenu()
 
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
@@ -343,6 +346,7 @@
       self.controller = controller
       super.init()
       citeMenu.delegate = self
+      collectionMenu.delegate = self
       moreMenu.delegate = self
     }
 
@@ -388,10 +392,12 @@
         // what holds the actions against the panel's edge.
         .rfcNavigation, .rfcDocumentTitle,
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
-        // The panel's own section. The flexible space holds the toggle against
-        // the window's trailing corner, so it stays in the corner whether the
+        // The panel's own section. The flexible space holds the toggles against
+        // the window's trailing corner, so they stay in the corner whether the
         // panel is showing or not rather than travelling with the panel's edge.
-        .rfcPanelSeparator, .flexibleSpace, .rfcPanelToggle,
+        // Two, as Pages has Format and Document: each shows its own pane in the
+        // one panel (#25).
+        .rfcPanelSeparator, .flexibleSpace, .rfcInfoToggle, .rfcPanelToggle,
       ]
     }
 
@@ -470,7 +476,15 @@
         return item
 
       case .rfcBookmark:
-        return button(identifier, "Bookmark", "bookmark", #selector(toggleBookmark))
+        // A click bookmarks; the indicator opens Add to Collection (#349).
+        let item = NSMenuToolbarItem(itemIdentifier: identifier)
+        item.label = "Bookmark"
+        item.image = NSImage(systemSymbolName: "bookmark", accessibilityDescription: "Bookmark")
+        item.showsIndicator = true
+        item.target = self
+        item.action = #selector(toggleBookmark)
+        item.menu = collectionMenu
+        return item
 
       case .rfcCite:
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
@@ -497,6 +511,9 @@
       case .rfcPanelToggle:
         return button(
           identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
+
+      case .rfcInfoToggle:
+        return button(identifier, "Info", "info.circle", #selector(toggleInfo))
 
       default:
         return nil
@@ -555,6 +572,20 @@
           add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
         }
 
+      case collectionMenu:
+        let library = LibraryModel.shared
+        let containing = id.map { library.collections.collections(containing: $0) } ?? []
+        for entry in library.collections.collections {
+          let item = NSMenuItem(
+            title: entry.name, action: #selector(toggleCollection), keyEquivalent: "")
+          item.target = self
+          item.representedObject = entry.id
+          item.state = containing.contains(entry.id) ? .on : .off
+          menu.addItem(item)
+        }
+        if !library.collections.collections.isEmpty { menu.addItem(.separator()) }
+        add(to: menu, "New Collection…", #selector(newCollection))
+
       default:
         break
       }
@@ -585,7 +616,8 @@
           item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
         }
         return id != nil
-      case NSToolbarItem.Identifier.rfcPanelToggle.rawValue:
+      case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
+        NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
       default:
         return id != nil
@@ -596,8 +628,21 @@
 
     @objc private func goBack() { navigation.goBack() }
     @objc private func goForward() { navigation.goForward() }
-    @objc private func togglePanel() { controller.togglePanel() }
+    @objc private func togglePanel() { controller.press(.navigation) }
+    @objc private func toggleInfo() { controller.press(.info) }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
+
+    @objc private func toggleCollection(_ sender: NSMenuItem) {
+      guard let document = id, let collection = sender.representedObject as? UUID else { return }
+      LibraryModel.shared.editCollections {
+        try CollectionStore.toggle(
+          document, in: collection, undoManager: controller.window?.undoManager, in: $0)
+      }
+    }
+
+    @objc private func newCollection() {
+      navigation.collectionEditor = .create(adding: id)
+    }
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
 
     @objc private func copyCitation(_ sender: NSMenuItem) {

@@ -15,11 +15,15 @@ public struct PreparedIndex: Sendable {
   /// The working groups with the most RFCs, most first and equal counts by name, for
   /// the sidebar.
   public let topWorkingGroups: [String]
+  /// How many RFCs each filter the index decides lists, for the sidebar's rows
+  /// (#344). A filter nothing is in has no entry.
+  public let counts: [LibraryFilter: Int]
 
   public init(index: RFCIndex) {
     self.index = index
     self.search = IndexSearch(index: index)
     self.topWorkingGroups = Self.workingGroups(in: index)
+    self.counts = Self.counts(in: index)
   }
 
   /// Parses the index as the RFC Editor serves it, and prepares it.
@@ -38,5 +42,21 @@ public struct PreparedIndex: Sendable {
       lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key
     }
     return ranked.prefix(12).map(\.key)
+  }
+
+  /// One pass over the index, asking each RFC only about the filters it could be
+  /// in: every fixed one, and the stream and working group it names.
+  private static func counts(in index: RFCIndex) -> [LibraryFilter: Int] {
+    var counts: [LibraryFilter: Int] = [:]
+    for rfc in index.rfcs {
+      var candidates: [LibraryFilter] = [
+        .all, .standards, .bestCurrentPractice, .stream(rfc.stream),
+      ]
+      if let group = rfc.workingGroup { candidates.append(.workingGroup(group)) }
+      for filter in candidates where filter.includes(rfc) == true {
+        counts[filter, default: 0] += 1
+      }
+    }
+    return counts
   }
 }

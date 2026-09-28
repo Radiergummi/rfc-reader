@@ -29,6 +29,7 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 - **Everything is a link.** `[RFC2119]`, `Section 4.2`, `Section 3 of [RFC9000]`, `Figure 1`, `https://` — all tappable, all in-app, with a peek before you commit.
 - **Truth about status.** The first thing a reader sees is whether the document is current, updated, obsoleted or has errata.
 - **Offline by default.** The index and everything you have opened stays on device. Sync the user's own data through iCloud, never their reading history to us.
+- **Kind to metered and poor connections.** Never spend bandwidth on something nobody is waiting for: a download the reader has walked away from is cancelled, not finished in the background.
 - **Native on every platform.** One SwiftUI code base. Real menu bar commands and keyboard shortcuts on Mac, Split View and Pencil on iPad, Handoff and Spotlight everywhere.
 
 ## Feature set, in tiers
@@ -113,9 +114,9 @@ Ideas from the first brainstorm session and where each one lands.
 
 | What | URL | Notes |
 |---|---|---|
-| Full index | `https://www.rfc-editor.org/rfc-index.xml` | ~14 MB, ~9,850 RFCs plus BCP/STD/FYI groups; parses in about a second |
+| Full index | `https://www.rfc-editor.org/rfc-index.xml` | ~14 MB, 9,842 RFCs (counts dated in `DATA_PIPELINE.md`) plus BCP/STD/FYI groups; parses in about a second |
 | Document, semantic | `https://www.rfc-editor.org/rfc/rfcNNNN.xml` | RFCXML v3; available for ~1,400 RFCs (roughly 8650 onwards) |
-| Document, text | `https://www.rfc-editor.org/rfc/rfcNNNN.txt` | Available for every RFC |
+| Document, text | `https://www.rfc-editor.org/rfc/rfcNNNN.txt` | Available for every RFC but a few early ones published only as PDF (#207) |
 | Per-RFC metadata | `https://www.rfc-editor.org/rfc/rfcNNNN.json` | Small; status, obsoletes, updates, errata URL |
 | Recently published | `https://www.rfc-editor.org/rfcrss.xml` | RSS, cheap to poll |
 | Errata | `https://www.rfc-editor.org/errata.json` | ~12 MB, every erratum with section and original/corrected text |

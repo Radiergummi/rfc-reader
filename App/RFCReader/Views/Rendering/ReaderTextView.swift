@@ -72,6 +72,36 @@ import RFCReaderKit
       super.quickLook(with: event)
     }
 
+    /// The hosted header in the top inset. Named rather than found among the
+    /// subviews, because TextKit 2 keeps its own fragment views there.
+    weak var header: NSView?
+
+    /// The text view sets the I-beam over its whole bounds — over the header's
+    /// author chips too, which are buttons, and its title, which cannot be selected.
+    /// Over the header the pointer is the arrow. Both overrides are needed: a cursor
+    /// update the hosting view does not handle arrives here through the responder
+    /// chain, and every move resets it.
+    override func cursorUpdate(with event: NSEvent) {
+      guard !isOverHeader(event) else {
+        NSCursor.arrow.set()
+        return
+      }
+      super.cursorUpdate(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+      guard !isOverHeader(event) else {
+        NSCursor.arrow.set()
+        return
+      }
+      super.mouseMoved(with: event)
+    }
+
+    private func isOverHeader(_ event: NSEvent) -> Bool {
+      guard let header else { return false }
+      return header.frame.contains(convert(event.locationInWindow, from: nil))
+    }
+
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
     /// own tracking loop and does not return until the button is up. A click that
     /// starts on a reference is tracked here instead.

@@ -52,7 +52,7 @@
       return true
     }
 
-    /// `rfc://9110/section/4.2`, plus rfc-editor.org and datatracker links handed over
+    /// `rfc://9110#section-4.2`, plus rfc-editor.org and datatracker links handed over
     /// by the share sheet.
     ///
     /// This was `onOpenURL` on the scene. With no `WindowGroup` there is no scene to
