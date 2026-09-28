@@ -157,6 +157,9 @@ final class RFCTextViewCoordinator: NSObject {
     /// references to the same target are still two hovers.
     private var hoveredBox: ReferenceBox?
     private var popover: NSPopover?
+    /// The popover up is a document preview (#29), which the pointer is meant to
+    /// travel into — unlike a card, which leaving the reference closes.
+    private var isShowingDocumentPreview = false
     /// The reference a force click just previewed, whose own mouse-up must not
     /// follow it: see `clickedOnLink`. The next mouse-down starts a click of its
     /// own, and forgets it.
@@ -619,9 +622,7 @@ final class RFCTextViewCoordinator: NSObject {
       // otherwise open over the document the click is leaving.
       cancelHover()
       linkClickPointer = NSEvent.mouseLocation
-      guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else {
-        return false
-      }
+      guard let url = Self.url(fromLink: link) else { return false }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)
@@ -724,8 +725,11 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     private func hover(atWindowPoint point: NSPoint) {
-      // A preview previews nothing itself: a card over a card over the reader.
-      guard commitsOnClick == nil, let (box, range) = reference(atWindowPoint: point) else {
+      // A preview previews nothing itself: a card over a card over the reader. And
+      // a document preview is to be read and scrolled, so the pointer leaving the
+      // reference on its way there must not close it, as it does a card.
+      guard commitsOnClick == nil, !isShowingDocumentPreview else { return }
+      guard let (box, range) = reference(atWindowPoint: point) else {
         cancelHover()
         return
       }
@@ -773,20 +777,25 @@ final class RFCTextViewCoordinator: NSObject {
         showPopover(for: box, range: range)
       case .document(let id, let place):
         // Over a hover card too: this is the bigger answer to the same question.
+        guard let library, let rect = referenceRect(for: range) else { return false }
         cancelHover()
         hoveredBox = box
         forceClickedBox = box
-        showDocumentPreview(of: id, at: place, following: url, range: range)
+        showDocumentPreview(of: id, at: place, following: url, at: rect, library: library)
       }
       return true
     }
 
-    /// The link a reference's runs carry: a URL, or its string on a run that
-    /// AppKit has already normalised.
+    /// The link a reference's runs carry.
     private func link(at offset: Int) -> URL? {
       let value = textView?.textLayoutManager?.attributedText?.attribute(
         .link, at: offset, effectiveRange: nil)
-      return value as? URL ?? (value as? String).flatMap(URL.init(string:))
+      return value.flatMap(Self.url(fromLink:))
+    }
+
+    /// A link attribute's value as a URL: AppKit may hand it over as its string.
+    private static func url(fromLink link: Any) -> URL? {
+      link as? URL ?? (link as? String).flatMap(URL.init(string:))
     }
 
     /// The preview is a reader of its own — its own text view and storage, built by
@@ -794,21 +803,33 @@ final class RFCTextViewCoordinator: NSObject {
     /// what a click on the reference would have, with the modifiers held for it,
     /// and closes it.
     private func showDocumentPreview(
-      of id: DocumentID, at place: String?, following url: URL, range: NSRange
+      of id: DocumentID, at place: String?, following url: URL, at rect: CGRect,
+      library: LibraryModel
     ) {
-      guard let textView, let library, let rect = referenceRect(for: range) else { return }
       let preview = DocumentPreview(library: library, id: id, place: place) { [weak self] in
-        self?.cancelHover()
-        _ = self?.onLink(url, .current)
+        guard let self else { return }
+        self.cancelHover()
+        // A click, as far as the reader is concerned: the scroll it causes must not
+        // preview whatever lands under the pointer, which is now over the reader.
+        self.linkClickPointer = NSEvent.mouseLocation
+        _ = self.onLink(url, .current)
       }
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: AnyView(preview.environment(library)))
+      present(host, size: DocumentPreview.size, at: rect)
+      isShowingDocumentPreview = true
+    }
+
+    /// Shared by the card and the document preview, so the two popovers are
+    /// anchored and dismissed the same way.
+    private func present(_ controller: NSViewController, size: CGSize?, at rect: CGRect) {
+      guard let textView else { return }
       let shown = NSPopover()
       shown.behavior = .transient
       shown.delegate = self
-      shown.contentViewController = host
-      shown.contentSize = DocumentPreview.size
+      shown.contentViewController = controller
+      if let size { shown.contentSize = size }
       let anchor = rect.offsetBy(
         dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
       shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
@@ -827,8 +848,11 @@ final class RFCTextViewCoordinator: NSObject {
           y: viewPoint.y - textView.textContainerOrigin.y))
     }
 
+    /// Not while a document preview is up: the pointer leaves the text view on its
+    /// way into the popover, which is where it is meant to go.
     @objc(mouseExited:)
     private func mouseExited(with event: NSEvent) {
+      guard !isShowingDocumentPreview else { return }
       cancelHover()
     }
 
@@ -841,6 +865,7 @@ final class RFCTextViewCoordinator: NSObject {
       dwellTimer = nil
       hoveredBox = nil
       forceClickedBox = nil
+      isShowingDocumentPreview = false
       if popover?.isShown == true { popover?.performClose(nil) }
       popover = nil
     }
@@ -849,18 +874,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// cleared the hover already invalidated this timer, but the guard costs
     /// nothing and keeps this function correct even if that ever stops being true.
     private func showPopover(for box: ReferenceBox, range: NSRange) {
-      guard let textView, hoveredBox === box, let preview = preview(for: box.reference),
+      guard hoveredBox === box, let preview = preview(for: box.reference),
         let rect = referenceRect(for: range)
       else { return }
-      let host = NSHostingController(rootView: preview)
-      let shown = NSPopover()
-      shown.behavior = .transient
-      shown.delegate = self
-      shown.contentViewController = host
-      let anchor = rect.offsetBy(
-        dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
-      shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
-      popover = shown
+      present(NSHostingController(rootView: preview), size: nil, at: rect)
     }
 
     /// Hit-tests a point in text-container coordinates down to a character offset,
@@ -915,6 +932,7 @@ final class RFCTextViewCoordinator: NSObject {
       guard let closed = notification.object as? NSPopover, closed === popover else { return }
       popover = nil
       hoveredBox = nil
+      isShowingDocumentPreview = false
     }
   }
 #endif

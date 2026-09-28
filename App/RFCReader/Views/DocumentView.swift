@@ -535,9 +535,8 @@ struct DocumentView: View {
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
   private func jump(toSection section: String?, animated: Bool) {
     guard let section, let document else { return }
-    let anchor =
-      (document.section(number: section) ?? document.section(anchor: section))?.anchor ?? section
-    scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+    scrollTarget = ReaderScrollTarget(
+      anchor: document.anchor(forPlace: section), animated: animated)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.

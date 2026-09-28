@@ -47,6 +47,14 @@ public struct RFCDocument: Sendable, Hashable, Codable {
     firstSection { $0.number == number }
   }
 
+  /// The anchor to scroll to for a place a link names: a section number, or an
+  /// anchor. A number resolves to its section's anchor; anything else — a section's
+  /// anchor, a figure's, a paragraph's — is already the anchor. The reader and the
+  /// link preview both go through this, so a preview opens where a click goes.
+  public func anchor(forPlace place: String) -> String {
+    (section(number: place) ?? section(anchor: place))?.anchor ?? place
+  }
+
   /// Every RFC referenced anywhere in the document, deduplicated and sorted.
   ///
   /// Anywhere includes the headings and the abstract: a heading cites like prose

@@ -1,7 +1,8 @@
 import Foundation
 import RFCKit
 
-/// What a force click (macOS) or a long press (iOS) on a reference shows (#29).
+/// What a force click on a reference shows (#29). macOS so far; a long press on
+/// iOS is to show the same, and still shows the card.
 ///
 /// Safari's link preview, for documents: the document the reference names, at the
 /// place it names, readable and scrollable — not a summary of it. The one exception

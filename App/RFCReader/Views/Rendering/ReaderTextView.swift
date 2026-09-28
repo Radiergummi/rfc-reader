@@ -64,8 +64,9 @@ import RFCReaderKit
     /// Only a reference is taken over. Everywhere else a force click is AppKit's
     /// Look Up, which a reader of dense technical prose uses on any word.
     ///
-    /// Unverified on Force Touch hardware: `NSTextView` runs its own immediate-action
-    /// recognizer, which may claim the gesture before this is reached. If it does,
+    /// On Force Touch hardware this appears to be reached (#29): the force click
+    /// showed a reference's card before it showed the document preview. Should
+    /// `NSTextView`'s own immediate-action recognizer ever claim the gesture first,
     /// the fallback is `pressureChange(with:)` at stage 2; see ARCHITECTURE.md.
     override func quickLook(with event: NSEvent) {
       guard !quickLookReference(event) else { return }

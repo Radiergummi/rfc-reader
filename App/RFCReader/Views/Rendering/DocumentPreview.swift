@@ -2,8 +2,8 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// The document a reference names, as a force click (macOS) or a long press (iOS)
-/// previews it: Safari's link preview, for RFCs (#29).
+/// The document a reference names, as a force click previews it on macOS: Safari's
+/// link preview, for RFCs (#29). iOS's long press still shows the card.
 ///
 /// A reader of its own, not a picture of one — its own `RFCTextView`, its own text
 /// storage built by `DocumentTextBuilder` at the preview's width — so it reads and
@@ -21,6 +21,7 @@ struct DocumentPreview: View {
   static let size = CGSize(width: 560, height: 620)
 
   @AppStorage("readingFontSize") private var fontSize = 17.0
+  @AppStorage("underlineLinks") private var underlineLinks = false
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?
@@ -96,14 +97,14 @@ struct DocumentPreview: View {
       let document = try await library.document(for: id)
       let column = ReaderLayout.column(forWidth: Self.size.width)
       let built = await Self.build(
-        document, style: ReadingStyle(bodySize: fontSize, measure: column))
+        document,
+        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
       loaded = Loaded(document: document, built: built)
-      // Resolved the way the reader resolves a jump: a section number, or else an
-      // anchor as it stands.
+      // Resolved the way the reader resolves a jump, so the preview opens where a
+      // click on the reference goes.
       if let place {
-        let anchor =
-          (document.section(number: place) ?? document.section(anchor: place))?.anchor ?? place
-        scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+        scrollTarget = ReaderScrollTarget(
+          anchor: document.anchor(forPlace: place), animated: false)
       }
     } catch {
       failure = error.localizedDescription
