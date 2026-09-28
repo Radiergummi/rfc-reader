@@ -200,10 +200,14 @@ public enum CollectionStore {
     return value
   }
 
+  /// Whether `create` and `update` take the name: one with more than spaces.
+  public static func isValidName(_ name: String) -> Bool {
+    !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
   private static func validName(_ name: String) throws -> String {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { throw Failure.emptyName }
-    return trimmed
+    guard isValidName(name) else { throw Failure.emptyName }
+    return name.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private static func collections(in context: ModelContext) throws -> [DocumentCollection] {

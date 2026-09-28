@@ -27,10 +27,19 @@ struct CollectionEditorSheet: View {
 
   /// The store refuses a name of only spaces; the button says so first.
   private var canSave: Bool {
-    !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    CollectionStore.isValidName(name)
   }
 
   var body: some View {
+    form
+      .onAppear(perform: load)
+      .onChange(of: isGone) { _, isGone in
+        if isGone { dismiss() }
+      }
+  }
+
+  @ViewBuilder
+  private var form: some View {
     #if os(macOS)
       VStack(alignment: .leading, spacing: 12) {
         Text(title).font(.headline)
@@ -46,10 +55,6 @@ struct CollectionEditorSheet: View {
       }
       .padding(20)
       .frame(width: 360)
-      .onAppear(perform: load)
-      .onChange(of: isGone) { _, isGone in
-        if isGone { dismiss() }
-      }
     #else
       NavigationStack {
         Form { fields }
@@ -63,10 +68,6 @@ struct CollectionEditorSheet: View {
           }
       }
       .presentationDetents([.medium])
-      .onAppear(perform: load)
-      .onChange(of: isGone) { _, isGone in
-        if isGone { dismiss() }
-      }
     #endif
   }
 

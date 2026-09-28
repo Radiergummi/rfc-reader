@@ -42,6 +42,13 @@ struct CollectionStoreTests {
     #expect(CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
+  /// What the editor enables its button by, so the button and the store agree.
+  @Test func `a name is valid once it has more than spaces`() {
+    #expect(!CollectionStore.isValidName(""))
+    #expect(!CollectionStore.isValidName(" \t\n"))
+    #expect(CollectionStore.isValidName(" DNS "))
+  }
+
   @Test func `an update renames and recolors in one save`() throws {
     let container = try makeContainer()
     let context = container.mainContext
