@@ -59,6 +59,33 @@ struct RFCXMLParserTests {
     #expect(document.section(anchor: "status-of-memo") == nil)
   }
 
+  /// Unprepped XML -- a draft, or an RFC before the prep tool ran -- has sections with
+  /// neither `anchor` nor `pn`. Their anchors key the table of contents, deep links and
+  /// reading positions, so they must be the same on every parse and distinct in one.
+  @Test func `an unprepped section's anchor is stable and unique`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle>
+          <section><name>First</name>
+            <section><name>Nested</name></section>
+          </section>
+          <section><name>Second</name></section>
+        </middle>
+        <back>
+          <section><name>Appendix</name></section>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 4)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))

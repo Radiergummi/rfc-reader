@@ -36,15 +36,18 @@ public struct RFCXMLParser: Sendable {
     let header = builder.parseHeader(root)
     var sections: [Section] = []
     if let middle = root.first("middle") {
-      sections += builder.parseSections(in: middle, appendix: false)
+      sections += builder.parseSections(in: middle, appendix: false, position: nil)
     }
     if let back {
+      var count = 0
       for element in back.elements {
         switch element.name {
         case "references":
+          count += 1
           sections.append(builder.parseReferencesSection(element))
         case "section":
-          sections.append(builder.parseSection(element, appendix: true))
+          count += 1
+          sections.append(builder.parseSection(element, appendix: true, position: "back-\(count)"))
         default:
           break
         }
@@ -240,26 +243,39 @@ public struct RFCXMLParser: Sendable {
 
     // MARK: Sections
 
-    func parseSections(in parent: XMLTree.Element, appendix: Bool) -> [Section] {
-      parent.elements.compactMap { child in
+    /// Sections of `parent`, whose own position is `position` (nil for `<middle>`).
+    func parseSections(in parent: XMLTree.Element, appendix: Bool, position: String?) -> [Section] {
+      var count = 0
+      return parent.elements.compactMap { child in
         switch child.name {
-        case "section": parseSection(child, appendix: appendix)
+        case "section":
+          count += 1
+          let childPosition = position.map { "\($0).\(count)" } ?? "\(count)"
+          return parseSection(child, appendix: appendix, position: childPosition)
         // Not valid RFCXML, but our serializer emits it for a references subsection
         // whose siblings are ordinary sections; keep it as a subsection.
-        case "references": parseReferencesSection(child)
-        default: nil
+        case "references":
+          count += 1
+          return parseReferencesSection(child)
+        default:
+          return nil
         }
       }
     }
 
-    func parseSection(_ element: XMLTree.Element, appendix: Bool) -> Section {
+    /// `position` is where the section sits among its siblings -- `2.1`, `back-1` --
+    /// and names a section that has neither `anchor` nor `pn`, as in unprepped XML.
+    /// An anchor keys deep links and reading positions, so it has to come out the same
+    /// on every parse.
+    func parseSection(_ element: XMLTree.Element, appendix: Bool, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let isNumbered = element["numbered"] != "false"
-      let anchor = element["anchor"] ?? partNumber ?? UUID().uuidString
+      let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
       let blocks = parseBlocks(in: element)
-      let subsections = parseSections(in: element, appendix: appendix || numbering.isAppendix)
+      let subsections = parseSections(
+        in: element, appendix: appendix || numbering.isAppendix, position: position)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
