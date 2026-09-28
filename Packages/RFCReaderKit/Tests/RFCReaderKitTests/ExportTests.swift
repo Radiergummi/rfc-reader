@@ -6,6 +6,12 @@ import UniformTypeIdentifiers
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Export: formats")
 struct ExportFormatTests {
   @Test func `a file is named as the RFC Editor names its own`() {
