@@ -81,6 +81,10 @@ final class RFCTextViewCoordinator: NSObject {
   var onLink: (URL, LinkActivation) -> Bool = { _, _ in false }
   /// See `RFCTextView.bibliography`.
   var bibliography: [ReferenceGroup] = []
+  /// The document on screen; see `RFCTextView.documentID`.
+  var documentID: DocumentID?
+  /// See `RFCTextView.commitsOnClick`.
+  var commitsOnClick: (() -> Void)?
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
   /// synchronously, on every scroll tick that changes it: the title is coupled to
   /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
@@ -653,7 +657,7 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     private func previewUnderRestingPointer() {
-      guard NSApp.isActive, NSEvent.pressedMouseButtons == 0, let textView,
+      guard commitsOnClick == nil, NSApp.isActive, NSEvent.pressedMouseButtons == 0, let textView,
         let window = textView.window
       else { return }
       let point = window.mouseLocationOutsideOfEventStream
@@ -668,8 +672,11 @@ final class RFCTextViewCoordinator: NSObject {
     /// ends any dwell: the timer runs in `.default` mode, so a click or a drag's
     /// tracking loop only delays it until the button is up again, and a drag that
     /// began on a reference would otherwise open its card wherever the drag ended.
-    func mouseDownInText() {
+    func mouseDownInText() -> Bool {
       cancelHover()
+      guard let commitsOnClick else { return false }
+      commitsOnClick()
+      return true
     }
 
     // MARK: - Hover preview
@@ -717,7 +724,8 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     private func hover(atWindowPoint point: NSPoint) {
-      guard let (box, range) = reference(atWindowPoint: point) else {
+      // A preview previews nothing itself: a card over a card over the reader.
+      guard commitsOnClick == nil, let (box, range) = reference(atWindowPoint: point) else {
         cancelHover()
         return
       }
@@ -734,28 +742,77 @@ final class RFCTextViewCoordinator: NSObject {
       }
     }
 
-    /// Force click on a reference: the same card, without the dwell. Anywhere else,
-    /// and on a reference that has no card, it returns false and `ReaderTextView`
-    /// hands the event on to AppKit's Look Up.
+    /// Force click on a reference: Safari's link preview, for documents (#29) — the
+    /// document it names, readable and scrollable, at the place it names. A
+    /// bibliography entry that names no RFC has no document of ours to show, and
+    /// gets its card instead. Anywhere else, and on a reference with neither, it
+    /// returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
     /// So does Look Up from the keyboard, which means the selection, not whatever
     /// the pointer happens to rest on — and a key event has no location to test.
     /// So does an event from any other window, such as a menu's: its location is
     /// in that window's coordinates, not the text view's.
     func quickLookReference(with event: NSEvent) -> Bool {
-      guard event.type != .keyDown,
+      guard commitsOnClick == nil, event.type != .keyDown,
         let textView, event.window === textView.window,
         let (box, range) = reference(atWindowPoint: event.locationInWindow),
-        preview(for: box.reference) != nil
+        let documentID,
+        let url = link(at: range.location),
+        let target = LinkPreview.resolve(url, from: documentID)
       else { return false }
-      if hoveredBox === box, popover?.isShown == true {
+      switch target {
+      case .card:
+        guard preview(for: box.reference) != nil else { return false }
+        // Already showing from a hover: the force click adds nothing.
+        if hoveredBox === box, popover?.isShown == true {
+          forceClickedBox = box
+          return true
+        }
+        cancelHover()
+        hoveredBox = box
         forceClickedBox = box
-        return true
+        showPopover(for: box, range: range)
+      case .document(let id, let place):
+        // Over a hover card too: this is the bigger answer to the same question.
+        cancelHover()
+        hoveredBox = box
+        forceClickedBox = box
+        showDocumentPreview(of: id, at: place, following: url, range: range)
       }
-      cancelHover()
-      hoveredBox = box
-      forceClickedBox = box
-      showPopover(for: box, range: range)
       return true
+    }
+
+    /// The link a reference's runs carry: a URL, or its string on a run that
+    /// AppKit has already normalised.
+    private func link(at offset: Int) -> URL? {
+      let value = textView?.textLayoutManager?.attributedText?.attribute(
+        .link, at: offset, effectiveRange: nil)
+      return value as? URL ?? (value as? String).flatMap(URL.init(string:))
+    }
+
+    /// The preview is a reader of its own — its own text view and storage, built by
+    /// `DocumentTextBuilder` — in a popover beside the reference. A click in it does
+    /// what a click on the reference would have, with the modifiers held for it,
+    /// and closes it.
+    private func showDocumentPreview(
+      of id: DocumentID, at place: String?, following url: URL, range: NSRange
+    ) {
+      guard let textView, let library, let rect = referenceRect(for: range) else { return }
+      let preview = DocumentPreview(library: library, id: id, place: place) { [weak self] in
+        self?.cancelHover()
+        _ = self?.onLink(url, .current)
+      }
+      // The preview's reader asks the environment for the library, and a hosting
+      // controller is outside every environment chain.
+      let host = NSHostingController(rootView: AnyView(preview.environment(library)))
+      let shown = NSPopover()
+      shown.behavior = .transient
+      shown.delegate = self
+      shown.contentViewController = host
+      shown.contentSize = DocumentPreview.size
+      let anchor = rect.offsetBy(
+        dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
+      shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+      popover = shown
     }
 
     /// The reference under a point in window coordinates. `textContainerOrigin` is

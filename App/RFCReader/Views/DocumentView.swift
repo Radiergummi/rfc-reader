@@ -252,6 +252,7 @@ struct DocumentView: View {
         built: built,
         bibliography: reader.groups,
         measure: measure,
+        documentID: id,
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },

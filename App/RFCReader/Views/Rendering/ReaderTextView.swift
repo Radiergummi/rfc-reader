@@ -57,8 +57,9 @@ import RFCReaderKit
     /// about text.
     var quickLookReference: (NSEvent) -> Bool = { _ in false }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
-    /// mistaken for part of the next click.
-    var willTrackMouseDown: () -> Void = {}
+    /// mistaken for part of the next click. Answers whether it took the click
+    /// itself, as the reader inside a link preview does, to commit it.
+    var willTrackMouseDown: () -> Bool = { false }
 
     /// Only a reference is taken over. Everywhere else a force click is AppKit's
     /// Look Up, which a reader of dense technical prose uses on any word.
@@ -74,7 +75,7 @@ import RFCReaderKit
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
     /// own tracking loop and does not return until the button is up.
     override func mouseDown(with event: NSEvent) {
-      willTrackMouseDown()
+      guard !willTrackMouseDown() else { return }
       super.mouseDown(with: event)
     }
 
