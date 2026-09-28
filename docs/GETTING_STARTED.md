@@ -1,16 +1,16 @@
 # Getting started
 
-You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26) and [XcodeGen](https://github.com/yonaskolb/XcodeGen). RFCKit alone builds with any Swift 6.3 toolchain, including on Linux.
+You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26), [XcodeGen](https://github.com/yonaskolb/XcodeGen) for the project and [SwiftLint](https://github.com/realm/SwiftLint) for `make lint`; swift-format comes with the toolchain. RFCKit alone builds with any Swift 6.3 toolchain, including on Linux.
 
 ```sh
-brew install xcodegen
+brew install xcodegen swiftlint
 make check      # lint, build and test both Swift packages: the gate before committing
 make run        # generate the Xcode project, build the macOS app and launch it
 ```
 
 Everything goes through the `Makefile`; `CLAUDE.md` has the table of its targets — the app-side test suite (`make test-app`), the iOS builds, formatting, and the corpus pipeline. `RFCReader.xcodeproj` is generated from `project.yml` (`make xcodeproj`) and is not committed: edit `project.yml`, never the project.
 
-`project.yml` signs with the maintainer's team. To build under your own, set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` there, or build unsigned with `make build-app CODE_SIGNING_ALLOWED=NO`, as CI does.
+`project.yml` signs with the maintainer's team, so outside it `make run` fails at signing. Either set `bundleIdPrefix`, `PRODUCT_BUNDLE_IDENTIFIER` and `DEVELOPMENT_TEAM` there to your own, or build unsigned, as CI does: `make run CODE_SIGNING_ALLOWED=NO`.
 
 The first launch downloads the 14 MB RFC index. An `rfc-index.xml` added to the app's resources is used until the download lands, so a build that bundles one works offline from the start:
 

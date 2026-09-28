@@ -4,7 +4,7 @@
 
 ## The facts that shape everything
 
-Numbers from the RFC Editor index as of 20 September 2026, and unchanged on 28 September. This is the one place they are stated; elsewhere they are quoted from here.
+Numbers from the RFC Editor index as of 20 September 2026, and unchanged on 28 September. The other documents quote these.
 
 | | RFCs | Pages | Text size (est.) |
 |---|---|---|---|
