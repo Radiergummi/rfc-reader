@@ -56,15 +56,15 @@ extension RFCTextViewCoordinator {
     accessibilityHeadings = items(carrying: .rfcAnchor)
     accessibilityLinks = items(carrying: .link)
 
-    // Adjacent runs sharing the same `VerbatimBox` instance are one diagram —
-    // `appendVerbatim` emits a source-code language label and its body as two
-    // back-to-back runs over the same box. Coalescing by reference identity
-    // keeps that pair, and a multi-line artwork's many line fragments, as one
-    // rotor stop rather than one per run.
+    // Only what VoiceOver says as a diagram (`AccessibleReading.isDiagram`); source
+    // code and artwork that is not a drawing are read as text. Adjacent runs
+    // sharing the same `VerbatimBox` instance are one diagram: coalescing by
+    // reference identity keeps a multi-line artwork's many runs as one rotor stop
+    // rather than one per run.
     var diagrams: [AccessibilityRotorItem] = []
     var openBox: ObjectIdentifier?
     text.enumerateAttribute(.rfcVerbatim, in: full) { value, range, _ in
-      guard let box = value as? VerbatimBox else {
+      guard let box = value as? VerbatimBox, AccessibleReading.isDiagram(box) else {
         openBox = nil
         return
       }
@@ -73,10 +73,9 @@ extension RFCTextViewCoordinator {
         diagrams.append(
           AccessibilityRotorItem(range: NSUnionRange(last.range, range), label: last.label))
       } else {
-        let caption =
-          text.attribute(.rfcCaption, at: range.location, effectiveRange: nil) as? String
         diagrams.append(
-          AccessibilityRotorItem(range: range, label: box.content.name ?? caption ?? "Diagram"))
+          AccessibilityRotorItem(
+            range: range, label: AccessibleReading.rotorLabel(at: range.location, in: text)))
       }
       openBox = identity
     }

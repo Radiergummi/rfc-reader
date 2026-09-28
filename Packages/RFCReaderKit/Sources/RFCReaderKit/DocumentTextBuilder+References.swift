@@ -8,7 +8,7 @@ extension DocumentTextBuilder {
     appendBlocks(figure.blocks, indent: indent)
     let caption = Self.caption("Figure", number: figure.number, title: figure.title)
     // Tag any artwork the figure just contributed with the caption, so the
-    // accessibility element has a name even when `Preformatted.name` is absent.
+    // Diagrams rotor can name it.
     if let caption {
       let range = NSRange(location: start, length: output.length - start)
       output.enumerateAttribute(.rfcVerbatim, in: range) { value, subrange, _ in
