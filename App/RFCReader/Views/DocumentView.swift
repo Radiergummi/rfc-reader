@@ -86,13 +86,14 @@ struct DocumentView: View {
   /// The column is derived from this rather than stored beside it. Artwork scaling
   /// and table shape are measured against the column, so it has to be settled
   /// *before* the first build or the document is built against a guess and
-  /// immediately thrown away. It is a pure function of the width (`ReaderLayout`),
+  /// immediately thrown away. It is a pure function of the width and the measure
+  /// preference (`ReaderLayout`),
   /// so this view can work it out for itself rather than waiting to be told by the
   /// text view it has not created yet — which is why nothing is built until the
   /// geometry reader has run once.
   @State private var paneWidth: CGFloat?
 
-  /// Derived from the pane's width, and nothing else.
+  /// Derived from the pane's width and the measure preference, and nothing else.
   ///
   /// The panel does not appear here and must not: on macOS the reader's pane spans
   /// it — the panel is a full-height inspector item drawn over the top — so the

@@ -18,8 +18,8 @@ struct RFCTextView: View {
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
-  /// The same preference the document was built against, so the inset the text
-  /// view is laid out with agrees with the column the build measured.
+  /// The same preference `DocumentView` derives the build's column from, so the
+  /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
   /// Written synchronously as tracking computes; see `VisibleAnchorBox`.
   let lastVisibleAnchor: VisibleAnchorBox

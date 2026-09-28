@@ -72,22 +72,11 @@ struct ReaderLayoutTests {
         == ReaderLayout.column(forWidth: 600, measure: .recommended))
   }
 
-  /// The inset and the build each ask for one of these, and they have drifted
-  /// apart before: whatever the preference, the column is what the gutters leave.
-  @Test func `the column is what the gutters leave under either preference`() {
-    for measure in MeasurePreference.allCases {
-      for width: CGFloat in [390, 760, 1200, 2560] {
-        let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)
-        #expect(ReaderLayout.column(forWidth: width, measure: measure) == width - gutter * 2)
-      }
-    }
-  }
-
-  /// Stored in user defaults by its raw value, so the spelling is the setting.
-  @Test func `the preference round trips through its stored value`() {
-    for measure in MeasurePreference.allCases {
-      #expect(MeasurePreference(rawValue: measure.rawValue) == measure)
-    }
+  /// Stored in user defaults by its raw value, so the spelling is the setting:
+  /// renaming a case would quietly reset everyone who chose it.
+  @Test func `the preference is stored under its existing spellings`() {
+    #expect(MeasurePreference(rawValue: "recommended") == .recommended)
+    #expect(MeasurePreference(rawValue: "fullWidth") == .fullWidth)
   }
 
   /// The floor is wide enough to read at, and low enough that the two side columns

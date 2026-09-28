@@ -259,7 +259,10 @@ struct SettingsView: View {
         GeneralSettings()
       }
     }
+    // A grouped form is scroll-backed and has no height of its own to offer, so
+    // the window is told to size to it rather than left to guess.
     .frame(width: 460)
+    .fixedSize(horizontal: false, vertical: true)
   }
 }
 

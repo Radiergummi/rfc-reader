@@ -303,8 +303,14 @@ final class RFCTextViewCoordinator: NSObject {
   /// This runs on every update pass — and an update pass happens on every section
   /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
   /// the gutter, the column or the header's height moved. A relayout costs more
-  /// still, and only the column can force one: a window wider than the measure
-  /// moves the gutters, not the text.
+  /// still, and only the column can force one: under the recommended measure, a
+  /// window wider than it moves the gutters, not the text. Full width has no such
+  /// slack — every change of width is a change of column, and re-wraps.
+  ///
+  /// `measure` is the live preference, which runs ahead of the storage for as long
+  /// as a flip takes to rebuild, exactly as the width does during a resize: the
+  /// text re-wraps at the new column at once and the rebuild re-measures artwork
+  /// and tables for it when it lands.
   func layOut(width: CGFloat, measure: MeasurePreference) {
     guard let textView, width > 0 else { return }
     let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)

@@ -76,23 +76,25 @@ public struct ReadingStyle: Sendable, Equatable {
   public var indentStep: CGFloat { bodySize * 1.4 }
 }
 
-/// How wide the text column is, given how wide the view is.
-///
-/// A function of the view's width and nothing else, which is why it lives here
-/// rather than inside the text view: the reader has to know the column *before* it
-/// builds, because artwork scaling and table shape are measured against it, and a
-/// document built against a guess has to be thrown away and built again.
 /// How wide the reader sets its text.
 ///
-/// A setting, stored by its raw value. An enum rather than a flag, so a third
-/// choice — an explicit measure — does not change every signature again.
+/// A setting, stored by its raw value — so the case names are what user defaults
+/// hold, and renaming one resets everyone's choice. An enum rather than a flag, so
+/// a third choice — an explicit measure — does not change every signature again.
 public enum MeasurePreference: String, CaseIterable, Sendable {
   /// Capped at `ReaderLayout.idealMeasure`, the gutters growing beyond it.
   case recommended
-  /// Out to the margins however wide the window is, the way `less` does.
+  /// Out to the margins however wide the reader is, the way `less` does.
   case fullWidth
 }
 
+/// How wide the text column is, given how wide the view is and how wide the reader
+/// wants its text.
+///
+/// A function of those two and nothing else, which is why it lives here rather
+/// than inside the text view: the reader has to know the column *before* it
+/// builds, because artwork scaling and table shape are measured against it, and a
+/// document built against a guess has to be thrown away and built again.
 public enum ReaderLayout {
   /// The design ceiling on the column: below this width the column tracks the view
   /// exactly (less `margin` on each side); above it the gutters grow instead, so
