@@ -37,21 +37,6 @@
 
   extension NSToolbarItem: FlexibleToolbarItem {}
 
-  /// The window's toolbar.
-  ///
-  /// `NSToolbar` only accepts items from its delegate, which is why the overlay panel
-  /// could never split it: SwiftUI owned the delegate and would not share it. The item
-  /// that does the splitting is `NSTrackingSeparatorToolbarItem`, bound to the divider
-  /// between the reader and the panel — AppKit then lays the document's actions out in
-  /// what is left of the titlebar, and the panel's toggle sits out on the panel's own
-  /// glass, which is where Pages puts it.
-  ///
-  /// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
-  /// ones were tried first, to keep the declarations `DocumentView` already had: a
-  /// hosting view reports no width the toolbar will honour, so every item was laid out
-  /// on top of the one before it — the bookmark drew inside the back/forward group and
-  /// the share icon over the panel's toggle. Native items also get the system's own
-  /// grouping and glass, which a hosted control cannot.
   /// A title over a line of detail, as a window's own titlebar draws its title over
   /// its subtitle: the list's title.
   private final class TitleStack: NSStackView {
@@ -321,6 +306,21 @@
     }
   }
 
+  /// The window's toolbar.
+  ///
+  /// `NSToolbar` only accepts items from its delegate, which is why the overlay panel
+  /// could never split it: SwiftUI owned the delegate and would not share it. The item
+  /// that does the splitting is `NSTrackingSeparatorToolbarItem`, bound to the divider
+  /// between the reader and the panel — AppKit then lays the document's actions out in
+  /// what is left of the titlebar, and the panel's toggle sits out on the panel's own
+  /// glass, which is where Pages puts it.
+  ///
+  /// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
+  /// ones were tried first, to keep the declarations `DocumentView` already had: a
+  /// hosting view reports no width the toolbar will honour, so every item was laid out
+  /// on top of the one before it — the bookmark drew inside the back/forward group and
+  /// the share icon over the panel's toggle. Native items also get the system's own
+  /// grouping and glass, which a hosted control cannot.
   final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
 
