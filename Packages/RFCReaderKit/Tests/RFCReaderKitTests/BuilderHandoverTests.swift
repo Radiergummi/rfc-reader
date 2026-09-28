@@ -72,29 +72,42 @@ struct BuilderHandoverTests {
   /// storages hold the build's own objects — its chips' attachments by identity.
   /// That is safe while the reuse stays on the main actor and nothing the text
   /// views do writes to the build, which is what this pins: the build reads the
-  /// same after two storages have laid it out, at two different columns.
+  /// same after two text views have laid it out, at two different columns, and
+  /// drawn it — drawing is where AppKit makes an attachment's cell and view.
   @MainActor
-  @Test func `a build installed into two storages is left as it was`() throws {
+  @Test func `a build installed into two text views is left as it was`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: ReadingStyle())
     let runs = Self.runs(of: built.text)
     let string = built.text.string
     let attachments = Self.attachmentStates(in: built.text)
     #expect(!attachments.isEmpty)
 
-    var storages: [NSTextContentStorage] = []
+    var installed: [String?] = []
     for column in [712.0, 512.0] {
-      let storage = NSTextContentStorage()
-      let layout = NSTextLayoutManager()
-      let container = NSTextContainer(size: CGSize(width: column, height: 1e7))
-      container.lineFragmentPadding = 0
-      layout.textContainer = container
-      storage.addTextLayoutManager(layout)
-      storage.install(built.text)
-      layout.ensureLayout(for: layout.documentRange)
-      storages.append(storage)
+      #if canImport(AppKit)
+        let textView = NSTextView(usingTextLayoutManager: true)
+        textView.frame = CGRect(x: 0, y: 0, width: column, height: 4_000)
+        textView.textContainer?.lineFragmentPadding = 0
+        let storage = try #require(textView.textContentStorage)
+        let layout = try #require(textView.textLayoutManager)
+        storage.install(built.text)
+        layout.ensureLayout(for: layout.documentRange)
+        let bitmap = try #require(textView.bitmapImageRepForCachingDisplay(in: textView.bounds))
+        textView.cacheDisplay(in: textView.bounds, to: bitmap)
+      #else
+        let storage = NSTextContentStorage()
+        let layout = NSTextLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: column, height: 1e7))
+        container.lineFragmentPadding = 0
+        layout.textContainer = container
+        storage.addTextLayoutManager(layout)
+        storage.install(built.text)
+        layout.ensureLayout(for: layout.documentRange)
+      #endif
+      installed.append(storage.textStorage?.string)
     }
 
-    #expect(storages.allSatisfy { $0.textStorage?.string == string })
+    #expect(installed == [string, string])
     #expect(built.text.string == string)
     #expect(Self.runs(of: built.text) == runs)
     #expect(Self.attachmentStates(in: built.text) == attachments)

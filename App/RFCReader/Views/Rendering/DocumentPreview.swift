@@ -31,7 +31,9 @@ struct DocumentPreview: View {
   @State private var lastVisibleAnchor = VisibleAnchorBox()
   @State private var heading = HeadingBox()
 
-  private struct Loaded {
+  /// Everything a preview shows, kept whole by `LibraryModel.previews` so the
+  /// build is never paired with another parse of its document.
+  struct Loaded {
     let document: RFCDocument
     let built: BuiltDocument
     /// What a citation of a bibliography entry in the preview previews (#198).
@@ -97,30 +99,30 @@ struct DocumentPreview: View {
     }
   }
 
-  /// Fetched if it is not cached, the way the reader fetches it, and built at the
-  /// preview's own column — or not built at all, when a preview of the same
-  /// document in the same style kept its build (#374).
+  /// What a preview of the same document in the same style kept (#374), or else
+  /// fetched if it is not cached, the way the reader fetches it, and built at the
+  /// preview's own column.
   private func load() async {
+    let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
+    let style = ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks)
+    let key = BuildKey(document: id, style: style)
     do {
-      let document = try await library.document(for: id)
-      let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
-      let style = ReadingStyle(
-        bodySize: fontSize, measure: column, underlinesLinks: underlineLinks)
-      let key = BuildKey(document: id, style: style)
-      let built: BuiltDocument
-      if let kept = library.previewBuilds.value(for: key) {
-        built = kept
+      let shown: Loaded
+      if let kept = library.previews.value(for: key) {
+        shown = kept
       } else {
-        built = await DocumentView.build(document, style: style)
-        library.previewBuilds.store(built, for: key)
+        let document = try await library.document(for: id)
+        shown = Loaded(
+          document: document, built: await DocumentView.build(document, style: style),
+          bibliography: ReferenceGroup.groups(in: document))
+        library.previews.store(shown, for: key)
       }
-      loaded = Loaded(
-        document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
+      loaded = shown
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
         scrollTarget = ReaderScrollTarget(
-          anchor: document.anchor(forPlace: place), animated: false)
+          anchor: shown.document.anchor(forPlace: place), animated: false)
       }
     } catch {
       failure = error.localizedDescription

@@ -1,4 +1,4 @@
-import RFCKit
+import Foundation
 
 /// The last few values asked for, the least recently used going first once there
 /// are more than `capacity`.
@@ -40,16 +40,9 @@ public struct RecentValues<Key: Hashable, Value> {
       entries.removeFirst(entries.count - capacity)
     }
   }
-}
 
-/// What a build is a build of: a document, in a style. A build for any other size,
-/// column or link style is a different one.
-public struct BuildKey: Hashable, Sendable {
-  public let document: DocumentID
-  public let style: ReadingStyle
-
-  public init(document: DocumentID, style: ReadingStyle) {
-    self.document = document
-    self.style = style
+  /// Lets go of every value whose key matches, leaving the rest in their order.
+  public mutating func removeAll(where matches: (Key) -> Bool) {
+    entries.removeAll { matches($0.key) }
   }
 }

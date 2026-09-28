@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import SwiftUI
 import Testing
 
 @testable import RFCReaderKit
@@ -42,8 +43,20 @@ struct RecentValuesTests {
     #expect(recent.value(for: "a") == 10)
   }
 
-  /// A build is for one style: the same document at another size, width or link
-  /// style is another build.
+  /// What a removed download leaves: the document is parsed again on its next
+  /// open, and a kept preview of the old parse must not be paired with it.
+  @Test func `removing entries leaves the rest in their order`() {
+    var recent = RecentValues<String, Int>(capacity: 3)
+    recent.store(1, for: "a")
+    recent.store(2, for: "b")
+    recent.store(3, for: "c")
+    recent.removeAll { $0 == "b" }
+    #expect(recent.keys == ["a", "c"])
+    #expect(recent.value(for: "b") == nil)
+  }
+
+  /// A build is for one style: the same document at another size, width, line
+  /// height, text size or link style is another build.
   @Test func `a build key differs by document and by every part of the style`() {
     let style = ReadingStyle()
     let document = DocumentID(series: .rfc, number: 9110)
@@ -53,9 +66,15 @@ struct RecentValuesTests {
     var wider = style
     wider.measure += 1
     #expect(key != BuildKey(document: document, style: wider))
+    var looser = style
+    looser.lineHeightMultiple += 0.1
+    #expect(key != BuildKey(document: document, style: looser))
     var underlined = style
     underlined.underlinesLinks.toggle()
     #expect(key != BuildKey(document: document, style: underlined))
     #expect(key != BuildKey(document: document, style: style.scaled(by: 1.1)))
+    let larger = ReadingStyle(textSize: .xxxLarge)
+    #expect(larger.textSize != style.textSize)
+    #expect(key != BuildKey(document: document, style: larger))
   }
 }

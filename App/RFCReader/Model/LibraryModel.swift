@@ -253,11 +253,23 @@ final class LibraryModel {
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
-  /// The builds force-click previews made, kept for the next preview of the same
+  /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
-  /// than a spinner. Four, at 4.5 to 8 MB a build. Not observed, for the reason
-  /// `listCache` is not: it is a memo, and nothing is drawn from it.
-  @ObservationIgnored var previewBuilds = RecentValues<BuildKey, BuiltDocument>(capacity: 4)
+  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  ///
+  /// The whole preview rather than the build alone, so a build is never paired with
+  /// another parse of its document; and a document's previews go when it is
+  /// removed or evicted, since its next open parses it afresh (`forgetPreviews`).
+  /// Empty on iOS, which has no such preview.
+  ///
+  /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
+  /// drawn from it.
+  @ObservationIgnored var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(capacity: 4)
+
+  private func forgetPreviews(of documents: some Sequence<DocumentID>) {
+    let documents = Set(documents)
+    previews.removeAll { documents.contains($0.document) }
+  }
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
@@ -543,7 +555,8 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    let evicted = await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    forgetPreviews(of: evicted)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
@@ -616,6 +629,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    forgetPreviews(of: [id])
     await refreshDownloadedNumbers()
   }
 }
