@@ -29,15 +29,33 @@ struct RFCListView: View {
     // `library.open(_:activation:in:)` like every other open: a selection binding
     // is handed the outcome, not the click, and Command-click on a list row is the
     // platform's multi-select chord rather than ours to take.
+    let window = rows.prefix(limit)
+    let row = { (rfc: RFCMetadata, showsYear: Bool) in
+      RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear)
+        .tag(rfc.id)
+        .onAppear {
+          guard rfc.id == trigger else { return }
+          limit = ListWindow.extendedLimit(from: limit, total: rows.count)
+        }
+    }
     List(selection: $navigation.selection) {
-      ForEach(rows.prefix(limit)) { rfc in
-        RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
-          .tag(rfc.id)
-          .onAppear {
-            guard rfc.id == trigger else { return }
-            limit = ListWindow.extendedLimit(from: limit, total: rows.count)
+      #if os(macOS)
+        ForEach(window) { row($0, true) }
+      #else
+        // By year where the list is in order of publication, as Notes sections
+        // its lists by date (#347). Over the window only: a later page's row may
+        // join a year already on screen, which is above the reader by then.
+        if YearSections.apply(to: navigation.filter, query: navigation.searchText) {
+          ForEach(YearSections.sections(of: window)) { section in
+            Section(String(section.year)) {
+              ForEach(section.rfcs) { row($0, false) }
+            }
+            .sectionIndexLabel(String(section.year))
           }
-      }
+        } else {
+          ForEach(window) { row($0, true) }
+        }
+      #endif
       // Where Mail says when it last checked: after the last row, scrolled to
       // rather than pinned. Only once every row is in the window — after a
       // partial page it would read as the end of a list that goes on — and not
@@ -59,6 +77,8 @@ struct RFCListView: View {
     #else
       // On iOS, cards with a margin round them, as Notes' lists are (#346).
       .listStyle(.insetGrouped)
+      .headerProminence(.increased)
+      .listSectionIndexVisibility(.visible)
     #endif
     .overlay {
       if rows.isEmpty, library.indexState.isReady {
@@ -127,6 +147,8 @@ struct IndexStatusView: View {
 struct RFCRow: View {
   let rfc: RFCMetadata
   let isBookmarked: Bool
+  /// False under a year's header, which already says it (#347).
+  var showsYear = true
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -165,7 +187,9 @@ struct RFCRow: View {
       if isBookmarked {
         Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
       }
-      Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+      if showsYear {
+        Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+      }
     }
   }
 
