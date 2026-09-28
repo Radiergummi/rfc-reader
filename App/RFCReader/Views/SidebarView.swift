@@ -273,12 +273,7 @@ struct SidebarView: View {
       Label {
         Text(entry.name)
       } icon: {
-        Image(systemName: "folder")
-          // On a Mac a selected sidebar row turns its icons white, and an explicit
-          // colour would override that: `.primary` there follows the row's
-          // prominence.
-          .foregroundStyle(
-            isSelected(filter) ? AnyShapeStyle(.primary) : AnyShapeStyle(entry.color.color))
+        CollectionFolderIcon(color: entry.color)
       }
       #if os(macOS)
         accessories(count: nil)
@@ -316,14 +311,6 @@ struct SidebarView: View {
       Divider()
       Button("Delete…", role: .destructive) { deleting = entry }
     }
-  }
-
-  private func isSelected(_ filter: LibraryFilter) -> Bool {
-    #if os(macOS)
-      navigation.sidebarSelection == filter
-    #else
-      false
-    #endif
   }
 
   private func moveCollections(from source: IndexSet, to destination: Int) {
@@ -463,5 +450,30 @@ private struct SidebarLabelStyle: LabelStyle {
         title
       }
     }
+  }
+}
+
+/// A collection's folder, in its colour (#349).
+private struct CollectionFolderIcon: View {
+  let color: CollectionColor
+
+  #if os(macOS)
+    @Environment(\.backgroundProminence) private var prominence
+  #endif
+
+  var body: some View {
+    Image(systemName: "folder")
+      .foregroundStyle(style)
+  }
+
+  /// On a Mac a row drawn with the accent behind it turns its icons white, and an
+  /// explicit colour would override that: `.primary` there follows the row. Only
+  /// that row — a selection in an inactive window or an unfocused sidebar is drawn
+  /// grey, and keeps the folder's colour, as Finder's tags do.
+  private var style: AnyShapeStyle {
+    #if os(macOS)
+      if prominence == .increased { return AnyShapeStyle(.primary) }
+    #endif
+    return AnyShapeStyle(color.color)
   }
 }
