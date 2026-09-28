@@ -31,8 +31,28 @@
     /// What a search depends on. The index is part of it so that a palette opened
     /// before the index loaded searches again once it has.
     private struct SearchKey: Equatable {
-      var input: String
+      var query: String
       var hasIndex: Bool
+    }
+
+    /// What is typed, less the spaces around it, which change nothing it finds.
+    private var query: String {
+      Self.query(from: input)
+    }
+
+    private static func query(from text: String) -> String {
+      text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Resolves on the keystroke itself, before any ↵ queued behind it can read the
+    /// selection: an `onChange` or the search's task would only run a turn later.
+    private var text: Binding<String> {
+      Binding {
+        input
+      } set: { text in
+        input = text
+        resolve(Self.query(from: text))
+      }
     }
 
     var body: some View {
@@ -44,6 +64,7 @@
         } else if let message {
           Divider()
           Text(message)
+            .lineLimit(2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
@@ -52,7 +73,7 @@
       }
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
-      .task(id: SearchKey(input: input, hasIndex: library.index != nil)) { await update() }
+      .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
       .onAppear { isFocused = true }
     }
 
@@ -71,7 +92,7 @@
           .font(.title2)
           .foregroundStyle(.secondary)
           .accessibilityHidden(true)
-        TextField("RFC number, BCP 14, or a link", text: $input)
+        TextField("RFC number, BCP 14, or a link", text: text)
           .textFieldStyle(.plain)
           .font(.title2)
           .focused($isFocused)
@@ -150,18 +171,20 @@
       return .handled
     }
 
-    /// Runs per keystroke and is cancelled by the next one, which is the debounce:
-    /// only a pause long enough to outlast the sleep reaches the search.
-    private func update() async {
+    /// What was typed, resolved exactly.
+    private func resolve(_ query: String) {
       // Typing on after ↵ is a change of mind.
       pendingActivation = nil
-      let query = input.trimmingCharacters(in: .whitespacesAndNewlines)
-      let exact = DocumentReference.link(from: query)
-      results.show(query: query, exact: exact)
+      results.show(query: query, exact: DocumentReference.link(from: query))
+    }
+
+    /// Runs per change of the query and is cancelled by the next, which is the debounce:
+    /// only a pause long enough to outlast the sleep reaches the search.
+    private func search(_ query: String) async {
       guard !query.isEmpty else { return }
       // A link names its document outright, and no title or abstract contains one:
       // scanning the index for it would take the whole scan to find nothing.
-      if exact != nil, query.contains("://") {
+      if query.contains("://"), DocumentReference.link(from: query) != nil {
         finish(with: [], for: query)
         return
       }
