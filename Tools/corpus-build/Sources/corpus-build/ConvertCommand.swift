@@ -145,7 +145,8 @@ struct ConvertCommand: AsyncParsableCommand {
           "refused by one guard only", metadata: ["guard": "\(guardName)", "blocks": "\(count)"])
       }
     }
-    if job.schema != nil { Self.logSchema(reports, previouslyValid: previouslyValid) }
+    var comparison: SchemaComparison?
+    if job.schema != nil { comparison = Self.logSchema(reports, previouslyValid: previouslyValid) }
     let flagged = reports.filter { !$0.warnings.isEmpty }
     Self.logger.info(
       "done",
@@ -159,6 +160,13 @@ struct ConvertCommand: AsyncParsableCommand {
         metadata: [
           "document": "\(entry.id)", "warnings": .array(entry.warnings.map { .string($0) }),
         ])
+    }
+    // Last, so the report is written and everything above logged before the run fails.
+    if let comparison, comparison.isRegression {
+      Self.logger.error(
+        "documents stopped validating",
+        metadata: ["documents": "\(comparison.stoppedValidating.count)"])
+      throw ExitCode.failure
     }
   }
 
@@ -201,9 +209,10 @@ struct ConvertCommand: AsyncParsableCommand {
   /// cause can hide an unknown one (`SchemaCheck`).
   ///
   /// Then, against the report this run replaced, the documents that stopped validating,
-  /// by name: those are the regressions, and a count that nets them against documents
-  /// that started would hide them.
-  static func logSchema(_ reports: [DocumentReport], previouslyValid: Set<String>?) {
+  /// by name (`SchemaComparison`), which the run fails on.
+  static func logSchema(
+    _ reports: [DocumentReport], previouslyValid: Set<String>?
+  ) -> SchemaComparison? {
     let checked = reports.compactMap(\.schema)
     Self.logger.info(
       "schema",
@@ -218,15 +227,17 @@ struct ConvertCommand: AsyncParsableCommand {
           "cause": "\(cause.rawValue)", "documents": "\(documents)", "onlyCause": "\(sole)",
         ])
     }
-    guard let previouslyValid else { return }
-    let valid = reports.filter { $0.schema == [] }.map(\.id)
-    let stopped = reports.filter { previouslyValid.contains($0.id) && $0.schema != [] }.map(\.id)
-    let started = valid.filter { !previouslyValid.contains($0) }.count
+    guard let previouslyValid else { return nil }
+    let comparison = SchemaComparison(reports: reports, previouslyValid: previouslyValid)
     Self.logger.info(
       "schema against the previous report",
-      metadata: ["startedValidating": "\(started)", "stoppedValidating": "\(stopped.count)"])
-    for id in stopped.prefix(40) {
+      metadata: [
+        "startedValidating": "\(comparison.startedValidating)",
+        "stoppedValidating": "\(comparison.stoppedValidating.count)",
+      ])
+    for id in comparison.stoppedValidating.prefix(40) {
       Self.logger.warning("stopped validating", metadata: ["document": "\(id)"])
     }
+    return comparison
   }
 }

@@ -234,18 +234,27 @@ corpus-fetch-xml: corpus-tool
 
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 # The report's `schema` field says, per document, why the output is not valid
-# RFCXML; `[]` is a document that validates. A regression is one that stops.
+# RFCXML; `[]` is a document that validates. A regression is one that stops, and it
+# fails the step once the new report is written. That report is the next run's
+# baseline, so rerunning passes: read the documents it names first.
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
 
 ## Check the schema check: three RFCs as the RFC Editor published them must validate
-# Needs them fetched (`make corpus-fetch-xml CORPUS_LIMIT=`). If one fails, the
-# schema or the validator is wrong, and no count the convert step reports means
-# anything until it is fixed.
-corpus-schema-control:
-	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+# If one fails, the schema or the validator is wrong, and no count the convert step
+# reports means anything until it is fixed; so `corpus` runs this before converting.
+# The three are fetched here when a limited `corpus-fetch-xml` left them out.
+SCHEMA_CONTROL_DOCUMENTS := $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+
+corpus-schema-control: $(SCHEMA_CONTROL_DOCUMENTS)
+	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(SCHEMA_CONTROL_DOCUMENTS)
+
+# One RFC as published in RFCXML, fetched where `corpus-fetch-xml` would have put it.
+$(CORPUS)/xml.noindex/%.xml:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 ## Check that each scripted override is still what its script makes
 # An override corrected by a script (corpus/overrides/rfcNNNN.py) is a snapshot of
@@ -279,4 +288,4 @@ corpus-queries: corpus-tool
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-manifest
