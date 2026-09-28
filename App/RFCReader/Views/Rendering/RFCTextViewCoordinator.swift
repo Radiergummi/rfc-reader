@@ -201,19 +201,11 @@ final class RFCTextViewCoordinator: NSObject {
     lastReportedAnchor = nil
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
-    // Written through the backing `NSTextStorage`, never by assigning
-    // `storage.attributedString`.
-    //
-    // That assignment *discards* the `NSTextStorage` — measured: non-nil before,
-    // nil immediately after, and `textView.textStorage` nil with it. TextKit 2
-    // lays out and draws from `attributedString` alone, so the document still
-    // renders perfectly and the damage is invisible: what breaks is everything
-    // AppKit still routes through the text storage. Dragging computed a correct
-    // selection and then discarded it at mouse-up, and `clickedOnLink` never
-    // fired, so the reader could be read but not selected, copied, or clicked.
-    storage.performEditingTransaction {
-      storage.textStorage?.setAttributedString(built.text)
-    }
+    // Through `install`, never by assigning `storage.attributedString`, which
+    // discards the text storage that selection and link clicks go through while
+    // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
+    // `StorageInstallTests` pins it.
+    storage.install(built.text)
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
