@@ -1044,6 +1044,13 @@ struct LegacyTextCorpusFindingsTests {
     #expect(LegacyTextParser.catalogueEntries(["   The value 1 - the default - is kept."]) == nil)
     // Entries at two different indents.
     #expect(LegacyTextParser.catalogueEntries(["   1 - One", "      2 - Two"]) == nil)
+    // A table with a column of its own after the name: joining it would run the
+    // columns together into one sentence.
+    #expect(
+      LegacyTextParser.catalogueEntries([
+        "      1 - query      A request for the whole table.",
+        "      2 - answer     The table itself.",
+      ]) == nil)
   }
 
   @Test func `a lettered catalogue number keeps its letter`() {

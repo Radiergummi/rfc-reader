@@ -1691,8 +1691,16 @@ public struct LegacyTextParser: Sendable {
   /// A paragraph indented past a catalogue entry's number and carrying no marker of
   /// its own is the rest of that entry: the standards summaries set an entry's
   /// description under it that way (RFC 2300's `This is an information document
-  /// ...`), and it was preserved as artwork. The same tests as a list item's
-  /// continuation, for the same reasons.
+  /// ...`), and it was preserved as artwork.
+  ///
+  /// The prose test, with one refusal excused for a short block. Most of those
+  /// descriptions are a phrase in title case (`A Draft Standard protocol.`), set
+  /// past the classic cap, and the prose test refuses a block there unless it reads
+  /// as sentences. Kept as artwork, each one ended the catalogue, and RFC 2300's
+  /// summary came out as 131 lists. The entry above explains the indent, as a list
+  /// item explains its continuation's; and at two lines at most, a block is too short
+  /// to be the algorithm steps and grammar that refusal is there for. Every other
+  /// refusal -- artwork punctuation, a column gap, a ragged indent -- still stands.
   private static func attachContinuation(
     _ block: RawBlock,
     toCatalogueAt numberIndent: Int,
@@ -1705,9 +1713,9 @@ public struct LegacyTextParser: Sendable {
     }
     guard block.indent > numberIndent, marker == nil, catalogueEntries(block.lines) == nil
     else { return false }
-    guard readsLikeSentences(block.lines, share: (of: 1, in: 2)),
-      looksLikeProse(block.lines, maxIndent: .max)
-    else { return false }
+    let refusals = diagnose(block.lines, maxIndent: .max, thorough: true).rejections
+    let excused = block.lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
+    guard refusals.allSatisfy(excused.contains) else { return false }
     let inlines = linker.link(joinWrappedLines(block.lines))
     guard !inlines.isEmpty else { return false }
     item.definition.append(.paragraph(Paragraph(inlines)))
@@ -2097,7 +2105,12 @@ public struct LegacyTextParser: Sendable {
     var entries: [(term: String, lines: [String])] = []
     for line in lines {
       if let match = line.firstMatch(of: catalogueEntryPattern) {
-        guard match.indent.count == indent else { return nil }
+        // A column gap in the entry is a table with a column of its own after the
+        // name (RFC 1058's `1 - request     A request ...`): joined as prose, the
+        // columns would run together into one sentence. Artwork keeps them apart.
+        guard match.indent.count == indent, !match.text.contains(internalGapPattern) else {
+          return nil
+        }
         entries.append((String(match.term), [String(match.text)]))
       } else if line.leadingSpaceCount > indent, !entries.isEmpty {
         entries[entries.count - 1].lines.append(line)

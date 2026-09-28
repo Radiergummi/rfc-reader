@@ -171,4 +171,15 @@ struct CorpusBackedCatalogueTests {
       catalogues(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
     #expect(entry.definition.count == 2)
   }
+
+  /// Most of those descriptions are a short phrase in title case (`A Draft Standard
+  /// protocol.`), which the sentence test a list item's continuation asks refuses.
+  /// Kept as artwork, each one ended the catalogue above it, and the summary came
+  /// out as one list per entry or two.
+  @Test func `a short description does not break the catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
+    let lists = catalogues(in: document)
+    #expect(lists.count < 20, "\(lists.count) catalogues")
+    #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
+  }
 }
