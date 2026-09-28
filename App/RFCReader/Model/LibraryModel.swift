@@ -133,11 +133,11 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
-    // Before anything is awaited, so that the parse is under way by the time this
-    // first suspends. `AppDelegate` starts this with `Task.immediate` and makes the
-    // first window once it does: the window is about 255 ms of the main thread, and
-    // the parse, which needs nothing from it, now runs beside it rather than after
-    // it (#367).
+    // Before anything is awaited, so that the parse is already running when this
+    // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
+    // makes the first window at that suspension: the window is about 255 ms of the
+    // main thread, and the parse, which needs nothing from it, runs beside it rather
+    // than after it (#367). Every `await` stays below this line.
     async let cached = Self.loadCachedIndex(from: store)
     await refreshDownloadedNumbers()
     do {
@@ -165,14 +165,14 @@ final class LibraryModel {
     }
   }
 
-  /// The cached index, parsed on the store's actor and prepared off the main actor
-  /// — the search and the working groups with it. Nil when there is none.
+  /// The cached index, parsed and prepared off the main actor and off the store's —
+  /// the search and the working groups with it. Nil when there is none.
   @concurrent
   private static func loadCachedIndex(from store: DocumentStore) async throws
-    -> (PreparedIndex, updatedAt: Date)?
+    -> (prepared: PreparedIndex, updatedAt: Date)?
   {
-    guard let cached = try await store.cachedIndex() else { return nil }
-    return (PreparedIndex(index: cached.index), cached.updatedAt)
+    guard let cached = store.cachedIndexLocation() else { return nil }
+    return (try PreparedIndex.parse(Data(contentsOf: cached.url)), cached.updatedAt)
   }
 
   @concurrent
