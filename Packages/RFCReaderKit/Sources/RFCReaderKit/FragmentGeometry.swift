@@ -54,6 +54,7 @@ public enum FragmentGeometry {
     public let rect: CGRect
     public let roundsLeading: Bool
     public let roundsTrailing: Bool
+    public var isInformative = false
   }
 
   /// A decoration can span several fragments — a multi-line artwork block lays out
@@ -241,7 +242,9 @@ public enum FragmentGeometry {
               height: bottom - top
             ),
             roundsLeading: roundsLeading,
-            roundsTrailing: roundsTrailing
+            roundsTrailing: roundsTrailing,
+            isInformative: text.attribute(.rfcInformative, at: piece.location, effectiveRange: nil)
+              != nil
           ))
       }
     }
