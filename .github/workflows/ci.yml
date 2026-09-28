@@ -188,7 +188,8 @@ jobs:
     # Every save above keys its entry on the commit, so each push to main adds one
     # per job, and the repository's 10 GB went to 36 compilation caches with nothing
     # pruned. A restore only ever takes the newest entry of a kind, so the rest are
-    # deleted. After the saves, and on main only, where the saves happen.
+    # deleted. After the saves, and on main only, where the saves happen. The corpus
+    # workflow's fetched text (corpus-text-, about 450 MB a run) is pruned here too.
     if: ${{ !cancelled() && github.event_name == 'push' }}
     needs: [rfckit-macos, app-build, rfckit-linux]
     runs-on: ubuntu-24.04
@@ -202,7 +203,7 @@ jobs:
     steps:
       - name: Keep the newest cache of each kind
         run: |
-          for prefix in xcode-compilation-cache- swiftpm-macos- swiftpm-linux-; do
+          for prefix in xcode-compilation-cache- swiftpm-macos- swiftpm-linux- corpus-text-; do
             gh cache list --key "$prefix" --ref refs/heads/main --sort created_at --order desc \
               --limit 100 --json id --jq '.[1:][].id' |
               xargs -r -n1 gh cache delete
