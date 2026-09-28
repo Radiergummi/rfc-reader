@@ -229,7 +229,9 @@ struct RFCRow: View {
           Group {
             // Proportional digits: tabular ones are for a column, and the number
             // leads a line of text now rather than standing in one.
-            Text(rfc.id.displayName)
+            // A narrow no-break space inside it, so "RFC" and its number read as
+            // one thing beside the parts the wider gaps set apart.
+            Text(rfc.id.displayName.replacing(" ", with: "\u{202F}"))
             if showsYear {
               Text(String(rfc.date.year))
             }
