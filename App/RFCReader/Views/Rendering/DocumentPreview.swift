@@ -103,7 +103,7 @@ struct DocumentPreview: View {
     do {
       let document = try await library.document(for: id)
       let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
-      let built = await Self.build(
+      let built = await DocumentView.build(
         document,
         style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
       loaded = Loaded(
@@ -117,10 +117,5 @@ struct DocumentPreview: View {
     } catch {
       failure = error.localizedDescription
     }
-  }
-
-  @concurrent
-  private static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
   }
 }

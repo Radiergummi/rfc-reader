@@ -845,7 +845,7 @@ final class RFCTextViewCoordinator: NSObject {
       }
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
-      let host = NSHostingController(rootView: AnyView(preview.environment(library)))
+      let host = NSHostingController(rootView: preview.environment(library))
       present(host, size: DocumentPreview.size, at: rect)
       isShowingDocumentPreview = true
     }
