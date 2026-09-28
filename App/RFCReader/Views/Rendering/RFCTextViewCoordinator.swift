@@ -305,10 +305,10 @@ final class RFCTextViewCoordinator: NSObject {
   /// the gutter, the column or the header's height moved. A relayout costs more
   /// still, and only the column can force one: a window wider than the measure
   /// moves the gutters, not the text.
-  func layOut(width: CGFloat) {
+  func layOut(width: CGFloat, measure: MeasurePreference) {
     guard let textView, width > 0 else { return }
-    let gutter = ReaderLayout.gutter(forWidth: width)
-    let column = ReaderLayout.column(forWidth: width)
+    let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)
+    let column = ReaderLayout.column(forWidth: width, measure: measure)
     // Measured every pass, deliberately: the height depends on the width, on the
     // content size category, and on metadata that can arrive after the first
     // layout, and a cache keyed on any one of those goes stale as a header

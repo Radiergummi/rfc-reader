@@ -30,6 +30,7 @@ struct DocumentView: View {
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
   @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
 
   let id: DocumentID
 
@@ -100,7 +101,7 @@ struct DocumentView: View {
   /// rebuilding it and losing the reader's place. What the panel overlaps, it
   /// covers, and closing it uncovers.
   private var column: CGFloat? {
-    paneWidth.map { ReaderLayout.column(forWidth: $0) }
+    paneWidth.map { ReaderLayout.column(forWidth: $0, measure: measure) }
   }
 
   private var metadata: RFCMetadata? { library.metadata(id) }
@@ -250,6 +251,7 @@ struct DocumentView: View {
       RFCTextView(
         built: built,
         bibliography: reader.groups,
+        measure: measure,
         lastVisibleAnchor: lastVisibleAnchor,
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },

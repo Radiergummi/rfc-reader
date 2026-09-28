@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftData
 import SwiftUI
 
@@ -246,20 +247,58 @@ struct DocumentCommands: Commands {
   }
 #endif
 
+/// The app's settings, tabbed the way a Mac app's are. A tab joins as a feature
+/// arrives that has something worth configuring, rather than ahead of it.
 struct SettingsView: View {
+  var body: some View {
+    TabView {
+      Tab("Reading", systemImage: "textformat.size") {
+        ReadingSettings()
+      }
+      Tab("General", systemImage: "gearshape") {
+        GeneralSettings()
+      }
+    }
+    .frame(width: 460)
+  }
+}
+
+private struct ReadingSettings: View {
   @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
   @AppStorage("underlineLinks") private var underlineLinks = false
+
+  /// A toggle over the preference rather than a picker: there are two choices,
+  /// and one of them is the default the reader opts out of.
+  private var usesFullWidth: Binding<Bool> {
+    Binding(
+      get: { measure == .fullWidth },
+      set: { measure = $0 ? .fullWidth : .recommended }
+    )
+  }
 
   var body: some View {
     Form {
       Slider(value: $fontSize, in: 12...28, step: 1) {
         Text("Reading font size: \(Int(fontSize))")
       }
-      Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
+      Toggle(isOn: usesFullWidth) {
+        Text("Use the full window width for text")
+        Text("Otherwise lines stop at a comfortable reading length, and the text is centred.")
+      }
       Toggle("Underline links", isOn: $underlineLinks)
     }
-    .padding()
-    .frame(width: 420)
+    .formStyle(.grouped)
+  }
+}
+
+private struct GeneralSettings: View {
+  @AppStorage("preferOriginalText") private var preferOriginalText = false
+
+  var body: some View {
+    Form {
+      Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
+    }
+    .formStyle(.grouped)
   }
 }
