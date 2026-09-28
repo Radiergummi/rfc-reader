@@ -317,6 +317,23 @@ struct LegacyTextParserTests {
     #expect(!LegacyTextParser.refusesUnnumberedHeading("How to use this document"))
   }
 
+  /// An appendix heading the appendix pattern missed falls through to the unnumbered
+  /// test, and has to keep passing it with a trailing period, a lower-case word or its
+  /// length: `Appendix A.`, `Annex B (informative): …`, a lettered `A.3.2.` subsection.
+  @Test func `an appendix heading is an unnumbered heading however it is written`() {
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("Appendix A."))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("APPENDIX 2 - COMMAND SYNTAX."))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading(
+        "Appendix 1.  Error Recovery and Resynchronization Strategies."))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading(
+        "Appendix B -- Differences from an earlier version of this text"))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading("Annex C (informative): Long term verification"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("B.1.2.  successful-ok-with-notes (0x0001)"))
+  }
+
   /// Through `parse`: a MIB set at column 0 opens no sections.
   @Test func `MIB lines at column 0 open no sections`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))

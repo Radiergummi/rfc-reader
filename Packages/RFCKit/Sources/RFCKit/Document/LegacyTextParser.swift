@@ -1473,6 +1473,10 @@ public struct LegacyTextParser: Sendable {
       depth: 1)
   }
 
+  /// A lettered section number, `A.3.2.` or `B.1 `, before the words of an appendix's
+  /// subsection.
+  nonisolated(unsafe) private static let letteredSectionNumber = #/[A-Z](\.\d+)+\.?\s/#
+
   /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
   /// definitions, braces, table rules and box drawing, arrows.
   private static let codePunctuation = ["::=", "{", "}", "|", "+--", "---", "===", "->"]
@@ -1502,6 +1506,16 @@ public struct LegacyTextParser: Sendable {
   /// lines, need the neighbouring lines to judge, which is a second pass.
   static func refusesUnnumberedHeading(_ title: String) -> Bool {
     guard let first = title.first else { return true }
+    // An appendix heading the appendix pattern missed lands here, and 90 of them were
+    // lost to these rules over the corpus: `Appendix A.`, `Appendix 1.  BGP FSM State
+    // Transitions and Actions.`, `Annex B (informative): …`, `A.3.2.  "subscription-
+    // resumed" …`. What they start with says heading, whatever follows it.
+    let opening = title.prefix(8).lowercased()
+    if opening.hasPrefix("appendix") || opening.hasPrefix("annex")
+      || title.prefixMatch(of: letteredSectionNumber) != nil
+    {
+      return false
+    }
     if first.isLowercase { return true }
     if codePunctuation.contains(where: { title.contains($0) }) { return true }
     if let last = title.last, ".;,".contains(last), !title.hasSuffix("etc.") { return true }
