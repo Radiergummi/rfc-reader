@@ -207,10 +207,11 @@ struct RFCXMLParserTests {
     #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
     #expect(
       bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
-    #expect(bcp14.display.chip != nil)
+    #expect(bcp14.display.isChip)
 
     let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
     #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
+    #expect(!transport.display.isChip)
   }
 
   /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.

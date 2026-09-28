@@ -216,8 +216,8 @@ struct BuilderStructureTests {
   /// reference is phrased — and had already drifted from them in one place. Those
   /// rules now live on `CrossReference.display`, which `plainText` answers from
   /// too, so the only thing left for the builder to get right is *rendering* them:
-  /// the chip's symbol goes in front of the span the model marked, and nothing
-  /// else moves.
+  /// the chip's symbol goes in front of a reference the model marks as a chip, and
+  /// nothing else moves.
   private static func renderedLabel(_ inlines: [Inline]) -> String {
     inlines.map { inline -> String in
       switch inline {
@@ -227,10 +227,7 @@ struct BuilderStructureTests {
         return renderedLabel(inner)
       case .crossReference(let xref):
         let display = xref.display
-        guard let chip = display.chip else { return display.text }
-        return String(display.text[display.text.startIndex..<chip.lowerBound])
-          + chipPrefix
-          + String(display.text[chip.lowerBound...])
+        return display.isChip ? chipPrefix + display.text : display.text
       case .lineBreak:
         return "\n"
       }

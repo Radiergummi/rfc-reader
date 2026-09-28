@@ -527,8 +527,8 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
   }
 
-  /// How a reader lays this reference out: the text it shows, and which part of
-  /// that text -- if any -- may be drawn as a chip.
+  /// How a reader lays this reference out: the text it shows, and whether it may be
+  /// drawn as a chip.
   ///
   /// One rule, in one place, because the screen and a copied selection have to
   /// agree. The renderer used to compose the section form itself while `plainText`
@@ -536,29 +536,30 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// "Section 4.2 of [RFC 9110]".
   public struct Display: Sendable, Equatable {
     public let text: String
-    /// The span of `text` a chip covers, or nil when the reference reads as
-    /// ordinary link text.
-    public let chip: Range<String.Index>?
+    /// Whether all of `text` is drawn as one chip; when not, the reference reads as
+    /// ordinary link text. A chip is always the whole reference: the section is a
+    /// suffix of the document it is in, so there is no text beside it to leave out.
+    public let isChip: Bool
   }
 
   public var display: Display {
     // Words from the source, or a reference within this document: neither is ours
     // to restyle.
     guard text == nil, case .document(let id, let section) = target else {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     // `bare` is the source asking for the section number alone. Drawing "RFC 9110
     // § 4.2" over the top of that would be answering a question it already
     // answered.
     if sectionFormat == .bare, section != nil {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     let name = Self.nonBreakingLabel(id.displayName)
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
     let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
-    return Display(text: composed, chip: composed.startIndex..<composed.endIndex)
+    return Display(text: composed, isChip: true)
   }
 
   /// The text a reader shows for this reference -- what `[Inline].plainText`
