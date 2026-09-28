@@ -35,6 +35,9 @@ struct RFCListView: View {
         .tag(rfc.id)
         #if !os(macOS)
           .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
+          // Closer than the default, as Notes sets its rows: measured on the same
+          // phone, ours stood about 8 pt taller above and 5 pt below.
+          .listRowInsets(.vertical, 6)
         #endif
         .onAppear {
           guard rfc.id == trigger else { return }
@@ -115,7 +118,6 @@ struct RFCListView: View {
     }
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
-      .navigationSubtitle(library.listSubtitle(for: navigation))
       // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
       // under it whenever the list was short enough not to scroll.
       .navigationBarTitleDisplayMode(.inline)
@@ -124,6 +126,19 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
+        // Written out rather than `.navigationSubtitle`, whose inline subtitle is
+        // a caption: Notes sets its count a size up, measured on the same phone.
+        ToolbarItem(placement: .principal) {
+          VStack(spacing: 0) {
+            Text(navigation.filter.title).font(.headline)
+            let subtitle = library.listSubtitle(for: navigation)
+            if !subtitle.isEmpty {
+              Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }
+          }
+          .accessibilityElement(children: .combine)
+          .accessibilityAddTraits(.isHeader)
+        }
       }
       // The index could be refreshed only from the status line at the list's very
       // end (#348).
@@ -194,26 +209,44 @@ struct RFCRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
-      // On iOS the title leads, in bold, and what identifies it follows, as a
-      // note's title leads its row in Notes (#346).
       #if os(macOS)
         designation
         title
+        HStack(spacing: 6) {
+          StatusBadge(status: rfc.currentStatus)
+          if rfc.isObsolete {
+            Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
+          }
+          if let group = rfc.workingGroup {
+            Text(group).font(.caption2).foregroundStyle(.tertiary)
+          }
+        }
       #else
+        // The title leads, in bold, as a note's title leads its row in Notes
+        // (#346), and everything else shares one line beneath it, the
+        // designation in its trailing corner.
         title.font(.headline)
-        designation
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+          StatusBadge(status: rfc.currentStatus)
+          Group {
+            if rfc.isObsolete {
+              Text("Obsolete")
+            }
+            if let group = rfc.workingGroup {
+              Text(group)
+            }
+          }
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          Spacer(minLength: 8)
+          designation
+        }
       #endif
-      HStack(spacing: 6) {
-        StatusBadge(status: rfc.currentStatus)
-        if rfc.isObsolete {
-          Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
-        }
-        if let group = rfc.workingGroup {
-          Text(group).font(.caption2).foregroundStyle(.tertiary)
-        }
-      }
     }
-    .padding(.vertical, 2)
+    #if os(macOS)
+      .padding(.vertical, 2)
+    #endif
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
@@ -225,7 +258,10 @@ struct RFCRow: View {
       Text(rfc.id.displayName)
         .font(.subheadline.monospacedDigit())
         .foregroundStyle(.secondary)
-      Spacer()
+      // On iOS the row's own line places it, in its trailing corner.
+      #if os(macOS)
+        Spacer()
+      #endif
       if isBookmarked {
         Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
       }

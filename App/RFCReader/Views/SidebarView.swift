@@ -125,8 +125,10 @@ struct SidebarView: View {
               .foregroundStyle(Color(uiColor: .label))
             Spacer()
             Image(systemName: "chevron.down.circle.fill")
-              .font(.title3)
-              .foregroundStyle(.white, Color(uiColor: .systemGray2))
+              // Notes' size and grey, measured on the same phone: 17 pt across,
+              // in a grey a step darker than `systemGray2`.
+              .font(.body)
+              .foregroundStyle(.white, Color(uiColor: .systemGray))
               .rotationEffect(.degrees(isExpanded.wrappedValue ? 0 : -90))
           }
         }
@@ -300,10 +302,19 @@ private struct SidebarLabelStyle: LabelStyle {
     let title: LabelStyleConfiguration.Title
     /// Wide enough for the widest symbol the sidebar uses, and scaled with the
     /// text so the column still holds at larger accessibility sizes.
-    @ScaledMetric(relativeTo: .body) private var column: CGFloat = 22
+    ///
+    /// On iOS wider and further from the title, where Notes sets its folder names,
+    /// measured on the same phone: the titles started 11 pt short of Notes'.
+    #if os(macOS)
+      @ScaledMetric(relativeTo: .body) private var column: CGFloat = 22
+      private let spacing: CGFloat = 6
+    #else
+      @ScaledMetric(relativeTo: .body) private var column: CGFloat = 28
+      @ScaledMetric(relativeTo: .body) private var spacing: CGFloat = 12
+    #endif
 
     var body: some View {
-      HStack(spacing: 6) {
+      HStack(spacing: spacing) {
         icon
           .frame(width: column)
           #if !os(macOS)
