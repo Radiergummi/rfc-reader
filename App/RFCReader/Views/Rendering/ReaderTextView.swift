@@ -104,10 +104,14 @@ import RFCReaderKit
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
     /// own tracking loop and does not return until the button is up. A click that
-    /// starts on a reference is tracked here instead.
+    /// starts on a reference is tracked here instead — a single click without
+    /// Control: a control-click is the context menu and a double-click selects,
+    /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
-      guard let (link, index) = referenceLink(event) else {
+      guard event.clickCount == 1, !event.modifierFlags.contains(.control),
+        let (link, index) = referenceLink(event)
+      else {
         super.mouseDown(with: event)
         return
       }
