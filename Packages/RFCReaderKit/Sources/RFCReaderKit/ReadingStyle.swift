@@ -24,8 +24,6 @@ public struct ReadingStyle: Sendable, Equatable {
   /// The system's text size, which headings are scaled for on their own curve:
   /// at the accessibility sizes a title grows less than the body does.
   public private(set) var textSize: DynamicTypeSize
-  /// Bold Text: prose weights one step heavier, as the system's own text is.
-  public private(set) var boldText: Bool
   /// Width available to text: the reader's 760 pt frame less its horizontal padding.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
@@ -43,11 +41,10 @@ public struct ReadingStyle: Sendable, Equatable {
   ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
     bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
-    underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large, boldText: Bool = false
+    underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
     self.textSize = textSize
-    self.boldText = boldText
     self.measure = measure
     self.lineHeightMultiple = lineHeightMultiple
     self.underlinesLinks = underlinesLinks
@@ -62,14 +59,14 @@ public struct ReadingStyle: Sendable, Equatable {
     return scaled
   }
 
-  public var bodyFont: PlatformFont { systemFont(ofSize: bodySize, weight: .regular) }
-  public var boldBodyFont: PlatformFont { systemFont(ofSize: bodySize, weight: .bold) }
-  public var captionFont: PlatformFont { systemFont(ofSize: bodySize * 0.88, weight: .regular) }
+  public var bodyFont: PlatformFont { .systemFont(ofSize: bodySize) }
+  public var boldBodyFont: PlatformFont { .boldSystemFont(ofSize: bodySize) }
+  public var captionFont: PlatformFont { .systemFont(ofSize: bodySize * 0.88) }
 
   /// Strong text in `surrounding`: a step heavier than it and at least bold, at
   /// its size and slant. A bold trait added to the face is not enough — on a
-  /// semibold face, which is what the body is under Bold Text, it changes nothing,
-  /// and strong text would read the same as the prose around it.
+  /// semibold face, which is what a heading is, it changes nothing, and strong
+  /// text would read the same as the heading around it.
   public func strongFont(matching surrounding: PlatformFont) -> PlatformFont {
     let heavier = Self.heavier(than: surrounding.weight)
     let weight = heavier.rawValue > PlatformFont.Weight.bold.rawValue ? heavier : .bold
@@ -88,35 +85,38 @@ public struct ReadingStyle: Sendable, Equatable {
     .adding(traits: slant)
   }
 
-  /// Verbatim blocks — artwork and source code — stay regular under Bold Text:
-  /// they are drawn with the characters, and a heavier stroke closes up a diagram's
-  /// box-drawing without making it any easier to read.
+  /// Verbatim blocks — artwork and source code. Bold Text is the system's to apply
+  /// (#153): UIKit makes its proportional system font heavier by itself, and was
+  /// seen on a device to leave this one regular, which suits a diagram — a heavier
+  /// stroke would close up its box-drawing without making it easier to read.
   public func monospacedFont(scale: CGFloat) -> PlatformFont {
     .monospacedSystemFont(ofSize: bodySize * 0.82 * scale, weight: .regular)
   }
 
   /// `1.` is a title, `1.1.` a subtitle, deeper is a headline: the system's
-  /// `.title2`, `.title3` and `.headline`, in proportion to the body at the current
-  /// text size, so they keep the system's relationship to it at every size.
+  /// `.title2`, `.title3` and `.headline`, in proportion to the body, so they keep
+  /// the platform's own relationship to it. On iOS that relationship changes with
+  /// the text size; the Mac has no Dynamic Type, and its titles are 17 and 15 pt
+  /// against a 13 pt body, which the reader has always rounded to 1.3 and 1.15.
   public func headingFont(depth: Int) -> PlatformFont {
-    // A headline is the body's size at every text size, so the deepest headings
-    // need no table of their own.
-    let ratio: CGFloat =
-      switch depth {
-      case 1: TextSizeMetrics.title2(textSize) / TextSizeMetrics.body(textSize)
-      case 2: TextSizeMetrics.title3(textSize) / TextSizeMetrics.body(textSize)
-      default: 1
-      }
-    return systemFont(ofSize: bodySize * ratio, weight: .semibold)
-  }
-
-  /// The system font at `weight`, a step heavier under Bold Text — unless the
-  /// system has already made it heavier itself, as UIKit may for its own font:
-  /// a face heavier than was asked for is Bold Text applied once already.
-  private func systemFont(ofSize size: CGFloat, weight: PlatformFont.Weight) -> PlatformFont {
-    let asked = PlatformFont.systemFont(ofSize: size, weight: weight)
-    guard boldText, asked.weight.rawValue < weight.rawValue + 0.05 else { return asked }
-    return .systemFont(ofSize: size, weight: Self.heavier(than: weight))
+    // A headline is the body's size on both platforms and at every text size, so
+    // the deepest headings need no ratio of their own.
+    #if os(macOS)
+      let ratio: CGFloat =
+        switch depth {
+        case 1: 1.3
+        case 2: 1.15
+        default: 1
+        }
+    #else
+      let ratio: CGFloat =
+        switch depth {
+        case 1: TextSizeMetrics.title2(textSize) / TextSizeMetrics.body(textSize)
+        case 2: TextSizeMetrics.title3(textSize) / TextSizeMetrics.body(textSize)
+        default: 1
+        }
+    #endif
+    return .systemFont(ofSize: bodySize * ratio, weight: .semibold)
   }
 
   /// One step up the weights the reader uses: regular to semibold, semibold to
@@ -128,7 +128,15 @@ public struct ReadingStyle: Sendable, Equatable {
   }
 
   public var paragraphSpacing: CGFloat { bodySize * 0.7 }
-  public var indentStep: CGFloat { bodySize * 1.4 }
+  /// One level of indent: the body's size and a bit, until that would take more
+  /// than a small share of the column. At the accessibility sizes the body grows to
+  /// three times its default and the column does not, and a step that grew with it
+  /// set a deeply nested paragraph on an iPhone in past the column's width (#153).
+  /// Bounded here, five levels never take more than two fifths of the column.
+  public var indentStep: CGFloat { min(bodySize * 1.4, measure * Self.indentShare) }
+
+  /// The most of the column one indent step may take.
+  static let indentShare: CGFloat = 0.08
 }
 
 /// How wide the reader sets its text.
