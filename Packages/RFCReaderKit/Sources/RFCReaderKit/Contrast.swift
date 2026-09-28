@@ -24,7 +24,8 @@ public struct SRGBColour: Hashable, Sendable {
   }
 
   public static let white = SRGBColour(red: 1, green: 1, blue: 1)
-  public static let black = SRGBColour(red: 0, green: 0, blue: 0)
+  /// For the tests, which check the contrast formula against its extremes.
+  static let black = SRGBColour(red: 0, green: 0, blue: 0)
 
   /// WCAG 2.x relative luminance: each channel linearised from the sRGB curve, then
   /// weighted by how bright the eye finds it. 0 is black, 1 is white.

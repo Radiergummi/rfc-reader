@@ -107,7 +107,8 @@ public enum RFCTraits {
     #endif
   }
 
-  public static var monospace: PlatformFontDescriptor.SymbolicTraits {
+  /// For the tests, which check that code runs are set monospaced.
+  static var monospace: PlatformFontDescriptor.SymbolicTraits {
     #if canImport(UIKit)
       .traitMonoSpace
     #else
