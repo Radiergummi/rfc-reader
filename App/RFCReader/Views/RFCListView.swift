@@ -29,15 +29,41 @@ struct RFCListView: View {
     // `library.open(_:activation:in:)` like every other open: a selection binding
     // is handed the outcome, not the click, and Command-click on a list row is the
     // platform's multi-select chord rather than ours to take.
-    List(selection: $navigation.selection) {
-      ForEach(rows.prefix(limit)) { rfc in
-        RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
-          .tag(rfc.id)
-          .onAppear {
-            guard rfc.id == trigger else { return }
-            limit = ListWindow.extendedLimit(from: limit, total: rows.count)
-          }
+    let window = rows.prefix(limit)
+    let row = { (rfc: RFCMetadata, showsYear: Bool) in
+      RFCRow(
+        rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear,
+        filter: navigation.filter
+      )
+      .tag(rfc.id)
+      #if !os(macOS)
+        .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
+      #endif
+      .onAppear {
+        guard rfc.id == trigger else { return }
+        limit = ListWindow.extendedLimit(from: limit, total: rows.count)
       }
+    }
+    List(selection: $navigation.selection) {
+      #if os(macOS)
+        ForEach(window) { row($0, true) }
+      #else
+        // By year where the list is in order of publication, as Notes sections
+        // its lists by date (#347). Over the window only: a later page's row may
+        // join a year already on screen, which is above the reader by then.
+        if YearSections.apply(to: navigation.filter, query: navigation.searchText) {
+          ForEach(YearSections.sections(of: window)) { section in
+            Section {
+              ForEach(section.rfcs) { row($0, false) }
+            } header: {
+              Text(String(section.year))
+                .levelWithCards()
+            }
+          }
+        } else {
+          ForEach(window) { row($0, true) }
+        }
+      #endif
       // Where Mail says when it last checked: after the last row, scrolled to
       // rather than pinned. Only once every row is in the window — after a
       // partial page it would read as the end of a list that goes on — and not
@@ -54,13 +80,29 @@ struct RFCListView: View {
     // Inset rather than plain: the selection is a rounded capsule with a margin
     // either side, the way every other macOS content list draws one. Plain fills
     // the row edge to edge and squares it off.
-    .listStyle(.inset)
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      // On iOS, cards with a margin round them, as Notes' lists are (#346).
+      .listStyle(.insetGrouped)
+      .headerProminence(.increased)
+    #endif
     .overlay {
       if rows.isEmpty, library.indexState.isReady {
-        ContentUnavailableView.search(text: navigation.searchText)
+        // "No Results" only for a search: an empty Bookmarks list was told to
+        // check its spelling.
+        if navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+          ContentUnavailableView(
+            "No \(navigation.filter.title)", systemImage: navigation.filter.systemImage)
+        } else {
+          ContentUnavailableView.search(text: navigation.searchText)
+        }
       }
     }
     .onChange(of: navigation.filter, initial: true) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
+    }
+    .onChange(of: navigation.listOptions) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.searchText) {
@@ -77,8 +119,39 @@ struct RFCListView: View {
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
       .navigationSubtitle(library.listSubtitle(for: navigation))
+      // Inline, as Notes titles a folder. Large, the subtitle shrank to a caption
+      // under it whenever the list was short enough not to scroll.
+      .navigationBarTitleDisplayMode(.inline)
+      // Narrows what this list shows, as Notes' field does inside a folder (#345).
+      .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
+      .toolbar {
+        LibraryBottomBar(navigation: navigation)
+        ToolbarItem(placement: .primaryAction) { optionsMenu }
+      }
+      // The index could be refreshed only from the status line at the list's very
+      // end (#348).
+      .refreshable { await library.refreshIndex() }
     #endif
   }
+
+  #if !os(macOS)
+    /// How the list is shown, for this tab (#348).
+    private var optionsMenu: some View {
+      @Bindable var navigation = navigation
+      return Menu {
+        if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
+          Picker("Sort", selection: $navigation.listOptions.order) {
+            ForEach(ListOptions.Order.allCases, id: \.self) { order in
+              Text(order.title)
+            }
+          }
+        }
+        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      } label: {
+        Label("View Options", systemImage: "ellipsis")
+      }
+    }
+  #endif
 
   /// Where the selected document sits in the list, if it is in it at all.
   ///
@@ -119,9 +192,78 @@ struct IndexStatusView: View {
 struct RFCRow: View {
   let rfc: RFCMetadata
   let isBookmarked: Bool
+  /// False under a year's header, which already says it (#347).
+  var showsYear = true
+  /// The list's filter, whose fixed fields the row leaves out: PPPEXT's rows need
+  /// not each say "pppext", nor the Internet Standards' each say "STD".
+  var filter: LibraryFilter?
+
+  private var showsStatus: Bool { filter?.fixesStatus != true }
+  private var workingGroup: String? {
+    filter?.fixesWorkingGroup == true ? nil : rfc.workingGroup
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
+      #if os(macOS)
+        designation
+        title
+        HStack(spacing: 6) {
+          if showsStatus {
+            StatusBadge(status: rfc.currentStatus)
+          }
+          if rfc.isObsolete {
+            Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
+          }
+          if let workingGroup {
+            Text(workingGroup).font(.caption2).foregroundStyle(.tertiary)
+          }
+        }
+      #else
+        // The title leads, in bold, as a note's title leads its row in Notes
+        // (#346), and everything else follows on one line beneath it, read from
+        // the start: a gap between the parts rather than a separator, and
+        // nothing pushed out to the far edge.
+        title.font(.headline)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+          Group {
+            // Proportional digits: tabular ones are for a column, and the number
+            // leads a line of text now rather than standing in one.
+            // A narrow no-break space inside it, so "RFC" and its number read as
+            // one thing beside the parts the wider gaps set apart.
+            Text(rfc.id.displayName.replacing(" ", with: "\u{202F}"))
+            if showsYear {
+              Text(String(rfc.date.year))
+            }
+            // Spelled as the sidebar and the list's title spell it.
+            if let workingGroup {
+              Text(workingGroup.uppercased())
+            }
+            if rfc.isObsolete {
+              Text("Obsolete")
+            }
+          }
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          if showsStatus {
+            StatusBadge(status: rfc.currentStatus)
+          }
+          if isBookmarked {
+            Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
+          }
+        }
+      #endif
+    }
+    .padding(.vertical, 2)
+    // One element, not five: VoiceOver read the number, the year, the title, the
+    // status and the group as separate stops per row (#156).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
+  }
+
+  #if os(macOS)
+    private var designation: some View {
       HStack(alignment: .firstTextBaseline) {
         Text(rfc.id.displayName)
           .font(.subheadline.monospacedDigit())
@@ -130,25 +272,76 @@ struct RFCRow: View {
         if isBookmarked {
           Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
         }
-        Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
-      }
-      Text(rfc.title)
-        .lineLimit(2)
-        .strikethrough(rfc.isObsolete, color: .secondary)
-      HStack(spacing: 6) {
-        StatusBadge(status: rfc.currentStatus)
-        if rfc.isObsolete {
-          Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
-        }
-        if let group = rfc.workingGroup {
-          Text(group).font(.caption2).foregroundStyle(.tertiary)
+        if showsYear {
+          Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
         }
       }
     }
-    .padding(.vertical, 2)
-    // One element, not five: VoiceOver read the number, the year, the title, the
-    // status and the group as separate stops per row (#156).
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
+  #endif
+
+  private var title: some View {
+    Text(rfc.title)
+      .lineLimit(2)
+      .strikethrough(rfc.isObsolete, color: .secondary)
+      // Typeset as the English it is. Under a German system language, iOS
+      // hyphenated titles mid-word, as in "Key Exch-ange" (#346).
+      .typesettingLanguage(.init(identifier: "en"))
   }
 }
+
+#if !os(macOS)
+  /// What a list row offers beyond a tap (#348): a leading swipe to bookmark it, and
+  /// a context menu previewing its abstract, as Notes previews a note.
+  private struct RowActions: ViewModifier {
+    let rfc: RFCMetadata
+    let isBookmarked: Bool
+    @Environment(\.modelContext) private var modelContext
+
+    func body(content: Content) -> some View {
+      content
+        .swipeActions(edge: .leading) {
+          Button(action: toggleBookmark) {
+            Label(
+              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: isBookmarked ? "bookmark.slash" : "bookmark")
+          }
+          .tint(.accentColor)
+        }
+        .contextMenu {
+          Button(action: toggleBookmark) {
+            Label(
+              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+          }
+          ShareLink(
+            item: RFCEditorEndpoints.infoPage(rfc.id),
+            subject: Text("\(rfc.id.displayName): \(rfc.title)"))
+        } preview: {
+          preview
+        }
+    }
+
+    private var preview: some View {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(rfc.id.displayName)
+          .font(.subheadline.monospacedDigit())
+          .foregroundStyle(.secondary)
+        Text(rfc.title).font(.headline)
+        if let abstract = rfc.abstract {
+          Text(abstract)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(12)
+        }
+      }
+      .typesettingLanguage(.init(identifier: "en"))
+      .padding()
+      .frame(width: 340, alignment: .leading)
+    }
+
+    private func toggleBookmark() {
+      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
+      BookmarkStore.toggle(rfc.id, title: title, in: modelContext)
+    }
+  }
+#endif

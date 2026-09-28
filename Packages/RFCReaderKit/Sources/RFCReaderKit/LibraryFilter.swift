@@ -43,6 +43,39 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     }
   }
 
+  /// Whether `rfc` is in this filter's list, for the filters the index alone
+  /// decides: nil for those the reader's own data decides, and for a series, whose
+  /// members the index lists rather than marks.
+  ///
+  /// One predicate for the list and for the sidebar's count of it, so the two
+  /// cannot disagree.
+  public func includes(_ rfc: RFCMetadata) -> Bool? {
+    switch self {
+    case .all: true
+    case .standards: rfc.currentStatus == .internetStandard
+    case .bestCurrentPractice: rfc.currentStatus == .bestCurrentPractice
+    case .stream(let stream): rfc.stream == stream
+    case .workingGroup(let group): rfc.workingGroup == group
+    case .recent, .bookmarks, .downloaded, .series: nil
+    }
+  }
+
+  /// Whether every RFC this filter lists has the same status, which its rows then
+  /// need not each show.
+  public var fixesStatus: Bool {
+    switch self {
+    case .standards, .bestCurrentPractice: true
+    default: false
+    }
+  }
+
+  /// Whether every RFC this filter lists is from the same working group, which its
+  /// rows then need not each show: PPPEXT's rows need not each say "pppext".
+  public var fixesWorkingGroup: Bool {
+    if case .workingGroup = self { return true }
+    return false
+  }
+
   /// The collection a script names, by the title the sidebar shows for it — the
   /// same string a script reads back — without regard to case: "All RFCs",
   /// "bookmarks", "IETF", "BCP 14", "httpbis".

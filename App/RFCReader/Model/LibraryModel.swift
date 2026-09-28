@@ -141,6 +141,7 @@ final class LibraryModel {
     self.index = prepared.index
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
+    self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
   }
@@ -159,6 +160,10 @@ final class LibraryModel {
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
 
+  /// How many RFCs each filter the index decides lists, derived with the index for
+  /// the same reason `topWorkingGroups` is (#344).
+  private(set) var indexCounts: [LibraryFilter: Int] = [:]
+
   /// Everything the list is a function of.
   ///
   /// The filter and the query are passed in rather than read off `self`: they belong
@@ -170,6 +175,7 @@ final class LibraryModel {
     let bookmarked: Set<Int>
     let recentlyRead: [Int]
     let downloaded: Set<Int>
+    let options: ListOptions
   }
 
   /// Answers remembered against their inputs.
@@ -210,10 +216,28 @@ final class LibraryModel {
       query: scene.searchText.trimmingCharacters(in: .whitespaces),
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
-      downloaded: filter == .downloaded ? scene.downloaded : []
+      downloaded: filter == .downloaded ? scene.downloaded : [],
+      options: scene.listOptions
     )
+    return list(key, in: index)
+  }
+
+  /// The whole library searched for `query`, whatever filter a scene is on: what the
+  /// sidebar lists while it is searched on an iPhone, where the list is not on
+  /// screen beside it (#345).
+  func librarySearch(_ query: String) -> [RFCMetadata] {
+    // Observed on every call, for the reason `list(for:)` gives.
+    guard let index else { return [] }
+    let key = ListKey(
+      filter: .all, query: query.trimmingCharacters(in: .whitespaces),
+      bookmarked: [], recentlyRead: [], downloaded: [], options: ListOptions())
+    return list(key, in: index)
+  }
+
+  private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     if let hit = listCache[key] { return hit }
-    let computed = computeList(key, in: index)
+    let computed = key.options.apply(
+      to: computeList(key, in: index), filter: key.filter, query: key.query)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
@@ -240,11 +264,9 @@ final class LibraryModel {
     case .recent: base = key.recentlyRead.compactMap { index[$0] }
     case .bookmarks: base = key.bookmarked.sorted(by: >).compactMap { index[$0] }
     case .downloaded: base = key.downloaded.sorted(by: >).compactMap { index[$0] }
-    case .standards: base = index.rfcs.reversed().filter { $0.currentStatus == .internetStandard }
-    case .bestCurrentPractice:
-      base = index.rfcs.reversed().filter { $0.currentStatus == .bestCurrentPractice }
-    case .stream(let stream): base = index.rfcs.reversed().filter { $0.stream == stream }
-    case .workingGroup(let group): base = index.rfcs.reversed().filter { $0.workingGroup == group }
+    // Through the predicate the sidebar's counts use, so the two cannot disagree.
+    case .standards, .bestCurrentPractice, .stream, .workingGroup:
+      base = index.rfcs.reversed().filter { filter.includes($0) == true }
     case .series(let id): base = index.series(id)?.members.compactMap { index[$0] } ?? []
     }
 

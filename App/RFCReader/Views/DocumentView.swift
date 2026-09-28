@@ -23,7 +23,6 @@ struct DocumentView: View {
     // live fetch of every bookmark per open document that nothing read.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Query private var bookmarks: [Bookmark]
   #endif
@@ -318,28 +317,26 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
-    private var hasRoomyToolbar: Bool {
-      ReaderLayout.toolbarHasRoom(
-        isRegularWidth: horizontalSizeClass == .regular,
-        isCompactHeight: verticalSizeClass == .compact)
-    }
-
-    /// Contents and More, plus Share when there is room; everything else is in
-    /// More (#245).
+    /// Share and More at the top; Contents and Cite leading the bottom bar, and
+    /// Bookmark trailing it as the view's primary action, the way Notes puts
+    /// Compose there (#342).
     ///
-    /// The inline title has the lowest priority in the bar. Five actions beside the
-    /// back button left an iPhone's bar no room for it, and it collapsed to "…".
-    /// Contents stays out of the menu because jumping to a section is what a long
-    /// RFC is read by.
+    /// The inline title has the lowest priority in the top bar, which is why only
+    /// two actions stay up there: five beside the back button left an iPhone's bar
+    /// no room for it, and it collapsed to "…" (#245).
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-      if hasRoomyToolbar, let metadata {
+      if let metadata {
         ToolbarItem(placement: .primaryAction) {
           shareLink(metadata)
         }
       }
 
       ToolbarItem(placement: .primaryAction) {
+        moreMenu
+      }
+
+      ToolbarItemGroup(placement: .bottomBar) {
         Button {
           withAnimation(.snappy) { showTableOfContents.toggle() }
         } label: {
@@ -347,46 +344,52 @@ struct DocumentView: View {
         }
         // The same chord as the Mac's (#157).
         .keyboardShortcut("i", modifiers: [.command, .option])
+
+        citeMenu
       }
 
-      ToolbarItem(placement: .primaryAction) {
-        moreMenu
+      ToolbarSpacer(.flexible, placement: .bottomBar)
+
+      ToolbarItem(placement: .bottomBar) {
+        bookmarkButton
       }
     }
 
-    private var moreMenu: some View {
+    private var bookmarkButton: some View {
       // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
-      return Menu {
+      return Button {
+        toggleBookmark()
+      } label: {
+        Label(
+          bookmarked ? "Remove Bookmark" : "Bookmark",
+          systemImage: bookmarked ? "bookmark.fill" : "bookmark")
+      }
+      .keyboardShortcut("d", modifiers: .command)
+    }
+
+    private var citeMenu: some View {
+      Menu {
+        ForEach(CitationStyle.allCases) { style in
+          Button(style.displayName) { copyCitation(style) }
+        }
+        Divider()
+        Button("Copy Link to Current Section") {
+          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+        }
+      } label: {
+        Label("Cite", systemImage: "quote.opening")
+      }
+    }
+
+    /// What is used least: the original text, and the document's pages elsewhere.
+    private var moreMenu: some View {
+      Menu {
         Section {
-          if !hasRoomyToolbar, let metadata {
-            shareLink(metadata)
-          }
-
-          Button {
-            toggleBookmark()
-          } label: {
-            Label(
-              bookmarked ? "Remove Bookmark" : "Bookmark",
-              systemImage: bookmarked ? "bookmark.fill" : "bookmark")
-          }
-          .keyboardShortcut("d", modifiers: .command)
-
-          Menu {
-            ForEach(CitationStyle.allCases) { style in
-              Button(style.displayName) { copyCitation(style) }
-            }
-            Divider()
-            Button("Copy Link to Current Section") {
-              Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-            }
-          } label: {
-            Label("Cite", systemImage: "quote.opening")
-          }
+          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
         }
 
         Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
           Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
           if let url = metadata?.errataURL {
             Button("Errata") { systemOpenURL(url) }
@@ -397,7 +400,7 @@ struct DocumentView: View {
           }
         }
       } label: {
-        Label("More", systemImage: "ellipsis.circle")
+        Label("More", systemImage: "ellipsis")
       }
     }
 
