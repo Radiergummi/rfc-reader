@@ -475,16 +475,22 @@
     private func showOrHideQuickOpen() {
       if navigation.isShowingGoToSheet {
         guard quickOpen == nil, let window else { return }
+        // ⌘L reaches the last reader window that was key, which may since have been
+        // minimised: the palette hangs from it, so it comes back first. The palette
+        // waits for it, since the window takes key back as it lands, and a panel that
+        // loses key closes.
+        if window.isMiniaturized {
+          window.deminiaturize(nil)
+          return
+        }
         let hide: () -> Void = { [weak self] in self?.navigation.isShowingGoToSheet = false }
         let panel = QuickOpenPanel(
           content: QuickOpenPalette(library: library, navigation: navigation, dismiss: hide),
           onClose: hide
         )
         quickOpen = panel
-        // ⌘L reaches the last reader window that was key, which may since have been
-        // minimised or left on another Space: the palette hangs from it, so it comes
-        // forward first rather than the palette floating alone where it used to be.
-        if window.isMiniaturized { window.deminiaturize(nil) }
+        // A window left on another Space comes forward too, rather than the palette
+        // floating alone where the window used to be.
         window.makeKeyAndOrderFront(nil)
         panel.show(over: window)
       } else {
@@ -508,6 +514,11 @@
     private func placeInitialFocus() {
       guard !hasPlacedInitialFocus, let window = window as? ReaderWindow else { return }
       hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
+    }
+
+    /// Where a palette asked for while the window was minimised is shown.
+    func windowDidDeminiaturize(_ notification: Notification) {
+      showOrHideQuickOpen()
     }
 
     func windowWillClose(_ notification: Notification) {
