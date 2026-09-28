@@ -110,6 +110,11 @@ public struct Author: Hashable, Sendable, Codable {
   public var isEditor: Bool {
     role?.lowercased().hasPrefix("ed") == true
   }
+
+  /// The name as the reader shows it, an editor's marked as one: "R. Fielding, Ed."
+  public var displayName: String {
+    isEditor ? "\(name), Ed." : name
+  }
 }
 
 /// An author's affiliation and address, as RFCXML's `<author>` states them.

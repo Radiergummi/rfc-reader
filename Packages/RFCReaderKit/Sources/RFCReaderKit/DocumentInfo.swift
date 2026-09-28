@@ -76,16 +76,21 @@ public struct DocumentInfo: Equatable, Sendable {
     case file(DocumentID, FileFormat)
     /// Keywords, set as tags, each searching the library for itself.
     case keywords([String])
+    /// People, drawn as the header's chips (#19).
+    case authors([Author])
   }
 
-  public init(_ metadata: RFCMetadata, in index: RFCIndex?) {
+  /// - Parameter authors: the document's own, once it is here: they carry the
+  ///   contact details a chip opens, which the index never has. The index's names
+  ///   stand in until then, as they do in the header.
+  public init(_ metadata: RFCMetadata, authors: [Author]? = nil, in index: RFCIndex?) {
     number = metadata.id.displayName
     title = metadata.title
     status = metadata.currentStatus
     isObsolete = metadata.isObsolete
     facts = Self.facts(metadata)
     sections = [
-      Self.section("Authors", .list, metadata.authors.map(Self.author)),
+      Self.section("Authors", .list, Self.authors(authors, else: metadata.authors)),
       Self.section("Relationships", .list, Self.relationships(metadata, index: index)),
       Self.section("Links", .card, Self.links(metadata)),
       Self.section("Formats", .card, Self.formats(metadata)),
@@ -112,9 +117,9 @@ public struct DocumentInfo: Equatable, Sendable {
     return facts
   }
 
-  /// "Editor" is the one role the index and both parsers record.
-  private static func author(_ author: Author) -> Row {
-    Row(label: "", value: .text(author.isEditor ? "\(author.name), Ed." : author.name))
+  private static func authors(_ own: [Author]?, else indexed: [Author]) -> [Row] {
+    let authors = own.flatMap { $0.isEmpty ? nil : $0 } ?? indexed
+    return authors.isEmpty ? [] : [Row(label: "", value: .authors(authors))]
   }
 
   /// Each relationship is a list, not a sentence: "obsoletes RFC 2616, 7230, 7231,
