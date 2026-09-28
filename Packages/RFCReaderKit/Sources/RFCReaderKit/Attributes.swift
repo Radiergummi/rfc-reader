@@ -16,11 +16,6 @@ extension NSAttributedString.Key {
   /// merges contiguous runs whose values compare equal and two adjacent chips must
   /// stay two runs. Only its distinctness is meaningful; nothing reads the number.
   public static let rfcChip = NSAttributedString.Key("rfcChip")
-  /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
-  /// sits inside a captioned figure: the Diagrams rotor's fallback label when
-  /// `Preformatted.name` is absent. What VoiceOver reads leaves it out, because the
-  /// caption is set as text right after the diagram (`AccessibleReading`).
-  public static let rfcCaption = NSAttributedString.Key("rfcCaption")
 }
 
 public enum RFCDecoration: String, Sendable {

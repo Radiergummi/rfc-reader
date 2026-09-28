@@ -73,10 +73,8 @@ extension RFCTextViewCoordinator {
         diagrams.append(
           AccessibilityRotorItem(range: NSUnionRange(last.range, range), label: last.label))
       } else {
-        let caption =
-          text.attribute(.rfcCaption, at: range.location, effectiveRange: nil) as? String
         diagrams.append(
-          AccessibilityRotorItem(range: range, label: box.content.name ?? caption ?? "Diagram"))
+          AccessibilityRotorItem(range: range, label: AccessibleReading.label(for: box)))
       }
       openBox = identity
     }

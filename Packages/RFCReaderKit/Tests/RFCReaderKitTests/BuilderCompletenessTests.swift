@@ -54,21 +54,6 @@ struct BuilderCompletenessTests {
     #expect(built.anchors.offset(of: "figure-3") != nil)
   }
 
-  @Test func `a captioned figure tags its artwork with the caption`() throws {
-    let figure = Figure(
-      title: "Packet layout",
-      number: 3,
-      blocks: [.preformatted(Preformatted(kind: .artwork, text: "+--+"))],
-      anchor: "figure-3"
-    )
-    let document = Fixtures.document(.figure(figure))
-    let built = DocumentTextBuilder.build(document, style: style)
-    let offset = try Fixtures.offset(of: "+--+", in: built.text)
-    #expect(
-      built.text.attribute(.rfcCaption, at: offset, effectiveRange: nil) as? String
-        == "Figure 3: Packet layout")
-  }
-
   @Test func `block quotes and asides are indented text with a decoration`() throws {
     let document = Fixtures.document(
       .blockQuote([.paragraph(Paragraph(text: "quoted"))]),
