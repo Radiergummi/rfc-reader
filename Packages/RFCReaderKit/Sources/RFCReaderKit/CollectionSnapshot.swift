@@ -48,14 +48,11 @@ public struct CollectionSnapshot: Equatable, Sendable {
     self.memberships = memberships
   }
 
-  /// From the store's rows: collections in `(position, createdAt, identifier)`
-  /// order, members in `(position, addedAt, documentKey)` order. Items naming a
-  /// collection that is not among `collections`, and keys that name no document,
-  /// are left out.
+  /// From the store's rows: collections in `DocumentCollection.order`, members in
+  /// `DocumentCollectionItem.order`. Items naming a collection that is not among
+  /// `collections`, and keys that name no document, are left out.
   public init(collections: [DocumentCollection], items: [DocumentCollectionItem]) {
-    let orderedItems = items.sorted {
-      ($0.position, $0.addedAt, $0.documentKey) < ($1.position, $1.addedAt, $1.documentKey)
-    }
+    let orderedItems = items.sorted(using: DocumentCollectionItem.order)
     var membersByCollection: [UUID: [DocumentID]] = [:]
     var seen: Set<Pair> = []
     for item in orderedItems {
@@ -66,10 +63,7 @@ public struct CollectionSnapshot: Equatable, Sendable {
         membersByCollection[collection, default: []].append(document)
       }
     }
-    let orderedCollections = collections.sorted {
-      ($0.position, $0.createdAt, $0.identifier.uuidString)
-        < ($1.position, $1.createdAt, $1.identifier.uuidString)
-    }
+    let orderedCollections = collections.sorted(using: DocumentCollection.order)
     self.init(
       collections: orderedCollections.map {
         Entry(
