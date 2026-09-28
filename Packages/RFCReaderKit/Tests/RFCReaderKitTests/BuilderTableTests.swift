@@ -13,8 +13,8 @@ import Testing
 @Suite("Builder: tables")
 @MainActor
 struct BuilderTableTests {
-  private func cells(_ strings: [String]) -> [[Inline]] {
-    strings.map { [Inline.text($0)] }
+  private func row(_ strings: [String]) -> RFCKit.Table.Row {
+    RFCKit.Table.Row(cells: strings.map { [Inline.text($0)] })
   }
 
   private func document(_ table: RFCKit.Table) -> RFCDocument {
@@ -25,8 +25,8 @@ struct BuilderTableTests {
     RFCKit.Table(
       title: "Methods",
       number: 1,
-      header: [cells(["Method", "Safe", "Idempotent"])],
-      rows: [cells(["GET", "yes", "yes"]), cells(["POST", "no", "no"])],
+      header: [row(["Method", "Safe", "Idempotent"])],
+      rows: [row(["GET", "yes", "yes"]), row(["POST", "no", "no"])],
       anchor: "table-1"
     )
   }
@@ -37,8 +37,8 @@ struct BuilderTableTests {
     RFCKit.Table(
       title: "Status Codes",
       number: 2,
-      header: [cells(["Code", "Description", "Ref."])],
-      rows: [cells(["404", String(repeating: "a long prose description ", count: 4), "6.5.4"])],
+      header: [row(["Code", "Description", "Ref."])],
+      rows: [row(["404", String(repeating: "a long prose description ", count: 4), "6.5.4"])],
       anchor: "table-2"
     )
   }
@@ -103,8 +103,8 @@ struct BuilderTableTests {
     let xref = CrossReference(target: .document(.rfc(9110), section: "6.5.4"), text: "[RFC 9110]")
     let table = RFCKit.Table(
       title: nil,
-      header: [cells(["Ref."])],
-      rows: [[[.crossReference(xref)]]],
+      header: [row(["Ref."])],
+      rows: [RFCKit.Table.Row(cells: [[.crossReference(xref)]])],
       anchor: "table-3"
     )
     let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
@@ -118,6 +118,15 @@ struct BuilderTableTests {
     #expect(built.text.string.contains("Table 1: Methods"))
   }
 
+  /// As xml2rfc writes it: the number and the name, the number alone, the name
+  /// alone, and nothing for a block that has neither.
+  @Test func `a caption is the number, the name, or both`() {
+    #expect(DocumentTextBuilder.caption("Table", number: 2, title: "Codes") == "Table 2: Codes")
+    #expect(DocumentTextBuilder.caption("Table", number: 2, title: nil) == "Table 2")
+    #expect(DocumentTextBuilder.caption("Table", number: nil, title: "Codes") == "Codes")
+    #expect(DocumentTextBuilder.caption("Table", number: nil, title: nil) == nil)
+  }
+
   @Test func `the anchor is indexed`() {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.anchors.offset(of: "table-1") != nil)
@@ -129,8 +138,8 @@ struct BuilderTableTests {
   @Test(arguments: [TableShape.grid, .stacked])
   func `a rows anchor is indexed at the row`(shape expected: TableShape) throws {
     var table = expected == .grid ? narrow : prose
-    if expected == .stacked { table.rows.append(cells(["410", "gone", "6.5.9"])) }
-    table.rowAnchors = [nil, "cited-row"]
+    if expected == .stacked { table.rows.append(row(["410", "gone", "6.5.9"])) }
+    table.rows[1].anchor = "cited-row"
     #expect(shape(table) == expected)
     let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
     let offset = try #require(built.anchors.offset(of: "cited-row"))
@@ -144,7 +153,7 @@ struct BuilderTableTests {
   @Test(arguments: [TableShape.grid, .stacked])
   func `a header rows anchor is indexed at the header`(shape expected: TableShape) throws {
     var table = expected == .grid ? narrow : prose
-    table.headerRowAnchors = ["cited-header"]
+    table.header[0].anchor = "cited-header"
     #expect(shape(table) == expected)
     let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
     let offset = try #require(built.anchors.offset(of: "cited-header"))

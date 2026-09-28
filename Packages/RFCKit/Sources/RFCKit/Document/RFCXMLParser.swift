@@ -36,15 +36,18 @@ public struct RFCXMLParser: Sendable {
     let header = builder.parseHeader(root)
     var sections: [Section] = []
     if let middle = root.first("middle") {
-      sections += builder.parseSections(in: middle, appendix: false)
+      sections += builder.parseSections(in: middle, appendix: false, position: nil)
     }
     if let back {
+      var count = 0
       for element in back.elements {
         switch element.name {
         case "references":
-          sections.append(builder.parseReferencesSection(element))
+          count += 1
+          sections.append(builder.parseReferencesSection(element, position: "back-\(count)"))
         case "section":
-          sections.append(builder.parseSection(element, appendix: true))
+          count += 1
+          sections.append(builder.parseSection(element, appendix: true, position: "back-\(count)"))
         default:
           break
         }
@@ -240,26 +243,41 @@ public struct RFCXMLParser: Sendable {
 
     // MARK: Sections
 
-    func parseSections(in parent: XMLTree.Element, appendix: Bool) -> [Section] {
-      parent.elements.compactMap { child in
+    /// Sections of `parent`, whose own position is `position` (nil for `<middle>`).
+    func parseSections(in parent: XMLTree.Element, appendix: Bool, position: String?) -> [Section] {
+      func childPosition(_ count: Int) -> String {
+        position.map { "\($0).\(count)" } ?? "\(count)"
+      }
+      var count = 0
+      return parent.elements.compactMap { child in
         switch child.name {
-        case "section": parseSection(child, appendix: appendix)
+        case "section":
+          count += 1
+          return parseSection(child, appendix: appendix, position: childPosition(count))
         // Not valid RFCXML, but our serializer emits it for a references subsection
         // whose siblings are ordinary sections; keep it as a subsection.
-        case "references": parseReferencesSection(child)
-        default: nil
+        case "references":
+          count += 1
+          return parseReferencesSection(child, position: childPosition(count))
+        default:
+          return nil
         }
       }
     }
 
-    func parseSection(_ element: XMLTree.Element, appendix: Bool) -> Section {
+    /// `position` is where the section sits among its siblings -- `2.1`, `back-1` --
+    /// and names a section that has neither `anchor` nor `pn`, as in unprepped XML.
+    /// An anchor keys deep links and reading positions, so it has to come out the same
+    /// on every parse.
+    func parseSection(_ element: XMLTree.Element, appendix: Bool, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let isNumbered = element["numbered"] != "false"
-      let anchor = element["anchor"] ?? partNumber ?? UUID().uuidString
+      let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
       let blocks = parseBlocks(in: element)
-      let subsections = parseSections(in: element, appendix: appendix || numbering.isAppendix)
+      let subsections = parseSections(
+        in: element, appendix: appendix || numbering.isAppendix, position: position)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
@@ -296,12 +314,14 @@ public struct RFCXMLParser: Sendable {
       return (nil, false)
     }
 
-    func parseReferencesSection(_ element: XMLTree.Element) -> Section {
+    /// `position` names an anchorless list, as it does a section in `parseSection`.
+    func parseReferencesSection(_ element: XMLTree.Element, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let title = parseHeadingTitle(element, fallback: "References")
       var entries: [Reference] = []
       var subsections: [Section] = []
+      var count = 0
       for child in element.elements {
         switch child.name {
         case "reference":
@@ -309,7 +329,8 @@ public struct RFCXMLParser: Sendable {
         case "referencegroup":
           entries.append(parseReferenceGroup(child))
         case "references":
-          subsections.append(parseReferencesSection(child))
+          count += 1
+          subsections.append(parseReferencesSection(child, position: "\(position).\(count)"))
         default:
           break
         }
@@ -318,7 +339,7 @@ public struct RFCXMLParser: Sendable {
         entries.isEmpty
         ? [] : [.references(ReferenceList(title: title.plainText, entries: entries))]
       return Section(
-        anchor: element["anchor"] ?? partNumber ?? "references",
+        anchor: element["anchor"] ?? partNumber ?? "unanchored-references-\(position)",
         number: numbering.number,
         title: title,
         blocks: blocks,
@@ -600,20 +621,17 @@ public struct RFCXMLParser: Sendable {
     }
 
     private func parseTable(_ element: XMLTree.Element) -> Table {
-      func cells(of rows: [XMLTree.Element]) -> [[[Inline]]] {
-        rows.map { row in
-          row.elements.filter { $0.name == "th" || $0.name == "td" }
-            .map { normalize(parseInlines($0.children)) }
+      func rows(_ elements: [XMLTree.Element]) -> [Table.Row] {
+        elements.map { row in
+          Table.Row(
+            cells: row.elements.filter { $0.name == "th" || $0.name == "td" }
+              .map { normalize(parseInlines($0.children)) },
+            anchor: row["anchor"])
         }
-      }
-      // Empty unless some row has one, as `Table.rowAnchors` documents.
-      func anchors(of rows: [XMLTree.Element]) -> [String?] {
-        rows.contains { $0["anchor"] != nil } ? rows.map { $0["anchor"] } : []
       }
       // RFC 7991 allows more than one `<tbody>`: RFC 9911's tables of YANG types
       // put each group of related types in its own, and reading only the first
-      // dropped all but the counters. The cells and the anchors are read from the
-      // same list of rows, so they cannot fall out of step.
+      // dropped all but the counters.
       let headerRows = element.first("thead")?.all("tr") ?? []
       let bodyRows = element.elements
         .filter { $0.name == "tbody" || $0.name == "tfoot" }
@@ -625,11 +643,9 @@ public struct RFCXMLParser: Sendable {
       return Table(
         title: element.first("name")?.normalizedText,
         number: number,
-        header: cells(of: headerRows),
-        rows: cells(of: bodyRows),
-        anchor: element["anchor"],
-        rowAnchors: anchors(of: bodyRows),
-        headerRowAnchors: anchors(of: headerRows)
+        header: rows(headerRows),
+        rows: rows(bodyRows),
+        anchor: element["anchor"]
       )
     }
 

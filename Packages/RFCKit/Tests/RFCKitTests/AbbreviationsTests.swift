@@ -73,6 +73,25 @@ struct AbbreviationsTests {
     #expect(abbreviation.sectionAnchor == "bad-assumptions")
   }
 
+  /// An entry's annotation is the citing author's own words about it, but it is
+  /// still the bibliography: an expansion there is as likely the cited document's,
+  /// copied, and a reader looking up an abbreviation in the body is not helped by
+  /// one found in a note on page 40. So it does not count either.
+  @Test func `a reference annotation is not the documents words`() {
+    let entry = Reference(
+      anchor: "TLS13", title: "The Transport Layer Security Protocol Version 1.3",
+      annotation: [.text("Specifies Transport Layer Security (TLS).")])
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Annotated"),
+      sections: [
+        Section(
+          anchor: "references", title: "References",
+          blocks: [.references(ReferenceList(title: "References", entries: [entry]))])
+      ],
+      source: .xml)
+    #expect(Abbreviations.defined(in: document)["TLS"] == nil)
+  }
+
   // MARK: The matching itself
 
   private func pairs(_ text: String) -> [String] {

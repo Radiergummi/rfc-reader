@@ -151,6 +151,27 @@ struct RFCXMLSerializerTests {
     #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
   }
 
+  /// `<references>` holds only entries, so a block beside them has nowhere to go. It
+  /// is dropped, and the caller is told, not left to find it missing.
+  @Test func `a dropped block comes back as a warning`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Test"),
+      sections: [
+        Section(
+          anchor: "references", title: "References",
+          blocks: [
+            .paragraph(Paragraph(text: "A note ahead of the entries.")),
+            .references(ReferenceList(title: "References", entries: [])),
+          ])
+      ],
+      source: .text
+    )
+    let serialization = RFCXMLSerializer().serialization(of: document)
+    #expect(!serialization.xml.contains("A note ahead of the entries."))
+    #expect(serialization.warnings.count == 1)
+    #expect(serialization.warnings.first?.contains("references") == true)
+  }
+
   @Test func `unresolved document references survive as links`() throws {
     // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
     let document = RFCDocument(

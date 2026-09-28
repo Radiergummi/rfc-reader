@@ -9,7 +9,7 @@ rfc-reader/
 │   │   ├── Models/           DocumentID, RFCMetadata, RFCIndex, enums for status/stream/format
 │   │   ├── Index/            RFCIndexParser (streaming SAX), XMLTree (small DOM used by the document parser)
 │   │   ├── Document/         RFCDocument model, RFCXMLParser (RFCXML v3), LegacyTextParser (plain text), RFCXMLSerializer
-│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient (actor), RFCLink (URL scheme + web URLs), feed parser
+│   │   ├── Client/           RFCEditorEndpoints, RFCEditorClient, RFCLink (URL scheme + web URLs), feed parser
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
 │   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed)
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
@@ -81,7 +81,7 @@ Both XML parsers ignore a parser error reported *after* the root element has clo
 ## Data flow in the app
 
 ```
-RFC Editor ──HTTP──▶ RFCEditorClient (actor) ──bytes──▶ DocumentStore (actor)
+RFC Editor ──HTTP──▶ RFCEditorClient ──────────bytes──▶ DocumentStore (actor)
                                                           │  writes rfcNNNN.xml/.txt to Application Support
                                                           │  parses on demand, memoises RFCDocument
                                                           ▼

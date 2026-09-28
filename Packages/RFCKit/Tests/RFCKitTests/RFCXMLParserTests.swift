@@ -59,6 +59,60 @@ struct RFCXMLParserTests {
     #expect(document.section(anchor: "status-of-memo") == nil)
   }
 
+  /// Unprepped XML -- a draft, or an RFC before the prep tool ran -- has sections with
+  /// neither `anchor` nor `pn`. Their anchors key the table of contents, deep links and
+  /// reading positions, so they must be the same on every parse and distinct in one.
+  @Test func `an unprepped section's anchor is stable and unique`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle>
+          <section><name>First</name>
+            <section><name>Nested</name></section>
+          </section>
+          <section><name>Second</name></section>
+        </middle>
+        <back>
+          <section><name>Appendix</name></section>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 4)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
+  /// Two anchorless reference lists -- normative and informative, in unprepped XML --
+  /// would otherwise share one fallback anchor, and a link to the second would land on
+  /// the first.
+  @Test func `unprepped reference lists get distinct anchors`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle><section anchor="intro"><name>Intro</name></section></middle>
+        <back>
+          <references><name>Normative References</name>
+            <reference anchor="A"><front><title>A</title></front></reference>
+          </references>
+          <references><name>Informative References</name>
+            <reference anchor="B"><front><title>B</title></front></reference>
+          </references>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 3)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
@@ -153,10 +207,11 @@ struct RFCXMLParserTests {
     #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
     #expect(
       bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
-    #expect(bcp14.display.chip != nil)
+    #expect(bcp14.display.isChip)
 
     let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
     #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
+    #expect(!transport.display.isChip)
   }
 
   /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.
@@ -357,9 +412,9 @@ struct RFCXMLParserTests {
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
     #expect(table.rows.count == 32)
-    #expect(table.rows.first?.first?.plainText == "counter32")
-    #expect(table.rows[6].first?.plainText == "object-identifier")
-    #expect(table.rows.last?.first?.plainText == "yang-identifier")
+    #expect(table.rows.first?.cells.first?.plainText == "counter32")
+    #expect(table.rows[6].cells.first?.plainText == "object-identifier")
+    #expect(table.rows.last?.cells.first?.plainText == "yang-identifier")
   }
 
   /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,

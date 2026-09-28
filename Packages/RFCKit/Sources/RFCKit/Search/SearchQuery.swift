@@ -8,49 +8,150 @@ import Foundation
 /// removed from the field is exactly the query on screen, and completion for the
 /// qualifier being typed.
 public enum SearchQuery {
+  // MARK: - The vocabulary
+
+  /// A filter the search field understands. The one table of the grammar:
+  /// `IndexSearch.parseQuery` reads a qualifier by any of its spellings, completion
+  /// offers it by its name, and `format` writes it back by its name.
+  enum Qualifier: CaseIterable, Sendable {
+    case workingGroup, status, author, stream, year, has
+
+    /// The long spelling, written back and offered.
+    var name: String {
+      switch self {
+      case .workingGroup: "wg"
+      case .status: "status"
+      case .author: "author"
+      case .stream: "stream"
+      case .year: "year"
+      case .has: "has"
+      }
+    }
+
+    /// Every spelling it is read by: its name, then its aliases.
+    var spellings: [String] {
+      switch self {
+      case .workingGroup: [name, "group"]
+      case .status: [name, "is"]
+      case .author: [name, "by"]
+      case .stream, .year, .has: [name]
+      }
+    }
+
+    init?(spelling: some StringProtocol) {
+      let spelling = spelling.lowercased()
+      guard let qualifier = Self.allCases.first(where: { $0.spellings.contains(spelling) })
+      else { return nil }
+      self = qualifier
+    }
+
+    /// What completion offers for the word that begins it. `has:` has one value,
+    /// so it is offered whole.
+    var completion: String {
+      self == .has ? "\(name):\(SearchQuery.xmlValue)" : "\(name):"
+    }
+
+    /// Whether its values are a closed vocabulary, so one outside it is a typo that
+    /// `parseQuery` searches as text or drops. Working groups are not closed: any
+    /// name filters.
+    var isClosed: Bool {
+      switch self {
+      case .status, .stream, .has: true
+      case .workingGroup, .author, .year: false
+      }
+    }
+  }
+
+  /// A `status:` value, with the long spellings it is also read by, and the statuses
+  /// it stands for. `current` is not a status but the obsolete filter, and has none.
+  struct StatusValue: Sendable {
+    let name: String
+    let longSpellings: [String]
+    let statuses: Set<PublicationStatus>
+
+    /// Every spelling it is read by: its name, then its long spellings.
+    var spellings: [String] { [name] + longSpellings }
+
+    /// Whether this is `current`, the obsolete filter.
+    var excludesObsolete: Bool { statuses.isEmpty }
+
+    static let all: [StatusValue] = [
+      StatusValue(
+        name: "std", longSpellings: ["standard", "standards"],
+        statuses: [.internetStandard, .draftStandard, .proposedStandard]),
+      StatusValue(name: "bcp", longSpellings: [], statuses: [.bestCurrentPractice]),
+      StatusValue(name: "info", longSpellings: ["informational"], statuses: [.informational]),
+      StatusValue(name: "exp", longSpellings: ["experimental"], statuses: [.experimental]),
+      StatusValue(name: "historic", longSpellings: [], statuses: [.historic]),
+      StatusValue(name: "current", longSpellings: [], statuses: []),
+    ]
+
+    init(name: String, longSpellings: [String], statuses: Set<PublicationStatus>) {
+      self.name = name
+      self.longSpellings = longSpellings
+      self.statuses = statuses
+    }
+
+    init?(spelling: some StringProtocol) {
+      let spelling = spelling.lowercased()
+      guard let value = Self.all.first(where: { $0.spellings.contains(spelling) }) else {
+        return nil
+      }
+      self = value
+    }
+  }
+
+  /// The `stream:` spelling of a stream.
+  static func spelling(of stream: Stream) -> String {
+    stream.rawValue.lowercased()
+  }
+
+  /// The stream a `stream:` value names.
+  static func stream(spelled spelling: some StringProtocol) -> Stream? {
+    let spelling = spelling.lowercased()
+    return Stream.allCases.first { Self.spelling(of: $0) == spelling }
+  }
+
+  /// The one value `has:` takes.
+  static let xmlValue = "xml"
+
   // MARK: - Writing a query back out
 
   /// The canonical form of a parsed query: one qualifier per filter, long spellings,
   /// in a fixed order, then the free text. `parseQuery` reads it back to the same
   /// filters and text.
   public static func format(text: String, filters: SearchFilters) -> String {
+    func word(_ qualifier: Qualifier, _ value: String) -> String { "\(qualifier.name):\(value)" }
     var words: [String] = []
-    if let group = filters.workingGroup { words.append("wg:\(group)") }
-    words += statusWords(filters.statuses).map { "status:\($0)" }
-    if filters.excludeObsolete { words.append("status:current") }
-    if let author = filters.author { words.append("author:\(author)") }
+    if let group = filters.workingGroup { words.append(word(.workingGroup, group)) }
+    words += statusWords(filters.statuses).map { word(.status, $0) }
+    if filters.excludeObsolete, let current = StatusValue.all.first(where: \.excludesObsolete) {
+      words.append(word(.status, current.name))
+    }
+    if let author = filters.author { words.append(word(.author, author)) }
     words += Stream.allCases.filter(filters.streams.contains).map {
-      "stream:\($0.rawValue.lowercased())"
+      word(.stream, spelling(of: $0))
     }
     if let years = filters.yearRange {
       words.append(
-        years.lowerBound == years.upperBound
-          ? "year:\(years.lowerBound)" : "year:\(years.lowerBound)-\(years.upperBound)")
+        word(
+          .year,
+          years.lowerBound == years.upperBound
+            ? "\(years.lowerBound)" : "\(years.lowerBound)-\(years.upperBound)"))
     }
-    if filters.requiresXML { words.append("has:xml") }
+    if filters.requiresXML { words.append(word(.has, xmlValue)) }
     let text = text.trimmingCharacters(in: .whitespaces)
     if !text.isEmpty { words.append(text) }
     return words.joined(separator: " ")
   }
 
-  /// The `status:` values, in `statusValues` order, whose statuses together make up
-  /// `statuses`. `parseQuery` only ever produces unions of these groups.
+  /// The `status:` values, in `StatusValue.all` order, whose statuses together make
+  /// up `statuses`. `parseQuery` only ever produces unions of these groups.
   private static func statusWords(_ statuses: Set<PublicationStatus>) -> [String] {
-    statusValues.compactMap { value, group in
-      group.isEmpty || !group.isSubset(of: statuses) ? nil : value
+    StatusValue.all.compactMap { value in
+      value.excludesObsolete || !value.statuses.isSubset(of: statuses) ? nil : value.name
     }
   }
-
-  /// What each `status:` value stands for, as `parseQuery` reads it. `current` is not
-  /// a status but the obsolete filter, and has no set.
-  private static let statusValues: [(String, Set<PublicationStatus>)] = [
-    ("std", [.internetStandard, .draftStandard, .proposedStandard]),
-    ("bcp", [.bestCurrentPractice]),
-    ("info", [.informational]),
-    ("exp", [.experimental]),
-    ("historic", [.historic]),
-    ("current", []),
-  ]
 
   // MARK: - Completion
 
@@ -60,17 +161,6 @@ public enum SearchQuery {
     /// A qualifier `parseQuery` does not know: the word is searched for as text.
     public var isUnknown: Bool
   }
-
-  /// The qualifiers, in the order they are offered, with the aliases each is also
-  /// typed as.
-  private static let qualifiers: [(name: String, aliases: [String])] = [
-    ("wg", ["group"]),
-    ("status", ["is"]),
-    ("author", ["by"]),
-    ("stream", []),
-    ("year", []),
-    ("has", []),
-  ]
 
   /// Completions for the last word of `query`, the one being typed.
   ///
@@ -94,47 +184,30 @@ public enum SearchQuery {
 
     guard let colon = word.firstIndex(of: ":") else {
       let typed = word.lowercased()
-      let begun = qualifiers.filter { qualifier in
-        ([qualifier.name] + qualifier.aliases).contains { $0.hasPrefix(typed) }
+      let begun = Qualifier.allCases.filter { qualifier in
+        qualifier.spellings.contains { $0.hasPrefix(typed) }
       }
-      return offer(begun.map { $0.name == "has" ? "has:xml" : "\($0.name):" })
+      return offer(begun.map(\.completion))
     }
-    let key = word[..<colon].lowercased()
     let typed = word[word.index(after: colon)...].lowercased()
-    guard let qualifier = qualifiers.first(where: { $0.name == key || $0.aliases.contains(key) })
-    else {
+    guard let qualifier = Qualifier(spelling: word[..<colon]) else {
       return [Suggestion(completion: query, isUnknown: true)]
     }
-    let values: [String] =
-      switch qualifier.name {
-      case "wg": workingGroups(in: index)
-      case "status": statusValues.map(\.0)
-      case "stream": Stream.allCases.map { $0.rawValue.lowercased() }
-      case "has": ["xml"]
-      default: []
+    let matching: [String] =
+      switch qualifier {
+      case .workingGroup: workingGroups(in: index).filter { $0.hasPrefix(typed) }
+      // A long spelling completes to the short value it means.
+      case .status:
+        StatusValue.all.filter { $0.spellings.contains { $0.hasPrefix(typed) } }.map(\.name)
+      case .stream: Stream.allCases.map(spelling(of:)).filter { $0.hasPrefix(typed) }
+      case .has: [xmlValue].filter { $0.hasPrefix(typed) }
+      case .author, .year: []
       }
-    var matching = values.filter { $0.hasPrefix(typed) }
-    if qualifier.name == "status" {
-      for (spelling, value) in statusSpellings
-      where spelling.hasPrefix(typed) && !matching.contains(value) {
-        matching.append(value)
-      }
-    }
-    // A value outside a closed vocabulary is a typo `parseQuery` would search as
-    // text, or drop. Working groups are not closed: any name filters.
-    if matching.isEmpty, !typed.isEmpty, ["status", "stream", "has"].contains(qualifier.name) {
+    if matching.isEmpty, !typed.isEmpty, qualifier.isClosed {
       return [Suggestion(completion: query, isUnknown: true)]
     }
     return offer(matching.map { "\(qualifier.name):\($0)" })
   }
-
-  /// The long `status:` spellings `parseQuery` also reads, and the value each means.
-  private static let statusSpellings: [(String, String)] = [
-    ("standard", "std"),
-    ("standards", "std"),
-    ("informational", "info"),
-    ("experimental", "exp"),
-  ]
 
   /// Every working group the index names, lowercased as `parseQuery` matches them,
   /// most documents first. Not one with a space in its name ("NON WORKING GROUP"):

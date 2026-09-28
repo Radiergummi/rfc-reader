@@ -28,8 +28,8 @@ struct DocumentTraversalTests {
                 items: [ListItem(blocks: [.paragraph(Paragraph([.text("item "), cite(3)]))])])),
             .table(
               Table(
-                title: nil, header: [[[.text("head "), cite(4)]]],
-                rows: [[[.text("cell "), cite(5)]]])),
+                title: nil, header: [Table.Row(cells: [[.text("head "), cite(4)]])],
+                rows: [Table.Row(cells: [[.text("cell "), cite(5)]])])),
             .definitionList([
               DefinitionItem(
                 term: [.text("term "), cite(6)],

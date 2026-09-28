@@ -27,7 +27,19 @@ public struct RFCXMLSerializer: Sendable {
     self.options = options
   }
 
+  /// The XML, and what could not be written into it.
+  public struct Serialization: Sendable {
+    public var xml: String
+    /// One line for each part of the document the XML has no place for and so leaves out.
+    public var warnings: [String]
+  }
+
+  /// The XML alone, for a caller that has no use for the warnings.
   public func serialize(_ document: RFCDocument) -> String {
+    serialization(of: document).xml
+  }
+
+  public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
     let referenceAnchors = Self.referenceAnchors(in: document)
     var context = Context(referenceAnchors: referenceAnchors)
@@ -88,7 +100,7 @@ public struct RFCXMLSerializer: Sendable {
       writer.close("back")
     }
     writer.close("rfc")
-    return writer.output
+    return Serialization(xml: writer.output, warnings: context.warnings)
   }
 
   /// Where `<back>` starts. The schema orders it as its `<references>`, then its
@@ -382,17 +394,17 @@ public struct RFCXMLSerializer: Sendable {
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for (index, row) in table.header.enumerated() {
-          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
-          for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
+        for row in table.header {
+          writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+          for cell in row.cells { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
         writer.close("thead")
       }
       writer.open("tbody")
-      for (index, row) in table.rows.enumerated() {
-        writer.open("tr", table.anchor(ofRow: index).map { [("anchor", $0)] } ?? [])
-        for cell in row { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
+      for row in table.rows {
+        writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+        for cell in row.cells { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
         writer.close("tr")
       }
       writer.close("tbody")

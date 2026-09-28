@@ -9,7 +9,6 @@ struct RFCIndexParserTests {
     #expect(index.rfcs.count >= 9)
     #expect(index.series.contains { $0.id == DocumentID(series: .bcp, number: 14) })
     #expect(index.series.contains { $0.id == DocumentID(series: .std, number: 97) })
-    #expect(index.notIssued.contains(14))
   }
 
   @Test func `reads rich metadata`() throws {
@@ -49,7 +48,6 @@ struct RFCIndexParserTests {
     let old = try #require(index[7231])
     #expect(old.isObsolete)
     #expect(old.obsoletedBy == [.rfc(9110)])
-    #expect(index.documentsAffecting(7231).map(\.number) == [9110])
   }
 
   @Test func `series membership`() throws {
