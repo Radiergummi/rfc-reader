@@ -54,7 +54,12 @@ struct RFCListView: View {
     // Inset rather than plain: the selection is a rounded capsule with a margin
     // either side, the way every other macOS content list draws one. Plain fills
     // the row edge to edge and squares it off.
-    .listStyle(.inset)
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      // On iOS, cards with a margin round them, as Notes' lists are (#346).
+      .listStyle(.insetGrouped)
+    #endif
     .overlay {
       if rows.isEmpty, library.indexState.isReady {
         ContentUnavailableView.search(text: navigation.searchText)
@@ -125,19 +130,15 @@ struct RFCRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
-      HStack(alignment: .firstTextBaseline) {
-        Text(rfc.id.displayName)
-          .font(.subheadline.monospacedDigit())
-          .foregroundStyle(.secondary)
-        Spacer()
-        if isBookmarked {
-          Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
-        }
-        Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
-      }
-      Text(rfc.title)
-        .lineLimit(2)
-        .strikethrough(rfc.isObsolete, color: .secondary)
+      // On iOS the title leads, in bold, and what identifies it follows, as a
+      // note's title leads its row in Notes (#346).
+      #if os(macOS)
+        designation
+        title
+      #else
+        title.font(.headline)
+        designation
+      #endif
       HStack(spacing: 6) {
         StatusBadge(status: rfc.currentStatus)
         if rfc.isObsolete {
@@ -153,5 +154,27 @@ struct RFCRow: View {
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
+  }
+
+  private var designation: some View {
+    HStack(alignment: .firstTextBaseline) {
+      Text(rfc.id.displayName)
+        .font(.subheadline.monospacedDigit())
+        .foregroundStyle(.secondary)
+      Spacer()
+      if isBookmarked {
+        Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
+      }
+      Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+    }
+  }
+
+  private var title: some View {
+    Text(rfc.title)
+      .lineLimit(2)
+      .strikethrough(rfc.isObsolete, color: .secondary)
+      // Typeset as the English it is. Under a German system language, iOS
+      // hyphenated titles mid-word, as in "Key Exch-ange" (#346).
+      .typesettingLanguage(.init(identifier: "en"))
   }
 }
