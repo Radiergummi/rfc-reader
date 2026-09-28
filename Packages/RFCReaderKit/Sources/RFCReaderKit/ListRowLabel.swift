@@ -12,10 +12,9 @@ extension RFCMetadata {
     if isObsolete {
       parts.append("Obsolete")
     }
-    // The index fills the field for documents from no group with this sentence
-    // rather than leaving it empty; prefixed, it would be read as "Working group
+    // Prefixed, the index's sentence for no group would be read as "Working group
     // NON WORKING GROUP".
-    if let workingGroup, workingGroup.caseInsensitiveCompare("NON WORKING GROUP") != .orderedSame {
+    if let workingGroup = namedWorkingGroup {
       parts.append("Working group \(workingGroup)")
     }
     parts.append(String(date.year))
@@ -23,5 +22,15 @@ extension RFCMetadata {
       parts.append("Bookmarked")
     }
     return parts.joined(separator: ", ")
+  }
+
+  /// The working group, or nil for a document from none: the index fills the field
+  /// for those with the sentence "NON WORKING GROUP" rather than leaving it empty.
+  var namedWorkingGroup: String? {
+    guard let workingGroup, workingGroup.caseInsensitiveCompare("NON WORKING GROUP") != .orderedSame
+    else {
+      return nil
+    }
+    return workingGroup
   }
 }

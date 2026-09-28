@@ -20,8 +20,14 @@ final class ReaderState {
   /// Only the sections the storage actually holds; see `DocumentView.rebuild()`.
   var sections: [RFCKit.Section] = []
   var groups: [ReferenceGroup] = []
-  /// Which of the two the panel is showing. Both are ways of navigating the
-  /// document, so they share one panel rather than competing for the toolbar.
+  /// What the Info pane shows, derived once per document by `DocumentView` (#25).
+  var info: DocumentInfo?
+  /// Which pane the inspector shows: the document's navigation, or what is known
+  /// about it. Each has its own toolbar button, and they share the one slot beside
+  /// the reader, as Pages' Format and Document do (`InspectorPane`).
+  var pane: InspectorPane = .navigation
+  /// Which tab the navigation pane is showing. The contents and references are both
+  /// ways of navigating the document, so they share one pane.
   var tab: InspectorTab = .contents
 
   /// The anchor the reader is looking at: the contents' highlight.
@@ -78,6 +84,7 @@ final class ReaderState {
   /// Shows a bibliography entry: what a citation of anything but an RFC links to
   /// (`DocumentTextBuilder.referenceScheme`).
   func reveal(reference anchor: String) {
+    pane = .navigation
     tab = .references
     revealedReference = RevealedReference(anchor: anchor)
     openPanel()
@@ -89,6 +96,7 @@ final class ReaderState {
     updateToolbarTitle(.hidden)
     sections = []
     groups = []
+    info = nil
     revealedReference = nil
     currentAnchor = nil
     currentSection = nil
