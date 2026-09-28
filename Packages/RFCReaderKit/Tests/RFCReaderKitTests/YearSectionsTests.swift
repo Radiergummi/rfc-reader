@@ -8,7 +8,7 @@ import Testing
 @Suite("Year sections")
 struct YearSectionsTests {
   private func rfc(_ number: Int, year: Int) -> RFCMetadata {
-    RFCMetadata(id: .rfc(number), title: "Title", date: PublicationDate(year: year))
+    Fixtures.metadata(number, year: year)
   }
 
   @Test func `consecutive rows of one year make one section`() {

@@ -37,6 +37,28 @@ enum Fixtures {
     LegacyTextParser.parse(try data("rfc2119.txt"))
   }
 
+  /// A committed fixture, parsed by its extension: this package's own where it has
+  /// one by that name, RFCKit's otherwise.
+  static func document(named name: String) throws -> RFCDocument {
+    let data =
+      Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Fixtures") != nil
+      ? try data(name) : try rfcKitData(name)
+    return name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+  }
+
+  /// An index entry for RFC `number` with only the fields a test sets; the rest are
+  /// the index's own defaults.
+  static func metadata(
+    _ number: Int, title: String = "Title", year: Int = 2020, month: Int? = nil,
+    obsoletedBy: [DocumentID] = [], currentStatus: PublicationStatus = .unknown,
+    stream: RFCKit.Stream = .legacy, workingGroup: String? = nil
+  ) -> RFCMetadata {
+    RFCMetadata(
+      id: .rfc(number), title: title, date: PublicationDate(year: year, month: month),
+      obsoletedBy: obsoletedBy, currentStatus: currentStatus, stream: stream,
+      workingGroup: workingGroup)
+  }
+
   /// A one-section document around `blocks` — the shell almost every builder test
   /// needs and none of them is testing.
   static func document(_ blocks: Block...) -> RFCDocument {

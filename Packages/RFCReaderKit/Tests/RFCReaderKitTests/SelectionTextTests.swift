@@ -7,14 +7,8 @@ import Testing
 @Suite("Selection text")
 @MainActor
 struct SelectionTextTests {
-  private let style = ReadingStyle()
-
-  private func run(_ inlines: [Inline]) -> NSAttributedString {
-    Fixtures.inlineRun(inlines, style: style)
-  }
-
   private func copied(_ inlines: [Inline]) -> String {
-    SelectionText.plainText(of: run(inlines))
+    SelectionText.plainText(of: Fixtures.inlineRun(inlines))
   }
 
   @Test func `ordinary prose is copied as it is`() {
@@ -86,7 +80,9 @@ struct SelectionTextTests {
   /// tail of one — which is also what stops a selection beginning after the symbol
   /// from copying a bare fragment.
   @Test func `a partly selected reference still copies whole`() {
-    let whole = run([.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))])
+    let whole = Fixtures.inlineRun([
+      .crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    ])
     let tail = whole.attributedSubstring(from: NSRange(location: whole.length - 2, length: 2))
     #expect(SelectionText.plainText(of: tail) == "[RFC 9110]")
   }

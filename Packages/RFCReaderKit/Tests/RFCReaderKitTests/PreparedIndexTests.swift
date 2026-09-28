@@ -11,8 +11,7 @@ import Testing
 @Suite("Prepared index")
 struct PreparedIndexTests {
   private func rfc(_ number: Int, title: String = "Title", group: String? = nil) -> RFCMetadata {
-    RFCMetadata(
-      id: .rfc(number), title: title, date: PublicationDate(year: 2020), workingGroup: group)
+    Fixtures.metadata(number, title: title, workingGroup: group)
   }
 
   @Test func `the working groups are the twelve with the most RFCs`() {
@@ -47,21 +46,19 @@ struct PreparedIndexTests {
   /// The sidebar's counts (#344), for every filter the index alone decides.
   @Test func `every filter the index decides is counted`() {
     let index = RFCIndex(rfcs: [
-      RFCMetadata(
-        id: .rfc(9110), title: "HTTP Semantics", date: PublicationDate(year: 2022),
-        currentStatus: .internetStandard, stream: .ietf, workingGroup: "httpbis"),
-      RFCMetadata(
-        id: .rfc(9111), title: "HTTP Caching", date: PublicationDate(year: 2022),
-        currentStatus: .internetStandard, stream: .ietf, workingGroup: "httpbis"),
-      RFCMetadata(
-        id: .rfc(2119), title: "Key words", date: PublicationDate(year: 1997),
-        currentStatus: .bestCurrentPractice, stream: .ietf),
-      RFCMetadata(
-        id: .rfc(9000), title: "QUIC", date: PublicationDate(year: 2021),
-        currentStatus: .proposedStandard, stream: .ietf, workingGroup: "quic"),
-      RFCMetadata(
-        id: .rfc(1149), title: "Avian carriers", date: PublicationDate(year: 1990),
-        currentStatus: .experimental, stream: .legacy),
+      Fixtures.metadata(
+        9110, title: "HTTP Semantics", year: 2022, currentStatus: .internetStandard,
+        stream: .ietf, workingGroup: "httpbis"),
+      Fixtures.metadata(
+        9111, title: "HTTP Caching", year: 2022, currentStatus: .internetStandard,
+        stream: .ietf, workingGroup: "httpbis"),
+      Fixtures.metadata(
+        2119, title: "Key words", year: 1997, currentStatus: .bestCurrentPractice, stream: .ietf),
+      Fixtures.metadata(
+        9000, title: "QUIC", year: 2021, currentStatus: .proposedStandard, stream: .ietf,
+        workingGroup: "quic"),
+      Fixtures.metadata(
+        1149, title: "Avian carriers", year: 1990, currentStatus: .experimental, stream: .legacy),
     ])
 
     let counts = PreparedIndex(index: index).counts

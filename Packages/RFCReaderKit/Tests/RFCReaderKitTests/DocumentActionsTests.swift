@@ -9,7 +9,7 @@ struct DocumentActionsTests {
   private let id = DocumentID(series: .rfc, number: 9110)
 
   private func metadata(title: String) -> RFCMetadata {
-    RFCMetadata(id: id, title: title, date: PublicationDate(year: 2022, month: 6))
+    Fixtures.metadata(id.number, title: title, year: 2022, month: 6)
   }
 
   // MARK: - The bookmark's title

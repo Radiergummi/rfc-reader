@@ -33,7 +33,7 @@ struct LibraryFilterTests {
     let filter = LibraryFilter.collection(UUID())
     #expect(!filter.fixesStatus)
     #expect(!filter.fixesWorkingGroup)
-    let rfc = RFCMetadata(id: .rfc(9000), title: "QUIC", date: PublicationDate(year: 2021))
+    let rfc = Fixtures.metadata(9000, title: "QUIC", year: 2021)
     #expect(filter.includes(rfc) == nil)
     #expect(!YearSections.apply(to: filter, query: ""))
   }
