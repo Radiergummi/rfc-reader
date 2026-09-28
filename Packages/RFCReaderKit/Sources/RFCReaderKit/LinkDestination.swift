@@ -12,6 +12,9 @@ public enum LinkDestination: Equatable, Sendable {
   /// Scroll this document to a section number or an anchor; the reader resolves
   /// either.
   case jump(String)
+  /// Show this entry of the document's bibliography, which the body leaves out;
+  /// see `DocumentTextBuilder.referenceScheme`.
+  case reference(String)
   /// Show the linked document. How — here or in a tab of its own — is the
   /// activation the caller already holds; `LibraryModel.open(_:activation:in:)` is
   /// the one place that turns it into an effect, so a Command-click means the same
@@ -28,6 +31,9 @@ public enum LinkDestination: Equatable, Sendable {
     // not what Command means.
     if let anchor = DocumentTextBuilder.anchor(from: url) {
       return .jump(anchor)
+    }
+    if let entry = DocumentTextBuilder.reference(from: url) {
+      return .reference(entry)
     }
     guard let link = RFCLink(url: url) else { return .unhandled }
 

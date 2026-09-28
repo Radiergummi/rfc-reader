@@ -29,6 +29,7 @@ struct DocumentView: View {
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage("underlineLinks") private var underlineLinks = false
 
   let id: DocumentID
 
@@ -104,26 +105,34 @@ struct DocumentView: View {
 
   private var metadata: RFCMetadata? { library.metadata(id) }
   #if !os(macOS)
-    private var isBookmarked: Bool { bookmarks.contains { $0.number == id.number } }
+    private var isBookmarked: Bool {
+      let key = id.fileStem
+      return bookmarks.contains { $0.documentKey == key }
+    }
   #endif
 
   /// Everything a build depends on. One trigger, so the document is built in one
-  /// place whatever changed — a new RFC, the font-size slider, or a window resize.
+  /// place whatever changed — a new RFC, a reading setting, or a window resize.
   private struct BuildInputs: Equatable {
     /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
     /// triggers the build. `load()` only ever fetches into a view with no
     /// document, so every load arrives as a false → true transition.
     let hasDocument: Bool
     let fontSize: Double
+    let underlineLinks: Bool
     let column: CGFloat?
 
     var style: ReadingStyle? {
-      column.map { ReadingStyle(bodySize: fontSize, measure: $0) }
+      column.map {
+        ReadingStyle(bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks)
+      }
     }
   }
 
   private var buildInputs: BuildInputs {
-    BuildInputs(hasDocument: document != nil, fontSize: fontSize, column: column)
+    BuildInputs(
+      hasDocument: document != nil, fontSize: fontSize, underlineLinks: underlineLinks,
+      column: column)
   }
 
   /// The reader, and on macOS only the reader.
@@ -178,6 +187,11 @@ struct DocumentView: View {
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
+        #if !os(macOS)
+          reader.openPanel = { [isPresented = $showTableOfContents] in
+            withAnimation(.snappy) { isPresented.wrappedValue = true }
+          }
+        #endif
       }
       .onChange(of: buildInputs, initial: true) {
         // Appearing again fires this with nothing changed. A build already made,
@@ -192,13 +206,13 @@ struct DocumentView: View {
         work.build = Task(name: "Build document") { await rebuild() }
       }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section)
+        jump(toSection: request?.section, animated: true)
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
   }
 
-  @State private var scrollTarget: String?
+  @State private var scrollTarget: ReaderScrollTarget?
 
   /// The width channel. It wraps everything, including the loading state, so the
   /// column is known before there is a document to build.
@@ -278,11 +292,11 @@ struct DocumentView: View {
       .onAppear {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
-          jump(toSection: request.section)
-        } else if let saved = storedPosition()?.sectionAnchor,
+          jump(toSection: request.section, animated: false)
+        } else if let saved = storedPosition()?.anchor,
           document.section(anchor: saved) != nil
         {
-          scrollTarget = saved
+          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
     } else if let loadError {
@@ -515,10 +529,11 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?) {
+  private func jump(toSection section: String?, animated: Bool) {
     guard let section, let document else { return }
-    scrollTarget =
+    let anchor =
       (document.section(number: section) ?? document.section(anchor: section))?.anchor ?? section
+    scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
@@ -540,6 +555,8 @@ struct DocumentView: View {
     switch LinkDestination.resolve(url, from: id, activation: activation) {
     case .jump(let section):
       navigation.jump(toSection: section)
+    case .reference(let anchor):
+      reader.reveal(reference: anchor)
     case .document(let link):
       library.open(link, activation: activation, in: navigation)
     case .unhandled:
@@ -563,8 +580,9 @@ struct DocumentView: View {
   #endif
 
   private func storedPosition() -> ReadingPosition? {
-    let number = id.number
-    let descriptor = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.number == number })
+    let key = id.fileStem
+    let descriptor = FetchDescriptor<ReadingPosition>(
+      predicate: #Predicate { $0.documentKey == key })
     return try? modelContext.fetch(descriptor).first
   }
 
@@ -581,17 +599,19 @@ struct DocumentView: View {
     if let existing = storedPosition() {
       existing.updatedAt = .now
     } else {
-      modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: nil))
+      modelContext.insert(ReadingPosition(document: id, place: nil))
     }
   }
 
   private func saveReadingPosition() {
-    let anchor = lastVisibleAnchor.anchor
+    // The anchor alone for now: the reader reports the section on screen, not the
+    // offset within it, so a place is saved at the anchor itself (#152).
+    let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
     if let existing = storedPosition() {
-      existing.sectionAnchor = anchor
+      existing.place = place
       existing.updatedAt = .now
     } else {
-      modelContext.insert(ReadingPosition(number: id.number, sectionAnchor: anchor))
+      modelContext.insert(ReadingPosition(document: id, place: place))
     }
   }
 }

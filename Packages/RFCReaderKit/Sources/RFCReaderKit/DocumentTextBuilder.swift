@@ -21,6 +21,12 @@ public final class DocumentTextBuilder {
   /// `InlineText`, which this replaces.
   public static let anchorScheme = "rfc-anchor"
 
+  /// The scheme a citation of a bibliography entry uses instead. The body leaves
+  /// the bibliography to the panel (`holdsOnlyReferences`), so a citation of
+  /// anything but an RFC — still an anchor after parsing — has no position to
+  /// scroll to, and goes to its entry there.
+  public static let referenceScheme = "rfc-reference"
+
   /// The style the *current* region is emitted in. A `var` because a region can be
   /// set quieter than the body around it — see `emitting(in:colour:)`.
   private(set) var style: ReadingStyle
@@ -52,6 +58,10 @@ public final class DocumentTextBuilder {
   /// reference, and RFCs are full of them.
   var chipSymbols: [CGFloat: PlatformImage] = [:]
 
+  /// The anchors of the document's bibliography entries, which `url(for:)` links
+  /// with `referenceScheme`. Collected before anything is emitted.
+  var referenceAnchors: Set<String> = []
+
   init(style: ReadingStyle) {
     self.style = style
   }
@@ -59,6 +69,7 @@ public final class DocumentTextBuilder {
   public static func build(_ document: RFCDocument, style: ReadingStyle) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style)
     builder.appendDocument(document)
+    builder.reserveChipPadding()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
@@ -98,6 +109,8 @@ public final class DocumentTextBuilder {
 
 extension DocumentTextBuilder {
   func appendDocument(_ document: RFCDocument) {
+    referenceAnchors = Set(
+      ReferenceGroup.groups(in: document).flatMap { $0.entries.map(\.anchor) })
     appendAbstract(document.header.abstract)
     for section in document.sections {
       appendSection(section, depth: 1)
