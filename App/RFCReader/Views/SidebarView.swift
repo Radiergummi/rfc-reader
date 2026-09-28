@@ -49,25 +49,8 @@ struct SidebarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
       }
-      // At the sidebar's foot, where the Mac's own sidebars keep their add button
-      // (#349); File > New Collection does the same.
-      .safeAreaInset(edge: .bottom) {
-        HStack {
-          Button {
-            navigation.collectionEditor = .create(adding: nil)
-          } label: {
-            Label("New Collection", systemImage: "folder.badge.plus")
-          }
-          .buttonStyle(.borderless)
-          .labelStyle(.titleAndIcon)
-          Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        // The rows scroll under it: without a bar behind it, their titles showed
-        // through the button's.
-        .background(.bar)
-      }
+    // New Collection is File > New Collection… on the Mac, and nowhere in the
+    // sidebar: a fixed button at its foot read as out of place (#349).
     #else
       // Beside Edit, as Notes keeps New Folder (#349).
       .toolbar {
