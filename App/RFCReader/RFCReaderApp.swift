@@ -112,6 +112,11 @@ struct DocumentCommands: Commands {
       Button("Go to RFC…") { openDocument?() }
         .keyboardShortcut("l", modifiers: .command)
         .disabled(openDocument == nil)
+      #if os(macOS)
+        Button("New Collection…") { navigation?.collectionEditor = .create(adding: nil) }
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .disabled(navigation == nil)
+      #endif
     }
     #if os(macOS)
       // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to

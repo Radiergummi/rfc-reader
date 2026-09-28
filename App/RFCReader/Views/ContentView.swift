@@ -112,6 +112,9 @@ import SwiftUI
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
+      .sheet(item: $navigation.collectionEditor) { mode in
+        CollectionEditorSheet(mode: mode)
+      }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
       }
