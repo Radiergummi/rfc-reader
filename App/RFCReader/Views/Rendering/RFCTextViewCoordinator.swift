@@ -329,15 +329,10 @@ final class RFCTextViewCoordinator: NSObject {
     // content size category, and on metadata that can arrive after the first
     // layout, and a cache keyed on any one of those goes stale as a header
     // overlapping the first paragraph. Only the writes below are conditional.
-    //
-    // A header with no height of its own — `EmptyView`, as a link preview's reader
-    // has — answers with the height it was offered, 1.8e308, and that inset made
-    // the text view's frame height NaN, which AppKit traps on (#29). Such a header
-    // has no height.
     let offered = CGFloat.greatestFiniteMagnitude
     let measured =
       headerHost?.sizeThatFits(in: CGSize(width: column, height: offered)).height ?? 0
-    let headerHeight = measured < offered ? measured : 0
+    let headerHeight = ReaderLayout.headerHeight(measured: measured, offered: offered)
     guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
     else { return }
     let columnChanged = column != laidOutColumn

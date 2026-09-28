@@ -125,6 +125,15 @@ public enum ReaderLayout {
   public static func column(forWidth width: CGFloat, measure: MeasurePreference) -> CGFloat {
     width - gutter(forWidth: width, measure: measure) * 2
   }
+
+  /// The inset a hosted header takes, given what it measured when `offered` a
+  /// height. A header with no height of its own — `EmptyView`, as a link preview's
+  /// reader has (#29) — answers with the height it was offered, 1.8e308, and that
+  /// inset made the text view's frame height NaN, which AppKit traps on. Such a
+  /// header has no height.
+  public static func headerHeight(measured: CGFloat, offered: CGFloat) -> CGFloat {
+    measured < offered ? measured : 0
+  }
 }
 
 /// How wide the window's own title is drawn, given the column it sits over.
