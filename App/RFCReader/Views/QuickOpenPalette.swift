@@ -1,4 +1,5 @@
 #if os(macOS)
+  import AppKit
   import RFCKit
   import RFCReaderKit
   import SwiftUI
@@ -19,12 +20,20 @@
 
     @State private var input = ""
     @State private var results = QuickOpenResults()
-    /// Whether the hits on screen are for what is typed now, so "nothing matches"
-    /// waits for the search rather than flashing on every keystroke.
-    @State private var isSearching = false
+    /// ↵ was pressed while the selection was a hit of an earlier query: open what
+    /// the search for the current one selects, as soon as it lands, the way the key
+    /// press asked for — its modifiers are long released by then.
+    @State private var pendingActivation: LinkActivation?
     @FocusState private var isFocused: Bool
 
     static let width: CGFloat = 620
+
+    /// What a search depends on. The index is part of it so that a palette opened
+    /// before the index loaded searches again once it has.
+    private struct SearchKey: Equatable {
+      var input: String
+      var hasIndex: Bool
+    }
 
     var body: some View {
       VStack(spacing: 0) {
@@ -32,9 +41,9 @@
         if !results.rows.isEmpty {
           Divider()
           rows
-        } else if !trimmedInput.isEmpty, !isSearching {
+        } else if let message {
           Divider()
-          Text("Nothing in the index matches “\(trimmedInput)”.")
+          Text(message)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
@@ -43,8 +52,17 @@
       }
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
-      .task(id: input) { await update() }
+      .task(id: SearchKey(input: input, hasIndex: library.index != nil)) { await update() }
       .onAppear { isFocused = true }
+    }
+
+    /// Said in place of rows, once there is something to say: not while a search is
+    /// still running, so it does not flash on every keystroke.
+    private var message: String? {
+      let query = results.query
+      guard !query.isEmpty, !results.isSearching else { return nil }
+      if library.index == nil { return "The RFC index is still loading." }
+      return "Nothing in the index matches “\(query)”."
     }
 
     private var field: some View {
@@ -52,30 +70,33 @@
         Image(systemName: "magnifyingglass")
           .font(.title2)
           .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
         TextField("RFC number, BCP 14, or a link", text: $input)
           .textFieldStyle(.plain)
           .font(.title2)
           .focused($isFocused)
-          .onKeyPress(.upArrow) {
-            results.moveSelection(by: -1)
-            return .handled
-          }
-          .onKeyPress(.downArrow) {
-            results.moveSelection(by: 1)
-            return .handled
-          }
+          .accessibilityLabel("Go to RFC")
+          .onKeyPress(.upArrow) { moveSelection(by: -1) }
+          .onKeyPress(.downArrow) { moveSelection(by: 1) }
           // Any modifiers: `LinkActivation.current` reads them off the key press, so
           // ⌘↵ opens a tab behind this one and ⇧↵ one in front, as a click does.
           .onKeyPress(.return) {
-            open(results.selected)
+            guard !isComposing else { return .ignored }
+            openSelection()
             return .handled
           }
+          // The same, should the field editor take Return before the key press
+          // reaches SwiftUI; a handled press never submits, so it cannot open twice.
+          .onSubmit(openSelection)
           .onExitCommand(perform: dismiss)
       }
       .padding(.horizontal, 18)
       .padding(.vertical, 14)
     }
 
+    /// No hover selection: rows move under a resting pointer as hits arrive, and a
+    /// row the pointer merely found itself over must not take ↵ from the one the
+    /// keyboard chose. A click opens the row it lands on.
     private var rows: some View {
       VStack(spacing: 2) {
         ForEach(results.rows, id: \.self) { link in
@@ -92,7 +113,7 @@
           .fontWeight(.semibold)
           .monospacedDigit()
           .frame(width: 84, alignment: .leading)
-        Text(library.metadata(link.id)?.title ?? "Not in the index")
+        Text(library.summary(of: link.id) ?? "Not in the index")
           .lineLimit(1)
           .truncationMode(.tail)
           .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
@@ -111,27 +132,43 @@
         }
       }
       .contentShape(.rect)
-      .onHover { inside in
-        if inside { results.select(link) }
-      }
       .onTapGesture { open(link) }
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+      .accessibilityAction { open(link) }
     }
 
-    private var trimmedInput: String {
-      input.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// An input method's uncommitted text owns the arrows and Return: they pick and
+    /// confirm the composition, not a row.
+    private var isComposing: Bool {
+      (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() == true
+    }
+
+    private func moveSelection(by offset: Int) -> KeyPress.Result {
+      guard !isComposing else { return .ignored }
+      results.moveSelection(by: offset)
+      return .handled
     }
 
     /// Runs per keystroke and is cancelled by the next one, which is the debounce:
     /// only a pause long enough to outlast the sleep reaches the search.
     private func update() async {
-      results.show(exact: DocumentReference.link(from: input))
-      let query = trimmedInput
-      guard !query.isEmpty else {
-        results.show(hits: [])
-        isSearching = false
+      // Typing on after ↵ is a change of mind.
+      pendingActivation = nil
+      let query = input.trimmingCharacters(in: .whitespacesAndNewlines)
+      let exact = DocumentReference.link(from: query)
+      results.show(query: query, exact: exact)
+      guard !query.isEmpty else { return }
+      // A link names its document outright, and no title or abstract contains one:
+      // scanning the index for it would take the whole scan to find nothing.
+      if exact != nil, query.contains("://") {
+        finish(with: [], for: query)
         return
       }
-      isSearching = true
+      guard library.index != nil else {
+        finish(with: [], for: query)
+        return
+      }
       do {
         try await Task.sleep(for: .milliseconds(120))
       } catch {
@@ -139,13 +176,28 @@
       }
       let hits = await library.suggestions(for: query, limit: QuickOpenResults.limit)
       guard !Task.isCancelled else { return }
-      results.show(hits: hits)
-      isSearching = false
+      finish(with: hits, for: query)
     }
 
-    private func open(_ link: RFCLink?) {
+    private func finish(with hits: [DocumentID], for query: String) {
+      results.show(hits: hits, for: query)
+      if let activation = pendingActivation, !results.isSearching {
+        pendingActivation = nil
+        open(results.openable, activation: activation)
+      }
+    }
+
+    private func openSelection() {
+      if let link = results.openable {
+        open(link)
+      } else if results.isSearching {
+        pendingActivation = .current
+      }
+    }
+
+    private func open(_ link: RFCLink?, activation: LinkActivation = .current) {
       guard let link else { return }
-      library.open(link, activation: .current, in: navigation)
+      library.open(link, activation: activation, in: navigation)
       dismiss()
     }
   }

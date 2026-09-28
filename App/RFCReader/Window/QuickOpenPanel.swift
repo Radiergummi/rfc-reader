@@ -1,5 +1,6 @@
 #if os(macOS)
   import AppKit
+  import RFCReaderKit
   import SwiftUI
 
   /// The window the Go to RFC palette floats in.
@@ -22,6 +23,8 @@
     /// needs to fall into.
     private static let size = NSSize(width: QuickOpenPalette.width + 2 * margin, height: 460)
     private static let margin: CGFloat = 24
+    /// Between the toolbar and the palette's top edge.
+    private static let gap: CGFloat = 12
 
     init(content: some View, onClose: @escaping () -> Void) {
       self.onClose = onClose
@@ -55,11 +58,14 @@
 
     /// Centred on `parent`, hanging just below its toolbar.
     func show(over parent: NSWindow) {
-      let top = parent.frame.minY + parent.contentLayoutRect.maxY
-      let origin = NSPoint(
-        x: parent.frame.midX - Self.size.width / 2,
-        // The margin is transparent, so the palette itself starts that far down.
-        y: top - Self.size.height + Self.margin - 12
+      let contentTop = parent.frame.minY + parent.contentLayoutRect.maxY
+      let origin = QuickOpenPlacement.origin(
+        of: Self.size,
+        over: parent.frame,
+        // The margin is transparent, so the panel starts that far above the
+        // palette, which sits a little below the toolbar.
+        below: contentTop - Self.gap + Self.margin,
+        screen: parent.screen?.visibleFrame
       )
       setFrameOrigin(origin)
       parent.addChildWindow(self, ordered: .above)
@@ -68,6 +74,12 @@
 
     /// Esc, whether or not SwiftUI's field saw it first.
     override func cancelOperation(_ sender: Any?) {
+      onClose()
+    }
+
+    /// ⌘W while the palette is key is addressed to the palette, which has no close
+    /// button to answer it with.
+    override func performClose(_ sender: Any?) {
       onClose()
     }
 
