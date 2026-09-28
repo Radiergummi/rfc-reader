@@ -45,6 +45,8 @@ targets:
       path: App/RFCReader/Info.plist
       properties:
         CFBundleDisplayName: RFC Reader
+        # The version, set here only: XcodeGen writes these into Info.plist as they
+        # are, so a MARKETING_VERSION build setting beside them was never read.
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.reference
@@ -71,7 +73,6 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
-        com.apple.security.files.user-selected.read-write: true
         # Option-clicking a format in the Info pane saves it to Downloads (#25).
         com.apple.security.files.downloads.read-write: true
     settings:
@@ -82,8 +83,6 @@ targets:
         # defaults, as `DocumentTextBuilder` requires, and so would any other target.
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: "YES"
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
