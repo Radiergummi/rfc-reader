@@ -15,7 +15,17 @@ public struct LegacyTextParser: Sendable {
   }
 
   public static func parse(_ data: Data) -> RFCDocument {
-    parse(String(decoding: data, as: UTF8.self))
+    parse(text(decoding: data))
+  }
+
+  /// The text of a legacy RFC file: UTF-8, or Windows-1252 for the 34 older documents
+  /// that are not (accented names, curly quotes), and lossy UTF-8 for bytes that are
+  /// neither. Every reader of the format decodes through here, so the parser, the
+  /// original-text view and corpus-build agree on what a document says.
+  public static func text(decoding bytes: Data) -> String {
+    String(data: bytes, encoding: .utf8)
+      ?? String(data: bytes, encoding: .windowsCP1252)
+      ?? String(decoding: bytes, as: UTF8.self)
   }
 
   // MARK: - Parsing
