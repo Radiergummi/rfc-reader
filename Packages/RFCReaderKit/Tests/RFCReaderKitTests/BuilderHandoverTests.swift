@@ -67,6 +67,53 @@ struct BuilderHandoverTests {
     withExtendedLifetime((firstBuild, secondBuild)) {}
   }
 
+  /// A kept build is installed again, into another text view, every time it is
+  /// reused (#374). `install` copies the text but not the attribute values, so both
+  /// storages hold the build's own objects — its chips' attachments by identity.
+  /// That is safe while the reuse stays on the main actor and nothing the text
+  /// views do writes to the build, which is what this pins: the build reads the
+  /// same after two storages have laid it out, at two different columns.
+  @MainActor
+  @Test func `a build installed into two storages is left as it was`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: ReadingStyle())
+    let runs = Self.runs(of: built.text)
+    let string = built.text.string
+    let attachments = Self.attachmentStates(in: built.text)
+    #expect(!attachments.isEmpty)
+
+    var storages: [NSTextContentStorage] = []
+    for column in [712.0, 512.0] {
+      let storage = NSTextContentStorage()
+      let layout = NSTextLayoutManager()
+      let container = NSTextContainer(size: CGSize(width: column, height: 1e7))
+      container.lineFragmentPadding = 0
+      layout.textContainer = container
+      storage.addTextLayoutManager(layout)
+      storage.install(built.text)
+      layout.ensureLayout(for: layout.documentRange)
+      storages.append(storage)
+    }
+
+    #expect(storages.allSatisfy { $0.textStorage?.string == string })
+    #expect(built.text.string == string)
+    #expect(Self.runs(of: built.text) == runs)
+    #expect(Self.attachmentStates(in: built.text) == attachments)
+  }
+
+  /// What a text view could change about an attachment: its bounds, its image and
+  /// its contents, per attachment, in document order.
+  private static func attachmentStates(in text: NSAttributedString) -> [String] {
+    var states: [String] = []
+    text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) {
+      value, range, _ in
+      guard let attachment = value as? NSTextAttachment else { return }
+      let image = attachment.image.map { "\(ObjectIdentifier($0))" } ?? "none"
+      states.append(
+        "\(range.location) \(attachment.bounds) \(image) \(attachment.contents?.count ?? -1)")
+    }
+    return states
+  }
+
   private static func document(_ fixture: String) throws -> RFCDocument {
     fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
   }
