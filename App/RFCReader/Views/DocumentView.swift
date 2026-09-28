@@ -477,9 +477,13 @@ struct DocumentView: View {
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document
-  /// opened before the index finished loading has none to show until it does.
+  /// opened before the index finished loading has none to show until it does. And
+  /// again once the document is here, whose own authors carry the contact details
+  /// their chips open.
   private func deriveInfo() {
-    reader.info = metadata.map { DocumentInfo($0, in: library.index) }
+    reader.info = metadata.map {
+      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+    }
   }
 
   private func trace(_ event: String) {
@@ -509,6 +513,7 @@ struct DocumentView: View {
         uniquingKeysWith: { first, _ in first }
       )
       document = loaded
+      deriveInfo()
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the

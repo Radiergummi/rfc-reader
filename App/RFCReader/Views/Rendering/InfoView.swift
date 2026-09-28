@@ -184,6 +184,8 @@ private struct SectionRows: View {
           }
         }
       }
+    case .authors(let authors):
+      AuthorChips(authors: authors)
     case .keywords(let keywords):
       VStack(alignment: .leading, spacing: 4) {
         caption(row.label)
