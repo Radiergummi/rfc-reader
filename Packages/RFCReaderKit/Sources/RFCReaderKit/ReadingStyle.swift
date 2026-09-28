@@ -13,7 +13,7 @@ import SwiftUI
 /// string, so switching to dark mode or changing the accent redraws rather than
 /// rebuilding. Only a change here costs a rebuild, and a rebuild loses the reader's
 /// place until the anchor index puts it back.
-public struct ReadingStyle: Sendable, Equatable {
+public struct ReadingStyle: Sendable, Hashable {
   /// The body text's point size: the reader's own size, scaled for the system's
   /// text size. Everything else measured from the body — captions, code, spacing,
   /// indents — follows from this.

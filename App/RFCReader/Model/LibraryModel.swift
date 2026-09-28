@@ -253,6 +253,12 @@ final class LibraryModel {
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
+  /// The builds force-click previews made, kept for the next preview of the same
+  /// document in the same style (#374), which then shows its text at once rather
+  /// than a spinner. Four, at 4.5 to 8 MB a build. Not observed, for the reason
+  /// `listCache` is not: it is a memo, and nothing is drawn from it.
+  @ObservationIgnored var previewBuilds = RecentValues<BuildKey, BuiltDocument>(capacity: 4)
+
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
   func list(for scene: NavigationModel) -> [RFCMetadata] {

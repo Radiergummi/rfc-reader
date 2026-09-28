@@ -98,14 +98,22 @@ struct DocumentPreview: View {
   }
 
   /// Fetched if it is not cached, the way the reader fetches it, and built at the
-  /// preview's own column.
+  /// preview's own column — or not built at all, when a preview of the same
+  /// document in the same style kept its build (#374).
   private func load() async {
     do {
       let document = try await library.document(for: id)
       let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
-      let built = await DocumentView.build(
-        document,
-        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
+      let style = ReadingStyle(
+        bodySize: fontSize, measure: column, underlinesLinks: underlineLinks)
+      let key = BuildKey(document: id, style: style)
+      let built: BuiltDocument
+      if let kept = library.previewBuilds.value(for: key) {
+        built = kept
+      } else {
+        built = await DocumentView.build(document, style: style)
+        library.previewBuilds.store(built, for: key)
+      }
       loaded = Loaded(
         document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
       // Resolved the way the reader resolves a jump, so the preview opens where a
