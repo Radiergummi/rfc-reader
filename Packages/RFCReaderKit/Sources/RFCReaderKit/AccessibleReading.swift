@@ -76,7 +76,7 @@ public enum AccessibleReading {
       _ = text.attribute(
         .rfcVerbatim, at: piece.location, longestEffectiveRange: &diagram, in: whole)
       if piece.location == diagram.location {
-        pieces.append(.label(label(for: box)))
+        pieces.append(.label(label))
       }
       // The builder ends every verbatim block with a line break.
       let last = NSMaxRange(diagram) - 1
@@ -100,16 +100,48 @@ public enum AccessibleReading {
   /// rules at 0.07 and RFC 8999's packet notation near 0.
   static let drawingShare = 0.3
 
+  /// A drawing, unless most of its lines are words: then it is a table, whose
+  /// borders or underlines pass `drawingShare` but whose rows are data to be heard.
+  ///
+  /// A line is words when it has a letter and more than half of its characters
+  /// that are not white space are letters and digits. The letter keeps a bit
+  /// layout's numbered ruler out; "more than half" keeps out a box's middle line,
+  /// `| Client | -------> | Server |`, which is exactly half. "Most" is strictly
+  /// more than half of the lines that are not blank, because a bit layout
+  /// alternates field rows and borders: RFC 793's header has 7 lines of words in
+  /// 19, and its option layouts 2 in 4. So a bordered table needs more rows than
+  /// borders to be read, which one with a header row and two data rows does not.
   static func looksLikeDrawing(_ text: String) -> Bool {
     var characters = 0
     var drawing = 0
-    for scalar in text.unicodeScalars where !scalar.properties.isWhitespace {
-      characters += 1
-      if isDrawing(scalar) {
-        drawing += 1
+    var lines = 0
+    var linesOfWords = 0
+    for line in text.split(whereSeparator: \.isNewline) {
+      var lineCharacters = 0
+      var alphanumerics = 0
+      var hasLetter = false
+      for scalar in line.unicodeScalars where !scalar.properties.isWhitespace {
+        lineCharacters += 1
+        if isDrawing(scalar) {
+          drawing += 1
+        }
+        if scalar.properties.isAlphabetic {
+          hasLetter = true
+          alphanumerics += 1
+        } else if scalar.properties.numericType != nil {
+          alphanumerics += 1
+        }
+      }
+      guard lineCharacters > 0 else { continue }
+      characters += lineCharacters
+      lines += 1
+      if hasLetter && 2 * alphanumerics > lineCharacters {
+        linesOfWords += 1
       }
     }
-    return characters > 0 && Double(drawing) >= drawingShare * Double(characters)
+    return characters > 0
+      && Double(drawing) >= drawingShare * Double(characters)
+      && 2 * linesOfWords <= lines
   }
 
   /// The ASCII an RFC draws with, and Unicode's box drawing and block elements.
@@ -119,13 +151,18 @@ public enum AccessibleReading {
     asciiDrawing.contains(scalar) || (0x2500...0x259F).contains(scalar.value)
   }
 
-  /// The name, when the source gives one: it is the one thing about a diagram the
-  /// text does not already say. Not the figure's caption: in a document from XML it
-  /// is set as text right after the diagram, and would be read twice. A legacy
-  /// document keeps its "Figure 3: …" line inside the artwork, so there it goes
-  /// unsaid with the drawing (#361 splits it out into a real title).
-  public static func label(for box: VerbatimBox) -> String {
-    guard let name = box.content.name, !name.isEmpty else { return "Diagram" }
-    return "\(name), diagram"
+  /// What VoiceOver says in place of a diagram. Not `Preformatted.name`, which is
+  /// RFCXML's file name to extract the artwork to, not a title; and not the
+  /// figure's caption, which in a document from XML is set as text right after
+  /// the diagram and would be read twice. A legacy document keeps its
+  /// "Figure 3: …" line inside the artwork, so there it goes unsaid with the
+  /// drawing (#361 splits it out into a real title).
+  public static let label = "Diagram"
+
+  /// What the Diagrams rotor lists the diagram at `location` as: its figure's
+  /// caption, which the rotor never reads through, so it is not said twice there,
+  /// and which is what tells one figure from the next; `label` without one.
+  public static func rotorLabel(at location: Int, in text: NSAttributedString) -> String {
+    text.attribute(.rfcCaption, at: location, effectiveRange: nil) as? String ?? label
   }
 }

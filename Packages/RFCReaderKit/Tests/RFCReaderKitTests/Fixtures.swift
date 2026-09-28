@@ -17,6 +17,16 @@ enum Fixtures {
     return try Data(contentsOf: url)
   }
 
+  /// One of RFCKit's committed fixtures, read where it is. Never copy one into this
+  /// package: no RFC text is committed twice.
+  static func rfcKitData(_ name: String) throws -> Data {
+    let directory = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .appendingPathComponent("../../../RFCKit/Tests/RFCKitTests/Fixtures")
+      .standardizedFileURL
+    return try Data(contentsOf: directory.appendingPathComponent(name))
+  }
+
   /// RFCXML v3: structured sections, tables, cross references with derivedContent.
   static func rfc8999() throws -> RFCDocument {
     try RFCXMLParser.parse(try data("rfc8999.xml"))

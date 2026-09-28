@@ -74,7 +74,8 @@ extension RFCTextViewCoordinator {
           AccessibilityRotorItem(range: NSUnionRange(last.range, range), label: last.label))
       } else {
         diagrams.append(
-          AccessibilityRotorItem(range: range, label: AccessibleReading.label(for: box)))
+          AccessibilityRotorItem(
+            range: range, label: AccessibleReading.rotorLabel(at: range.location, in: text)))
       }
       openBox = identity
     }

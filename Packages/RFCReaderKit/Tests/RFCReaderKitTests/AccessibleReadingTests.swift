@@ -45,6 +45,16 @@ struct AccessibleReadingTests {
     return reading(range, in: text, asked: &asked) ?? ""
   }
 
+  /// RFC 793 and RFC 5234 are RFCKit's fixtures, read where they are committed
+  /// rather than copied into this package.
+  private func document(_ fixture: String) throws -> RFCDocument {
+    switch fixture {
+    case "rfc8999.xml": return try Fixtures.rfc8999()
+    case "rfc2119.txt": return try Fixtures.rfc2119()
+    default: return LegacyTextParser.parse(try Fixtures.rfcKitData(fixture))
+    }
+  }
+
   private func whole(_ text: NSAttributedString) -> NSRange {
     NSRange(location: 0, length: text.length)
   }
@@ -126,11 +136,27 @@ struct AccessibleReadingTests {
     #expect(reading.hasPrefix("\nFigure 3"))
   }
 
-  /// The name is the one thing about a diagram the text does not already say; the
-  /// caption is set right after it, so a label repeating it would be read twice.
-  @Test func `a named diagram says its name`() {
-    let text = built(Fixtures.document(figure(named: "QUIC long header")))
-    #expect(reading(whole(text), in: text).contains("[QUIC long header, diagram]\nFigure 3"))
+  /// RFCXML's `name` on artwork is a file name to extract it to, not a title:
+  /// VoiceOver says "Diagram", never "tcp-header.txt, diagram".
+  @Test func `a named diagram is still said as a diagram`() {
+    let text = built(Fixtures.document(figure(named: "tcp-header.txt")))
+    let reading = reading(whole(text), in: text)
+    #expect(reading.contains("[Diagram]\nFigure 3"))
+    #expect(!reading.contains("tcp-header.txt"))
+  }
+
+  /// The rotor lists figures by name, and is never read through, so there the
+  /// caption is not said twice: it is what tells one figure from the next.
+  @Test func `the rotor names a figure by its caption`() throws {
+    let text = built(Fixtures.document(figure(named: "tcp-header.txt")))
+    let offset = try Fixtures.offset(of: "+--+", in: text)
+    #expect(AccessibleReading.rotorLabel(at: offset, in: text) == "Figure 3: Packet layout")
+  }
+
+  @Test func `the rotor calls a diagram with no caption a diagram`() throws {
+    let text = built(Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: diagram))))
+    let offset = try Fixtures.offset(of: "+--+", in: text)
+    #expect(AccessibleReading.rotorLabel(at: offset, in: text) == "Diagram")
   }
 
   @Test func `source code is read as text`() {
@@ -150,15 +176,39 @@ struct AccessibleReadingTests {
     #expect(!reading.contains("[Diagram]"))
   }
 
+  /// RFC 793's drawings are said as diagrams: none of the header's bit layout or
+  /// the state diagram's boxes is read out.
+  @Test func `RFC 793's drawings are diagrams`() throws {
+    let text = built(try document("rfc793.txt"))
+    let reading = reading(whole(text), in: text)
+    #expect(reading.contains("[Diagram]"))
+    #expect(!reading.contains("+-+-+-+-+-+"))
+    #expect(!reading.contains("+---------+ ---------\\"))
+    // Its receive test table is a table, and is read.
+    #expect(reading.contains("Segment Receive  Test"))
+  }
+
+  /// RFC 5234's rules are grammar, not drawings, however many `<`, `*` and `/`
+  /// they hold: `<a>*<b>element` is read as it is.
+  @Test func `RFC 5234's rules are not diagrams`() throws {
+    let text = built(try document("rfc5234.txt"))
+    let reading = reading(whole(text), in: text)
+    #expect(!reading.contains("[Diagram]"))
+    #expect(reading.contains("<a>*<b>element"))
+  }
+
   /// Over a whole real document, every character is either read as text or stands
   /// under a diagram's label: nothing is skipped, nothing is read twice.
   ///
-  /// Neither document has a drawing: RFC 8999's artworks are packet notation, and
-  /// RFC 2119 has none. Both check that what is not a diagram comes back whole.
-  @Test(arguments: [("rfc8999.xml", 0), ("rfc2119.txt", 0)])
+  /// RFC 793 has ten drawings: its layering and header diagrams, the sequence
+  /// spaces, the state diagram. RFC 8999's artworks are packet notation, RFC 5234's
+  /// are grammar rules and RFC 2119 has none, so those check that what is not a
+  /// diagram comes back whole.
+  @Test(arguments: [
+    ("rfc793.txt", 10), ("rfc5234.txt", 0), ("rfc8999.xml", 0), ("rfc2119.txt", 0),
+  ])
   func `nothing is skipped or read twice`(fixture: String, diagrams: Int) throws {
-    let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
-    let text = built(document)
+    let text = built(try document(fixture))
     var covered = IndexSet()
     var labels = 0
     for piece in AccessibleReading.pieces(of: whole(text), in: text) {
@@ -232,6 +282,21 @@ struct AccessibleReadingTests {
     """
     0x00 0x1f 0x2e 0x41 0x5b 0x60 0x7e 0x80
     """,
+    """
+    +-------+--------------------+-----------+
+    | Value | Name               | Reference |
+    +-------+--------------------+-----------+
+    | 0     | Reserved           | [RFCxxxx] |
+    | 1     | Echo Request       | [RFCxxxx] |
+    | 2     | Echo Reply         | [RFCxxxx] |
+    +-------+--------------------+-----------+
+    """,
+    """
+    Value   Name              Reference
+    -----   ---------------   ---------
+    0       Reserved          [RFCxxxx]
+    1       Echo Request      [RFCxxxx]
+    """,
     "",
   ])
   func `text set as artwork is not a diagram`(artwork: String) {
@@ -244,8 +309,4 @@ struct AccessibleReadingTests {
     #expect(!AccessibleReading.isDiagram(box))
   }
 
-  @Test func `an empty name falls back to the plain label`() {
-    let box = VerbatimBox(Preformatted(kind: .artwork, text: diagram, name: ""))
-    #expect(AccessibleReading.label(for: box) == "Diagram")
-  }
 }
