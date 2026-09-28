@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Where a laid-out document breaks into pages (#375).

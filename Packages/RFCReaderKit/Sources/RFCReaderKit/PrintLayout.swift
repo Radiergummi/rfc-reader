@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Where things go on a printed page, and the style the document is built in for it
