@@ -663,7 +663,7 @@ struct DocumentView: View {
     private func toggleBookmark() {
       let title = DocumentActions.bookmarkTitle(
         metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      BookmarkStore.toggle(id, title: title, in: modelContext)
+      library.toggleBookmark(id, title: title)
     }
 
     private func copyCitation(_ style: CitationStyle) {
@@ -673,11 +673,15 @@ struct DocumentView: View {
     }
   #endif
 
+  /// Nil when the fetch fails, which is logged: the reader opens at the top, as it
+  /// does for a document never read.
   private func storedPosition() -> ReadingPosition? {
-    let key = id.fileStem
-    let descriptor = FetchDescriptor<ReadingPosition>(
-      predicate: #Predicate { $0.documentKey == key })
-    return try? modelContext.fetch(descriptor).first
+    do {
+      return try ReadingPositionStore.position(for: id, in: modelContext)
+    } catch {
+      trace("reading the position failed: \(error)")
+      return nil
+    }
   }
 
   /// Dates the entry as this document is opened, not only as it is left.
@@ -690,10 +694,10 @@ struct DocumentView: View {
   /// the place being restored a moment later in the reader's `onAppear`, so only
   /// the date is written.
   private func markAsRead() {
-    if let existing = storedPosition() {
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: nil))
+    do {
+      try ReadingPositionStore.markOpened(id, in: modelContext)
+    } catch {
+      trace("marking as read failed: \(error)")
     }
   }
 
@@ -701,11 +705,10 @@ struct DocumentView: View {
     // The anchor alone for now: the reader reports the section on screen, not the
     // offset within it, so a place is saved at the anchor itself (#152).
     let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
-    if let existing = storedPosition() {
-      existing.place = place
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: place))
+    do {
+      try ReadingPositionStore.save(place, for: id, in: modelContext)
+    } catch {
+      trace("saving the position failed: \(error)")
     }
   }
 }

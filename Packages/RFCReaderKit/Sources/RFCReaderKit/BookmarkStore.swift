@@ -1,11 +1,6 @@
 import Foundation
 import RFCKit
-import RFCReaderKit
 import SwiftData
-import os
-
-private let bookmarkLog = Logger(
-  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "bookmarks")
 
 /// The one place a `Bookmark` is read or written.
 ///
@@ -19,14 +14,18 @@ private let bookmarkLog = Logger(
 /// for the filled glyph, macOS holds the last answer in
 /// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
 /// often to ask a store here.
-enum BookmarkStore {
+///
+/// In the package beside `CollectionStore`, and on its terms: every failure is
+/// thrown, and the App decides what to do with it.
+@MainActor
+public enum BookmarkStore {
   /// Every bookmarked document. Only the keys are fetched: this runs on every save
   /// of the store, and most of those record a reading position.
   ///
   /// Throws rather than answering with an empty set, which would read as "nothing is
   /// bookmarked": eviction would take that as leave to delete the bookmarked
   /// documents' offline copies.
-  static func bookmarkedDocuments(in context: ModelContext) throws -> Set<DocumentID> {
+  public static func bookmarkedDocuments(in context: ModelContext) throws -> Set<DocumentID> {
     var descriptor = FetchDescriptor<Bookmark>()
     descriptor.propertiesToFetch = [\.documentKey]
     return Set(try context.fetch(descriptor).compactMap(\.document))
@@ -34,17 +33,11 @@ enum BookmarkStore {
 
   /// Adds the bookmark, or removes the one already there.
   ///
-  /// When the lookup fails, it changes nothing: not knowing whether the document is
-  /// bookmarked, inserting would add a second bookmark beside the one there.
-  static func toggle(_ id: DocumentID, title: String, in context: ModelContext) {
-    let existing: [Bookmark]
-    do {
-      existing = try bookmarks(for: id, in: context)
-    } catch {
-      bookmarkLog.error(
-        "looking up a bookmark failed: \(String(describing: error), privacy: .public)")
-      return
-    }
+  /// A failed lookup throws before anything changes: not knowing whether the
+  /// document is bookmarked, inserting would add a second bookmark beside the one
+  /// there.
+  public static func toggle(_ id: DocumentID, title: String, in context: ModelContext) throws {
+    let existing = try bookmarks(for: id, in: context)
     if !existing.isEmpty {
       // Every row naming the document, since nothing stops there being two.
       existing.forEach(context.delete)
@@ -55,14 +48,7 @@ enum BookmarkStore {
     // other: on macOS the sidebar's list and the reader's toolbar are separate
     // hosting roots reading the same store, and the glyph should not be able to
     // disagree with the list behind it while a save is still pending.
-    do {
-      try context.save()
-    } catch {
-      // Logged rather than discarded (#125): the change is still in the context,
-      // and autosave may yet write it, but a bookmark that is never saved should
-      // leave a trace.
-      bookmarkLog.error("saving a bookmark failed: \(String(describing: error), privacy: .public)")
-    }
+    try context.save()
   }
 
   /// Looked up by key before every insert: the store has no unique constraint to do

@@ -110,6 +110,17 @@ final class LibraryModel {
     }
   }
 
+  /// Adds the bookmark or removes it, on the app's context. A failure is logged
+  /// rather than shown, as a collection's is (#125); the store has changed nothing.
+  func toggleBookmark(_ id: DocumentID, title: String) {
+    do {
+      try BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+    } catch {
+      libraryLog.error(
+        "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
   private func refreshBookmarks() {
     let documents: Set<DocumentID>
     do {
@@ -569,8 +580,7 @@ final class LibraryModel {
   private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = AppData.container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
-    let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
-    let read = try context.fetch(recent).compactMap(\.document)
+    let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     let open = scenes.compactMap { $0.model?.selection }
     return bookmarked.union(read).union(open)
@@ -590,12 +600,19 @@ final class LibraryModel {
   /// read list is history as of the moment the filter is entered, and a live query
   /// re-sorted it under the click that was reading it. `NavigationModel` takes one
   /// of these when its filter changes, exactly as it takes `downloadedNumbers`.
+  ///
+  /// Empty when the fetch fails, which is logged: the list is only shown, and
+  /// nothing is decided by its being empty.
   func recentlyReadNumbers() -> [Int] {
-    let descriptor = FetchDescriptor<ReadingPosition>(
-      sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-    )
-    let positions = (try? AppData.container.mainContext.fetch(descriptor)) ?? []
-    return positions.compactMap(\.document).filter { $0.series == .rfc }.map(\.number)
+    let documents: [DocumentID]
+    do {
+      documents = try ReadingPositionStore.recentlyRead(in: AppData.container.mainContext)
+    } catch {
+      libraryLog.error(
+        "reading the recently read list failed: \(String(describing: error), privacy: .public)")
+      return []
+    }
+    return documents.filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

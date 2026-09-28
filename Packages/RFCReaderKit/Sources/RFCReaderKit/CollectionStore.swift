@@ -4,8 +4,9 @@ import SwiftData
 
 /// Every change to collections, on a context (#349).
 ///
-/// In the package rather than beside `BookmarkStore` in the App target, which has
-/// no test bundle: what happens to a collection is decided here, and tested. Each
+/// In the package rather than in the App target, which has no test bundle, as
+/// `BookmarkStore` and `ReadingPositionStore` are: what happens to a collection is
+/// decided here, and tested. Each
 /// change saves before it returns, as `BookmarkStore.toggle` does, so the hosted
 /// roots on a Mac — separate readers of one store — cannot disagree while a save is
 /// pending.

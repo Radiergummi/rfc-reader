@@ -454,7 +454,7 @@
         documentTitle: reader.documentTitle,
         id: id
       )
-      BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      library.toggleBookmark(id, title: title)
     }
 
     // MARK: - Go to RFC

@@ -427,7 +427,6 @@ struct RFCRow: View {
   private struct RowActions: ViewModifier {
     let rfc: RFCMetadata
     let isBookmarked: Bool
-    @Environment(\.modelContext) private var modelContext
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     @Environment(\.undoManager) private var undoManager
@@ -498,7 +497,7 @@ struct RFCRow: View {
 
     private func toggleBookmark() {
       let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
-      BookmarkStore.toggle(rfc.id, title: title, in: modelContext)
+      library.toggleBookmark(rfc.id, title: title)
     }
   }
 #endif
