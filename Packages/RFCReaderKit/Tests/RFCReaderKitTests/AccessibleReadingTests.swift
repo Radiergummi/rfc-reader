@@ -140,12 +140,22 @@ struct AccessibleReadingTests {
     #expect(AccessibleReading.pieces(of: whole(text), in: text) == [.text(whole(text))])
   }
 
+  /// Artwork that is not a drawing reads perfectly well as words, and legacy
+  /// documents set every block that is not prose as artwork: grammars, message
+  /// examples, packet notation. RFC 8999's four artworks are packet notation.
+  @Test func `artwork that is not a drawing is read as text`() throws {
+    let text = built(try Fixtures.rfc8999())
+    let reading = reading(whole(text), in: text)
+    #expect(reading.contains("Long Header Packet {"))
+    #expect(!reading.contains("[Diagram]"))
+  }
+
   /// Over a whole real document, every character is either read as text or stands
   /// under a diagram's label: nothing is skipped, nothing is read twice.
   ///
-  /// RFC 8999 has four artworks; RFC 2119 has none, and checks that prose alone
-  /// comes back whole.
-  @Test(arguments: [("rfc8999.xml", 4), ("rfc2119.txt", 0)])
+  /// Neither document has a drawing: RFC 8999's artworks are packet notation, and
+  /// RFC 2119 has none. Both check that what is not a diagram comes back whole.
+  @Test(arguments: [("rfc8999.xml", 0), ("rfc2119.txt", 0)])
   func `nothing is skipped or read twice`(fixture: String, diagrams: Int) throws {
     let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
     let text = built(document)
@@ -160,13 +170,82 @@ struct AccessibleReadingTests {
       #expect(covered.isDisjoint(with: span))
       covered.formUnion(span)
     }
-    var artwork = IndexSet()
+    var diagramCharacters = IndexSet()
     text.enumerateAttribute(.rfcVerbatim, in: whole(text)) { value, range, _ in
-      guard let box = value as? VerbatimBox, box.content.kind == .artwork else { return }
-      artwork.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
+      guard let box = value as? VerbatimBox, AccessibleReading.isDiagram(box) else { return }
+      diagramCharacters.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
     }
-    // Only artwork goes unread, and all of it is under a label.
-    #expect(covered.union(artwork).count == text.length)
+    // Only diagrams go unread, and all of them are under a label.
+    #expect(covered.union(diagramCharacters).count == text.length)
     #expect(labels == diagrams)
+  }
+
+  /// Guard level: what makes a block of artwork a drawing, over hand-written lines
+  /// in the shape of an RFC's.
+  @Test(arguments: [
+    """
+    +--------+          +--------+
+    | Client | -------> | Server |
+    +--------+          +--------+
+    """,
+    """
+     0                   1                   2
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |    Kind Field     |       Length Field    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    """,
+    """
+    Sender                  Receiver
+      |                         |
+      |------- Request -------->|
+      |<------ Reply -----------|
+    """,
+    """
+    ┌──────┐     ┌──────┐
+    │ Left │ ──> │ Right│
+    └──────┘     └──────┘
+    """,
+  ])
+  func `a drawing is a diagram`(artwork: String) {
+    #expect(AccessibleReading.looksLikeDrawing(artwork))
+  }
+
+  @Test(arguments: [
+    """
+    message   = start-line *( field CRLF ) CRLF [ body ]
+    field     = field-name ":" OWS field-value OWS
+    delimiter = "/" / "," / ";" / "=" / "<" / ">"
+    """,
+    """
+    Example Record {
+      Kind (8) = 2,
+      Length (16),
+      Value (..),
+    }
+    """,
+    """
+    GET /index.html HTTP/1.1
+    Host: www.example.com
+    Accept-Language: en-US
+    """,
+    """
+    0x00 0x1f 0x2e 0x41 0x5b 0x60 0x7e 0x80
+    """,
+    "",
+  ])
+  func `text set as artwork is not a diagram`(artwork: String) {
+    #expect(!AccessibleReading.looksLikeDrawing(artwork))
+  }
+
+  /// Source code is never a diagram, whatever it looks like.
+  @Test func `source code that looks like a drawing is not a diagram`() {
+    let box = VerbatimBox(Preformatted(kind: .sourceCode, text: diagram))
+    #expect(!AccessibleReading.isDiagram(box))
+  }
+
+  @Test func `an empty name falls back to the plain label`() {
+    let box = VerbatimBox(Preformatted(kind: .artwork, text: diagram, name: ""))
+    #expect(AccessibleReading.label(for: box) == "Diagram")
   }
 }

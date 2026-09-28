@@ -5,8 +5,8 @@ import RFCKit
 ///
 /// The body is one text view, so a diagram is just characters in it, and VoiceOver
 /// read its box drawing out one character at a time. This decides what to say
-/// instead: prose, and source code, which reads perfectly well, pass through as they
-/// are; a diagram becomes one spoken label.
+/// instead: prose, source code, and artwork that is not a drawing, all of which read
+/// perfectly well, pass through as they are; a diagram becomes one spoken label.
 ///
 /// The label is said once, where the range reaches the diagram's first character.
 /// VoiceOver asks a line at a time, so a diagram's first line announces it and its
@@ -68,7 +68,7 @@ public enum AccessibleReading {
     }
 
     text.enumerateAttribute(.rfcVerbatim, in: range) { value, piece, _ in
-      guard let box = value as? VerbatimBox, box.content.kind == .artwork else {
+      guard let box = value as? VerbatimBox, isDiagram(box) else {
         read(piece)
         return
       }
@@ -87,10 +87,44 @@ public enum AccessibleReading {
     return pieces
   }
 
+  /// Whether a verbatim block is said as a label rather than read: artwork that is
+  /// a drawing. Legacy documents set every block that is not prose as artwork —
+  /// grammars, message examples, tables — and those read perfectly well as words.
+  public static func isDiagram(_ box: VerbatimBox) -> Bool {
+    box.content.kind == .artwork && looksLikeDrawing(box.content.text)
+  }
+
+  /// A drawing is mostly lines, boxes and arrows: at least this share of the
+  /// characters that are not white space are drawing characters. Measured, RFC 793's
+  /// header diagram sits at 0.76 and its state diagram at 0.71, RFC 5234's core
+  /// rules at 0.07 and RFC 8999's packet notation near 0.
+  static let drawingShare = 0.3
+
+  static func looksLikeDrawing(_ text: String) -> Bool {
+    var characters = 0
+    var drawing = 0
+    for scalar in text.unicodeScalars where !scalar.properties.isWhitespace {
+      characters += 1
+      if isDrawing(scalar) {
+        drawing += 1
+      }
+    }
+    return characters > 0 && Double(drawing) >= drawingShare * Double(characters)
+  }
+
+  /// The ASCII an RFC draws with, and Unicode's box drawing and block elements.
+  private static let asciiDrawing = Set("+-|/\\_=<>^*~".unicodeScalars)
+
+  private static func isDrawing(_ scalar: Unicode.Scalar) -> Bool {
+    asciiDrawing.contains(scalar) || (0x2500...0x259F).contains(scalar.value)
+  }
+
   /// The name, when the source gives one: it is the one thing about a diagram the
-  /// text does not already say. Not the figure's caption, which is set right after
-  /// the diagram and would be read twice.
-  static func label(for box: VerbatimBox) -> String {
+  /// text does not already say. Not the figure's caption: in a document from XML it
+  /// is set as text right after the diagram, and would be read twice. A legacy
+  /// document keeps its "Figure 3: …" line inside the artwork, so there it goes
+  /// unsaid with the drawing (#361 splits it out into a real title).
+  public static func label(for box: VerbatimBox) -> String {
     guard let name = box.content.name, !name.isEmpty else { return "Diagram" }
     return "\(name), diagram"
   }
