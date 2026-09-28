@@ -39,7 +39,7 @@ Block (enum)
   definitionList([DefinitionItem])  term inlines + definition blocks
   preformatted(Preformatted)        artwork or sourceCode, verbatim text, optional language
   figure(Figure) · table(Table) · blockQuote · aside
-  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines
+  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines; its kind (normative, informative, unknown) is derived from its title
 
 Inline (enum)
   text · emphasis · strong · code · superscript · subscript · link(URL) · crossReference · lineBreak
