@@ -5,10 +5,19 @@ import Testing
 
 @Suite("Return offer")
 struct ReturnOfferTests {
-  private let numbers = ["section-4.2": "4.2", "appendix-A.1": "A.1"]
+  private let document = RFCDocument(
+    header: DocumentHeader(title: "T"),
+    sections: [
+      Section(anchor: "abstract", title: "Abstract"),
+      Section(
+        anchor: "section-4", number: "4", title: "Semantics",
+        subsections: [Section(anchor: "section-4.2", number: "4.2", title: "Methods")]),
+      Section(anchor: "appendix-A.1", number: "A.1", title: "Grammar", isAppendix: true),
+    ],
+    source: .xml)
 
-  private func title(_ section: String?) -> String {
-    ReturnOffer.title(for: Place(id: .rfc(9110), section: section), sectionNumbers: numbers)
+  private func title(_ section: String?, in document: RFCDocument? = nil) -> String {
+    ReturnOffer.title(for: Place(id: .rfc(9110), section: section), in: document ?? self.document)
   }
 
   /// What the history usually records: the anchor the reader had scrolled to.
@@ -22,6 +31,21 @@ struct ReturnOfferTests {
     #expect(title("4.2") == "Back to §4.2")
   }
 
+  /// Resolved the way a jump resolves it, through `anchor(forPlace:)`: a number
+  /// is read as a number first, so the label names the section a tap goes to even
+  /// when some anchor happens to be spelled like another section's number.
+  @Test func `a place is resolved the way a jump resolves it`() {
+    let tricky = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(anchor: "4.2", number: "7", title: "Oddly anchored"),
+        Section(anchor: "section-4.2", number: "4.2", title: "Methods"),
+      ],
+      source: .xml)
+    #expect(tricky.anchor(forPlace: "4.2") == "section-4.2")
+    #expect(title("4.2", in: tricky) == "Back to §4.2")
+  }
+
   @Test func `no place yet is the top`() {
     #expect(title(nil) == "Back to Top")
   }
@@ -29,5 +53,11 @@ struct ReturnOfferTests {
   /// The abstract, or anything else the storage anchors without a number.
   @Test func `an unnumbered place is plain back`() {
     #expect(title("abstract") == "Back")
+    #expect(title("figure-3") == "Back")
+  }
+
+  /// Before the document has loaded there is nothing to name a section by.
+  @Test func `a place in a document not yet loaded is plain back`() {
+    #expect(ReturnOffer.title(for: Place(id: .rfc(9110), section: "4.2"), in: nil) == "Back")
   }
 }
