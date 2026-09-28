@@ -18,4 +18,35 @@ struct BibliographyTests {
     let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
     #expect(groups.entry(anchor: "section-2") == nil)
   }
+
+  // MARK: Normative or informative (#184)
+
+  /// RFC 8999 cites RFC 2119 normatively, and RFC 5116 and the QUIC drafts only
+  /// informatively.
+  @Test func `a citation has the kind of the list that holds its entry`() throws {
+    let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
+    #expect(groups.kind(of: .document(.rfc(2119), section: nil)) == .normative)
+    #expect(groups.kind(of: .document(.rfc(5116), section: "2")) == .informative)
+    #expect(groups.kind(of: .anchor("QUIC-TLS")) == .informative)
+  }
+
+  @Test func `a citation no list holds has no kind`() throws {
+    let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
+    #expect(groups.kind(of: .document(.rfc(1), section: nil)) == .unknown)
+    #expect(groups.kind(of: .anchor("section-2")) == .unknown)
+  }
+
+  /// A document that lists an entry in both counts it as part of the specification.
+  @Test func `an entry in both lists is normative`() {
+    let entry = Reference(
+      anchor: "RFC9110", title: "HTTP Semantics",
+      seriesInfo: [
+        SeriesInfo(name: "RFC", value: "9110")
+      ])
+    let groups = [
+      ReferenceGroup(title: "Informative References", kind: .informative, entries: [entry]),
+      ReferenceGroup(title: "Normative References", kind: .normative, entries: [entry]),
+    ]
+    #expect(groups.kind(of: .document(.rfc(9110), section: nil)) == .normative)
+  }
 }

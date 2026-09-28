@@ -399,6 +399,18 @@ public struct ReferenceList: Sendable, Hashable, Codable {
     self.title = title
     self.entries = entries
   }
+
+  public enum Kind: Sendable, Hashable {
+    case normative
+    case informative
+    case unknown
+
+    public init(title: String) {
+      self = .unknown
+    }
+  }
+
+  public var kind: Kind { .unknown }
 }
 
 /// One bibliographic entry, e.g. `[RFC7301]`.

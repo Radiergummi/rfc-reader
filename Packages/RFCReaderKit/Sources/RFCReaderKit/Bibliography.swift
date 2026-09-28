@@ -11,12 +11,14 @@ import RFCKit
 /// under test.
 public struct ReferenceGroup: Identifiable, Sendable {
   public let title: String
+  public let kind: ReferenceList.Kind
   public let entries: [Reference]
 
   public var id: String { title }
 
-  public init(title: String, entries: [Reference]) {
+  public init(title: String, kind: ReferenceList.Kind, entries: [Reference]) {
     self.title = title
+    self.kind = kind
     self.entries = entries
   }
 
@@ -27,13 +29,15 @@ public struct ReferenceGroup: Identifiable, Sendable {
     document.allSections.flatMap { section in
       section.blocks.compactMap { block in
         guard case .references(let list) = block, !list.entries.isEmpty else { return nil }
-        return ReferenceGroup(title: list.title, entries: list.entries)
+        return ReferenceGroup(title: list.title, kind: list.kind, entries: list.entries)
       }
     }
   }
 }
 
 extension [ReferenceGroup] {
+  public func kind(of target: CrossReference.Target) -> ReferenceList.Kind { .unknown }
+
   /// The entry a citation names by `anchor`, from whichever bibliography holds it:
   /// what a preview of the citation shows, since the body leaves the entries out.
   public func entry(anchor: String) -> Reference? {
