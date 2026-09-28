@@ -64,7 +64,7 @@ public struct ListOptions: Hashable, Sendable {
 
   /// Whether rows can be dragged into a new order: only in a collection, in its own
   /// order, unsearched — a search's rows are in order of relevance, and their
-  /// neighbours are not the collection's.
+  /// neighbors are not the collection's.
   public func allowsMoving(in filter: LibraryFilter, query: String) -> Bool {
     guard case .collection = filter else { return false }
     return collectionSort == .manual && query.trimmingCharacters(in: .whitespaces).isEmpty

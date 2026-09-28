@@ -2,7 +2,7 @@ import RFCReaderKit
 import SwiftUI
 
 extension CollectionColor {
-  /// The system colour a collection's name stands for, adapting to dark mode and
+  /// The system color a collection's name stands for, adapting to dark mode and
   /// increased contrast.
   var color: Color {
     switch self {

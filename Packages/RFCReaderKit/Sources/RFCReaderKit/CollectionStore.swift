@@ -32,7 +32,7 @@ public enum CollectionStore {
     return collection
   }
 
-  /// The editor's name and colour, in one save.
+  /// The editor's name and color, in one save.
   public static func update(
     _ identifier: UUID, name: String, color: CollectionColor, in context: ModelContext
   ) throws {
@@ -63,7 +63,7 @@ public enum CollectionStore {
     }
     rows.removeAll { $0.identifier == identifier }
     moving.position = place(
-      between: CollectionOrder.neighbours(above: above, below: below, in: rows.map(\.identifier)),
+      between: CollectionOrder.neighbors(above: above, below: below, in: rows.map(\.identifier)),
       in: rows, key: \.identifier, position: \.position)
     try context.save()
   }
@@ -162,10 +162,10 @@ public enum CollectionStore {
     let moving = rows.filter { $0.documentKey == document.fileStem }
     guard !moving.isEmpty else { return }
     rows.removeAll { $0.documentKey == document.fileStem }
-    let neighbours = CollectionOrder.neighbours(
+    let neighbors = CollectionOrder.neighbors(
       above: above?.fileStem, below: below?.fileStem, in: rows.map(\.documentKey))
     let position = place(
-      between: neighbours, in: rows, key: \.documentKey, position: \.position)
+      between: neighbors, in: rows, key: \.documentKey, position: \.position)
     for item in moving {
       item.position = position
     }
@@ -174,17 +174,17 @@ public enum CollectionStore {
 
   // MARK: - Helpers
 
-  /// The position between two neighbours, renumbering `rows` first when the gap is
-  /// too narrow or the neighbours are equal.
+  /// The position between two neighbors, renumbering `rows` first when the gap is
+  /// too narrow or the neighbors are equal.
   private static func place<Row: AnyObject, Key: Equatable>(
-    between neighbours: (before: Key?, after: Key?), in rows: [Row],
+    between neighbors: (before: Key?, after: Key?), in rows: [Row],
     key: KeyPath<Row, Key>, position: ReferenceWritableKeyPath<Row, Double>
   ) -> Double {
     func current(_ wanted: Key?) -> Double? {
       wanted.flatMap { wanted in rows.first { $0[keyPath: key] == wanted }?[keyPath: position] }
     }
     if case .position(let value) = CollectionOrder.placement(
-      between: current(neighbours.before), and: current(neighbours.after))
+      between: current(neighbors.before), and: current(neighbors.after))
     {
       return value
     }
@@ -193,9 +193,9 @@ public enum CollectionStore {
     }
     guard
       case .position(let value) = CollectionOrder.placement(
-        between: current(neighbours.before), and: current(neighbours.after))
+        between: current(neighbors.before), and: current(neighbors.after))
     else {
-      preconditionFailure("renumbered neighbours are a spacing apart")
+      preconditionFailure("renumbered neighbors are a spacing apart")
     }
     return value
   }

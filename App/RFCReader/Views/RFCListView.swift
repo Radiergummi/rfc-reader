@@ -28,7 +28,7 @@ struct RFCListView: View {
 
   /// A drag in the visible rows, resolved by their documents rather than their
   /// offsets: the rows on screen may hide obsolete documents or be only the first
-  /// pages (`CollectionOrder.neighbours`).
+  /// pages (`CollectionOrder.neighbors`).
   private func move(from source: IndexSet, to destination: Int, in visible: [RFCMetadata]) {
     guard let collection, let moved = source.first.map({ visible[$0] }) else { return }
     var reordered = visible

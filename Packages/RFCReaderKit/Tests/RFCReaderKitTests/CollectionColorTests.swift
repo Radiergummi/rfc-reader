@@ -3,10 +3,10 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// A collection's colour, stored by name so it syncs as a word (#349).
-@Suite("Collection colour")
+/// A collection's color, stored by name so it syncs as a word (#349).
+@Suite("Collection color")
 struct CollectionColorTests {
-  @Test func `every colour round-trips through its name`() {
+  @Test func `every color round-trips through its name`() {
     for color in CollectionColor.allCases {
       #expect(CollectionColor(name: color.rawValue) == color)
     }
@@ -23,5 +23,10 @@ struct CollectionColorTests {
       CollectionColor.allCases.map(\.rawValue) == [
         "blue", "green", "orange", "red", "purple", "pink", "teal", "yellow", "gray",
       ])
+  }
+
+  /// The app's strings are American English.
+  @Test func `the gray swatch is named gray`() {
+    #expect(CollectionColor.gray.title == "Gray")
   }
 }

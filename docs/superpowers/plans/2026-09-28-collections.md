@@ -17,7 +17,7 @@
 - Every model attribute optional or defaulted; no `@Attribute(.unique)` (CloudKit's shape, `UserData.swift` header).
 - Model names `DocumentCollection` and `DocumentCollectionItem` (never `Collection`, Swift's protocol). The interface says "Collection".
 - Items are ordered by `(position, addedAt, documentKey)` ascending; collections by `(position, createdAt, identifier.uuidString)` ascending.
-- Colour palette, in this order: blue, green, orange, red, purple, pink, teal, yellow, gray; default blue; stored by raw value.
+- Color palette, in this order: blue, green, orange, red, purple, pink, teal, yellow, gray; default blue; stored by raw value.
 - Items whose collection is missing are **never** deleted (spec, "Integrity").
 - Scripting-name precedence: fixed collections and streams, series, working group, user collection (first in sidebar order).
 - On macOS an `@Environment` lookup inside an `NSHostingController` root that was not handed the model is a runtime trap; `ReaderWindowController.host(_:)` hands `LibraryModel`, `NavigationModel`, `ReaderState` and the container. Menu commands reach the window through `ActiveReaderWindow`, never `@FocusedValue`.
@@ -31,7 +31,7 @@
 The inputs most likely to bite a person, each pinned by a test in the task named:
 
 1. **A collection deleted while another tab shows it** (or on another device) — that tab falls back to All RFCs rather than an empty, untitled list. Pinned in Task 6 (`KeptFilter`) and Task 7 (wiring).
-2. **Reordering with obsolete documents hidden or rows not yet paged in** — the moved row lands next to the visible neighbour it was dropped beside, not at an offset into hidden rows. Pinned in Task 1 (`CollectionOrder.neighbours`) and Task 5 (`move`).
+2. **Reordering with obsolete documents hidden or rows not yet paged in** — the moved row lands next to the visible neighbor it was dropped beside, not at an offset into hidden rows. Pinned in Task 1 (`CollectionOrder.neighbors`) and Task 5 (`move`).
 3. **Many moves into the same gap, and two items at one position after an offline append** — order stays deterministic and a renumber happens instead of a collapse. Pinned in Task 1 and Task 5.
 4. **A synced item naming something that is not an RFC, or a collection that has not arrived yet** — nothing crashes, the item is not listed or counted, and it is not deleted. Pinned in Task 3 and Task 4.
 5. **A name of only spaces, on create and on rename** — refused, and the Create/Save button stays disabled. Pinned in Task 5; the button in Task 8.
@@ -42,7 +42,7 @@ The inputs most likely to bite a person, each pinned by a test in the task named
 
 **RFCReaderKit (`Packages/RFCReaderKit/Sources/RFCReaderKit/`)**
 - `CollectionColor.swift` — create. The palette.
-- `CollectionOrder.swift` — create. Position arithmetic and visible-to-full neighbour mapping.
+- `CollectionOrder.swift` — create. Position arithmetic and visible-to-full neighbor mapping.
 - `UserData.swift` — modify. `SchemaV4`, typealiases, migration stage, container, item deduplication.
 - `CollectionSnapshot.swift` — create. The value the app observes.
 - `CollectionStore.swift` — create. Every mutation, on a `ModelContext`.
@@ -60,7 +60,7 @@ The inputs most likely to bite a person, each pinned by a test in the task named
 - `Model/NavigationModel.swift` — `keepFilter(in:)`, `collectionEditor`.
 - `Model/AppData.swift` — warning copy.
 - `Views/Components/CollectionColor+Color.swift` — create. Palette to SwiftUI `Color`.
-- `Views/Collections/CollectionEditorSheet.swift` — create. Create/rename/colour sheet.
+- `Views/Collections/CollectionEditorSheet.swift` — create. Create/rename/color sheet.
 - `Views/Collections/AddToCollectionItems.swift` — create. The shared Add to Collection menu items and sheet.
 - `Views/Collections/CollectionPickerSheet.swift` — create. The Add picker.
 - `Views/SidebarView.swift`, `Views/RFCListView.swift`, `Views/ContentView.swift`, `Views/DocumentView.swift` — modify.
@@ -82,7 +82,7 @@ The inputs most likely to bite a person, each pinned by a test in the task named
 - Test: `Packages/RFCReaderKit/Tests/RFCReaderKitTests/CollectionOrderTests.swift`
 
 **Interfaces:**
-- Produces: `CollectionColor` (`CaseIterable`, `rawValue: String`, `static let default`, `init(name: String)`, `title: String`); `CollectionOrder.spacing`, `.minimumGap`, `.Placement { case position(Double), renumberFirst }`, `appending(after: Double?) -> Double`, `placement(between: Double?, and: Double?) -> Placement`, `renumbered(count: Int) -> [Double]`, `neighbours<Key: Equatable>(above: Key?, below: Key?, in: [Key]) -> (before: Key?, after: Key?)`.
+- Produces: `CollectionColor` (`CaseIterable`, `rawValue: String`, `static let default`, `init(name: String)`, `title: String`); `CollectionOrder.spacing`, `.minimumGap`, `.Placement { case position(Double), renumberFirst }`, `appending(after: Double?) -> Double`, `placement(between: Double?, and: Double?) -> Placement`, `renumbered(count: Int) -> [Double]`, `neighbors<Key: Equatable>(above: Key?, below: Key?, in: [Key]) -> (before: Key?, after: Key?)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -94,10 +94,10 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// A collection's colour, stored by name so it syncs as a word (#349).
-@Suite("Collection colour")
+/// A collection's color, stored by name so it syncs as a word (#349).
+@Suite("Collection color")
 struct CollectionColorTests {
-  @Test func `every colour round-trips through its name`() {
+  @Test func `every color round-trips through its name`() {
     for color in CollectionColor.allCases {
       #expect(CollectionColor(name: color.rawValue) == color)
     }
@@ -137,7 +137,7 @@ struct CollectionOrderTests {
     #expect(CollectionOrder.appending(after: 3) == 3 + CollectionOrder.spacing)
   }
 
-  @Test func `a move between two neighbours takes their midpoint`() {
+  @Test func `a move between two neighbors takes their midpoint`() {
     #expect(CollectionOrder.placement(between: 1, and: 2) == .at(1.5))
   }
 
@@ -148,7 +148,7 @@ struct CollectionOrderTests {
   }
 
   /// Two devices appending offline both write "after the last".
-  @Test func `equal neighbours call for a renumber`() {
+  @Test func `equal neighbors call for a renumber`() {
     #expect(CollectionOrder.placement(between: 2, and: 2) == .renumberFirst)
   }
 
@@ -167,31 +167,31 @@ struct CollectionOrderTests {
   /// not somewhere among the hidden rows beyond it.
   @Test func `a drop below a visible row lands right after it`() {
     let full = ["a", "hidden", "b"]
-    let neighbours = CollectionOrder.neighbours(above: "a", below: "b", in: full)
-    #expect(neighbours.before == "a")
-    #expect(neighbours.after == "hidden")
+    let neighbors = CollectionOrder.neighbors(above: "a", below: "b", in: full)
+    #expect(neighbors.before == "a")
+    #expect(neighbors.after == "hidden")
   }
 
   /// The list pages its rows in (`ListWindow`): a drop at the end of what is on
   /// screen lands after the last visible row, ahead of the rows not paged in yet.
   @Test func `a drop at the end of the window lands ahead of unpaged rows`() {
     let full = ["a", "b", "unpaged"]
-    let neighbours = CollectionOrder.neighbours(above: "b", below: nil, in: full)
-    #expect(neighbours.before == "b")
-    #expect(neighbours.after == "unpaged")
+    let neighbors = CollectionOrder.neighbors(above: "b", below: nil, in: full)
+    #expect(neighbors.before == "b")
+    #expect(neighbors.after == "unpaged")
   }
 
   @Test func `a drop at the top lands right before the visible row below it`() {
     let full = ["hidden", "a", "b"]
-    let neighbours = CollectionOrder.neighbours(above: nil, below: "a", in: full)
-    #expect(neighbours.before == "hidden")
-    #expect(neighbours.after == "a")
+    let neighbors = CollectionOrder.neighbors(above: nil, below: "a", in: full)
+    #expect(neighbors.before == "hidden")
+    #expect(neighbors.after == "a")
   }
 
   @Test func `a drop into an empty list lands first`() {
-    let neighbours = CollectionOrder.neighbours(above: nil, below: nil, in: ["a"])
-    #expect(neighbours.before == nil)
-    #expect(neighbours.after == "a")
+    let neighbors = CollectionOrder.neighbors(above: nil, below: nil, in: ["a"])
+    #expect(neighbors.before == nil)
+    #expect(neighbors.after == "a")
   }
 }
 ```
@@ -208,15 +208,15 @@ Expected: build failure, `cannot find 'CollectionColor' in scope`.
 ```swift
 import Foundation
 
-/// A collection's colour: one of a fixed palette of system colours, stored by name
-/// (#349). A name rather than a colour value adapts to dark mode and increased
+/// A collection's color: one of a fixed palette of system colors, stored by name
+/// (#349). A name rather than a color value adapts to dark mode and increased
 /// contrast, and syncs as a word.
 public enum CollectionColor: String, CaseIterable, Sendable, Identifiable {
   case blue, green, orange, red, purple, pink, teal, yellow, gray
 
   public static let `default`: CollectionColor = .blue
 
-  /// The colour a stored name names, or the default for one this version does not
+  /// The color a stored name names, or the default for one this version does not
   /// know, which is what a newer device may sync to an older one.
   public init(name: String) {
     self = CollectionColor(rawValue: name) ?? .default
@@ -234,7 +234,7 @@ public enum CollectionColor: String, CaseIterable, Sendable, Identifiable {
     case .pink: "Pink"
     case .teal: "Teal"
     case .yellow: "Yellow"
-    case .gray: "Grey"
+    case .gray: "Gray"
     }
   }
 }
@@ -247,11 +247,11 @@ import Foundation
 
 /// Where rows sit in a collection, and collections in the sidebar (#349).
 ///
-/// Positions are `Double`s so a move takes the midpoint of its new neighbours and
+/// Positions are `Double`s so a move takes the midpoint of its new neighbors and
 /// writes one row. Halving a gap runs out eventually, and two devices appending
 /// offline can land on one position; both call for renumbering first.
 public enum CollectionOrder {
-  /// The gap between neighbours after appending or renumbering.
+  /// The gap between neighbors after appending or renumbering.
   public static let spacing: Double = 1
 
   /// Narrower than this, a gap is not split: the rows are renumbered first.
@@ -267,7 +267,7 @@ public enum CollectionOrder {
     (last ?? 0) + spacing
   }
 
-  /// Between two neighbours, either of which may be missing at an end.
+  /// Between two neighbors, either of which may be missing at an end.
   public static func placement(between before: Double?, and after: Double?) -> Placement {
     switch (before, after) {
     case (nil, nil):
@@ -293,7 +293,7 @@ public enum CollectionOrder {
   /// visible rows either side of the drop point; `full` is every row but the moved
   /// one, in order. The row goes right after `above` where there is one, otherwise
   /// right before `below`.
-  public static func neighbours<Key: Equatable>(
+  public static func neighbors<Key: Equatable>(
     above: Key?, below: Key?, in full: [Key]
   ) -> (before: Key?, after: Key?) {
     if let above, let index = full.firstIndex(of: above) {
@@ -318,7 +318,7 @@ Expected: all pass.
 ```bash
 make fmt && make lint
 git add Packages/RFCReaderKit/Sources/RFCReaderKit/CollectionColor.swift Packages/RFCReaderKit/Sources/RFCReaderKit/CollectionOrder.swift Packages/RFCReaderKit/Tests/RFCReaderKitTests/CollectionColorTests.swift Packages/RFCReaderKit/Tests/RFCReaderKitTests/CollectionOrderTests.swift
-git commit -m "Add the collection palette and ordering arithmetic" -m "Positions are Doubles so a move writes one row; a gap too narrow to split, or two equal neighbours, calls for a renumber. A move in a visible list resolves by the visible neighbours, never by offset.
+git commit -m "Add the collection palette and ordering arithmetic" -m "Positions are Doubles so a move writes one row; a gap too narrow to split, or two equal neighbors, calls for a renumber. A move in a visible list resolves by the visible neighbors, never by offset.
 
 Refs #349
 
@@ -963,7 +963,7 @@ struct CollectionStoreTests {
     #expect(CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
-  @Test func `rename and colour change what the snapshot says`() throws {
+  @Test func `rename and color change what the snapshot says`() throws {
     let context = try context()
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
     try CollectionStore.rename(id, to: "QUIC", in: context)
@@ -1020,7 +1020,7 @@ struct CollectionStoreTests {
     #expect(items.map(\.collectionIdentifier) == [kept])
   }
 
-  @Test func `a move places a document between its visible neighbours`() throws {
+  @Test func `a move places a document between its visible neighbors`() throws {
     let context = try context()
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
     for number in [1, 2, 3] { try CollectionStore.add(.rfc(number), to: id, in: context) }
@@ -1158,7 +1158,7 @@ public enum CollectionStore {
     }
     rows.removeAll { $0.identifier == identifier }
     moving.position = place(
-      between: CollectionOrder.neighbours(above: above, below: below, in: rows.map(\.identifier)),
+      between: CollectionOrder.neighbors(above: above, below: below, in: rows.map(\.identifier)),
       in: rows, key: \.identifier, position: \.position)
     try context.save()
   }
@@ -1229,26 +1229,26 @@ public enum CollectionStore {
     var rows = try items(in: identifier, context: context)
     guard let moving = rows.first(where: { $0.documentKey == document.fileStem }) else { return }
     rows.removeAll { $0 === moving }
-    let neighbours = CollectionOrder.neighbours(
+    let neighbors = CollectionOrder.neighbors(
       above: above?.fileStem, below: below?.fileStem, in: rows.map(\.documentKey))
     moving.position = place(
-      between: neighbours, in: rows, key: \.documentKey, position: \.position)
+      between: neighbors, in: rows, key: \.documentKey, position: \.position)
     try context.save()
   }
 
   // MARK: - Helpers
 
-  /// The position between two neighbours, renumbering `rows` first when the gap is
-  /// too narrow or the neighbours are equal.
+  /// The position between two neighbors, renumbering `rows` first when the gap is
+  /// too narrow or the neighbors are equal.
   private static func place<Row: AnyObject, Key: Equatable>(
-    between neighbours: (before: Key?, after: Key?), in rows: [Row],
+    between neighbors: (before: Key?, after: Key?), in rows: [Row],
     key: KeyPath<Row, Key>, position: ReferenceWritableKeyPath<Row, Double>
   ) -> Double {
     func current(_ wanted: Key?) -> Double? {
       wanted.flatMap { wanted in rows.first { $0[keyPath: key] == wanted }?[keyPath: position] }
     }
     if case .position(let value) = CollectionOrder.placement(
-      between: current(neighbours.before), and: current(neighbours.after))
+      between: current(neighbors.before), and: current(neighbors.after))
     {
       return value
     }
@@ -1257,9 +1257,9 @@ public enum CollectionStore {
     }
     guard
       case .position(let value) = CollectionOrder.placement(
-        between: current(neighbours.before), and: current(neighbours.after))
+        between: current(neighbors.before), and: current(neighbors.after))
     else {
-      preconditionFailure("renumbered neighbours are a spacing apart")
+      preconditionFailure("renumbered neighbors are a spacing apart")
     }
     return value
   }
@@ -1315,7 +1315,7 @@ Expected: all pass.
 ```bash
 make fmt && make lint
 git add Packages/RFCReaderKit/Sources/RFCReaderKit/CollectionStore.swift Packages/RFCReaderKit/Tests/RFCReaderKitTests/CollectionStoreTests.swift
-git commit -m "Add the collection store, where every change to collections is made" -m "Create, rename, colour, delete, add, remove, toggle and move, each saving before it returns. A removal can be undone to its old place; an empty name is refused.
+git commit -m "Add the collection store, where every change to collections is made" -m "Create, rename, color, delete, add, remove, toggle and move, each saving before it returns. A removal can be undone to its old place; an empty name is refused.
 
 Refs #349
 
@@ -1481,7 +1481,7 @@ In `systemImage`: `case .collection: "folder"`.
 In `includes(_:)`: add `.collection` to the `nil` arm: `case .recent, .bookmarks, .downloaded, .series, .collection: nil`.
 `fixesStatus`/`fixesWorkingGroup` already answer false by `default`/`if case`.
 
-Change the scripting initialiser's signature and add the collection branch last:
+Change the scripting initializer's signature and add the collection branch last:
 
 ```swift
   public init?(
@@ -1549,7 +1549,7 @@ add `public var collectionSort: CollectionSort`, extend `init` with `collectionS
 
   /// Whether rows can be dragged into a new order: only in a collection, in its own
   /// order, unsearched — a search's rows are in order of relevance, and their
-  /// neighbours are not the collection's.
+  /// neighbors are not the collection's.
   public func allowsMoving(in filter: LibraryFilter, query: String) -> Bool {
     guard case .collection = filter else { return false }
     return collectionSort == .manual && query.trimmingCharacters(in: .whitespaces).isEmpty
@@ -1738,7 +1738,7 @@ and after `sidebarSelection`:
   }
 ```
 
-- [ ] **Step 3: Colour and the editor mode**
+- [ ] **Step 3: Color and the editor mode**
 
 `App/RFCReader/Views/Components/CollectionColor+Color.swift`:
 
@@ -1747,7 +1747,7 @@ import RFCReaderKit
 import SwiftUI
 
 extension CollectionColor {
-  /// The system colour a collection's name stands for, adapting to dark mode and
+  /// The system color a collection's name stands for, adapting to dark mode and
   /// increased contrast.
   var color: Color {
     switch self {
@@ -1776,7 +1776,7 @@ enum CollectionEditorMode: Identifiable, Hashable {
   /// A new collection, and the document to add to it once made, when it was asked
   /// for from an Add to Collection menu.
   case create(adding: DocumentID?)
-  /// Renaming and recolouring the collection with this identifier.
+  /// Renaming and recoloring the collection with this identifier.
   case edit(UUID)
 
   var id: Self { self }
@@ -1860,7 +1860,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// Creating a collection, or renaming and recolouring one (#349).
+/// Creating a collection, or renaming and recoloring one (#349).
 struct CollectionEditorSheet: View {
   let mode: CollectionEditorMode
 
@@ -2054,7 +2054,7 @@ Then:
       } icon: {
         Image(systemName: "folder")
           // On a Mac a selected sidebar row turns its icons white, and an explicit
-          // colour would override that: `.primary` there follows the row's
+          // color would override that: `.primary` there follows the row's
           // prominence.
           .foregroundStyle(
             isSelected(filter) ? AnyShapeStyle(.primary) : AnyShapeStyle(entry.color.color))
@@ -2068,7 +2068,7 @@ Then:
     .tag(filter)
     .contextMenu {
       Button("Rename…") { navigation.collectionEditor = .edit(entry.id) }
-      Menu("Colour") {
+      Menu("Color") {
         ForEach(CollectionColor.allCases) { color in
           Button {
             library.editCollections { try CollectionStore.setColor(entry.id, to: color, in: $0) }
@@ -2185,7 +2185,7 @@ make run-device IOS_DEVICE=Charon
 ```
 
 Check, on both:
-- New Collection creates a collection, Create is disabled for a blank name, and it appears under Library with its colour.
+- New Collection creates a collection, Create is disabled for a blank name, and it appears under Library with its color.
 - Selecting it shows an empty list titled with its name (the window and tab title on the Mac too); Rename changes every title at once.
 - Delete asks first; deleting the collection a second Mac tab shows moves that tab to All RFCs.
 - Reordering collections by drag works; on iOS, Edit shows reorder and delete handles for collections only.
@@ -2207,7 +2207,7 @@ and use `List(selection: selection)`.
 
 ```bash
 git add App
-git commit -m "Add a Collections section to the sidebar" -m "Create, rename, recolour, delete after asking, and reorder, on both platforms: New Collection beside Edit on iOS, at the sidebar's foot and as File > New Collection on the Mac. Selecting a collection lists its documents in their order.
+git commit -m "Add a Collections section to the sidebar" -m "Create, rename, recolor, delete after asking, and reorder, on both platforms: New Collection beside Edit on iOS, at the sidebar's foot and as File > New Collection on the Mac. Selecting a collection lists its documents in their order.
 
 Refs #349
 
@@ -2398,7 +2398,7 @@ Add to `RFCListView`:
 
   /// A drag in the visible rows, resolved by their documents rather than their
   /// offsets: the rows on screen may hide obsolete documents or be only the first
-  /// pages (`CollectionOrder.neighbours`).
+  /// pages (`CollectionOrder.neighbors`).
   private func move(from source: IndexSet, to destination: Int, in visible: [RFCMetadata]) {
     guard let collection, let moved = source.first.map({ visible[$0] }) else { return }
     var reordered = visible
@@ -2519,7 +2519,7 @@ With the collection filled through the picker in Task 9:
 
 ```bash
 git add App
-git commit -m "Rearrange and remove a collection's documents" -m "Drag to reorder in the collection's own order, resolved by the visible neighbours; remove by swipe, Delete or a right click, undoably, back to the same place. VoiceOver offers Move Up and Move Down.
+git commit -m "Rearrange and remove a collection's documents" -m "Drag to reorder in the collection's own order, resolved by the visible neighbors; remove by swipe, Delete or a right click, undoably, back to the same place. VoiceOver offers Move Up and Move Down.
 
 Refs #349
 
@@ -2944,11 +2944,11 @@ After the "Decision: the user data store is versioned, keyed on the document, an
 
 *Decided September 2026 (issue #349).* A collection is a `DocumentCollection` and its members are `DocumentCollectionItem` rows naming it by identifier, in `SchemaV4`. Not a SwiftData relationship: with one, the collection's to-many side is what two devices both edit once sync is on; as independent rows, two devices adding to one collection each insert a row and nothing is lost.
 
-Items are ordered by `(position, addedAt, documentKey)`. Positions are `Double`s, so a move takes the midpoint of its neighbours and writes one row; a gap too narrow to split, or two equal positions after offline appends, renumbers the collection first (`CollectionOrder`). A move made in a list that hides rows resolves by the visible neighbours' documents, never by offset. A reorder racing a renumber on another device may misplace one item; that is accepted.
+Items are ordered by `(position, addedAt, documentKey)`. Positions are `Double`s, so a move takes the midpoint of its neighbors and writes one row; a gap too narrow to split, or two equal positions after offline appends, renumbers the collection first (`CollectionOrder`). A move made in a list that hides rows resolves by the visible neighbors' documents, never by offset. A reorder racing a renumber on another device may misplace one item; that is accepted.
 
 Items whose collection is missing are not deleted. Under sync they may simply have arrived before it, and deleting them would sync back and empty the collection where it was made; nothing shows them, since every list and count is computed per existing collection. A sweep with a grace period belongs to the sync work.
 
-Every change is made by `CollectionStore` and read through `CollectionSnapshot`, both in `RFCReaderKit` and tested there. A colour is stored by name from a fixed palette (`CollectionColor`), so it adapts to dark mode and an older device reads a name it does not know as the default.
+Every change is made by `CollectionStore` and read through `CollectionSnapshot`, both in `RFCReaderKit` and tested there. A color is stored by name from a fixed palette (`CollectionColor`), so it adapts to dark mode and an older device reads a name it does not know as the default.
 ```
 
 - [ ] **Step 2: The full check**

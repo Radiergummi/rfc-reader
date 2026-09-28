@@ -14,7 +14,7 @@ struct CollectionOrderTests {
     #expect(CollectionOrder.appending(after: 3) == 3 + CollectionOrder.spacing)
   }
 
-  @Test func `a move between two neighbours takes their midpoint`() {
+  @Test func `a move between two neighbors takes their midpoint`() {
     #expect(CollectionOrder.placement(between: 1, and: 2) == .position(1.5))
   }
 
@@ -27,7 +27,7 @@ struct CollectionOrderTests {
   }
 
   /// Two devices appending offline both write "after the last".
-  @Test func `equal neighbours call for a renumber`() {
+  @Test func `equal neighbors call for a renumber`() {
     #expect(CollectionOrder.placement(between: 2, and: 2) == .renumberFirst)
   }
 
@@ -47,30 +47,30 @@ struct CollectionOrderTests {
   /// not somewhere among the hidden rows beyond it.
   @Test func `a drop below a visible row lands right after it`() {
     let full = ["a", "hidden", "b"]
-    let neighbours = CollectionOrder.neighbours(above: "a", below: "b", in: full)
-    #expect(neighbours.before == "a")
-    #expect(neighbours.after == "hidden")
+    let neighbors = CollectionOrder.neighbors(above: "a", below: "b", in: full)
+    #expect(neighbors.before == "a")
+    #expect(neighbors.after == "hidden")
   }
 
   /// The list pages its rows in (`ListWindow`): a drop at the end of what is on
   /// screen lands after the last visible row, ahead of the rows not paged in yet.
   @Test func `a drop at the end of the window lands ahead of unpaged rows`() {
     let full = ["a", "b", "unpaged"]
-    let neighbours = CollectionOrder.neighbours(above: "b", below: nil, in: full)
-    #expect(neighbours.before == "b")
-    #expect(neighbours.after == "unpaged")
+    let neighbors = CollectionOrder.neighbors(above: "b", below: nil, in: full)
+    #expect(neighbors.before == "b")
+    #expect(neighbors.after == "unpaged")
   }
 
   @Test func `a drop at the top lands right before the visible row below it`() {
     let full = ["hidden", "a", "b"]
-    let neighbours = CollectionOrder.neighbours(above: nil, below: "a", in: full)
-    #expect(neighbours.before == "hidden")
-    #expect(neighbours.after == "a")
+    let neighbors = CollectionOrder.neighbors(above: nil, below: "a", in: full)
+    #expect(neighbors.before == "hidden")
+    #expect(neighbors.after == "a")
   }
 
   @Test func `a drop into an empty list lands first`() {
-    let neighbours = CollectionOrder.neighbours(above: nil, below: nil, in: ["a"])
-    #expect(neighbours.before == nil)
-    #expect(neighbours.after == "a")
+    let neighbors = CollectionOrder.neighbors(above: nil, below: nil, in: ["a"])
+    #expect(neighbors.before == nil)
+    #expect(neighbors.after == "a")
   }
 }

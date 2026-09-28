@@ -13,13 +13,13 @@ user-made lists of RFCs in the sidebar, with the folder controls Notes has.
 They serve three uses, which the design has to hold together:
 
 - **Project reading lists.** "Everything for my HTTP/3 server", added to while reading.
-- **Topic grouping.** Organising the library by subject, which means one document may be in
+- **Topic grouping.** Organizing the library by subject, which means one document may be in
   several collections.
 - **Ordered reading paths.** A sequence read in order, which means the order is the reader's
   own, set by hand. Issue #189 builds such paths automatically; these are made by hand.
 
 Sharing a collection with someone else is not part of this, but the model must not rule it
-out: a collection has to be describable as a name, a colour and an ordered list of
+out: a collection has to be describable as a name, a color and an ordered list of
 designations, which any later export format can carry.
 
 ## Decisions
@@ -31,7 +31,7 @@ designations, which any later export format can carry.
 | Order | Manual, new items at the end, reorderable. Newest/Oldest First are view options on top. | Reading paths need the reader's order; a large topic collection still wants to be seen by date. |
 | Bookmarks | Stays separate and unchanged. | Bookmarking is one-tap "keep this"; a collection is a deliberate, named list. No migration of existing bookmarks. |
 | Nesting | Flat. | Nesting brings reparenting, cycle checks and "what does a parent list" for little gain now. A parent can be added later as an optional attribute. |
-| Colour | One of a fixed palette of system colours, stored by name. | Adapts to dark mode and increased contrast, and syncs as a word. |
+| Color | One of a fixed palette of system colors, stored by name. | Adapts to dark mode and increased contrast, and syncs as a word. |
 | Platforms | iOS and macOS together. | The model and list logic are shared; once sync is on, lists made on one platform must be visible on the other. |
 | Name | "Collections" in the interface. Scripting keeps "collection" for every sidebar entry, user-made ones included. | Matches the user's wording. Scripting's existing term already means "a thing the sidebar lists". |
 
@@ -79,8 +79,8 @@ devices both edit.
 tie-break makes two items that ended up at one position — two devices appending offline both
 write "after the last" — sort the same way on every launch and every device.
 
-**Positions are `Double`s** so an item can move between two neighbours by taking their
-midpoint, writing one row. When the gap is too narrow to split, or the neighbours are equal,
+**Positions are `Double`s** so an item can move between two neighbors by taking their
+midpoint, writing one row. When the gap is too narrow to split, or the neighbors are equal,
 the collection is renumbered in one pass first.
 
 **Accepted under sync:** a reorder on one device racing a renumber on another may leave one
@@ -123,13 +123,13 @@ a store on disk as `UserData.deduplicate` is:
 
 - `create(name:color:)` — trims the name; refuses an empty one; appends at the end of the
   sidebar; returns the collection.
-- `update(name:color:)` — the editor's name and colour, in one save.
+- `update(name:color:)` — the editor's name and color, in one save.
 - `delete` — removes the collection and all its items in one save.
 - `add(_:to:)` — appends at the end; adding a document already in the collection changes
   nothing.
 - `toggle(_:in:)` — removes **every** item naming the document in that collection, or adds it;
   answers the state it leaves.
-- `move(_:in:after:before:)` — places a document between two neighbours named by document, not
+- `move(_:in:after:before:)` — places a document between two neighbors named by document, not
   by row offset; renumbers first when `CollectionOrder` says so.
 - `moveCollection(_:after:before:)` — the same for the sidebar.
 
@@ -138,25 +138,25 @@ comes back at its old position rather than at the end.
 
 ### `CollectionOrder`
 
-Pure arithmetic: the position after the last; the midpoint of two neighbours; whether a gap is
-too narrow or the neighbours equal, so a renumber is due; and the renumbering itself, which
+Pure arithmetic: the position after the last; the midpoint of two neighbors; whether a gap is
+too narrow or the neighbors equal, so a renumber is due; and the renumbering itself, which
 keeps the `(position, addedAt, documentKey)` order and spaces positions evenly.
 
-It also maps a move made in a **visible** list onto real neighbours. The visible list may hide
+It also maps a move made in a **visible** list onto real neighbors. The visible list may hide
 obsolete documents or only hold the rows paged in so far (`ListWindow`), so a move is resolved
 by the documents above and below the drop point in the visible list, then placed between those
 two in the full collection, never by offset.
 
 ### `CollectionColor`
 
-An enum of named system colours — blue, green, orange, red, purple, pink, teal, yellow, grey —
+An enum of named system colors — blue, green, orange, red, purple, pink, teal, yellow, gray —
 with `default` blue and `init(name:)` falling back to the default for a name it does not know,
 which is what a newer device may sync to an older one.
 
 ### `CollectionSnapshot`
 
 What the app reads collections through, built from one fetch: the collections in sidebar order
-with name and colour, and for each its members as ordered RFC numbers. Value-typed, `Sendable`
+with name and color, and for each its members as ordered RFC numbers. Value-typed, `Sendable`
 and `Equatable`, so the app can publish it only when it changed. Tested: order, the tie-break,
 items of a missing collection ignored, duplicate items collapsed.
 
@@ -208,11 +208,11 @@ items of a missing collection ignored, duplicate items collapsed.
 
 - A **Collections** section below Library and above Browse, hidden while there are none. It
   collapses and remembers it, like the other sections.
-- Each row: `folder` tinted with the collection's colour, and the name; on iOS also the count,
+- Each row: `folder` tinted with the collection's color, and the name; on iOS also the count,
   as the other rows have. On the Mac, where the sidebar's icons are untinted so a selected row
   turns them white, the tint applies only while the row is not selected.
 - **New Collection** (`folder.badge.plus`) opens a sheet: a name field, focused, and a row of
-  colour swatches. **Create** is disabled while the trimmed name is empty. On iOS the button
+  color swatches. **Create** is disabled while the trimmed name is empty. On iOS the button
   sits in the sidebar's top bar beside **Edit**, as in Notes; on the Mac, at the sidebar's foot
   and as File ▸ New Collection, which sets a sheet flag on `NavigationModel` reached through
   `ActiveReaderWindow`, as Go to RFC is (`@FocusedValue` does not resolve from a hosted root).
@@ -220,7 +220,7 @@ items of a missing collection ignored, duplicate items collapsed.
   unaffected. Entering and leaving Edit must neither push nor clear the sidebar's selection,
   which drives navigation in compact width — to verify on the device before step 2 closes.
 - A collection row's context menu (long press on iOS, right click on the Mac): **Edit…**, which
-  opens the editor with the name and the colour, and **Delete**. The colour is not offered
+  opens the editor with the name and the color, and **Delete**. The color is not offered
   again as a submenu: two places to change it, one of them behind a dialog titled for the
   name, was what the device check found. iOS also offers delete by trailing swipe.
 - **Delete** asks first, saying how many documents the collection holds and that the documents
@@ -271,7 +271,7 @@ collections and the order names resolve in. Getting it returns the name through
 
 - Sharing, import and export (the model keeps it possible; see Why).
 - Nesting.
-- Icons other than the folder; custom colours outside the palette.
+- Icons other than the folder; custom colors outside the palette.
 - Turning on iCloud sync, and with it any sweep of orphaned items. The schema is ready for it;
   enabling it is its own change.
 - Smart collections defined by a query.
@@ -287,7 +287,7 @@ Each step ends compiling, tested and working on both platforms.
    `title(for:)` at every title site, and `computeList`'s case — since the new case does not
    compile without them. No interface yet.
 2. **Sidebar and a read-only collection list.** The Collections section with create, rename,
-   colour, delete and sidebar reorder; selecting a collection shows its documents in manual
+   color, delete and sidebar reorder; selecting a collection shows its documents in manual
    order.
 3. **Editing a collection's list.** Reordering, removal with undo, the sort options on both
    platforms (including the Mac's View menu items), VoiceOver actions, the Add picker, the empty
@@ -304,10 +304,10 @@ Each step ends compiling, tested and working on both platforms.
   - two new collections get different identifiers;
   - deduplication keeps the earliest item and leaves items of a missing collection alone;
   - `CollectionStore`: add is idempotent; toggle removes every duplicate; delete cascades; a
-    move renumbers when the gap is too narrow or the neighbours equal; an undone removal returns
+    move renumbers when the gap is too narrow or the neighbors equal; an undone removal returns
     to its old position; an empty or whitespace name is refused;
   - `CollectionOrder`: append, midpoint, both ends, the renumbering threshold, equal
-    neighbours, and a move resolved from a visible list with hidden and unpaged rows;
+    neighbors, and a move resolved from a visible list with hidden and unpaged rows;
   - `CollectionColor`: round trip, unknown name;
   - `CollectionSnapshot`: order with the tie-break, missing collections, duplicates;
   - `ListOptions.collectionOrder` and `canReorder`, and that the library's Oldest First leaves a

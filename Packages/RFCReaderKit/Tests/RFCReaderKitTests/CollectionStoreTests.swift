@@ -42,7 +42,7 @@ struct CollectionStoreTests {
     #expect(CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
-  @Test func `an update renames and recolours in one save`() throws {
+  @Test func `an update renames and recolors in one save`() throws {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
@@ -110,7 +110,7 @@ struct CollectionStoreTests {
     #expect(items.map(\.collectionIdentifier) == [kept])
   }
 
-  @Test func `a move places a document between its visible neighbours`() throws {
+  @Test func `a move places a document between its visible neighbors`() throws {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier

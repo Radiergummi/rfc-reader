@@ -294,7 +294,7 @@ struct SidebarView: View {
     }
     .tag(filter)
     .contextMenu {
-      // The editor holds the name and the colour both: one place to change either.
+      // The editor holds the name and the color both: one place to change either.
       Button("Edit…") { navigation.collectionEditor = .edit(entry.id) }
       Divider()
       Button("Delete…", role: .destructive) { deleting = entry }
@@ -441,7 +441,7 @@ private struct SidebarLabelStyle: LabelStyle {
   }
 }
 
-/// A collection's folder, in its colour (#349).
+/// A collection's folder, in its color (#349).
 private struct CollectionFolderIcon: View {
   let color: CollectionColor
 
@@ -455,9 +455,9 @@ private struct CollectionFolderIcon: View {
   }
 
   /// On a Mac a row drawn with the accent behind it turns its icons white, and an
-  /// explicit colour would override that: `.primary` there follows the row. Only
+  /// explicit color would override that: `.primary` there follows the row. Only
   /// that row — a selection in an inactive window or an unfocused sidebar is drawn
-  /// grey, and keeps the folder's colour, as Finder's tags do.
+  /// gray, and keeps the folder's color, as Finder's tags do.
   private var style: AnyShapeStyle {
     #if os(macOS)
       if prominence == .increased { return AnyShapeStyle(.primary) }

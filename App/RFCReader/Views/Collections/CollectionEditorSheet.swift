@@ -2,7 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// Creating a collection, or renaming and recolouring one (#349).
+/// Creating a collection, or renaming and recoloring one (#349).
 struct CollectionEditorSheet: View {
   let mode: CollectionEditorMode
 

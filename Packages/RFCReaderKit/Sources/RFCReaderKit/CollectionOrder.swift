@@ -2,11 +2,11 @@ import Foundation
 
 /// Where rows sit in a collection, and collections in the sidebar (#349).
 ///
-/// Positions are `Double`s so a move takes the midpoint of its new neighbours and
+/// Positions are `Double`s so a move takes the midpoint of its new neighbors and
 /// writes one row. Halving a gap runs out eventually, and two devices appending
 /// offline can land on one position; both call for renumbering first.
 public enum CollectionOrder {
-  /// The gap between neighbours after appending or renumbering.
+  /// The gap between neighbors after appending or renumbering.
   public static let spacing: Double = 1
 
   /// Narrower than this, a gap is not split: the rows are renumbered first.
@@ -22,7 +22,7 @@ public enum CollectionOrder {
     (last ?? 0) + spacing
   }
 
-  /// Between two neighbours, either of which may be missing at an end.
+  /// Between two neighbors, either of which may be missing at an end.
   public static func placement(between before: Double?, and after: Double?) -> Placement {
     switch (before, after) {
     case (nil, nil):
@@ -48,7 +48,7 @@ public enum CollectionOrder {
   /// visible rows either side of the drop point; `full` is every row but the moved
   /// one, in order. The row goes right after `above` where there is one, otherwise
   /// right before `below`.
-  public static func neighbours<Key: Equatable>(
+  public static func neighbors<Key: Equatable>(
     above: Key?, below: Key?, in full: [Key]
   ) -> (before: Key?, after: Key?) {
     if let above, let index = full.firstIndex(of: above) {
