@@ -143,4 +143,43 @@ struct QuickOpenResultsTests {
     #expect(results.selected == nil)
     #expect(!results.isSearching)
   }
+
+  // MARK: - What a row says
+
+  private static let bcp14 = DocumentID(series: .bcp, number: 14)
+
+  private static let titles: [DocumentID: String] = [
+    .rfc(9110): "HTTP Semantics",
+    .rfc(2119): "Key words",
+    .rfc(8174): "Ambiguity of uppercase",
+  ]
+
+  private static func metadata(_ id: DocumentID) -> RFCMetadata? {
+    titles[id].map { RFCMetadata(id: id, title: $0, date: PublicationDate(year: 2022)) }
+  }
+
+  @Test func `a document in the index says its title`() {
+    let summary = QuickOpenResults.summary(of: .rfc(9110), members: [], metadata: Self.metadata)
+    #expect(summary == "HTTP Semantics")
+  }
+
+  @Test func `a series of one says its member and that member's title`() {
+    let summary = QuickOpenResults.summary(
+      of: Self.bcp14, members: [.rfc(2119)], metadata: Self.metadata)
+    #expect(summary == "RFC 2119: Key words")
+  }
+
+  /// The conjunction is the reader's locale's, so only the members are pinned.
+  @Test func `a series of several lists its members`() throws {
+    let summary = try #require(
+      QuickOpenResults.summary(
+        of: Self.bcp14, members: [.rfc(2119), .rfc(8174)], metadata: Self.metadata))
+    #expect(summary.hasPrefix("RFC 2119"))
+    #expect(summary.hasSuffix("RFC 8174"))
+  }
+
+  @Test func `a document neither in the index nor a series says nothing`() {
+    let summary = QuickOpenResults.summary(of: .rfc(99999), members: [], metadata: Self.metadata)
+    #expect(summary == nil)
+  }
 }

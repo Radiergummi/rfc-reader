@@ -1,3 +1,4 @@
+import Foundation
 import RFCKit
 
 /// The rows under the Go to RFC palette's field, and which one ↵ would open.
@@ -78,6 +79,25 @@ public struct QuickOpenResults: Equatable, Sendable {
     guard !rows.isEmpty else { return }
     let current = selected.flatMap { rows.firstIndex(of: $0) } ?? 0
     selected = rows[min(max(current + offset, 0), rows.count - 1)]
+  }
+
+  /// What a row says about a document: an RFC's title, or what a series number
+  /// stands for now — `BCP 14` is not in the index as a document of its own.
+  ///
+  /// - Parameters:
+  ///   - members: The series' current members, empty for an RFC.
+  ///   - metadata: The index's entry for a document, if it has one.
+  public static func summary(
+    of id: DocumentID,
+    members: [DocumentID],
+    metadata: (DocumentID) -> RFCMetadata?
+  ) -> String? {
+    if let own = metadata(id) { return own.title }
+    guard !members.isEmpty else { return nil }
+    if members.count == 1, let only = metadata(members[0]) {
+      return "\(only.id.displayName): \(only.title)"
+    }
+    return members.map(\.displayName).formatted(.list(type: .and))
   }
 
   /// The selected row stays selected if it is still listed; otherwise the top one is.

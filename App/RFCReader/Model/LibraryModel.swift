@@ -347,12 +347,7 @@ final class LibraryModel {
   /// What a Go to RFC row says about a document: an RFC's title, or what a series
   /// number stands for now — `BCP 14` is not in the index as a document of its own.
   func summary(of id: DocumentID) -> String? {
-    if let metadata = metadata(id) { return metadata.title }
-    guard let members = index?.series(id)?.members, !members.isEmpty else { return nil }
-    if members.count == 1, let only = metadata(members[0]) {
-      return "\(only.id.displayName): \(only.title)"
-    }
-    return members.map(\.displayName).formatted(.list(type: .and))
+    QuickOpenResults.summary(of: id, members: index?.series(id)?.members ?? [], metadata: metadata)
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
