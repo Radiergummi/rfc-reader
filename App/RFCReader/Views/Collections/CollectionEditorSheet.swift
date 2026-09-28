@@ -103,8 +103,7 @@ struct CollectionEditorSheet: View {
           try CollectionStore.add(document, to: collection.identifier, in: context)
         }
       case .edit(let identifier):
-        try CollectionStore.rename(identifier, to: name, in: context)
-        try CollectionStore.setColor(identifier, to: color, in: context)
+        try CollectionStore.update(identifier, name: name, color: color, in: context)
       }
     }
     dismiss()

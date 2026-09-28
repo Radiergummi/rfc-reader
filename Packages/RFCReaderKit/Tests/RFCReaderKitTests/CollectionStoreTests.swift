@@ -37,21 +37,36 @@ struct CollectionStoreTests {
     }
     let collection = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context)
     #expect(throws: CollectionStore.Failure.emptyName) {
-      try CollectionStore.rename(collection.identifier, to: "\t", in: context)
+      try CollectionStore.update(collection.identifier, name: "\t", color: .blue, in: context)
     }
     #expect(CollectionSnapshot.fetch(in: context).collections.map(\.name) == ["HTTP/3"])
   }
 
-  @Test func `rename and colour change what the snapshot says`() throws {
+  @Test func `an update renames and recolours in one save`() throws {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    try CollectionStore.rename(id, to: "QUIC", in: context)
-    try CollectionStore.setColor(id, to: .orange, in: context)
+    var saves = 0
+    let observer = NotificationCenter.default.addObserver(
+      forName: ModelContext.didSave, object: context, queue: nil
+    ) { _ in saves += 1 }
+    defer { NotificationCenter.default.removeObserver(observer) }
+
+    try CollectionStore.update(id, name: "QUIC", color: .orange, in: context)
 
     let entry = CollectionSnapshot.fetch(in: context)[id]
     #expect(entry?.name == "QUIC")
     #expect(entry?.color == .orange)
+    #expect(saves == 1)
+  }
+
+  @Test func `a colour changes what the snapshot says`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
+    try CollectionStore.setColor(id, to: .orange, in: context)
+
+    #expect(CollectionSnapshot.fetch(in: context)[id]?.color == .orange)
   }
 
   @Test func `adding appends, and adding again changes nothing`() throws {

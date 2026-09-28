@@ -32,9 +32,14 @@ public enum CollectionStore {
     return collection
   }
 
-  public static func rename(_ identifier: UUID, to name: String, in context: ModelContext) throws {
+  /// The editor's name and colour, in one save.
+  public static func update(
+    _ identifier: UUID, name: String, color: CollectionColor, in context: ModelContext
+  ) throws {
     let name = try validName(name)
-    try collection(identifier, in: context).name = name
+    let collection = try collection(identifier, in: context)
+    collection.name = name
+    collection.color = color
     try context.save()
   }
 
