@@ -24,11 +24,16 @@ let package = Package(
     .package(path: "../../Packages/RFCKit"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
     .package(url: "https://github.com/apple/swift-log", exact: "1.15.1"),
+    // SHA-256 for the manifest: CryptoKit on Apple platforms, BoringSSL on Linux.
+    .package(url: "https://github.com/apple/swift-crypto", exact: "5.0.0"),
   ],
   targets: [
     .target(
       name: "RFCCorpusKit",
-      dependencies: [.product(name: "RFCKit", package: "RFCKit")],
+      dependencies: [
+        .product(name: "RFCKit", package: "RFCKit"),
+        .product(name: "Crypto", package: "swift-crypto"),
+      ],
       swiftSettings: swiftSettings
     ),
     .executableTarget(
