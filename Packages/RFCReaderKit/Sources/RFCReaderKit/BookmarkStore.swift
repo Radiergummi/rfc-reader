@@ -10,10 +10,10 @@ import SwiftData
 /// had to be made twice — and the two had already drifted over the title a new
 /// bookmark stores, which is now `DocumentActions.bookmarkTitle`.
 ///
-/// What each caller still owns is how it *displays* the state: iOS reads its `@Query`
-/// for the filled glyph, macOS holds the last answer in
-/// `ReaderWindowController.isBookmarked` because `NSToolbar` revalidates far too
-/// often to ask a store here.
+/// Nobody displays the state by asking here: `LibraryModel` reads
+/// `bookmarkedDocuments(in:)` after every save, and the toolbars, the menu and the
+/// list rows read its set, which is cheap enough for `NSToolbar` to revalidate
+/// against on every event.
 ///
 /// In the package beside `CollectionStore`, and on its terms: every failure is
 /// thrown, and the App decides what to do with it.

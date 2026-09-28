@@ -124,12 +124,13 @@ struct DocumentCommands: Commands {
       // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
       CommandGroup(after: .pasteboard) {
         Section {
-          // Static title: whether this RFC is bookmarked is a SwiftData fetch,
-          // not something the menu observes, so a "Remove Bookmark" label would
-          // go stale. The toolbar's filled glyph carries the state.
-          Button("Bookmark") { active.controller?.toggleBookmark() }
-            .keyboardShortcut("d", modifiers: .command)
-            .disabled(navigation?.selection == nil)
+          // Says what it will do, as the toolbar's glyph does: both read the
+          // library's set of bookmarked documents, which the menu observes.
+          Button(active.controller?.isBookmarked == true ? "Remove Bookmark" : "Bookmark") {
+            active.controller?.toggleBookmark()
+          }
+          .keyboardShortcut("d", modifiers: .command)
+          .disabled(navigation?.selection == nil)
           // The key window's undo manager, so Edit > Undo puts back a document
           // removed from here, as it does for a removal in the list (#349).
           if let navigation, let document = navigation.selection {

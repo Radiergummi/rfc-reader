@@ -19,13 +19,11 @@ struct DocumentView: View {
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
     // Only the iOS toolbar reads these. On macOS the bookmark button and the
-    // external links are the window's, and a `@Query` left outside this guard ran a
-    // live fetch of every bookmark per open document that nothing read.
+    // external links are the window's.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
@@ -122,10 +120,9 @@ struct DocumentView: View {
 
   private var metadata: RFCMetadata? { library.metadata(id) }
   #if !os(macOS)
-    private var isBookmarked: Bool {
-      let key = id.fileStem
-      return bookmarks.contains { $0.documentKey == key }
-    }
+    /// From the library's one set, as the Mac's toolbar and every list row read it,
+    /// rather than a live query of every bookmark per open document.
+    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(id) }
   #endif
 
   /// Everything a build depends on. One trigger, so the document is built in one
@@ -400,7 +397,6 @@ struct DocumentView: View {
     }
 
     private var bookmarkButton: some View {
-      // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
       // A tap bookmarks, as before; a long press adds to a collection (#349).
       return Menu {
