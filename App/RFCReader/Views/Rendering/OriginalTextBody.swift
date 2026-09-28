@@ -67,7 +67,7 @@
       if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
       guard let textView = scrollView.documentView as? NSTextView else { return }
       // Through the text storage, never the content storage's `attributedString`,
-      // which silently discards the backing store (CLAUDE.md).
+      // which silently discards the backing store; see `NSTextContentStorage.install(_:)`.
       textView.textStorage?.setAttributedString(attributed)
       context.coordinator.shown = (text, fontSize)
     }

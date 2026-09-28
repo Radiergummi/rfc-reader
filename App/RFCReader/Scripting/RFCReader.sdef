@@ -50,7 +50,7 @@
       <property name="current section" code="RWcs" type="text" access="r" description="The number of the section being read; missing value if none.">
         <cocoa key="scriptCurrentSection"/>
       </property>
-      <property name="collection" code="RWco" type="text" description="The collection the list shows, by its name in the sidebar: “All RFCs”, “Bookmarks”, “Recently Read”, “Available Offline”, “Internet Standards”, “Best Current Practices”, a stream such as “IETF”, a working group such as “HTTPBIS”, or a series such as “BCP 14”.">
+      <property name="collection" code="RWco" type="text" description="The collection the list shows, by its name in the sidebar: “All RFCs”, “Bookmarks”, “Recently Read”, “Available Offline”, “Internet Standards”, “Best Current Practices”, a stream such as “IETF”, a working group such as “HTTPBIS”, or a series such as “BCP 14”. A collection you made is named as the sidebar shows it; built-in names, series and working groups are matched first, and among collections of one name the first in the sidebar.">
         <cocoa key="scriptCollection"/>
       </property>
       <property name="search text" code="RWst" type="text" description="What the list is filtered by; empty for no search.">

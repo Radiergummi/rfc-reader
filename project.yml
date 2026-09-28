@@ -1,5 +1,5 @@
-# XcodeGen project spec. Run `xcodegen generate` (brew install xcodegen) to produce
-# RFCReader.xcodeproj, or create the project by hand as described in docs/GETTING_STARTED.md.
+# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (brew install
+# xcodegen) to produce RFCReader.xcodeproj; edit this file, never the generated project.
 name: RFCReader
 options:
   bundleIdPrefix: me.mazetti
@@ -36,6 +36,8 @@ targets:
       - path: App/RFCReader/Scripting/RFCReader.sdef
         destinationFilters: [macOS]
         buildPhase: resources
+      # One app icon per Xcode version; the settings below pick which is built.
+      - path: App/icons
     dependencies:
       - package: RFCKit
       - package: RFCReaderKit
@@ -82,3 +84,10 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
+        # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
+        # rather than ignores, so the variant it cannot read is not even an input.
+        ASSETCATALOG_COMPILER_APPICON_NAME: $(APP_ICON_$(XCODE_VERSION_MAJOR))
+        APP_ICON_2600: AppIcon-26
+        APP_ICON_2700: AppIcon-27
+        EXCLUDED_SOURCE_FILE_NAMES: AppIcon-*.icon
+        INCLUDED_SOURCE_FILE_NAMES: $(ASSETCATALOG_COMPILER_APPICON_NAME).icon

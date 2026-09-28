@@ -100,10 +100,15 @@
     }
 
     @objc var scriptCollection: String {
-      get { controller?.navigation.filter.title ?? "" }
+      get { controller.map { LibraryModel.shared.title(for: $0.navigation.filter) } ?? "" }
       set {
-        let groups = Set(LibraryModel.shared.index?.rfcs.compactMap(\.workingGroup) ?? [])
-        guard let filter = LibraryFilter(scriptName: newValue, workingGroups: groups) else {
+        let library = LibraryModel.shared
+        let groups = Set(library.index?.rfcs.compactMap(\.workingGroup) ?? [])
+        guard
+          let filter = LibraryFilter(
+            scriptName: newValue, workingGroups: groups,
+            collections: library.collections.collections)
+        else {
           ScriptError.report("There is no collection named “\(newValue)”.")
           return
         }

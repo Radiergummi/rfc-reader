@@ -1,0 +1,231 @@
+{
+  "features" : [
+    "refractivity"
+  ],
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.92616,0.98933,1.00000,1.00000",
+          "display-p3:0.62840,0.86048,0.96783,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.00542,0.04004,0.10688,1.00000",
+          "display-p3:0.12046,0.16491,0.18638,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "blend-mode-specializations" : [
+        {
+          "value" : "soft-light"
+        },
+        {
+          "appearance" : "dark",
+          "value" : "overlay"
+        }
+      ],
+      "blur-material" : 1,
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "R.svg",
+          "name" : "R",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -172.4441451660182,
+              -7.610000000000014
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "F.svg",
+          "name" : "F",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              121.46950658789274,
+              -1.7509999999999764
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "C.svg",
+          "name" : "C",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              366.6504430995867,
+              -5.8530000000000655
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "name" : "Letters",
+      "refractivity" : {
+        "depth" : 0.0759765625,
+        "enabled" : true,
+        "strength" : -0.290390625
+      },
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.1
+      }
+    },
+    {
+      "blend-mode-specializations" : [
+        {
+          "value" : "overlay"
+        },
+        {
+          "appearance" : "dark",
+          "value" : "plus-lighter"
+        }
+      ],
+      "blur-material-specializations" : [
+        {
+          "value" : 0.5
+        },
+        {
+          "appearance" : "light",
+          "value" : 1
+        }
+      ],
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "R.svg",
+          "name" : "R",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -172.4441451660182,
+              -7.610000000000014
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "F.svg",
+          "name" : "F",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              121.46950658789274,
+              -1.7509999999999764
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "C.svg",
+          "name" : "C",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              366.6504430995867,
+              -5.8530000000000655
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "name" : "Letters",
+      "refractivity" : {
+        "depth" : 0.6541796875,
+        "enabled" : true,
+        "strength" : 0.581484375
+      },
+      "shadow-specializations" : [
+        {
+          "value" : {
+            "kind" : "layer-color",
+            "opacity" : 0.24
+          }
+        },
+        {
+          "appearance" : "light",
+          "value" : {
+            "kind" : "layer-color",
+            "opacity" : 0.46
+          }
+        }
+      ],
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.09
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
