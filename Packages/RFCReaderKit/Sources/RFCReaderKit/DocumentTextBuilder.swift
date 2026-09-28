@@ -131,14 +131,7 @@ extension DocumentTextBuilder {
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
     mark(Self.abstractAnchor)
-    append(
-      "Abstract\n",
-      [
-        .font: style.headingFont(depth: 1),
-        .foregroundColor: RFCColors.label,
-        .rfcAnchor: Self.abstractAnchor,
-        .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6),
-      ].merging(Self.headingLevel(depth: 1)) { current, _ in current })
+    append("Abstract\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
     // Emitted quiet, rather than emitted and then quietened. A post-pass has to
     // guess which runs "count" — matching against a dynamic colour to find the
     // ones to step back — and anything the builder *measures* against the style
@@ -147,6 +140,21 @@ extension DocumentTextBuilder {
     emitting(in: style.scaled(by: Self.abstractScale), colour: RFCColors.secondaryLabel) {
       appendBlocks(blocks, indent: 0)
     }
+  }
+
+  /// A heading at `depth`, carrying the anchor it is the heading of. The abstract's
+  /// has nothing above it, being the first thing in the storage; a section's is set
+  /// off from the prose before it by `spacingBefore`.
+  private func headingAttributes(depth: Int, anchor: String, spacingBefore: CGFloat = 0)
+    -> [NSAttributedString.Key: Any]
+  {
+    [
+      .font: style.headingFont(depth: depth),
+      .foregroundColor: RFCColors.label,
+      .rfcAnchor: anchor,
+      .paragraphStyle: paragraphStyle(
+        spacingBefore: spacingBefore, spacingAfter: style.paragraphSpacing * 0.6),
+    ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
   }
 
   /// A heading's level, in the text itself, where UIKit looks for it: that is what
@@ -187,15 +195,10 @@ extension DocumentTextBuilder {
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
     // is in `base`, so the anchor, the font and the spacing carry across the
     // reference's own runs and the chip is set at heading size.
-    let headingAttributes: [NSAttributedString.Key: Any] = [
-      .font: style.headingFont(depth: depth),
-      .foregroundColor: RFCColors.label,
-      .rfcAnchor: section.anchor,
-      .paragraphStyle: paragraphStyle(
-        spacingBefore: style.paragraphSpacing * 1.6, spacingAfter: style.paragraphSpacing * 0.6),
-    ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
-    output.append(inlineRuns(section.displayTitleInlines, base: headingAttributes))
-    append("\n", headingAttributes)
+    let attributes = headingAttributes(
+      depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6)
+    output.append(inlineRuns(section.displayTitleInlines, base: attributes))
+    append("\n", attributes)
     appendBlocks(section.blocks, indent: 0)
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
@@ -276,10 +279,22 @@ extension DocumentTextBuilder {
   }
 
   func bodyAttributes(indent: CGFloat) -> [NSAttributedString.Key: Any] {
+    bodyAttributes(paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing))
+  }
+
+  /// Body text, in the body font and the colour of the text being emitted, set in
+  /// `paragraphStyle`.
+  func bodyAttributes(_ paragraphStyle: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
+    [.font: style.bodyFont, .foregroundColor: bodyColour, .paragraphStyle: paragraphStyle]
+  }
+
+  /// Secondary text that names a block -- a figure's or table's caption, a source
+  /// code block's language -- in the caption font and the secondary colour.
+  func captionAttributes(_ paragraphStyle: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
     [
-      .font: style.bodyFont,
-      .foregroundColor: bodyColour,
-      .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing),
+      .font: style.captionFont,
+      .foregroundColor: RFCColors.secondaryLabel,
+      .paragraphStyle: paragraphStyle,
     ]
   }
 

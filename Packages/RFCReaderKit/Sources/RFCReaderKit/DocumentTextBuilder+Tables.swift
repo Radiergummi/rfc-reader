@@ -70,8 +70,7 @@ extension DocumentTextBuilder {
     // Only the font differs between a header row and a data row, and nothing in
     // either varies down the table, so both are built once here rather than per
     // row.
-    let dataAttributes: [NSAttributedString.Key: Any] =
-      [.font: style.bodyFont, .foregroundColor: bodyColour, .paragraphStyle: rowStyle]
+    let dataAttributes = bodyAttributes(rowStyle)
     var headerAttributes = dataAttributes
     headerAttributes[.font] = style.boldBodyFont
 
@@ -91,12 +90,8 @@ extension DocumentTextBuilder {
     // Nothing here varies by row or cell, so the three dictionaries are built
     // once for the whole table rather than once per cell.
     let cellIndent = indent + style.indentStep
-    let attributes: [NSAttributedString.Key: Any] = [
-      .font: style.bodyFont,
-      .foregroundColor: bodyColour,
-      .paragraphStyle: paragraphStyle(
-        indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25),
-    ]
+    let attributes = bodyAttributes(
+      paragraphStyle(indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25))
     var labelAttributes = attributes
     labelAttributes[.font] = style.boldBodyFont
     labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
@@ -133,11 +128,7 @@ extension DocumentTextBuilder {
     guard let caption, !caption.isEmpty else { return }
     append(
       caption + "\n",
-      [
-        .font: style.captionFont,
-        .foregroundColor: RFCColors.secondaryLabel,
-        .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center),
-      ])
+      captionAttributes(
+        paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center)))
   }
 }

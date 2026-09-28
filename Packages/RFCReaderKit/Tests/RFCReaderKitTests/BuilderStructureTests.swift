@@ -134,6 +134,32 @@ struct BuilderStructureTests {
       "the abstract is not a section")
   }
 
+  /// The abstract's heading is a first-level heading like any section's: the same
+  /// font, colour and spacing after, differing only in having nothing above it.
+  @Test func `the abstract heading is set as a first level heading`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let section = try #require(document.sections.first)
+    let abstract = try Fixtures.offset(of: "Abstract", in: built.text)
+    let heading = try #require(built.anchors.offset(of: section.anchor))
+    func attribute<Value>(_ key: NSAttributedString.Key, at offset: Int) -> Value? {
+      built.text.attribute(key, at: offset, effectiveRange: nil) as? Value
+    }
+    let abstractFont: PlatformFont? = attribute(.font, at: abstract)
+    let headingFont: PlatformFont? = attribute(.font, at: heading)
+    #expect(abstractFont == headingFont)
+    let abstractColour: PlatformColor? = attribute(.foregroundColor, at: abstract)
+    let headingColour: PlatformColor? = attribute(.foregroundColor, at: heading)
+    #expect(abstractColour == headingColour)
+    let abstractParagraph = try #require(
+      attribute(.paragraphStyle, at: abstract) as NSParagraphStyle?)
+    let headingParagraph = try #require(
+      attribute(.paragraphStyle, at: heading) as NSParagraphStyle?)
+    #expect(abstractParagraph.paragraphSpacing == headingParagraph.paragraphSpacing)
+    #expect(abstractParagraph.paragraphSpacingBefore == 0)
+    #expect(headingParagraph.paragraphSpacingBefore == style.paragraphSpacing * 1.6)
+  }
+
   @Test func `a document with no abstract gets no heading`() throws {
     var document = try Fixtures.rfc8999()
     document.header.abstract = []
