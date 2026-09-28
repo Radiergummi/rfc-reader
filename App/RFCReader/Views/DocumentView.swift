@@ -69,6 +69,9 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+
+    /// Whether the panel is a sheet over the reader rather than a column beside it.
+    private var isCompact: Bool { horizontalSizeClass == .compact }
   #endif
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
@@ -175,15 +178,18 @@ struct DocumentView: View {
           guard !Task.isCancelled else { return }
           navigation.settleReturnOffer()
         }
-        // iOS keeps the inspector. A 320 pt panel pinned to the trailing edge
-        // swallows an iPhone, and in compact width the inspector already presents
-        // itself as a sheet.
-        .inspector(isPresented: $showsInspector) {
-          PanelHost(
-            isPresented: $showsInspector,
-            closesAfterChoice: horizontalSizeClass == .compact
-          )
+        // iOS keeps the inspector as a column beside the reader where there is
+        // room for one. In compact width it is a sheet, and a `.sheet` of our own
+        // rather than the one `.inspector` turns itself into: that one, swiped
+        // away, set the binding back to false but dropped the next request to
+        // show it, so the panel's buttons opened it only on every other tap.
+        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
           .inspectorColumnWidth(min: 260, ideal: 320)
+        }
+        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
+          PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
+          .presentationDetents([.medium, .large])
         }
       #endif
       .onAppear {

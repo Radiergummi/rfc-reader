@@ -141,13 +141,18 @@ struct PanelHost: View {
           navigation.jump(toSection: $0)
           didNavigate()
         },
-        openDocument: {
-          library.open($0, activation: .current, in: navigation)
-          didNavigate()
+        openDocument: { id in
+          leave { library.open(id, activation: .current, in: navigation) }
         },
-        search: {
-          navigation.search($0)
-          didNavigate()
+        search: { text in
+          leave {
+            navigation.search(text)
+            #if !os(macOS)
+              // An iPhone shows the list or the reader, not both: the results are
+              // the list's, so the reader steps back to it.
+              if closesAfterChoice { navigation.selection = nil }
+            #endif
+          }
         }
       )
     } else {
@@ -159,6 +164,21 @@ struct PanelHost: View {
     #if !os(macOS)
       if closesAfterChoice { isPresented = false }
     #endif
+  }
+
+  /// A choice that leaves this document: another RFC, or the list. The sheet is
+  /// closed first and the choice made a turn later (#298). Made at once, it replaced
+  /// the reader, whose view owns the sheet, before the sheet heard it should close,
+  /// so the sheet stayed up with nothing in it.
+  private func leave(_ choice: @escaping () -> Void) {
+    #if !os(macOS)
+      if closesAfterChoice {
+        isPresented = false
+        DispatchQueue.main.async(execute: choice)
+        return
+      }
+    #endif
+    choice()
   }
 }
 
