@@ -4,6 +4,10 @@ import SwiftData
 import SwiftUI
 import os
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 /// The reader's load and build decisions, at debug level: what a device's
 /// Console shows when a document fails to load or never finishes (#252, #253).
 private let readerLog = Logger(
@@ -446,8 +450,32 @@ struct DocumentView: View {
             Button("Preceding Draft") { systemOpenURL(draft) }
           }
         }
+
+        Section {
+          Button("Print…", systemImage: "printer") { printDocument() }
+        }
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// The system's print sheet, with the document laid out for paper (#375). Laid
+    /// out for the region's paper; the sheet scales it to whatever paper is chosen.
+    private func printDocument() {
+      let original = reader.showOriginal
+      Task {
+        guard
+          let data = try? await DocumentPDF.make(
+            for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else { return }
+        let info = UIPrintInfo.printInfo()
+        info.jobName = id.displayName
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printingItem = data
+        controller.present(animated: true)
       }
     }
 

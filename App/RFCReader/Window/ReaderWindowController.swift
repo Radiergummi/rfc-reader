@@ -1,5 +1,6 @@
 #if os(macOS)
   import AppKit
+  import PDFKit
   import RFCKit
   import RFCReaderKit
   import SwiftData
@@ -455,6 +456,38 @@
         id: id
       )
       BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+    }
+
+    // MARK: - Print
+
+    /// File > Print…: the document laid out for paper, handed to the system's print
+    /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
+    /// chosen; a different paper picked in the panel itself is scaled to fit.
+    func printDocument() {
+      guard let id = navigation.selection, reader.hasDocument, let window else { return }
+      let printInfo = NSPrintInfo.shared
+      let original = reader.showOriginal
+      Task {
+        do {
+          let data = try await DocumentPDF.make(
+            for: id, original: original, paperSize: printInfo.paperSize, library: library)
+          guard let pdf = PDFDocument(data: data),
+            let operation = pdf.printOperation(
+              for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+          else { return }
+          operation.jobTitle = id.displayName
+          operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } catch {
+          _ = window.presentError(error)
+        }
+      }
+    }
+
+    /// File > Page Setup…, which sets the paper `printDocument()` lays out for.
+    func runPageSetup() {
+      guard let window else { return }
+      NSPageLayout().beginSheet(
+        with: NSPrintInfo.shared, modalFor: window, delegate: nil, didEnd: nil, contextInfo: nil)
     }
 
     // MARK: - Go to RFC
