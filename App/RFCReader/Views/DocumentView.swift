@@ -31,6 +31,10 @@ struct DocumentView: View {
   @AppStorage("preferOriginalText") private var preferOriginalText = false
   @AppStorage("underlineLinks") private var underlineLinks = false
   @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  /// The system's text size and Bold Text, which the reader follows (#153). The Mac
+  /// has neither, and reports the default size and no weight.
+  @Environment(\.dynamicTypeSize) private var textSize
+  @Environment(\.legibilityWeight) private var legibilityWeight
 
   let id: DocumentID
 
@@ -121,11 +125,15 @@ struct DocumentView: View {
     let hasDocument: Bool
     let fontSize: Double
     let underlineLinks: Bool
+    let textSize: DynamicTypeSize
+    let boldText: Bool
     let column: CGFloat?
 
     var style: ReadingStyle? {
       column.map {
-        ReadingStyle(bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks)
+        ReadingStyle(
+          bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize,
+          boldText: boldText)
       }
     }
   }
@@ -133,7 +141,7 @@ struct DocumentView: View {
   private var buildInputs: BuildInputs {
     BuildInputs(
       hasDocument: document != nil, fontSize: fontSize, underlineLinks: underlineLinks,
-      column: column)
+      textSize: textSize, boldText: legibilityWeight == .bold, column: column)
   }
 
   /// The reader, and on macOS only the reader.
