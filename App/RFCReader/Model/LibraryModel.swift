@@ -217,6 +217,22 @@ final class LibraryModel {
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : []
     )
+    return list(key, in: index)
+  }
+
+  /// The whole library searched for `query`, whatever filter a scene is on: what the
+  /// sidebar lists while it is searched on an iPhone, where the list is not on
+  /// screen beside it (#345).
+  func librarySearch(_ query: String) -> [RFCMetadata] {
+    // Observed on every call, for the reason `list(for:)` gives.
+    guard let index else { return [] }
+    let key = ListKey(
+      filter: .all, query: query.trimmingCharacters(in: .whitespaces),
+      bookmarked: [], recentlyRead: [], downloaded: [])
+    return list(key, in: index)
+  }
+
+  private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     if let hit = listCache[key] { return hit }
     let computed = computeList(key, in: index)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }

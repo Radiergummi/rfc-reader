@@ -18,39 +18,24 @@ struct SidebarView: View {
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
-      Section("Library", isExpanded: $libraryExpanded) {
-        row(.bookmarks)
-        row(.recent)
-        row(.downloaded)
-      }
-      Section("Browse", isExpanded: $browseExpanded) {
-        row(.all)
-        row(.standards)
-        row(.bestCurrentPractice)
-        ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
-          row(.stream(stream))
-        }
-      }
-      if !library.topWorkingGroups.isEmpty {
-        Section("Working Groups", isExpanded: $workingGroupsExpanded) {
-          ForEach(library.topWorkingGroups, id: \.self) { group in
-            row(.workingGroup(group))
-          }
-        }
-      }
-      // Not on iOS, where the sidebar is a list of places to go and this puts
-      // documents among them (#343). It is the top of All RFCs anyway.
       #if os(macOS)
-        justPublished
+        places
+      #else
+        if isSearchingInPlace {
+          searchResults
+        } else {
+          places
+        }
       #endif
     }
     .navigationTitle("RFCs")
-    // Search lives on the sidebar, not on the list it filters, and not in the
-    // toolbar: the toolbar's trailing end belongs to the panel's toggle, and the
-    // document's section of it is the wrong place for something that filters the
-    // library. The text it binds to lives on `NavigationModel`, so `RFCListView`
-    // filters on it exactly as before.
     #if os(macOS)
+      // Search lives on the sidebar, not on the list it filters, and not in the
+      // toolbar: the toolbar's trailing end belongs to the panel's toggle, and the
+      // document's section of it is the wrong place for something that filters the
+      // library. The text it binds to lives on `NavigationModel`, so `RFCListView`
+      // filters on it exactly as before.
+      //
       // Written out rather than `.searchable`, which draws nothing here: the
       // sidebar is its own hosting controller now, with no `NavigationSplitView`
       // around it to give `.sidebar` placement a meaning. Measured — the window
@@ -61,13 +46,95 @@ struct SidebarView: View {
         .padding(.vertical, 8)
       }
     #else
-      .searchable(text: Bindable(navigation).searchText, placement: .sidebar, prompt: "Search")
+      // The list has a field of its own as well, which narrows the filter it
+      // shows; this one searches the library (#345). Both bind the one text.
+      .searchable(text: Bindable(navigation).searchText, prompt: "Search")
+      .toolbar { LibraryBottomBar(navigation: navigation) }
+      .overlay {
+        if isSearchingInPlace, library.indexState.isReady,
+          library.librarySearch(navigation.searchText).isEmpty
+        {
+          ContentUnavailableView.search(text: navigation.searchText)
+        }
+      }
+      // Coming back from a list is leaving the search that list was narrowed by,
+      // as it is in Notes. Otherwise the sidebar comes back showing the whole
+      // library searched for what narrowed Bookmarks.
+      .onAppear {
+        if horizontalSizeClass == .compact { navigation.searchText = "" }
+      }
       // A list of places, titled and headed the way Notes' folders are (#343).
       .navigationBarTitleDisplayMode(.large)
       .headerProminence(.increased)
     #endif
     .labelStyle(SidebarLabelStyle())
   }
+
+  @ViewBuilder
+  private var places: some View {
+    Section("Library", isExpanded: $libraryExpanded) {
+      row(.bookmarks)
+      row(.recent)
+      row(.downloaded)
+    }
+    Section("Browse", isExpanded: $browseExpanded) {
+      row(.all)
+      row(.standards)
+      row(.bestCurrentPractice)
+      ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
+        row(.stream(stream))
+      }
+    }
+    if !library.topWorkingGroups.isEmpty {
+      Section("Working Groups", isExpanded: $workingGroupsExpanded) {
+        ForEach(library.topWorkingGroups, id: \.self) { group in
+          row(.workingGroup(group))
+        }
+      }
+    }
+    // Not on iOS, where the sidebar is a list of places to go and this puts
+    // documents among them (#343). It is the top of All RFCs anyway.
+    #if os(macOS)
+      justPublished
+    #endif
+  }
+
+  #if !os(macOS)
+    /// Whether the sidebar lists what was searched for rather than its places.
+    ///
+    /// Only collapsed: side by side, the list beside it shows the results. On an
+    /// iPhone the list is not on screen, and the field searched for nothing anyone
+    /// could see.
+    private var isSearchingInPlace: Bool {
+      horizontalSizeClass == .compact
+        && !navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The first results, and the way to all of them in All RFCs, which keeps the
+    /// query: the list is windowed (`ListWindow`) and this is not.
+    @ViewBuilder
+    private var searchResults: some View {
+      let results = library.librarySearch(navigation.searchText)
+      let bookmarked = library.bookmarkedNumbers
+      Section {
+        ForEach(results.prefix(Self.searchResultLimit)) { rfc in
+          Button {
+            library.open(rfc.id, activation: .current, in: navigation)
+          } label: {
+            RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
+          }
+          .buttonStyle(.plain)
+        }
+        if results.count > Self.searchResultLimit {
+          Button("Show All \(results.count.formatted()) Results") {
+            navigation.sidebarSelection = .all
+          }
+        }
+      }
+    }
+
+    private static let searchResultLimit = 50
+  #endif
 
   private func row(_ filter: LibraryFilter) -> some View {
     HStack {

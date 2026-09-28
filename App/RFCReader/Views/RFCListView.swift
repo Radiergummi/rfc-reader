@@ -77,6 +77,9 @@ struct RFCListView: View {
     #if !os(macOS)
       .navigationTitle(navigation.filter.title)
       .navigationSubtitle(library.listSubtitle(for: navigation))
+      // Narrows what this list shows, as Notes' field does inside a folder (#345).
+      .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
+      .toolbar { LibraryBottomBar(navigation: navigation) }
     #endif
   }
 
