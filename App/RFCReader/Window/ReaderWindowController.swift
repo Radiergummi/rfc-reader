@@ -483,6 +483,33 @@
       }
     }
 
+    /// File > Export…: the document saved in the format the save panel's pop-up
+    /// picks (#376), as a sheet on this window. A paged format is laid out for the
+    /// paper Page Setup has chosen, as a print is.
+    func exportDocument() {
+      guard let id = navigation.selection, reader.hasDocument, let window else { return }
+      let panel = NSSavePanel()
+      let chooser = ExportFormatChooser(panel: panel, document: id)
+      panel.accessoryView = chooser.view
+      panel.isExtensionHidden = false
+      panel.canCreateDirectories = true
+      panel.beginSheetModal(for: window) { [library] response in
+        guard response == .OK, let url = panel.url else { return }
+        // Read here, not captured earlier: the chooser is what the panel's pop-up
+        // changed, and holding it in this closure is what keeps it alive.
+        let format = chooser.format
+        Task {
+          do {
+            let data = try await DocumentExport.data(
+              for: id, as: format, paperSize: NSPrintInfo.shared.paperSize, library: library)
+            try data.write(to: url, options: .atomic)
+          } catch {
+            _ = window.presentError(error)
+          }
+        }
+      }
+    }
+
     /// File > Page Setup…, which sets the paper `printDocument()` lays out for.
     func runPageSetup() {
       guard let window else { return }

@@ -21,6 +21,11 @@ extension NSAttributedString.Key {
   /// (`AccessibleReading.rotorLabel`). Never read aloud with the diagram, because
   /// the caption follows it as text.
   public static let rfcCaption = NSAttributedString.Key("rfcCaption")
+  /// Where a link goes, in a build whose style emits no live links
+  /// (`ReadingStyle.emitsLinks`): a key TextKit does not know, so it neither
+  /// underlines nor recolours the run, which an exported PDF still turns into a
+  /// link annotation (#376). The value is the URL the reader's `.link` would carry.
+  public static let rfcLinkTarget = NSAttributedString.Key("rfcLinkTarget")
 }
 
 public enum RFCDecoration: String, Sendable {

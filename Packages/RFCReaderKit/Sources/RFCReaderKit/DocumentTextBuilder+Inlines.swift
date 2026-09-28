@@ -97,10 +97,10 @@ extension DocumentTextBuilder {
   }
 
   /// What makes a run a link: the URL, and the underline when the reader asked
-  /// for one (`ReadingStyle.underlinesLinks`). Nothing, for a style that has no
-  /// links (`ReadingStyle.emitsLinks`).
+  /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
+  /// links (`ReadingStyle.emitsLinks`), only where it goes, as `.rfcLinkTarget`.
   private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
-    guard style.emitsLinks else { return [:] }
+    guard style.emitsLinks else { return [.rfcLinkTarget: url] }
     var attributes: [NSAttributedString.Key: Any] = [.link: url]
     if style.underlinesLinks {
       attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue

@@ -31,10 +31,11 @@ public struct ReadingStyle: Sendable, Equatable {
   /// An underline is the reader's to ask for, and then it goes under every link,
   /// chips included.
   public var underlinesLinks: Bool
-  /// Whether a link is a link at all. On by default; off for a print, where a link
-  /// cannot be followed and a text layout manager with no text view to say
-  /// otherwise underlines and recolours every `.link` run (#375). The text of a
-  /// link stays, and so does a reference's chip.
+  /// Whether a link is a live `.link` run. On by default; off for paper, where a
+  /// text layout manager with no text view to say otherwise underlines and
+  /// recolours every `.link` run (#375). The text of a link stays, and so does a
+  /// reference's chip, and where it goes is kept as `.rfcLinkTarget`, which an
+  /// exported PDF makes a link of again (#376).
   public var emitsLinks: Bool
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close

@@ -73,6 +73,14 @@ public struct PrintLayout: Sendable, Equatable {
       width: contentRect.width, height: Self.furnitureHeight)
   }
 
+  /// `rect`, in the laid-out document's coordinates, where `page` puts it on
+  /// paper: the page's slice of the document starts at the top of the column.
+  /// Where a fragment is drawn, and where an exported PDF's links and
+  /// destinations go (#376).
+  public func onPaper(_ rect: CGRect, page: PrintPagination.Page) -> CGRect {
+    rect.offsetBy(dx: contentRect.minX, dy: contentRect.minY - page.top)
+  }
+
   /// The style a document is built in for this paper: the print body size, set to
   /// the page's column, with no links, since paper cannot follow one. The system's
   /// text size is left at its default: it is a setting for the screen, and paper

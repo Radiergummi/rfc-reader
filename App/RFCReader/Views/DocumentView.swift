@@ -76,6 +76,8 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+    /// A finished export, while Save to Files is showing it (#376).
+    @State private var exported: ExportedFile?
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
@@ -200,6 +202,14 @@ struct DocumentView: View {
         .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
           .presentationDetents([.medium, .large])
+        }
+        .fileExporter(
+          isPresented: Binding(get: { exported != nil }, set: { if !$0 { exported = nil } }),
+          document: exported,
+          contentType: (exported?.format ?? .pdf).contentType,
+          defaultFilename: id.fileStem
+        ) { _ in
+          exported = nil
         }
       #endif
       .onAppear {
@@ -448,10 +458,28 @@ struct DocumentView: View {
         }
 
         Section {
+          Menu("Export", systemImage: "square.and.arrow.down") {
+            ForEach(ExportFormat.allCases) { format in
+              Button(format.name) { exportDocument(as: format) }
+            }
+          }
           Button("Print…", systemImage: "printer") { printDocument() }
         }
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// Save to Files, with the document in `format` (#376). Laid out for the region's
+    /// paper, as a print is.
+    private func exportDocument(as format: ExportFormat) {
+      Task {
+        guard
+          let data = try? await DocumentExport.data(
+            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else { return }
+        exported = ExportedFile(data: data, format: format)
       }
     }
 
