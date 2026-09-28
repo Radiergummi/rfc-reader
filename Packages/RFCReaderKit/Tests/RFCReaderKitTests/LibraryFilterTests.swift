@@ -26,4 +26,15 @@ struct LibraryFilterTests {
       #expect(!filter.fixesWorkingGroup)
     }
   }
+
+  /// Everything in a collection is there because the reader put it there: it fixes
+  /// no field, and the index cannot decide it.
+  @Test func `a collection fixes nothing and the index cannot decide it`() {
+    let filter = LibraryFilter.collection(UUID())
+    #expect(!filter.fixesStatus)
+    #expect(!filter.fixesWorkingGroup)
+    let rfc = RFCMetadata(id: .rfc(9000), title: "QUIC", date: PublicationDate(year: 2021))
+    #expect(filter.includes(rfc) == nil)
+    #expect(!YearSections.apply(to: filter, query: ""))
+  }
 }

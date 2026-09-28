@@ -19,7 +19,7 @@ public enum YearSections {
     guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
     switch filter {
     case .all, .standards, .bestCurrentPractice, .stream, .workingGroup: return true
-    case .recent, .bookmarks, .downloaded, .series: return false
+    case .recent, .bookmarks, .downloaded, .series, .collection: return false
     }
   }
 
