@@ -33,6 +33,9 @@ struct RFCListView: View {
     let row = { (rfc: RFCMetadata, showsYear: Bool) in
       RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear)
         .tag(rfc.id)
+        #if !os(macOS)
+          .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
+        #endif
         .onAppear {
           guard rfc.id == trigger else { return }
           limit = ListWindow.extendedLimit(from: limit, total: rows.count)
@@ -88,6 +91,9 @@ struct RFCListView: View {
     .onChange(of: navigation.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
+    .onChange(of: navigation.listOptions) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
+    }
     .onChange(of: navigation.searchText) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
@@ -104,9 +110,34 @@ struct RFCListView: View {
       .navigationSubtitle(library.listSubtitle(for: navigation))
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
       .searchable(text: $navigation.searchText, prompt: "Search \(navigation.filter.title)")
-      .toolbar { LibraryBottomBar(navigation: navigation) }
+      .toolbar {
+        LibraryBottomBar(navigation: navigation)
+        ToolbarItem(placement: .primaryAction) { optionsMenu }
+      }
+      // The index could be refreshed only from the status line at the list's very
+      // end (#348).
+      .refreshable { await library.refreshIndex() }
     #endif
   }
+
+  #if !os(macOS)
+    /// How the list is shown, for this tab (#348).
+    private var optionsMenu: some View {
+      @Bindable var navigation = navigation
+      return Menu {
+        if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
+          Picker("Sort", selection: $navigation.listOptions.order) {
+            ForEach(ListOptions.Order.allCases, id: \.self) { order in
+              Text(order.title)
+            }
+          }
+        }
+        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      } label: {
+        Label("View Options", systemImage: "ellipsis")
+      }
+    }
+  #endif
 
   /// Where the selected document sits in the list, if it is in it at all.
   ///
@@ -202,3 +233,60 @@ struct RFCRow: View {
       .typesettingLanguage(.init(identifier: "en"))
   }
 }
+
+#if !os(macOS)
+  /// What a list row offers beyond a tap (#348): a leading swipe to bookmark it, and
+  /// a context menu previewing its abstract, as Notes previews a note.
+  private struct RowActions: ViewModifier {
+    let rfc: RFCMetadata
+    let isBookmarked: Bool
+    @Environment(\.modelContext) private var modelContext
+
+    func body(content: Content) -> some View {
+      content
+        .swipeActions(edge: .leading) {
+          Button(action: toggleBookmark) {
+            Label(
+              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: isBookmarked ? "bookmark.slash" : "bookmark")
+          }
+          .tint(.accentColor)
+        }
+        .contextMenu {
+          Button(action: toggleBookmark) {
+            Label(
+              isBookmarked ? "Remove Bookmark" : "Bookmark",
+              systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+          }
+          ShareLink(
+            item: RFCEditorEndpoints.infoPage(rfc.id),
+            subject: Text("\(rfc.id.displayName): \(rfc.title)"))
+        } preview: {
+          preview
+        }
+    }
+
+    private var preview: some View {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(rfc.id.displayName)
+          .font(.subheadline.monospacedDigit())
+          .foregroundStyle(.secondary)
+        Text(rfc.title).font(.headline)
+        if let abstract = rfc.abstract {
+          Text(abstract)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(12)
+        }
+      }
+      .typesettingLanguage(.init(identifier: "en"))
+      .padding()
+      .frame(width: 340, alignment: .leading)
+    }
+
+    private func toggleBookmark() {
+      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
+      BookmarkStore.toggle(rfc.id, title: title, in: modelContext)
+    }
+  }
+#endif

@@ -44,6 +44,8 @@ final class NavigationModel: Identifiable {
     }
   }
   var searchText = ""
+  /// The iOS list's view options, for this tab (#348).
+  var listOptions = ListOptions()
   var isShowingGoToSheet = false
 
   /// The library the list is computed from, and which the inputs below are taken

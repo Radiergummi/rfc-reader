@@ -175,6 +175,7 @@ final class LibraryModel {
     let bookmarked: Set<Int>
     let recentlyRead: [Int]
     let downloaded: Set<Int>
+    let options: ListOptions
   }
 
   /// Answers remembered against their inputs.
@@ -215,7 +216,8 @@ final class LibraryModel {
       query: scene.searchText.trimmingCharacters(in: .whitespaces),
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
-      downloaded: filter == .downloaded ? scene.downloaded : []
+      downloaded: filter == .downloaded ? scene.downloaded : [],
+      options: scene.listOptions
     )
     return list(key, in: index)
   }
@@ -228,13 +230,14 @@ final class LibraryModel {
     guard let index else { return [] }
     let key = ListKey(
       filter: .all, query: query.trimmingCharacters(in: .whitespaces),
-      bookmarked: [], recentlyRead: [], downloaded: [])
+      bookmarked: [], recentlyRead: [], downloaded: [], options: ListOptions())
     return list(key, in: index)
   }
 
   private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
     if let hit = listCache[key] { return hit }
-    let computed = computeList(key, in: index)
+    let computed = key.options.apply(
+      to: computeList(key, in: index), filter: key.filter, query: key.query)
     if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
     listCache[key] = computed
     return computed
