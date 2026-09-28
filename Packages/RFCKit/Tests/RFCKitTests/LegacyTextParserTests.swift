@@ -1021,7 +1021,8 @@ struct LegacyTextCorpusFindingsTests {
         "         Somewhere, 1 April 1969.",
       ]))
     #expect(one.map(\.term) == ["7"])
-    #expect(one.first?.text == "Someone, A., \"A Title\", RFC 7 (NIC 101), Somewhere, 1 April 1969.")
+    #expect(
+      one.first?.text == "Someone, A., \"A Title\", RFC 7 (NIC 101), Somewhere, 1 April 1969.")
 
     let two = try #require(
       LegacyTextParser.catalogueEntries([

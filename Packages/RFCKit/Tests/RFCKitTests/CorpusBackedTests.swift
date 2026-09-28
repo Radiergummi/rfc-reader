@@ -139,3 +139,36 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(document.section(anchor: "appendix-C") != nil)
   }
 }
+
+@Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCatalogueTests {
+  private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
+    document.everyBlock.compactMap {
+      if case .definitionList(let items) = $0 { return items }
+      return nil
+    }
+  }
+
+  /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
+  /// each hung past its number. They were artwork, every reference in them unlinked;
+  /// they are one catalogue now, numbered as the document numbers them (#204).
+  @Test func `the RFC index of RFC 1012 is a catalogue`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
+    let entries = try #require(catalogues(in: document).max { $0.count < $1.count })
+    #expect(entries.count > 900)
+    #expect(entries.first?.term.plainText == "1")
+    #expect(
+      document.artworkText.allSatisfy { !$0.contains("  - Crocker, Steve") },
+      "no entry is left as artwork")
+  }
+
+  /// The standards summaries set a new RFC's number and title on one line and its
+  /// description under it. The title was a paragraph and the description artwork;
+  /// the description is the entry's second paragraph now.
+  @Test func `an entry's indented description joins the entry`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
+    let entry = try #require(
+      catalogues(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
+    #expect(entry.definition.count == 2)
+  }
+}

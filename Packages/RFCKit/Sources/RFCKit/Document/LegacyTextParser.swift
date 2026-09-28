@@ -424,7 +424,9 @@ public struct LegacyTextParser: Sendable {
           section: anchor,
           firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
           lineCount: block.lines.count,
-          claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil,
+          // A catalogue is a list too, offered the block before the prose test.
+          claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil
+            || catalogueEntries(block.lines) != nil,
           diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
         )
       }
@@ -1504,6 +1506,11 @@ public struct LegacyTextParser: Sendable {
 
   nonisolated(unsafe) private static let bulletPattern =
     #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
+  /// A catalogue entry: `NUMBER[letter]  - text`, the RFC index of RFC 1012, the
+  /// standards summaries' `2352 - A Convention ...`, numbered steps and value tables
+  /// (#204). The text may not start with a digit, or `3 - 2` would be an entry.
+  nonisolated(unsafe) private static let catalogueEntryPattern =
+    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#
   nonisolated(unsafe) private static let numberedItemPattern =
     #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
   /// `containsArtwork` answers the same question byte by byte; an alternative added
@@ -1634,6 +1641,8 @@ public struct LegacyTextParser: Sendable {
     var result: [Block] = []
     // The marker indent of the list `result.last` holds, while it holds one.
     var openListIndent: Int?
+    // The same for a catalogue: the column its numbers stand in.
+    var openCatalogueIndent: Int?
     for block in merged {
       // Probed once: the continuation test needs to know the block opens with no
       // marker, and a list the block produces needs the column of its own.
@@ -1643,20 +1652,68 @@ public struct LegacyTextParser: Sendable {
       {
         continue
       }
+      if let indent = openCatalogueIndent,
+        attachContinuation(
+          block, toCatalogueAt: indent, marker: marker, in: &result, linker: linker)
+      {
+        continue
+      }
       for parsed in classify(block, marker: marker, proseIndent: proseIndent, linker: linker) {
-        // Merge adjacent list blocks of the same style into one list.
+        // Merge adjacent list blocks of the same style into one list, and adjacent
+        // catalogue blocks into one catalogue: RFC 1012 sets a blank line between
+        // every entry, so each arrives as a block of its own.
         if case .list(let list) = parsed, case .list(var previous)? = result.last,
           previous.style == list.style
         {
           previous.items += list.items
           result[result.count - 1] = .list(previous)
+        } else if case .definitionList(let items) = parsed,
+          case .definitionList(let previous)? = result.last, openCatalogueIndent != nil
+        {
+          result[result.count - 1] = .definitionList(previous + items)
         } else {
           result.append(parsed)
         }
       }
       openListIndent = if case .list? = result.last { marker?.indent } else { nil }
+      openCatalogueIndent =
+        if case .definitionList? = result.last, catalogueEntries(block.lines) != nil {
+          block.lines.first?.leadingSpaceCount
+        } else if case .definitionList? = result.last {
+          openCatalogueIndent
+        } else {
+          nil
+        }
     }
     return result
+  }
+
+  /// A paragraph indented past a catalogue entry's number and carrying no marker of
+  /// its own is the rest of that entry: the standards summaries set an entry's
+  /// description under it that way (RFC 2300's `This is an information document
+  /// ...`), and it was preserved as artwork. The same tests as a list item's
+  /// continuation, for the same reasons.
+  private static func attachContinuation(
+    _ block: RawBlock,
+    toCatalogueAt numberIndent: Int,
+    marker: ListMarker?,
+    in result: inout [Block],
+    linker: InlineLinker
+  ) -> Bool {
+    guard case .definitionList(var items)? = result.last, var item = items.last else {
+      return false
+    }
+    guard block.indent > numberIndent, marker == nil, catalogueEntries(block.lines) == nil
+    else { return false }
+    guard readsLikeSentences(block.lines, share: (of: 1, in: 2)),
+      looksLikeProse(block.lines, maxIndent: .max)
+    else { return false }
+    let inlines = linker.link(joinWrappedLines(block.lines))
+    guard !inlines.isEmpty else { return false }
+    item.definition.append(.paragraph(Paragraph(inlines)))
+    items[items.count - 1] = item
+    result[result.count - 1] = .definitionList(items)
+    return true
   }
 
   /// A block indented past a list's marker and carrying no marker of its own is the
@@ -1983,6 +2040,20 @@ public struct LegacyTextParser: Sendable {
       return [.list(list)]
     }
 
+    // Catalogues: every entry a number and a dash at one indent, anything else hung
+    // past it. Before the prose test, which takes a one-line entry for a paragraph
+    // and the rest of the block for artwork.
+    if let entries = catalogueEntries(lines) {
+      return [
+        .definitionList(
+          entries.map { entry in
+            DefinitionItem(
+              term: [.text(entry.term)],
+              definition: [.paragraph(Paragraph(linker.link(entry.text)))])
+          })
+      ]
+    }
+
     if looksLikeProse(lines, maxIndent: proseIndent) {
       let inlines = linker.link(Self.joinWrappedLines(lines))
       return inlines.isEmpty ? [] : [.paragraph(Paragraph(inlines))]
@@ -2012,6 +2083,29 @@ public struct LegacyTextParser: Sendable {
       }
     }
     return result
+  }
+
+  /// The entries of a catalogue block, each its number and its text with the lines
+  /// hung under it joined, or nil when the block is not one: every entry has to stand
+  /// at the first one's indent, and every other line has to hang past it. Internal,
+  /// so the shape can be pinned on hand-written lines.
+  static func catalogueEntries(_ lines: [String]) -> [(term: String, text: String)]? {
+    guard let first = lines.first, let head = first.firstMatch(of: catalogueEntryPattern) else {
+      return nil
+    }
+    let indent = head.indent.count
+    var entries: [(term: String, lines: [String])] = []
+    for line in lines {
+      if let match = line.firstMatch(of: catalogueEntryPattern) {
+        guard match.indent.count == indent else { return nil }
+        entries.append((String(match.term), [String(match.text)]))
+      } else if line.leadingSpaceCount > indent, !entries.isEmpty {
+        entries[entries.count - 1].lines.append(line)
+      } else {
+        return nil
+      }
+    }
+    return entries.map { ($0.term, joinWrappedLines($0.lines)) }
   }
 
   private static func parseList(_ lines: [String], marker: ListMarker?, linker: InlineLinker)
