@@ -27,7 +27,19 @@ public struct RFCXMLSerializer: Sendable {
     self.options = options
   }
 
+  /// The XML, and what could not be written into it.
+  public struct Serialization: Sendable {
+    public var xml: String
+    /// One line for each part of the document the XML has no place for and so leaves out.
+    public var warnings: [String]
+  }
+
+  /// The XML alone, for a caller that has no use for the warnings.
   public func serialize(_ document: RFCDocument) -> String {
+    serialization(of: document).xml
+  }
+
+  public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
     let referenceAnchors = Self.referenceAnchors(in: document)
     var context = Context(referenceAnchors: referenceAnchors)
@@ -88,7 +100,7 @@ public struct RFCXMLSerializer: Sendable {
       writer.close("back")
     }
     writer.close("rfc")
-    return writer.output
+    return Serialization(xml: writer.output, warnings: context.warnings)
   }
 
   /// Where `<back>` starts. The schema orders it as its `<references>`, then its
