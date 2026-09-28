@@ -19,8 +19,12 @@ public enum LinkPreview: Equatable, Sendable {
   /// The bibliography entry with this anchor, as the reference card.
   case card(String)
 
-  /// Nil for a URL the reader does not own: a link to the web previews nothing.
-  public static func resolve(_ url: URL, from currentDocument: DocumentID) -> LinkPreview? {
+  /// Nil for a URL the reader does not own: a link to the web previews nothing. A
+  /// BCP, STD or FYI previews its first member RFC, as a click on it opens that one
+  /// (`NavigationModel.open`): the series has no document of its own to fetch.
+  public static func resolve(
+    _ url: URL, from currentDocument: DocumentID, in index: RFCIndex?
+  ) -> LinkPreview? {
     if let anchor = DocumentTextBuilder.anchor(from: url) {
       return .document(currentDocument, place: anchor)
     }
@@ -28,6 +32,9 @@ public enum LinkPreview: Equatable, Sendable {
       return .card(entry)
     }
     guard let link = RFCLink(url: url) else { return nil }
+    if link.id.series != .rfc, let first = index?.series(link.id)?.members.first {
+      return .document(first, place: link.section)
+    }
     return .document(link.id, place: link.section)
   }
 }

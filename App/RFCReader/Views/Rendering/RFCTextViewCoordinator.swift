@@ -771,7 +771,7 @@ final class RFCTextViewCoordinator: NSObject {
         let (box, range) = reference(atWindowPoint: event.locationInWindow),
         let documentID,
         let url = link(at: range.location),
-        let target = LinkPreview.resolve(url, from: documentID)
+        let target = LinkPreview.resolve(url, from: documentID, in: library?.index)
       else { return false }
       switch target {
       case .card:

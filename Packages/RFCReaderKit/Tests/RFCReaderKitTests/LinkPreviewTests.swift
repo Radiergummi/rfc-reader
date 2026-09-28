@@ -11,13 +11,23 @@ import Testing
 struct LinkPreviewTests {
   private let current = DocumentID.rfc(9110)
   private let other = DocumentID.rfc(8446)
+  private let bcp14 = DocumentID(series: .bcp, number: 14)
 
   private func resolve(_ string: String) -> LinkPreview? {
-    LinkPreview.resolve(URL(string: string)!, from: current)
+    LinkPreview.resolve(
+      URL(string: string)!, from: current,
+      in: RFCIndex(
+        rfcs: [], series: [SeriesEntry(id: bcp14, members: [.rfc(2119), .rfc(8174)])]))
   }
 
   @Test func `another RFC previews that RFC from the top`() {
     #expect(resolve(RFCLink(id: other).appURL.absoluteString) == .document(other, place: nil))
+  }
+
+  /// A click on a series reference opens its first member (`NavigationModel.open`),
+  /// so the preview shows that one too: the series has no document of its own.
+  @Test func `a series previews its first member RFC`() {
+    #expect(resolve(RFCLink(id: bcp14).appURL.absoluteString) == .document(.rfc(2119), place: nil))
   }
 
   @Test func `a section of another RFC previews it at that section`() {
