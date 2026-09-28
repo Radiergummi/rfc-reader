@@ -9,8 +9,6 @@ struct SidebarView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.editMode) private var editMode
-    /// For Recently Read's count, which is every document with a place kept.
-    @Query private var readingPositions: [ReadingPosition]
   #endif
   // Which sections are open, kept across launches (#344).
   @AppStorage("sidebar.libraryExpanded") private var libraryExpanded = true
@@ -320,7 +318,7 @@ struct SidebarView: View {
       switch filter {
       case .bookmarks: library.bookmarkedNumbers.count
       case .downloaded: library.downloadedNumbers.count
-      case .recent: readingPositions.count { $0.document?.series == .rfc }
+      case .recent: library.recentlyReadCount
       default: library.indexCounts[filter]
       }
     }

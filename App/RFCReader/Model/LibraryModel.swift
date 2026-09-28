@@ -56,17 +56,30 @@ final class LibraryModel {
   /// it enters that filter rather than waiting on the store's actor.
   private(set) var downloadedNumbers: Set<Int> = []
 
+  /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
+  /// of `recentlyReadNumbers()`, kept current on every save rather than by a live
+  /// query of every reading position in the view.
+  private(set) var recentlyReadCount = 0
+
   private init() {
     refreshBookmarks()
     refreshCollections()
+    refreshRecentlyReadCount()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.refreshBookmarks()
         self?.refreshCollections()
+        self?.refreshRecentlyReadCount()
       }
     }
+  }
+
+  private func refreshRecentlyReadCount() {
+    let count = recentlyReadNumbers().count
+    guard count != recentlyReadCount else { return }
+    recentlyReadCount = count
   }
 
   private func refreshCollections() {
