@@ -291,6 +291,19 @@ struct NavigationHistoryTests {
     #expect(history.go(to: place(9110)) == nil)
   }
 
+  /// A link to the hidden place shows it and scrolls to its section; its row, which
+  /// names none, shows it where it was.
+  @Test func `going to the hidden place scrolls only when it names a section`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"))
+    history.hide()
+    #expect(history.go(to: place(9110, "section-15.5")) == place(9110, "section-15.5"))
+    history.hide()
+    #expect(history.go(to: place(9110)) == nil)
+    #expect(history.shown == place(9110, "section-15.5"))
+  }
+
   @Test func `going somewhere new arrives there`() {
     var history = NavigationHistory()
     #expect(history.go(to: place(9110)) == place(9110))

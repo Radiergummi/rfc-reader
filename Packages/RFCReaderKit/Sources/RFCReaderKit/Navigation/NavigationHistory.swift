@@ -48,14 +48,14 @@ public struct NavigationHistory: Sendable {
   }
 
   /// Go to `place`, recording `position` as the spot being left behind, and return
-  /// the place to arrive at: nil when there is nowhere to move.
+  /// the place to scroll to: nil when there is nothing to scroll to.
   ///
-  /// Re-opening the document and section already on screen is not a navigation:
+  /// Re-opening the document and section already current is not a navigation:
   /// clicking the same link twice must not stack two identical entries to walk back
-  /// through. It is still a place to arrive at when it names a section, because the
-  /// entry records where the tab was sent, not where the reader has scrolled since
-  /// (#287). Striking out in a new direction drops whatever was ahead, as a browser
-  /// does.
+  /// through, so the history does not move and `position` is not recorded. It is
+  /// still returned when it names a section, because the entry records where the
+  /// tab was sent, not where the reader has scrolled since (#287). Striking out in a
+  /// new direction drops whatever was ahead, as a browser does.
   @discardableResult
   public mutating func go(to place: HistoryEntry, leaving position: String? = nil)
     -> HistoryEntry?
