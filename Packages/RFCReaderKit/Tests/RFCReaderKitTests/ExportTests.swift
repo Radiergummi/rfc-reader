@@ -49,6 +49,11 @@ struct ExportLinkTests {
     "RFC2119": Reference(
       anchor: "RFC2119", title: "Key words", seriesInfo: [SeriesInfo(name: "RFC", value: "2119")]),
     "NOWHERE": Reference(anchor: "NOWHERE", title: "An Unpublished Note"),
+    "LOCAL": Reference(
+      anchor: "LOCAL", title: "A Local File", url: URL(string: "file:///etc/hosts")),
+    "LOCAL-RFC": Reference(
+      anchor: "LOCAL-RFC", title: "Key words",
+      seriesInfo: [SeriesInfo(name: "RFC", value: "2119")], url: URL(string: "file:///etc/hosts")),
   ]
 
   private func target(_ string: String) throws -> PDFExport.Target? {
@@ -79,6 +84,13 @@ struct ExportLinkTests {
       try target("https://example.com/") == .web(try #require(URL(string: "https://example.com/"))))
     #expect(try target("mailto:someone@example.com") != nil)
     #expect(try target("file:///etc/hosts") == nil)
+  }
+
+  /// An entry's URL is held to the same schemes as a link in the text; one that is
+  /// not followable leaves the RFC the entry names, or nothing.
+  @Test func `a citation's URL is held to the schemes a link is`() throws {
+    #expect(try target("rfc-reference:LOCAL") == nil)
+    #expect(try target("rfc-reference:LOCAL-RFC") == .web(RFCLink(id: .rfc(2119)).webURL))
   }
 
   /// A print's build keeps no live links, but it keeps where each one went, on the
@@ -165,6 +177,31 @@ struct ExportGeometryTests {
     let placed = layout.onPaper(CGRect(x: 10, y: 650, width: 100, height: 12), page: page)
     #expect(placed.minX == layout.contentRect.minX + 10)
     #expect(placed.minY == layout.contentRect.minY + 50)
+  }
+
+  /// A destination goes to its first line's top, which is where a page starts: a
+  /// heading that opens a page is on that page, at the top of the column.
+  @Test func `a heading that opens a page is placed on that page`() throws {
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
+    let pages = [Page(top: 0, bottom: 100), Page(top: 110, bottom: 200)]
+    let place = try #require(PDFExport.destination(lineTop: 110, pages: pages, layout: layout))
+    #expect(place.page == 1)
+    #expect(place.point.x == layout.contentRect.minX)
+    #expect(place.point.y == layout.paperSize.height - layout.contentRect.minY)
+    #expect(PDFExport.destination(lineTop: -1, pages: pages, layout: layout) == nil)
+  }
+
+  /// A link's words are on the page that holds their middle, in its PDF coordinates.
+  @Test func `a link is placed on the page that holds its middle`() throws {
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
+    let pages = [Page(top: 0, bottom: 100), Page(top: 110, bottom: 200)]
+    let words = CGRect(x: 10, y: 120, width: 50, height: 12)
+    let placed = try #require(PDFExport.linkBounds(words, pages: pages, layout: layout))
+    #expect(placed.page == 1)
+    #expect(
+      placed.rect
+        == PDFExport.pdfRect(
+          layout.onPaper(words, page: pages[1]), paperHeight: layout.paperSize.height))
   }
 
   @Test func `a position is on the last page that starts above it`() {

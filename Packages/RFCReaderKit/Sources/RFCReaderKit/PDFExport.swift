@@ -33,12 +33,17 @@ public enum PDFExport {
     }
     if let entry = DocumentTextBuilder.reference(from: url) {
       guard let reference = references[entry] else { return nil }
-      if let url = reference.url { return .web(url) }
+      if let url = reference.url, let target = followable(url) { return target }
       return reference.documentID.map { .web(RFCLink(id: $0).webURL) }
     }
     if let link = RFCLink(url: url) {
       return .web(link.webURL)
     }
+    return followable(url)
+  }
+
+  /// `url` as a link, when a PDF reader can follow it: the web, or mail.
+  private static func followable(_ url: URL) -> Target? {
     guard let scheme = url.scheme?.lowercased(), ["http", "https", "mailto"].contains(scheme)
     else { return nil }
     return .web(url)
@@ -98,6 +103,39 @@ public enum PDFExport {
       subject = designation ?? ""
       keywords = header.keywords.isEmpty ? (metadata?.keywords ?? []) : header.keywords
     }
+  }
+
+  /// A place on a page: where a destination scrolls to, in the page's PDF
+  /// coordinates.
+  public struct Place: Equatable, Sendable {
+    public let page: Int
+    public let point: CGPoint
+  }
+
+  /// Where a destination goes for a paragraph whose first line's top is at
+  /// `lineTop`, in the laid-out document's coordinates: that line's page, at the
+  /// column's left edge. The line's top, not its layout fragment's, because a
+  /// fragment's frame includes the space before a heading while a page starts at a
+  /// line's top: from the fragment, a heading that opens a page would be placed at
+  /// the foot of the page before.
+  public static func destination(
+    lineTop: CGFloat, pages: [PrintPagination.Page], layout: PrintLayout
+  ) -> Place? {
+    guard let index = PrintPagination.page(containing: lineTop, in: pages) else { return nil }
+    let onPaper = layout.onPaper(
+      CGRect(x: 0, y: lineTop, width: 0, height: 0), page: pages[index])
+    let pdf = pdfRect(onPaper, paperHeight: layout.paperSize.height)
+    return Place(page: index, point: CGPoint(x: pdf.minX, y: pdf.maxY))
+  }
+
+  /// Where a link's words go, `rect` in the laid-out document's coordinates: on the
+  /// page that holds their middle, in that page's PDF coordinates.
+  public static func linkBounds(
+    _ rect: CGRect, pages: [PrintPagination.Page], layout: PrintLayout
+  ) -> (page: Int, rect: CGRect)? {
+    guard let index = PrintPagination.page(containing: rect.midY, in: pages) else { return nil }
+    let onPaper = layout.onPaper(rect, page: pages[index])
+    return (index, pdfRect(onPaper, paperHeight: layout.paperSize.height))
   }
 
   /// `rect`, given top-down as a page draws it, in a PDF page's own coordinates,

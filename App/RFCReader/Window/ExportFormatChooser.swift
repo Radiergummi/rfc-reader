@@ -25,6 +25,9 @@
       let label = NSTextField(labelWithString: "Format:")
       let row = NSStackView(views: [label, popUp])
       row.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+      // The panel sizes its accessory by the view's frame, which a view made in
+      // code starts without.
+      row.frame.size = row.fittingSize
       view = row
       super.init()
       popUp.target = self
