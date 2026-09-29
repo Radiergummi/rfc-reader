@@ -417,6 +417,13 @@ struct DocumentView: View {
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
+      // Last and apart, so the first build does not wait for it; and, like the
+      // rest, not written over the next document's reader state.
+      Task(name: "Extract requirements") { [reader, navigation, id] in
+        let requirements = await Self.requirements(in: loaded)
+        guard navigation.selection == id else { return }
+        reader.requirements = requirements
+      }
     }
   }
 
@@ -456,6 +463,13 @@ struct DocumentView: View {
     // index once per section.
     let sections = built.anchors.sections
     reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
+  }
+
+  /// The Requirements tab's rows (#180), off the main actor: every sentence of the
+  /// document is split and read for key words.
+  @concurrent
+  private static func requirements(in document: RFCDocument) async -> [Requirement] {
+    Requirements.extract(from: document)
   }
 
   /// Off the main actor, and structured: unlike a detached task, it inherits the
