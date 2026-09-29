@@ -207,7 +207,7 @@ struct ExportOutlineTests {
 
   @Test func `the file says what document it is`() {
     let header = DocumentHeader(
-      id: .rfc(9999), title: "A Protocol", authors: [Author(name: "A. Writer", role: "editor")],
+      id: .rfc(9999), title: "A Protocol", authors: [Author(name: "A. Writer", role: .editor)],
       keywords: ["examples"])
     let info = PDFExport.Info(header: header, metadata: nil)
     #expect(info.title == "RFC 9999: A Protocol")

@@ -17,14 +17,27 @@ on:
         type: boolean
         default: false
 
+# Only the publish job writes, and it builds nothing.
+permissions:
+  contents: read
+
+# One run at a time, queued rather than canceled: a full run takes hours, and each
+# full run's baseline is the report of the last full one to succeed.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
     timeout-minutes: 180
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
+    # Read-only: this job compiles and runs third-party packages. actions: read to
+    # download the previous run's report.
     permissions:
       contents: read
+      actions: read
     # Inputs reach the scripts as environment variables, never spliced into their text.
     env:
       VERSION: ${{ inputs.version }}
@@ -35,22 +48,57 @@ jobs:
           persist-credentials: false
 
       - name: Restore fetched text
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: corpus/text.noindex
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
-      # make for the Makefile, xmllint for the schema check. The image carries
-      # neither.
+      # make for the Makefile, xmllint for the schema check, gh for the previous
+      # report. The image carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils gh >/dev/null
+
+      # The report of the last successful full run is this run's baseline: convert
+      # compares its schema results with the report it replaces and fails on any
+      # document that stopped validating. Only a full run uploads one, since a smoke
+      # run's twenty documents would compare nothing else, so the recent successful
+      # runs are looked through for the newest that has it. A failed run's report is
+      # never the baseline, so a regression keeps failing until it is fixed. Without
+      # one nothing is compared, which is said as a warning rather than passed over.
+      - name: Restore the previous report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow corpus.yml \
+            --status success --limit 20 --json databaseId --jq '.[].databaseId')
+          for run in $runs; do
+            if gh run download "$run" --repo "$GITHUB_REPOSITORY" --name corpus-baseline \
+              --dir baseline 2>/dev/null; then
+              mkdir -p corpus
+              cp baseline/report.json corpus/report.json
+              echo "Baseline: the report of run $run"
+              exit 0
+            fi
+          done
+          echo "::warning::No previous full run's report; schema regressions are not checked in this run."
 
       # The same entry point as a local `make corpus`, so CI builds the corpus a
       # developer does: the modern RFCXML documents fetched beside the converted
       # ones, and the prose diagnostics written. An empty LIMIT is the full set.
       - name: Fetch, convert, manifest
         run: make corpus CORPUS_LIMIT="$LIMIT" CORPUS_VERSION="$VERSION"
+
+      # About 450 MB, so saved by full runs only: a smoke run's twenty documents
+      # would otherwise become the newest entry, and CI's cache pruning keeps only
+      # the newest of each kind. Saved even when convert failed, since the fetch did
+      # not.
+      - name: Save fetched text
+        if: ${{ !cancelled() && inputs.limit == '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: corpus/text.noindex
+          key: corpus-text-${{ github.run_id }}
 
       # Two packs from the one directory, split at RFC 8650: the converted legacy
       # documents wait on the IETF Trust's answer about redistribution, and the
@@ -79,7 +127,9 @@ jobs:
             mv "packs/$pack.json" "packs/$pack/manifest.json"
           done
 
+      # Also when convert failed on a regression: the report names the documents.
       - name: Upload report and pack folders as workflow artifacts
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: corpus-${{ inputs.version }}
@@ -89,6 +139,15 @@ jobs:
             corpus/manifest.json
             packs/
 
+      # The next run's baseline, on its own so that run downloads one small file:
+      # only a full run's, and only a successful one's.
+      - name: Upload the report as the next run's baseline
+        if: ${{ inputs.limit == '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: corpus-baseline
+          path: corpus/report.json
+
   # Apple Archive with LZFSE, which the app reads with Apple's own frameworks and so
   # gains no dependency for (#36). Nothing on Linux writes the Apple Archive
   # container, so the archive is made here, by `aa`, Apple's own writer of it.
@@ -96,9 +155,8 @@ jobs:
     needs: build
     runs-on: macos-26
     timeout-minutes: 30
-    # write only for the optional `gh release create` in the last step.
     permissions:
-      contents: write
+      contents: read
     env:
       VERSION: ${{ inputs.version }}
     steps:
@@ -114,19 +172,35 @@ jobs:
           done
           ls -la ./*.aar
 
+      # With the manifest of both, which the release carries beside them.
       - name: Upload packs as workflow artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packs-${{ inputs.version }}
-          path: "*.aar"
+          path: |
+            *.aar
+            corpus/manifest.json
 
+  # The only job that can write to the repository: it checks nothing out and runs
+  # no code of ours or anyone's, only gh over the artifact the archive job uploaded.
+  publish:
+    if: ${{ inputs.publish }}
+    needs: archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # For `gh release create`; actions: read to download this run's artifact.
+      contents: write
+      actions: read
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
       - name: Publish release
-        if: ${{ inputs.publish }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
         run: |
-          gh release create "corpus-$VERSION" legacy-xml-*.aar modern-xml-*.aar corpus/manifest.json \
-            --repo "$REPOSITORY" \
+          gh run download "$GITHUB_RUN_ID" --name "packs-$VERSION" --dir packs
+          gh release create "corpus-$VERSION" packs/legacy-xml-*.aar packs/modern-xml-*.aar \
+            packs/corpus/manifest.json \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

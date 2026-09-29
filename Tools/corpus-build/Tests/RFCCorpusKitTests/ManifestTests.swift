@@ -30,4 +30,14 @@ struct ManifestTests {
   @Test func `an entry records the file's size`() {
     #expect(Manifest.Entry(path: "a/b.xml", data: Data(count: 1234)).bytes == 1234)
   }
+
+  /// Nothing of the run it was written in, so a rebuild of the same files can be
+  /// compared with the release byte for byte.
+  @Test func `a manifest holds its version and files and nothing else`() throws {
+    let manifest = Manifest(
+      version: "2026.09", files: [Manifest.Entry(path: "rfc1.xml", data: Data("x".utf8))])
+    let encoded = try JSONEncoder().encode(manifest)
+    let object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    #expect(Set(object.keys) == ["version", "files"])
+  }
 }

@@ -4,7 +4,7 @@ You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26), [
 
 ```sh
 brew install xcodegen swiftlint
-make check      # lint, build and test both Swift packages: the gate before committing
+make check      # lint, build and test the three Swift packages: the gate before committing
 make run        # generate the Xcode project, build the macOS app and launch it
 ```
 

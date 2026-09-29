@@ -22,13 +22,15 @@ struct DocumentPreview: View {
   var size = LinkPreview.documentSize
   let commit: () -> Void
 
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
   /// The reader follows Dynamic Type (#331), so the preview of it does too.
   @Environment(\.dynamicTypeSize) private var textSize
   /// The reader's own preference, so the preview's build and its text view agree
   /// on the column, as `DocumentView` and the reader's do (#32).
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   @State private var loaded: Loaded?
   @State private var failure: String?
   @State private var scrollTarget: ReaderScrollTarget?

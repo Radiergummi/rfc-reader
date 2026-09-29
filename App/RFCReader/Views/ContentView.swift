@@ -125,18 +125,19 @@ import SwiftUI
       } message: {
         Text(AppData.storeWarning.message)
       }
-      // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) {
-        library.activate(navigation)
-        // Nothing on screen: the panel must not go on describing the document
-        // that was.
-        if navigation.selection == nil { reader.clear() }
-      }
+      .readerScene(library: library, navigation: navigation, reader: reader)
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
-      .sheet(item: $navigation.collectionEditor) { mode in
-        CollectionEditorSheet(mode: mode)
+      // ⌘K opens Go to RFC too, where most apps with a palette put it. The menu's
+      // item holds ⌘L, and one item gets one shortcut, so this invisible button
+      // carries the other, drawn transparent and kept out of VoiceOver's way.
+      .background {
+        Button("Go to RFC") { navigation.isShowingGoToSheet = true }
+          .keyboardShortcut("k", modifiers: .command)
+          .opacity(0)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
       }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
@@ -215,7 +216,7 @@ struct EmptyDetailView: View {
       if let link = resolved, let metadata = library.metadata(link.id) {
         Text("\(link.id.displayName) — \(metadata.title)")
       } else if !input.isEmpty {
-        Text("Not something I recognise as an RFC.")
+        Text("Not something I recognize as an RFC.")
       } else {
         Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
       }

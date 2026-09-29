@@ -9,7 +9,7 @@
   /// A palette rather than a dialog, the way Spotlight and Open Quickly are: no title,
   /// no label, no buttons. What was typed is resolved exactly on the keystroke — a
   /// number, `BCP 14`, a link — and searched for as well, so `http caching` offers
-  /// candidates where the sheet this replaces could only say it did not recognise it.
+  /// candidates where the sheet this replaces could only say it did not recognize it.
   ///
   /// The models are properties, not `@Environment` lookups: this is the root of a
   /// hosting view in a panel of its own, outside every environment chain.
@@ -32,11 +32,7 @@
 
     /// What is typed, less the spaces around it, which change nothing it finds.
     private var query: String {
-      Self.query(from: input)
-    }
-
-    private static func query(from text: String) -> String {
-      text.trimmingCharacters(in: .whitespacesAndNewlines)
+      input.normalizedQuery
     }
 
     /// Resolves on the keystroke itself, before any ↵ queued behind it can read the
@@ -46,7 +42,7 @@
         input
       } set: { text in
         input = text
-        resolve(Self.query(from: text))
+        resolve(text.normalizedQuery)
       }
     }
 
@@ -198,7 +194,7 @@
         isObsolete: { library.metadata($0)?.isObsolete ?? false })
     }
 
-    /// Runs per change of the query and is cancelled by the next, which is the debounce:
+    /// Runs per change of the query and is canceled by the next, which is the debounce:
     /// only a pause long enough to outlast the sleep reaches the search.
     private func search(_ query: String) async {
       guard !query.isEmpty else { return }

@@ -2,7 +2,9 @@ import SwiftUI
 
 struct OriginalTextView: View {
   let text: String?
+  let error: String?
   let fontSize: Double
+  let tryAgain: () -> Void
 
   var body: some View {
     if let text {
@@ -19,6 +21,14 @@ struct OriginalTextView: View {
             .padding(24)
         }
       #endif
+    } else if let error {
+      ContentUnavailableView {
+        Label("Couldn't load the original text", systemImage: "wifi.exclamationmark")
+      } description: {
+        Text(error)
+      } actions: {
+        Button("Try Again", action: tryAgain)
+      }
     } else {
       ProgressView()
     }

@@ -3,7 +3,7 @@ import Foundation
 /// Filters that can be combined with a free-text query.
 public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
-  public var streams: Set<Stream> = []
+  public var streams: Set<PublicationStream> = []
   /// Lowercased when set, and nil when set empty, as the prepared fields it is
   /// matched against are lowercased and an empty value is no filter.
   public var workingGroup: String? {
@@ -86,50 +86,52 @@ public struct IndexSearch: Sendable {
     var filters = SearchFilters()
     var words: [String] = []
     for token in SearchQuery.words(in: query) {
-      guard let qualifier = SearchQuery.qualifier(in: token) else {
+      guard let written = SearchQuery.qualifier(in: token) else {
         words.append(token)
         continue
       }
-      let key = qualifier.key.lowercased()
-      let value = SearchQuery.unquoted(qualifier.value).trimmingCharacters(in: .whitespaces)
+      let value = SearchQuery.unquoted(written.value).trimmingCharacters(in: .whitespaces)
       // `wg:"` is still being typed; like `wg:`, it is free text until it has a value.
       guard !value.isEmpty else {
         words.append(token)
         continue
       }
-      switch key {
-      case "wg", "group":
+      guard let qualifier = SearchQuery.Qualifier(spelling: written.key) else {
+        words.append(token)
+        continue
+      }
+      switch qualifier {
+      case .workingGroup:
         filters.workingGroup = value
-      case "author", "by":
+      case .author:
         filters.author = value
-      case "stream":
-        if let stream = Stream.allCases.first(where: {
-          $0.rawValue.lowercased() == value.lowercased()
-        }) {
+      case .stream:
+        if let stream = SearchQuery.stream(spelled: value) {
           filters.streams.insert(stream)
         }
-      case "status", "is":
-        switch value.lowercased() {
-        case "std", "standard", "standards":
-          filters.statuses.formUnion([.internetStandard, .draftStandard, .proposedStandard])
-        case "bcp": filters.statuses.insert(.bestCurrentPractice)
-        case "info", "informational": filters.statuses.insert(.informational)
-        case "exp", "experimental": filters.statuses.insert(.experimental)
-        case "historic": filters.statuses.insert(.historic)
-        case "current": filters.excludeObsolete = true
-        default: words.append(token)
+      case .status:
+        if let status = SearchQuery.StatusValue(spelling: value) {
+          if status.excludesObsolete {
+            filters.excludeObsolete = true
+          } else {
+            filters.statuses.formUnion(status.statuses)
+          }
+        } else {
+          words.append(token)
         }
-      case "year":
+      case .year:
         let bounds = value.split(separator: "-").compactMap { Int($0) }
         if bounds.count == 2 {
           filters.yearRange = min(bounds[0], bounds[1])...max(bounds[0], bounds[1])
         } else if bounds.count == 1 {
           filters.yearRange = bounds[0]...bounds[0]
         }
-      case "has" where value.lowercased() == "xml":
-        filters.requiresXML = true
-      default:
-        words.append(token)
+      case .has:
+        if value.lowercased() == SearchQuery.xmlValue {
+          filters.requiresXML = true
+        } else {
+          words.append(token)
+        }
       }
     }
     return SearchQuery.Parsed(text: words.joined(separator: " "), filters: filters)
@@ -146,11 +148,8 @@ public struct IndexSearch: Sendable {
     let terms = SearchQuery.words(in: trimmed.lowercased()).map(SearchQuery.unquoted)
       .filter { !$0.isEmpty }
 
-    // A query that is just a document number goes straight there.
-    if let id = DocumentID(parsing: trimmed), id.series == .rfc, let exact = index[id.number],
-      filters.isEmpty
-    {
-      return [SearchHit(rfc: exact, score: Int.max)]
+    if filters.isEmpty, let number = Self.number(in: trimmed) {
+      return numberHits(number, limit: limit)
     }
 
     // Converted here rather than inside the loop: a needle allocated per entry
@@ -175,6 +174,34 @@ public struct IndexSearch: Sendable {
       if $0.score != $1.score { return $0.score > $1.score }
       return $0.rfc.number > $1.rfc.number
     }
+    return Array(hits.prefix(limit))
+  }
+
+  /// The RFC number a query is, if it is nothing else: `991`, `RFC 991`. Such a
+  /// query is a number, not words — the document it names, then every number it
+  /// begins, newest first, since `991` is as often the start of 9910 as it is RFC 991.
+  /// Public so the palette can drop an earlier number's hits on the keystroke,
+  /// knowing without a search which of them still match.
+  public static func number(in query: String) -> Int? {
+    let parsed = parseQuery(query)
+    let trimmed = parsed.text.trimmingCharacters(in: .whitespaces)
+    guard parsed.filters.isEmpty, let id = DocumentID(parsing: trimmed), id.series == .rfc else {
+      return nil
+    }
+    return id.number
+  }
+
+  /// Whether a number query matches the document: an RFC whose number begins with it.
+  public static func matches(_ id: DocumentID, number: Int) -> Bool {
+    id.series == .rfc && String(id.number).hasPrefix(String(number))
+  }
+
+  private func numberHits(_ number: Int, limit: Int) -> [SearchHit] {
+    var hits = index[number].map { [SearchHit(rfc: $0, score: Int.max)] } ?? []
+    let longer = index.rfcs
+      .filter { $0.number != number && Self.matches($0.id, number: number) }
+      .sorted { $0.number > $1.number }
+    hits += longer.map { SearchHit(rfc: $0, score: $0.number) }
     return Array(hits.prefix(limit))
   }
 
@@ -267,12 +294,10 @@ struct SearchText: Hashable, Sendable {
 
   func hasPrefix(_ other: SearchText) -> Bool {
     guard other.bytes.count <= bytes.count else { return false }
-    return bytes.withUnsafeBufferPointer { haystack in
-      other.bytes.withUnsafeBufferPointer { needle in
-        for offset in 0..<needle.count where haystack[offset] != needle[offset] { return false }
-        return true
-      }
-    }
+    let haystack = bytes.span
+    let needle = other.bytes.span
+    for offset in needle.indices where haystack[offset] != needle[offset] { return false }
+    return true
   }
 
   /// Naive scan, skipping on the first byte. The needle is a search term — a
@@ -281,22 +306,20 @@ struct SearchText: Hashable, Sendable {
   func contains(_ other: SearchText) -> Bool {
     guard !other.bytes.isEmpty else { return true }
     guard other.bytes.count <= bytes.count else { return false }
-    return bytes.withUnsafeBufferPointer { haystack in
-      other.bytes.withUnsafeBufferPointer { needle in
-        let first = needle[0]
-        let last = haystack.count - needle.count
-        var start = 0
-        while start <= last {
-          if haystack[start] == first {
-            var offset = 1
-            while offset < needle.count, haystack[start + offset] == needle[offset] { offset += 1 }
-            if offset == needle.count { return true }
-          }
-          start += 1
-        }
-        return false
+    let haystack = bytes.span
+    let needle = other.bytes.span
+    let first = needle[0]
+    let last = haystack.count - needle.count
+    var start = 0
+    while start <= last {
+      if haystack[start] == first {
+        var offset = 1
+        while offset < needle.count, haystack[start + offset] == needle[offset] { offset += 1 }
+        if offset == needle.count { return true }
       }
+      start += 1
     }
+    return false
   }
 }
 

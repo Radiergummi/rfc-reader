@@ -9,8 +9,6 @@ struct SidebarView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.editMode) private var editMode
-    /// For Recently Read's count, which is every document with a place kept.
-    @Query private var readingPositions: [ReadingPosition]
   #endif
   // Which sections are open, kept across launches (#344).
   @AppStorage("sidebar.libraryExpanded") private var libraryExpanded = true
@@ -135,7 +133,7 @@ struct SidebarView: View {
       row(.all)
       row(.standards)
       row(.bestCurrentPractice)
-      ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
+      ForEach([PublicationStream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
         row(.stream(stream))
       }
     }
@@ -157,8 +155,8 @@ struct SidebarView: View {
   ///
   /// On iOS the header is drawn here rather than by `Section(isExpanded:)`, whose
   /// header could not be made to look like Notes': `.headerProminence(.increased)`
-  /// left it small and grey, its toggle came out black where Notes' is a dimmed
-  /// grey, and it sat inset from the cards' edge, where Notes' is level with it.
+  /// left it small and gray, its toggle came out black where Notes' is a dimmed
+  /// gray, and it sat inset from the cards' edge, where Notes' is level with it.
   @ViewBuilder
   private func group<Content: View>(
     _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
@@ -175,13 +173,13 @@ struct SidebarView: View {
           HStack {
             Text(title)
               .font(.title2.weight(.semibold))
-              // The label colour itself: `.primary` resolves against the
-              // header's own style, which is grey.
+              // The label color itself: `.primary` resolves against the
+              // header's own style, which is gray.
               .foregroundStyle(Color(uiColor: .label))
             Spacer()
             Image(systemName: "chevron.down.circle.fill")
-              // Notes' size and grey, measured on the same phone: 17 pt across,
-              // in a grey a step darker than `systemGray2`.
+              // Notes' size and gray, measured on the same phone: 17 pt across,
+              // in a gray a step darker than `systemGray2`.
               .font(.body)
               .foregroundStyle(.white, Color(uiColor: .systemGray))
               .rotationEffect(.degrees(isExpanded.wrappedValue ? 0 : -90))
@@ -203,7 +201,7 @@ struct SidebarView: View {
     /// could see.
     private var isSearchingInPlace: Bool {
       horizontalSizeClass == .compact
-        && !navigation.appliedQuery.isEmpty
+        && !navigation.appliedQuery.isUnsearchedQuery
     }
 
     /// The first results, and the way to all of them in All RFCs, which keeps the
@@ -322,7 +320,7 @@ struct SidebarView: View {
       switch filter {
       case .bookmarks: library.bookmarkedNumbers.count
       case .downloaded: library.downloadedNumbers.count
-      case .recent: readingPositions.count { $0.document?.series == .rfc }
+      case .recent: library.recentlyReadCount
       default: library.indexCounts[filter]
       }
     }
@@ -440,7 +438,7 @@ private struct SidebarLabelStyle: LabelStyle {
         icon
           .frame(width: column)
           #if !os(macOS)
-            // In the accent colour, as Notes draws its folders (#343). Not on
+            // In the accent color, as Notes draws its folders (#343). Not on
             // macOS, whose sidebar tints its icons already and turns them white
             // on a selected row, which an explicit style would override.
             .foregroundStyle(.tint)

@@ -1,5 +1,6 @@
 import Foundation
 import RFCCorpusKit
+import RFCKit
 import Testing
 
 /// The corpus-build binary, run as `make` and the corpus workflow run it. What is
@@ -78,7 +79,7 @@ struct CommandLineTests {
     let written = try FileManager.default.contentsOfDirectory(atPath: out.path).sorted()
     #expect(written == ["rfc1149.xml", "rfc2119.xml"])
 
-    let text = DocumentConverter.text(
+    let text = LegacyTextParser.text(
       decoding: try Data(contentsOf: Fixtures.url("rfc2119.txt")))
     let expected = DocumentConverter().convert(text: text, stem: "rfc2119", metadata: nil).xml
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)

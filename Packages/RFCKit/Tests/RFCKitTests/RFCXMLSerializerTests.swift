@@ -119,7 +119,7 @@ struct RFCXMLSerializerTests {
     #expect(Self.signature(reparsed) == Self.signature(parsed))
     #expect(reparsed.referencedDocuments == parsed.referencedDocuments)
     #expect(reparsed.header.obsoletes == [.rfc(4234)])
-    #expect(reparsed.header.category == "Standards Track")
+    #expect(reparsed.header.category == .standardsTrack)
     #expect(xml.contains("<!-- test -->"))
     #expect(xml.contains("rel=\"alternate\""))
   }
@@ -131,10 +131,7 @@ struct RFCXMLSerializerTests {
 
     let xrefs = reparsed.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let canonical = try #require(
@@ -149,6 +146,27 @@ struct RFCXMLSerializerTests {
 
     let authored = try #require(xrefs.first { $0.text == "[US-ASCII]" })
     #expect(!authored.isCanonicalLabel, "author tag flag must survive the round trip")
+  }
+
+  /// `<references>` holds only entries, so a block beside them has nowhere to go. It
+  /// is dropped, and the caller is told, not left to find it missing.
+  @Test func `a dropped block comes back as a warning`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Test"),
+      sections: [
+        Section(
+          anchor: "references", title: "References",
+          blocks: [
+            .paragraph(Paragraph(text: "A note ahead of the entries.")),
+            .references(ReferenceList(title: "References", entries: [])),
+          ])
+      ],
+      source: .text
+    )
+    let serialization = RFCXMLSerializer().serialization(of: document)
+    #expect(!serialization.xml.contains("A note ahead of the entries."))
+    #expect(serialization.warnings.count == 1)
+    #expect(serialization.warnings.first?.contains("references") == true)
   }
 
   @Test func `unresolved document references survive as links`() throws {
@@ -251,7 +269,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
       let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
       let xml = RFCXMLSerializer().serialize(parsed)
       let authors = { (document: RFCDocument) in
-        document.allSections.flatMap(\.blocks).flatMap { block -> [[String]] in
+        document.allSections.flatMap(\.blocks).flatMap { block -> [[Author]] in
           guard case .references(let list) = block else { return [] }
           return list.entries.map(\.authors)
         }
@@ -298,7 +316,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   }
 
   /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
-  /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
+  /// declares one ID twice, which failed the schema in 7,419 documents. A synthesized
   /// anchor is the part number for every numbered section, so it is written once, as the
   /// `pn` the published series always carries, and read back from there.
   @Test func `an anchor that is the part number is written once`() throws {

@@ -31,11 +31,11 @@ struct IndexHeaderTests {
     let page = DocumentHeader(
       id: .rfc(1234), title: "A Title", authors: [Author(name: "garbage l969")])
     let index = Self.entry(authors: [
-      Author(name: "B. Second", role: "Editor"), Author(name: "A. First"),
+      Author(name: "B. Second", role: .editor), Author(name: "A. First"),
     ])
     let header = Self.applied(index, to: page).header
     #expect(
-      header.authors == [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")])
+      header.authors == [Author(name: "B. Second", role: .editor), Author(name: "A. First")])
   }
 
   @Test func `a page with no date takes the index's`() {
@@ -83,15 +83,15 @@ struct IndexHeaderTests {
   /// title page already names the index's author, so the entry's authors are replaced
   /// with ones the page doesn't have, to show they come from the entry.
   @Test func `a conversion takes the header from the index entry`() throws {
-    let text = DocumentConverter.text(decoding: try Data(contentsOf: Fixtures.url("rfc1149.txt")))
+    let text = LegacyTextParser.text(decoding: try Data(contentsOf: Fixtures.url("rfc1149.txt")))
     let index = try RFCIndexParser.parse(contentsOf: Fixtures.url("rfc-index-sample.xml"))
     var entry = try #require(index[1149])
-    entry.authors = [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")]
+    entry.authors = [Author(name: "B. Second", role: .editor), Author(name: "A. First")]
     let conversion = DocumentConverter().convert(text: text, stem: "rfc1149", metadata: entry)
     let header = try RFCXMLParser.parse(conversion.xml).header
     #expect(header.id == .rfc(1149))
     #expect(header.authors.map(\.name) == ["B. Second", "A. First"])
-    #expect(header.authors.map(\.role) == ["Editor", nil])
+    #expect(header.authors.map(\.role) == [.editor, nil])
     #expect(header.date == PublicationDate(year: 1990, month: 4, day: 1))
     #expect(!conversion.report.warnings.contains { $0.contains("RFC number") })
   }

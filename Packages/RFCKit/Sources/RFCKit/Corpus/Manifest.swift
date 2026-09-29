@@ -6,6 +6,9 @@ import Foundation
 ///
 /// A pack carries its own manifest at its root, listing its files by bare name
 /// (`rfc1.xml`), and never itself.
+///
+/// No date: the same files and version give the same manifest, which is what lets a
+/// rebuild be compared with the release it would replace.
 public struct Manifest: Codable, Equatable, Sendable {
   public struct Entry: Codable, Equatable, Sendable {
     public var path: String
@@ -24,12 +27,10 @@ public struct Manifest: Codable, Equatable, Sendable {
   public static let fileName = "manifest.json"
 
   public var version: String
-  public var generatedAt: String
   public var files: [Entry]
 
-  public init(version: String, generatedAt: String, files: [Entry]) {
+  public init(version: String, files: [Entry]) {
     self.version = version
-    self.generatedAt = generatedAt
     self.files = files
   }
 

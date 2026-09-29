@@ -52,7 +52,16 @@ final class DocumentSession {
   /// document each time.
   private(set) var sectionNumbers: [String: String] = [:]
 
+  /// The original text (`reader.showOriginal`), fetched the first time it is shown,
+  /// and why it could not be.
+  private(set) var originalText: String?
+  private(set) var originalTextError: String?
+
   @ObservationIgnored private var load: Task<Void, Never>?
+  /// The original text's fetch, held for the reason `load` is: a `.task` on the
+  /// original text view was canceled by the spurious disappearance, and its failure
+  /// left the view spinning with nothing to try again.
+  @ObservationIgnored private var originalTextLoad: Task<Void, Never>?
   @ObservationIgnored private var build: Task<Void, Never>?
   /// The inputs the build under way is for.
   @ObservationIgnored private var buildingFor: BuildInputs?
@@ -67,9 +76,32 @@ final class DocumentSession {
   deinit {
     load?.cancel()
     build?.cancel()
+    originalTextLoad?.cancel()
   }
 
   var hasStartedLoading: Bool { load != nil }
+  var hasStartedOriginalTextLoad: Bool { originalTextLoad != nil }
+
+  /// Fetches the original text: once per session, the first time it is shown, plus
+  /// Try Again after a failure. Holds the session weakly, for the reason `startLoad`
+  /// gives.
+  func startOriginalTextLoad(from library: LibraryModel) {
+    originalTextLoad?.cancel()
+    originalTextError = nil
+    originalTextLoad = Task(name: "Load original text") { [weak self, id] in
+      do {
+        let text = try await library.originalText(for: id)
+        guard let self, !Task.isCancelled else { return }
+        originalText = text
+      } catch {
+        // Canceled only when the session goes, or when Try Again replaces this
+        // fetch, and neither wants an error on screen.
+        guard let self, !Task.isCancelled else { return }
+        trace("original text failed: \(error)")
+        originalTextError = error.localizedDescription
+      }
+    }
+  }
 
   /// Fetches, and hands the document to `loaded` once it is the state's. Building is
   /// `requestBuild`'s job, which the document arriving triggers.

@@ -64,7 +64,7 @@ final class ReaderState {
 
   /// Moves the document's title into the toolbar, from 0 to 1 as its heading
   /// scrolls away, and names the section being read under it; see
-  /// `ToolbarTitleReveal` and `ToolbarSubtitle`. The toolbar installs itself here.
+  /// `ToolbarTitleReveal` and `RunningHeading`. The toolbar installs itself here.
   ///
   /// A callback, not a property the toolbar observes: it is called on every
   /// scroll tick the title moves in, and observation delivers a change a run-loop

@@ -8,7 +8,7 @@ import Testing
 #endif
 
 /// When the client falls back from a document's XML to its plain text (#125): only
-/// when there is no XML. A cancelled load, a server error or a network failure is
+/// when there is no XML. A canceled load, a server error or a network failure is
 /// the real error, not a reason to start a second request.
 @Suite("Client: document fallback")
 struct DocumentFallbackTests {
@@ -96,8 +96,8 @@ struct DocumentFallbackTests {
     #expect(transport.requested == ["xml"])
   }
 
-  /// A cancelled load stops; it does not go on to ask for the text.
-  @Test func `a cancelled load is cancelled, and no text is fetched`() async throws {
+  /// A canceled load stops; it does not go on to ask for the text.
+  @Test func `a canceled load is canceled, and no text is fetched`() async throws {
     let transport = Transport(xml: .failure(CancellationError()), text: .body(Data()))
     await #expect(throws: CancellationError.self) {
       _ = try await RFCEditorClient(transport: transport).fetchPreferredDocument(.rfc(9110))

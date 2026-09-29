@@ -56,7 +56,7 @@ private struct AuthorChip: View {
 }
 
 /// Two initials on a tint of their own, the way Contacts draws a person with no
-/// photo. The colours are `AuthorMonogram`'s, which hold the initials to 4.5:1
+/// photo. The colors are `AuthorMonogram`'s, which hold the initials to 4.5:1
 /// against every tint. The fill is flat rather than the system `gradient`, which
 /// would lighten part of the circle away from the value that was measured.
 private struct Monogram: View {
@@ -66,18 +66,18 @@ private struct Monogram: View {
   var body: some View {
     Text(AuthorMonogram.initials(for: name))
       .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-      .foregroundStyle(Color(AuthorMonogram.initialsColour))
+      .foregroundStyle(Color(AuthorMonogram.initialsColor))
       .frame(width: size, height: size)
-      .background(Color(AuthorMonogram.tintColour(for: name)), in: .circle)
+      .background(Color(AuthorMonogram.tintColor(for: name)), in: .circle)
       .accessibilityHidden(true)
   }
 }
 
 extension Color {
-  /// A colour whose contrast RFCReaderKit has measured, drawn as exactly those sRGB
+  /// A color whose contrast RFCReaderKit has measured, drawn as exactly those sRGB
   /// values in every appearance.
-  fileprivate init(_ colour: SRGBColour) {
-    self.init(.sRGB, red: colour.red, green: colour.green, blue: colour.blue)
+  fileprivate init(_ color: SRGBColor) {
+    self.init(.sRGB, red: color.red, green: color.green, blue: color.blue)
   }
 }
 
@@ -86,7 +86,7 @@ extension Color {
 #if os(macOS)
   /// Presents the card in an `NSPopover` rather than SwiftUI's, whose arrow is
   /// drawn in the popover's material while the card paints its own poster beneath
-  /// it: a grey tip on a coloured card. `hasFullSizeContent` lets the card reach
+  /// it: a gray tip on a colored card. `hasFullSizeContent` lets the card reach
   /// into the arrow, the way Contacts' own popovers look.
   private struct ContactCardPresenter: NSViewRepresentable {
     @Binding var isPresented: Bool

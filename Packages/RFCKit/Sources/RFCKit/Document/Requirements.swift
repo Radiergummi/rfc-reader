@@ -104,9 +104,9 @@ public enum Requirements {
         // algorithms and whether each MUST be implemented, says nothing without
         // its row, so that row is one requirement. A row lands on its own anchor
         // where it has one.
-        for (index, row) in table.rows.enumerated() {
-          let anchor = table.anchor(ofRow: index) ?? table.anchor ?? outer
-          let cells = row.map(\.plainText)
+        for row in table.rows {
+          let anchor = row.anchor ?? table.anchor ?? outer
+          let cells = row.cells.map(\.plainText)
           if cells.contains(where: isOnlyKeywords) {
             record(cells.joined(separator: " | "), anchor)
           } else {
