@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// Where the header's author chips land (#19): left to right, starting a new line
-/// wherever the next one would not fit, each centred on its line. The sizes are
+/// wherever the next one would not fit, each centered on its line. The sizes are
 /// the chips' own, already clamped to the line by the caller, which alone can ask
 /// a view how it fits a narrower width.
 public enum WrappingRow {

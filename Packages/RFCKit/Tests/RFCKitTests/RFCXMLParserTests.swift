@@ -329,7 +329,7 @@ struct RFCXMLParserTests {
   /// cites them as `[HTTP/2]` and `[HTTP/3]`. The entry has to read the same, or a
   /// reader cannot find the citation in the bibliography -- while the anchor stays
   /// what `<xref target>` points at.
-  @Test func `an entry is labelled the way its citations are`() throws {
+  @Test func `an entry is labeled the way its citations are`() throws {
     let entries = try Self.entries(in: "rfc9220.xml")
     let http2 = try #require(entries.first { $0.anchor == "HTTP2" })
     #expect(http2.displayAnchor == "HTTP/2")
@@ -373,7 +373,7 @@ struct RFCXMLParserTests {
 
   /// RFC 8761 sets `symRefs="false"`: its prose cites `[1]`, `[2]`, and nothing in the
   /// bibliography says `BT2020-2` anywhere a reader can see.
-  @Test func `numbered references are labelled by number`() throws {
+  @Test func `numbered references are labeled by number`() throws {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })

@@ -147,10 +147,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   /// The card's outer padding is only added on the run's own top and/or bottom
   /// edge, and not even there where the run meets another card (`Placement.cardRect`)
-  /// — a middle fragment sits flush against its neighbours, so consecutive
+  /// — a middle fragment sits flush against its neighbors, so consecutive
   /// fragments' cards tile into one continuous band instead of overlapping (and
   /// darkening, since the fill is translucent) at every line boundary. The joins
-  /// are then moved onto the device pixel grid, or both neighbours half-cover the
+  /// are then moved onto the device pixel grid, or both neighbors half-cover the
   /// pixel they share and the band shows a darker line at every seam.
   private func drawCard(
     at point: CGPoint, span: FragmentGeometry.DecorationSpan, color: PlatformColor,

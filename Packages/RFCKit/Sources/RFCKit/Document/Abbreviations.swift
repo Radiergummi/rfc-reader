@@ -212,7 +212,7 @@ enum Abbreviations {
 
   /// Where the long form starts: the matched word, unless it is a lowercase function
   /// word, in which case the nearest earlier word with the same initial that is not
-  /// one, capitalised or not, so not a sentence's opening `The` or `A`. With none,
+  /// one, capitalized or not, so not a sentence's opening `The` or `A`. With none,
   /// there is no expansion. A hyphenated word is one word, so `on-path attackers
   /// (OPAs)` starts on `on-path`, not on `on`.
   ///

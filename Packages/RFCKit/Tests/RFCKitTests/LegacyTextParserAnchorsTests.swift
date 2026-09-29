@@ -33,9 +33,9 @@ struct LegacyTextParserAnchorsTests {
 
     let entries = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(
       \.entries)
-    let relabelled = try #require(entries.first { $0.anchor == "ISO-8859-2" })
+    let relabeled = try #require(entries.first { $0.anchor == "ISO-8859-2" })
     #expect(
-      relabelled.displayAnchor == "ISO-8859",
+      relabeled.displayAnchor == "ISO-8859",
       "a renamed entry still reads as the label its citations use")
   }
 

@@ -168,9 +168,9 @@ struct AbbreviationsTests {
   }
 
   /// Nor does it land on a function word that opens the sentence: `A` is no
-  /// better a start for being capitalised. The first `A` of `ANN` is the `a` of
+  /// better a start for being capitalized. The first `A` of `ANN` is the `a` of
   /// `and`.
-  @Test func `moving back does not land on a capitalised function word`() {
+  @Test func `moving back does not land on a capitalized function word`() {
     #expect(pairs("A Network and a Node (ANN) are").isEmpty)
   }
 

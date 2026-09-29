@@ -25,7 +25,7 @@ actor DocumentStore {
 
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
-  /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
+  /// canceled (#116). Original Text fetches the `.txt` on its own, so it has its
   /// own.
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()

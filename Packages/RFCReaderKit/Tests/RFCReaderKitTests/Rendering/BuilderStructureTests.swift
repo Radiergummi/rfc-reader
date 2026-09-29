@@ -100,7 +100,7 @@ struct BuilderStructureTests {
 
   /// Neither parser keeps "Abstract" as a block, and the reader's header view no
   /// longer draws it, so the builder is the only thing left that can.
-  @Test func `the abstract is labelled`() throws {
+  @Test func `the abstract is labeled`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
     let text = built.text.string

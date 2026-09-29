@@ -166,7 +166,7 @@ extension DocumentTextBuilder {
   /// falls inside both the drawn background and the hit region. `NSTextAttachment
   /// (image:)` sits the image's bottom edge on the text baseline by default,
   /// which reads low against the words around it, so the symbol is drawn at the
-  /// run's own font size and its bounds are centred on that font's cap height.
+  /// run's own font size and its bounds are centered on that font's cap height.
   private func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     let font = font(in: attributes)
     guard let symbol = chipSymbol(pointSize: font.pointSize) else { return nil }

@@ -21,7 +21,7 @@
     /// `.inVisibleRect` keeps this correct across resizes and scrolling without an
     /// `updateTrackingAreas` override.
     private var trackingArea: NSTrackingArea?
-    /// The 0.5 s dwell. A task on the main actor rather than a `Timer`: cancelling
+    /// The 0.5 s dwell. A task on the main actor rather than a `Timer`: canceling
     /// it is all it takes, and a click or a drag in progress when it ends is told
     /// apart by the button still held, which `ReferenceHover` checks.
     private var dwellTask: Task<Void, Never>?

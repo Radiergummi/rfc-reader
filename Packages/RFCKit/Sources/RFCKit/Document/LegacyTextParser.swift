@@ -93,9 +93,9 @@ public struct LegacyTextParser: Sendable {
           section: anchor,
           firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
           lineCount: block.lines.count,
-          // A catalogue is a list too, offered the block before the prose test.
+          // A catalog is a list too, offered the block before the prose test.
           claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil
-            || catalogueEntries(block.lines) != nil,
+            || catalogEntries(block.lines) != nil,
           diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
         )
       }
@@ -104,7 +104,7 @@ public struct LegacyTextParser: Sendable {
 
   /// Everything between raw text and blocks: depagination, front matter, segmentation.
   ///
-  /// Both entry points go through here so neither can normalise the text differently
+  /// Both entry points go through here so neither can normalize the text differently
   /// from the other. Extracting only `rawSections` left this prelude written twice,
   /// which is the same drift one level up.
   static func prepared(_ text: String, title: String? = nil) -> Prepared {
@@ -337,7 +337,7 @@ public struct LegacyTextParser: Sendable {
   /// is `Obsoletes:  RFC #733`, in RFC 1144 the first of the title's two lines (#170,
   /// #171), in RFC 5323 the author and date. Where the guess is not the title, the
   /// index's replaces it -- in 601 of the 8,457 legacy documents -- and the rest of the
-  /// title the page sets is recognised in the lead-in and kept out of it.
+  /// title the page sets is recognized in the lead-in and kept out of it.
   ///
   /// Where the guess is the title, the page's own stays, although the index recases
   /// and rewords it: it sets older titles in sentence case and drops their article
@@ -378,7 +378,7 @@ public struct LegacyTextParser: Sendable {
     // Convert raw sections into structured ones.
     var flat: [Section] = []
     // A document has one abstract, the first: RFC 2371's appendix embeds a second
-    // protocol's, and a catalogue (RFC 1292, 1632, 2116) gives every entry one (#72).
+    // protocol's, and a catalog (RFC 1292, 1632, 2116) gives every entry one (#72).
     // A later one is the body's, and stays where it is.
     var abstractTaken = false
     for (index, raw) in sections.enumerated() {
@@ -454,7 +454,7 @@ public struct LegacyTextParser: Sendable {
   /// sections in the corpus, 446 of the 552 over 60 lines are two or three blocks, none
   /// that is boilerplate is more than 16, and every one that swallowed its body is 22 or
   /// more. Past the gap a single line ends it, because boilerplate is paragraphs and a
-  /// lone line is where the body's own unrecognised heading sits.
+  /// lone line is where the body's own unrecognized heading sits.
   static func boilerplateExtent(of blocks: [RawBlock], isContents: Bool, proseIndent: Int)
     -> Int
   {

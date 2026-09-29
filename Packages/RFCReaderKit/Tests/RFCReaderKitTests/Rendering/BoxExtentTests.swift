@@ -6,7 +6,7 @@ import Testing
 
 /// A boxed attribute value — `VerbatimBox`, `ReferenceBox` — is one instance per
 /// block or reference, carried across several storage runs: a chip is three, and a
-/// verbatim block shares its decoration with its neighbour. Its extent is the
+/// verbatim block shares its decoration with its neighbor. Its extent is the
 /// longest range carrying that same instance, which holds only if a Swift class
 /// bridges to `isEqual:` by identity. These pin that it does, and the helper every
 /// extent lookup goes through.

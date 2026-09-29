@@ -102,7 +102,7 @@ struct LegacyTextParserFrontMatterTests {
   /// leaves between it and the body reaches the lead-in, and is taken out of it by what
   /// it is (#76): RFC 757's phone number, and with it the whole lead-in; RFC 674's
   /// header block, under its journal stamp, and the page number after its title; RFC
-  /// 1441's centred `Status of this Memo` and its paragraph, and its contents. The
+  /// 1441's centered `Status of this Memo` and its paragraph, and its contents. The
   /// body after them stays.
   @Test func `the title pages leftovers are not the lead in`() throws {
     #expect(
@@ -334,7 +334,7 @@ struct LegacyTextParserFrontMatterTests {
   /// A document has one abstract, and it is the first. RFC 2371 embeds the TMP
   /// specification as an appendix, abstract and all, and each `Abstract` heading was
   /// lifted into the header in turn: the document's abstract came out as TMP's, and
-  /// neither was left in the body. The catalogues -- RFC 1292, 1632, 2116 -- give every
+  /// neither was left in the body. The catalogs -- RFC 1292, 1632, 2116 -- give every
   /// entry one, and lost each entry's to the header the same way (#72).
   @Test func `only the first abstract is the documents`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2371.txt"))

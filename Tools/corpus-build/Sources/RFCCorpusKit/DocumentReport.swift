@@ -41,7 +41,7 @@ public struct DocumentReport: Codable, Sendable {
     }
 
     var warnings: [String] = []
-    if document.header.id == nil { warnings.append("no RFC number recognised in front matter") }
+    if document.header.id == nil { warnings.append("no RFC number recognized in front matter") }
     if document.header.title.isEmpty { warnings.append("no title") }
     if document.sections.isEmpty { warnings.append("no sections") }
     if paragraphs == 0 { warnings.append("no prose paragraphs") }

@@ -56,7 +56,7 @@
     /// that is never key never takes a keystroke.
     override var canBecomeKey: Bool { true }
 
-    /// Centred on `parent`, hanging just below its toolbar.
+    /// Centered on `parent`, hanging just below its toolbar.
     func show(over parent: NSWindow) {
       let contentTop = parent.frame.minY + parent.contentLayoutRect.maxY
       let origin = QuickOpenPlacement.origin(

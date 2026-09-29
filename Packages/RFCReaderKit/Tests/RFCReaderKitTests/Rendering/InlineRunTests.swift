@@ -20,9 +20,9 @@ struct InlineRunTests {
   }
 
   @Test func `emphasis and strong change the font`() throws {
-    let emphasised = Fixtures.inlineRun([.emphasis([.text("x")])])
+    let emphasized = Fixtures.inlineRun([.emphasis([.text("x")])])
     let font = try #require(
-      emphasised.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont)
+      emphasized.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont)
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
 
     let strong = Fixtures.inlineRun([.strong([.text("x")])])
@@ -52,10 +52,10 @@ struct InlineRunTests {
   }
 
   @Test func `code in emphasis stays italic`() throws {
-    let emphasised = Fixtures.inlineRun([.emphasis([.text("see "), .code("foo")])])
-    let offset = try Fixtures.offset(of: "foo", in: emphasised)
+    let emphasized = Fixtures.inlineRun([.emphasis([.text("see "), .code("foo")])])
+    let offset = try Fixtures.offset(of: "foo", in: emphasized)
     let font = try #require(
-      emphasised.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
+      emphasized.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
   }

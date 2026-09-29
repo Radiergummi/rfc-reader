@@ -59,7 +59,7 @@ public struct ProseDiagnostics: Sendable {
   public var isProse: Bool { rejections.isEmpty }
 
   /// Refused by exactly one guard, and so a candidate for the boundary sample that
-  /// hand-labelling draws from: everything agreed except one thing.
+  /// hand-labeling draws from: everything agreed except one thing.
   public var isNearMiss: Bool { rejections.count == 1 }
 }
 

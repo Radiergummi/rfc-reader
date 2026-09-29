@@ -35,9 +35,9 @@ struct WrappingRowTests {
     #expect(frames.map(\.minY) == [0, 0])
   }
 
-  /// A shorter chip is centred on its line, and the next line starts below the
+  /// A shorter chip is centered on its line, and the next line starts below the
   /// tallest.
-  @Test func `chips are centred on their line`() {
+  @Test func `chips are centered on their line`() {
     let frames = WrappingRow.frames(
       for: [
         CGSize(width: 40, height: 24), CGSize(width: 40, height: 20), CGSize(width: 90, height: 20),

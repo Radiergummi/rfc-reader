@@ -173,7 +173,7 @@ struct BuilderVerbatimTests {
       "the widest line fills the indented measure: \(rendered) vs \(available)")
   }
 
-  /// A caption centres under its figure, and an indented figure's card starts at the
+  /// A caption centers under its figure, and an indented figure's card starts at the
   /// indent — so the caption's paragraph has to start there too.
   @Test func `an indented figures caption is indented with it`() throws {
     let figure = Figure(

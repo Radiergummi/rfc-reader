@@ -16,7 +16,7 @@ fetched `https://www.rfc-editor.org/rfc/rfc9110.xml` and `.../rfc9114.xml` over 
 
 **Decision note (added after this probe ran):** the > 400 ms verdict below stands as measured.
 The decision is to proceed with the single-storage TextKit 2 design as specified anyway, and to
-revisit layout cost later as a paging optimisation. The measured numbers and the verdict itself
+revisit layout cost later as a paging optimization. The measured numbers and the verdict itself
 are unchanged.
 
 **Resolution (added 2026-09-21, once the milestone shipped):** the gate's Stop was overridden by that

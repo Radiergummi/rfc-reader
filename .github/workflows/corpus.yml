@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 
-# One run at a time, queued rather than cancelled: a full run takes hours, and each
+# One run at a time, queued rather than canceled: a full run takes hours, and each
 # run's baseline is the report of the last one to succeed.
 concurrency:
   group: ${{ github.workflow }}

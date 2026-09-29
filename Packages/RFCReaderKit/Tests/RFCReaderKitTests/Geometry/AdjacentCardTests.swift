@@ -109,7 +109,7 @@ struct AdjacentCardTests {
     try #require(alone.count == 1)
     #expect(
       drawn[0].rect.minY == alone[0].rect.minY,
-      "the top of the first card has no neighbour and keeps its cap")
+      "the top of the first card has no neighbor and keeps its cap")
   }
 
   /// A quote draws a rule, not a card, so artwork inside one is not cut against

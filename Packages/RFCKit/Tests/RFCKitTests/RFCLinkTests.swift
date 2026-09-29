@@ -26,7 +26,7 @@ struct RFCLinkTests {
       ("https://datatracker.ietf.org/doc/rfc9110/", RFCLink(id: .rfc(9110))),
       ("https://tools.ietf.org/html/rfc2616", RFCLink(id: .rfc(2616))),
     ])
-  func `recognises the ways RFCs get linked`(input: String, expected: RFCLink) throws {
+  func `recognizes the ways RFCs get linked`(input: String, expected: RFCLink) throws {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url) == expected)
   }
@@ -76,7 +76,7 @@ struct RFCLinkTests {
   }
 
   /// The prefix is the convention, not decoration: an unprefixed fragment is not a
-  /// section, and `#page-12` stays unrecognised rather than becoming one. Both
+  /// section, and `#page-12` stays unrecognized rather than becoming one. Both
   /// schemes are strict about it.
   @Test(
     arguments: [

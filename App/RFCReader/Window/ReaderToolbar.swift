@@ -317,7 +317,7 @@
   ///
   /// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
   /// ones were tried first, to keep the declarations `DocumentView` already had: a
-  /// hosting view reports no width the toolbar will honour, so every item was laid out
+  /// hosting view reports no width the toolbar will honor, so every item was laid out
   /// on top of the one before it — the bookmark drew inside the back/forward group and
   /// the share icon over the panel's toggle. Native items also get the system's own
   /// grouping and glass, which a hosted control cannot.
@@ -413,7 +413,7 @@
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
         // The panel's own section. The flexible space holds the toggles against
         // the window's trailing corner, so they stay in the corner whether the
-        // panel is showing or not rather than travelling with the panel's edge.
+        // panel is showing or not rather than traveling with the panel's edge.
         // Two, as Pages has Format and Document: each shows its own pane in the
         // one panel (#25).
         .rfcPanelSeparator, .flexibleSpace, .rfcInfoToggle, .rfcPanelToggle,

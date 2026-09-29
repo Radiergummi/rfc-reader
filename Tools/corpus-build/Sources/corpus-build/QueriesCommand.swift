@@ -4,7 +4,7 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
-/// Writes the cross-reference judgement set used to measure search ranking (#37). What
+/// Writes the cross-reference judgment set used to measure search ranking (#37). What
 /// makes a citing sentence a query is `QuerySet`.
 struct QueriesCommand: ParsableCommand {
   static let configuration = CommandConfiguration(

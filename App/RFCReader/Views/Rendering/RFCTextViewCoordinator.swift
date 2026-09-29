@@ -136,7 +136,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// before it has real fragment frames; everything after it has none yet.
   private var laidOutThrough = 0
   /// The slices after the first one, running between frames until the document is
-  /// laid out. Cancelled by the next `install` — and by a change of column, which
+  /// laid out. Canceled by the next `install` — and by a change of column, which
   /// invalidates every frame it has computed.
   private var layoutTask: Task<Void, Never>?
   /// Characters per slice: about 8 ms of layout on this machine, so a slice fits
@@ -186,7 +186,7 @@ final class RFCTextViewCoordinator: NSObject {
       hover.send(.reset)
     #endif
     // What section tracking last reported, for a place whose anchor the new
-    // build does not have: its section's heading is the old behaviour, and still
+    // build does not have: its section's heading is the old behavior, and still
     // far better than the top of the document. Only a restyle has one: the first
     // install of a document leaves the choice between a deep link and the saved
     // reading position to `DocumentView`, and a coordinator never outlives its
@@ -294,7 +294,7 @@ final class RFCTextViewCoordinator: NSObject {
 
   // MARK: - Geometry
 
-  /// Centres the column and hangs the header in the top inset.
+  /// Centers the column and hangs the header in the top inset.
   ///
   /// This runs on every update pass — and an update pass happens on every section
   /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless

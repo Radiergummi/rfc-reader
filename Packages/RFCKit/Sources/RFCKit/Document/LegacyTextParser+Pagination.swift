@@ -256,7 +256,7 @@ extension LegacyTextParser {
       let titles = statedHeadings ?? numberedHeadingTitles(lines)
       statedHeadings = titles
       // Against the key, which has its numbers masked, where the titles do not:
-      // the two sides do not normalise alike, so a running header holding a
+      // the two sides do not normalize alike, so a running header holding a
       // number cannot match its own stated heading and its first copy survives.
       // Both repairs lose content and are measured in #57 -- masking the titles
       // too makes `Chapter 3` and `Chapter 4` one heading and drops a field's
@@ -291,8 +291,8 @@ extension LegacyTextParser {
 
   /// The titles of the numbered headings: what a section running header is compared
   /// against to learn whether the document already heads that section itself. At any
-  /// indent, because RFC 793 centres `2.  PHILOSOPHY`; numbered only, because RFC 770
-  /// centres an unnumbered `REFERENCES` that is no heading, and its running header is
+  /// indent, because RFC 793 centers `2.  PHILOSOPHY`; numbered only, because RFC 770
+  /// centers an unnumbered `REFERENCES` that is no heading, and its running header is
   /// all it has.
   ///
   /// `1:` counts here in every document, not only where `numbersHeadingsWithAColon`

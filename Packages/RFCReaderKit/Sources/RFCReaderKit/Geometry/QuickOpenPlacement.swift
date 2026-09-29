@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// Where the Go to RFC palette's panel goes, in screen coordinates.
 ///
-/// Centred on its window and hanging from `top`, the way Spotlight hangs from the
+/// Centered on its window and hanging from `top`, the way Spotlight hangs from the
 /// menu bar, then pulled back onto the screen. A child window is not constrained to
 /// the screen the way a titled one is, so a reader window dragged half off the edge
 /// would otherwise take half the field being typed into with it.

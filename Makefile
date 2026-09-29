@@ -292,7 +292,7 @@ corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
 	  --version $(CORPUS_VERSION)
 
-## Rebuild the cross-reference judgement set used to measure search ranking
+## Rebuild the cross-reference judgment set used to measure search ranking
 # Not part of `corpus`: it reads the converted corpus rather than producing it, and
 # the set only changes when the corpus or the filtering does. It is written into the
 # gitignored corpus directory, never the tree, because its queries are RFC sentences.

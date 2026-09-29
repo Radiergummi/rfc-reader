@@ -75,7 +75,7 @@ struct DocumentReportTests {
       id: "rfc1", overridden: false)
     #expect(
       report.warnings == [
-        "no RFC number recognised in front matter", "no title", "no sections",
+        "no RFC number recognized in front matter", "no title", "no sections",
         "no prose paragraphs",
       ])
   }

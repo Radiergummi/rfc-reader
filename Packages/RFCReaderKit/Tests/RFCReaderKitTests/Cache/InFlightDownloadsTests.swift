@@ -6,7 +6,7 @@ import Testing
 
 /// Downloads the store has running (#116): a second open joins the first, a
 /// removal made while one is in flight keeps its result off the disk, and one that
-/// no reader waits for any more is cancelled.
+/// no reader waits for any more is canceled.
 @Suite("In-flight downloads")
 struct InFlightDownloadsTests {
   /// Holds a fetch in flight until the test lets it finish.
@@ -34,10 +34,10 @@ struct InFlightDownloadsTests {
     let downloads = InFlightDownloads<Data>()
     private(set) var written: [DocumentID] = []
     private(set) var fetches = 0
-    /// Every fetch started, in order, so a test can ask whether one was cancelled.
+    /// Every fetch started, in order, so a test can ask whether one was canceled.
     private(set) var started: [Task<Data, any Error>] = []
 
-    /// The fetch does not look at cancellation, as a parse does not: a cancelled
+    /// The fetch does not look at cancellation, as a parse does not: a canceled
     /// one still finishes once the gate opens, and must still not be written.
     func open(_ id: DocumentID, gate: Gate) async throws -> Data {
       let (data, isKept) = try await downloads.value(for: id) {
@@ -77,7 +77,7 @@ struct InFlightDownloadsTests {
   }
 
   /// Until as many readers wait for the fetch for `id` as `count`: a reader
-  /// cancelled has not left until the store has heard about it.
+  /// canceled has not left until the store has heard about it.
   private func untilWaiting(_ count: Int, for id: DocumentID, in store: Store) async {
     while await store.waiters(id) != count {
       await Task.yield()
@@ -179,7 +179,7 @@ struct InFlightDownloadsTests {
   }
 
   /// Nobody is waiting for it, so it no longer spends the reader's bandwidth (#116).
-  @Test func `a download nobody waits for is cancelled`() async throws {
+  @Test func `a download nobody waits for is canceled`() async throws {
     let store = Store()
     let gate = Gate()
     let opening = Task { try await store.open(.rfc(9110), gate: gate) }
@@ -214,7 +214,7 @@ struct InFlightDownloadsTests {
   /// A reader who leaves is done waiting then, not when the download it left ends
   /// for the reader who stayed: the gate is still shut when the first returns.
   @Test(.timeLimit(.minutes(1)))
-  func `a cancelled reader returns while the download goes on`() async throws {
+  func `a canceled reader returns while the download goes on`() async throws {
     let store = Store()
     let gate = Gate()
     let first = Task { try await store.open(.rfc(9110), gate: gate) }
@@ -230,15 +230,15 @@ struct InFlightDownloadsTests {
     #expect(await store.written == [.rfc(9110)])
   }
 
-  @Test func `an open after a cancelled download starts a new one`() async throws {
+  @Test func `an open after a canceled download starts a new one`() async throws {
     let store = Store()
     let gate = Gate()
-    let cancelled = Task { try await store.open(.rfc(9110), gate: gate) }
+    let canceled = Task { try await store.open(.rfc(9110), gate: gate) }
     await untilRunning(.rfc(9110), in: store)
-    cancelled.cancel()
+    canceled.cancel()
     await untilWaiting(0, for: .rfc(9110), in: store)
     await gate.open()
-    _ = try? await cancelled.value
+    _ = try? await canceled.value
 
     _ = try await store.open(.rfc(9110), gate: gate)
     #expect(await store.fetches == 2)
@@ -248,7 +248,7 @@ struct InFlightDownloadsTests {
   /// A fetch that notices its cancellation fails with its own error, as URLSession
   /// does with `URLError.cancelled`; the reader still sees a cancellation, not a
   /// failure to show.
-  @Test func `a cancelled download throws a cancellation whatever it failed with`() async throws {
+  @Test func `a canceled download throws a cancellation whatever it failed with`() async throws {
     let downloads = InFlightDownloads<Data>()
     let gate = Gate()
     let opening = Task {

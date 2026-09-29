@@ -52,7 +52,7 @@ struct DocumentView: View {
   /// The fetch, and the build it triggers. Owned by the view rather than by
   /// `.task`, which ties them to appearance: in a collapsed split view, a reader
   /// pushed over one that was popped is told it disappeared the moment it appears,
-  /// and is never told it appeared again. `.task` cancelled the fetch on that
+  /// and is never told it appeared again. `.task` canceled the fetch on that
   /// notice and nothing started it again, so the reader spun forever while on
   /// screen (#252 was the same cancellation, shown as an error).
   @State private var work = Work()
@@ -64,14 +64,14 @@ struct DocumentView: View {
   ///
   /// A reference, so that it goes when the view's state does, which is when the
   /// view is replaced by the next document's (`.id(selection)`): the old reader's
-  /// fetch and 650 ms build are cancelled then, rather than running on for a
+  /// fetch and 650 ms build are canceled then, rather than running on for a
   /// document nobody will see. Disappearing is not going (#252).
   private final class Work {
     var load: Task<Void, Never>?
     var build: Task<Void, Never>?
     var buildingFor: BuildInputs?
     /// The original text's fetch, for the same reason as `load`: a `.task` on the
-    /// original text view was cancelled by the spurious disappearance, and its
+    /// original text view was canceled by the spurious disappearance, and its
     /// failure left the view spinning with nothing to try again.
     var originalText: Task<Void, Never>?
 
@@ -218,7 +218,7 @@ struct DocumentView: View {
       }
       .onChange(of: buildInputs, initial: true) {
         // Appearing again fires this with nothing changed. A build already made,
-        // or under way, for these inputs is left to stand rather than cancelled
+        // or under way, for these inputs is left to stand rather than canceled
         // and paid for twice.
         guard buildInputs != builtInputs, buildInputs != work.buildingFor else {
           trace("build skipped, inputs unchanged")
@@ -510,7 +510,7 @@ struct DocumentView: View {
       do {
         originalText = try await library.originalText(for: id)
       } catch {
-        // Cancelled only when the view goes, or when Try Again replaces this
+        // Canceled only when the view goes, or when Try Again replaces this
         // fetch, and neither wants an error on screen.
         guard !Task.isCancelled else { return }
         trace("original text failed: \(error)")
@@ -593,7 +593,7 @@ struct DocumentView: View {
     // blocking the main thread for it is what made the font-size slider stutter.
     let rebuilt = await Self.build(document, style: style)
     guard !Task.isCancelled else {
-      trace("build cancelled, discarded")
+      trace("build canceled, discarded")
       return
     }
     built = rebuilt
@@ -616,7 +616,7 @@ struct DocumentView: View {
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end; `rebuild()` is
-  /// what discards a cancelled one. `DocumentPreview` builds through it too.
+  /// what discards a canceled one. `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
     DocumentTextBuilder.build(document, style: style)

@@ -244,7 +244,7 @@ struct ProseDiagnosticsTests {
   }
 
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
-  /// report does not diagnose it either: RFC 1441's centred status paragraph and its
+  /// report does not diagnose it either: RFC 1441's centered status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
   /// RFC 757's phone number is the whole of its lead-in, and the report has none.
   @Test func `the title pages leftovers are not diagnosed`() throws {

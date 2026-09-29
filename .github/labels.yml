@@ -37,7 +37,7 @@
   description: LegacyTextParser's heuristics for the plain-text RFCs
 - name: "area: xml & model"
   color: "fef2c0"
-  description: The RFCXML parser, the RFCDocument model and its serialisation
+  description: The RFCXML parser, the RFCDocument model and its serialization
 - name: "area: corpus"
   color: "bfd4f2"
   description: corpus-build, the data packs, overrides and the RFC index data

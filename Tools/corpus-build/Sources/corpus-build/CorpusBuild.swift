@@ -31,7 +31,7 @@ func writeJSON(_ value: some Encodable, to path: String) throws {
 }
 
 extension Logger {
-  /// The logger of one command, labelled `corpus-build.<command>`. It writes to standard
+  /// The logger of one command, labeled `corpus-build.<command>`. It writes to standard
   /// error, where progress and diagnostics have always gone, and is made with its handler
   /// rather than through `LoggingSystem.bootstrap`, whose default writes to standard
   /// output. Values go in metadata, so a message is the same text from run to run.

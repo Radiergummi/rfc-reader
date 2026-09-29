@@ -65,7 +65,7 @@ public struct AnchorIndex: Sendable, Equatable {
   }
 
   /// Where in `entries` the anchor covering `offset` is, for a caller that needs
-  /// its neighbours too; see `anchor(at:)`.
+  /// its neighbors too; see `anchor(at:)`.
   public func index(at offset: Int) -> Int? {
     let after = entries.partitioningIndex { $0.offset > offset }
     return after > 0 ? after - 1 : nil

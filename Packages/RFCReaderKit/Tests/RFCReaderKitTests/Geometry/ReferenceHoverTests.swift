@@ -182,7 +182,7 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.forceClickDocument(first)).isEmpty)
   }
 
-  @Test func `the pointer travelling into a document preview does not close it`() {
+  @Test func `the pointer traveling into a document preview does not close it`() {
     var hover = ReferenceHover()
     _ = hover.handle(.forceClickDocument(first))
     #expect(hover.handle(.pointerMoved(location: elsewhere, target: nil)).isEmpty)

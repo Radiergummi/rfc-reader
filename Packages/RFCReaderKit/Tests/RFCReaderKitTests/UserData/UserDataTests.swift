@@ -55,7 +55,7 @@ struct UserDataTests {
 
     do {
       // Unversioned, as every install's store was made: `ModelContainer(for:)` over
-      // the models, with no `VersionedSchema`. SwiftData has to recognise it as V1
+      // the models, with no `VersionedSchema`. SwiftData has to recognize it as V1
       // by its models alone.
       let legacy = try ModelContainer(
         for: SchemaV1.Bookmark.self, SchemaV1.ReadingPosition.self,

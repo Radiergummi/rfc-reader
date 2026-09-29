@@ -76,7 +76,7 @@ struct CorpusBackedTitlePageTests {
   /// Since the front matter ends at the first paragraph (#74), whatever the title page
   /// leaves between it and the body reaches the lead-in, and is taken out of it by what
   /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
-  /// after its title; RFC 1441's centred `Status of this Memo` and its paragraph, and
+  /// after its title; RFC 1441's centered `Status of this Memo` and its paragraph, and
   /// its contents. The body after them stays.
   @Test func `the title pages leftovers are not the lead in`() throws {
     let procedureCall = leadInText(LegacyTextParser.parse(try CorpusText.text("rfc674")))
@@ -93,7 +93,7 @@ struct CorpusBackedTitlePageTests {
   }
 
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
-  /// report does not diagnose it either: RFC 1441's centred status paragraph and its
+  /// report does not diagnose it either: RFC 1441's centered status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
   @Test func `the title pages leftovers are not diagnosed`() throws {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try CorpusText.text("rfc1441"))
@@ -141,18 +141,18 @@ struct CorpusBackedAppendixHeadingTests {
   }
 }
 
-@Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
-struct CorpusBackedCatalogueTests {
-  private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
+@Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCatalogTests {
+  private func catalogs(in document: RFCDocument) -> [[DefinitionItem]] {
     document.everyBlock.compactMap(\.definitionItems)
   }
 
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
   /// each hung past its number. They were artwork, every reference in them unlinked;
-  /// they are one catalogue now, numbered as the document numbers them (#204).
-  @Test func `the RFC index of RFC 1012 is a catalogue`() throws {
+  /// they are one catalog now, numbered as the document numbers them (#204).
+  @Test func `the RFC index of RFC 1012 is a catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
-    let entries = try #require(catalogues(in: document).max { $0.count < $1.count })
+    let entries = try #require(catalogs(in: document).max { $0.count < $1.count })
     #expect(entries.count > 900)
     #expect(entries.first?.term.plainText == "1")
     #expect(
@@ -166,47 +166,47 @@ struct CorpusBackedCatalogueTests {
   @Test func `an entry's indented description joins the entry`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
     let entry = try #require(
-      catalogues(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
+      catalogs(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
     #expect(entry.definition.count == 2)
   }
 
   /// Most of those descriptions are a short phrase in title case (`A Draft Standard
   /// protocol.`), which the sentence test a list item's continuation asks refuses.
-  /// Kept as artwork, each one ended the catalogue above it, and the summary came
+  /// Kept as artwork, each one ended the catalog above it, and the summary came
   /// out as one list per entry or two.
-  @Test func `a short description does not break the catalogue`() throws {
+  @Test func `a short description does not break the catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
-    let lists = catalogues(in: document)
-    #expect(lists.count < 20, "\(lists.count) catalogues")
+    let lists = catalogs(in: document)
+    #expect(lists.count < 20, "\(lists.count) catalogs")
     #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
   }
 
   /// RFC 793 sets a legend under each sequence-space diagram, one line to an entry,
-  /// and centres the figure's captions under it. A caption is not the last entry's
+  /// and centers the figure's captions under it. A caption is not the last entry's
   /// second paragraph.
-  @Test func `a caption centred under a legend stays out of it`() throws {
+  @Test func `a caption centered under a legend stays out of it`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
-    let entries = catalogues(in: document).flatMap { $0 }
+    let entries = catalogs(in: document).flatMap { $0 }
     #expect(!entries.isEmpty)
     #expect(entries.allSatisfy { $0.definition.count == 1 }, "an entry took a second paragraph")
   }
 
   /// RFC 1140 right-aligns its numbers, so `996` stands a column deeper than `1006`,
-  /// its text in the same column. One catalogue still.
-  @Test func `right-aligned numbers stay one catalogue`() throws {
+  /// its text in the same column. One catalog still.
+  @Test func `right-aligned numbers stay one catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1140"))
     let holding996 = try #require(
-      catalogues(in: document).first { $0.contains { $0.term.plainText == "996" } })
+      catalogs(in: document).first { $0.contains { $0.term.plainText == "996" } })
     #expect(holding996.contains { $0.term.plainText == "1006" })
   }
 
   /// RFC 206 sets three error-code tables one after another, each under its own
-  /// caption. They are three catalogues, not one that runs its numbering again.
-  @Test func `tables under their own captions are separate catalogues`() throws {
+  /// caption. They are three catalogs, not one that runs its numbering again.
+  @Test func `tables under their own captions are separate catalogs`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc206"))
-    for entries in catalogues(in: document) {
+    for entries in catalogs(in: document) {
       let terms = entries.compactMap { Int($0.term.plainText) }
-      #expect(terms == terms.sorted(), "a catalogue restarts its numbering: \(terms)")
+      #expect(terms == terms.sorted(), "a catalog restarts its numbering: \(terms)")
       #expect(entries.allSatisfy { $0.definition.count == 1 })
     }
   }

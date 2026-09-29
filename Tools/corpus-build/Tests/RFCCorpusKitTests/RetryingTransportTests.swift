@@ -108,7 +108,7 @@ struct RetryingTransportTests {
     #expect(sleeps.recorded.isEmpty)
   }
 
-  @Test func `a cancelled request is not retried`() async {
+  @Test func `a canceled request is not retried`() async {
     let transport = ScriptedTransport([.failure(.cancelled)])
     await #expect(throws: URLError.self) {
       try await Self.retrying(transport, sleeps: Sleeps()).data(for: Self.url)

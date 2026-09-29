@@ -9,7 +9,7 @@
   /// the sidebar's search field, because those are two hosting views with two focus
   /// stores of their own. Measured — clicking a row selected it and left first
   /// responder exactly where it already was, so the list drew its selection in the
-  /// inactive grey and the arrow keys went to whoever did hold it. Under
+  /// inactive gray and the arrow keys went to whoever did hold it. Under
   /// `NavigationSplitView` the question never arose: one hosting view is one focus
   /// scope, and SwiftUI moved focus between the columns itself.
   ///

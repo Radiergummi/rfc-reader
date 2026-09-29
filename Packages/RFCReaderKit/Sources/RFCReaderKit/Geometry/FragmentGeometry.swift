@@ -211,7 +211,7 @@ public enum FragmentGeometry {
         let padLeft = roundsLeading ? chipPadding : 0
         let padRight = roundsTrailing ? chipPadding : 0
 
-        // Centred on the glyphs, not the line: `lineHeightMultiple` adds all of
+        // Centered on the glyphs, not the line: `lineHeightMultiple` adds all of
         // a line's extra leading above its ascender, so a tint filling the line
         // box had room above the label and none below its descenders.
         let font =
@@ -335,7 +335,7 @@ public enum FragmentGeometry {
       CGRect(x: columnLeft - padding - width, y: origin.y, width: width, height: frame.height)
     }
 
-    /// `rect`, in the drawing space, with the edges it shares with a neighbouring
+    /// `rect`, in the drawing space, with the edges it shares with a neighboring
     /// fragment moved onto the device pixel grid: its top when `top`, its bottom
     /// when `bottom`.
     ///
@@ -352,10 +352,10 @@ public enum FragmentGeometry {
     /// document and the backing store: the scroll offset, the header's top inset,
     /// the text view's own origin, a fragment view's position. Rounding against
     /// the scale alone assumed all of those were whole pixels; the translation
-    /// carries them, so nothing has to be. Two neighbours drawn into one context
+    /// carries them, so nothing has to be. Two neighbors drawn into one context
     /// map the same edge to the same device coordinate whatever local space each
     /// is drawn in, so they round it to the same pixel; drawn into two layers,
-    /// each rounds to the pixels of the layer its fill is rasterised into. Rounding
+    /// each rounds to the pixels of the layer its fill is rasterized into. Rounding
     /// is `floor(y + 0.5)`, so a tie goes one way from both sides.
     ///
     /// `toDevice` is the context's `userSpaceToDeviceSpaceTransform`, not its

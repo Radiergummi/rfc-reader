@@ -408,7 +408,7 @@ extension Reference {
 }
 
 /// One `<seriesInfo>` of a reference: a series and the document's place in it, such
-/// as RFC 9110 or DOI 10.17487/RFC9110. A struct rather than a labelled tuple, which
+/// as RFC 9110 or DOI 10.17487/RFC9110. A struct rather than a labeled tuple, which
 /// could be none of `Hashable`, `Codable` or `Equatable`, and so kept every type that
 /// held a reference from being any of them (#130).
 public struct SeriesInfo: Hashable, Codable, Sendable {

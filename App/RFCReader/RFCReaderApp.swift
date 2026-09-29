@@ -22,7 +22,7 @@ struct RFCReaderApp: App {
   var body: some Scene {
     #if os(macOS)
       // The only scene, and still enough to carry the menu bar: `.commands` are
-      // honoured with no `WindowGroup` present, measured, which is what keeps the
+      // honored with no `WindowGroup` present, measured, which is what keeps the
       // whole menu from having to be rebuilt in AppKit. What it does not carry is
       // File ▸ New Window, which `WindowGroup` used to contribute — `WindowCommands`
       // puts it back.
@@ -319,7 +319,7 @@ private struct ReadingSettings: View {
       }
       Toggle(isOn: usesFullWidth) {
         Text("Use the full window width for text")
-        Text("Otherwise lines stop at a comfortable reading length, and the text is centred.")
+        Text("Otherwise lines stop at a comfortable reading length, and the text is centered.")
       }
       Toggle("Underline links", isOn: $underlineLinks)
     }

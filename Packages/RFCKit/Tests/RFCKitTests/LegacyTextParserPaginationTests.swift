@@ -66,7 +66,7 @@ struct LegacyTextParserPaginationTests {
 
   /// A section running header is furniture on every page but the first, where it is
   /// the only thing that says a section starts. RFC 770 heads its bibliography with
-  /// a centred `REFERENCES` that is no heading, and a running `References` on each of
+  /// a centered `REFERENCES` that is no heading, and a running `References` on each of
   /// its pages; dropping every one of those lost all 58 entries.
   @Test func `a section running header still opens its section`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))

@@ -86,7 +86,7 @@ extension Color {
 #if os(macOS)
   /// Presents the card in an `NSPopover` rather than SwiftUI's, whose arrow is
   /// drawn in the popover's material while the card paints its own poster beneath
-  /// it: a grey tip on a colored card. `hasFullSizeContent` lets the card reach
+  /// it: a gray tip on a colored card. `hasFullSizeContent` lets the card reach
   /// into the arrow, the way Contacts' own popovers look.
   private struct ContactCardPresenter: NSViewRepresentable {
     @Binding var isPresented: Bool

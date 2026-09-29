@@ -6,7 +6,7 @@ import RFCKit
 /// Not every block: at roughly a million of them the file would be unusable. The
 /// two things worth keeping are the shape of the whole — which guard fires, how
 /// often — and the blocks refused by exactly one guard, which is the sample
-/// hand-labelling draws from.
+/// hand-labeling draws from.
 public struct ProseReport: Codable, Sendable {
   public var documents = 0
   public var blocks = 0

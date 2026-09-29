@@ -10,7 +10,7 @@ import Synchronization
 /// resumed and wrote the document back: the removal was silently undone.
 ///
 /// A removal during a download does not cancel it. A fetch is only ever started by
-/// opening the document, so the reader is waiting for it, and cancelling would turn
+/// opening the document, so the reader is waiting for it, and canceling would turn
 /// "don't keep this offline" into an error in front of them. Instead the removal
 /// marks the running fetch, and a marked fetch is not kept, whoever waits for it: a
 /// reader who joins it after the removal does not bring it back either. The readers
@@ -21,9 +21,9 @@ import Synchronization
 /// is written once.
 ///
 /// A fetch lasts as long as someone waits for it. Each open that joins it is
-/// counted, and one that is cancelled — its reader left the document — leaves at
+/// counted, and one that is canceled — its reader left the document — leaves at
 /// once, without waiting for the fetch to end; when the last one has, the fetch is
-/// cancelled and forgotten, so it stops spending the bandwidth of someone on a
+/// canceled and forgotten, so it stops spending the bandwidth of someone on a
 /// metered or poor connection, writes nothing, and the next open starts afresh. While any reader still waits, it goes on: closing one
 /// of two tabs on a document does not fail the other.
 ///
@@ -57,8 +57,8 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
   ///
   /// Awaiting a task does not pass the waiter's cancellation on to it, nor end the
   /// wait, so a waiter suspends on a continuation of its own instead: one that is
-  /// cancelled leaves and throws `CancellationError` at once, and the last to leave
-  /// cancels the fetch. A cancelled fetch throws `CancellationError`, whatever it
+  /// canceled leaves and throws `CancellationError` at once, and the last to leave
+  /// cancels the fetch. A canceled fetch throws `CancellationError`, whatever it
   /// failed with or even when it finished anyway, as a parse that does not look at
   /// cancellation does, so its result is never written.
   public nonisolated(nonsending) func value(
@@ -158,7 +158,7 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
     }
   }
 
-  /// A waiter for `task` was cancelled: it stops waiting now. The last one to leave
+  /// A waiter for `task` was canceled: it stops waiting now. The last one to leave
   /// cancels the fetch and forgets it, so a later open starts another.
   private func leave(_ id: DocumentID, _ task: Task<Value, any Error>, _ waiter: Int) {
     let continuation = running.withLock { running -> CheckedContinuation<Void, Never>? in

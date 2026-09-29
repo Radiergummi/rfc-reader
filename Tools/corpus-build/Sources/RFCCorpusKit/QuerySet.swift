@@ -1,12 +1,12 @@
 import Foundation
 import RFCKit
 
-/// Builds the cross-reference judgement set used to measure search ranking (#37).
+/// Builds the cross-reference judgment set used to measure search ranking (#37).
 ///
-/// A cross reference that names a section of another RFC is a relevance judgement its
+/// A cross reference that names a section of another RFC is a relevance judgment its
 /// author already made: the sentence around it says what the target section is about.
 /// Excise the citation and that sentence becomes a query whose answer is known, which
-/// is the only way to get thousands of judgements without writing them by hand.
+/// is the only way to get thousands of judgments without writing them by hand.
 ///
 /// The filtering lives here rather than in a scratch script because the set is
 /// worthless if it cannot be reproduced.

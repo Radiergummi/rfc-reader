@@ -61,8 +61,8 @@ struct RFCListView: View {
     // long.
     let bookmarked = library.bookmarkedNumbers
     // Once, and shared by everything below: `rfcs` was read twice per body pass —
-    // here and in the overlay — which is half of why the memoised list was worth
-    // memoising.
+    // here and in the overlay — which is half of why the memoized list was worth
+    // memoizing.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not

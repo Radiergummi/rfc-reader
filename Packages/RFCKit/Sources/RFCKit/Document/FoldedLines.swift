@@ -72,7 +72,7 @@ public enum FoldedLines {
   /// The header must open the block: the first line that is not blank. A NOTE
   /// further down is the block talking about folding, not announcing it.
   ///
-  /// RFC 8792 centres the note between runs of `=`, and `rfcfold` pads it to the
+  /// RFC 8792 centers the note between runs of `=`, and `rfcfold` pads it to the
   /// block's width, so the padding is taken off at both ends and not measured.
   private static func header(in lines: [Substring]) -> (index: Int, strategy: Strategy)? {
     guard let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }) else {

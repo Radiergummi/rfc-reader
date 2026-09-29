@@ -9,7 +9,7 @@
   /// A palette rather than a dialog, the way Spotlight and Open Quickly are: no title,
   /// no label, no buttons. What was typed is resolved exactly on the keystroke — a
   /// number, `BCP 14`, a link — and searched for as well, so `http caching` offers
-  /// candidates where the sheet this replaces could only say it did not recognise it.
+  /// candidates where the sheet this replaces could only say it did not recognize it.
   ///
   /// The models are properties, not `@Environment` lookups: this is the root of a
   /// hosting view in a panel of its own, outside every environment chain.
@@ -169,7 +169,7 @@
       results.show(query: query, exact: exact, members: members)
     }
 
-    /// Runs per change of the query and is cancelled by the next, which is the debounce:
+    /// Runs per change of the query and is canceled by the next, which is the debounce:
     /// only a pause long enough to outlast the sleep reaches the search.
     private func search(_ query: String) async {
       guard !query.isEmpty else { return }

@@ -94,7 +94,7 @@
       list.minimumThickness = Self.listMinimum
       listItem = list
 
-      // The panel's width arrives as a right safe-area inset, and honouring it
+      // The panel's width arrives as a right safe-area inset, and honoring it
       // would take 320 pt off the reader the moment the panel opened — which
       // re-wraps the text, rebuilds the document and loses the reader's place.
       // What the panel overlaps, it covers.
@@ -102,7 +102,7 @@
       // Two layers have to refuse it, because they are two different measurements
       // of two different things. This one is SwiftUI's: the width `DocumentView`
       // derives its column from comes from a `GeometryReader` in this hosted root,
-      // and a root that honours the inset reports 919 pt shut and 599 pt open.
+      // and a root that honors the inset reports 919 pt shut and 599 pt open.
       // Clearing `safeAreaRegions` holds it at 919 both ways — measured, with the
       // view's own frame unchanged at 919 and the inset still arriving as 320.
       // `ignoresSafeArea` inside `NavigationSplitView`'s detail column did not do
@@ -194,7 +194,7 @@
     // MARK: - Observation
 
     /// What this window follows in its models: its title, the list's, the panel's
-    /// rule and the palette. A task per sequence, all cancelled as the window
+    /// rule and the palette. A task per sequence, all canceled as the window
     /// closes; each holds the controller weakly.
     private var observations: [Task<Void, Never>] = []
 
@@ -286,7 +286,7 @@
           }?
           .truncated(to: Self.subtitleLimit) ?? "",
         // The reader's own copy, shown once its header scrolls away. Whole, not
-        // truncated like the tab's: the item ellipsises to whatever room it has.
+        // truncated like the tab's: the item ellipsizes to whatever room it has.
         documentTitle: navigation.selection?.displayName ?? "",
         documentSubtitle: navigation.selection.flatMap { library.metadata($0)?.title } ?? "",
         isBookmarked: isBookmarked
@@ -495,7 +495,7 @@
       if navigation.isShowingGoToSheet {
         guard quickOpen == nil, let window else { return }
         // ⌘L reaches the last reader window that was key, which may since have been
-        // minimised: the palette hangs from it, so it comes back first. The palette
+        // minimized: the palette hangs from it, so it comes back first. The palette
         // waits for it, since the window takes key back as it lands, and a panel that
         // loses key closes.
         if window.isMiniaturized {
@@ -535,7 +535,7 @@
       hasPlacedInitialFocus = window.giveFocus(inside: listItem.viewController.view)
     }
 
-    /// Where a palette asked for while the window was minimised is shown.
+    /// Where a palette asked for while the window was minimized is shown.
     func windowDidDeminiaturize(_ notification: Notification) {
       showOrHideQuickOpen()
     }

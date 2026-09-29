@@ -183,7 +183,7 @@ struct EmptyDetailView: View {
       if let link = resolved, let metadata = library.metadata(link.id) {
         Text("\(link.id.displayName) — \(metadata.title)")
       } else if !input.isEmpty {
-        Text("Not something I recognise as an RFC.")
+        Text("Not something I recognize as an RFC.")
       } else {
         Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
       }

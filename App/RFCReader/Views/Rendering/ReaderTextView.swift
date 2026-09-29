@@ -160,9 +160,9 @@ import RFCReaderKit
     /// How far, in points, a press on a reference moves before it is a drag.
     private static let dragThreshold: CGFloat = 3
 
-    /// AppKit asks for each declared type in turn. Only the plain-text flavour is
+    /// AppKit asks for each declared type in turn. Only the plain-text flavor is
     /// rewritten -- that is the one a terminal, a mail body or a code editor reads,
-    /// and the one the chip's characters are wrong for. The rich flavours stay
+    /// and the one the chip's characters are wrong for. The rich flavors stay
     /// AppKit's, because a rich target receives the attachment as an image, which is
     /// the chip's symbol and is what it looks like on screen.
     override func writeSelection(

@@ -90,7 +90,7 @@ public struct RFCEditorClient: Sendable {
 
   /// The XML where the index lists it, the plain text otherwise (#125).
   ///
-  /// The text is fetched only when there is no XML: a 404 for it. A cancelled
+  /// The text is fetched only when there is no XML: a 404 for it. A canceled
   /// load, a server error or a network failure is the error, and asking for the
   /// text after one would start a second request and report *its* failure instead.
   /// XML that is there but does not parse falls back to the text too, so the

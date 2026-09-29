@@ -1,6 +1,6 @@
 # Search evaluation query sets
 
-Two judgement sets for measuring RFC search quality (issue #37). They exist because
+Two judgment sets for measuring RFC search quality (issue #37). They exist because
 ranking changes cannot be assessed by looking at a few results — the first day of
 work on this drew five conclusions that turned out to be inside the noise. Only the
 hand set is committed; the cross-reference set is generated from the corpus.
@@ -35,7 +35,7 @@ the certificate`), a definition (`what is an idempotent request method`), a rule
 reasons, both learned the hard way:
 
 - Several sections are legitimately correct for one query, and forcing a single
-  answer penalises a system that returns a different good one.
+  answer penalizes a system that returns a different good one.
 - **Each answer set includes the successor's equivalent section.** Without that, the
   index correctly ranking RFC 9113 §5.1.2 above the superseded RFC 7540 §5.1.2 scores
   as a *regression*. The mappings were made by hand and are not mechanical —
@@ -49,7 +49,7 @@ only instrument here with validity.
 
 Derived from cross references that name a section of another RFC. The *citing
 sentence* is the query, with the citation itself excised, so the query describes the
-target in prose without naming it — a relevance judgement an RFC author already made.
+target in prose without naming it — a relevance judgment an RFC author already made.
 
 Filtered from 20,840 recovered sentences: dropped under 8 content words, near
 duplicates, self-citations, and targets absent from the index; 12,248 survive, of
@@ -86,7 +86,7 @@ corpus-build queries --in corpus/xml.noindex --out corpus/queries-xref.json \
                      [--limit 4000] [--seed 11] [--min-words 8]
 ```
 
-The extraction *and* the filtering live in the subcommand, because a judgement set
+The extraction *and* the filtering live in the subcommand, because a judgment set
 that cannot be reproduced is not evidence of anything. The sample is drawn with a
 seeded generator rather than `shuffled()`, so the same corpus and `--seed` give the
 same 4,000 queries on any platform. Nothing in CI generates or reads the set.

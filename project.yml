@@ -11,7 +11,7 @@ options:
 
 settings:
   base:
-    # Swift 6 is the language mode; there is no 6.2 mode. The 6.2 behaviour is the
+    # Swift 6 is the language mode; there is no 6.2 mode. The 6.2 behavior is the
     # two settings on the RFCReader target (#129). Complete strict concurrency is
     # Swift 6's default, so it is not spelled out.
     SWIFT_VERSION: "6.0"

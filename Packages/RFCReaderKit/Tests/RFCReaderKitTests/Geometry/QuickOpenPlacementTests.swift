@@ -3,14 +3,14 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// Where the Go to RFC palette's panel goes: centred on its window, hanging below
+/// Where the Go to RFC palette's panel goes: centered on its window, hanging below
 /// the toolbar, and never off the screen.
 @Suite("Quick open placement")
 struct QuickOpenPlacementTests {
   private let screen = CGRect(x: 0, y: 0, width: 1500, height: 900)
   private let size = CGSize(width: 600, height: 400)
 
-  @Test func `the panel is centred on the window and hangs from the content's top`() {
+  @Test func `the panel is centered on the window and hangs from the content's top`() {
     let origin = QuickOpenPlacement.origin(
       of: size,
       over: CGRect(x: 100, y: 100, width: 1000, height: 700),

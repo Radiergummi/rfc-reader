@@ -39,7 +39,7 @@ If nothing matches, say that the queue is empty and stop. Under `/loop`, end the
 
 Read the issue with its comments, and any issue or pull request it links. Read the sections of `docs/ARCHITECTURE.md`, `docs/DATA_PIPELINE.md` and `docs/VISION.md` for the code it touches, and the code itself. `CLAUDE.md`'s standing constraints apply in full.
 
-**Ask whenever the answer is the maintainer's to give.** That means an issue that can be read two ways, a change to the document model or a standing constraint, a user-visible behaviour the issue doesn't specify, or an expected result you can't pin down. It applies at this step and at any later one. Don't proceed on an assumption. To ask:
+**Ask whenever the answer is the maintainer's to give.** That means an issue that can be read two ways, a change to the document model or a standing constraint, a user-visible behavior the issue doesn't specify, or an expected result you can't pin down. It applies at this step and at any later one. Don't proceed on an assumption. To ask:
 
 1. Post a marked comment. Say what you found, then ask numbered questions, each with the option you would choose and why.
 2. Add `agent-blocked`. If you already have a draft pull request, leave it as a draft, with your work pushed.
@@ -55,7 +55,7 @@ Make a worktree off the latest `origin/main` with `EnterWorktree` (name `issue-N
 
 ## 4. Test first, and open the draft right away
 
-1. Write the test that shows the bug, or pins the new behaviour, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: prefer a guard-level test on hand-written lines, then a test through `parse` on a fixture already committed in `Fixtures`, then a `Corpus-backed:` test. Never commit RFC text, whether a new fixture, an excerpt of an existing one or an override snapshot.
+1. Write the test that shows the bug, or pins the new behavior, and watch it fail for the right reason. Follow the testing rules in `CLAUDE.md`: prefer a guard-level test on hand-written lines, then a test through `parse` on a fixture already committed in `Fixtures`, then a `Corpus-backed:` test. Never commit RFC text, whether a new fixture, an excerpt of an existing one or an override snapshot.
 2. Commit it, push, and open a **draft** pull request at once: `gh pr create --draft`. Its body says `Closes #N`, and the plan as you understand it. Add `agent-pr` to the issue.
 3. Keep the pull request a draft for as long as you are working on it.
 

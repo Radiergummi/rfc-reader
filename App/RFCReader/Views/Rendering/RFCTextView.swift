@@ -9,7 +9,7 @@ import SwiftUI
 /// and nobody selects through it. Everything below it is text.
 ///
 /// The `GeometryReader` is the width channel: it is what makes a window resize reach
-/// the representable at all, and the column is centred from it.
+/// the representable at all, and the column is centered from it.
 struct RFCTextView: View {
   // The coordinator builds the hover/long-press preview's hosting controller
   // itself, which sits outside SwiftUI's environment chain — so it needs the

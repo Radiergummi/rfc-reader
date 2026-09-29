@@ -17,8 +17,8 @@ public enum ToolbarTitleReveal {
     distance: CGFloat
   ) -> CGFloat {
     guard distance > 0 else { return visibleTop >= headingBottom ? 1 : 0 }
-    let travelled = (visibleTop - (headingBottom - distance)) / distance
-    return min(1, max(0, travelled))
+    let traveled = (visibleTop - (headingBottom - distance)) / distance
+    return min(1, max(0, traveled))
   }
 
   /// How opaque the toolbar's title is at a given progress: nothing for the first

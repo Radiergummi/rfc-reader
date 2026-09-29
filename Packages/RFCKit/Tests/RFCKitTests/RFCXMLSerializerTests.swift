@@ -302,7 +302,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   }
 
   /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
-  /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
+  /// declares one ID twice, which failed the schema in 7,419 documents. A synthesized
   /// anchor is the part number for every numbered section, so it is written once, as the
   /// `pn` the published series always carries, and read back from there.
   @Test func `an anchor that is the part number is written once`() throws {

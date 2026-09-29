@@ -73,7 +73,7 @@ struct LegacyTextParserHeadingsTests {
     #expect(!titles.contains { $0.hasPrefix("The changes between version 1") })
     #expect(!titles.contains { $0.hasPrefix("This report attempts to summarize") })
 
-    // The abstract is still recognised, and its paragraphs stay whole.
+    // The abstract is still recognized, and its paragraphs stay whole.
     guard case .paragraph(let abstract)? = document.header.abstract.first else {
       Issue.record("abstract missing")
       return

@@ -15,11 +15,11 @@ extension LegacyTextParser {
   ///   last one, `REFERENCES ....... 42`, and RFC 1441 the whole listing;
   /// - a header block, which states the document's number in two columns: RFC 780
   ///   and 821 repeat theirs on the first page of the body, and RFC 674 sets its
-  ///   under an NLS journal stamp. RFC 84's catalogue states a number on every
+  ///   under an NLS journal stamp. RFC 84's catalog states a number on every
   ///   entry, but indents the entry's lines under it, and stays;
   /// - a line with no letters in it, a phone number (RFC 757) or a page number
   ///   (RFC 674);
-  /// - boilerplate under a heading set off column 0, as a centred `Status of this
+  /// - boilerplate under a heading set off column 0, as a centered `Status of this
   ///   Memo` is in RFC 1441 to 1452: the heading, and up to three paragraphs after it
   ///   that say what boilerplate says. A contents title goes alone, its entries after
   ///   it.
@@ -251,8 +251,8 @@ extension LegacyTextParser {
   /// has a header line's left column (RFC 821's is `Request for Comments: DRAFT`), and
   /// every line is two columns, or one column set flush right. The document's own
   /// number, because a table of RFCs is two columns stating numbers too. The whole
-  /// column, because RFC 160's catalogue lists `Network Working Group Meeting`. Two
-  /// lines to a handful: a line of RFC 84's catalogue is `NWG/RFC 14    (never issued)`
+  /// column, because RFC 160's catalog lists `Network Working Group Meeting`. Two
+  /// lines to a handful: a line of RFC 84's catalog is `NWG/RFC 14    (never issued)`
   /// on its own.
   static func isHeaderBlock(_ lines: [String], number: Int?) -> Bool {
     guard (2...8).contains(lines.count),

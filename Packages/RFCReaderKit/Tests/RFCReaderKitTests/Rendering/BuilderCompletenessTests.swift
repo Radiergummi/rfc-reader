@@ -105,8 +105,8 @@ struct BuilderCompletenessTests {
     }
   }
 
-  /// `RFCXMLParser` wraps any unrecognised child element as `.aside(blocks)`, so an
-  /// unrecognised element inside a `<blockquote>` nests an aside inside a quote for
+  /// `RFCXMLParser` wraps any unrecognized child element as `.aside(blocks)`, so an
+  /// unrecognized element inside a `<blockquote>` nests an aside inside a quote for
   /// real documents, not just hypothetically. The more specific, inner decoration
   /// must survive; the outer one only fills what the inner call left unset.
   @Test func `a nested aside inside a block quote keeps its own decoration`() throws {

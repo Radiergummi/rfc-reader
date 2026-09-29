@@ -112,7 +112,7 @@ struct ChipLineGeometryTests {
       origin: .zero
     )
 
-    // The chip on the later line, found by the line its centre falls on.
+    // The chip on the later line, found by the line its center falls on.
     let lineBounds = fixture.laterLine.typographicBounds
     let onLaterLine = chips.filter { lineBounds.minY..<lineBounds.maxY ~= $0.rect.midY }
     #expect(!onLaterLine.isEmpty, "the wrapped line's chips must be among the rects")
@@ -170,7 +170,7 @@ struct ChipLineGeometryTests {
 
   /// The line box is not the glyph box: `lineHeightMultiple` puts all of a body
   /// line's extra leading above its ascender, so a tint filling the line had
-  /// room above the label and none below its descenders. The tint is centred on
+  /// room above the label and none below its descenders. The tint is centered on
   /// the chip font's own ascender and descender instead.
   @Test func `a chip is padded equally above and below its glyphs`() throws {
     let paragraph = try chipParagraph([
@@ -192,7 +192,7 @@ struct ChipLineGeometryTests {
   /// `BCP 14 [RFC2119] [RFC8174]` is in nearly every RFC. A chip's tint reaches
   /// past its glyphs, and a space is narrower than two paddings, so adjacent chips
   /// overlapped, and a chip's tint covered the space before it. The padding takes
-  /// up room in the line instead: every tint clears its neighbours' glyphs.
+  /// up room in the line instead: every tint clears its neighbors' glyphs.
   @Test(arguments: [" ", ""])
   func `a chip's tint clears the text and chips beside it`(separator: String) throws {
     let chip = { (number: Int) in
