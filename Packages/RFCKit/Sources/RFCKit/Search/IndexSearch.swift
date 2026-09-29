@@ -173,6 +173,10 @@ public struct IndexSearch: Sendable {
     func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
       if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
       if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
+      if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
+      if filters.excludeObsolete, rfc.isObsolete { return false }
+      if filters.requiresXML, !rfc.hasXMLSource { return false }
+      // The text filters come last, so the cheap checks above spare them their scan.
       // An empty value matches nothing, as it did when the filters went through
       // Foundation: a document with no working group has an empty prepared group,
       // and an empty needle is contained in every name.
@@ -180,9 +184,6 @@ public struct IndexSearch: Sendable {
       if let author, author.isEmpty || !entry.authors.contains(where: { $0.contains(author) }) {
         return false
       }
-      if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
-      if filters.excludeObsolete, rfc.isObsolete { return false }
-      if filters.requiresXML, !rfc.hasXMLSource { return false }
       return true
     }
   }
