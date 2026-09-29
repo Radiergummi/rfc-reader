@@ -10,11 +10,11 @@ import Testing
 struct RequirementListTests {
   private static func requirement(
     _ sentence: String, _ keywords: [BCP14Keyword], section: String, number: String? = nil,
-    title: String = "Title", anchor: String? = nil
+    title: String = "Title", anchor: String? = nil, isHeuristic: Bool = false
   ) -> Requirement {
     Requirement(
       keywords: keywords, sentence: sentence, anchor: anchor ?? section, sectionAnchor: section,
-      sectionNumber: number, sectionTitle: title, isHeuristic: false)
+      sectionNumber: number, sectionTitle: title, isHeuristic: isHeuristic)
   }
 
   private static let all = [
@@ -89,10 +89,39 @@ struct RequirementListTests {
       [Self.all[0], Self.all[2]], document: .rfc(9110))
     #expect(
       csv == """
-        "Key words","Requirement","Citation","Link"\r
-        "MUST","The client MUST send a Host field.","RFC 9110, Section 7.2","rfc://9110#section-7.2"\r
-        "MUST NOT, SHOULD","A proxy MUST NOT forward ""Connection"", and SHOULD log it.","RFC 9110, Section 7.6.1","rfc://9110#section-7.6.1"\r
+        "Key words","Requirement","Citation","Link","Heuristic"\r
+        "MUST","The client MUST send a Host field.","RFC 9110, Section 7.2","rfc://9110#section-7.2","No"\r
+        "MUST NOT, SHOULD","A proxy MUST NOT forward ""Connection"", and SHOULD log it.","RFC 9110, Section 7.6.1","rfc://9110#section-7.6.1","No"\r
 
         """)
+  }
+
+  // MARK: - Recovered from legacy text
+
+  private static let recovered = requirement(
+    "A host MUST answer.", [.must], section: "section-3", number: "3", isHeuristic: true)
+
+  /// Requirements read from legacy text say so: their sentences were recovered.
+  @Test func `only requirements recovered from legacy text carry a note`() {
+    #expect(RequirementList.note(for: Self.all) == nil)
+    #expect(RequirementList.note(for: [Self.recovered]) == RequirementList.heuristicNote)
+  }
+
+  @Test func `the Markdown checklist of recovered requirements carries the note`() {
+    let markdown = RequirementList.markdownChecklist([Self.recovered], document: .rfc(1122))
+    #expect(
+      markdown == """
+        # RFC 1122 conformance checklist
+
+        > \(RequirementList.heuristicNote)
+
+        - [ ] **MUST** A host MUST answer. ([RFC 1122, Section 3](rfc://1122#section-3))
+
+        """)
+  }
+
+  @Test func `the CSV checklist marks a recovered requirement`() {
+    let csv = RequirementList.csvChecklist([Self.recovered], document: .rfc(1122))
+    #expect(csv.hasSuffix(#","Yes"\#r\#n"#))
   }
 }

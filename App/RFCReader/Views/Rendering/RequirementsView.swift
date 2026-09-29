@@ -23,6 +23,14 @@ struct RequirementsView: View {
       let shown = filter.apply(to: requirements)
       VStack(spacing: 0) {
         controls(shown: shown, keywords: RequirementList.keywords(in: requirements))
+        if let note = RequirementList.note(for: requirements) {
+          Text(note)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+        }
         List {
           ForEach(RequirementList.sections(of: shown)) { section in
             Section(section.heading) {

@@ -37,8 +37,15 @@ struct RequirementsTests {
       Requirements.sentences(in: "Use a token, e.g. The One. Versions such as 1.1 and 4.2.1 apply.")
         == ["Use a token, e.g. The One.", "Versions such as 1.1 and 4.2.1 apply."])
     #expect(
-      Requirements.sentences(in: "Fields, i.e. Headers, etc. Are sent. See Sec. 4 for more.")
-        == ["Fields, i.e. Headers, etc. Are sent.", "See Sec. 4 for more."])
+      Requirements.sentences(in: "Fields, i.e. Headers, are sent. See Sec. 4 for more.")
+        == ["Fields, i.e. Headers, are sent.", "See Sec. 4 for more."])
+  }
+
+  /// "etc." ends the list and, followed by a capital, nearly always the sentence.
+  @Test func `etc. ends a sentence`() {
+    #expect(
+      Requirements.sentences(in: "Send A, B, etc. The server MUST reply.")
+        == ["Send A, B, etc.", "The server MUST reply."])
   }
 
   /// A sentence can open on a quoted name or a citation as well as on a capital.
@@ -125,6 +132,39 @@ struct RequirementsTests {
       ],
       source: .xml)
     #expect(Requirements.extract(from: document).map(\.anchor) == ["item-1", "def-retry"])
+  }
+
+  /// A cell of key words alone says nothing without the row it is in, so the row
+  /// is one requirement; a cell that is a sentence of its own stays one.
+  @Test func `a table row whose cell is only key words is one requirement`() {
+    let table = Table(
+      title: nil, header: [[[.text("Algorithm")], [.text("Status")]]],
+      rows: [
+        [[.text("alg-one")], [.text("MUST")]],
+        [[.text("alg-two")], [.text("SHOULD NOT")]],
+        [[.text("Field")], [.text("It MAY be empty.")]],
+      ])
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "S",
+          blocks: [
+            .table(table),
+            .references(
+              ReferenceList(
+                title: "Normative References",
+                entries: [
+                  Reference(
+                    anchor: "RFC2119", title: "Key words",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "2119")])
+                ])),
+          ])
+      ],
+      source: .xml)
+    #expect(
+      Requirements.extract(from: document).map(\.sentence)
+        == ["alg-one | MUST", "alg-two | SHOULD NOT", "It MAY be empty."])
   }
 
   // MARK: - Through parse

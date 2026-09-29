@@ -100,10 +100,18 @@ public enum Requirements {
         visit(inner, around: outer, record)
       case .table(let table):
         // A profile often states its requirements a row at a time, a cell saying
-        // what a field MUST be. A row lands on its own anchor where it has one.
+        // what a field MUST be. A cell of key words alone, as in a table of
+        // algorithms and whether each MUST be implemented, says nothing without
+        // its row, so that row is one requirement. A row lands on its own anchor
+        // where it has one.
         for (index, row) in table.rows.enumerated() {
           let anchor = table.anchor(ofRow: index) ?? table.anchor ?? outer
-          for cell in row { record(cell.plainText, anchor) }
+          let cells = row.map(\.plainText)
+          if cells.contains(where: isOnlyKeywords) {
+            record(cells.joined(separator: " | "), anchor)
+          } else {
+            for cell in cells { record(cell, anchor) }
+          }
         }
       case .preformatted, .figure, .blockQuote, .references:
         break
@@ -136,6 +144,15 @@ public enum Requirements {
 
   // MARK: - Key words
 
+  /// Whether `text` has key words and no other words: "MUST", "SHOULD NOT".
+  static func isOnlyKeywords(_ text: String) -> Bool {
+    let words = text.split { !$0.isLetter }.count
+    let keywordWords = keywords(in: text).reduce(0) { count, keyword in
+      count + keyword.rawValue.split(separator: " ").count
+    }
+    return words > 0 && keywordWords == words
+  }
+
   /// The key words in `sentence`, in order: uppercase whole words only, a negated
   /// one (`MUST NOT`, `NOT RECOMMENDED`) read whole before the one it contains.
   static func keywords(in sentence: String) -> [BCP14Keyword] {
@@ -161,7 +178,7 @@ public enum Requirements {
   // MARK: - Sentences
 
   /// Words a stop follows without ending the sentence.
-  private static let abbreviations: Set<String> = ["e.g", "i.e", "etc", "Sec", "cf", "vs", "Fig"]
+  private static let abbreviations: Set<String> = ["e.g", "i.e", "Sec", "cf", "vs", "Fig"]
 
   /// `text` split into sentences, by a rule of our own, since RFCKit builds on
   /// Linux, where `NLTokenizer` is not: a sentence ends at `.`, `!` or `?`, after any

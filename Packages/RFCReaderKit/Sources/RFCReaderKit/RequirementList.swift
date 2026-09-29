@@ -60,6 +60,18 @@ public enum RequirementList {
     }
   }
 
+  // MARK: - Recovered from legacy text
+
+  /// What the tab and the Markdown checklist say of requirements read from legacy
+  /// text (#180), whose sentences the parser recovered rather than was given.
+  public static let heuristicNote =
+    "Sentences recovered from plain text: check them against the RFC."
+
+  /// `heuristicNote` where any of `requirements` was read from legacy text.
+  public static func note(for requirements: [Requirement]) -> String? {
+    requirements.contains(where: \.isHeuristic) ? heuristicNote : nil
+  }
+
   // MARK: - Checklist
 
   /// The checklist as a Markdown task list, one requirement a line, each citing the
@@ -68,6 +80,7 @@ public enum RequirementList {
     -> String
   {
     var lines = ["# \(document.displayName) conformance checklist", ""]
+    if let note = note(for: requirements) { lines += ["> \(note)", ""] }
     for requirement in requirements {
       let (citation, link) = cite(requirement, in: document)
       lines.append(
@@ -77,7 +90,8 @@ public enum RequirementList {
   }
 
   /// The checklist as CSV (RFC 4180): every field quoted, quotes doubled, lines
-  /// ended with CRLF.
+  /// ended with CRLF. The last column says whether a requirement was read from
+  /// legacy text.
   public static func csvChecklist(_ requirements: [Requirement], document: DocumentID)
     -> String
   {
@@ -85,10 +99,11 @@ public enum RequirementList {
       fields.map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
         .joined(separator: ",") + "\r\n"
     }
-    var csv = row(["Key words", "Requirement", "Citation", "Link"])
+    var csv = row(["Key words", "Requirement", "Citation", "Link", "Heuristic"])
     for requirement in requirements {
       let (citation, link) = cite(requirement, in: document)
-      csv += row([keywordList(requirement), requirement.sentence, citation, link])
+      let heuristic = requirement.isHeuristic ? "Yes" : "No"
+      csv += row([keywordList(requirement), requirement.sentence, citation, link, heuristic])
     }
     return csv
   }
