@@ -258,15 +258,18 @@ struct BuilderStructureTests {
   /// The abstract introduces the document rather than being part of it, so it is
   /// set smaller and quieter than the body prose that follows.
   @Test func `the abstract is set as a standfirst`() throws {
-    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
-    let abstract = try #require(
-      try Fixtures.rfc8999().header.abstract.compactMap { block -> String? in
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    func firstParagraph(of blocks: [Block]) -> String? {
+      blocks.compactMap { block -> String? in
         guard case .paragraph(let paragraph) = block else { return nil }
         return paragraph.plainText
-      }.first)
+      }.first
+    }
+    let abstract = try #require(firstParagraph(of: document.header.abstract))
     let abstractOffset = try Fixtures.offset(of: abstract, in: built.text)
-    let bodyOffset = try Fixtures.offset(
-      of: "QUIC is a connection-oriented protocol", in: built.text)
+    let body = try #require(firstParagraph(of: document.section(number: "1")?.blocks ?? []))
+    let bodyOffset = try Fixtures.offset(of: body, in: built.text)
 
     let abstractFont = try #require(
       built.text.attribute(.font, at: abstractOffset, effectiveRange: nil) as? PlatformFont)

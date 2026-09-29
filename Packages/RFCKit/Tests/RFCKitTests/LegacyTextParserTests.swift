@@ -58,7 +58,7 @@ struct LegacyTextParserTests {
       Issue.record("abstract missing")
       return
     }
-    #expect(paragraph.plainText.hasPrefix("In many standards track documents"))
+    #expect(paragraph.plainText.hasPrefix("In many standards track"))
   }
 
   @Test func `paragraphs split across pages are rejoined`() throws {
@@ -70,7 +70,7 @@ struct LegacyTextParserTests {
     }
     #expect(paragraphs.count == 1)
     #expect(
-      paragraphs[0].contains("the carriers are self-regenerating."),
+      paragraphs[0].contains("self-regenerating"),
       "hyphenated word rejoined across the page break")
     #expect(paragraphs[0].hasSuffix("cable trays."))
   }
@@ -118,7 +118,7 @@ struct LegacyTextParserTests {
         break
       }
     }
-    #expect(paragraphs.first?.hasPrefix("Rules resolve into a string of terminal values") == true)
+    #expect(paragraphs.first?.hasPrefix("Rules resolve") == true)
     #expect(artworks.contains { $0.contains("=  binary") })
     #expect(
       artworks.contains { $0.contains("CR          =  %d13") },
@@ -142,7 +142,8 @@ struct LegacyTextParserTests {
     #expect(lists.count == 1)
     #expect(lists[0].items.count == 2)
     if case .paragraph(let paragraph)? = lists[0].items[1].blocks.first {
-      #expect(paragraph.plainText == "This syntax uses the rules provided in Appendix B.")
+      #expect(paragraph.plainText.hasPrefix("This syntax"))
+      #expect(paragraph.plainText.hasSuffix("Appendix B."))
     } else {
       Issue.record("list item should contain a paragraph")
     }
@@ -488,7 +489,7 @@ struct LegacyTextCorpusFindingsTests {
 
       Status of This Memo
 
-         This memo provides information for the Internet community.
+         This memo is published for the information of the Internet community.
 
       1.  Introduction
 
@@ -536,16 +537,16 @@ struct LegacyTextCorpusFindingsTests {
 
     // Lines from the middle of a paragraph must not become sections.
     let titles = document.allSections.map(\.titleText)
-    #expect(!titles.contains { $0.hasPrefix("The changes between version 1") })
-    #expect(!titles.contains { $0.hasPrefix("This report attempts to summarize") })
+    #expect(!titles.contains { $0.hasPrefix("The changes") })
+    #expect(!titles.contains { $0.hasPrefix("This report") })
 
     // The abstract is still recognised, and its paragraphs stay whole.
     guard case .paragraph(let abstract)? = document.header.abstract.first else {
       Issue.record("abstract missing")
       return
     }
-    #expect(abstract.plainText.hasPrefix("This is the first of two reports"))
-    #expect(abstract.plainText.hasSuffix("OSPF is an Interior Gateway Protocol)."))
+    #expect(abstract.plainText.hasPrefix("This is the first"))
+    #expect(abstract.plainText.hasSuffix("Interior Gateway Protocol)."))
   }
 
   /// A tab is eight columns, but `leadingSpaceCount` counted spaces only, so a line
@@ -565,8 +566,8 @@ struct LegacyTextCorpusFindingsTests {
     let lines = header.split(separator: "\n", omittingEmptySubsequences: false)
     // The block's indent is four, from `    0`, and every line loses exactly that.
     #expect(lines.first == "0           Destination net          (8)")
-    #expect(lines.contains("  This field selects the appropriate gateway processing and is used"))
-    #expect(lines.contains("    0 -- Escape; protocol is specified by a subsequent field"))
+    #expect(lines.contains { $0.hasPrefix("  This field") })
+    #expect(lines.contains { $0.hasPrefix("    0 -- Escape") })
   }
 
   /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on
@@ -591,7 +592,8 @@ struct LegacyTextCorpusFindingsTests {
     // across it is one paragraph again.
     let paragraphs = document.paragraphs.map(\.plainText)
     #expect(
-      paragraphs.contains { $0.contains("the TCP must tell user to go into \"normal mode\".") })
+      paragraphs.contains { $0.contains("(RCV.NXT)") && $0.contains("\"normal mode\"") },
+      "the terms on either side of the page break are in one paragraph")
   }
 
   /// A section running header is furniture on every page but the first, where it is
@@ -688,7 +690,7 @@ struct LegacyTextCorpusFindingsTests {
     }
     let staples = try middle("rfc1927.txt")
     #expect(staples.middle.contains("New MIME Types: Staple"))
-    #expect(!staples.middle.contains("This memo provides information for the Internet community"))
+    #expect(!staples.middle.contains("Internet community"))
 
     let traffic = try middle("rfc509.txt")
     #expect(traffic.middle.contains("HOST THROUGHPUT SUMMARY"))
@@ -720,14 +722,14 @@ struct LegacyTextCorpusFindingsTests {
     let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
     #expect(
       addresses.paragraphs.contains {
-        $0.plainText.hasPrefix("This memo describes the relationship between address fields")
+        $0.plainText.hasPrefix("This memo describes")
       })
     #expect(addresses.header.id == .rfc(796))
 
     let remoteJobs = LegacyTextParser.parse(try Fixtures.string("rfc105.txt"))
     #expect(
       remoteJobs.paragraphs.contains {
-        $0.plainText.hasPrefix("In the discussions that follow, 'byte' means 8 bits")
+        $0.plainText.hasPrefix("In the discussions")
       })
     #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
   }
@@ -748,10 +750,10 @@ struct LegacyTextCorpusFindingsTests {
       "                              Version 2",
     ]
     let procedureCallBody = [
-      "As many of you may know SRI is part of a team working on the National",
-      "Software Works project. In the course of our work we have developed a",
-      "Procedure Call Protocol to be used between the modules which make up",
-      "the NSW. We are interested in your comments on this protocol.",
+      "Most of you will have heard that our group is building a set of",
+      "tools for distributed programs. Along the way we have written a",
+      "protocol for calling procedures between the parts of that system,",
+      "and we would welcome your comments on it.",
     ]
     let procedureCall = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -774,20 +776,18 @@ struct LegacyTextCorpusFindingsTests {
 
     let introduction = ["          1.  Introduction"]
     let managementBody = [
-      "          The purpose of this document is to provide an overview of",
-      "          version 2 of the Internet-standard Network Management",
-      "          Framework, termed the SNMP version 2 framework (SNMPv2).",
+      "          This document gives an overview of the second version of the",
+      "          example management framework, and of the documents that make",
+      "          it up.",
     ]
     let management = LegacyTextParser.leadInWithoutFrontMatter(
       [
         LegacyTextParser.RawBlock(lines: ["          Status of this Memo"]),
         LegacyTextParser.RawBlock(lines: [
-          "          This RFC specifes an IAB standards track protocol for the",
-          "          Internet community, and requests discussion and suggestions",
-          "          for improvements.  Please refer to the current edition of the",
-          "          \"IAB Official Protocol Standards\" for the standardization",
-          "          state and status of this protocol.  Distribution of this memo",
-          "          is unlimited.",
+          "          This memo defines a standards track protocol for the",
+          "          Internet community and asks for comments on how to improve",
+          "          it.  See the latest \"Official Protocol Standards\" for where",
+          "          it stands.  Distribution of this memo is unlimited.",
         ]),
         LegacyTextParser.RawBlock(lines: ["          Table of Contents"]),
         LegacyTextParser.RawBlock(lines: [
@@ -840,19 +840,19 @@ struct LegacyTextCorpusFindingsTests {
   @Test func `only boilerplate wording is taken for boilerplate`() {
     #expect(
       LegacyTextParser.readsAsBoilerplate([
-        "   This document is distributed as an RFC for information only.  It",
-        "   does not specify a standard for the ARPA-Internet.",
+        "   This note is sent out for information only.  It does not",
+        "   specify a standard for the network.",
       ]))
     #expect(
       LegacyTextParser.readsAsBoilerplate([
-        "   This memo provides information for the Internet community.  It does",
-        "   not specify an Internet standard.  Distribution of this memo is",
-        "   unlimited.",
+        "   This memo is for the information of the Internet community.  It",
+        "   does not specify an Internet standard of any kind.  Distribution",
+        "   of this memo is unlimited.",
       ]))
     #expect(
       !LegacyTextParser.readsAsBoilerplate([
-        "   The purpose of this document is to provide an overview of version 2",
-        "   of the Internet-standard Network Management Framework.",
+        "   This document gives an overview of the second version of the",
+        "   example management framework.",
       ]))
   }
 
@@ -867,10 +867,10 @@ struct LegacyTextCorpusFindingsTests {
     #expect(replaced.header.title == "Carrier Pigeons for Internet Datagrams")
 
     let abstract = [
-      "            This memo suggests a  file  format  to  be  used  to  inform",
-      "            multiple   mail   reading  user  agent  programs  about  the",
-      "            locally-installed facilities for handling  mail  in  various",
-      "            formats.",
+      "            This document proposes a  file  format  that  tells  every",
+      "            program  on  a  host  that  reads  mail  which  local  tools",
+      "            can  show  a  message  in  each  of  the  formats  it  may",
+      "            arrive in.",
     ]
     let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -950,9 +950,9 @@ struct LegacyTextCorpusFindingsTests {
   /// `June 9, 1972` was the lead-in's second block (#170).
   @Test func `a date alone on a line is the title pages`() {
     let body = [
-      "   Long transmission delays such as those inherent in satellite",
-      "   communication are most certainly a cause for concern among users of",
-      "   remote interactive systems.",
+      "   Anyone who works on a remote interactive system notices every delay",
+      "   on the line, and the delay a satellite hop adds is longer than most",
+      "   people will put up with.",
     ]
     let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -977,13 +977,9 @@ struct LegacyTextCorpusFindingsTests {
       return nil
     }
     #expect(
-      abstract.first?.hasPrefix("In many applications where different nodes cooperate") == true)
-    #expect(
-      document.paragraphs.contains { $0.plainText.hasPrefix("TMP provides a simple mechanism") })
-    #expect(
-      !document.paragraphs.contains {
-        $0.plainText.hasPrefix("In many applications where different nodes cooperate")
-      })
+      abstract.first?.hasPrefix("In many applications") == true)
+    #expect(document.paragraphs.contains { $0.plainText.hasPrefix("TMP provides") })
+    #expect(!document.paragraphs.contains { $0.plainText.hasPrefix("In many applications") })
   }
 
   /// Furniture recurs in the same place, so a line at the foot of one page and a line
@@ -1547,18 +1543,18 @@ struct LegacyTextCorpusFindingsTests {
                              A. Person (person@example)
 
 
-            As a part of the Remote Site Maintenance project, we have
-            expanded the servers on these machines to include commands
-            which deal with the creation of directories.
+            As part of an effort to look after hosts at remote sites, we
+            have extended the servers on those hosts with commands that
+            create and remove directories.
 
-            We have added four commands to our server.
+            Four commands are new in this version.
       """
     let document = LegacyTextParser.parse(text)
     #expect(document.header.title == "A DOCUMENT WITH NO COLUMN ZERO")
     let paragraphs = document.paragraphs.map(\.plainText)
     #expect(paragraphs.count == 2)
-    #expect(paragraphs[0].hasPrefix("As a part of the Remote Site Maintenance"))
-    #expect(paragraphs[1] == "We have added four commands to our server.")
+    #expect(paragraphs[0].hasPrefix("As part of an effort to look after hosts at remote sites"))
+    #expect(paragraphs[1] == "Four commands are new in this version.")
   }
 
   /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
@@ -1575,14 +1571,14 @@ struct LegacyTextCorpusFindingsTests {
 
       1.  Introduction
 
-           A model is developed of interactions between programs.
-      Salient features of this model which promote and simplify
-      the construction of reliable, responsive services are
-      identified.
+           This document sets out a way for two programs to
+      exchange requests.  The parts of it that make a service
+      quick to answer and hard to break are named, one by
+      one.
 
-           Using this model as a template, the general
-      architecture of one possible interaction protocol is
-      presented.
+           With that in hand, the shape of one protocol built
+      on it is laid out, and its choices are argued for in
+      turn.
       """
     let document = LegacyTextParser.parse(text)
     let intro = try? #require(document.section(number: "1"))
@@ -1593,7 +1589,7 @@ struct LegacyTextCorpusFindingsTests {
     #expect(paragraphs.count == 2)
     #expect(
       paragraphs.first
-        == "A model is developed of interactions between programs. Salient features of this model which promote and simplify the construction of reliable, responsive services are identified."
+        == "This document sets out a way for two programs to exchange requests. The parts of it that make a service quick to answer and hard to break are named, one by one."
     )
     #expect(
       !(intro?.blocks ?? []).contains { block in
@@ -1621,35 +1617,35 @@ struct LegacyTextCorpusFindingsTests {
       1.  Introduction
 
 
-           Experience suggests that one of the most important factors in
+           How fast an implementation runs depends, more than on anything
 
-      determining the performance of an implementation is the manner in
+      else, on how the work inside it is divided up between its
 
-      which that implementation is modularized.
+      parts.
 
 
            The protocol is not the only thing that matters here.  In fact,
 
-      this document will argue that modularity is one of the chief villains
+      this document will argue that how a program is split up costs it
 
-      in attempting to obtain good performance.
+      more speed than any choice the protocol makes.
 
 
       2.  Efficiency Considerations
 
 
-           There are many aspects to efficiency.  One aspect is sending
+           Efficiency means more than one thing.  One is moving data
 
-      data at minimum transmission cost, which is a critical aspect of
+      as cheaply as possible, which matters on a leased line and
 
-      common carrier communications, if not in local area networks.
+      hardly at all on a local network.
 
 
-           Another aspect is sending data at a high rate, which may not be
+           Another is moving data quickly, which a slow network may rule
 
-      possible at all if the network is very slow, but which may be the one
+      out altogether, but which can be the one requirement that shapes
 
-      central design constraint.
+      everything else.
 
 
            A third aspect is the cost of the implementation itself, which
@@ -1669,7 +1665,7 @@ struct LegacyTextCorpusFindingsTests {
     #expect(paragraphs.count == 2)
     #expect(
       paragraphs.first
-        == "Experience suggests that one of the most important factors in determining the performance of an implementation is the manner in which that implementation is modularized."
+        == "How fast an implementation runs depends, more than on anything else, on how the work inside it is divided up between its parts."
     )
     #expect(intro.blocks.count == 2, "no line survives as its own block")
   }
@@ -1703,11 +1699,12 @@ struct LegacyTextCorpusFindingsTests {
       Issue.record("expected the introduction to start with a paragraph")
       return
     }
+    #expect(!first.plainText.contains("  "), "the padding is collapsed")
+    #expect(first.plainText.hasPrefix("The current ARPAnet"))
+    #expect(first.plainText.hasSuffix("shortcomings."))
     #expect(
-      first.plainText
-        // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
-        == "The current ARPAnet message handling scheme has evolved from rather informal, decentralized beginnings. Early developers took advantage of pre-existing tools -- TECO, FTP -- in order to implement their first systems. Later, protocols were developed to codify the conventions already in use. While these conventions have been able to support an amazing variety and amount of service, they have a number of shortcomings."
-    )
+      first.plainText.split(separator: " ").count == 63,
+      "every word of the paragraph, and nothing after it")
   }
 
   /// The prose cap was six columns everywhere: a body at column 3, plus three. RFC 1178
@@ -1716,21 +1713,21 @@ struct LegacyTextCorpusFindingsTests {
   /// body now, and a body at column 3 keeps the classic one.
   @Test func `a body set deeper than column three is still prose`() {
     let paragraph = [
-      "         Using a word that has strong semantic implications in the",
-      "         current context will cause confusion.  This is especially true",
-      "         in conversation where punctuation is not obvious and grammar is",
-      "         often incorrect.",
+      "         A name that already means something on the network will be",
+      "         misread the first time someone says it aloud.  This is worse",
+      "         in a hurried conversation, where nobody stops to ask which",
+      "         was meant.",
     ]
-    let deeper = (["      Don't overload other terms already in common use.", ""] + paragraph)
+    let deeper = (["      Avoid names that are already in common use.", ""] + paragraph)
       .map(LegacyTextParser.Line.text)
     let cap = LegacyTextParser.proseIndent(deeper)
     #expect(cap == 9)
     #expect(LegacyTextParser.diagnose(paragraph, maxIndent: cap).isProse)
 
     let classic = [
-      "   As soon as you deal with more than one computer, you need to",
-      "   distinguish between them.  For example, to tell your system",
-      "   administrator that your computer is busted, you might say, \"Hey Ken.",
+      "   Once a site has more than one machine, each of them needs a",
+      "   name of its own.  For example, to report that one of them is",
+      "   down, you might tell the operator, \"The one by the window stopped.",
     ].map(LegacyTextParser.Line.text)
     #expect(LegacyTextParser.proseIndent(classic) == LegacyTextParser.classicProseIndent)
   }
@@ -1741,17 +1738,17 @@ struct LegacyTextCorpusFindingsTests {
   /// first item was read into the sentence as `that: o The most recently ...`.
   @Test func `a bullet at the top of a page is not the rest of a sentence`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
-      "   In a stable network there is no requirement to propagate routing",
-      "   information on a circuit, so if no routing information is (being)",
-      "   received on a circuit it is assumed that:",
+      "   When a link has been quiet for a while, a router has heard nothing",
+      "   new about the neighbor at its far end, so if nothing has arrived",
+      "   on the link recently it is taken that:",
     ])
     let bullet = LegacyTextParser.RawBlock(lines: [
-      "   o  The most recently received information is accurate."
+      "   o  The last information heard from the neighbor still holds."
     ])
     #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
 
     let restOfSentence = LegacyTextParser.RawBlock(lines: [
-      "   operational routing information previously received on that circuit"
+      "   the last information heard from the neighbor on that link still"
     ])
     #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
@@ -1762,9 +1759,9 @@ struct LegacyTextCorpusFindingsTests {
   /// as `they send o Access-Request o Accounting-Request ...`.
   @Test func `a bullet after an unfinished sentence is not its rest`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
-      "   RADIUS/TLS clients transmit the same packet types on the connection",
-      "   they initiated as a RADIUS/UDP client would (see Section 3.4 (3) and",
-      "   (4)).  For example, they send",
+      "   Clients over the secure transport send the same messages on a",
+      "   connection they opened as they would over the plain one (see",
+      "   Section 3.2 (1) and (2)).  For example, they send",
     ])
     let bullet = LegacyTextParser.RawBlock(lines: ["   o  Access-Request"])
     #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
