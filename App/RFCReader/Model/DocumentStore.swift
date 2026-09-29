@@ -12,7 +12,11 @@ nonisolated private let storeLog = Logger(
 /// view and re-parsing after a parser improvement both come for free.
 actor DocumentStore {
   private let directory: URL
-  private var parsed: [DocumentID: RFCDocument] = [:]
+  /// The documents parsed last, so reopening one, or going back to it, skips the
+  /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
+  /// (`make benchmark`). Bounded: it used to keep every document opened for as long
+  /// as the app ran.
+  private var parsed = RecentValues<DocumentID, RFCDocument>(capacity: 8)
 
   /// Which bodies are on disk, scanned once on first use and kept current by
   /// every write and removal below, so asking does not enumerate the directory.
@@ -26,6 +30,9 @@ actor DocumentStore {
   /// own.
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()
+  /// The parses of cached bodies running, for the same three reasons: a parse
+  /// suspends the open, so the actor lets a second open or a removal in meanwhile.
+  private let parses = InFlightDownloads<RFCDocument?>()
 
   /// Whether a body has been written since eviction last looked, so a cache that
   /// has not grown is not enumerated again.
@@ -208,7 +215,8 @@ actor DocumentStore {
   func remove(_ id: DocumentID) {
     downloads.removed(id)
     originalTexts.removed(id)
-    parsed[id] = nil
+    parses.removed(id)
+    parsed.removeAll { $0 == id }
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
       for url in urls {
@@ -225,35 +233,21 @@ actor DocumentStore {
       "Load document", id: signpostID, "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Load document", interval) }
     markOpened(id)
-    if let cached = parsed[id] { return cached }
+    if let cached = parsed.value(for: id) { return cached }
 
     let xmlURL = fileURL(id, format: .xml)
-    if let data = try? Data(contentsOf: xmlURL),
-      let document = try? signposter.withIntervalSignpost(
-        "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
-    {
-      parsed[id] = document
-      return document
-    }
-    // Before a cached `.txt`: the pack is the single XML path it exists for, and a
-    // `.txt` cached before it arrived still serves Original Text.
-    if let packURL = legacyPack?.file(for: id) {
-      do {
-        let document = try RFCXMLParser.parse(Data(contentsOf: packURL))
-        parsed[id] = document
-        return document
-      } catch {
-        storeLog.error(
-          "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
-        )
+    let textURL = fileURL(id, format: .text)
+    let packURL = legacyPack?.file(for: id)
+    let (cached, isCachedKept) = try await parses.value(for: id) {
+      Task {
+        await Self.parseCached(
+          id, xml: xmlURL, pack: packURL, text: textURL, signpostID: signpostID)
       }
     }
-    let textURL = fileURL(id, format: .text)
-    if let data = try? Data(contentsOf: textURL) {
-      let document = signposter.withIntervalSignpost(
-        "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
-      parsed[id] = document
-      return document
+    if let cached {
+      // A body removed while it parsed is shown but not kept, like a fetch (#116).
+      if isCachedKept { parsed.store(cached, for: id) }
+      return cached
     }
 
     let (fetched, isKept) = try await downloads.value(for: id) {
@@ -267,9 +261,40 @@ actor DocumentStore {
     hasGrown = true
     // A pack installed while this was in flight serves the document from now on.
     if legacyPack?.file(for: id) == nil {
-      parsed[id] = fetched.document
+      parsed.store(fetched.document, for: id)
     }
     return fetched.document
+  }
+
+  /// The body on disk, parsed: the cached XML if there is one, then the installed
+  /// pack's, otherwise the cached text, or nil when none is there. Off the actor,
+  /// like a fetch's parse, so the store answers other calls meanwhile -- whether a
+  /// document is available offline, the next open -- instead of queueing them
+  /// behind half a second of legacy text.
+  @concurrent
+  private static func parseCached(
+    _ id: DocumentID, xml: URL, pack: URL?, text: URL, signpostID: OSSignpostID
+  ) async -> RFCDocument? {
+    if let data = try? Data(contentsOf: xml),
+      let document = try? signposter.withIntervalSignpost(
+        "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
+    {
+      return document
+    }
+    // Before a cached `.txt`: the pack is the single XML path it exists for, and a
+    // `.txt` cached before it arrived still serves Original Text.
+    if let pack {
+      do {
+        return try RFCXMLParser.parse(Data(contentsOf: pack))
+      } catch {
+        storeLog.error(
+          "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    guard let data = try? Data(contentsOf: text) else { return nil }
+    return signposter.withIntervalSignpost(
+      "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
   }
 
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
@@ -322,9 +347,7 @@ actor DocumentStore {
     let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
-    for id in parsed.keys where pack.file(for: id) != nil {
-      parsed[id] = nil
-    }
+    parsed.removeAll { pack.file(for: $0) != nil }
     return pack
   }
 
