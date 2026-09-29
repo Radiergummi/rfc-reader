@@ -76,7 +76,7 @@ struct ConvertCommand: AsyncParsableCommand {
     var offset: Int
     var report: DocumentReport
     var prose: ProseReport?
-    var boundary: [BoundarySample.Entry]?
+    var boundary: BoundarySample.Sample?
   }
 
   func run() async throws {
@@ -157,13 +157,21 @@ struct ConvertCommand: AsyncParsableCommand {
       }
     }
     if let boundary {
-      let entries = results.flatMap { $0.boundary ?? [] }
+      let entries = results.flatMap { $0.boundary?.entries ?? [] }
       try writeJSON(entries, to: boundary)
       for (criterion, count) in Dictionary(grouping: entries, by: \.criterion)
         .mapValues(\.count).sorted(by: { $0.value > $1.value })
       {
         Self.logger.info(
           "on the boundary", metadata: ["criterion": "\(criterion)", "blocks": "\(count)"])
+      }
+      let unlocated = results.filter { ($0.boundary?.unlocated ?? 0) > 0 }
+      if !unlocated.isEmpty {
+        let blocks = unlocated.reduce(0) { $0 + ($1.boundary?.unlocated ?? 0) }
+        let documents = unlocated.map(\.report.id).joined(separator: ", ")
+        Self.logger.warning(
+          "on the boundary but not found in the source",
+          metadata: ["blocks": "\(blocks)", "documents": "\(documents)"])
       }
     }
     if job.schema != nil { Self.logSchema(reports, previouslyValid: previouslyValid) }
