@@ -40,6 +40,10 @@ final class ReaderState {
   /// Whether there is anything to describe. The panel draws nothing without it.
   var hasDocument = false
 
+  /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
+  /// without one, as Copy is (#186). Reported by the text view's coordinator.
+  var hasSelection = false
+
   /// The title the document gives itself, for the one caller the index cannot
   /// serve: `DocumentActions.bookmarkTitle` when `library.metadata` has nothing.
   /// Here for the same reason `currentSection` is — the toolbar needs one string
@@ -101,6 +105,7 @@ final class ReaderState {
     currentAnchor = nil
     currentSection = nil
     hasDocument = false
+    hasSelection = false
     documentTitle = nil
     precedingDraft = nil
   }

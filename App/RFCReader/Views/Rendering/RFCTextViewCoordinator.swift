@@ -83,6 +83,32 @@ final class RFCTextViewCoordinator: NSObject {
   var bibliography: [ReferenceGroup] = []
   /// The document on screen; see `RFCTextView.documentID`.
   var documentID: DocumentID?
+  /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
+  /// or nil when nothing is selected (#186); see `QuoteCitation`.
+  func quote(of range: NSRange) -> QuoteCitation.Quote? {
+    guard let documentID, let built else { return nil }
+    return QuoteCitation.quote(of: range, in: built, document: documentID)
+  }
+  /// See `RFCTextView.onSelectionChange`.
+  var onSelectionChange: (Bool) -> Void = { _ in }
+  /// What `onSelectionChange` was last told, so a selection dragged across the text
+  /// reports once rather than on every character.
+  private var reportedSelection: Bool?
+
+  /// Tells the view whether anything is selected: whenever the selection changes, and
+  /// after an install, which may clear it without saying so. Deferred for the reason
+  /// `onVisibleAnchorChange` is: installing reports from inside SwiftUI's update.
+  /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
+  /// selection's own edit menu (#186).
+  func reportSelection() {
+    #if !canImport(UIKit)
+      guard let textView else { return }
+      let hasSelection = textView.selectedRange().length > 0
+      guard hasSelection != reportedSelection else { return }
+      reportedSelection = hasSelection
+      Task { self.onSelectionChange(hasSelection) }
+    #endif
+  }
   /// See `RFCTextView.commitsOnClick`.
   var commitsOnClick: (() -> Void)?
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
@@ -218,6 +244,7 @@ final class RFCTextViewCoordinator: NSObject {
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
     // `StorageInstallTests` pins it.
     storage.install(built.text)
+    reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
@@ -630,6 +657,10 @@ final class RFCTextViewCoordinator: NSObject {
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+      reportSelection()
     }
 
     /// A menu's tracking loop holds the run loop outside `.default` mode, so a dwell

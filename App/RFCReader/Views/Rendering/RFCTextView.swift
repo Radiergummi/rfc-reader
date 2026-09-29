@@ -34,6 +34,10 @@ struct RFCTextView: View {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
+  /// one, as Copy is (#186). Reported on macOS only; see
+  /// `RFCTextViewCoordinator.reportSelection()`.
+  let onSelectionChange: (Bool) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -56,6 +60,7 @@ struct RFCTextView: View {
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
+    onSelectionChange: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -71,6 +76,7 @@ struct RFCTextView: View {
     self.onVisibleAnchorChange = onVisibleAnchorChange
     self.onLink = onLink
     self.onToolbarTitle = onToolbarTitle
+    self.onSelectionChange = onSelectionChange
     self.heading = heading
     self.headerIdentity = headerIdentity
     self.header = AnyView(header())
@@ -91,6 +97,7 @@ struct RFCTextView: View {
           onVisibleAnchorChange: onVisibleAnchorChange,
           onLink: onLink,
           onToolbarTitle: onToolbarTitle,
+          onSelectionChange: onSelectionChange,
           heading: heading,
           library: library,
           header: header,
@@ -127,6 +134,7 @@ struct ReaderInputs {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  let onSelectionChange: (Bool) -> Void
   let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView
@@ -142,6 +150,7 @@ struct ReaderInputs {
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
+    coordinator.onSelectionChange = onSelectionChange
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
@@ -211,6 +220,9 @@ struct ReaderInputs {
       textView.isFindInteractionEnabled = true
       textView.textLayoutManager?.delegate = context.coordinator
       textView.delegate = context.coordinator
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
+      }
 
       let host = UIHostingController(rootView: inputs.header)
       host.view.backgroundColor = .clear
@@ -269,6 +281,9 @@ struct ReaderInputs {
       }
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
+      }
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
