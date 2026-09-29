@@ -1,6 +1,15 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
+// The same language settings as RFCKit and RFCReaderKit, so the benchmarks
+// compile under the rules of the code they measure.
+let swiftSettings: [SwiftSetting] = [
+  .enableUpcomingFeature("ExistentialAny"),
+  .enableUpcomingFeature("MemberImportVisibility"),
+  .enableUpcomingFeature("InferIsolatedConformances"),
+  .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+]
+
 // Benchmarks for the work the app waits on: parsing the index and documents,
 // searching, and building a document's text. A package of its own, so neither
 // RFCKit nor RFCReaderKit takes on package-benchmark as a dependency, and the
@@ -12,7 +21,7 @@ let package = Package(
     .macOS(.v26)
   ],
   dependencies: [
-    .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.36.2"),
+    .package(url: "https://github.com/ordo-one/package-benchmark", exact: "1.36.2"),
     .package(path: "../../Packages/RFCKit"),
     .package(path: "../../Packages/RFCReaderKit"),
   ],
@@ -25,6 +34,7 @@ let package = Package(
         .product(name: "RFCReaderKit", package: "RFCReaderKit"),
       ],
       path: "Benchmarks/RFCBenchmarks",
+      swiftSettings: swiftSettings,
       plugins: [
         .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
       ]

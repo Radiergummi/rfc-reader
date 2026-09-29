@@ -90,22 +90,24 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 #   make benchmark BENCHMARK_ARGS='baseline compare before'
 #   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
 #
-BENCHMARK_INPUTS := rfc-index.xml xml.noindex/rfc9110.xml xml.noindex/rfc9000.xml \
-	text.noindex/rfc5661.txt text.noindex/rfc793.txt
+BENCHMARK_CORPUS := $(CORPUS)/benchmarks
+BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc5661.txt rfc793.txt
 BENCHMARK_ARGS ?=
-benchmark: $(BENCHMARK_INPUTS:%=$(CORPUS)/%)
-	cd Tools/benchmarks && RFC_CORPUS=$(abspath $(CORPUS)) \
+benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+	cd Tools/benchmarks && RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
 	  swift package --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
-$(CORPUS)/rfc-index.xml:
+# The benchmarks' inputs have a directory of their own, fetched once and then
+# left alone: a baseline compares only while its inputs stay the same, and the
+# corpus pipeline refetches its rfc-index.xml and converts whatever lies in
+# text.noindex. Written to a partial file first, like the legacy RFCs below.
+$(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
 
-# One RFC authored in RFCXML, for the benchmarks; the legacy ones in this
-# directory are converted, not fetched, and are not asked for this way.
-$(CORPUS)/xml.noindex/%.xml:
+$(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a
 # partial file first, so an interrupted download is not taken for the document.

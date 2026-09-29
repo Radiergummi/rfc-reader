@@ -9,80 +9,91 @@ import RFCReaderKit
 // in the running app; these pin the pure functions underneath, so a change to one
 // is a number against a saved baseline rather than a feeling.
 //
-// Inputs are real RFCs, read from the corpus directory in `RFC_CORPUS`, which
+// Inputs are real RFCs, read from the directory in `RFC_CORPUS`, which
 // `make benchmark` fills: no RFC text is committed (CLAUDE.md). The documents are
 // the ones #357 measured: RFC 9110 and 9000, the largest XML the app opens
 // often, RFC 5661, the largest legacy text, and RFC 793, a typical one.
+//
+// Each benchmark runs in a process of its own and reads its input in `setup`,
+// which runs before the memory baseline is taken. So a benchmark pays only for
+// its own input, and its peak memory is the work's, not the inputs'.
 
 let benchmarks: @Sendable () -> Void = {
   Benchmark.defaultConfiguration = .init(
-    metrics: [.wallClock, .mallocCountTotal, .peakMemoryResident],
+    metrics: [.wallClock, .mallocCountTotal, .peakMemoryResidentDelta],
     maxDuration: .seconds(10),
     maxIterations: 50
   )
 
   let corpus = Corpus()
 
-  let indexData = corpus.data("rfc-index.xml")
-  Benchmark("Index: parse") { benchmark in
+  Benchmark("Index: parse") { benchmark, data in
     for _ in benchmark.scaledIterations {
-      blackHole(try RFCIndexParser.parse(indexData))
+      blackHole(try RFCIndexParser.parse(data))
     }
+  } setup: {
+    corpus.data("rfc-index.xml")
   }
 
-  let index = try! RFCIndexParser.parse(indexData)
-  Benchmark("Index: prepare") { benchmark in
+  Benchmark("Index: prepare") { benchmark, index in
     for _ in benchmark.scaledIterations {
       blackHole(PreparedIndex(index: index))
     }
+  } setup: {
+    try RFCIndexParser.parse(corpus.data("rfc-index.xml"))
   }
 
-  let search = IndexSearch(index: index)
   for query in ["http", "author:fielding", "transport layer security"] {
-    Benchmark("Search: \(query)") { benchmark in
+    Benchmark("Search: \(query)") { benchmark, search in
       for _ in benchmark.scaledIterations {
         blackHole(search.search(query, limit: .max))
       }
+    } setup: {
+      IndexSearch(index: try RFCIndexParser.parse(corpus.data("rfc-index.xml")))
     }
   }
 
   for number in [9110, 9000] {
-    let data = corpus.data("xml.noindex/rfc\(number).xml")
-    Benchmark("Parse XML: RFC \(number)") { benchmark in
+    Benchmark("Parse XML: RFC \(number)") { benchmark, data in
       for _ in benchmark.scaledIterations {
         blackHole(try RFCXMLParser.parse(data))
       }
+    } setup: {
+      corpus.data("rfc\(number).xml")
     }
   }
 
   for number in [5661, 793] {
-    let data = corpus.data("text.noindex/rfc\(number).txt")
-    Benchmark("Parse text: RFC \(number)") { benchmark in
+    Benchmark("Parse text: RFC \(number)") { benchmark, data in
       for _ in benchmark.scaledIterations {
         blackHole(LegacyTextParser.parse(data))
       }
+    } setup: {
+      corpus.data("rfc\(number).txt")
     }
   }
 
   // The reader's column, as #357 measured the builds.
   let style = ReadingStyle(measure: 712)
   for number in [9110, 9000] {
-    let document = try! RFCXMLParser.parse(corpus.data("xml.noindex/rfc\(number).xml"))
-    Benchmark("Build: RFC \(number)") { benchmark in
+    Benchmark("Build: RFC \(number)") { benchmark, document in
       for _ in benchmark.scaledIterations {
         blackHole(DocumentTextBuilder.build(document, style: style))
       }
+    } setup: {
+      try RFCXMLParser.parse(corpus.data("rfc\(number).xml"))
     }
   }
-  let legacy = LegacyTextParser.parse(corpus.data("text.noindex/rfc5661.txt"))
-  Benchmark("Build: RFC 5661") { benchmark in
+  Benchmark("Build: RFC 5661") { benchmark, document in
     for _ in benchmark.scaledIterations {
-      blackHole(DocumentTextBuilder.build(legacy, style: style))
+      blackHole(DocumentTextBuilder.build(document, style: style))
     }
+  } setup: {
+    LegacyTextParser.parse(corpus.data("rfc5661.txt"))
   }
 }
 
-/// The corpus directory the inputs are read from.
+/// The directory the inputs are read from.
 struct Corpus {
   let directory: URL
 
