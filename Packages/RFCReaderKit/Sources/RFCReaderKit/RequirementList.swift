@@ -97,18 +97,13 @@ public enum RequirementList {
     requirement.keywords.map(\.rawValue).joined(separator: ", ")
   }
 
-  /// "RFC 9110, Section 7.2" (or "Appendix A.1", whose number starts with a
-  /// letter) and its `rfc://` link, or the document alone for an unnumbered
-  /// section.
+  /// "RFC 9110, Section 7.2" (or "Appendix A.1") and its `rfc://` link, or the
+  /// document alone for an unnumbered section.
   private static func cite(_ requirement: Requirement, in document: DocumentID) -> (
     citation: String, link: String
   ) {
     let link = RFCLink(id: document, section: requirement.sectionNumber)
-    let citation =
-      requirement.sectionNumber.map { number in
-        let kind = number.first?.isLetter == true ? "Appendix" : "Section"
-        return "\(document.displayName), \(kind) \(number)"
-      } ?? document.displayName
+    let citation = CitationFormatter.shortCitation(document, section: requirement.sectionNumber)
     return (citation, link.appURL.absoluteString)
   }
 }

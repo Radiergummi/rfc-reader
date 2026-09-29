@@ -31,7 +31,7 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
-  let requirements: [Requirement]
+  let requirements: [Requirement]?
   let info: DocumentInfo?
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?

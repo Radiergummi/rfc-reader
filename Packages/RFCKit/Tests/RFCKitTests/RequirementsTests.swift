@@ -41,6 +41,13 @@ struct RequirementsTests {
         == ["Fields, i.e. Headers, etc. Are sent.", "See Sec. 4 for more."])
   }
 
+  /// A sentence can open on a quoted name or a citation as well as on a capital.
+  @Test func `a sentence may begin with an opening quote or bracket`() {
+    #expect(
+      Requirements.sentences(in: #"The flag MUST be zero. "len" MUST be set. [KEYWORDS] applies."#)
+        == ["The flag MUST be zero.", #""len" MUST be set."#, "[KEYWORDS] applies."])
+  }
+
   @Test func `a stop inside quotes or parentheses ends the sentence after them`() {
     #expect(
       Requirements.sentences(in: #"It is called "done." Then it MUST stop (as below.) Next."#)
@@ -51,9 +58,11 @@ struct RequirementsTests {
 
   /// However the key words are declared, the declaration is not a requirement.
   @Test(arguments: [
-    #"The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14."#,
+    #"In this memo "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY" and "OPTIONAL" carry the meanings BCP 14 gives them."#,
     #"The key words "MUST", "SHOULD", and "MAY" are to be interpreted as defined in RFC 2119."#,
     #"The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" are used as specified in [KEYWORDS]."#,
+    // Fewer than five, and not "interpreted": known by the key words being quoted.
+    "This memo uses the terms 'MUST', 'SHOULD' and 'MAY' in the sense given in [KEYWORDS].",
   ])
   func `the declaration of the key words is recognized however it is worded`(sentence: String) {
     #expect(Requirements.declaresKeywords(sentence))
@@ -61,6 +70,29 @@ struct RequirementsTests {
 
   @Test func `a requirement citing RFC 2119 is still a requirement`() {
     #expect(!Requirements.declaresKeywords("Implementations MUST follow RFC 2119 conventions."))
+  }
+
+  /// BCP 14 is cited as the group of RFC 2119 and RFC 8174 as often as by either.
+  @Test func `a document citing BCP 14 itself has requirements`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "S",
+          blocks: [
+            .paragraph(Paragraph(text: "A client MUST retry.")),
+            .references(
+              ReferenceList(
+                title: "Normative References",
+                entries: [
+                  Reference(
+                    anchor: "BCP14", title: "BCP14 consists of RFC 2119, RFC 8174",
+                    seriesInfo: [SeriesInfo(name: "BCP", value: "14")])
+                ])),
+          ])
+      ],
+      source: .xml)
+    #expect(Requirements.extract(from: document).map(\.sentence) == ["A client MUST retry."])
   }
 
   // MARK: - Where a requirement lands

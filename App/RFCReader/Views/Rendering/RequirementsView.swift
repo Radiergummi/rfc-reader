@@ -9,7 +9,8 @@ import SwiftUI
 /// What is listed, and what the checklist says, is `RequirementList`'s, under test;
 /// this only draws it.
 struct RequirementsView: View {
-  let requirements: [Requirement]
+  /// Nil while they are still being extracted, which is not the same as none.
+  let requirements: [Requirement]?
   /// The document shown, which the checklist cites.
   let document: DocumentID?
   /// Goes to a requirement's paragraph, the way a Contents row goes to its section.
@@ -18,14 +19,10 @@ struct RequirementsView: View {
   @State private var filter = RequirementList.Filter()
 
   var body: some View {
-    if requirements.isEmpty {
-      ContentUnavailableView(
-        "No Requirements", systemImage: "checklist",
-        description: Text("This document does not use the BCP 14 key words."))
-    } else {
+    if let requirements, !requirements.isEmpty {
       let shown = filter.apply(to: requirements)
       VStack(spacing: 0) {
-        controls(shown: shown)
+        controls(shown: shown, keywords: RequirementList.keywords(in: requirements))
         List {
           ForEach(RequirementList.sections(of: shown)) { section in
             Section(section.heading) {
@@ -44,15 +41,22 @@ struct RequirementsView: View {
           }
         }
       }
+    } else if requirements != nil {
+      ContentUnavailableView(
+        "No Requirements", systemImage: "checklist",
+        description: Text("This document does not use the BCP 14 key words."))
+    } else {
+      ProgressView()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
   }
 
-  private func controls(shown: [Requirement]) -> some View {
+  private func controls(shown: [Requirement], keywords: [BCP14Keyword]) -> some View {
     HStack(spacing: 8) {
       Picker("Key Word", selection: $filter.keyword) {
         Text("All Key Words").tag(BCP14Keyword?.none)
         Divider()
-        ForEach(RequirementList.keywords(in: requirements), id: \.self) { keyword in
+        ForEach(keywords, id: \.self) { keyword in
           Text(keyword.rawValue).tag(BCP14Keyword?.some(keyword))
         }
       }

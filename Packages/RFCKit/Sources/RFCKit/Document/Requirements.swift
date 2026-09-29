@@ -47,8 +47,8 @@ public struct Requirement: Sendable, Hashable {
 
 /// Every BCP 14 requirement a document states (#180), in document order.
 ///
-/// Only a document that cites RFC 2119 or RFC 8174 uses the key words in their
-/// BCP 14 sense, and only in uppercase (RFC 8174), so that is what is read, in XML
+/// Only a document that cites BCP 14, or RFC 2119 or RFC 8174 in it, uses the key
+/// words in their BCP 14 sense, and only in uppercase (RFC 8174), so that is what is read, in XML
 /// and legacy text alike: RFCXML's `<bcp14>` becomes emphasis in the model, and
 /// legacy text never had it. Only prose states requirements: paragraphs, list
 /// items, definitions, table cells and asides, not artwork, source code,
@@ -56,7 +56,8 @@ public struct Requirement: Sendable, Hashable {
 public enum Requirements {
   public static func extract(from document: RFCDocument) -> [Requirement] {
     let cited = Set(document.referencedDocuments)
-    guard cited.contains(.rfc(2119)) || cited.contains(.rfc(8174)) else { return [] }
+    let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
+    guard !cited.isDisjoint(with: bcp14) else { return [] }
     let isHeuristic = document.source == .text
     var found: [Requirement] = []
     for section in document.allSections {
@@ -98,11 +99,11 @@ public enum Requirements {
       case .aside(let inner):
         visit(inner, around: outer, record)
       case .table(let table):
-        // A profile often states its requirements a row at a time: "CBOR MUST be
-        // used." A row lands on its own anchor where it has one.
+        // A profile often states its requirements a row at a time, a cell saying
+        // what a field MUST be. A row lands on its own anchor where it has one.
         for (index, row) in table.rows.enumerated() {
-          let anchor = index < table.rowAnchors.count ? table.rowAnchors[index] : nil
-          for cell in row { record(cell.plainText, anchor ?? table.anchor ?? outer) }
+          let anchor = table.anchor(ofRow: index) ?? table.anchor ?? outer
+          for cell in row { record(cell.plainText, anchor) }
         }
       case .preformatted, .figure, .blockQuote, .references:
         break
@@ -113,13 +114,24 @@ public enum Requirements {
   /// The boilerplate that declares the key words, which names them and requires
   /// nothing. It is worded many ways ("as described in BCP 14", "as defined in RFC
   /// 2119", "as specified in [KEYWORDS]"), but it always lists several key words at
-  /// once, which no requirement does; a shorter list is known by what it cites.
+  /// once, which no requirement does; a shorter list is known by what it cites,
+  /// and by saying the key words are "interpreted" or by naming them in quotes: a
+  /// sentence that quotes a key word is about it, not bound by it.
   static func declaresKeywords(_ sentence: String) -> Bool {
     if Set(keywords(in: sentence)).count >= 5 { return true }
     let citesBCP14 = ["BCP 14", "BCP14", "2119", "8174", "KEYWORDS"].contains {
       sentence.contains($0)
     }
-    return citesBCP14 && sentence.contains("interpreted")
+    return citesBCP14 && (sentence.contains("interpreted") || namesKeywordsInQuotes(sentence))
+  }
+
+  /// Whether `sentence` names a key word in quotes, `"MUST"` or `'MUST'`, rather
+  /// than using it.
+  private static func namesKeywordsInQuotes(_ sentence: String) -> Bool {
+    let quotes = [("\"", "\""), ("'", "'"), ("“", "”"), ("‘", "’")]
+    return BCP14Keyword.allCases.contains { keyword in
+      quotes.contains { open, close in sentence.contains(open + keyword.rawValue + close) }
+    }
   }
 
   // MARK: - Key words
@@ -153,8 +165,9 @@ public enum Requirements {
 
   /// `text` split into sentences, by a rule of our own, since RFCKit builds on
   /// Linux, where `NLTokenizer` is not: a sentence ends at `.`, `!` or `?`, after any
-  /// closing quote or parenthesis, when a space and then a capital letter or a
-  /// digit follow, and the stop does not end an abbreviation such as `e.g.`.
+  /// closing quote or parenthesis, when a space and then a capital letter, a digit,
+  /// or an opening quote or bracket follow, and the stop does not end an
+  /// abbreviation such as `e.g.`.
   static func sentences(in text: String) -> [String] {
     let characters = Array(text)
     var sentences: [String] = []
@@ -171,7 +184,8 @@ public enum Requirements {
       while next < characters.count, characters[next] == " " { next += 1 }
       let endsSentence =
         next > end && next < characters.count
-        && (characters[next].isUppercase || characters[next].isNumber)
+        && (characters[next].isUppercase || characters[next].isNumber
+          || "\"'([“‘".contains(characters[next]))
         && !endsAbbreviation(characters, at: index)
       if endsSentence {
         sentences.append(String(characters[start..<end]).trimmingCharacters(in: .whitespaces))
