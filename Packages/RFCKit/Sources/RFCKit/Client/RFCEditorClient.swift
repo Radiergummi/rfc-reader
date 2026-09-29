@@ -112,13 +112,22 @@ public enum IndexFetch: Sendable, Hashable {
 /// share, and a method that parses is `@concurrent`: a large document is parsed off
 /// the caller's actor, and two fetches parse side by side rather than in turn.
 public struct RFCEditorClient: Sendable {
-  public enum ClientError: Error, Sendable {
+  public enum ClientError: Error, LocalizedError, Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
     /// What was being read, and why it could not be: the parser's own error, kept
     /// rather than turned into words.
     case decoding(context: String, underlying: any Error)
+
+    /// What was being read and what went wrong reading it, for a failure to decode
+    /// (#320). The other cases are the network's, and are left to their callers to word.
+    public var errorDescription: String? {
+      switch self {
+      case .decoding(let context, let underlying): "\(context): \(underlying.localizedDescription)"
+      case .invalidResponse, .httpStatus, .notFound: nil
+      }
+    }
   }
 
   private let transport: any HTTPTransport
@@ -301,8 +310,15 @@ public struct RecentRFC: Sendable, Hashable, Identifiable {
 }
 
 public enum RecentFeedParser {
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case malformed(XMLSyntaxError)
+
+    /// The syntax error's own words, which the app shows (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .malformed(let error): error.errorDescription
+      }
+    }
   }
 
   private static let titlePattern = Pattern(#/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)

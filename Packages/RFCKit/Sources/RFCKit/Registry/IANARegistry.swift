@@ -13,12 +13,20 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
   case quicTransportErrors
   case mediaTypes
 
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case malformed(XMLSyntaxError)
     /// Well-formed XML without the registry, or with no record in it: an XHTML
     /// error page, or a registry IANA has renamed. Kept as a registry, it would
     /// answer every lookup with nothing until it was next fetched.
     case missing(String)
+
+    /// The syntax error's own words, or which registry was not found (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .malformed(let error): error.errorDescription
+      case .missing(let file): "No registry records in IANA's \(file)."
+      }
+    }
   }
 
   /// The file IANA publishes the registry in. One file can hold several registries:

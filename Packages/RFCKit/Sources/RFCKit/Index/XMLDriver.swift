@@ -49,10 +49,35 @@ enum XMLDriver {
     if let failure = delegate.failure { throw failure }
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber,
-      message: parser.parserError?.localizedDescription
-        ?? (delegate.depth == 0
+      message: message(
+        of: parser.parserError,
+        otherwise: delegate.depth == 0
           ? "empty document" : "the document ended before its root element closed")
     )
+  }
+
+  /// What the parser said about `error`, or `fallback` when it said nothing a person
+  /// can read (#320).
+  ///
+  /// On Darwin a parse error's own description is its domain and code, "The operation
+  /// couldn't be completed. (NSXMLParserErrorDomain error 76.)". The words are
+  /// libxml2's, in the error reported as it happens, under
+  /// `NSXMLParserErrorMessage`, with a line break at the end. The error left in
+  /// `parserError` once `parse()` gives up has none, and neither does the one for an
+  /// empty document, which is reported only there. swift-corelibs-foundation builds
+  /// its description from libxml2's message instead.
+  static func message(of error: (any Error)?, otherwise fallback: String) -> String {
+    guard let error else { return fallback }
+    let userInfo = (error as NSError).userInfo
+    if let text = userInfo["NSXMLParserErrorMessage"] as? String {
+      let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !trimmed.isEmpty { return trimmed }
+    }
+    #if canImport(FoundationXML)
+      return error.localizedDescription
+    #else
+      return fallback
+    #endif
   }
 
   /// The root element's attributes, and nothing after them. A draft's header
@@ -80,7 +105,7 @@ enum XMLDriver {
     }
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber,
-      message: parser.parserError?.localizedDescription ?? "empty document")
+      message: XMLDriver.message(of: parser.parserError, otherwise: "empty document"))
   }
 
   private final class RootDelegate: NSObject, XMLParserDelegate {
@@ -135,7 +160,7 @@ enum XMLDriver {
       guard failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
-        message: parseError.localizedDescription)
+        message: XMLDriver.message(of: parseError, otherwise: "malformed XML"))
     }
   }
 }
