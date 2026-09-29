@@ -10,6 +10,23 @@ struct IndexSearchTests {
     #expect(search.search("rfc 2119").map(\.rfc.number) == [2119])
   }
 
+  /// Typing a number is often typing the start of a longer one: `991` on its way to
+  /// 9910. The document the number names comes first, then every number it begins,
+  /// newest first — and only numbers, not titles that happen to contain the digits.
+  @Test func `a number lists the document it names, then the numbers it begins`() {
+    let rfcs = [991, 9910, 9915, 9919, 199, 2991].map { number in
+      RFCMetadata(
+        id: DocumentID(series: .rfc, number: number),
+        // A title holding the digits is not a number match.
+        title: number == 2991 ? "The 991 Profile" : "Document \(number)",
+        date: PublicationDate(year: 2026))
+    }
+    let search = IndexSearch(index: RFCIndex(rfcs: rfcs))
+    #expect(search.search("991").map(\.rfc.number) == [991, 9919, 9915, 9910])
+    #expect(search.search("RFC 991").map(\.rfc.number) == [991, 9919, 9915, 9910])
+    #expect(search.search("99").map(\.rfc.number) == [9919, 9915, 9910, 991])
+  }
+
   @Test func `title words rank above abstract mentions`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     let hits = search.search("HTTP semantics")

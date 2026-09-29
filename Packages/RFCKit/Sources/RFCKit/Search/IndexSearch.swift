@@ -124,11 +124,11 @@ public struct IndexSearch: Sendable {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
     let terms = trimmed.lowercased().split(separator: " ").map(String.init).filter { !$0.isEmpty }
 
-    // A query that is just a document number goes straight there.
-    if let id = DocumentID(parsing: trimmed), id.series == .rfc, let exact = index[id.number],
-      filters.isEmpty
-    {
-      return [SearchHit(rfc: exact, score: Int.max)]
+    // A query that is just a document number is a number, not words: the document
+    // it names, then every number it begins, newest first, since `991` is as often
+    // the start of 9910 as it is RFC 991.
+    if let id = DocumentID(parsing: trimmed), id.series == .rfc, filters.isEmpty {
+      return numberHits(id.number, limit: limit)
     }
 
     // Converted here rather than inside the loop: a needle allocated per entry
@@ -151,6 +151,16 @@ public struct IndexSearch: Sendable {
       if $0.score != $1.score { return $0.score > $1.score }
       return $0.rfc.number > $1.rfc.number
     }
+    return Array(hits.prefix(limit))
+  }
+
+  private func numberHits(_ number: Int, limit: Int) -> [SearchHit] {
+    let typed = String(number)
+    var hits = index[number].map { [SearchHit(rfc: $0, score: Int.max)] } ?? []
+    let longer = index.rfcs
+      .filter { $0.number != number && String($0.number).hasPrefix(typed) }
+      .sorted { $0.number > $1.number }
+    hits += longer.map { SearchHit(rfc: $0, score: $0.number) }
     return Array(hits.prefix(limit))
   }
 
