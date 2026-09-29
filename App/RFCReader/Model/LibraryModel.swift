@@ -5,6 +5,10 @@ import RFCReaderKit
 import SwiftData
 import os
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 private let libraryLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
@@ -473,18 +477,43 @@ final class LibraryModel {
 
   /// Opens `link` in a tab of its own, either behind the current one or in front.
   ///
-  /// Through AppKit, because on macOS the app makes its own windows: there is no
+  /// On macOS through AppKit, because the app makes its own windows: there is no
   /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
-  /// controller rather than by SwiftUI.
+  /// controller rather than by SwiftUI. Nothing can be passed to a window as it is
+  /// made, so the link waits in `pendingSceneLink` for the window that appears to
+  /// take it in `register(_:)`.
   ///
-  /// Nothing can be passed to a window as it is made, so the link waits in
-  /// `pendingSceneLink` for the window that appears to take it in `register(_:)`.
+  /// On iPad a window of its own, asked of UIKit with a user activity carrying the
+  /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
+  /// app's `WindowGroup` is a plain one, which cannot take a value. A new window
+  /// always comes to the front there, so `inBackground` does not apply.
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
       pendingSceneLink = link
       AppDelegate.shared?.openTab(inBackground: inBackground)
+    #else
+      guard opensNewWindows else { return }
+      let activity = NSUserActivity(activityType: SceneRequest.activityType)
+      activity.userInfo = SceneRequest.userInfo(for: link)
+      UIApplication.shared.activateSceneSession(
+        for: UISceneSessionActivationRequest(role: .windowApplication, userActivity: activity)
+      ) { error in
+        libraryLog.error(
+          "opening a window failed: \(String(describing: error), privacy: .public)")
+      }
     #endif
   }
+
+  #if !os(macOS)
+    /// Whether this device can show another window: an iPad, not an iPhone. Menus
+    /// offer Open in New Window only where it is.
+    var opensNewWindows: Bool { UIApplication.shared.supportsMultipleScenes }
+
+    /// Opens `id` in a window of its own, from a menu that offers it.
+    func openInNewWindow(_ id: DocumentID) {
+      openInNewScene(RFCLink(id: id), inBackground: false)
+    }
+  #endif
 
   #if os(macOS)
     /// Where a document asked for by name opens.

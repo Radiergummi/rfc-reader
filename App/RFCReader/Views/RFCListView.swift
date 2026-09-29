@@ -473,6 +473,13 @@ struct RFCRow: View {
           ShareLink(
             item: RFCEditorEndpoints.infoPage(rfc.id),
             subject: Text("\(rfc.id.displayName): \(rfc.title)"))
+          if library.opensNewWindows {
+            Button {
+              library.openInNewWindow(rfc.id)
+            } label: {
+              Label("Open in New Window", systemImage: "macwindow.badge.plus")
+            }
+          }
         } preview: {
           preview
         }

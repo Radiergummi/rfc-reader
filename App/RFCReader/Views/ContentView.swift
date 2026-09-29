@@ -53,6 +53,13 @@ import SwiftUI
       // reaches no column's bar: each column titles itself, the list included
       // (#246).
       .navigationTitle(windowTitle)
+      // A window asked for with a link (#158): addressed to this scene, so it opens
+      // here rather than going through `route`, which picks a scene for a link that
+      // names none.
+      .onContinueUserActivity(SceneRequest.activityType) { activity in
+        guard let link = SceneRequest.link(from: activity.userInfo) else { return }
+        navigation.open(link, in: library.index)
+      }
       // On the split view rather than on `DocumentView`: macOS gives the detail
       // column no leading toolbar slot — a `.navigation` item declared down there is
       // silently dropped — and scene-level navigation belongs beside the sidebar
