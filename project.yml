@@ -1,5 +1,6 @@
-# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (brew install
-# xcodegen) to produce RFCReader.xcodeproj; edit this file, never the generated project.
+# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (the pinned
+# release from `make xcodegen-install`, or Homebrew's) to produce
+# RFCReader.xcodeproj; edit this file, never the generated project.
 name: RFCReader
 options:
   bundleIdPrefix: me.mazetti

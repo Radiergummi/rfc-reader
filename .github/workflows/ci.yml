@@ -116,10 +116,9 @@ jobs:
           persist-credentials: false
       - run: xcodebuild -version
       - name: Install XcodeGen
-        # The release the Makefile pins, checked against its SHA-256 (#165).
-        run: |
-          make xcodegen-install XCODEGEN_DIR="$RUNNER_TEMP/xcodegen"
-          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+        # The release the Makefile pins, checked against its SHA-256 (#165), into
+        # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
+        run: make xcodegen-install
       # The newest cache any earlier run saved: entries are keyed on their inputs,
       # so a stale one is never used, only not hit.
       - name: Restore the compilation cache

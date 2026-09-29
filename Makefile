@@ -23,11 +23,13 @@ PROJECT := RFCReader.xcodeproj
 SCHEME  := RFCReader
 
 # The XcodeGen release the project is generated with, and its zip's SHA-256
-# (#165). CI installs exactly this through `xcodegen-install`; `xcodeproj` warns
-# when the one on the PATH is another.
+# (#165). CI installs exactly this through `xcodegen-install`; `xcodeproj` runs
+# that install when there is one, the xcodegen on the PATH otherwise, and warns
+# when the one it runs is another version.
 XCODEGEN_VERSION := 2.46.0
 XCODEGEN_SHA256  := 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
 XCODEGEN_DIR     ?= .build/xcodegen
+XCODEGEN          = $(or $(wildcard $(XCODEGEN_DIR)/xcodegen/bin/xcodegen),xcodegen)
 
 ## Lint all Swift sources
 # --strict because .swiftlint.yml is tuned to the tree as it stands: every rule
@@ -94,15 +96,17 @@ $(CORPUS)/text.noindex/%.txt:
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
 
 ## Download the pinned XcodeGen release into XCODEGEN_DIR, checking its SHA-256
-# Its binary is then XCODEGEN_DIR/xcodegen/bin/xcodegen, which goes on the PATH;
-# Homebrew's is fine too, at the same version. The zip is written under a
-# partial name first, so a download that fails its check is never unpacked.
+# Its binary is then XCODEGEN_DIR/xcodegen/bin/xcodegen, which `xcodeproj` prefers
+# to the PATH's. The zip is written under a partial name first, so a download
+# that fails its check is never unpacked, and a previous install is removed
+# before unpacking, so no file of another release is left beside this one.
 xcodegen-install:
 	@mkdir -p $(XCODEGEN_DIR)
-	curl -fsSL -o $(XCODEGEN_DIR)/xcodegen.zip.part https://github.com/yonaskolb/XcodeGen/releases/download/$(XCODEGEN_VERSION)/xcodegen.zip
+	curl -fsSL --retry 3 -o $(XCODEGEN_DIR)/xcodegen.zip.part https://github.com/yonaskolb/XcodeGen/releases/download/$(XCODEGEN_VERSION)/xcodegen.zip
 	echo "$(XCODEGEN_SHA256)  $(XCODEGEN_DIR)/xcodegen.zip.part" | shasum -a 256 -c -
 	mv $(XCODEGEN_DIR)/xcodegen.zip.part $(XCODEGEN_DIR)/xcodegen.zip
-	unzip -qo $(XCODEGEN_DIR)/xcodegen.zip -d $(XCODEGEN_DIR)
+	rm -rf $(XCODEGEN_DIR)/xcodegen
+	unzip -q $(XCODEGEN_DIR)/xcodegen.zip -d $(XCODEGEN_DIR)
 	$(XCODEGEN_DIR)/xcodegen/bin/xcodegen --version
 
 ## Generate the Xcode project from project.yml
@@ -116,15 +120,15 @@ xcodegen-install:
 # Another XcodeGen version is a warning, not a failure: the project is
 # generated and gitignored, and a Homebrew upgrade should not stop a build.
 xcodeproj:
-	@installed=$$(xcodegen --version 2>/dev/null | sed 's/^Version: //'); \
-	if [ -z "$$installed" ]; then \
-	  echo "XcodeGen $(XCODEGEN_VERSION) is not installed: brew install xcodegen, or make xcodegen-install" >&2; \
+	@if ! command -v $(XCODEGEN) >/dev/null; then \
+	  echo "XcodeGen $(XCODEGEN_VERSION) is not installed: make xcodegen-install, or brew install xcodegen" >&2; \
 	  exit 1; \
 	fi; \
+	installed=$$($(XCODEGEN) --version 2>/dev/null | sed 's/^Version: //'); \
 	if [ "$$installed" != "$(XCODEGEN_VERSION)" ]; then \
-	  echo "warning: XcodeGen $$installed is installed; this project is generated with $(XCODEGEN_VERSION)" >&2; \
+	  echo "warning: $(XCODEGEN) reports version '$$installed'; this project is generated with $(XCODEGEN_VERSION)" >&2; \
 	fi
-	xcodegen generate
+	$(XCODEGEN) generate
 
 # Signed with the team project.yml names, provisioning included: automatic signing
 # may create the profile and register this Mac or the attached iPhone on the way.
