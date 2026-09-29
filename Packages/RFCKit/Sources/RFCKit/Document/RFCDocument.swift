@@ -238,8 +238,8 @@ public struct Paragraph: Sendable, Hashable, Codable {
 public struct ListBlock: Sendable, Hashable, Codable {
   public enum Style: Sendable, Hashable, Codable {
     case bullet
-    /// Numbered with the given format, e.g. `%d.` or `(%c)`; nil means plain decimal.
-    case numbered(format: String?, start: Int)
+    /// Numbered, counting as `ListNumbering` says.
+    case numbered(ListNumbering)
     /// No marker; used for hanging indents and the RFCXML `empty` attribute.
     case bare
   }

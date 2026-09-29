@@ -496,7 +496,7 @@ public struct RFCXMLParser: Sendable {
         let start = element["start"].flatMap(Int.init) ?? 1
         return .list(
           ListBlock(
-            style: .numbered(format: element["type"], start: start),
+            style: .numbered(ListNumbering(type: element["type"], start: start)),
             items: parseListItems(element),
             isCompact: element["spacing"] == "compact"
           ))

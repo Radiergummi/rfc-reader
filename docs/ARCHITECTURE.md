@@ -35,7 +35,7 @@ RFCDocument
 
 Block (enum)
   paragraph(Paragraph)              inlines + optional anchor + author's indent in characters
-  list(ListBlock)                   bullet / numbered(format, start) / bare; items hold blocks
+  list(ListBlock)                   bullet / numbered(ListNumbering) / bare; items hold blocks
   definitionList([DefinitionItem])  term inlines + definition blocks
   preformatted(Preformatted)        artwork or sourceCode, verbatim text, optional language
   figure(Figure) · table(Table) · blockQuote · aside

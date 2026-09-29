@@ -339,10 +339,10 @@ public struct RFCXMLSerializer: Sendable {
       case .bare:
         name = "ul"
         attributes.append(("empty", "true"))
-      case .numbered(let format, let start):
+      case .numbered(let numbering):
         name = "ol"
-        attributes.append(("type", format ?? "1"))
-        attributes.append(("start", String(start)))
+        attributes.append(("type", numbering.type))
+        attributes.append(("start", String(numbering.start)))
       }
       if list.isCompact { attributes.append(("spacing", "compact")) }
       writer.open(name, attributes)
