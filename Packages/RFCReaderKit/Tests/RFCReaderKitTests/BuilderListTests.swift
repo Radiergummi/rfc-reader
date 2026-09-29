@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: lists")
-@MainActor
 struct BuilderListTests {
   private let style = ReadingStyle()
 

@@ -1,8 +1,7 @@
 import Foundation
 import RFCKit
 
-/// What a force click on a reference shows (#29). macOS so far; a long press on
-/// iOS is to show the same, and still shows the card.
+/// What a force click (macOS) or a long press (iOS) on a reference shows (#29).
 ///
 /// Safari's link preview, for documents: the document the reference names, at the
 /// place it names, readable and scrollable — not a summary of it. The one exception
@@ -18,6 +17,20 @@ public enum LinkPreview: Equatable, Sendable {
   case document(DocumentID, place: String?)
   /// The bibliography entry with this anchor, as the reference card.
   case card(String)
+
+  /// The document preview's size where there is room for it: macOS's popover, or
+  /// an iPad's context menu.
+  public static let documentSize = CGSize(width: 560, height: 620)
+
+  /// The document preview's size inside `available`, a context menu's screen. It
+  /// keeps the 16 pt a context menu's preview keeps from the screen's edges, and
+  /// no more than 60 % of its height, so the menu under it fits without UIKit
+  /// shrinking the preview to make room.
+  public static func documentSize(fitting available: CGSize) -> CGSize {
+    CGSize(
+      width: min(documentSize.width, available.width - 2 * 16),
+      height: min(documentSize.height, (available.height * 0.6).rounded(.down)))
+  }
 
   /// Nil for a URL the reader does not own: a link to the web previews nothing. A
   /// BCP, STD or FYI previews its first member RFC, as a click on it opens that one
