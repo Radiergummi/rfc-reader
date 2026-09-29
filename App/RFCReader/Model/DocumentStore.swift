@@ -135,11 +135,18 @@ actor DocumentStore {
   func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient) async throws
     -> RFCDocument
   {
+    let signpostID = signposter.makeSignpostID()
+    let interval = signposter.beginInterval(
+      "Load document", id: signpostID, "\(id.displayName, privacy: .public)")
+    defer { signposter.endInterval("Load document", interval) }
     markOpened(id)
     if let cached = parsed[id] { return cached }
 
     let xmlURL = fileURL(id, format: .xml)
-    if let data = try? Data(contentsOf: xmlURL), let document = try? RFCXMLParser.parse(data) {
+    if let data = try? Data(contentsOf: xmlURL),
+      let document = try? signposter.withIntervalSignpost(
+        "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
+    {
       parsed[id] = document
       return document
     }
@@ -158,7 +165,8 @@ actor DocumentStore {
     }
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
-      let document = LegacyTextParser.parse(data)
+      let document = signposter.withIntervalSignpost(
+        "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
       parsed[id] = document
       return document
     }
@@ -185,6 +193,9 @@ actor DocumentStore {
   private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
     async throws -> RFCEditorClient.FetchedDocument
   {
+    let interval = signposter.beginInterval(
+      "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
+    defer { signposter.endInterval("Fetch document", interval) }
     let fetched = try await client.fetchPreferredDocument(
       id, availableFormats: formats.isEmpty ? nil : formats)
     if let failure = fetched.xmlParseFailure {

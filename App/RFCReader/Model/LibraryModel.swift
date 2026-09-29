@@ -198,17 +198,28 @@ final class LibraryModel {
     -> (prepared: PreparedIndex, updatedAt: Date)?
   {
     guard let cached = store.cachedIndexLocation() else { return nil }
-    return (try PreparedIndex.parse(Data(contentsOf: cached.url)), cached.updatedAt)
+    let prepared = try signposter.withIntervalSignpost("Read cached index") {
+      try PreparedIndex.parse(Data(contentsOf: cached.url))
+    }
+    return (prepared, cached.updatedAt)
   }
 
   @concurrent
   private static func parse(_ data: Data) async throws -> PreparedIndex {
-    try PreparedIndex.parse(data)
+    try signposter.withIntervalSignpost("Parse index") {
+      try PreparedIndex.parse(data)
+    }
   }
 
   func refreshIndex() async {
     do {
-      let data = try await client.fetchIndexData()
+      let interval = signposter.beginInterval("Fetch index")
+      let data: Data
+      do {
+        // Ended on a throw too, so an offline refresh does not leave it open.
+        defer { signposter.endInterval("Fetch index", interval) }
+        data = try await client.fetchIndexData()
+      }
       // Off the main actor: the parse alone is about a second (#124).
       let prepared = try await Self.parse(data)
       try await store.storeIndex(data)
@@ -226,6 +237,7 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+    signposter.emitEvent("Index ready")
   }
 
   // MARK: - Lists
@@ -401,7 +413,11 @@ final class LibraryModel {
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = search.search(key.query, limit: .max)
+    let hits = signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+    ) {
+      search.search(key.query, limit: .max)
+    }
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter { return hits.map(\.rfc) }
     let allowed = Set(base.map(\.number))
@@ -421,7 +437,11 @@ final class LibraryModel {
   private static func suggestions(
     in search: IndexSearch, for query: String, limit: Int
   ) async -> [DocumentID] {
-    search.search(query, limit: limit).map(\.id)
+    signposter.withIntervalSignpost(
+      "Suggest", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
+    ) {
+      search.search(query, limit: limit).map(\.id)
+    }
   }
 
   // MARK: - Scene routing
