@@ -230,12 +230,10 @@ struct SearchText: Hashable, Sendable {
 
   func hasPrefix(_ other: SearchText) -> Bool {
     guard other.bytes.count <= bytes.count else { return false }
-    return bytes.withUnsafeBufferPointer { haystack in
-      other.bytes.withUnsafeBufferPointer { needle in
-        for offset in 0..<needle.count where haystack[offset] != needle[offset] { return false }
-        return true
-      }
-    }
+    let haystack = bytes.span
+    let needle = other.bytes.span
+    for offset in needle.indices where haystack[offset] != needle[offset] { return false }
+    return true
   }
 
   /// Naive scan, skipping on the first byte. The needle is a search term — a
@@ -244,21 +242,19 @@ struct SearchText: Hashable, Sendable {
   func contains(_ other: SearchText) -> Bool {
     guard !other.bytes.isEmpty else { return true }
     guard other.bytes.count <= bytes.count else { return false }
-    return bytes.withUnsafeBufferPointer { haystack in
-      other.bytes.withUnsafeBufferPointer { needle in
-        let first = needle[0]
-        let last = haystack.count - needle.count
-        var start = 0
-        while start <= last {
-          if haystack[start] == first {
-            var offset = 1
-            while offset < needle.count, haystack[start + offset] == needle[offset] { offset += 1 }
-            if offset == needle.count { return true }
-          }
-          start += 1
-        }
-        return false
+    let haystack = bytes.span
+    let needle = other.bytes.span
+    let first = needle[0]
+    let last = haystack.count - needle.count
+    var start = 0
+    while start <= last {
+      if haystack[start] == first {
+        var offset = 1
+        while offset < needle.count, haystack[start + offset] == needle[offset] { offset += 1 }
+        if offset == needle.count { return true }
       }
+      start += 1
     }
+    return false
   }
 }

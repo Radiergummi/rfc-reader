@@ -80,21 +80,19 @@ struct InlineLinker: Sendable {
     var sectionOfRFC: Bool { rfc && section }
 
     init(in text: String) {
-      var text = text
-      text.withUTF8 { bytes in
-        for index in bytes.indices {
-          switch Unicode.Scalar(bytes[index]) {
-          case "[": bracket = true
-          case "R" where bytes.holds("RFC", at: index):
-            rfc = true
-            if bytes.holds("RFCs", at: index) { rfcs = true }
-          case "S" where bytes.holds("Section", at: index): section = true
-          case "h" where bytes.holds("http", at: index): http = true
-          default: continue
-          }
-          // `rfcs` implies `rfc`: nothing later in the fragment can change the answer.
-          if bracket, rfcs, section, http { return }
+      let bytes = text.utf8Span.span
+      for index in bytes.indices {
+        switch Unicode.Scalar(bytes[index]) {
+        case "[": bracket = true
+        case "R" where bytes.holds("RFC", at: index):
+          rfc = true
+          if bytes.holds("RFCs", at: index) { rfcs = true }
+        case "S" where bytes.holds("Section", at: index): section = true
+        case "h" where bytes.holds("http", at: index): http = true
+        default: continue
         }
+        // `rfcs` implies `rfc`: nothing later in the fragment can change the answer.
+        if bracket, rfcs, section, http { return }
       }
     }
   }
