@@ -12,14 +12,8 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
-    // Only the iOS toolbar reads these. On macOS the bookmark button and the
-    // external links are the window's, and a `@Query` left outside this guard ran a
-    // live fetch of every bookmark per open document that nothing read.
-    @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
@@ -82,12 +76,6 @@ struct DocumentView: View {
   }
 
   private var metadata: RFCMetadata? { library.metadata(id) }
-  #if !os(macOS)
-    private var isBookmarked: Bool {
-      let key = id.fileStem
-      return bookmarks.contains { $0.documentKey == key }
-    }
-  #endif
 
   private var buildInputs: BuildInputs {
     BuildInputs(
@@ -119,7 +107,11 @@ struct DocumentView: View {
           DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
         )
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .toolbar {
+          DocumentToolbar(
+            id: id, metadata: metadata, library: library, navigation: navigation,
+            reader: reader, showsInspector: $showsInspector)
+        }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
         // view's frame.
@@ -282,113 +274,6 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
-    /// Share and More at the top; Contents and Cite leading the bottom bar, and
-    /// Bookmark trailing it as the view's primary action, the way Notes puts
-    /// Compose there (#342).
-    ///
-    /// The inline title has the lowest priority in the top bar, which is why only
-    /// two actions stay up there: five beside the back button left an iPhone's bar
-    /// no room for it, and it collapsed to "…" (#245).
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-      if let metadata {
-        ToolbarItem(placement: .primaryAction) {
-          shareLink(metadata)
-        }
-      }
-
-      ToolbarItem(placement: .primaryAction) {
-        moreMenu
-      }
-
-      ToolbarItemGroup(placement: .bottomBar) {
-        Button {
-          press(.navigation)
-        } label: {
-          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
-        }
-        // The same chord as the Mac's (#157).
-        .keyboardShortcut("i", modifiers: [.command, .option])
-
-        Button {
-          press(.info)
-        } label: {
-          Label("Info", systemImage: "info.circle")
-        }
-        .keyboardShortcut("i", modifiers: .command)
-
-        citeMenu
-      }
-
-      ToolbarSpacer(.flexible, placement: .bottomBar)
-
-      ToolbarItem(placement: .bottomBar) {
-        bookmarkButton
-      }
-    }
-
-    private var bookmarkButton: some View {
-      // Read once: a linear scan of the bookmarks, and the label wants it twice.
-      let bookmarked = isBookmarked
-      // A tap bookmarks, as before; a long press adds to a collection (#349).
-      return Menu {
-        AddToCollectionItems(
-          document: id, library: library, navigation: navigation, undoManager: undoManager)
-      } label: {
-        Label(
-          bookmarked ? "Remove Bookmark" : "Bookmark",
-          systemImage: bookmarked ? "bookmark.fill" : "bookmark")
-      } primaryAction: {
-        toggleBookmark()
-      }
-      .keyboardShortcut("d", modifiers: .command)
-    }
-
-    private var citeMenu: some View {
-      Menu {
-        ForEach(CitationStyle.allCases) { style in
-          Button(style.displayName) { copyCitation(style) }
-        }
-        Divider()
-        Button("Copy Link to Current Section") {
-          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-        }
-      } label: {
-        Label("Cite", systemImage: "quote.opening")
-      }
-    }
-
-    /// A pane's button: opens the inspector on that pane, swaps an open one to it,
-    /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
-    private func press(_ pane: InspectorPane) {
-      let result = InspectorPane.pressing(
-        pane, isOpen: showsInspector, showing: reader.pane)
-      reader.pane = result.pane
-      withAnimation(.snappy) { showsInspector = result.isOpen }
-    }
-
-    /// What is used least: the original text, and the document's pages elsewhere.
-    private var moreMenu: some View {
-      Menu {
-        Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
-        }
-
-        Section {
-          Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
-          if let url = metadata?.errataURL {
-            Button("Errata") { systemOpenURL(url) }
-          }
-          Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
-          if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { systemOpenURL(draft) }
-          }
-        }
-      } label: {
-        Label("More", systemImage: "ellipsis")
-      }
-    }
-
     /// Where a tap on the return offer goes, while it is on show.
     ///
     /// In a single column only: beside other columns, the back/forward pair is in
@@ -416,11 +301,6 @@ struct DocumentView: View {
       }
     }
 
-    private func shareLink(_ metadata: RFCMetadata) -> some View {
-      ShareLink(
-        item: RFCEditorEndpoints.infoPage(id),
-        subject: Text("\(id.displayName): \(metadata.title)"))
-    }
   #endif
 
   // MARK: - Actions
@@ -522,20 +402,6 @@ struct DocumentView: View {
     }
     return true
   }
-
-  #if !os(macOS)
-    private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(
-        metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      BookmarkStore.toggle(id, title: title, in: modelContext)
-    }
-
-    private func copyCitation(_ style: CitationStyle) {
-      guard let metadata else { return }
-      Clipboard.copy(
-        DocumentActions.citation(metadata, section: reader.currentSection, style: style))
-    }
-  #endif
 
   private func saveReadingPosition() {
     // The anchor alone for now: the reader reports the section on screen, not the
