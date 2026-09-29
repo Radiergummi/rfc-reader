@@ -265,8 +265,12 @@ struct BuilderStructureTests {
         return paragraph.plainText
       }.first)
     let abstractOffset = try Fixtures.offset(of: abstract, in: built.text)
-    let bodyOffset = try Fixtures.offset(
-      of: "QUIC is a connection-oriented protocol", in: built.text)
+    let body = try #require(
+      try Fixtures.rfc8999().section(number: "1")?.blocks.compactMap { block -> String? in
+        guard case .paragraph(let paragraph) = block else { return nil }
+        return paragraph.plainText
+      }.first)
+    let bodyOffset = try Fixtures.offset(of: body, in: built.text)
 
     let abstractFont = try #require(
       built.text.attribute(.font, at: abstractOffset, effectiveRange: nil) as? PlatformFont)

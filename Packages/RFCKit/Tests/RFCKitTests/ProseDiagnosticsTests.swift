@@ -42,13 +42,13 @@ struct ProseDiagnosticsTests {
   /// report names that apart: an indent of 9 is not too deep in such a document.
   @Test func `a deeper cap excuses sentences but not code`() {
     let sentences = [
-      "         Using a word that has strong semantic implications in the",
-      "         current context will cause confusion.",
+      "         A name that already means something on the network will be",
+      "         misread the first time someone says it aloud.",
     ]
     #expect(LegacyTextParser.diagnose(sentences).rejections == [.indentTooDeep])
     #expect(LegacyTextParser.diagnose(sentences, maxIndent: 12).isProse)
 
-    let code = ["         ::= { ifMauEntry 4 }"]
+    let code = ["         ::= { exampleEntry 4 }"]
     #expect(LegacyTextParser.diagnose(code, maxIndent: 12).rejections == [.deepIndentNotSentences])
     #expect(LegacyTextParser.diagnose(code, maxIndent: 6).rejections == [.indentTooDeep])
   }
@@ -390,7 +390,7 @@ struct ProseDiagnosticsTests {
       "         error to the client and closes the connection afterwards.",
     ]
     #expect(LegacyTextParser.diagnose(sentences, maxIndent: 7).readsAsDeepProse)
-    let code = ["         ::= { ifMauEntry 4 }"]
+    let code = ["         ::= { exampleEntry 4 }"]
     let diagnosis = LegacyTextParser.diagnose(code, maxIndent: 7)
     #expect(diagnosis.rejections == [.indentTooDeep])
     #expect(!diagnosis.readsAsDeepProse)

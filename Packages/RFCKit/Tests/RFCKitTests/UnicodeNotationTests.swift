@@ -31,12 +31,10 @@ struct UnicodeNotationTests {
   /// Multilingual Plane.
   @Test func `the default format through the parser`() throws {
     let paragraph = try #require(
-      try Self.paragraphs(in: "rfc9682.xml").first {
-        $0.plainText.contains("no need to escape the")
-      })
+      try Self.paragraphs(in: "rfc9682.xml").first { $0.plainText.contains("U+1F073") })
     #expect(
       paragraph.plainText.contains(
-        "no need to escape the \"🁳\" (DOMINO TILE VERTICAL-02-02, U+1F073) or \"⌘\" (PLACE OF INTEREST SIGN, U+2318); however"
+        "\"🁳\" (DOMINO TILE VERTICAL-02-02, U+1F073) or \"⌘\" (PLACE OF INTEREST SIGN, U+2318);"
       ))
     #expect(paragraph.inlines.contains(.code("🁳")), "the literal is set apart from the prose")
   }
@@ -45,12 +43,10 @@ struct UnicodeNotationTests {
   /// Hebrew word, and the reader showed only the letters.
   @Test func `rfc9290 spells out each letter`() throws {
     let paragraph = try #require(
-      try Self.paragraphs(in: "rfc9290.xml").first {
-        $0.plainText.contains("the sequence of characters is")
-      })
+      try Self.paragraphs(in: "rfc9290.xml").first { $0.plainText.contains("U+05E9") })
     #expect(
       paragraph.plainText.contains(
-        "the sequence of characters is: \"ש\" (HEBREW LETTER SHIN, U+05E9), \"ל\" (HEBREW LETTER LAMED, U+05DC), \"ו\" (HEBREW LETTER VAV, U+05D5), \"ם\" (HEBREW LETTER FINAL MEM, U+05DD). Note"
+        "is: \"ש\" (HEBREW LETTER SHIN, U+05E9), \"ל\" (HEBREW LETTER LAMED, U+05DC), \"ו\" (HEBREW LETTER VAV, U+05D5), \"ם\" (HEBREW LETTER FINAL MEM, U+05DD). "
       ))
   }
 
