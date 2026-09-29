@@ -62,20 +62,25 @@ struct AmendmentsTests {
   }
 
   /// One link per place, however often that place cites the same section: RFC 9601
-  /// cites sections of the documents it updates twelve times, two of them repeats.
+  /// cites a section of a document it updates twice in one of its own sections.
   @Test func `a section amending the same section twice is one link`() throws {
     let document = try Self.document("rfc9601.xml")
     let updated = Set(document.header.updates)
-    let citations = document.proseInlines.filter { inline in
-      guard case .crossReference(let xref) = inline,
-        case .document(let id, _?, _) = xref.target
-      else { return false }
-      return updated.contains(id)
+    let citedByPlace = document.proseInlinesBySection.map { place in
+      let cited = place.inlines.compactMap { inline -> String? in
+        guard case .crossReference(let xref) = inline,
+          case .document(let id, let section?, _) = xref.target,
+          updated.contains(id)
+        else { return nil }
+        return "\(id.fileStem) \(section)"
+      }
+      return (anchor: place.sectionAnchor, cited: cited)
     }
-    let links = Amendments.links(in: document)
-    #expect(citations.count == 12)
-    #expect(links.count == 10)
-    #expect(Set(links).count == links.count)
+    let repeating = try #require(
+      citedByPlace.first { Set($0.cited).count < $0.cited.count },
+      "the fixture must cite a section of an updated document twice in one place")
+    let links = Amendments.links(in: document).filter { $0.amendingSection == repeating.anchor }
+    #expect(links.count == Set(repeating.cited).count)
   }
 
   /// A bibliography entry's note describes the entry, and amends nothing: a section

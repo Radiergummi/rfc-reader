@@ -9,8 +9,9 @@ import Foundation
 public struct Amendment: Sendable, Hashable, Codable {
   /// The document amended.
   public var amended: DocumentID
-  /// Its section, as the citation names it: `4.2`, or `B` for an appendix. What
-  /// `RFCLink` takes, not an anchor.
+  /// Its section, as the citation names it, in the form `RFCLink.section` takes: a
+  /// number, `4.2`, or `B` for an appendix, or an anchor, `appendix-1`, for an
+  /// appendix numbered like a section.
   public var section: String
   /// The amending document.
   public var amending: DocumentID
@@ -47,9 +48,7 @@ public enum Amendments {
     let updated = Set(document.header.updates)
     guard let amending = document.header.id, !updated.isEmpty else { return [] }
     let bibliographies: Set<String?> = Set(
-      document.allSections.filter { section in
-        section.blocks.contains { if case .references = $0 { true } else { false } }
-      }.map(\.anchor))
+      document.allSections.filter(RFCXMLSerializer.isReferences).map(\.anchor))
     var seen: Set<Amendment> = []
     var links: [Amendment] = []
     for place in document.proseInlinesBySection
