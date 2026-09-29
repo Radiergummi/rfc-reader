@@ -256,7 +256,7 @@ final class LibraryModel {
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
     self.indexCounts = prepared.counts
-    listCache.removeAll()
+    listCache = RecentlyUsed(capacity: Self.listCacheCapacity)
     indexState = .ready(updatedAt: updatedAt)
   }
 
@@ -288,8 +288,8 @@ final class LibraryModel {
   ///
   /// A dictionary rather than a single slot because tabs have their own filters now:
   /// with one slot, two tabs listing different things evict each other on every pass
-  /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
-  /// -- this is a cache, so losing an entry costs time, never correctness.
+  /// and the hit rate collapses to zero. Bounded, forgetting the list used longest
+  /// ago -- this is a cache, so losing an entry costs time, never correctness.
   ///
   /// Not observed: `list` writes it from a view's body on a miss, and a write to
   /// a property the running body read invalidated that body, so every miss rendered
@@ -297,8 +297,9 @@ final class LibraryModel {
   /// That makes a hit read nothing observable, though, so `list` reads `index`
   /// before looking here: the key carries every other input, and those the caller
   /// reads for itself.
-  @ObservationIgnored private var listCache: [LibraryList: [RFCMetadata]] = [:]
-  private static let listCacheLimit = 8
+  @ObservationIgnored private var listCache = RecentlyUsed<LibraryList, [RFCMetadata]>(
+    capacity: listCacheCapacity)
+  private static let listCacheCapacity = 8
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
@@ -347,10 +348,9 @@ final class LibraryModel {
   /// top of `list` is what gets the view to ask again. The index is handed in from
   /// that read rather than read again here, so the observed read is the only one.
   private func list(_ key: LibraryList, in index: RFCIndex) -> [RFCMetadata] {
-    if let hit = listCache[key] { return hit }
+    if let hit = listCache.value(for: key) { return hit }
     let computed = key.rows(in: index, search: search)
-    if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
-    listCache[key] = computed
+    listCache.insert(computed, for: key)
     return computed
   }
 
