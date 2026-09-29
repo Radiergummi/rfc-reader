@@ -76,7 +76,8 @@ jobs:
             exit 0
           fi
           mkdir -p corpus
-          cp baseline/corpus-*/report.json corpus/report.json
+          # The artifact keeps the paths it was uploaded with, under its own name.
+          cp baseline/corpus-*/corpus/report.json corpus/report.json
           echo "Baseline: the report of run $previous"
 
       # The same entry point as a local `make corpus`, so CI builds the corpus a
