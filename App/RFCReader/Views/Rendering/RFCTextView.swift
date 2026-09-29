@@ -197,6 +197,11 @@ struct ReaderInputs {
       let textView = ReaderTextView(usingTextLayoutManager: true)
       textView.isEditable = false
       textView.isSelectable = true
+      // Off, because UIKit's text drag cannot carry a chip: it collects the chip's
+      // link and its leading glyph's attachment as two overlapping ranges and
+      // deletes both from its copy of the dragged text, which raises when the chip
+      // ends the range. A long press on a chip lifts exactly that range (#431).
+      textView.textDragInteraction?.isEnabled = false
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
       // `.never`: automatic adjustment moves `contentOffset`'s origin away from the
