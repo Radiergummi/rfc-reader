@@ -1394,12 +1394,19 @@ public struct LegacyTextParser: Sendable {
   /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
   /// body starts there too — so that the indent says nothing — it also has to stand alone
   /// between blank lines. `heading(from:)` judges the text; this judges the position.
+  ///
+  /// An unnumbered heading also has to pass `refusesUnnumberedHeading`, here rather than
+  /// in `heading(from:)`, whose other caller is the front matter's end: there the test is
+  /// kept lax on purpose. The stricter one moved the front matter's end in 41 documents,
+  /// most of them later, and what it ran on past was lost: RFC 783's summary.
   private static func heading(
     at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
   ) -> HeadingInfo? {
     guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
     guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-    return heading(from: string, colonNumbered: colonNumbered)
+    guard let heading = heading(from: string, colonNumbered: colonNumbered) else { return nil }
+    if heading.number == nil, refusesUnnumberedHeading(heading.title) { return nil }
+    return heading
   }
 
   private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
@@ -1467,31 +1474,39 @@ public struct LegacyTextParser: Sendable {
     else { return nil }
     let lowered = trimmed.lowercased()
     guard !headerLinePrefixes.contains(where: { lowered.hasPrefix($0) }) else { return nil }
-    guard !refusesUnnumberedHeading(trimmed) else { return nil }
     return HeadingInfo(
       number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())",
       depth: 1)
   }
 
-  /// A lettered section number, `A.3.2.` or `B.1 `, before the words of an appendix's
-  /// subsection.
-  nonisolated(unsafe) private static let letteredSectionNumber = #/[A-Z](\.\d+)+\.?\s/#
+  /// How an appendix heading the appendix pattern missed opens: the word `Appendix` or
+  /// `Annex`, capitalized or in capitals, or a lettered section number set off like one,
+  /// `A.3.2.  ` or `B.1  `. Not a lower-case `appendix`, which is wrapped prose, nor a
+  /// number and a single space, which is a reference in prose (`A.2 for more`) or an
+  /// ITU name (`X.25 switch`).
+  nonisolated(unsafe) private static let appendixOpening =
+    #/A(?i:ppendix|nnex)\b|[A-Z](?:\.\d+)+(?:\.\s|\s\s)/#
 
   /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
   /// definitions, braces, table rules and box drawing, arrows.
   private static let codePunctuation = ["::=", "{", "}", "|", "+--", "---", "===", "->"]
 
   /// Words a title-cased heading leaves in lower case: `Transmission of IP Datagrams
-  /// over Ethernet` is title case all the same.
+  /// over Ethernet` is title case all the same. Only words of four letters or more,
+  /// because `isSentenceCase` looks at no shorter word.
   private static let minorWords: Set<String> = [
-    "a", "an", "the", "and", "or", "but", "nor", "for", "of", "in", "on", "at", "to", "by",
-    "with", "from", "into", "onto", "over", "upon", "via", "as", "per", "vs",
+    "about", "above", "across", "after", "against", "along", "among", "around", "before",
+    "behind", "below", "beneath", "beside", "besides", "between", "beyond", "despite",
+    "down", "during", "except", "from", "inside", "into", "like", "near", "onto",
+    "outside", "over", "past", "since", "than", "through", "throughout", "toward",
+    "towards", "under", "underneath", "until", "unto", "upon", "versus", "with", "within",
+    "without",
   ]
 
   /// True for a column-0 line that passed every other test for an unnumbered heading,
   /// but reads as something else: prose, a MIB line, a grammar or a drawing (#201).
   ///
-  /// Measured over the legacy corpus, half of the 61,858 unnumbered headings the parser
+  /// Measured over the legacy corpus, half of the 62,924 unnumbered headings the parser
   /// made were one of these, and every sample of them was wrong:
   ///
   /// - a lower-case start: MIB lines (`dot1qTpGroupLearnt OBJECT-TYPE`), wrapped prose,
@@ -1501,7 +1516,7 @@ public struct LegacyTextParser: Sendable {
   ///   ends a heading's list as often as a sentence, and is let through;
   /// - sentence case past 50 characters, where the samples turn from titles into prose.
   ///
-  /// Title case, all capitals and short sentence case (`How to use this document`) are
+  /// Title case, all capitals and short sentence case (`How to read this memo`) are
   /// where the real headings are. Their false positives, table rows and header-field
   /// lines, need the neighbouring lines to judge, which is a second pass.
   static func refusesUnnumberedHeading(_ title: String) -> Bool {
@@ -1510,12 +1525,7 @@ public struct LegacyTextParser: Sendable {
     // lost to these rules over the corpus: `Appendix A.`, `Appendix 1.  BGP FSM State
     // Transitions and Actions.`, `Annex B (informative): …`, `A.3.2.  "subscription-
     // resumed" …`. What they start with says heading, whatever follows it.
-    let opening = title.prefix(8).lowercased()
-    if opening.hasPrefix("appendix") || opening.hasPrefix("annex")
-      || title.prefixMatch(of: letteredSectionNumber) != nil
-    {
-      return false
-    }
+    if title.prefixMatch(of: appendixOpening) != nil { return false }
     if first.isLowercase { return true }
     if codePunctuation.contains(where: { title.contains($0) }) { return true }
     if let last = title.last, ".;,".contains(last), !title.hasSuffix("etc.") { return true }
@@ -1525,8 +1535,7 @@ public struct LegacyTextParser: Sendable {
   /// Neither all capitals nor title case: some word of four letters or more that is not
   /// a minor word starts in lower case.
   private static func isSentenceCase(_ title: String) -> Bool {
-    guard title.contains(where: \.isLowercase) else { return false }
-    return title.split(separator: " ").contains { word in
+    title.split(separator: " ").contains { word in
       let letters = word.filter(\.isLetter)
       guard letters.count >= 4, !minorWords.contains(letters.lowercased()) else { return false }
       return letters.first?.isLowercase == true

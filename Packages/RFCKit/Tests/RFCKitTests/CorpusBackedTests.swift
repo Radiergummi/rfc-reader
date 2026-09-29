@@ -213,3 +213,15 @@ struct CorpusBackedCatalogueTests {
     }
   }
 }
+
+@Suite("Corpus-backed: unnumbered headings", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedUnnumberedHeadingTests {
+  /// The front matter ends at the first line that could be a heading, and that test is
+  /// kept lax: refusing prose there as the body does ran RFC 783's front matter on past
+  /// its summary, set at column 0 under a centred `Summary`, and lost it (#201). The
+  /// summary stays in the lead-in.
+  @Test func `a summary at column 0 is not swallowed into the front matter`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc783"))
+    #expect(leadInText(document).contains { $0.contains("its name comes") })
+  }
+}

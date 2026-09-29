@@ -314,7 +314,10 @@ struct LegacyTextParserTests {
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading(
         "TRANSMISSION OF DATAGRAMS OVER NETWORKS WITH LONG HEADERS"))
-    #expect(!LegacyTextParser.refusesUnnumberedHeading("How to use this document"))
+    #expect(
+      !LegacyTextParser.refusesUnnumberedHeading(
+        "Coexistence of the Relay Agents between Two Neighbouring Networks"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("How to read this memo"))
   }
 
   /// An appendix heading the appendix pattern missed falls through to the unnumbered
@@ -325,13 +328,25 @@ struct LegacyTextParserTests {
     #expect(!LegacyTextParser.refusesUnnumberedHeading("APPENDIX 2 - COMMAND SYNTAX."))
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading(
-        "Appendix 1.  Error Recovery and Resynchronization Strategies."))
+        "Appendix 1.  Session States and the Events That Change Them."))
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading(
         "Appendix B -- Differences from an earlier version of this text"))
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading("Annex C (informative): Long term verification"))
     #expect(!LegacyTextParser.refusesUnnumberedHeading("B.1.2.  successful-ok-with-notes (0x0001)"))
+  }
+
+  /// The appendix exemption is for a heading's opening, not for any line that shares
+  /// its first letters: wrapped prose, a reference to an appendix, an ITU name.
+  @Test func `an appendix mentioned in prose is still not an unnumbered heading`() {
+    #expect(
+      LegacyTextParser.refusesUnnumberedHeading("appendix to the manual, which describes them"))
+    #expect(
+      LegacyTextParser.refusesUnnumberedHeading("Appendixes are listed at the end of this memo."))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("A.4 for the details of the exchange."))
+    #expect(
+      LegacyTextParser.refusesUnnumberedHeading("X.400 gateways, which the next section covers,"))
   }
 
   /// Through `parse`: a MIB set at column 0 opens no sections.
@@ -352,7 +367,7 @@ struct LegacyTextParserTests {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
     let titles = document.allSections.map(\.title.plainText)
     #expect(!titles.contains { $0.first?.isLowercase == true })
-    #expect(titles.contains("INTRODUCTION"))
+    #expect(titles.contains("OPEN Call"))
   }
 }
 
@@ -1788,5 +1803,4 @@ extension RFCDocument {
       return nil
     }
   }
-
 }
