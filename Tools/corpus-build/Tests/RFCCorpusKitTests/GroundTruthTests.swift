@@ -122,9 +122,41 @@ struct GroundTruthTests {
   }
 
   @Test func `counts add up across documents`() {
-    let a = GroundTruth.Counts(truePositives: 1, falsePositives: 2, falseNegatives: 3)
-    let b = GroundTruth.Counts(truePositives: 4, falsePositives: 5, falseNegatives: 6)
-    #expect(a + b == GroundTruth.Counts(truePositives: 5, falsePositives: 7, falseNegatives: 9))
+    let first = GroundTruth.Counts(truePositives: 1, falsePositives: 2, falseNegatives: 3)
+    let second = GroundTruth.Counts(truePositives: 4, falsePositives: 5, falseNegatives: 6)
+    #expect(
+      first + second == GroundTruth.Counts(truePositives: 5, falsePositives: 7, falseNegatives: 9))
+  }
+
+  // MARK: - The report
+
+  /// Totals per kind over every document, and the documents worst first, so the
+  /// ones to read first head the list.
+  @Test func `the report totals each kind and ranks the documents by errors`() {
+    func counts(_ found: Int, _ invented: Int, _ missed: Int) -> [GroundTruth.Kind: GroundTruth
+      .Counts]
+    {
+      [
+        .heading: GroundTruth.Counts(
+          truePositives: found, falsePositives: invented, falseNegatives: missed)
+      ]
+    }
+    let report = GroundTruthReport(documents: [
+      (.rfc(9000), counts(4, 0, 0)),
+      (.rfc(8999), counts(1, 2, 3)),
+      (.rfc(9110), counts(2, 1, 0)),
+    ])
+    #expect(report.documents.map(\.document) == ["rfc8999", "rfc9110", "rfc9000"])
+    #expect(report.documents.map(\.errors) == [5, 1, 0])
+    let headings = report.kinds["heading"]
+    #expect(headings?.truePositives == 7)
+    #expect(headings?.falsePositives == 3)
+    #expect(headings?.falseNegatives == 3)
+    #expect(headings?.precision == 0.7)
+    #expect(headings?.recall == 0.7)
+    // A kind no document had is reported, with nothing to divide by.
+    #expect(report.kinds["artwork"]?.truePositives == 0)
+    #expect(report.kinds["artwork"]?.precision == nil)
   }
 
   // MARK: - Fetching the pairs

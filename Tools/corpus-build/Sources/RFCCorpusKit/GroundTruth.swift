@@ -70,6 +70,10 @@ public enum GroundTruth {
       whole == 0 ? nil : Double(part) / Double(whole)
     }
 
+    public static func += (lhs: inout Counts, rhs: Counts) {
+      lhs = lhs + rhs
+    }
+
     public static func + (lhs: Counts, rhs: Counts) -> Counts {
       Counts(
         truePositives: lhs.truePositives + rhs.truePositives,
@@ -152,5 +156,63 @@ public enum GroundTruth {
       counts[block.kind]!.falseNegatives += left
     }
     return counts
+  }
+}
+
+/// `corpus/score.json`: the totals per kind, and every document worst first.
+/// Kinds are keyed by name, and every one is present, so two runs' files diff
+/// line for line.
+public struct GroundTruthReport: Codable, Sendable {
+  public struct Total: Codable, Sendable {
+    public var truePositives: Int
+    public var falsePositives: Int
+    public var falseNegatives: Int
+    public var precision: Double?
+    public var recall: Double?
+
+    init(_ counts: GroundTruth.Counts) {
+      truePositives = counts.truePositives
+      falsePositives = counts.falsePositives
+      falseNegatives = counts.falseNegatives
+      precision = counts.precision
+      recall = counts.recall
+    }
+  }
+
+  public struct Document: Codable, Sendable {
+    /// The file stem, `rfc9110`.
+    public var document: String
+    public var errors: Int
+    public var kinds: [String: GroundTruth.Counts]
+  }
+
+  public var kinds: [String: Total]
+  public var documents: [Document]
+
+  /// Ranked by errors, most first, and by number where they tie, so the order
+  /// is the same from run to run.
+  public init(documents scored: [(DocumentID, [GroundTruth.Kind: GroundTruth.Counts])]) {
+    var totals = Dictionary(
+      uniqueKeysWithValues: GroundTruth.Kind.allCases.map { ($0, GroundTruth.Counts.zero) })
+    for (_, counts) in scored {
+      for (kind, count) in counts {
+        totals[kind, default: .zero] += count
+      }
+    }
+    kinds = Dictionary(uniqueKeysWithValues: totals.map { ($0.key.rawValue, Total($0.value)) })
+    var ranked: [(number: Int, document: Document)] = []
+    for (id, counts) in scored {
+      let errors = counts.values.map(\.errors).reduce(0, +)
+      var byName: [String: GroundTruth.Counts] = [:]
+      for (kind, count) in counts { byName[kind.rawValue] = count }
+      ranked.append((id.number, Document(document: id.fileStem, errors: errors, kinds: byName)))
+    }
+    ranked.sort { lhs, rhs in
+      if lhs.document.errors != rhs.document.errors {
+        return lhs.document.errors > rhs.document.errors
+      }
+      return lhs.number < rhs.number
+    }
+    documents = ranked.map(\.document)
   }
 }
