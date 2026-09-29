@@ -513,7 +513,7 @@
 
       case .rfcNewCollection:
         return button(
-          identifier, "New Collection", "folder.badge.plus", #selector(newCollectionInSidebar))
+          identifier, "New Collection", "folder.badge.plus", #selector(newEmptyCollection))
 
       case .rfcPanelToggle:
         return button(
@@ -654,11 +654,12 @@
       navigation.collectionEditor = .create(adding: id)
     }
 
-    /// The sidebar's button, which makes an empty collection as File > New
-    /// Collection… does; only the Bookmark menu's adds the open document.
-    @objc private func newCollectionInSidebar() {
+    /// The toolbar's New Collection button, which makes an empty collection as
+    /// File > New Collection… does; only the Bookmark menu's adds the open document.
+    @objc private func newEmptyCollection() {
       navigation.collectionEditor = .create(adding: nil)
     }
+
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
 
     @objc private func copyCitation(_ sender: NSMenuItem) {
