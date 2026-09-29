@@ -8,7 +8,6 @@ import Foundation
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
 public enum LegacyTextParser {
-
   public static func parse(_ data: Data) -> RFCDocument {
     parse(String(decoding: data, as: UTF8.self))
   }

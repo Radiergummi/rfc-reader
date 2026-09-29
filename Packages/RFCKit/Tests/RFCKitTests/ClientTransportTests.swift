@@ -7,7 +7,7 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// The client's transport and errors, and the recent feed's dates (#148).
+/// The client's transport and errors (#148).
 @Suite("Client transport", .serialized)
 struct ClientTransportTests {
   /// A `URLProtocol` that answers every request with `StubProtocol.response`, and
@@ -31,6 +31,12 @@ struct ClientTransportTests {
     }
 
     override func stopLoading() {}
+  }
+
+  /// The stub's state is shared; each test starts from none, not the last test's.
+  init() {
+    StubProtocol.response = nil
+    StubProtocol.lastRequest = nil
   }
 
   private static func session() -> URLSession {
@@ -81,16 +87,7 @@ struct ClientTransportTests {
     } throws: { error in
       guard case .decoding(let context, let underlying) = error as? RFCEditorClient.ClientError
       else { return false }
-      return context == "rfc-index.xml" && !(underlying is RFCEditorClient.ClientError)
+      return context == "rfc-index.xml" && underlying is RFCIndexParser.ParseError
     }
-  }
-
-  /// RFC 822 dates, pinned before the parse moved from a `DateFormatter` to a
-  /// `Date.ParseStrategy`: every item has one, and they are the feed's instants.
-  @Test func `every recent RFC has the date the feed gives`() throws {
-    let recent = try RecentFeedParser.parse(try Fixtures.data("rfcrss.xml"))
-    #expect(recent.allSatisfy { $0.publishedAt != nil })
-    #expect(recent.first?.publishedAt == Date(timeIntervalSince1970: 1_789_776_000))
-    #expect(recent.contains { $0.publishedAt == Date(timeIntervalSince1970: 1_786_665_600) })
   }
 }

@@ -16,7 +16,7 @@ public protocol HTTPTransport: Sendable {
 /// add a public `data(for: URL)` to a system type, beside its own `data(from:)` and
 /// `data(for: URLRequest)` (#148).
 public struct URLSessionTransport: HTTPTransport {
-  public let session: URLSession
+  private let session: URLSession
 
   public init(session: URLSession = .shared) {
     self.session = session
@@ -44,7 +44,7 @@ public actor RFCEditorClient {
     case notFound(DocumentID)
     /// What was being read, and why it could not be: the parser's own error, kept
     /// rather than turned into words.
-    case decoding(context: String, underlying: any Error & Sendable)
+    case decoding(context: String, underlying: any Error)
   }
 
   private let transport: any HTTPTransport
@@ -228,15 +228,17 @@ public enum RecentFeedParser {
 
   /// An RFC 822 date, `Sat, 19 Sep 2026 00:00:00 GMT`: a `Sendable` value made once,
   /// where a `DateFormatter` was built for every parse (#148). The time zone field is
-  /// read, not assumed.
-  private static let dateStrategy = Date.ParseStrategy(
+  /// read, not assumed. Strict, as the `DateFormatter` was: a date that does not
+  /// exist, `31 Sep`, is no date rather than the first of the next month.
+  static let dateStrategy = Date.ParseStrategy(
     format: """
       \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \
       \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\
       \(second: .twoDigits) \(timeZone: .specificName(.short))
       """,
     locale: Locale(identifier: "en_US_POSIX"),
-    timeZone: TimeZone(identifier: "GMT")!)
+    timeZone: TimeZone(identifier: "GMT")!,
+    isLenient: false)
 
   public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
     let root: XMLTree.Element
