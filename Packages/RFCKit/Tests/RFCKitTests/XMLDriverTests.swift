@@ -34,10 +34,44 @@ struct XMLDriverTests {
     #expect(error.errorDescription?.contains("line \(error.line)") == true)
   }
 
-  @Test func `an empty document is malformed`() {
-    #expect(throws: XMLSyntaxError.self) {
+  @Test func `an empty document is malformed`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
       _ = try XMLTree.parse(Data())
     }
+    #expect(error.message == "empty document")
+  }
+
+  /// libxml2's own words, not the Darwin error's domain and code, "The operation
+  /// couldn't be completed. (NSXMLParserErrorDomain error 76.)" (#320).
+  @Test func `the message says what the parser found`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(Data("<a><b></a>".utf8))
+    }
+    #expect(error.message.localizedCaseInsensitiveContains("mismatch"))
+    #expect(!error.message.contains("ErrorDomain"))
+    #expect(error.message == error.message.trimmingCharacters(in: .whitespacesAndNewlines))
+  }
+
+  /// Every error that wraps the syntax error says what it says: the app shows
+  /// `localizedDescription`, which for an error that is not `LocalizedError` is its
+  /// type's name and a number (#320).
+  @Test func `a wrapped syntax error keeps its description`() throws {
+    let truncated = Data("<rfc>\n<front>".utf8)
+    let expected = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(truncated)
+    }
+    let wrapped: [any Error] = [
+      RFCXMLParser.ParseError.malformed(expected),
+      RFCIndexParser.ParseError.malformed(expected),
+      RecentFeedParser.ParseError.malformed(expected),
+      IANARegistry.ParseError.malformed(expected),
+    ]
+    for error in wrapped {
+      #expect(error.localizedDescription == expected.errorDescription)
+    }
+    let decoding = RFCEditorClient.ClientError.decoding(
+      context: "rfc-index.xml", underlying: RFCIndexParser.ParseError.malformed(expected))
+    #expect(decoding.localizedDescription == "rfc-index.xml: \(expected.errorDescription ?? "")")
   }
 
   /// The same truncated input through each parser: each wraps exactly the error the
