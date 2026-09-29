@@ -131,13 +131,10 @@ public struct ListNumbering: Sendable, Hashable, Codable {
   /// The value of a lowercase Roman numeral, or nil when `numeral` is not the
   /// canonical spelling of one (`iiii`, `vx`).
   private static func romanValue(_ numeral: Substring) -> Int? {
-    let values: [Character: Int] = [
-      "i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000,
-    ]
     var total = 0
     var previous = 0
     for character in numeral.reversed() {
-      guard let value = values[character] else { return nil }
+      guard let value = romanDigits[character] else { return nil }
       total += value < previous ? -value : value
       previous = max(previous, value)
     }
@@ -145,6 +142,19 @@ public struct ListNumbering: Sendable, Hashable, Codable {
   }
 
   // MARK: Markers
+
+  private static let alphabet = Array("abcdefghijklmnopqrstuvwxyz")
+
+  /// The value of each lowercase Roman digit.
+  private static let romanDigits: [Character: Int] = [
+    "i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000,
+  ]
+
+  /// Roman symbols from the largest down, subtractive pairs included.
+  private static let romanSymbols: [(Int, String)] = [
+    (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+    (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+  ]
 
   /// The marker of the item at `index`, counting from `start`.
   public func marker(at index: Int) -> String {
@@ -174,7 +184,6 @@ public struct ListNumbering: Sendable, Hashable, Codable {
   /// published RFCs are rendered by xml2rfc, and a reference to "item ba" has to
   /// find it.
   private static func letters(_ value: Int) -> String {
-    let alphabet = Array("abcdefghijklmnopqrstuvwxyz")
     var remaining = value - 1
     var result = String(alphabet[remaining % 26])
     remaining /= 26
@@ -186,13 +195,9 @@ public struct ListNumbering: Sendable, Hashable, Codable {
   }
 
   private static func roman(_ value: Int) -> String {
-    let table: [(Int, String)] = [
-      (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
-      (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
-    ]
     var remaining = value
     var result = ""
-    for (arabic, symbol) in table {
+    for (arabic, symbol) in romanSymbols {
       while remaining >= arabic {
         result += symbol
         remaining -= arabic

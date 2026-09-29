@@ -125,7 +125,7 @@ struct ListNumberingTests {
   /// RFC 793 letters its list `(a)`, `(b)`: read as letters in parentheses, not as
   /// numbers.
   @Test func `a legacy lettered list keeps its letters`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let numbering = try #require(
       Self.numbering(ofListStarting: "Determining that an acknowledgment", in: document))
     #expect(numbering == ListNumbering(counter: .lowerAlpha, prefix: "(", suffix: ")", start: 1))
@@ -133,7 +133,7 @@ struct ListNumberingTests {
 
   /// RFC 1927 numbers with a closing parenthesis, `1)`, which is not `1.`.
   @Test func `a legacy list keeps its punctuation`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc1927.txt"))
+    let document = try Fixtures.document("rfc1927.txt")
     let numbering = try #require(Self.numbering(ofListStarting: "New MIME Types", in: document))
     #expect(numbering == ListNumbering(suffix: ")", start: 1))
   }
@@ -141,14 +141,14 @@ struct ListNumberingTests {
   /// RFC 1927 starts every one of its lists at `1)`, a blank line apart. Merged by
   /// style alone they were one list of 33 items, drawn `1)` to `33)`.
   @Test func `lists that each start at one stay apart`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc1927.txt"))
+    let document = try Fixtures.document("rfc1927.txt")
     let longest = Self.lists(in: document).map(\.items.count).max() ?? 0
     #expect(longest <= 4)
   }
 
   /// RFC 8771 letters a nested list, `<ol type="a" start="1">`.
   @Test func `the XML parser reads the type and the start`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8771.xml"))
+    let document = try Fixtures.document("rfc8771.xml")
     let numberings = Self.lists(in: document).compactMap { list -> ListNumbering? in
       if case .numbered(let numbering) = list.style { return numbering }
       return nil

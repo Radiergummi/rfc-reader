@@ -27,7 +27,7 @@ struct AuthorTests {
   /// `, Ed.`, which the serializer cut back off by its length. They are authors now,
   /// and an editor survives the round trip as one.
   @Test func `a reference's editor survives a round trip`() throws {
-    let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let original = try Fixtures.document("rfc8999.xml")
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     for document in [original, reparsed] {
       let entry = try #require(

@@ -52,7 +52,8 @@ public struct ReadingStyle: Sendable, Hashable {
   ///   default text size. The two multiply (#153): someone at an accessibility size
   ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
-    bodySize: CGFloat = 17, measure: CGFloat = ReaderLayout.idealMeasure,
+    bodySize: CGFloat = CGFloat(ReaderPreferences.defaultFontSize),
+    measure: CGFloat = ReaderLayout.idealMeasure,
     lineHeightMultiple: CGFloat = 1.25,
     underlinesLinks: Bool = false, emitsLinks: Bool = true, references: ReferenceStyle = .chip,
     textSize: DynamicTypeSize = .large

@@ -619,13 +619,14 @@
       // iOS lists the formats and presents its print sheet.
       if menu === moreMenu {
         menu.addItem(.separator())
-        for (title, action) in [
-          ("Export…", #selector(exportDocument)), ("Print…", #selector(printDocument)),
-        ] {
-          let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-          item.target = self
-          menu.addItem(item)
-        }
+        let exportItem = NSMenuItem(
+          title: "Export…", action: #selector(exportDocument), keyEquivalent: "")
+        exportItem.target = self
+        menu.addItem(exportItem)
+        let printItem = NSMenuItem(
+          title: "Print…", action: #selector(printDocument), keyEquivalent: "")
+        printItem.target = self
+        menu.addItem(printItem)
       }
     }
 

@@ -227,13 +227,7 @@ public struct RFCXMLSerializer: Sendable {
   }
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
-    // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,
-    // which is an ID. The second is written unnumbered, its number in its name, so it
-    // reads the same and names nothing twice (#65).
-    let partNumber = section.number.map {
-      PartNumber(sectionNumber: $0, isAppendix: section.isAppendix).attribute
-    }
-    .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = Self.claimedPartNumber(of: section, context: &context)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
@@ -255,11 +249,18 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("section")
   }
 
+  /// The section's `pn`, or nil when it has no number or another section claimed that
+  /// one first. Two sections numbered alike (RFC 1 has two appendices A) would share a
+  /// `pn`, which is an ID. The second is written unnumbered, its number in its name, so
+  /// it reads the same and names nothing twice (#65).
+  private static func claimedPartNumber(of section: Section, context: inout Context) -> String? {
+    guard let number = section.number else { return nil }
+    let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix).attribute
+    return context.claim(partNumber) ? partNumber : nil
+  }
+
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
-    let partNumber = section.number.map {
-      PartNumber(sectionNumber: $0, isAppendix: section.isAppendix).attribute
-    }
-    .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = Self.claimedPartNumber(of: section, context: &context)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }

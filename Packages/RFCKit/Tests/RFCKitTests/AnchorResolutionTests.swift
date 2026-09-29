@@ -54,11 +54,8 @@ struct AnchorResolutionTests {
 
   /// A row's anchor is part of the row, so it names that row's cells and no other.
   @Test func `a row anchor names its own row's cells`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
-    let rows = document.blocks.flattened.flatMap { block -> [Table.Row] in
-      if case .table(let table) = block { return table.header + table.rows }
-      return []
-    }
+    let document = try Fixtures.document("rfc9271.xml")
+    let rows = document.blocks.compactMap(\.table).flatMap { $0.header + $0.rows }
     let row = try #require(rows.first { $0.anchor == "EventFSD" })
     #expect(row.cells.first?.plainText == "none")
     #expect(row.cells.dropFirst().first?.plainText == "FSD")
