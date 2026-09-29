@@ -84,4 +84,12 @@ struct CommandLineTests {
     let expected = DocumentConverter().convert(text: text, stem: "rfc2119", metadata: nil).xml
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)
   }
+
+  /// `--out` is where both files go; without it there is nowhere to write, and
+  /// nothing may be fetched first.
+  @Test func `revisions requires out`() throws {
+    let result = try Self.run(["revisions"])
+    #expect(result.status == 64, "EX_USAGE")
+    #expect(result.standardError.contains("--out"), "\(result.standardError)")
+  }
 }

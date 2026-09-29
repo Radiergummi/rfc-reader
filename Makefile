@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -91,7 +91,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1140 rfc1142 rfc1178 rfc1198 rfc1343 rfc1441 rfc1581 rfc1958 rfc206 rfc2196 rfc2300 rfc2326 rfc355 rfc5193 rfc6186 rfc6614 rfc674 rfc722 rfc7231 rfc775 rfc783 rfc793 rfc8011 rfc817
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1122 rfc1140 rfc1142 rfc1178 rfc1198 rfc1343 rfc1415 rfc1441 rfc1581 rfc1958 rfc206 rfc2196 rfc2300 rfc2326 rfc2569 rfc2910 rfc355 rfc5193 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc793 rfc8011 rfc817
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
@@ -366,6 +366,10 @@ corpus-manifest: corpus-tool
 # See Tools/corpus-build/Evaluation/README.md for which query set measures what.
 corpus-queries: corpus-tool
 	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out $(CORPUS)/queries-xref.json
+
+## Scan datatracker for adopted drafts revising an RFC, into corpus/revisions
+revisions: corpus-tool
+	$(CORPUS_BIN) revisions --out $(CORPUS)/revisions $(if $(wildcard $(CORPUS)/revisions/revisions-scan.json),--scan $(CORPUS)/revisions/revisions-scan.json)
 
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion

@@ -28,7 +28,7 @@ struct RFCXMLParserTests {
     #expect(document.header.draftName == "draft-ietf-quic-invariants-13")
     #expect(document.header.abstract.count == 1)
     if case .paragraph(let paragraph) = document.header.abstract[0] {
-      #expect(paragraph.plainText.hasPrefix("This document defines the properties"))
+      #expect(paragraph.plainText.contains("QUIC transport protocol"))
       #expect(!paragraph.plainText.contains("\n"), "whitespace inside <t> is collapsed")
     } else {
       Issue.record("abstract should be a paragraph")

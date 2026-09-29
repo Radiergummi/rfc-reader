@@ -70,16 +70,16 @@ struct LegacyTextParserHeadingsTests {
 
     // Lines from the middle of a paragraph must not become sections.
     let titles = document.allSections.map(\.titleText)
-    #expect(!titles.contains { $0.hasPrefix("The changes between version 1") })
-    #expect(!titles.contains { $0.hasPrefix("This report attempts to summarize") })
+    #expect(!titles.contains { $0.hasPrefix("The changes") })
+    #expect(!titles.contains { $0.hasPrefix("This report") })
 
     // The abstract is still recognized, and its paragraphs stay whole.
     guard case .paragraph(let abstract)? = document.header.abstract.first else {
       Issue.record("abstract missing")
       return
     }
-    #expect(abstract.plainText.hasPrefix("This is the first of two reports"))
-    #expect(abstract.plainText.hasSuffix("OSPF is an Interior Gateway Protocol)."))
+    #expect(abstract.plainText.hasPrefix("This is the first"))
+    #expect(abstract.plainText.hasSuffix("Interior Gateway Protocol)."))
   }
 
   /// Where a document sets as much text at column 0 as at its body indent, column 0

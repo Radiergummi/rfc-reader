@@ -35,7 +35,7 @@ struct LegacyTextParserFrontMatterTests {
       Issue.record("abstract missing")
       return
     }
-    #expect(paragraph.plainText.hasPrefix("In many standards track documents"))
+    #expect(paragraph.plainText.hasPrefix("In many standards track"))
   }
 
   /// A section the reader omits -- the memo's status, its copyright, its contents -- or
@@ -54,7 +54,7 @@ struct LegacyTextParserFrontMatterTests {
     }
     let staples = try middle("rfc1927.txt")
     #expect(staples.middle.contains("New MIME Types: Staple"))
-    #expect(!staples.middle.contains("This memo provides information for the Internet community"))
+    #expect(!staples.middle.contains("Internet community"))
 
     let traffic = try middle("rfc509.txt")
     #expect(traffic.middle.contains("HOST THROUGHPUT SUMMARY"))
@@ -86,14 +86,14 @@ struct LegacyTextParserFrontMatterTests {
     let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
     #expect(
       addresses.paragraphs.contains {
-        $0.plainText.hasPrefix("This memo describes the relationship between address fields")
+        $0.plainText.hasPrefix("This memo describes")
       })
     #expect(addresses.header.id == .rfc(796))
 
     let remoteJobs = LegacyTextParser.parse(try Fixtures.string("rfc105.txt"))
     #expect(
       remoteJobs.paragraphs.contains {
-        $0.plainText.hasPrefix("In the discussions that follow, 'byte' means 8 bits")
+        $0.plainText.hasPrefix("In the discussions")
       })
     #expect(!remoteJobs.allSections.contains { $0.titleText.hasPrefix("eight bits numbered") })
   }
@@ -114,10 +114,10 @@ struct LegacyTextParserFrontMatterTests {
       "                              Version 2",
     ]
     let procedureCallBody = [
-      "As many of you may know SRI is part of a team working on the National",
-      "Software Works project. In the course of our work we have developed a",
-      "Procedure Call Protocol to be used between the modules which make up",
-      "the NSW. We are interested in your comments on this protocol.",
+      "Most of you will have heard that our group is building a set of",
+      "tools for distributed programs. Along the way we have written a",
+      "protocol for calling procedures between the parts of that system,",
+      "and we would welcome your comments on it.",
     ]
     let procedureCall = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -140,20 +140,18 @@ struct LegacyTextParserFrontMatterTests {
 
     let introduction = ["          1.  Introduction"]
     let managementBody = [
-      "          The purpose of this document is to provide an overview of",
-      "          version 2 of the Internet-standard Network Management",
-      "          Framework, termed the SNMP version 2 framework (SNMPv2).",
+      "          This document gives an overview of the second version of the",
+      "          example management framework, and of the documents that make",
+      "          it up.",
     ]
     let management = LegacyTextParser.leadInWithoutFrontMatter(
       [
         LegacyTextParser.RawBlock(lines: ["          Status of this Memo"]),
         LegacyTextParser.RawBlock(lines: [
-          "          This RFC specifes an IAB standards track protocol for the",
-          "          Internet community, and requests discussion and suggestions",
-          "          for improvements.  Please refer to the current edition of the",
-          "          \"IAB Official Protocol Standards\" for the standardization",
-          "          state and status of this protocol.  Distribution of this memo",
-          "          is unlimited.",
+          "          This memo defines a standards track protocol for the",
+          "          Internet community and asks for comments on how to improve",
+          "          it.  See the latest \"Official Protocol Standards\" for where",
+          "          it stands.  Distribution of this memo is unlimited.",
         ]),
         LegacyTextParser.RawBlock(lines: ["          Table of Contents"]),
         LegacyTextParser.RawBlock(lines: [
@@ -206,19 +204,19 @@ struct LegacyTextParserFrontMatterTests {
   @Test func `only boilerplate wording is taken for boilerplate`() {
     #expect(
       LegacyTextParser.readsAsBoilerplate([
-        "   This document is distributed as an RFC for information only.  It",
-        "   does not specify a standard for the ARPA-Internet.",
+        "   This note is sent out for information only.  It does not",
+        "   specify a standard for the network.",
       ]))
     #expect(
       LegacyTextParser.readsAsBoilerplate([
-        "   This memo provides information for the Internet community.  It does",
-        "   not specify an Internet standard.  Distribution of this memo is",
-        "   unlimited.",
+        "   This memo is for the information of the Internet community.  It",
+        "   does not specify an Internet standard of any kind.  Distribution",
+        "   of this memo is unlimited.",
       ]))
     #expect(
       !LegacyTextParser.readsAsBoilerplate([
-        "   The purpose of this document is to provide an overview of version 2",
-        "   of the Internet-standard Network Management Framework.",
+        "   This document gives an overview of the second version of the",
+        "   example management framework.",
       ]))
   }
 
@@ -233,10 +231,10 @@ struct LegacyTextParserFrontMatterTests {
     #expect(replaced.header.title == "Carrier Pigeons for Internet Datagrams")
 
     let abstract = [
-      "            This memo suggests a  file  format  to  be  used  to  inform",
-      "            multiple   mail   reading  user  agent  programs  about  the",
-      "            locally-installed facilities for handling  mail  in  various",
-      "            formats.",
+      "            This document proposes a  file  format  that  tells  every",
+      "            program  on  a  host  that  reads  mail  which  local  tools",
+      "            can  show  a  message  in  each  of  the  formats  it  may",
+      "            arrive in.",
     ]
     let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -316,9 +314,9 @@ struct LegacyTextParserFrontMatterTests {
   /// `June 9, 1972` was the lead-in's second block (#170).
   @Test func `a date alone on a line is the title pages`() {
     let body = [
-      "   Long transmission delays such as those inherent in satellite",
-      "   communication are most certainly a cause for concern among users of",
-      "   remote interactive systems.",
+      "   Anyone who works on a remote interactive system notices every delay",
+      "   on the line, and the delay a satellite hop adds is longer than most",
+      "   people will put up with.",
     ]
     let leadIn = LegacyTextParser.leadInWithoutFrontMatter(
       [
@@ -340,13 +338,9 @@ struct LegacyTextParserFrontMatterTests {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2371.txt"))
     let abstract = document.header.abstract.compactMap(\.paragraph?.plainText)
     #expect(
-      abstract.first?.hasPrefix("In many applications where different nodes cooperate") == true)
-    #expect(
-      document.paragraphs.contains { $0.plainText.hasPrefix("TMP provides a simple mechanism") })
-    #expect(
-      !document.paragraphs.contains {
-        $0.plainText.hasPrefix("In many applications where different nodes cooperate")
-      })
+      abstract.first?.hasPrefix("In many applications") == true)
+    #expect(document.paragraphs.contains { $0.plainText.hasPrefix("TMP provides") })
+    #expect(!document.paragraphs.contains { $0.plainText.hasPrefix("In many applications") })
   }
 
   /// The front matter accepted one spelling of the number line, `Request for Comments:`,

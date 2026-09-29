@@ -16,6 +16,7 @@ struct CorpusBuild: AsyncParsableCommand {
     subcommands: [
       FetchCommand.self, ConvertCommand.self, ManifestCommand.self, QueriesCommand.self,
       ScoreCommand.self,
+      RevisionsCommand.self,
     ]
   )
 }

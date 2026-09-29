@@ -185,6 +185,21 @@ actor DocumentStore {
     try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
   }
 
+  // MARK: - Revisions
+
+  private var revisionsURL: URL { directory.appending(path: "revisions.json") }
+
+  /// The last good `revisions.json`. Nil when there is none, or it no longer decodes
+  /// (a newer version, after a downgrade).
+  func cachedRevisions() -> RFCRevisions? {
+    guard let data = try? Data(contentsOf: revisionsURL) else { return nil }
+    return try? RFCRevisions.decode(data)
+  }
+
+  func storeRevisions(_ data: Data) throws {
+    try data.write(to: revisionsURL, options: .atomic)
+  }
+
   // MARK: - Documents
 
   private func fileURL(_ id: DocumentID, format: FileFormat) -> URL {

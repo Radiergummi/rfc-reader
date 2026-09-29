@@ -35,8 +35,8 @@ struct LegacyTextParserPaginationTests {
     let lines = header.split(separator: "\n", omittingEmptySubsequences: false)
     // The block's indent is four, from `    0`, and every line loses exactly that.
     #expect(lines.first == "0           Destination net          (8)")
-    #expect(lines.contains("  This field selects the appropriate gateway processing and is used"))
-    #expect(lines.contains("    0 -- Escape; protocol is specified by a subsequent field"))
+    #expect(lines.contains { $0.hasPrefix("  This field") })
+    #expect(lines.contains { $0.hasPrefix("    0 -- Escape") })
   }
 
   /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on
@@ -61,7 +61,8 @@ struct LegacyTextParserPaginationTests {
     // across it is one paragraph again.
     let paragraphs = document.paragraphs.map(\.plainText)
     #expect(
-      paragraphs.contains { $0.contains("the TCP must tell user to go into \"normal mode\".") })
+      paragraphs.contains { $0.contains("(RCV.NXT)") && $0.contains("\"normal mode\"") },
+      "the terms on either side of the page break are in one paragraph")
   }
 
   /// A section running header is furniture on every page but the first, where it is

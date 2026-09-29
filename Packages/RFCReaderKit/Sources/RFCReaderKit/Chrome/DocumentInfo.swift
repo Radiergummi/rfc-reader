@@ -68,6 +68,8 @@ public struct DocumentInfo: Equatable, Sendable {
     case copyable(String)
     /// Other documents, opened in the reader the way a reference is.
     case documents([DocumentID])
+    /// Internet-Drafts, each opening its datatracker page in the browser.
+    case drafts([RevisionsSummary.Line])
     /// A page elsewhere.
     case link(URL)
     /// A format of the document, where the RFC Editor hosts it
@@ -83,7 +85,12 @@ public struct DocumentInfo: Equatable, Sendable {
   /// - Parameter authors: the document's own, once it is here: they carry the
   ///   contact details a chip opens, which the index never has. The index's names
   ///   stand in until then, as they do in the header.
-  public init(_ metadata: RFCMetadata, authors: [Author]? = nil, in index: RFCIndex?) {
+  /// - Parameter revisions: the drafts revising this document, from `revisions.json`;
+  ///   nil or empty adds no rows.
+  public init(
+    _ metadata: RFCMetadata, authors: [Author]? = nil, in index: RFCIndex?,
+    revisions: RevisionsSummary? = nil
+  ) {
     number = metadata.id.displayName
     title = metadata.title
     status = metadata.currentStatus
@@ -91,7 +98,8 @@ public struct DocumentInfo: Equatable, Sendable {
     facts = Self.facts(metadata)
     sections = [
       Self.section("Authors", .list, Self.authors(authors, else: metadata.authors)),
-      Self.section("Relationships", .list, Self.relationships(metadata, index: index)),
+      Self.section(
+        "Relationships", .list, Self.relationships(metadata, index: index, revisions: revisions)),
       Self.section("Links", .card, Self.links(metadata)),
       Self.section("Formats", .card, Self.formats(metadata)),
       Self.section("Details", .list, Self.details(metadata)),
@@ -125,7 +133,9 @@ public struct DocumentInfo: Equatable, Sendable {
   /// Each relationship is a list, not a sentence: "obsoletes RFC 2616, 7230, 7231,
   /// 7232, 7233, 7234, 7235" needs the room. A series lists its other members, as
   /// the index records them, and not this document again.
-  private static func relationships(_ metadata: RFCMetadata, index: RFCIndex?) -> [Row] {
+  private static func relationships(
+    _ metadata: RFCMetadata, index: RFCIndex?, revisions: RevisionsSummary?
+  ) -> [Row] {
     var rows: [Row] = []
     for (label, documents) in [
       ("Obsoletes", metadata.obsoletes),
@@ -134,6 +144,12 @@ public struct DocumentInfo: Equatable, Sendable {
       ("Updated by", metadata.updatedBy),
     ] where !documents.isEmpty {
       rows.append(Row(label: label, value: .documents(documents)))
+    }
+    for relation in [RevisionRelation.obsoletes, .updates] {
+      let lines = revisions?.inspectorLines(relation) ?? []
+      if !lines.isEmpty {
+        rows.append(Row(label: RevisionsSummary.relationLabel(relation), value: .drafts(lines)))
+      }
     }
     for series in metadata.isAlso {
       let others =

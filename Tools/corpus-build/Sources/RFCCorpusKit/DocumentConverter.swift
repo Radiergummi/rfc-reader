@@ -30,8 +30,10 @@ public struct DocumentConverter: Sendable {
     public var report: DocumentReport
     /// Nil unless `diagnosesProse`.
     public var prose: ProseReport?
-    /// Nil unless `samplesBoundary`.
-    public var boundary: [BoundarySample.Entry]?
+    /// Nil unless `samplesBoundary`. `unlocated` counts the blocks on the boundary that
+    /// could not be found in the source; it goes to the run's log, not the report, so the
+    /// report reads the same with or without the sample.
+    public var boundary: BoundarySample.Sample?
   }
 
   /// Converts the text of the document `stem` (`rfc2119`, from `rfc2119.txt`).
@@ -64,9 +66,6 @@ public struct DocumentConverter: Sendable {
     report.warnings += notes
     report.warnings += serialization.warnings
     if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
-    if let unlocated = boundary?.unlocated, unlocated > 0 {
-      report.warnings.append("\(unlocated) blocks on the boundary not found in the source")
-    }
     // Round-trip check: the XML must parse back into the same section tree.
     do {
       let reparsed = try RFCXMLParser.parse(xml)
@@ -78,6 +77,6 @@ public struct DocumentConverter: Sendable {
     } catch {
       report.warnings.append("generated XML does not parse: \(error)")
     }
-    return Conversion(xml: xml, report: report, prose: prose, boundary: boundary?.entries)
+    return Conversion(xml: xml, report: report, prose: prose, boundary: boundary)
   }
 }

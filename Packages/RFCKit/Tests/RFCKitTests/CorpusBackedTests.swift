@@ -34,7 +34,7 @@ struct CorpusBackedProseCapTests {
   @Test func `a body set deeper than column three is still prose`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1178"))
     #expect(document.artworkText.isEmpty, "\(document.artworkText.count) blocks kept as artwork")
-    #expect(document.paragraphs.contains { $0.plainText.hasPrefix("Using a word that has strong") })
+    #expect(document.paragraphs.contains { $0.plainText.contains("semantic implications") })
   }
 }
 
@@ -44,30 +44,36 @@ struct CorpusBackedPageJoinTests {
   /// and its first item was read into the sentence as `that: o The most recently ...`.
   @Test func `a bullet at the top of a page is not the rest of a sentence`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1581"))
-    #expect(
-      document.paragraphs.contains {
-        $0.plainText.hasSuffix("received on a circuit it is assumed that:")
-      })
-    #expect(
-      document.lists.contains {
-        guard case .paragraph(let first)? = $0.items.first?.blocks.first else { return false }
-        return first.plainText.hasPrefix("The most recently received information")
-      })
+    let blocks = try #require(document.section(number: "3.3")).blocks
+    guard case .paragraph(let sentence)? = blocks.first,
+      case .list(let list)? = blocks.dropFirst().first
+    else {
+      Issue.record("expected the sentence and then its list")
+      return
+    }
+    #expect(sentence.plainText.hasSuffix("assumed that:"))
+    #expect(list.items.count == 2)
   }
 
   /// RFC 6614's `For example, they send` ends a page, and its list of packet types,
   /// which starts the next, was read into it as `they send o Access-Request ...`.
   @Test func `a bullet after an unfinished sentence is not its rest`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc6614"))
-    #expect(document.paragraphs.contains { $0.plainText.hasSuffix("For example, they send") })
-    #expect(
-      document.lists.contains { list in
-        let items = list.items.compactMap { item -> String? in
-          guard case .paragraph(let text)? = item.blocks.first else { return nil }
-          return text.plainText
-        }
-        return items.starts(with: ["Access-Request", "Accounting-Request", "Status-Server"])
+    let blocks = try #require(document.section(number: "2.5")).blocks
+    let sentence = try #require(
+      blocks.firstIndex {
+        guard case .paragraph(let paragraph) = $0 else { return false }
+        return paragraph.plainText.hasSuffix("they send")
       })
+    guard case .list(let list)? = blocks.dropFirst(sentence + 1).first else {
+      Issue.record("expected the list of packet types after the sentence")
+      return
+    }
+    let items = list.items.compactMap { item -> String? in
+      guard case .paragraph(let text)? = item.blocks.first else { return nil }
+      return text.plainText
+    }
+    #expect(items.starts(with: ["Access-Request", "Accounting-Request", "Status-Server"]))
   }
 }
 
@@ -83,13 +89,13 @@ struct CorpusBackedTitlePageTests {
     #expect(!procedureCall.contains { $0.contains("Request for Comments 674") })
     #expect(!procedureCall.contains("1"))
     #expect(procedureCall.first?.hasPrefix("Procedure Call Protocol Documents") == true)
-    #expect(procedureCall.contains { $0.hasPrefix("As many of you may know SRI") })
+    #expect(procedureCall.contains { $0.hasPrefix("As many of you") }, "the body after them stays")
 
     let management = leadInText(LegacyTextParser.parse(try CorpusText.text("rfc1441")))
     #expect(!management.contains { $0.localizedCaseInsensitiveContains("status of this memo") })
-    #expect(!management.contains { $0.contains("requests discussion and suggestions") })
+    #expect(!management.contains { $0.contains("specifes") }, "nor the status paragraph")
     #expect(!management.contains { $0.contains("Table of Contents") || $0.contains("......") })
-    #expect(management.contains { $0.hasPrefix("The purpose of this document is to provide") })
+    #expect(management.contains { $0.hasPrefix("The purpose of") }, "the body after them stays")
   }
 
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
@@ -99,9 +105,10 @@ struct CorpusBackedTitlePageTests {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try CorpusText.text("rfc1441"))
       .filter { $0.section.isEmpty }.map(\.firstLine)
     #expect(!leadIn.contains("Status of this Memo"))
-    #expect(!leadIn.contains { $0.hasPrefix("This RFC specifes an IAB standards track") })
     #expect(!leadIn.contains { $0.hasPrefix("1 Introduction .....") })
-    #expect(leadIn.first?.hasPrefix("1.  Introduction") == true)
+    #expect(
+      leadIn.first?.hasPrefix("1.  Introduction") == true,
+      "neither the status paragraph nor the contents is diagnosed before it")
   }
 
   /// A title page sets a long title over several runs of lines, and the front matter
@@ -260,8 +267,8 @@ struct CorpusBackedReferencesSectionTests {
   /// only its entries, so what came before the first one was dropped (74 documents).
   @Test func `the text before the first entry is kept`() throws {
     for (stem, opening) in [
-      ("rfc1958", "Note that the references have been deliberately limited"),
-      ("rfc2196", "The following references may not be available"),
+      ("rfc1958", "Note that the"),
+      ("rfc2196", "The following references"),
     ] {
       let references = try Self.section(titled: "References", in: stem)
       guard case .paragraph(let first)? = references.blocks.first else {
@@ -282,7 +289,7 @@ struct CorpusBackedReferencesSectionTests {
     #expect(
       section.blocks.contains {
         guard case .paragraph(let paragraph) = $0 else { return false }
-        return paragraph.plainText.hasPrefix("The priority field in the SRV RR")
+        return paragraph.plainText.hasPrefix("The priority field")
       })
   }
 }
@@ -315,10 +322,8 @@ struct CorpusBackedBodyLayoutTests {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc775"))
     #expect(document.header.title == "DIRECTORY ORIENTED FTP COMMANDS")
     let paragraphs = document.paragraphs.map(\.plainText)
-    #expect(
-      paragraphs.contains { $0.hasPrefix("As a part of the Remote Site Maintenance (RSM) project") }
-    )
-    #expect(paragraphs.contains("We have added four commands to our server:"))
+    #expect(paragraphs.contains { $0.contains("Remote Site Maintenance") })
+    #expect(paragraphs.contains { $0.hasSuffix("to our server:") })
   }
 
   /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
@@ -327,11 +332,8 @@ struct CorpusBackedBodyLayoutTests {
   @Test func `paragraphs with a first line indent are prose`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc722"))
     let paragraphs = document.paragraphs.map(\.plainText)
-    #expect(
-      paragraphs.contains {
-        $0.hasPrefix("A model is developed of interactions between programs. Salient features")
-      })
-    #expect(!document.artworkText.contains { $0.contains("Using this model as a template") })
+    #expect(paragraphs.contains { $0.hasPrefix("A model is developed") })
+    #expect(!document.artworkText.contains { $0.contains("Using this model") })
   }
 
   /// RFC 817 is typeset double spaced: a single blank line is a wrapped line and two
@@ -341,11 +343,53 @@ struct CorpusBackedBodyLayoutTests {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc817"))
     #expect(document.allSections.count < 20, "\(document.allSections.count) sections")
     let paragraphs = document.paragraphs.map(\.plainText)
-    let experience = try #require(
-      paragraphs.first {
-        $0.hasPrefix("Experience suggests that one of the most important factors")
-      })
-    #expect(experience.hasSuffix("not the protocol but the operating system."))
+    let experience = try #require(paragraphs.first { $0.hasPrefix("Experience suggests") })
+    #expect(experience.hasSuffix("the operating system."))
+  }
+}
+
+@Suite("Corpus-backed: ABNF", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedABNFTests {
+  /// Every preformatted block of the document, the lead-in's included.
+  private static func preformatted(_ stem: String) throws -> [Preformatted] {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    return (document.leadIn.flattened + document.blocks).compactMap { block in
+      guard case .preformatted(let preformatted) = block else { return nil }
+      return preformatted
+    }
+  }
+
+  /// RFC 1415 lists directory entries, and RFC 707 and RFC 708 lay out messages, in
+  /// lines that parse as ABNF but assign one name twice with nothing else a grammar
+  /// has (#45). They stay artwork.
+  @Test(arguments: [
+    ("rfc1415", "CommonName"), ("rfc707", "message-type="), ("rfc708", "message-type="),
+  ])
+  func `a listing that assigns one name twice stays artwork`(stem: String, marker: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(marker) }
+    #expect(!blocks.isEmpty)
+    #expect(blocks.allSatisfy { $0.kind == .artwork }, "\(stem)")
+  }
+
+  /// RFC 2326, RFC 2569 and RFC 2910 each define one rule name twice where `=/` or
+  /// another name was meant; their repetitions and numeric values say they are
+  /// grammars all the same.
+  @Test(arguments: [
+    ("rfc2326", "utc-time"), ("rfc2569", "job-number"), ("rfc2910", "delimiter-tag"),
+  ])
+  func `a grammar that defines one name twice is still ABNF`(stem: String, rule: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(rule) }
+    #expect(blocks.contains { $0.kind == .sourceCode && $0.type == "abnf" }, "\(stem)")
+  }
+
+  /// RFC 1122 and RFC 6654 set legends as `name = what it names`, where the first word
+  /// of what it names is the name again. A rule referring to itself refers to no other
+  /// rule, so the legend is no grammar, and stays artwork.
+  @Test(arguments: [("rfc1122", "remote = remote"), ("rfc6654", "Host = IPv6")])
+  func `a legend naming itself stays artwork`(stem: String, marker: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(marker) }
+    #expect(!blocks.isEmpty)
+    #expect(blocks.allSatisfy { $0.kind == .artwork }, "\(stem)")
   }
 }
 

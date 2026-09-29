@@ -10,6 +10,8 @@ nonisolated private let libraryLog = Logger(
 
 #if os(macOS)
   import AppKit
+#else
+  import UIKit
 #endif
 
 #if os(macOS)
@@ -56,6 +58,14 @@ final class LibraryModel {
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
+  /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
+  /// until the cached copy or a fetch has arrived.
+  private(set) var revisions: RFCRevisions?
+  /// When this launch last fetched it; nil until it has.
+  @ObservationIgnored private var revisionsFetchedAt: Date?
+  @ObservationIgnored private var isRefreshingRevisions = false
+  @ObservationIgnored private var activations: (any NSObjectProtocol)?
+
   /// Every bookmarked document, fetched again on every save of the store: one set
   /// for the toolbars and scripts alike, which ask about the document on screen, so
   /// BCP 14 is not answered for by RFC 14 (#152).
@@ -92,6 +102,21 @@ final class LibraryModel {
         self?.refreshBookmarks()
         self?.refreshCollections()
         self?.refreshRecentlyReadCount()
+      }
+    }
+    // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
+    // SwiftUI's scene environment.
+    #if os(macOS)
+      let didBecomeActive = NSApplication.didBecomeActiveNotification
+    #else
+      let didBecomeActive = UIApplication.didBecomeActiveNotification
+    #endif
+    activations = NotificationCenter.default.addObserver(
+      forName: didBecomeActive, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        Task(name: "Refresh revisions") { await self.refreshRevisions() }
       }
     }
   }
@@ -232,6 +257,7 @@ final class LibraryModel {
     } catch {
       indexState = .failed(error.localizedDescription)
     }
+    Task(name: "Refresh revisions") { await refreshRevisions() }
   }
 
   #if DEBUG
@@ -339,6 +365,38 @@ final class LibraryModel {
     listCache = RecentValues(capacity: Self.listCacheCapacity)
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
+  }
+
+  // MARK: - Revisions
+
+  /// Loads the cached file first, so the banner is right offline. Then fetches, once a
+  /// launch and again when the last fetch is a day old: launch and every activation
+  /// call this, and the first to get here does the fetch. A failure keeps the cached
+  /// copy, leaves the next call to try again, and is logged, not shown (#125).
+  func refreshRevisions() async {
+    guard !isRefreshingRevisions else { return }
+    isRefreshingRevisions = true
+    defer { isRefreshingRevisions = false }
+    if revisions == nil, let cached = await store.cachedRevisions() {
+      revisions = cached
+    }
+    if let fetchedAt = revisionsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
+      return
+    }
+    do {
+      let fetched = try await client.fetchRevisions()
+      try await store.storeRevisions(fetched.data)
+      revisionsFetchedAt = .now
+      if fetched.revisions != revisions { revisions = fetched.revisions }
+    } catch {
+      libraryLog.error(
+        "fetching revisions failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// The drafts revising `id`.
+  func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
+    RevisionsSummary(revisions, for: id, now: .now)
   }
 
   // MARK: - Lists

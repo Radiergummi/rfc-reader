@@ -12,7 +12,7 @@ struct LegacyTextParserBlocksTests {
     let paragraphs = discussion.blocks.compactMap(\.paragraph?.plainText)
     #expect(paragraphs.count == 1)
     #expect(
-      paragraphs[0].contains("the carriers are self-regenerating."),
+      paragraphs[0].contains("self-regenerating"),
       "hyphenated word rejoined across the page break")
     #expect(paragraphs[0].hasSuffix("cable trays."))
   }
@@ -33,7 +33,7 @@ struct LegacyTextParserBlocksTests {
         break
       }
     }
-    #expect(paragraphs.first?.hasPrefix("Rules resolve into a string of terminal values") == true)
+    #expect(paragraphs.first?.hasPrefix("Rules resolve") == true)
     #expect(artworks.contains { $0.contains("=  binary") })
     #expect(
       artworks.contains { $0.contains("CR          =  %d13") },
@@ -51,7 +51,8 @@ struct LegacyTextParserBlocksTests {
     #expect(lists.count == 1)
     #expect(lists[0].items.count == 2)
     if case .paragraph(let paragraph)? = lists[0].items[1].blocks.first {
-      #expect(paragraph.plainText == "This syntax uses the rules provided in Appendix B.")
+      #expect(paragraph.plainText.hasPrefix("This syntax"))
+      #expect(paragraph.plainText.hasSuffix("Appendix B."))
     } else {
       Issue.record("list item should contain a paragraph")
     }
@@ -205,11 +206,12 @@ struct LegacyTextParserBlocksTests {
       Issue.record("expected the introduction to start with a paragraph")
       return
     }
+    #expect(!first.plainText.contains("  "), "the padding is collapsed")
+    #expect(first.plainText.hasPrefix("The current ARPAnet"))
+    #expect(first.plainText.hasSuffix("shortcomings."))
     #expect(
-      first.plainText
-        // swiftlint:disable:next line_length - one reflowed paragraph, asserted whole
-        == "The current ARPAnet message handling scheme has evolved from rather informal, decentralized beginnings. Early developers took advantage of pre-existing tools -- TECO, FTP -- in order to implement their first systems. Later, protocols were developed to codify the conventions already in use. While these conventions have been able to support an amazing variety and amount of service, they have a number of shortcomings."
-    )
+      first.plainText.split(separator: " ").count == 63,
+      "every word of the paragraph, and nothing after it")
   }
 
   /// The prose cap was six columns everywhere: a body at column 3, plus three. RFC 1178
@@ -218,21 +220,21 @@ struct LegacyTextParserBlocksTests {
   /// body now, and a body at column 3 keeps the classic one.
   @Test func `a body set deeper than column three is still prose`() {
     let paragraph = [
-      "         Using a word that has strong semantic implications in the",
-      "         current context will cause confusion.  This is especially true",
-      "         in conversation where punctuation is not obvious and grammar is",
-      "         often incorrect.",
+      "         A name that already means something on the network will be",
+      "         misread the first time someone says it aloud.  This is worse",
+      "         in a hurried conversation, where nobody stops to ask which",
+      "         was meant.",
     ]
-    let deeper = (["      Don't overload other terms already in common use.", ""] + paragraph)
+    let deeper = (["      Avoid names that are already in common use.", ""] + paragraph)
       .map(LegacyTextParser.Line.text)
     let cap = LegacyTextParser.proseIndent(deeper)
     #expect(cap == 9)
     #expect(LegacyTextParser.diagnose(paragraph, maxIndent: cap).isProse)
 
     let classic = [
-      "   As soon as you deal with more than one computer, you need to",
-      "   distinguish between them.  For example, to tell your system",
-      "   administrator that your computer is busted, you might say, \"Hey Ken.",
+      "   Once a site has more than one machine, each of them needs a",
+      "   name of its own.  For example, to report that one of them is",
+      "   down, you might tell the operator, \"The one by the window stopped.",
     ].map(LegacyTextParser.Line.text)
     #expect(LegacyTextParser.proseIndent(classic) == LegacyTextParser.classicProseIndent)
   }
@@ -243,17 +245,17 @@ struct LegacyTextParserBlocksTests {
   /// first item was read into the sentence as `that: o The most recently ...`.
   @Test func `a bullet at the top of a page is not the rest of a sentence`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
-      "   In a stable network there is no requirement to propagate routing",
-      "   information on a circuit, so if no routing information is (being)",
-      "   received on a circuit it is assumed that:",
+      "   When a link has been quiet for a while, a router has heard nothing",
+      "   new about the neighbor at its far end, so if nothing has arrived",
+      "   on the link recently it is taken that:",
     ])
     let bullet = LegacyTextParser.RawBlock(lines: [
-      "   o  The most recently received information is accurate."
+      "   o  The last information heard from the neighbor still holds."
     ])
     #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))
 
     let restOfSentence = LegacyTextParser.RawBlock(lines: [
-      "   operational routing information previously received on that circuit"
+      "   the last information heard from the neighbor on that link still"
     ])
     #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
@@ -264,9 +266,9 @@ struct LegacyTextParserBlocksTests {
   /// as `they send o Access-Request o Accounting-Request ...`.
   @Test func `a bullet after an unfinished sentence is not its rest`() {
     let endOfPage = LegacyTextParser.RawBlock(lines: [
-      "   RADIUS/TLS clients transmit the same packet types on the connection",
-      "   they initiated as a RADIUS/UDP client would (see Section 3.4 (3) and",
-      "   (4)).  For example, they send",
+      "   Clients over the secure transport send the same messages on a",
+      "   connection they opened as they would over the plain one (see",
+      "   Section 3.2 (1) and (2)).  For example, they send",
     ])
     let bullet = LegacyTextParser.RawBlock(lines: ["   o  Access-Request"])
     #expect(!LegacyTextParser.shouldJoinAcrossPage(endOfPage, bullet, proseIndent: 6))

@@ -206,6 +206,53 @@ struct DocumentInfoTests {
     let relationships = DocumentInfo(rich, in: nil).sections.first { $0.title == "Relationships" }
     #expect(relationships?.rows.contains { $0.label.hasPrefix("Part of") } == false)
   }
+
+  private func revisions(for metadata: RFCMetadata) -> RevisionsSummary {
+    let revision = { (draft: String, relation: RevisionRelation) in
+      RFCRevisions.Revision(
+        relation: relation, draft: draft, revision: "03", published: .now, stream: "ietf",
+        group: "httpbis", intendedStatus: "Proposed Standard", stage: .inGroup)
+    }
+    let file = RFCRevisions(
+      generatedAt: .now,
+      revisions: [
+        metadata.id.number: [
+          revision("draft-ietf-example-bis", .obsoletes),
+          revision("draft-ietf-example-ext", .updates),
+        ]
+      ])
+    return RevisionsSummary(file, for: metadata.id, now: .now)
+  }
+
+  @Test func `drafts revising the document follow Updated by`() {
+    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich))
+    let labels = info.sections.first { $0.title == "Relationships" }?.rows.map(\.label)
+    #expect(
+      labels == [
+        "Obsoletes", "Updated by", "Being replaced by", "Being updated by", "Part of STD 97",
+      ])
+  }
+
+  @Test func `a draft row lists the draft in full`() {
+    let info = DocumentInfo(rich, in: index, revisions: revisions(for: rich))
+    let row = info.sections.first { $0.title == "Relationships" }?.rows.first {
+      $0.label == "Being replaced by"
+    }
+    guard case .drafts(let lines) = row?.value else {
+      Issue.record("expected drafts, got \(String(describing: row?.value))")
+      return
+    }
+    #expect(lines.map(\.title) == ["draft-ietf-example-bis-03"])
+  }
+
+  /// A summary with nothing in it adds no row.
+  @Test func `no drafts add no rows`() {
+    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now)
+    #expect(section("Relationships", of: bare) == nil)
+    #expect(
+      DocumentInfo(bare, in: index, revisions: empty).sections.first { $0.title == "Relationships" }
+        == nil)
+  }
 }
 
 /// The IETF's areas, which the index records by their short codes (#25).
