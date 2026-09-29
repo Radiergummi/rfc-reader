@@ -54,6 +54,8 @@ public struct CitationFormatter: Sendable {
 
   private func sectionSuffix(_ section: String?) -> String? {
     guard let section, !section.isEmpty else { return nil }
+    // An appendix numbered like a section is named by its anchor (`RFCLink.section`).
+    if section.hasPrefix("appendix-") { return "Appendix \(section.dropFirst("appendix-".count))" }
     return section.first?.isLetter == true ? "Appendix \(section)" : "Section \(section)"
   }
 

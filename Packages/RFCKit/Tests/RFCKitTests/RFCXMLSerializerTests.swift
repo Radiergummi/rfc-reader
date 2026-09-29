@@ -283,6 +283,20 @@ struct RFCXMLSerializerCorpusFindingsTests {
       })
   }
 
+  /// An appendix that is a bibliography, RFC 2049's `Appendix C -- References`, is
+  /// written as `<references>`, and its `pn` names it an appendix. Read back, it was a
+  /// numbered section that was not one (#201).
+  @Test func `a references appendix round trips as an appendix`() throws {
+    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let appendix = try #require(parsed.section(anchor: "appendix-C"))
+    #expect(appendix.isAppendix)
+    #expect(appendix.blocks.contains { if case .references = $0 { true } else { false } })
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(parsed).utf8))
+    let readBack = try #require(reparsed.section(anchor: "appendix-C"))
+    #expect(readBack.number == "C")
+    #expect(readBack.isAppendix)
+  }
+
   /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`
   /// declares one ID twice, which failed the schema in 7,419 documents. A synthesised
   /// anchor is the part number for every numbered section, so it is written once, as the
