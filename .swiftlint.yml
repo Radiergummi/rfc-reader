@@ -12,6 +12,7 @@ included:
   - Packages/RFCReaderKit/Tests
   - Tools/corpus-build/Sources
   - Tools/corpus-build/Tests
+  - Tools/benchmarks/Benchmarks
 
 disabled_rules:
   # The parsers are long, branchy state machines: LegacyTextParser alone decides

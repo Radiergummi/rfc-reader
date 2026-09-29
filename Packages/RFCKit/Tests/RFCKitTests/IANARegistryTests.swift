@@ -245,7 +245,8 @@ struct IANARegistryTests {
     let body: String
     let status: Int
 
-    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+      let url = request.url!
       let found = url == registry.url
       let response = HTTPURLResponse(
         url: url, statusCode: found ? status : 404, httpVersion: nil, headerFields: nil)!

@@ -34,6 +34,10 @@ struct RFCTextView: View {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
+  /// one, as Copy is (#186). Reported on macOS only; see
+  /// `RFCTextViewCoordinator.reportSelection()`.
+  let onSelectionChange: (Bool) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -56,6 +60,7 @@ struct RFCTextView: View {
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
+    onSelectionChange: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -71,6 +76,7 @@ struct RFCTextView: View {
     self.onVisibleAnchorChange = onVisibleAnchorChange
     self.onLink = onLink
     self.onToolbarTitle = onToolbarTitle
+    self.onSelectionChange = onSelectionChange
     self.heading = heading
     self.headerIdentity = headerIdentity
     self.header = AnyView(header())
@@ -91,6 +97,7 @@ struct RFCTextView: View {
           onVisibleAnchorChange: onVisibleAnchorChange,
           onLink: onLink,
           onToolbarTitle: onToolbarTitle,
+          onSelectionChange: onSelectionChange,
           heading: heading,
           library: library,
           header: header,
@@ -127,6 +134,7 @@ struct ReaderInputs {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  let onSelectionChange: (Bool) -> Void
   let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView
@@ -142,6 +150,7 @@ struct ReaderInputs {
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
+    coordinator.onSelectionChange = onSelectionChange
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
@@ -197,6 +206,11 @@ struct ReaderInputs {
       let textView = ReaderTextView(usingTextLayoutManager: true)
       textView.isEditable = false
       textView.isSelectable = true
+      // Off, because UIKit's text drag cannot carry a chip: it collects the chip's
+      // link and its leading glyph's attachment as two overlapping ranges and
+      // deletes both from its copy of the dragged text, which raises when the chip
+      // ends the range. A long press on a chip lifts exactly that range (#431).
+      textView.textDragInteraction?.isEnabled = false
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
       // `.never`: automatic adjustment moves `contentOffset`'s origin away from the
@@ -211,6 +225,9 @@ struct ReaderInputs {
       textView.isFindInteractionEnabled = true
       textView.textLayoutManager?.delegate = context.coordinator
       textView.delegate = context.coordinator
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
+      }
 
       let host = UIHostingController(rootView: inputs.header)
       host.view.backgroundColor = .clear
@@ -270,6 +287,9 @@ struct ReaderInputs {
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
       }
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
+      }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
       }
@@ -307,8 +327,12 @@ struct ReaderInputs {
     /// the coordinator means it cannot outlive this view), but a popover already
     /// on screen would not otherwise close when the view goes away, and the
     /// tracking area does not retain the coordinator it reports to.
+    ///
+    /// `releaseDocument()` is the one that matters most: without it, what AppKit
+    /// keeps of the text view holds the whole document (#356).
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
       coordinator.tearDownHoverTracking()
+      coordinator.releaseDocument()
     }
   }
 #endif
