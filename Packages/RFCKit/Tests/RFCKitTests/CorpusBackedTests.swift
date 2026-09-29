@@ -242,6 +242,51 @@ struct CorpusBackedCatalogueTests {
   }
 }
 
+@Suite("Corpus-backed: ABNF", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedABNFTests {
+  /// Every preformatted block of the document, the lead-in's included.
+  private static func preformatted(_ stem: String) throws -> [Preformatted] {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    return (document.leadIn.flattened + document.blocks).compactMap { block in
+      guard case .preformatted(let preformatted) = block else { return nil }
+      return preformatted
+    }
+  }
+
+  /// RFC 1415 lists directory entries, and RFC 707 and RFC 708 lay out messages, in
+  /// lines that parse as ABNF but assign one name twice with nothing else a grammar
+  /// has (#45). They stay artwork.
+  @Test(arguments: [
+    ("rfc1415", "CommonName"), ("rfc707", "message-type="), ("rfc708", "message-type="),
+  ])
+  func `a listing that assigns one name twice stays artwork`(stem: String, marker: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(marker) }
+    #expect(!blocks.isEmpty)
+    #expect(blocks.allSatisfy { $0.kind == .artwork }, "\(stem)")
+  }
+
+  /// RFC 2326, RFC 2569 and RFC 2910 each define one rule name twice where `=/` or
+  /// another name was meant; their repetitions and numeric values say they are
+  /// grammars all the same.
+  @Test(arguments: [
+    ("rfc2326", "utc-time"), ("rfc2569", "job-number"), ("rfc2910", "delimiter-tag"),
+  ])
+  func `a grammar that defines one name twice is still ABNF`(stem: String, rule: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(rule) }
+    #expect(blocks.contains { $0.kind == .sourceCode && $0.type == "abnf" }, "\(stem)")
+  }
+
+  /// RFC 1122 and RFC 6654 set legends as `name = what it names`, where the first word
+  /// of what it names is the name again. A rule referring to itself refers to no other
+  /// rule, so the legend is no grammar, and stays artwork.
+  @Test(arguments: [("rfc1122", "remote = remote"), ("rfc6654", "Host = IPv6")])
+  func `a legend naming itself stays artwork`(stem: String, marker: String) throws {
+    let blocks = try Self.preformatted(stem).filter { $0.text.contains(marker) }
+    #expect(!blocks.isEmpty)
+    #expect(blocks.allSatisfy { $0.kind == .artwork }, "\(stem)")
+  }
+}
+
 @Suite("Corpus-backed: unnumbered headings", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedUnnumberedHeadingTests {
   /// The front matter ends at the first line that could be a heading, and that test is
