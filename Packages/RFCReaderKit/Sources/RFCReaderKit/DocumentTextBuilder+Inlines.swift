@@ -77,6 +77,10 @@ extension DocumentTextBuilder {
       // model's to say — `CrossReference.display`, which `plainText` answers
       // from too, so the screen and a copied selection cannot disagree.
       let display = xref.display
+      if style.references == .plainText {
+        attributes[.font] = style.referenceFont(matching: font(in: base))
+        return NSAttributedString(string: display.text, attributes: attributes)
+      }
       guard let chip = display.chip else {
         return NSAttributedString(string: display.text, attributes: attributes)
       }
@@ -97,8 +101,10 @@ extension DocumentTextBuilder {
   }
 
   /// What makes a run a link: the URL, and the underline when the reader asked
-  /// for one (`ReadingStyle.underlinesLinks`).
+  /// for one (`ReadingStyle.underlinesLinks`). Nothing, for a style that has no
+  /// links (`ReadingStyle.emitsLinks`).
   private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+    guard style.emitsLinks else { return [:] }
     var attributes: [NSAttributedString.Key: Any] = [.link: url]
     if style.underlinesLinks {
       attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue

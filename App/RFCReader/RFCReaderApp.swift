@@ -143,6 +143,16 @@ struct DocumentCommands: Commands {
       }
     #endif
     #if os(macOS)
+      // File > Page Setup… and Print…, which a SwiftUI app has only for a document
+      // scene (#375). Print is disabled unless a document is on screen.
+      CommandGroup(replacing: .printItem) {
+        Button("Page Setup…") { active.controller?.runPageSetup() }
+          .keyboardShortcut("p", modifiers: [.command, .shift])
+          .disabled(active.controller == nil)
+        Button("Print…") { active.controller?.printDocument() }
+          .keyboardShortcut("p", modifiers: .command)
+          .disabled(!showsDocument)
+      }
       // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
       // list's view options before.
       CommandGroup(after: .toolbar) {

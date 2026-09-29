@@ -1,5 +1,6 @@
 #if os(macOS)
   import AppKit
+  import PDFKit
   import RFCKit
   import RFCReaderKit
   import SwiftData
@@ -42,6 +43,9 @@
     private var hasPlacedInitialFocus = false
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
+    /// Whether a print is being prepared or its panel is up, so a second ⌘P
+    /// neither builds the PDF again nor asks for a second sheet.
+    private var isPrinting = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -455,6 +459,62 @@
         id: id
       )
       BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+    }
+
+    // MARK: - Print
+
+    /// File > Print…: the document laid out for paper, handed to the system's print
+    /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
+    /// chosen; a different paper picked in the panel itself is scaled to fit.
+    func printDocument() {
+      guard !isPrinting, let id = navigation.selection, reader.hasDocument, let window else {
+        return
+      }
+      // The PDF's pages carry their own margins; AppKit's, left in, would shrink
+      // every page to fit inside a second set.
+      guard let printInfo = NSPrintInfo.shared.copy() as? NSPrintInfo else { return }
+      printInfo.leftMargin = 0
+      printInfo.rightMargin = 0
+      printInfo.topMargin = 0
+      printInfo.bottomMargin = 0
+      let original = reader.showOriginal
+      isPrinting = true
+      Task {
+        do {
+          let data = try await DocumentPDF.make(
+            for: id, original: original, paperSize: printInfo.paperSize, library: library)
+          guard let pdf = PDFDocument(data: data),
+            let operation = pdf.printOperation(
+              for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+          else {
+            isPrinting = false
+            return
+          }
+          // The one field of the Save as PDF sheet a print can fill: its Author,
+          // Subject and Keywords have no public setting (#375).
+          operation.jobTitle = PrintFurniture.documentTitle(
+            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+          operation.runModal(
+            for: window, delegate: self,
+            didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
+        } catch {
+          isPrinting = false
+          _ = window.presentError(error)
+        }
+      }
+    }
+
+    @objc private func printOperationDidRun(
+      _ operation: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?
+    ) {
+      isPrinting = false
+    }
+
+    /// File > Page Setup…, which sets the paper `printDocument()` lays out for.
+    func runPageSetup() {
+      guard let window else { return }
+      NSPageLayout().beginSheet(
+        with: NSPrintInfo.shared, modalFor: window, delegate: nil, didEnd: nil, contextInfo: nil)
     }
 
     // MARK: - Go to RFC
