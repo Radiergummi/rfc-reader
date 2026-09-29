@@ -469,7 +469,7 @@ struct DocumentView: View {
           navigation.goBack()
         } label: {
           Label(
-            ReturnOffer.title(for: offer, sectionNumbers: sectionNumbers),
+            ReturnOffer.title(for: offer, in: document),
             systemImage: "arrow.uturn.backward")
         }
         .buttonStyle(.glass)

@@ -17,12 +17,11 @@ import RFCKit
 /// text view is the only part that needs the main actor, and `BuiltDocument` carries
 /// the result across.
 public final class DocumentTextBuilder {
-  /// The private URL scheme an in-document anchor link uses. Moved here from
-  /// `InlineText`, which this replaces.
+  /// The private URL scheme an in-document anchor link uses.
   public static let anchorScheme = "rfc-anchor"
 
   /// The scheme a citation of a bibliography entry uses instead. The body leaves
-  /// the bibliography to the panel (`holdsOnlyReferences`), so a citation of
+  /// the bibliography to the inspector (`holdsOnlyReferences`), so a citation of
   /// anything but an RFC — still an anchor after parsing — has no position to
   /// scroll to, and goes to its entry there.
   public static let referenceScheme = "rfc-reference"
@@ -186,9 +185,9 @@ extension DocumentTextBuilder {
   private func appendSection(_ section: Section, depth: Int) {
     // The bibliography is not part of the reading flow: every citation in the
     // prose already links straight to the document it names, so the section is
-    // several screens of rows nobody reads in order. It lives in a panel
-    // instead — see `ReferencesPanel` in the app — and is skipped here, heading
-    // and all, rather than left behind as an empty "9. References".
+    // several screens of rows nobody reads in order. It lives in the inspector's
+    // References tab instead — `DocumentInspector` in the app — and is skipped
+    // here, heading and all, rather than left behind as an empty "9. References".
     guard !Self.holdsOnlyReferences(section) else { return }
     mark(section.anchor, heading: section.displayTitle)
     // Through the same inline path as prose, because a heading cites documents

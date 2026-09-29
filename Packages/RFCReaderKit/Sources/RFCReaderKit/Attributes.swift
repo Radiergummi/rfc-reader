@@ -64,27 +64,35 @@ public final class ReferenceBox: Sendable {
 }
 
 extension NSAttributedString {
-  /// The cross reference at this character offset, and the whole of its extent:
-  /// what the hover popover is anchored to, and what both previews look up.
+  /// The whole extent of the boxed value — a `VerbatimBox` or `ReferenceBox` — at
+  /// `location`: every character around it carrying that same instance. Nil where
+  /// there is no value, or no character.
   ///
-  /// The extent is the attribute's run, not the storage run. A chip is three
-  /// storage runs — the symbol's attachment, the joiner, the label — so
-  /// `effectiveRange` names only the piece under the pointer, and the popover
-  /// pointed at a third of the chip. `ReferenceBox` compares by identity, one per
-  /// reference, so two adjacent references still come back as two.
+  /// The extent is the attribute's run, not the storage run: a chip is three
+  /// storage runs, and `effectiveRange` names only one. The boxes are Swift classes
+  /// with no `Equatable` conformance, which bridge to `isEqual:` by identity, so
+  /// `longestEffectiveRange` joins one box's runs and keeps two boxes apart even
+  /// when their contents are equal (`BoxExtentTests`).
   ///
-  /// This runs on every pointer move, and most of them are over prose, so the
-  /// cheap single-run lookup answers "no reference" first; the extent is only
-  /// walked out on a hit.
-  public func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
-    guard offset >= 0, offset < length,
-      attribute(.rfcReference, at: offset, effectiveRange: nil) is ReferenceBox
+  /// The cheap single-run lookup answers "no box" first, which is most characters;
+  /// the extent is only walked out on a hit.
+  func extent(ofBox key: NSAttributedString.Key, at location: Int) -> NSRange? {
+    guard location >= 0, location < length,
+      attribute(key, at: location, effectiveRange: nil) != nil
     else { return nil }
     var range = NSRange(location: 0, length: 0)
-    let whole = NSRange(location: 0, length: length)
-    guard
-      let box = attribute(.rfcReference, at: offset, longestEffectiveRange: &range, in: whole)
-        as? ReferenceBox
+    _ = attribute(
+      key, at: location, longestEffectiveRange: &range, in: NSRange(location: 0, length: length))
+    return range
+  }
+
+  /// The cross reference at this character offset, and the whole of its extent:
+  /// what the hover popover is anchored to, and what both previews look up. Two
+  /// adjacent references come back as two. This runs on every pointer move.
+  public func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      let box = attribute(.rfcReference, at: offset, effectiveRange: nil) as? ReferenceBox,
+      let range = extent(ofBox: .rfcReference, at: offset)
     else { return nil }
     return (box, range)
   }

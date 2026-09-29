@@ -37,12 +37,6 @@ extension NSTextLayoutManager {
     return NSRange(location: start, length: end - start)
   }
 
-  /// The same, for an element that knows its own range.
-  public func range(of element: NSTextElement) -> NSRange? {
-    guard let elementRange = element.elementRange else { return nil }
-    return range(of: elementRange)
-  }
-
   /// The text range spanning `range`, in document-relative character offsets.
   public func textRange(for range: NSRange) -> NSTextRange? {
     guard let start = location(atOffset: range.location),

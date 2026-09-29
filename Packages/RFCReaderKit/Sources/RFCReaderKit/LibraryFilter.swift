@@ -13,12 +13,14 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
   case workingGroup(String)
   case series(DocumentID)
   /// A collection the reader made (#349). Its name is the collection's and not the
-  /// filter's to carry: `LibraryModel.title(for:)` answers it.
+  /// filter's to carry: `title(in:)` reads it from the snapshot.
   case collection(UUID)
 
   public var id: Self { self }
 
-  public var title: String {
+  /// What the sidebar, the list and scripts call this filter. A collection is
+  /// called by its name in `collections`, and one that has gone since by nothing.
+  public func title(in collections: CollectionSnapshot) -> String {
     switch self {
     case .all: "All RFCs"
     case .recent: "Recently Read"
@@ -29,8 +31,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     case .stream(let stream): stream.displayName
     case .workingGroup(let group): group.uppercased()
     case .series(let id): id.displayName
-    // Never shown: every title goes through `LibraryModel.title(for:)`.
-    case .collection: ""
+    case .collection(let identifier): collections[identifier]?.name ?? ""
     }
   }
 
@@ -103,7 +104,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     ]
     let streams = RFCKit.Stream.allCases.map(LibraryFilter.stream)
     if let match = (fixed + streams).first(where: {
-      $0.title.caseInsensitiveCompare(name) == .orderedSame
+      $0.title(in: .empty).caseInsensitiveCompare(name) == .orderedSame
     }) {
       self = match
     } else if let id = DocumentID(parsing: name), id.series != .rfc {

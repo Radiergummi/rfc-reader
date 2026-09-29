@@ -7,8 +7,8 @@ import RFCKit
 /// Parsing the 14 MB index takes about a second, building its search about 50 ms,
 /// and counting the working groups a few more. All three ran on the main actor
 /// whenever the index was downloaded (#124). They are pure functions of the parsed
-/// index and every part is `Sendable`, so they are made in one place, in a detached
-/// task, and the main actor only assigns the result.
+/// index and every part is `Sendable`, so they are made in one place, in an
+/// `@concurrent` function, and the main actor only assigns the result.
 public struct PreparedIndex: Sendable {
   public let index: RFCIndex
   public let search: IndexSearch

@@ -62,11 +62,8 @@ struct QueriesCommand: ParsableCommand {
     }
     Self.logger.info("usable", metadata: ["candidates": "\(selection.usable)"])
 
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    let output = URL(fileURLWithPath: out)
-    try encoder.encode(selection.rows).write(to: output, options: .atomic)
+    try writeJSON(selection.rows, to: out)
     Self.logger.info(
-      "wrote queries", metadata: ["queries": "\(selection.rows.count)", "path": "\(output.path)"])
+      "wrote queries", metadata: ["queries": "\(selection.rows.count)", "path": "\(out)"])
   }
 }

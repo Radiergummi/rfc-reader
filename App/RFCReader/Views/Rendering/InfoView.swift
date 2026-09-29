@@ -229,11 +229,11 @@ private struct DocumentChip: View {
       Text(id.displayName)
         .lineLimit(1)
         .foregroundStyle(.tint)
-        // `FragmentGeometry.chipPadding` and the radius `RFCTextLayoutFragment`
-        // draws the reader's chips with.
+        // The padding and radius the reader's chips are drawn with.
         .padding(.horizontal, FragmentGeometry.chipPadding)
         .padding(.vertical, FragmentGeometry.chipVerticalPadding)
-        .background(Color.accentColor.opacity(0.15), in: .rect(cornerRadius: 6))
+        .background(
+          Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
     // The system's focus ring drew round the first chip as soon as the pane showed.

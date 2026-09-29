@@ -19,11 +19,11 @@ import Testing
 @Suite("Builder: handover")
 struct BuilderHandoverTests {
   /// The app's own shape: `DocumentView` builds off the main actor, in an
-  /// `@concurrent` function, and awaits the value. A build that quietly came to need the main actor would trap or diverge
-  /// here rather than pass.
+  /// `@concurrent` function, and awaits the value. A build that quietly came to
+  /// need the main actor would trap or diverge here rather than pass.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
-  func aBuildOffTheMainActorMatchesOneOnIt(fixture: String) async throws {
-    let document = try Self.document(fixture)
+  func `a build off the main actor matches one on it`(fixture: String) async throws {
+    let document = try Fixtures.document(named: fixture)
     let style = ReadingStyle()
     let detached = await Task.detached { DocumentTextBuilder.build(document, style: style) }.value
     let onMain = await MainActor.run { DocumentTextBuilder.build(document, style: style) }
@@ -40,8 +40,10 @@ struct BuilderHandoverTests {
   /// to read from two threads if nothing can write it, which for a paragraph style
   /// means it must not be an `NSMutableParagraphStyle`.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
-  func noParagraphStyleIsMutable(fixture: String) throws {
-    let text = DocumentTextBuilder.build(try Self.document(fixture), style: ReadingStyle()).text
+  func `no paragraph style is mutable`(fixture: String) throws {
+    let text = DocumentTextBuilder.build(
+      try Fixtures.document(named: fixture), style: ReadingStyle()
+    ).text
     var mutable = 0
     text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) {
       value, _, _ in
@@ -53,7 +55,7 @@ struct BuilderHandoverTests {
   /// Attachments are mutable, and each build must make its own: a cache that kept
   /// one across builds would share it between a result on the main actor and a
   /// build still running.
-  @Test func noAttachmentIsSharedBetweenBuilds() throws {
+  @Test func `no attachment is shared between builds`() throws {
     let document = try Fixtures.rfc8999()
     // Both held until the comparison: an identity is an address, and a build
     // freed early hands its addresses on to the next one.
@@ -65,10 +67,6 @@ struct BuilderHandoverTests {
     #expect(!first.isEmpty)
     #expect(first.isDisjoint(with: second))
     withExtendedLifetime((firstBuild, secondBuild)) {}
-  }
-
-  private static func document(_ fixture: String) throws -> RFCDocument {
-    fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
   }
 
   /// The attribute runs, as key sets over ranges: enough to tell two builds apart

@@ -211,10 +211,7 @@ public enum CollectionStore {
   }
 
   private static func collections(in context: ModelContext) throws -> [DocumentCollection] {
-    try context.fetch(
-      FetchDescriptor<DocumentCollection>(sortBy: [
-        SortDescriptor(\.position), SortDescriptor(\.createdAt),
-      ]))
+    try context.fetch(FetchDescriptor(sortBy: DocumentCollection.order))
   }
 
   private static func collection(
@@ -228,16 +225,35 @@ public enum CollectionStore {
     return collection
   }
 
-  /// In `(position, addedAt, documentKey)` order.
+  /// In `DocumentCollectionItem.order`.
   private static func items(
     in identifier: UUID, context: ModelContext
   ) throws -> [DocumentCollectionItem] {
     let target: UUID? = identifier
     return try context.fetch(
-      FetchDescriptor<DocumentCollectionItem>(
+      FetchDescriptor(
         predicate: #Predicate { $0.collectionIdentifier == target },
-        sortBy: [
-          SortDescriptor(\.position), SortDescriptor(\.addedAt), SortDescriptor(\.documentKey),
-        ]))
+        sortBy: DocumentCollectionItem.order))
+  }
+}
+
+// MARK: - Order
+
+// Each order is written once, here: a move is resolved against the store's order
+// and shown in the snapshot's, so two spellings that break a tie differently put
+// a moved row somewhere other than where it was dropped.
+
+extension DocumentCollection {
+  /// Sidebar order. Positions tie when two devices append offline, `createdAt`
+  /// when rows are made together; the identifier settles the rest.
+  static var order: [SortDescriptor<DocumentCollection>] {
+    [SortDescriptor(\.position), SortDescriptor(\.createdAt), SortDescriptor(\.identifier)]
+  }
+}
+
+extension DocumentCollectionItem {
+  /// A collection's order, with the same ties as `DocumentCollection.order`.
+  static var order: [SortDescriptor<DocumentCollectionItem>] {
+    [SortDescriptor(\.position), SortDescriptor(\.addedAt), SortDescriptor(\.documentKey)]
   }
 }

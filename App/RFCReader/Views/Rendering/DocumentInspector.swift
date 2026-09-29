@@ -174,7 +174,7 @@ struct PanelHost: View {
     #if !os(macOS)
       if closesAfterChoice {
         isPresented = false
-        DispatchQueue.main.async(execute: choice)
+        Task { choice() }
         return
       }
     #endif

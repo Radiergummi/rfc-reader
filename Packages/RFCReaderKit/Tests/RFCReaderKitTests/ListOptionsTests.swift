@@ -8,9 +8,7 @@ import Testing
 @Suite("List options")
 struct ListOptionsTests {
   private let rows = [9110, 7231, 2616].map { number in
-    RFCMetadata(
-      id: .rfc(number), title: "Title", date: PublicationDate(year: 2020),
-      obsoletedBy: number == 9110 ? [] : [.rfc(9110)])
+    Fixtures.metadata(number, obsoletedBy: number == 9110 ? [] : [.rfc(9110)])
   }
 
   @Test func `the defaults change nothing`() {
@@ -50,9 +48,9 @@ struct ListOptionsTests {
   }
 
   private let dated = [
-    RFCMetadata(id: .rfc(2616), title: "HTTP/1.1", date: PublicationDate(year: 1999)),
-    RFCMetadata(id: .rfc(9110), title: "HTTP Semantics", date: PublicationDate(year: 2022)),
-    RFCMetadata(id: .rfc(7231), title: "HTTP/1.1 Semantics", date: PublicationDate(year: 2014)),
+    Fixtures.metadata(2616, title: "HTTP/1.1", year: 1999),
+    Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022),
+    Fixtures.metadata(7231, title: "HTTP/1.1 Semantics", year: 2014),
   ]
 
   @Test func `a collection keeps its own order by default`() {

@@ -33,8 +33,26 @@ struct LibraryFilterTests {
     let filter = LibraryFilter.collection(UUID())
     #expect(!filter.fixesStatus)
     #expect(!filter.fixesWorkingGroup)
-    let rfc = RFCMetadata(id: .rfc(9000), title: "QUIC", date: PublicationDate(year: 2021))
+    let rfc = Fixtures.metadata(9000, title: "QUIC", year: 2021)
     #expect(filter.includes(rfc) == nil)
     #expect(!YearSections.apply(to: filter, query: ""))
+  }
+
+  /// A collection is titled by its name in the snapshot, which the filter does not
+  /// carry; one that has gone since has no title to show.
+  @Test func `a collection is titled by its name in the snapshot`() {
+    let entry = CollectionSnapshot.Entry(id: UUID(), name: "HTTP/3", color: .blue, members: [])
+    let snapshot = CollectionSnapshot(collections: [entry])
+    #expect(LibraryFilter.collection(entry.id).title(in: snapshot) == "HTTP/3")
+    #expect(LibraryFilter.collection(UUID()).title(in: snapshot) == "")
+  }
+
+  /// Every other filter's title is its own, whatever collections there are.
+  @Test func `a built-in filter's title does not depend on the collections`() {
+    let entry = CollectionSnapshot.Entry(id: UUID(), name: "Bookmarks", color: .red, members: [])
+    let snapshot = CollectionSnapshot(collections: [entry])
+    #expect(LibraryFilter.bookmarks.title(in: snapshot) == "Bookmarks")
+    #expect(LibraryFilter.all.title(in: snapshot) == "All RFCs")
+    #expect(LibraryFilter.workingGroup("httpbis").title(in: .empty) == "HTTPBIS")
   }
 }

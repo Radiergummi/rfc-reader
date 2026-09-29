@@ -15,6 +15,12 @@ struct CollectionStoreTests {
     try UserData.container(configurations: ModelConfiguration(isStoredInMemoryOnly: true))
   }
 
+  /// Counted from a notification observer, which may not capture a `var`.
+  @MainActor
+  private final class SaveCount {
+    var count = 0
+  }
+
   private func members(of collection: UUID, in context: ModelContext) -> [DocumentID] {
     CollectionSnapshot.fetch(in: context)[collection]?.members ?? []
   }
@@ -53,10 +59,11 @@ struct CollectionStoreTests {
     let container = try makeContainer()
     let context = container.mainContext
     let id = try CollectionStore.create(named: "HTTP/3", color: .blue, in: context).identifier
-    var saves = 0
+    let saves = SaveCount()
+    // The main context posts on the main actor, synchronously from `save`.
     let observer = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: context, queue: nil
-    ) { _ in saves += 1 }
+    ) { _ in MainActor.assumeIsolated { saves.count += 1 } }
     defer { NotificationCenter.default.removeObserver(observer) }
 
     try CollectionStore.update(id, name: "QUIC", color: .orange, in: context)
@@ -64,7 +71,7 @@ struct CollectionStoreTests {
     let entry = CollectionSnapshot.fetch(in: context)[id]
     #expect(entry?.name == "QUIC")
     #expect(entry?.color == .orange)
-    #expect(saves == 1)
+    #expect(saves.count == 1)
   }
 
   @Test func `adding appends, and adding again changes nothing`() throws {
@@ -187,6 +194,35 @@ struct CollectionStoreTests {
 
     #expect(
       CollectionSnapshot.fetch(in: context).collections.map(\.id) == [third, first, second])
+  }
+
+  /// Two collections on one position — two devices appending offline — sit in the
+  /// sidebar in the snapshot's order, and a move between them must be resolved in
+  /// that same order. Inserted in the other order, so a store that breaks the tie
+  /// some other way sees them reversed and puts the moved collection after both.
+  @Test func `a move between collections tied on position lands between them`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let created = Date(timeIntervalSinceReferenceDate: 0)
+    let first = DocumentCollection(name: "A", color: .blue, position: 1, createdAt: created)
+    first.identifier = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+    let second = DocumentCollection(name: "B", color: .blue, position: 1, createdAt: created)
+    second.identifier = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000002"))
+    context.insert(second)
+    try context.save()
+    context.insert(first)
+    try context.save()
+    let third = try CollectionStore.create(named: "C", color: .blue, in: context).identifier
+    #expect(
+      CollectionSnapshot.fetch(in: context).collections.map(\.id)
+        == [first.identifier, second.identifier, third])
+
+    try CollectionStore.moveCollection(
+      third, afterVisible: first.identifier, beforeVisible: second.identifier, in: context)
+
+    #expect(
+      CollectionSnapshot.fetch(in: context).collections.map(\.id)
+        == [first.identifier, third, second.identifier])
   }
 
   /// Collections list RFCs: a series, or text dropped from another app that happens

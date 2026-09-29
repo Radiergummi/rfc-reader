@@ -128,25 +128,14 @@ public enum FragmentGeometry {
   /// Two verbatim blocks in a row carry the same `.artwork` value with nothing
   /// between them, so the decoration's run alone reads them as one card, and a
   /// source block's language label lands mid-card. What tells them apart is the
-  /// block's own `VerbatimBox`, compared by identity: `longestEffectiveRange` on a
-  /// boxed value is at the mercy of how the box bridges to `isEqual`.
+  /// block's own `VerbatimBox`, one instance per block.
   private static func verbatimBlock(
     in text: NSAttributedString, at location: Int, within run: NSRange
   ) -> NSRange {
-    guard let box = text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox
+    guard text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) is VerbatimBox,
+      let block = text.extent(ofBox: .rfcVerbatim, at: location)
     else { return run }
-    var start = run.location
-    var end = NSMaxRange(run)
-    text.enumerateAttribute(.rfcVerbatim, in: run) { value, piece, stop in
-      guard (value as? VerbatimBox) !== box else { return }
-      if NSMaxRange(piece) <= location {
-        start = NSMaxRange(piece)
-      } else {
-        end = piece.location
-        stop.pointee = true
-      }
-    }
-    return NSRange(location: start, length: end - start)
+    return NSIntersectionRange(run, block)
   }
 
   /// One probe over a whole fragment, so a chipless paragraph — which is most of

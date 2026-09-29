@@ -67,12 +67,29 @@ public struct AnchorIndex: Sendable, Equatable {
   /// Where in `entries` the anchor covering `offset` is, for a caller that needs
   /// its neighbours too; see `anchor(at:)`.
   public func index(at offset: Int) -> Int? {
-    var low = 0
-    var high = entries.count
-    while low < high {
-      let middle = (low + high) / 2
-      if entries[middle].offset <= offset { low = middle + 1 } else { high = middle }
+    let after = entries.partitioningIndex { $0.offset > offset }
+    return after > 0 ? after - 1 : nil
+  }
+}
+
+extension RandomAccessCollection {
+  /// The first index whose element belongs in the second partition, or `endIndex`
+  /// when none does. The collection must already be partitioned by it: every
+  /// element for which it is false comes before every one for which it is true.
+  /// A binary search, as `swift-algorithms` spells it.
+  func partitioningIndex(where belongsInSecondPartition: (Element) -> Bool) -> Index {
+    var low = startIndex
+    var count = self.count
+    while count > 0 {
+      let half = count / 2
+      let middle = index(low, offsetBy: half)
+      if belongsInSecondPartition(self[middle]) {
+        count = half
+      } else {
+        low = index(after: middle)
+        count -= half + 1
+      }
     }
-    return low > 0 ? low - 1 : nil
+    return low
   }
 }

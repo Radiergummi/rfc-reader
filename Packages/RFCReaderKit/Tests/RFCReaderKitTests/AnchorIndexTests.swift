@@ -45,4 +45,16 @@ struct AnchorIndexTests {
     ])
     #expect(unsorted.entries.map(\.anchor) == ["a", "b"])
   }
+
+  /// The one binary search both lookups share: the first element past the
+  /// partition point, the end when there is none.
+  @Test func `the partitioning index is the first element that belongs after the point`() {
+    let offsets = [0, 120, 120, 400]
+    #expect(offsets.partitioningIndex { $0 > -1 } == 0)
+    #expect(offsets.partitioningIndex { $0 > 0 } == 1)
+    #expect(offsets.partitioningIndex { $0 > 120 } == 3)
+    #expect(offsets.partitioningIndex { $0 > 400 } == 4)
+    #expect([Int]().partitioningIndex { $0 > 0 } == 0)
+    #expect(offsets[1...].partitioningIndex { $0 > 120 } == 3)
+  }
 }

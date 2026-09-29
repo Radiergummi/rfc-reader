@@ -21,10 +21,10 @@ import Synchronization
 /// is written once.
 ///
 /// A fetch lasts as long as someone waits for it. Each open that joins it is
-/// counted, and one that is cancelled — its reader left the document — leaves; when
-/// the last one has, the fetch is cancelled and forgotten, so it stops spending the
-/// bandwidth of someone on a metered or poor connection, writes nothing, and the
-/// next open starts afresh. While any reader still waits, it goes on: closing one
+/// counted, and one that is cancelled — its reader left the document — leaves at
+/// once, without waiting for the fetch to end; when the last one has, the fetch is
+/// cancelled and forgotten, so it stops spending the bandwidth of someone on a
+/// metered or poor connection, writes nothing, and the next open starts afresh. While any reader still waits, it goes on: closing one
 /// of two tabs on a document does not fail the other.
 ///
 /// Here rather than in the App target for its tests, which run the store's own
@@ -32,7 +32,12 @@ import Synchronization
 public final class InFlightDownloads<Value: Sendable>: Sendable {
   private struct Running {
     let task: Task<Value, any Error>
-    var waiters: Int
+    /// Every reader waiting for it, by the number `value(for:start:)` gave them,
+    /// with the continuation they are suspended on once they are.
+    var waiting: [Int: CheckedContinuation<Void, Never>?] = [:]
+    var nextWaiter = 0
+    /// It has ended, and every waiter has been woken to read it.
+    var isFinished = false
     /// A removal came while it ran, so its result is not kept.
     var isRemoved = false
   }
@@ -50,27 +55,43 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
   /// Runs on the caller's actor, so a caller that writes the result right away,
   /// with no suspension between, cannot have a removal slip in before its write.
   ///
-  /// Awaiting a task does not pass the waiter's cancellation on to it, so this
-  /// does: a waiter that is cancelled leaves, and the last to leave cancels the
-  /// fetch. A cancelled fetch throws `CancellationError`, whatever it failed with
-  /// or even when it finished anyway, as a parse that does not look at
+  /// Awaiting a task does not pass the waiter's cancellation on to it, nor end the
+  /// wait, so a waiter suspends on a continuation of its own instead: one that is
+  /// cancelled leaves and throws `CancellationError` at once, and the last to leave
+  /// cancels the fetch. A cancelled fetch throws `CancellationError`, whatever it
+  /// failed with or even when it finished anyway, as a parse that does not look at
   /// cancellation does, so its result is never written.
   public nonisolated(nonsending) func value(
     for id: DocumentID, start: () -> Task<Value, any Error>
   ) async throws -> (value: Value, isKept: Bool) {
-    let task = running.withLock { running in
-      var entry = running[id] ?? Running(task: start(), waiters: 0)
-      entry.waiters += 1
+    let (task, waiter) = running.withLock { running in
+      var entry: Running
+      if let existing = running[id] {
+        entry = existing
+      } else {
+        entry = Running(task: start())
+        watch(id, entry.task)
+      }
+      let waiter = entry.nextWaiter
+      entry.nextWaiter += 1
+      entry.waiting[waiter] = .some(nil)
       running[id] = entry
-      return entry.task
+      return (entry.task, waiter)
     }
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        if !attach(continuation, as: waiter, to: id, task) {
+          continuation.resume()
+        }
+      }
+    } onCancel: {
+      leave(id, task, waiter)
+    }
+    try Task.checkCancellation()
+
     let value: Value
     do {
-      value = try await withTaskCancellationHandler {
-        try await task.value
-      } onCancel: {
-        leave(id, task)
-      }
+      value = try await task.value
     } catch {
       finish(id, task)
       throw task.isCancelled ? CancellationError() : error
@@ -87,7 +108,45 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
     }
   }
 
-  /// Called by everyone who awaited `task`, once it has. The first forgets it, and
+  /// Wakes everyone waiting for `task` once it has ended.
+  private func watch(_ id: DocumentID, _ task: Task<Value, any Error>) {
+    Task {
+      _ = await task.result
+      let woken = running.withLock { running in
+        guard var entry = running[id], entry.task == task else {
+          return [CheckedContinuation<Void, Never>]()
+        }
+        entry.isFinished = true
+        let woken = entry.waiting.values.compactMap { $0 }
+        for waiter in entry.waiting.keys {
+          entry.waiting[waiter] = .some(nil)
+        }
+        running[id] = entry
+        return woken
+      }
+      for continuation in woken {
+        continuation.resume()
+      }
+    }
+  }
+
+  /// Parks `continuation` until `task` ends or its waiter leaves. False when there
+  /// is nothing to wait for: the fetch has ended, or the waiter has already left.
+  private func attach(
+    _ continuation: CheckedContinuation<Void, Never>, as waiter: Int, to id: DocumentID,
+    _ task: Task<Value, any Error>
+  ) -> Bool {
+    running.withLock { running in
+      guard var entry = running[id], entry.task == task, !entry.isFinished,
+        entry.waiting[waiter] != nil
+      else { return false }
+      entry.waiting[waiter] = continuation
+      running[id] = entry
+      return true
+    }
+  }
+
+  /// Called by everyone who read `task` once it ended. The first forgets it, and
   /// is the one to keep it unless it was removed; a later open starts afresh. Only
   /// if it is still the one running for `id`: a later open may have started another.
   @discardableResult
@@ -99,19 +158,22 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
     }
   }
 
-  /// A waiter for `task` was cancelled. The last one to leave cancels the fetch
-  /// and forgets it, so a later open starts another.
-  private func leave(_ id: DocumentID, _ task: Task<Value, any Error>) {
-    running.withLock { running in
-      guard var entry = running[id], entry.task == task else { return }
-      entry.waiters -= 1
-      if entry.waiters > 0 {
-        running[id] = entry
-      } else {
+  /// A waiter for `task` was cancelled: it stops waiting now. The last one to leave
+  /// cancels the fetch and forgets it, so a later open starts another.
+  private func leave(_ id: DocumentID, _ task: Task<Value, any Error>, _ waiter: Int) {
+    let continuation = running.withLock { running -> CheckedContinuation<Void, Never>? in
+      guard var entry = running[id], entry.task == task,
+        let continuation = entry.waiting.removeValue(forKey: waiter)
+      else { return nil }
+      if entry.waiting.isEmpty {
         running[id] = nil
         task.cancel()
+      } else {
+        running[id] = entry
       }
+      return continuation
     }
+    continuation?.resume()
   }
 
   func isRunning(_ id: DocumentID) -> Bool {
@@ -120,6 +182,6 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
 
   /// How many readers are waiting for the fetch for `id`.
   func waiters(_ id: DocumentID) -> Int {
-    running.withLock { running in running[id]?.waiters ?? 0 }
+    running.withLock { running in running[id]?.waiting.count ?? 0 }
   }
 }

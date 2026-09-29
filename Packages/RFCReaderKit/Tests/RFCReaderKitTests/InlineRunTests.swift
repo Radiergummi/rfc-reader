@@ -15,27 +15,23 @@ import Testing
 struct InlineRunTests {
   private let style = ReadingStyle()
 
-  private func run(_ inlines: [Inline]) -> NSAttributedString {
-    Fixtures.inlineRun(inlines, style: style)
-  }
-
   @Test func `plain text survives`() {
-    #expect(run([.text("hello")]).string == "hello")
+    #expect(Fixtures.inlineRun([.text("hello")]).string == "hello")
   }
 
-  @Test func `emphasis and strong change the font`() {
-    let emphasised = run([.emphasis([.text("x")])])
-    let font = try? #require(
+  @Test func `emphasis and strong change the font`() throws {
+    let emphasised = Fixtures.inlineRun([.emphasis([.text("x")])])
+    let font = try #require(
       emphasised.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont)
-    #expect(font?.fontDescriptor.symbolicTraits.contains(RFCTraits.italic) == true)
+    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
 
-    let strong = run([.strong([.text("x")])])
+    let strong = Fixtures.inlineRun([.strong([.text("x")])])
     let boldFont = strong.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
     #expect(boldFont?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true)
   }
 
   @Test func `code uses the monospaced font`() {
-    let code = run([.code("GET")])
+    let code = Fixtures.inlineRun([.code("GET")])
     let font = code.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
     #expect(font == .monospacedSystemFont(ofSize: style.bodySize * 0.92, weight: .regular))
   }
@@ -56,7 +52,7 @@ struct InlineRunTests {
   }
 
   @Test func `code in emphasis stays italic`() throws {
-    let emphasised = run([.emphasis([.text("see "), .code("foo")])])
+    let emphasised = Fixtures.inlineRun([.emphasis([.text("see "), .code("foo")])])
     let offset = try Fixtures.offset(of: "foo", in: emphasised)
     let font = try #require(
       emphasised.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
@@ -67,7 +63,7 @@ struct InlineRunTests {
   /// A bold italic face states no weight in its descriptor, only the bold trait, so
   /// code inside strong emphasis came out regular italic.
   @Test func `code in strong emphasis stays bold and italic`() throws {
-    let text = run([.strong([.emphasis([.text("see "), .code("foo")])])])
+    let text = Fixtures.inlineRun([.strong([.emphasis([.text("see "), .code("foo")])])])
     let offset = try Fixtures.offset(of: "foo", in: text)
     let font = try #require(text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
@@ -76,7 +72,7 @@ struct InlineRunTests {
   }
 
   @Test func `a superscript or subscript keeps the traits around it`() throws {
-    let strong = run([.strong([.text("x"), .superscript("2"), .subscript("i")])])
+    let strong = Fixtures.inlineRun([.strong([.text("x"), .superscript("2"), .subscript("i")])])
     for script in ["2", "i"] {
       let offset = try Fixtures.offset(of: script, in: strong)
       let font = try #require(
@@ -88,7 +84,7 @@ struct InlineRunTests {
 
   @Test func `links carry their URL`() throws {
     let url = try #require(URL(string: "https://example.org"))
-    let link = run([.link(url, [.text("example")])])
+    let link = Fixtures.inlineRun([.link(url, [.text("example")])])
     #expect(link.attribute(.link, at: 0, effectiveRange: nil) as? URL == url)
   }
 
@@ -99,15 +95,15 @@ struct InlineRunTests {
     /// reference, which has its preview, carries none.
     @Test func `only an external link carries a tooltip`() throws {
       let url = try #require(URL(string: "https://www.rfc-editor.org/"))
-      let external = run([.link(url, [.text("the editor")])])
+      let external = Fixtures.inlineRun([.link(url, [.text("the editor")])])
       #expect(
         external.attribute(.toolTip, at: 0, effectiveRange: nil) as? String
           == "https://www.rfc-editor.org/")
 
-      let document = run([
+      let document = Fixtures.inlineRun([
         .crossReference(CrossReference(target: .document(.rfc(9110), section: "4.2")))
       ])
-      let anchor = run([
+      let anchor = Fixtures.inlineRun([
         .crossReference(CrossReference(target: .anchor("section-3"), text: "Section 3"))
       ])
       for reference in [document, anchor] {
@@ -122,7 +118,7 @@ struct InlineRunTests {
   @Test func `document cross references link to the app scheme`() throws {
     let xref = CrossReference(
       target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of [RFC 9110]")
-    let attributed = run([.crossReference(xref)])
+    let attributed = Fixtures.inlineRun([.crossReference(xref)])
     #expect(attributed.string == "Section 4.2 of [RFC 9110]")
     let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
     #expect(url.scheme == "rfc")
@@ -132,7 +128,7 @@ struct InlineRunTests {
 
   @Test func `anchor cross references use the private anchor scheme`() throws {
     let xref = CrossReference(target: .anchor("section-3"), text: "Section 3")
-    let attributed = run([.crossReference(xref)])
+    let attributed = Fixtures.inlineRun([.crossReference(xref)])
     let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
     #expect(url.absoluteString == "rfc-anchor:section-3")
   }
@@ -146,12 +142,15 @@ struct InlineRunTests {
     let withSection = CrossReference(target: .document(.rfc(2119), section: "2"))
     #expect(withSection.label == "Section\u{00A0}2 of [RFC\u{00A0}2119]")
     #expect(
-      run([.crossReference(withSection)]).string == chipPrefix + "RFC\u{00A0}2119\u{00A0}§\u{00A0}2"
+      Fixtures.inlineRun([.crossReference(withSection)]).string == chipPrefix
+        + "RFC\u{00A0}2119\u{00A0}§\u{00A0}2"
     )
 
     let withoutSection = CrossReference(target: .document(.rfc(2119), section: nil))
     #expect(withoutSection.label == "[RFC\u{00A0}2119]")
-    #expect(run([.crossReference(withoutSection)]).string == chipPrefix + "RFC\u{00A0}2119")
+    #expect(
+      Fixtures.inlineRun([.crossReference(withoutSection)]).string == chipPrefix + "RFC\u{00A0}2119"
+    )
   }
 
   /// `bare` is the source asking for the section number on its own, which is a
@@ -159,10 +158,12 @@ struct InlineRunTests {
   @Test func `a bare section format is not chipped`() {
     let xref = CrossReference(target: .document(.rfc(2119), section: "2"), sectionFormat: .bare)
     #expect(xref.displayLabel == "2")
-    #expect(run([.crossReference(xref)]).attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
+    #expect(
+      Fixtures.inlineRun([.crossReference(xref)]).attribute(.rfcChip, at: 0, effectiveRange: nil)
+        == nil)
   }
 
   @Test func `line breaks become newlines`() {
-    #expect(run([.text("a"), .lineBreak, .text("b")]).string == "a\nb")
+    #expect(Fixtures.inlineRun([.text("a"), .lineBreak, .text("b")]).string == "a\nb")
   }
 }

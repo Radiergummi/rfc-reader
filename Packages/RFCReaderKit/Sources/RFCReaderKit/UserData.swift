@@ -322,7 +322,9 @@ public enum UserData {
     if context.hasChanges { try context.save() }
   }
 
-  /// Newest first in, so the first row per key is the one kept.
+  /// Keeps the first row per key and deletes the rest, so `rows` come in the order
+  /// of preference: newest first for bookmarks and positions, earliest first for
+  /// collection items.
   private static func removeDuplicates<Row: PersistentModel>(
     _ rows: [Row], keyedBy key: (Row) -> String, in context: ModelContext
   ) {

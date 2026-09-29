@@ -56,17 +56,30 @@ final class LibraryModel {
   /// it enters that filter rather than waiting on the store's actor.
   private(set) var downloadedNumbers: Set<Int> = []
 
+  /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
+  /// of `recentlyReadNumbers()`, kept current on every save rather than by a live
+  /// query of every reading position in the view.
+  private(set) var recentlyReadCount = 0
+
   private init() {
     refreshBookmarks()
     refreshCollections()
+    refreshRecentlyReadCount()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.refreshBookmarks()
         self?.refreshCollections()
+        self?.refreshRecentlyReadCount()
       }
     }
+  }
+
+  private func refreshRecentlyReadCount() {
+    let count = recentlyReadNumbers().count
+    guard count != recentlyReadCount else { return }
+    recentlyReadCount = count
   }
 
   private func refreshCollections() {
@@ -81,14 +94,10 @@ final class LibraryModel {
     }
   }
 
-  /// What a filter is called, wherever it is shown: a collection's name, or the
-  /// filter's own title. Every title goes through here, so a collection is never
-  /// shown by the empty title its filter carries.
+  /// What a filter is called, wherever it is shown, against the collections as they
+  /// are now.
   func title(for filter: LibraryFilter) -> String {
-    if case .collection(let identifier) = filter {
-      return collections[identifier]?.name ?? ""
-    }
-    return filter.title
+    filter.title(in: collections)
   }
 
   /// How many of a collection's documents the index knows, for the sidebar. Nil
