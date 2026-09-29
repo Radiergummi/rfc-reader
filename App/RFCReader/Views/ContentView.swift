@@ -20,6 +20,9 @@ import SwiftUI
     /// What the reader is showing, shared with the panel. One per scene, for the same
     /// reason `NavigationModel` is.
     @State private var reader = ReaderState()
+    /// The link this window was asked to open (#158), held until it has appeared.
+    @State private var requestedLink: RFCLink?
+    @State private var hasAppeared = false
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
 
@@ -56,9 +59,17 @@ import SwiftUI
       // A window asked for with a link (#158): addressed to this scene, so it opens
       // here rather than going through `route`, which picks a scene for a link that
       // names none.
+      //
+      // Held until the scene has appeared if it comes first: appearing clears a
+      // compact sidebar's selection, which would otherwise undo the open and leave
+      // the new window on the sidebar rather than the document.
       .onContinueUserActivity(SceneRequest.activityType) { activity in
         guard let link = SceneRequest.link(from: activity.userInfo) else { return }
-        navigation.open(link, in: library.index)
+        if hasAppeared {
+          navigation.open(link, in: library.index)
+        } else {
+          requestedLink = link
+        }
       }
       // On the split view rather than on `DocumentView`: macOS gives the detail
       // column no leading toolbar slot — a `.navigation` item declared down there is
@@ -89,6 +100,11 @@ import SwiftUI
         // waiting link and reveal it in the list.
         if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
         library.register(navigation)
+        hasAppeared = true
+        if let link = requestedLink {
+          requestedLink = nil
+          navigation.open(link, in: library.index)
+        }
       }
       // Side by side, the sidebar shows which filter feeds the list.
       .onChange(of: horizontalSizeClass) {
