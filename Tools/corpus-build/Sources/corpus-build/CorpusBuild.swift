@@ -11,6 +11,7 @@ import Logging
 //   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
 //   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
 //                         [--limit 4000] [--seed 11] [--min-words 8]
+//   corpus-build revisions --out corpus/revisions [--scan corpus/revisions/revisions-scan.json] [--allow-shrink]
 //
 // `corpus-build help <command>` says what each option does. See docs/DATA_PIPELINE.md
 // for the why and the pack layout.
@@ -22,6 +23,7 @@ struct CorpusBuild: AsyncParsableCommand {
     abstract: "The offline half of RFC Reader's data pipeline.",
     subcommands: [
       FetchCommand.self, ConvertCommand.self, ManifestCommand.self, QueriesCommand.self,
+      RevisionsCommand.self,
     ]
   )
 }
