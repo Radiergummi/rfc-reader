@@ -103,10 +103,11 @@ struct RequirementsTests {
   }
 
   /// RFC 2119 is BCP 14, so its own key words are used in their BCP 14 sense, and
-  /// it names no other part of BCP 14 to say so. It used to qualify by citing
-  /// itself, which `referencedDocuments` no longer counts (#279).
+  /// it cites no other part of BCP 14 to say so (#279).
   @Test func `a document that is part of BCP 14 has requirements`() throws {
     let document = try Fixtures.document("rfc2119.txt")
+    let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
+    #expect(Set(document.referencedDocuments).isDisjoint(with: bcp14))
     #expect(!Requirements.extract(from: document).isEmpty)
   }
 

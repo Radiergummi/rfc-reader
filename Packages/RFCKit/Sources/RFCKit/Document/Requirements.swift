@@ -47,19 +47,20 @@ public struct Requirement: Sendable, Hashable {
 
 /// Every BCP 14 requirement a document states (#180), in document order.
 ///
-/// Only a document that cites BCP 14, or RFC 2119 or RFC 8174 in it, uses the key
-/// words in their BCP 14 sense, and only in uppercase (RFC 8174), so that is what is read, in XML
+/// Only a document that cites BCP 14, or RFC 2119 or RFC 8174 in it, or is one of
+/// the two, uses the key words in their BCP 14 sense, and only in uppercase (RFC 8174), so that is what is read, in XML
 /// and legacy text alike: RFCXML's `<bcp14>` becomes emphasis in the model, and
 /// legacy text never had it. Only prose states requirements: paragraphs, list
 /// items, definitions, table cells and asides, not artwork, source code,
 /// quotations or the references. The paragraph declaring the key words is not a requirement.
 public enum Requirements {
   public static func extract(from document: RFCDocument) -> [Requirement] {
-    // A part of BCP 14 uses its own key words in their BCP 14 sense without citing
-    // itself, which is not among the documents it references.
-    let cited = Set(document.referencedDocuments + [document.header.id].compactMap(\.self))
     let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
-    guard !cited.isDisjoint(with: bcp14) else { return [] }
+    // A part of BCP 14 need not cite itself, and could not: a document is never among
+    // the documents it references.
+    let isPartOfBCP14 = document.header.id.map(bcp14.contains) ?? false
+    let citesBCP14 = !Set(document.referencedDocuments).isDisjoint(with: bcp14)
+    guard isPartOfBCP14 || citesBCP14 else { return [] }
     let isHeuristic = document.source == .text
     var found: [Requirement] = []
     for section in document.allSections {
