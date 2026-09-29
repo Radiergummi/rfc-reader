@@ -11,20 +11,17 @@ import Testing
 struct AccessibleRotorTests {
   private let diagram = "+--+\n|  |\n+--+"
 
-  private func built(_ blocks: Block...) -> NSAttributedString {
-    let document = RFCDocument(
-      header: DocumentHeader(title: "T"),
-      sections: [Section(anchor: "section-1", number: "1", title: "S", blocks: blocks)],
-      source: .xml)
-    return DocumentTextBuilder.build(document, style: ReadingStyle()).text
+  private func built(_ document: RFCDocument) -> NSAttributedString {
+    DocumentTextBuilder.build(document, style: ReadingStyle()).text
   }
 
   private var artwork: Block { .preformatted(Preformatted(kind: .artwork, text: diagram)) }
 
   @Test func `each heading and each link is a stop over its text`() throws {
     let text = built(
-      .paragraph(
-        Paragraph([.link(try #require(URL(string: "https://example.com")), [.text("here")])])))
+      Fixtures.document(
+        .paragraph(
+          Paragraph([.link(try #require(URL(string: "https://example.com")), [.text("here")])]))))
     let rotors = AccessibleReading.Rotors(text)
     let heading = try Fixtures.offset(of: "S", in: text)
     #expect(rotors.headings.count == 1)
@@ -36,7 +33,7 @@ struct AccessibleRotorTests {
   /// Two diagrams back to back are two stops, each over the whole of its own
   /// block, however many storage runs the block is.
   @Test func `each diagram is one stop over its whole block`() throws {
-    let text = built(artwork, artwork)
+    let text = built(Fixtures.document(artwork, artwork))
     let rotors = AccessibleReading.Rotors(text)
     #expect(rotors.diagrams.count == 2)
     let first = try #require(rotors.diagrams.first)
@@ -47,7 +44,9 @@ struct AccessibleRotorTests {
   }
 
   @Test func `code is not a diagram stop`() {
-    let text = built(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
+    let text = built(
+      Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "a = b", type: "abnf")))
+    )
     #expect(AccessibleReading.Rotors(text).diagrams.isEmpty)
   }
 

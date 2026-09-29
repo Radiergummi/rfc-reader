@@ -384,7 +384,7 @@ struct RFCXMLParserTests {
   /// Reading only the first kept the six counters and dropped the rest.
   @Test func `every table body is read`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
-    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap(\.table)
+    let tables = document.everyBlock.flattened.compactMap(\.table)
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
     #expect(table.rows.count == 32)

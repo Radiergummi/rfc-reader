@@ -73,7 +73,7 @@ struct UnicodeNotationTests {
 
   @Test func `table cells are spelled out too`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc8771.xml"))
-    let tables = document.allSections.flatMap(\.blocks).compactMap(\.table)
+    let tables = document.everyBlock.compactMap(\.table)
     let table = try #require(tables.first { $0.header.first?.cells.first?.plainText == "Bit Seq." })
     #expect(
       table.rows.map { $0.cells[1].plainText } == [

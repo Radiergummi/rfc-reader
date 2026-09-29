@@ -87,7 +87,7 @@ struct AnchorResolutionTests {
 
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-    let tables = reparsed.allSections.flatMap(\.blocks).flattened.compactMap(\.table)
+    let tables = reparsed.everyBlock.flattened.compactMap(\.table)
     let table = try #require(tables.first { $0.header.first?.anchor == "cited-header" })
     #expect(table.header.map(\.anchor) == ["cited-header"])
     #expect(!table.rows.contains { $0.anchor == "cited-header" })

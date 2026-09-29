@@ -9,11 +9,10 @@ import Testing
 struct LibraryListTests {
   private let index = RFCIndex(
     rfcs: [
-      RFCMetadata(id: .rfc(1), title: "Host Software", date: PublicationDate(year: 1969)),
-      RFCMetadata(id: .rfc(2), title: "Host Software Protocol", date: PublicationDate(year: 1969)),
-      RFCMetadata(
-        id: .rfc(3), title: "Documentation Conventions", date: PublicationDate(year: 1969)),
-      RFCMetadata(id: .rfc(4), title: "Network Timetable", date: PublicationDate(year: 1969)),
+      Fixtures.metadata(1, title: "Host Software", year: 1969),
+      Fixtures.metadata(2, title: "Host Software Protocol", year: 1969),
+      Fixtures.metadata(3, title: "Documentation Conventions", year: 1969),
+      Fixtures.metadata(4, title: "Network Timetable", year: 1969),
     ],
     series: [
       SeriesEntry(id: DocumentID(series: .bcp, number: 1), members: [.rfc(3), .rfc(1)])
