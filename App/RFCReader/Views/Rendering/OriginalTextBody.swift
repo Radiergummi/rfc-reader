@@ -71,5 +71,12 @@
       textView.textStorage?.setAttributedString(attributed)
       context.coordinator.shown = (text, fontSize)
     }
+
+    /// Detaches the text view from its container, so what AppKit keeps of a TextKit 2
+    /// text view after it is gone does not hold the whole RFC; see
+    /// `RFCTextViewCoordinator.releaseDocument()` (#356).
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+      (scrollView.documentView as? NSTextView)?.textContainer?.textView = nil
+    }
   }
 #endif

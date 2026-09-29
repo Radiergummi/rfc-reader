@@ -5,19 +5,13 @@ import Foundation
 /// The RFC Editor's "prepped" XML carries `pn` (part number) attributes and
 /// `derivedContent` on cross references, which this parser leans on for stable
 /// anchors and display text instead of re-implementing the numbering rules.
-public struct RFCXMLParser: Sendable {
+public enum RFCXMLParser {
   public enum ParseError: Error, Sendable, Equatable {
     case notAnRFC(rootElement: String)
     case malformed(XMLSyntaxError)
   }
 
-  public init() {}
-
   public static func parse(_ data: Data) throws(ParseError) -> RFCDocument {
-    try RFCXMLParser().parse(data)
-  }
-
-  public func parse(_ data: Data) throws(ParseError) -> RFCDocument {
     let root: XMLTree.Element
     do {
       root = try XMLTree.parse(data)
@@ -329,7 +323,10 @@ public struct RFCXMLParser: Sendable {
         number: numbering.number,
         title: title,
         blocks: blocks,
-        subsections: subsections
+        subsections: subsections,
+        // An appendix that is a bibliography, `Appendix C -- References`, says so in its
+        // `pn` like any other appendix.
+        isAppendix: numbering.isAppendix
       )
     }
 

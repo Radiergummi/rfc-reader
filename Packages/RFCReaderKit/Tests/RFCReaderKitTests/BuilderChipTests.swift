@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: reference chips")
-@MainActor
 struct BuilderChipTests {
   private let style = ReadingStyle()
 

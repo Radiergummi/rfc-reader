@@ -7,13 +7,7 @@ import Foundation
 /// distinguishes prose from ASCII art, re-joins paragraphs split across pages and
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
-public struct LegacyTextParser: Sendable {
-  public init() {}
-
-  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
-    LegacyTextParser().parse(text, title: title)
-  }
-
+public enum LegacyTextParser {
   public static func parse(_ data: Data) -> RFCDocument {
     parse(String(decoding: data, as: UTF8.self))
   }
@@ -25,9 +19,9 @@ public struct LegacyTextParser: Sendable {
     case pageBreak
   }
 
-  nonisolated(unsafe) private static let footerPattern = #/\[Page \d+\]\s*$/#
-  nonisolated(unsafe) private static let runningHeaderPattern =
-    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#
+  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
+  private static let runningHeaderPattern = Pattern(
+    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
   /// Removes form feeds, running headers and page footers, keeping everything else verbatim.
   public static func stripPagination(_ text: String) -> String {
@@ -379,28 +373,51 @@ public struct LegacyTextParser: Sendable {
   private struct RawSection {
     var heading: HeadingInfo?
     var blocks: [RawBlock] = []
+    /// The first line that took a heading's place but was refused as an unnumbered one,
+    /// by its block and its place in that block: where omitted boilerplate ends, as it
+    /// did when that line was a heading.
+    var refusedHeadingLine: (block: Int, line: Int)?
   }
 
-  nonisolated(unsafe) private static let numberedHeadingPattern =
-    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
-  nonisolated(unsafe) private static let appendixHeadingPattern =
-    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
-  /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
-  /// pattern of its own rather than a colon allowed in the one above, whose
-  /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
-  /// column 0 is as often a question's answer.
-  nonisolated(unsafe) private static let colonAppendixHeadingPattern =
-    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#
+  private static let numberedHeadingPattern = Pattern(
+    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
+  /// An appendix heading that names itself one (#201): `Appendix` or `Annex` in any case
+  /// after its capital, then its number -- a letter, a Roman or an Arabic numeral, with
+  /// any subsections -- and the title, set off by a full stop, a colon, dashes, or by
+  /// spaces alone where it does not start in lower case, or no title at all:
+  /// `Appendix A. Title`, `APPENDIX 1 - TITLE`, `Annex B (informative): Title`,
+  /// `Appendix II.  Title`, `Appendix A--Title`, `Appendix A:`. A full stop or colon has
+  /// a space or the line's end after it, so `Appendix A.12).` and a contents entry's
+  /// `Appendix A.......35` are not one, and without a separator a lower-case word is
+  /// prose, `Appendix A describes`. `Appendix IANA` has no number, and `Appendix: Title`
+  /// none either: those stay unnumbered headings.
+  private static let namedAppendixHeadingPattern = Pattern(
+    #/^A(?i:ppendix|nnex)\s+(?<number>(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*)(?:\s*[.:](?=\s|$)|\s*-+|(?=\s+[^\s\p{Ll}])|$)\s*(?<title>.*)$/#
+  )
+  /// An appendix heading by its letter alone, `A.1. Title` or `B Title`, with a capital
+  /// to start its title.
+  private static let letteredAppendixHeadingPattern = Pattern(
+    #/^(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#)
+  /// A lettered subsection set off like a heading, by a full stop and a space or by two
+  /// spaces, `B.1.2.  title` or `C.4  title`, whatever its title starts with: RFC 8011's
+  /// status codes and RFC 1094's XDR types are in lower case. Not a number and a
+  /// single space, which is a reference in prose (`A.2 for more`) or an ITU name
+  /// (`X.25 switch`).
+  private static let appendixSubsectionHeadingPattern = Pattern(
+    #/^(?<number>[A-Z](?:\.\d+)+)(?:\.\s+|\s{2,})(?<title>\S.*)$/#)
 
   /// The number and title of an appendix heading, in any shape the parser reads one:
-  /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
+  /// named (`namedAppendixHeadingPattern`), by its letter, or as a lettered subsection.
   /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
   /// lines rather than through a whole document.
   static func appendixHeading(in line: String) -> (number: String, title: String)? {
-    if let match = line.firstMatch(of: appendixHeadingPattern) {
+    if let match = line.firstMatch(of: namedAppendixHeadingPattern) {
       return (String(match.number), String(match.title))
     }
-    if let match = line.firstMatch(of: colonAppendixHeadingPattern) {
+    if let match = line.firstMatch(of: letteredAppendixHeadingPattern) {
+      return (String(match.number), String(match.title))
+    }
+    if let match = line.firstMatch(of: appendixSubsectionHeadingPattern) {
       return (String(match.number), String(match.title))
     }
     return nil
@@ -417,6 +434,7 @@ public struct LegacyTextParser: Sendable {
     -> [BlockDiagnostics]
   {
     let prepared = prepared(text, title: title)
+    var locator = SourceLocator(text)
     return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in
@@ -427,9 +445,59 @@ public struct LegacyTextParser: Sendable {
           // A catalogue is a list too, offered the block before the prose test.
           claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil
             || catalogueEntries(block.lines) != nil,
-          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
+          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent),
+          sourceLines: locator.locate(block.lines)
         )
       }
+    }
+  }
+
+  /// Finds blocks in the source they came from, in document order.
+  ///
+  /// A block's lines are source lines, depaginated but otherwise as given: control
+  /// characters removed, tabs expanded, trailing space trimmed, which is how each source
+  /// line is read here too. Lines are numbered as the text splits at its newlines, before
+  /// anything is removed, because that is how a reader of the source counts them: an
+  /// overstrike can remove a newline, and numbering after it would put every later block
+  /// a line early. Each block starts at the next source line equal to its first, and its
+  /// other lines follow in order, past at most a page break's furniture between two of
+  /// them. Found once per diagnosis, rather than carried through depagination and
+  /// segmentation, which are the parser's hot path.
+  private struct SourceLocator {
+    /// The most lines a page break puts between two lines of a block: the edge lines
+    /// `recurringFurniture` drops at the foot and the head of a page, up to four each,
+    /// the footer, the form feed, the running header and the blanks around them.
+    private static let furnitureSpan = 24
+
+    private let lines: [String]
+    private var cursor = 0
+
+    init(_ text: String) {
+      lines = text.replacingOccurrences(of: "\r\n", with: "\n")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map { line in
+          removingControlCharacters(String(line))
+            .replacingOccurrences(of: "\u{0C}", with: "")
+            .expandingTabs()
+            .trimmingTrailingWhitespace()
+        }
+    }
+
+    /// The 1-based source lines of `block`, or nil when one of its lines is not where
+    /// it should be. Nothing is guessed: a block not found leaves the cursor where it
+    /// was, so the blocks after it are still found.
+    mutating func locate(_ block: [String]) -> ClosedRange<Int>? {
+      guard let first = block.first,
+        let start = lines[cursor...].firstIndex(of: first)
+      else { return nil }
+      var end = start
+      for line in block.dropFirst() {
+        let window = lines[(end + 1)..<min(end + 1 + Self.furnitureSpan, lines.count)]
+        guard let next = window.firstIndex(of: line) else { return nil }
+        end = next
+      }
+      cursor = end + 1
+      return (start + 1)...(end + 1)
     }
   }
 
@@ -660,8 +728,15 @@ public struct LegacyTextParser: Sendable {
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
           startsBlock: current.isEmpty)
         {
-          flushBlock()
-          sections.append(RawSection(heading: heading))
+          if heading.number == nil, refusesUnnumberedHeading(heading.title) {
+            let last = sections.count - 1
+            sections[last].refusedHeadingLine =
+              sections[last].refusedHeadingLine ?? (sections[last].blocks.count, current.count)
+            current.append(string)
+          } else {
+            flushBlock()
+            sections.append(RawSection(heading: heading))
+          }
         } else {
           current.append(string)
         }
@@ -683,13 +758,15 @@ public struct LegacyTextParser: Sendable {
   /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
   /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
   /// is where the two are told apart.
-  public func parse(_ text: String, title: String? = nil) -> RFCDocument {
+  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header
 
     // Collect known section numbers and reference anchors for link resolution.
-    let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
+    // An appendix numbered like a section, `Appendix 2`, is not what `Section 2` cites.
+    let sectionNumbers = Set(
+      sections.compactMap { $0.heading.flatMap { $0.isAppendix ? nil : $0.number } })
     let bibliographies = Self.settlingEntryAnchors(
       sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
@@ -733,17 +810,26 @@ public struct LegacyTextParser: Sendable {
       if heading.number == nil {
         let isAbstract = lowered == "abstract" && !abstractTaken
         if isAbstract || Self.isBoilerplateTitle(lowered) {
-          let extent = Self.boilerplateExtent(
+          var extent = Self.boilerplateExtent(
             of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
             proseIndent: proseIndent)
+          // Omitted boilerplate ends where a heading's place is taken, whether or not
+          // the line there is a heading: refused as prose, RFC 1198's sentence at column
+          // 0 took the list of standards under it into its `Status of this Memo`. Where
+          // the line continues a block, the lines before it are the boilerplate's.
+          var blocks = raw.blocks
+          if !isAbstract, let refused = raw.refusedHeadingLine, refused.block < extent {
+            blocks[refused.block].lines.removeFirst(refused.line)
+            extent = refused.block
+          }
           if isAbstract {
             header.abstract = Self.blocks(
               from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
             abstractTaken = true
           }
-          if extent < raw.blocks.count {
+          if extent < blocks.count {
             let body = Self.blocks(
-              from: Array(raw.blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
+              from: Array(blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
             if !body.isEmpty {
               flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
             }
@@ -1089,8 +1175,9 @@ public struct LegacyTextParser: Sendable {
     return previousRow[second.count]
   }
 
-  nonisolated(unsafe) private static let dateLinePattern =
+  private static let dateLinePattern = Pattern(
     #/(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+(?:\d{1,2},?\s+)?\d{4}/#
+  )
 
   /// A line that is a date and nothing else, as a title page sets its publication date:
   /// RFC 822's `August 13, 1982`, RFC 907's `July 1984`.
@@ -1123,7 +1210,7 @@ public struct LegacyTextParser: Sendable {
     return entries > 0 && entries * 2 >= lines.count
   }
 
-  nonisolated(unsafe) private static let romanPageNumberPattern = #/x{0,3}(?:ix|iv|v?i{0,3})/#
+  private static let romanPageNumberPattern = Pattern(#/x{0,3}(?:ix|iv|v?i{0,3})/#)
 
   /// A lower-case roman numeral up to `xxxix`, further than any front section's pages
   /// run. Spelt out rather than taken as any run of the letters, because `ill` and
@@ -1252,10 +1339,11 @@ public struct LegacyTextParser: Sendable {
     return nil
   }
 
-  nonisolated(unsafe) private static let monthYearPattern =
+  private static let monthYearPattern = Pattern(
     #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
-  nonisolated(unsafe) private static let authorPattern =
-    #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#
+  )
+  private static let authorPattern = Pattern(
+    #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#)
 
   /// The line that states the document's number, in any of the spellings the series has
   /// used (#51): `Request for Comments: 793`, `RFC # 64`, `NWG/RFC# 276`, `NWG RFC 103`, `RFC-811`,
@@ -1264,9 +1352,9 @@ public struct LegacyTextParser: Sendable {
   /// is not always in the left column (RFC 811 sets it on the right) and a label spaced
   /// widely enough from its number is split from it by the column split
   /// (`Request for Comments:    50`).
-  nonisolated(unsafe) private static let numberLinePattern =
+  private static let numberLinePattern = Pattern(
     #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#
-    .ignoresCase()
+      .ignoresCase())
 
   private static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
     var header = DocumentHeader(title: "")
@@ -1344,8 +1432,10 @@ public struct LegacyTextParser: Sendable {
     }
   }
 
+  private static let digitsPattern = Pattern(#/\d+/#)
+
   private static func documentIDs(in text: String) -> [DocumentID] {
-    text.matches(of: #/\d+/#).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
+    text.matches(of: digitsPattern).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
   }
 
   // MARK: Headings
@@ -1395,6 +1485,13 @@ public struct LegacyTextParser: Sendable {
   /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
   /// body starts there too — so that the indent says nothing — it also has to stand alone
   /// between blank lines. `heading(from:)` judges the text; this judges the position.
+  ///
+  /// An unnumbered heading also has to pass `refusesUnnumberedHeading`, which
+  /// `rawSections` asks rather than `heading(from:)`, whose other caller is the front
+  /// matter's end: there the test is kept lax on purpose. The stricter one moved the
+  /// front matter's end in 41 documents, most of them later, and what it ran on past was
+  /// lost: RFC 783's summary. Omitted boilerplate ends at a refused line too, for the
+  /// same reason.
   private static func heading(
     at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
   ) -> HeadingInfo? {
@@ -1473,6 +1570,68 @@ public struct LegacyTextParser: Sendable {
       depth: 1)
   }
 
+  /// How an appendix heading with no number opens: the word `Appendix` or `Annex`,
+  /// capitalized or in capitals. Not a lower-case `appendix`, which is wrapped prose,
+  /// and not followed by a number: a numbered appendix heading is read as one before
+  /// this, so what is left is prose that names one, `Appendix B holds the drawings`.
+  private static let appendixOpening = Pattern(
+    #/A(?i:ppendix|nnex)\b(?!\s+(?:[A-Z]|[IVX]+|\d+)\b)/#)
+
+  /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
+  /// definitions, braces, table rules and box drawing, arrows.
+  private static let codePunctuation = ["::=", "{", "}", "|", "+--", "---", "===", "->"]
+
+  /// Words a title-cased heading leaves in lower case: `Transmission of IP Datagrams
+  /// over Ethernet` is title case all the same. Only words of four letters or more,
+  /// because `isSentenceCase` looks at no shorter word.
+  private static let minorWords: Set<String> = [
+    "about", "above", "across", "after", "against", "along", "among", "around", "before",
+    "behind", "below", "beneath", "beside", "besides", "between", "beyond", "despite",
+    "down", "during", "except", "from", "inside", "into", "like", "near", "onto",
+    "outside", "over", "past", "since", "than", "through", "throughout", "toward",
+    "towards", "under", "underneath", "until", "unto", "upon", "versus", "with", "within",
+    "without",
+  ]
+
+  /// True for a column-0 line that passed every other test for an unnumbered heading,
+  /// but reads as something else: prose, a MIB line, a grammar or a drawing (#201).
+  ///
+  /// Measured over the legacy corpus, half of the 62,924 unnumbered headings the parser
+  /// made were one of these, and every sample of them was wrong:
+  ///
+  /// - a lower-case start: MIB lines (`dot1qTpGroupLearnt OBJECT-TYPE`), wrapped prose,
+  ///   `o` list items;
+  /// - code or diagram punctuation (`codePunctuation`): ASN.1, ABNF, table rules, boxes;
+  /// - a sentence's end, `.`, `;` or `,`: prose, protocol traces, data lines. `etc.`
+  ///   ends a heading's list as often as a sentence, and is let through;
+  /// - sentence case past 50 characters, where the samples turn from titles into prose.
+  ///
+  /// Title case, all capitals and short sentence case (`How to read this memo`) are
+  /// where the real headings are. Their false positives, table rows and header-field
+  /// lines, need the neighboring lines to judge, which is a second pass.
+  static func refusesUnnumberedHeading(_ title: String) -> Bool {
+    guard let first = title.first else { return true }
+    // A numbered appendix is an appendix heading and never reaches this test. One with
+    // no number lands here, and the rules would refuse four over the corpus for a full
+    // stop or their length: `Appendix: Title.`, `Appendix - a long title in sentence
+    // case`. What they start with says heading, whatever follows it.
+    if title.prefixMatch(of: appendixOpening) != nil { return false }
+    if first.isLowercase { return true }
+    if codePunctuation.contains(where: { title.contains($0) }) { return true }
+    if let last = title.last, ".;,".contains(last), !title.hasSuffix("etc.") { return true }
+    return title.count > 50 && isSentenceCase(title)
+  }
+
+  /// Neither all capitals nor title case: some word of four letters or more that is not
+  /// a minor word starts in lower case.
+  private static func isSentenceCase(_ title: String) -> Bool {
+    title.split(separator: " ").contains { word in
+      let letters = word.filter(\.isLetter)
+      guard letters.count >= 4, !minorWords.contains(letters.lowercased()) else { return false }
+      return letters.first?.isLowercase == true
+    }
+  }
+
   private static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {
     heading.title.lowercased().contains("references")
   }
@@ -1505,38 +1664,38 @@ public struct LegacyTextParser: Sendable {
 
   // MARK: Blocks
 
-  nonisolated(unsafe) private static let bulletPattern =
-    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
+  private static let bulletPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#)
   /// A catalogue entry: `NUMBER[letter]  - text`, the RFC index of RFC 1012, the
   /// standards summaries' `2352 - A Convention ...`, numbered steps and value tables
   /// (#204). The text may not start with a digit, or `3 - 2` would be an entry.
-  nonisolated(unsafe) private static let catalogueEntryPattern =
-    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#
+  private static let catalogueEntryPattern = Pattern(
+    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#)
   /// A column gap in a catalogue entry's text: a run of three spaces or more after a
   /// word. After a colon it is no column: `3 - NAME:   description` is a name and its
   /// description, the spaces aligning the descriptions (RFC 5412, 5416, 8231).
   /// `internalGapPattern` counted four spaces after a colon and not three, so RFC
   /// 8231 came out as one row a list among rows kept as artwork.
-  nonisolated(unsafe) private static let catalogueGapPattern = #/[^.?!:\s]\s{3,}\S/#
+  private static let catalogueGapPattern = Pattern(#/[^.?!:\s]\s{3,}\S/#)
   /// Arithmetic in an entry's text: a formula set on a line of its own opens with a
   /// number and a minus as well (RFC 5879's `1 - (1 - x / y) ^ 4 == ...`).
-  nonisolated(unsafe) private static let formulaPattern = #/==|\s\^\s/#
+  private static let formulaPattern = Pattern(#/==|\s\^\s/#)
   /// A second entry on the entry's line (RFC 3423's `1 - TCP, 2 - SCTP`), which is
   /// not the first one's text.
-  nonisolated(unsafe) private static let secondEntryPattern = #/,\s*\d+[a-z]? +- +\S/#
+  private static let secondEntryPattern = Pattern(#/,\s*\d+[a-z]? +- +\S/#)
   /// How far past an entry's text column a continuation may stand: a column or two
   /// either way is how a description under an entry is set, and a caption centred
   /// under a legend stands well past it (RFC 793's at 26 against 12).
   private static let catalogueContinuationSlack = 2
-  nonisolated(unsafe) private static let numberedItemPattern =
-    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
+  private static let numberedItemPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#)
   /// `containsArtwork` answers the same question byte by byte; an alternative added
   /// here has to be added there, and `` `the byte scans agree with the regexes` `` is the guard.
-  nonisolated(unsafe) static let artworkPattern =
-    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+  static let artworkPattern = Pattern(
+    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#)
   /// A run of three or more spaces between two non-space characters, not following
   /// sentence punctuation: a column gap rather than the gap after a full stop.
-  nonisolated(unsafe) static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+  static let internalGapPattern = Pattern(#/[^.?!:]\s{3,}\S/#)
 
   /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
   /// of every block the prose test sees. Swift's regex engine tries each alternative
@@ -1905,6 +2064,7 @@ public struct LegacyTextParser: Sendable {
     -> ProseDiagnostics
   {
     var diagnosis = ProseDiagnostics()
+    diagnosis.indentLimit = maxIndent
     guard let first = lines.first else {
       diagnosis.rejections = [.noLines]
       return diagnosis
@@ -1921,11 +2081,16 @@ public struct LegacyTextParser: Sendable {
     // a MIB module's text, whose `DESCRIPTION` clauses and comments are sentences: a
     // block with an assignment in it, or an ASN.1 comment, is the module's (RFC 8096's
     // `... obsoleted by IP-MIB::ipv6IpForwarding." ::= { ipv6MIBObjects 1 }`).
+    //
+    // A thorough diagnosis asks it of a block too deep as well: whether a looser limit
+    // would take the block, or refuse it as code instead, is what makes a near miss (#43).
+    if indent > classicProseIndent, indent <= maxIndent || thorough {
+      diagnosis.readsAsDeepProse =
+        readsLikeSentences(lines, share: (of: 1, in: 2)) && !readsAsModuleText(lines)
+    }
     if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
-    } else if indent > classicProseIndent,
-      !readsLikeSentences(lines, share: (of: 1, in: 2)) || readsAsModuleText(lines)
-    {
+    } else if indent > classicProseIndent, !diagnosis.readsAsDeepProse {
       diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {
@@ -2248,8 +2413,8 @@ public struct LegacyTextParser: Sendable {
   /// 1993.]`. Leading whitespace is excluded for the same reason -- `[ ]` and
   /// `[ a:defaultValue = "" ]` are schema fragments, not citations.
 
-  nonisolated(unsafe) private static let referenceStartPattern =
-    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#
+  private static let referenceStartPattern = Pattern(
+    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#)
   /// A page footer `depaginate` could not see. `footerPattern` is anchored to the
   /// end of the line, and the earliest RFCs set the footer the other way round --
   /// `[Page 0]` at the left margin with the author out at the right (RFC 753, 759,
@@ -2257,7 +2422,7 @@ public struct LegacyTextParser: Sendable {
   /// one bracket of an anchor's shape that never names a reference. Four documents,
   /// and without this each gains a `<reference anchor="Page 52">` whose title is
   /// whatever the footer's author column said.
-  nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
+  private static let pageFooterAnchorPattern = Pattern(#/Page\s+\d+/#)
 
   private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
     var references: [Reference] = []
@@ -2290,6 +2455,17 @@ public struct LegacyTextParser: Sendable {
     return references
   }
 
+  /// What `reference(anchor:text:)` reads out of an entry, once per bibliography entry:
+  /// hoisted, because a literal inside the function was a new `Regex` for every entry,
+  /// compiled again on its first match (#146).
+  private static let referenceRFCPattern = Pattern(#/\bRFC\s?(\d+)/#)
+  private static let referenceOlderRFCPattern = Pattern(
+    #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+  private static let referenceBCPPattern = Pattern(#/\bBCP\s?(\d+)/#)
+  private static let referenceSTDPattern = Pattern(#/\bSTD\s?(\d+)/#)
+  private static let referenceTitlePattern = Pattern(#/"([^"]+)"/#)
+  private static let referenceURLPattern = Pattern(#/https?:\/\/[^\s>,]+/#)
+
   private static func reference(anchor label: String, text: String) -> Reference {
     var seriesInfo: [SeriesInfo] = []
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
@@ -2298,24 +2474,24 @@ public struct LegacyTextParser: Sendable {
     // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
     // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
     // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
-    if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#)
-      ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+    if let match = text.firstMatch(of: referenceRFCPattern)
+      ?? text.firstMatch(of: referenceOlderRFCPattern)
     {
       seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
       seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
     }
-    if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceBCPPattern) {
       seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))
     }
-    if let match = text.firstMatch(of: #/\bSTD\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceSTDPattern) {
       seriesInfo.append(SeriesInfo(name: "STD", value: String(match.1)))
     }
-    let title = text.firstMatch(of: #/"([^"]+)"/#).map { String($0.1) } ?? ""
+    let title = text.firstMatch(of: referenceTitlePattern).map { String($0.1) } ?? ""
     let date = text.firstMatch(of: monthYearPattern).map {
       PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
     }
-    let url = text.firstMatch(of: #/https?:\/\/[^\s>,]+/#).flatMap {
+    let url = text.firstMatch(of: referenceURLPattern).flatMap {
       URL(string: String($0.output).trimmingTrailingPunctuation())
     }
     var reference = Reference(
@@ -2369,16 +2545,21 @@ struct InlineLinker: Sendable {
   /// A pattern and the literal it cannot match without, defined together: `link`
   /// reaches a pattern only through `matches(in:given:)`, so no pass can run under
   /// another pattern's gate.
-  struct Gated<Output> {
-    let regex: Regex<Output>
-    let gate: KeyPath<Literals, Bool>
+  struct Gated<Output: Sendable>: Sendable {
+    let regex: Pattern<Output>
+    let gate: any KeyPath<Literals, Bool> & Sendable
+
+    init(regex: Regex<Output>, gate: any KeyPath<Literals, Bool> & Sendable) {
+      self.regex = Pattern(regex)
+      self.gate = gate
+    }
 
     func matches(in text: String, given literals: Literals) -> [Regex<Output>.Match] {
       literals[keyPath: gate] ? text.matches(of: regex) : []
     }
   }
 
-  nonisolated(unsafe) static let sectionOfRFCPattern = Gated(
+  static let sectionOfRFCPattern = Gated(
     regex: #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#,
     gate: \.sectionOfRFC
   )
@@ -2388,7 +2569,7 @@ struct InlineLinker: Sendable {
   /// neither this pattern nor the bare one. Anything that is not a document once
   /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
   /// the bare pattern picks up whatever RFC sits inside it.
-  nonisolated(unsafe) static let bracketPattern = Gated(
+  static let bracketPattern = Gated(
     regex: #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#, gate: \.bracket)
   /// Deliberately blind to a preceding `[`. A multi-anchor citation
   /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
@@ -2400,17 +2581,17 @@ struct InlineLinker: Sendable {
   /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
   /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
   /// larger of the two shapes going unlinked.
-  nonisolated(unsafe) static let bareRFCPattern = Gated(
+  static let bareRFCPattern = Gated(
     regex: #/\bRFC[\s\-]?(?<number>\d+)\b/#, gate: \.rfc)
   /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
   /// reference but only the first carries the word, so the numbers are linked where
   /// they stand and the sentence is left to read as it was set.
-  nonisolated(unsafe) static let rfcListPattern = Gated(
+  static let rfcListPattern = Gated(
     regex: #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#, gate: \.rfcs)
-  nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
-  nonisolated(unsafe) static let sectionPattern = Gated(
+  private static let listNumberPattern = Pattern(#/\d{1,5}/#)
+  static let sectionPattern = Gated(
     regex: #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#, gate: \.section)
-  nonisolated(unsafe) static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
+  static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
 
   /// What a matched mention reads as: nil when the document spelled the reference
   /// the way the series spells itself, so the label composes back identically, and
@@ -2631,10 +2812,15 @@ extension String {
     return result
   }
 
+  /// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
+  /// every title `heading(from:)` reads, a contents entry's included: a static pattern,
+  /// as a literal in the function was a new `Regex` per line (#146).
+  private static let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
+
   func trimmingTrailingDots() -> String {
     var result = trimmingTrailingWhitespace()
     // Table-of-contents style "Title ....... 7" leaders.
-    if let match = result.firstMatch(of: #/\s*\.{3,}\s*\d*$/#) {
+    if let match = result.firstMatch(of: Self.contentsLeaderPattern) {
       result.removeSubrange(match.range)
     }
     return result
