@@ -17,7 +17,10 @@
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self
       // The scene's `.task` did this; there is no scene on macOS any more.
-      Task(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
+      // Immediate, so that the bootstrap has started reading the cached index by
+      // the time the window below is made (#367). A plain task waited for the
+      // window, and the list for both, one after the other.
+      Task.immediate(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
       warnIfTheStoreDidNotOpen()
     }

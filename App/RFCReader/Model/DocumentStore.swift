@@ -67,23 +67,26 @@ actor DocumentStore {
 
   // MARK: - Index
 
-  private var indexURL: URL { directory.appending(path: "rfc-index.xml") }
+  private nonisolated var indexURL: URL { directory.appending(path: "rfc-index.xml") }
 
-  func cachedIndex() throws -> (index: RFCIndex, updatedAt: Date)? {
-    let url: URL
-    var updatedAt = Date.distantPast
+  /// Where the cached index is, and when it was written: the RFC Editor's copy in the
+  /// cache, or else the snapshot bundled with the app. Nil when there is neither.
+  ///
+  /// Only a lookup, and nonisolated: the caller parses it, off this actor (#367).
+  /// Parsed here, the index held the store for as long as the parse took, so a
+  /// document opened during launch — an `rfc://` link — waited behind it.
+  nonisolated func cachedIndexLocation() -> (url: URL, updatedAt: Date)? {
     if FileManager.default.fileExists(atPath: indexURL.path) {
-      url = indexURL
-      updatedAt =
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
-        ?? .distantPast
+      let updatedAt =
+        (try? indexURL.resourceValues(forKeys: [.contentModificationDateKey])
+          .contentModificationDate) ?? .distantPast
+      return (indexURL, updatedAt)
     } else if let bundled = Bundle.main.url(forResource: "rfc-index", withExtension: "xml") {
       // A snapshot shipped with the app makes first launch work offline.
-      url = bundled
+      return (bundled, .distantPast)
     } else {
       return nil
     }
-    return (try RFCIndexParser.parse(contentsOf: url), updatedAt)
   }
 
   func storeIndex(_ data: Data) throws {

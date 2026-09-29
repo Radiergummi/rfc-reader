@@ -133,29 +133,18 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    // Before anything is awaited, so that the parse is already running when this
+    // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
+    // makes the first window at that suspension: the window is about 255 ms of the
+    // main thread, and the parse, which needs nothing from it, runs beside it rather
+    // than after it (#367). Every `await` stays below this line.
+    async let cached = Self.loadCachedIndex(from: store)
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
-    await refreshDownloadedNumbers()
-    do {
-      if let cached = try await store.cachedIndex() {
-        // The store parses the cached index on its own actor; the search and the
-        // working groups are built off the main actor as well.
-        let index = cached.index
-        let prepared = await Self.prepare(index)
-        apply(prepared, updatedAt: cached.updatedAt)
-        // Refresh in the background if the cache is older than a day.
-        if cached.updatedAt.timeIntervalSinceNow < -86_400 {
-          Task(name: "Refresh index") { await refreshIndex() }
-        }
-      } else {
-        await refreshIndex()
-      }
-    } catch {
-      indexState = .failed(error.localizedDescription)
-    }
-    // Just Published is decoration: a failure leaves it empty, and is logged
-    // rather than shown (#125).
+    // Just Published needs neither the index nor the downloads, so it starts beside
+    // them rather than after the index is applied. It is decoration: a failure leaves
+    // it empty, and is logged rather than shown (#125).
     Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
@@ -163,6 +152,20 @@ final class LibraryModel {
         libraryLog.error(
           "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
       }
+    }
+    await refreshDownloadedNumbers()
+    do {
+      if let (prepared, updatedAt) = try await cached {
+        apply(prepared, updatedAt: updatedAt)
+        // Refresh in the background if the cache is older than a day.
+        if updatedAt.timeIntervalSinceNow < -86_400 {
+          Task(name: "Refresh index") { await refreshIndex() }
+        }
+      } else {
+        await refreshIndex()
+      }
+    } catch {
+      indexState = .failed(error.localizedDescription)
     }
   }
 
@@ -188,10 +191,14 @@ final class LibraryModel {
     }
   #endif
 
-  /// The search and the working groups, built off the main actor.
+  /// The cached index, parsed and prepared off the main actor and off the store's —
+  /// the search and the working groups with it. Nil when there is none.
   @concurrent
-  private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
-    PreparedIndex(index: index)
+  private static func loadCachedIndex(from store: DocumentStore) async throws
+    -> (prepared: PreparedIndex, updatedAt: Date)?
+  {
+    guard let cached = store.cachedIndexLocation() else { return nil }
+    return (try PreparedIndex.parse(Data(contentsOf: cached.url)), cached.updatedAt)
   }
 
   @concurrent
