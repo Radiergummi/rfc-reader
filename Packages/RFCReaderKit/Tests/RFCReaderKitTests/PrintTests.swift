@@ -369,3 +369,169 @@ struct BuilderTitleTests {
     }
   }
 }
+
+/// The pages here are hand-written in the shape of a published RFC's, not quoted
+/// from one: a few short lines each, between form feeds.
+@Suite("Print: the published pages")
+struct PublishedPagesTests {
+  typealias Metrics = PublishedPages.Metrics
+
+  @Test func `each form feed starts a page, and the line break after it is not a line`() {
+    let pages = PublishedPages("first\nsecond\n\u{0C}\nthird\nfourth\n")
+    #expect(pages.pages == [["first", "second"], ["third", "fourth"]])
+  }
+
+  @Test func `a form feed with the next page's text on its line starts that page`() {
+    #expect(PublishedPages("first\n\u{0C}second\n").pages == [["first"], ["second"]])
+  }
+
+  /// A page's blank lines at the top are part of how it is set; the ones at its
+  /// foot, after the page number, are only the end of the file's line.
+  @Test func `a page keeps the blank lines at its top and loses the ones at its foot`() {
+    let pages = PublishedPages("\n\nfirst\n\n\n\u{0C}\nsecond")
+    #expect(pages.pages == [["", "", "first"], ["second"]])
+  }
+
+  @Test func `a form feed at the end of the text makes no empty page`() {
+    #expect(PublishedPages("first\n\u{0C}\n\n\u{0C}\n").pages == [["first"]])
+    #expect(PublishedPages("").pages.isEmpty)
+  }
+
+  @Test func `carriage returns end lines as line feeds do`() {
+    let pages = PublishedPages("first\r\nsecond\r\n\u{0C}\r\nthird\r\n")
+    #expect(pages.pages == [["first", "second"], ["third"]])
+  }
+
+  /// A tab in the published text stops at the next eighth column, as a terminal
+  /// set it, so a tab-indented table still lines up in a fixed-width font.
+  @Test func `a tab reaches the next eighth column`() {
+    #expect(PublishedPages("ab\tc\n\td").pages == [["ab      c", "        d"]])
+  }
+
+  @Test func `trailing spaces are not part of a line`() {
+    #expect(PublishedPages("first   \n").pages == [["first"]])
+  }
+
+  private let metrics = Metrics(lineHeight: 1.25, advance: 0.5)
+
+  @Test func `pages that fit are set at the preferred size`() {
+    let pages = PublishedPages(
+      Array(repeating: String(repeating: "x", count: 72), count: 58)
+        .joined(separator: "\n"))
+    // 58 lines of 11.25 pt, 72 columns of 4.5 pt.
+    let size = pages.fontSize(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(size == PrintLayout.originalTextSize)
+  }
+
+  /// Published pages are never split: one that is longer than the paper's makes
+  /// every page smaller, so each still prints whole on one sheet.
+  @Test func `a page too long for the paper makes the whole document smaller`() {
+    let short = Array(repeating: "x", count: 10).joined(separator: "\n")
+    let long = Array(repeating: "x", count: 80).joined(separator: "\n")
+    let pages = PublishedPages(short + "\n\u{0C}\n" + long)
+    let size = pages.fontSize(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(size == 700 / (80 * 1.25))
+  }
+
+  @Test func `a line too wide for the paper makes the whole document smaller`() {
+    let pages = PublishedPages("x\n\u{0C}\n" + String(repeating: "x", count: 100))
+    let size = pages.fontSize(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(size == 400 / (100 * 0.5))
+  }
+
+  /// `count` lines of `columns` columns each, as one page.
+  private func page(_ count: Int, columns: Int = 1) -> String {
+    Array(repeating: String(repeating: "x", count: columns), count: count)
+      .joined(separator: "\n")
+  }
+
+  /// Below 7 pt a print is no longer read, so the size stops there, and what does
+  /// not fit it is continued rather than shrunk further.
+  @Test func `shrinking stops at the smallest size`() {
+    let size = PublishedPages(page(200)).fontSize(
+      in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(size == PublishedPages.smallestSize)
+  }
+
+  /// At 7 pt, 700 pt of paper holds 80 lines of 8.75 pt.
+  @Test func `a page too long at the smallest size continues on the next sheet`() {
+    let sheets = PublishedPages(page(200)).sheets(
+      in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(sheets.fontSize == 7)
+    #expect(sheets.pages.map(\.count) == [80, 80, 40])
+  }
+
+  /// A continued page's last sheet is its own: the next published page still
+  /// starts a sheet of its own.
+  @Test func `the page after a continued one starts a sheet of its own`() {
+    let sheets = PublishedPages(page(100) + "\n\u{0C}\n" + page(10)).sheets(
+      in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(sheets.pages.map(\.count) == [80, 20, 10])
+  }
+
+  /// 75 lines shrink the text to fit exactly, and exactly is still one sheet.
+  @Test func `a page that fits when shrunk is one sheet`() {
+    let sheets = PublishedPages(page(75)).sheets(
+      in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(sheets.fontSize > 7 && sheets.fontSize < 9)
+    #expect(sheets.pages.map(\.count) == [75])
+  }
+
+  @Test func `pages that fit are sheets as they are`() {
+    let text = "first\nsecond\n\u{0C}\nthird"
+    let sheets = PublishedPages(text).sheets(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(sheets.fontSize == PrintLayout.originalTextSize)
+    #expect(sheets.pages == PublishedPages(text).pages)
+  }
+
+  /// At 7 pt, 400 pt of paper holds 114 columns of 3.5 pt. The rest of a line
+  /// wider than that continues on the next line, as far in as the line itself is.
+  @Test func `a line too wide at the smallest size wraps under its own indentation`() {
+    let line = "    " + String(repeating: "x", count: 200)
+    let sheets = PublishedPages(line).sheets(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(sheets.fontSize == 7)
+    #expect(
+      sheets.pages == [
+        ["    " + String(repeating: "x", count: 110), "    " + String(repeating: "x", count: 90)]
+      ])
+  }
+
+  /// An indentation as wide as the column leaves no room for the text after it,
+  /// so the continuation starts at the margin.
+  @Test func `a line indented past the column wraps at the margin`() {
+    let line = String(repeating: " ", count: 120) + "xx"
+    let sheets = PublishedPages(line).sheets(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(
+      sheets.pages == [
+        [String(repeating: " ", count: 114), String(repeating: " ", count: 6) + "xx"]
+      ])
+  }
+
+  @Test func `nothing to print is set at the preferred size`() {
+    let size = PublishedPages("").fontSize(in: CGSize(width: 400, height: 700), metrics: metrics)
+    #expect(size == PrintLayout.originalTextSize)
+  }
+
+  /// A published page is 58 lines of at most 72 columns, and it prints at the
+  /// preferred size on either paper.
+  @Test func `a published page of 58 lines fits both papers at 9 pt`() {
+    let font = PlatformFont.monospacedSystemFont(
+      ofSize: PrintLayout.originalTextSize, weight: .regular)
+    let page = Array(repeating: String(repeating: "0", count: 72), count: 58)
+      .joined(separator: "\n")
+    let pages = PublishedPages(page + "\n\u{0C}\n" + page)
+    for paper in [PrintLayout.letter, PrintLayout.isoA4] {
+      let column = PrintLayout(paperSize: paper).contentRect.size
+      #expect(pages.fontSize(in: column, metrics: Metrics(font)) == PrintLayout.originalTextSize)
+    }
+  }
+
+  @Test func `a font's metrics are per point of its size`() {
+    let small = Metrics(PlatformFont.monospacedSystemFont(ofSize: 9, weight: .regular))
+    let large = Metrics(PlatformFont.monospacedSystemFont(ofSize: 18, weight: .regular))
+    #expect(abs(small.lineHeight - large.lineHeight) < 0.01)
+    #expect(abs(small.advance - large.advance) < 0.01)
+    #expect(small.lineHeight > 1)
+    #expect(small.advance > 0.4 && small.advance < 1)
+  }
+}

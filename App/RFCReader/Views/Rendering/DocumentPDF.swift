@@ -29,52 +29,45 @@ nonisolated enum DocumentPDF {
   /// What is printed: the reader's rendering, or the RFC as published when the
   /// reader is showing that instead.
   nonisolated enum Content: Sendable {
-    case document(RFCDocument)
+    /// With the title block and running header and footer `PrintFurniture` says.
+    case document(RFCDocument, PrintFurniture)
+    /// With none: a published page carries its own.
     case original(String)
   }
 
   /// The open document, fetched and rendered as the reader is showing it. Fetched
   /// again rather than handed over by the reader: the library has it cached, and
   /// `ReaderState` deliberately carries strings out of the document, not the
-  /// document itself. With Original Text showing, both are fetched at once.
+  /// document itself. With Original Text showing, only the published text is
+  /// fetched: its pages have their own header and footer.
   @MainActor
   static func make(
     for id: DocumentID, original: Bool, paperSize: CGSize, library: LibraryModel
   ) async throws -> Data {
-    async let fetched = library.document(for: id)
-    let source: String? = if original { try await library.originalText(for: id) } else { nil }
-    let document = try await fetched
-    let furniture = PrintFurniture(header: document.header, metadata: library.metadata(id))
-    let content: Content = source.map { .original($0) } ?? .document(document)
-    return await render(content, furniture: furniture, paperSize: paperSize)
+    let content: Content
+    if original {
+      content = .original(try await library.originalText(for: id))
+    } else {
+      let document = try await library.document(for: id)
+      content = .document(
+        document, PrintFurniture(header: document.header, metadata: library.metadata(id)))
+    }
+    return await render(content, paperSize: paperSize)
   }
 
   /// Builds, lays out and draws, off the main actor, all of it in the light
   /// appearance: whether a dynamic colour resolves when a line is laid out or when
   /// it is drawn is TextKit's to decide, and either way it has to be paper's.
   @concurrent
-  static func render(_ content: Content, furniture: PrintFurniture, paperSize: CGSize) async
-    -> Data
-  {
+  static func render(_ content: Content, paperSize: CGSize) async -> Data {
     let layout = PrintLayout(paperSize: paperSize)
     switch content {
-    case .document(let document):
+    case .document(let document, let furniture):
       return buildAndLayOut(document, furniture: furniture, layout: layout) { _, laidOut in
         pdf(laidOut, layout: layout, furniture: furniture)
       }
     case .original(let source):
-      return inLightAppearance {
-        let text = NSAttributedString(
-          string: source,
-          attributes: [
-            .font: PlatformFont.monospacedSystemFont(
-              ofSize: PrintLayout.originalTextSize, weight: .regular),
-            .foregroundColor: RFCColors.label,
-          ])
-        return layOut(text, keepingWithNext: [], layout: layout) { laidOut in
-          pdf(laidOut, layout: layout, furniture: furniture)
-        }
-      }
+      return inLightAppearance { publishedPDF(source, layout: layout) }
     }
   }
 
