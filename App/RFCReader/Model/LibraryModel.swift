@@ -90,6 +90,7 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
+        self.recheckSpotlight()
       }
     }
   }
@@ -301,17 +302,35 @@ final class LibraryModel {
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
+    indexForSpotlight(prepared.index.rfcs)
+  }
+
+  // MARK: - Spotlight
+
+  /// The Spotlight indexing under way (#178), canceled when a newer one starts.
+  @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
+  /// When the last one started, so an activation knows whether the week has turned.
+  @ObservationIgnored private var spotlightCheckedAt: Date?
+
+  private func indexForSpotlight(_ rfcs: [RFCMetadata]) {
     // A launch with a day-old cache applies it, then the refreshed index: the first
     // indexing gives way, so the older index cannot finish last and win.
     spotlightIndexing?.cancel()
-    let rfcs = prepared.index.rfcs
+    spotlightCheckedAt = .now
     spotlightIndexing = Task(name: "Index for Spotlight") {
       await SpotlightIndexer.update(rfcs)
     }
   }
 
-  /// The Spotlight indexing under way (#178), canceled when a newer index arrives.
-  @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
+  /// On activation: an app left running past its items' `lifetime` would otherwise
+  /// lose every RFC from Spotlight, since only a newer index checks. Once a week at
+  /// most, and the indexer skips an unchanged state.
+  private func recheckSpotlight() {
+    guard let index, let spotlightCheckedAt,
+      SpotlightEntry.isRecheckDue(lastCheckedAt: spotlightCheckedAt, now: .now)
+    else { return }
+    indexForSpotlight(index.rfcs)
+  }
 
   // MARK: - Revisions
 

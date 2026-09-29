@@ -63,8 +63,19 @@ public struct SpotlightEntry: Sendable {
       }
       digest.update(data: Data([0x1E]))
     }
-    let week = Int(now.timeIntervalSince1970) / (7 * 86_400)
-    return Data(digest.finalize()) + Data(" \(week)".utf8)
+    return Data(digest.finalize()) + Data(" \(week(of: now))".utf8)
+  }
+
+  /// Whether an activation should check the index again (#178): when the week has
+  /// turned since the last check, so an app left running renews its items before
+  /// they reach their `lifetime`. Within the week the client state could not have
+  /// changed without a new index, which checks by itself.
+  public static func isRecheckDue(lastCheckedAt: Date, now: Date) -> Bool {
+    week(of: now) != week(of: lastCheckedAt)
+  }
+
+  private static func week(of date: Date) -> Int {
+    Int(date.timeIntervalSince1970) / (7 * 86_400)
   }
 
   /// The document a chosen Spotlight result names, or nil for an activity that is

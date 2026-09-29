@@ -99,6 +99,26 @@ struct SpotlightEntryTests {
     #expect(SpotlightEntry.lifetime > 14 * Self.day)
   }
 
+  /// An app left running is checked again when it is next activated in a new week,
+  /// so its items are renewed before they expire; within the week an activation
+  /// does nothing.
+  @Test func `an activation in the same week does not check again`() {
+    let weekStart = Date(timeIntervalSince1970: 1_700_096_400)
+    #expect(
+      !SpotlightEntry.isRecheckDue(
+        lastCheckedAt: weekStart, now: weekStart.addingTimeInterval(6 * Self.day)))
+  }
+
+  @Test func `an activation in a later week checks again`() {
+    let weekStart = Date(timeIntervalSince1970: 1_700_096_400)
+    #expect(
+      SpotlightEntry.isRecheckDue(
+        lastCheckedAt: weekStart, now: weekStart.addingTimeInterval(7 * Self.day)))
+    #expect(
+      SpotlightEntry.isRecheckDue(
+        lastCheckedAt: weekStart, now: weekStart.addingTimeInterval(40 * Self.day)))
+  }
+
   /// A result arrives back as its identifier, and opens the RFC it names.
   @Test func `a chosen result names the document it came from`() {
     let activity = NSUserActivity(activityType: CSSearchableItemActionType)
