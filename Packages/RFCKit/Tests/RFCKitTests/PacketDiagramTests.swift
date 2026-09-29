@@ -134,6 +134,119 @@ struct PacketDiagramTests {
     #expect(diagram.fields.count == 4)
   }
 
+  /// A diagram set at the margin can have no room for the boundary left of bit 0,
+  /// and puts its grid's corners under the ruler's digits: the same grid, one
+  /// column to the right of where the ruler puts it.
+  @Test func `a grid one column right of its ruler is read against the ruler`() throws {
+    let diagram = try #require(
+      recognize([
+        "0                   1",
+        "0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+        "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+        "|      Type     |     Length    |",
+        "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      ]))
+    #expect(
+      diagram.fields == [
+        field("Type", row: 0, offset: 0, width: 8), field("Length", row: 0, offset: 8, width: 8),
+      ])
+  }
+
+  /// The other way to number the tens: a digit over every bit from ten on.
+  @Test func `a tens line may number every bit from ten on`() throws {
+    let diagram = try #require(
+      recognize(
+        [
+          "                        1 1 1 1 1 1",
+          "    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+          Self.border16,
+          "   |      Type     |     Length    |",
+          Self.border16,
+        ]))
+    #expect(diagram.fields.map(\.name) == ["Type", "Length"])
+  }
+
+  /// Some leave the first ten unnumbered.
+  @Test func `a tens line may leave out its leading zero`() throws {
+    let diagram = try #require(
+      recognize(
+        [
+          "                        1",
+          "    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+          Self.border16,
+          "   |      Type     |     Length    |",
+          Self.border16,
+        ]))
+    #expect(diagram.fields.map(\.name) == ["Type", "Length"])
+  }
+
+  /// `~` is the usual mark for a field of no fixed length, and `:`, `/`, `\` and
+  /// `.` the others in use; each stands where the field's delimiter would.
+  @Test(arguments: [":", "/", "\\", "."])
+  func `a field between other variable-length marks has a variable length`(mark: String) throws {
+    let diagram = try #require(
+      recognize(
+        Self.ruler16 + [
+          Self.border16,
+          "   |      Type     |     Length    |",
+          Self.border16,
+          "   |                               |",
+          "   \(mark)             Value             \(mark)",
+          "   |                               |",
+          Self.border16,
+        ]))
+    #expect(diagram.fields.last == field("Value", row: 1, offset: 0, width: 16, variable: true))
+  }
+
+  /// The mark belongs to the field it stands against, not to the row.
+  @Test func `only the field against a variable-length mark has a variable length`() throws {
+    let diagram = try #require(
+      recognize(
+        Self.ruler16 + [
+          Self.border16,
+          "   |  Kind |          Options      ~",
+          Self.border16,
+        ]))
+    #expect(
+      diagram.fields == [
+        field("Kind", row: 0, offset: 0, width: 4),
+        field("Options", row: 0, offset: 4, width: 12, variable: true),
+      ])
+  }
+
+  /// A field that continues under part of a border takes its name from that part
+  /// only, not from the rule over the fields beside it.
+  @Test func `a field continued under part of a border does not take the rule as its name`()
+    throws
+  {
+    let diagram = try #require(
+      recognize(
+        Self.ruler16 + [
+          Self.border16,
+          "   |                               |",
+          "   +     Address   +-+-+-+-+-+-+-+-+",
+          "   |               |      Tag      |",
+          Self.border16,
+        ]))
+    #expect(
+      diagram.fields == [
+        field("Address", row: 0, offset: 0, width: 24, rows: 2),
+        field("Tag", row: 1, offset: 8, width: 8),
+      ])
+  }
+
+  /// Anything further off is not the grid the ruler numbers.
+  @Test func `a grid two columns off its ruler is not a packet diagram`() {
+    #expect(
+      recognize([
+        "0                   1",
+        "0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+        " +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+        " |      Type     |     Length    |",
+        " +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      ]) == nil)
+  }
+
   // MARK: - Rejected
 
   @Test func `a box drawing with no ruler is not a packet diagram`() {
