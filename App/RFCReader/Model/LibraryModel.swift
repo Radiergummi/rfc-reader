@@ -166,17 +166,23 @@ final class LibraryModel {
   /// The search and the working groups, built off the main actor.
   @concurrent
   private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
-    PreparedIndex(index: index)
+    signposter.withIntervalSignpost("Prepare index") {
+      PreparedIndex(index: index)
+    }
   }
 
   @concurrent
   private static func parse(_ data: Data) async throws -> PreparedIndex {
-    try PreparedIndex.parse(data)
+    try signposter.withIntervalSignpost("Parse index") {
+      try PreparedIndex.parse(data)
+    }
   }
 
   func refreshIndex() async {
     do {
+      let interval = signposter.beginInterval("Fetch index")
       let data = try await client.fetchIndexData()
+      signposter.endInterval("Fetch index", interval)
       // Off the main actor: the parse alone is about a second (#124).
       let prepared = try await Self.parse(data)
       try await store.storeIndex(data)
@@ -194,6 +200,7 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+    signposter.emitEvent("Index ready")
   }
 
   // MARK: - Lists
@@ -337,7 +344,11 @@ final class LibraryModel {
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = search.search(key.query, limit: .max)
+    let hits = signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+    ) {
+      search.search(key.query, limit: .max)
+    }
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter { return hits.map(\.rfc) }
     let allowed = Set(base.map(\.number))
@@ -357,7 +368,11 @@ final class LibraryModel {
   private static func suggestions(
     in search: IndexSearch, for query: String, limit: Int
   ) async -> [DocumentID] {
-    search.search(query, limit: limit).map(\.id)
+    signposter.withIntervalSignpost(
+      "Suggest", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
+    ) {
+      search.search(query, limit: limit).map(\.id)
+    }
   }
 
   // MARK: - Scene routing

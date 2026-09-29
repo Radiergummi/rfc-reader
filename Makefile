@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -175,6 +175,24 @@ install: build-app
 	  rm -rf '/Applications/$(SCHEME).app'; \
 	  cp -R "$$app" /Applications/; \
 	  echo "installed /Applications/$(SCHEME).app"
+
+## Record a Time Profiler trace of a scripted session and print the signposts
+# Release, because that is what ships and what the numbers should describe; a
+# Debug build is often several times slower in Swift code, and misleads. The
+# session opens three large documents and searches (`Tools/trace/trace.py` has
+# it); name another with TRACE_SCENARIO. The trace is kept in traces/ for
+# Instruments, where the same intervals sit in the Points of Interest lane.
+#
+#   make trace
+#   make trace TRACE_SCENARIO='wait 6; open 9110; wait 5'
+#
+TRACE_SCENARIO ?=
+trace: CONFIGURATION := Release
+trace: build-app
+	@app='$(call built_app,platform=macOS)'; \
+	  Tools/trace/trace.py --app "$$app" \
+	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
+	    $(if $(TRACE_SCENARIO),--scenario '$(TRACE_SCENARIO)')
 
 ## Build the corpus pipeline in release mode
 # Phony rather than a rule on $(CORPUS_BIN): swift build tracks its own sources

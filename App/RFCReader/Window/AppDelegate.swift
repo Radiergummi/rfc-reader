@@ -2,6 +2,7 @@
   import AppKit
   import Observation
   import RFCKit
+  import os
 
   /// Makes windows, because nothing else does any more.
   ///
@@ -16,9 +17,11 @@
 
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self
+      signposter.emitEvent("Launched")
       // The scene's `.task` did this; there is no scene on macOS any more.
       Task(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
+      signposter.emitEvent("First window made")
       warnIfTheStoreDidNotOpen()
     }
 

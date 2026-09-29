@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import os
 
 #if canImport(UIKit)
   import UIKit
@@ -133,6 +134,8 @@ final class RFCTextViewCoordinator: NSObject {
   /// laid out. Cancelled by the next `install` — and by a change of column, which
   /// invalidates every frame it has computed.
   private var layoutTask: Task<Void, Never>?
+  /// The signpost interval of the layout `layoutTask` is doing; see `Signposts`.
+  private var layoutInterval: OSSignpostIntervalState?
   /// Characters per slice: about 8 ms of layout on this machine, so a slice fits
   /// inside a frame.
   private static let layoutSlice = 20_000
@@ -217,7 +220,9 @@ final class RFCTextViewCoordinator: NSObject {
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
     // `StorageInstallTests` pins it.
-    storage.install(built.text)
+    signposter.withIntervalSignpost("Install document") {
+      storage.install(built.text)
+    }
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
@@ -264,6 +269,8 @@ final class RFCTextViewCoordinator: NSObject {
   /// state `scrollContainerTopTo` already treats as "do not clamp".
   private func beginLayout() {
     layoutTask?.cancel()
+    endLayoutInterval()
+    layoutInterval = signposter.beginInterval("Lay out document")
     laidOutEnd = nil
     laidOutThrough = 0
     ensureLayout(through: Self.layoutSlice)
@@ -304,6 +311,16 @@ final class RFCTextViewCoordinator: NSObject {
     // this value — that it keeps moving as the viewport does, which is why the
     // reader lays all of it out — applies to viewport layout, not here.
     laidOutEnd = layout.usageBoundsForTextContainer.maxY
+    endLayoutInterval()
+  }
+
+  /// Ends the layout interval `beginLayout()` began: when the last slice lands, or
+  /// when a newer layout replaces it before then, so a trace shows the replaced
+  /// one ending where it stopped rather than never ending.
+  private func endLayoutInterval() {
+    guard let layoutInterval else { return }
+    signposter.endInterval("Lay out document", layoutInterval)
+    self.layoutInterval = nil
   }
 
   // MARK: - Geometry
@@ -385,6 +402,7 @@ final class RFCTextViewCoordinator: NSObject {
         restorePlace()
       } else {
         layoutTask?.cancel()
+        endLayoutInterval()
         laidOutEnd = nil
         laidOutThrough = 0
       }
