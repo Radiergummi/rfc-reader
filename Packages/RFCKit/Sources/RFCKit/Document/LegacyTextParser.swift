@@ -2383,7 +2383,7 @@ struct InlineLinker: Sendable {
   /// A pattern and the literal it cannot match without, defined together: `link`
   /// reaches a pattern only through `matches(in:given:)`, so no pass can run under
   /// another pattern's gate.
-  struct Gated<Output>: Sendable {
+  struct Gated<Output: Sendable>: Sendable {
     let regex: Pattern<Output>
     let gate: any KeyPath<Literals, Bool> & Sendable
 
@@ -2651,8 +2651,8 @@ extension String {
   }
 
   /// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
-  /// every heading and contents line: a static pattern, as a literal in the function was
-  /// a new `Regex` per line (#146).
+  /// every title `heading(from:)` reads, a contents entry's included: a static pattern,
+  /// as a literal in the function was a new `Regex` per line (#146).
   private static let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
 
   func trimmingTrailingDots() -> String {
