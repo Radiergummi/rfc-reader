@@ -7,6 +7,7 @@
 RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
+BENCHMARKS   := Tools/benchmarks
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
 # The corpus working directory (see the corpus targets below). Set here rather
@@ -94,8 +95,8 @@ BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc5661.txt rfc793.txt
 BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
-	cd Tools/benchmarks && RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
-	  swift package --disable-sandbox benchmark $(BENCHMARK_ARGS)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
