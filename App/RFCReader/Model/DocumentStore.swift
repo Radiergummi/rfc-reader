@@ -41,8 +41,8 @@ actor DocumentStore {
 
   /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
   /// is installed.
-  private lazy var legacyPack: InstalledPack? = try? InstalledPack(
-    contentsOf: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
+  private lazy var legacyPack: InstalledPack? = Self.installedPack(
+    in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
   /// One install at a time: two would unpack into one destination and race to
   /// swap it in.
@@ -142,11 +142,16 @@ actor DocumentStore {
     }
     // Before a cached `.txt`: the pack is the single XML path it exists for, and a
     // `.txt` cached before it arrived still serves Original Text.
-    if let packURL = legacyPack?.file(for: id), let data = try? Data(contentsOf: packURL),
-      let document = try? RFCXMLParser.parse(data)
-    {
-      parsed[id] = document
-      return document
+    if let packURL = legacyPack?.file(for: id) {
+      do {
+        let document = try RFCXMLParser.parse(Data(contentsOf: packURL))
+        parsed[id] = document
+        return document
+      } catch {
+        storeLog.error(
+          "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
+        )
+      }
     }
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
@@ -164,7 +169,10 @@ actor DocumentStore {
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
-    parsed[id] = fetched.document
+    // A pack installed while this was in flight serves the document from now on.
+    if legacyPack?.file(for: id) == nil {
+      parsed[id] = fetched.document
+    }
     return fetched.document
   }
 
@@ -185,6 +193,22 @@ actor DocumentStore {
   }
 
   // MARK: - Data packs (#36)
+
+  /// The pack in `directory`, or nil when none is installed there or its manifest
+  /// does not read. That is logged, because the store would otherwise fall back to
+  /// the network with no sign of why.
+  private static func installedPack(in directory: URL) -> InstalledPack? {
+    guard FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) else {
+      return nil
+    }
+    do {
+      return try InstalledPack(contentsOf: directory)
+    } catch {
+      storeLog.error(
+        "the installed data pack is unreadable: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
 
   /// Installs the legacy XML pack from an `.aar`, an unpacked folder, or a URL to
   /// download one from, replacing the installed one only once the new one has
@@ -210,26 +234,17 @@ actor DocumentStore {
   private static func install(_ source: URL, as name: String, in packs: URL) async throws
     -> InstalledPack
   {
-    let pack: InstalledPack
-    if source.isFileURL {
-      pack = try PackInstaller.install(source, as: name, in: packs)
-    } else {
-      let (downloaded, response) = try await URLSession.shared.download(from: source)
-      defer { try? FileManager.default.removeItem(at: downloaded) }
-      // An error page is not an archive, and would be reported as one that failed
-      // to unpack.
-      if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
-        throw DownloadFailed(url: source, status: status)
-      }
-      pack = try PackInstaller.install(downloaded, as: name, in: packs)
+    guard !source.isFileURL else {
+      return try PackInstaller.install(source, as: name, in: packs)
     }
-    // Downloaded again rather than restored: half a gigabyte an iCloud backup has
-    // no business holding.
-    var packsFolder = packs
-    var values = URLResourceValues()
-    values.isExcludedFromBackup = true
-    try? packsFolder.setResourceValues(values)
-    return pack
+    let (downloaded, response) = try await URLSession.shared.download(from: source)
+    defer { try? FileManager.default.removeItem(at: downloaded) }
+    // An error page is not an archive, and would be reported as one that failed
+    // to unpack.
+    if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+      throw DownloadFailed(url: source, status: status)
+    }
+    return try PackInstaller.install(downloaded, as: name, in: packs)
   }
 
   // MARK: - Eviction (#39)

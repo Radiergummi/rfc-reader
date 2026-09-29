@@ -166,17 +166,38 @@ public enum PackInstaller {
     }
   }
 
+  private static let stagingPrefix = ".staging-"
+
   /// Installs `source` as `packs/name` and returns it. A folder is copied, not
-  /// moved; anything else is read as an archive.
+  /// moved; anything else is read as an archive. Packs are installed one at a time:
+  /// an install removes what an earlier one left staged.
   @discardableResult
   public static func install(_ source: URL, as name: String, in packs: URL) throws
     -> InstalledPack
   {
     let files = FileManager.default
+    // Resolved, so a link to a folder installs the folder rather than a copy of the
+    // link, and a path with nothing at it is reported as missing rather than as an
+    // archive that did not unpack.
+    let source = source.resolvingSymlinksInPath()
+    guard files.fileExists(atPath: source.path(percentEncoded: false)) else {
+      throw CocoaError(.fileNoSuchFile, userInfo: [NSURLErrorKey: source])
+    }
     try files.createDirectory(at: packs, withIntermediateDirectories: true)
+    // Downloaded again rather than restored: half a gigabyte a backup has no
+    // business holding, staging included.
+    var excluded = URLResourceValues()
+    excluded.isExcludedFromBackup = true
+    var packsFolder = packs
+    try? packsFolder.setResourceValues(excluded)
+    // What an install that was killed left staged.
+    for name in (try? files.contentsOfDirectory(atPath: packs.path(percentEncoded: false))) ?? []
+    where name.hasPrefix(stagingPrefix) {
+      try? files.removeItem(at: packs.appending(path: name))
+    }
     // Hidden, and in the same volume as the destination, so the swap is a rename.
     let staging = packs.appending(
-      path: ".staging-\(UUID().uuidString)", directoryHint: .isDirectory)
+      path: stagingPrefix + UUID().uuidString, directoryHint: .isDirectory)
     defer { try? files.removeItem(at: staging) }
     if (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
       try files.copyItem(at: source, to: staging)
@@ -195,5 +216,15 @@ public enum PackInstaller {
       try files.moveItem(at: staging, to: destination)
     }
     return InstalledPack(directory: destination, manifest: staged.manifest)
+  }
+
+  /// The source a developer names in `-installPack <url or path>`: a URL with a
+  /// scheme is downloaded from, anything else is a path. The path is expanded here,
+  /// because an app launched from the Finder or Xcode has no shell to expand `~`.
+  public static func source(fromArgument argument: String) -> URL {
+    if let url = URL(string: argument), url.scheme != nil {
+      return url
+    }
+    return URL(filePath: (argument as NSString).expandingTildeInPath)
   }
 }

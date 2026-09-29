@@ -232,4 +232,163 @@ struct DataPackTests {
     // Nothing staged is left behind either.
     #expect(try FileManager.default.contentsOfDirectory(atPath: packs.path) == ["legacy-xml"])
   }
+
+  @Test func `a pack that verifies replaces the installed one`() throws {
+    let scratch = try Scratch()
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+    _ = try PackInstaller.install(try makePack(in: scratch.url), as: "legacy-xml", in: packs)
+    let newer = try makePack(
+      in: scratch.url, named: "newer", files: ["rfc9.xml": "<rfc>nine</rfc>"])
+
+    try PackInstaller.install(newer, as: "legacy-xml", in: packs)
+
+    let installed = try InstalledPack(contentsOf: packs.appending(path: "legacy-xml"))
+    #expect(installed.file(for: .rfc(9)) != nil)
+    #expect(installed.file(for: .rfc(1)) == nil)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: packs.path) == ["legacy-xml"])
+  }
+
+  /// Verification runs on a hidden staging folder, which must not hide what is in it.
+  @Test func `an archive holding a file its manifest does not list is refused`() throws {
+    let scratch = try Scratch()
+    let pack = try makePack(in: scratch.url)
+    try Data("<rfc>three</rfc>".utf8).write(to: pack.appending(path: "rfc3.xml"))
+    let aar = scratch.url.appending(path: "legacy-xml-2026.09.aar")
+    try archive(pack, to: aar)
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+
+    #expect(throws: PackInstaller.VerificationFailed.self) {
+      try PackInstaller.install(aar, as: "legacy-xml", in: packs)
+    }
+  }
+
+  /// An install that was killed never ran its cleanup; the next one does it.
+  @Test func `an install removes what an interrupted one left staged`() throws {
+    let scratch = try Scratch()
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+    let abandoned = packs.appending(path: ".staging-abandoned", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: abandoned, withIntermediateDirectories: true)
+
+    try PackInstaller.install(try makePack(in: scratch.url), as: "legacy-xml", in: packs)
+
+    #expect(try FileManager.default.contentsOfDirectory(atPath: packs.path) == ["legacy-xml"])
+  }
+
+  /// Downloaded again rather than restored from a backup.
+  @Test func `the packs folder is excluded from backup`() throws {
+    let scratch = try Scratch()
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+
+    try PackInstaller.install(try makePack(in: scratch.url), as: "legacy-xml", in: packs)
+
+    let values = try URL(filePath: packs.path).resourceValues(forKeys: [.isExcludedFromBackupKey])
+    #expect(values.isExcludedFromBackup == true)
+  }
+
+  /// Installed from the folder it points at, not copied as a link.
+  @Test func `a symbolic link to a folder installs the folder`() throws {
+    let scratch = try Scratch()
+    let folder = try makePack(in: scratch.url)
+    let link = scratch.url.appending(path: "current")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: folder)
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+
+    let installed = try PackInstaller.install(link, as: "legacy-xml", in: packs)
+
+    #expect(installed.file(for: .rfc(2)) != nil)
+  }
+
+  /// Not "is not an Apple Archive": there is nothing there to be one.
+  @Test func `a source that does not exist is reported as missing`() throws {
+    let scratch = try Scratch()
+    let packs = scratch.url.appending(path: "Packs", directoryHint: .isDirectory)
+
+    #expect(throws: CocoaError.self) {
+      try PackInstaller.install(
+        scratch.url.appending(path: "absent.aar"), as: "legacy-xml", in: packs)
+    }
+  }
+
+  /// Extraction writes before anything verifies, so an entry that would land outside
+  /// the staging folder must be refused by the extraction itself.
+  @Test(arguments: [
+    [ArchiveEntry.file("../escaped.txt")],
+    [ArchiveEntry.link("up", to: ".."), ArchiveEntry.file("up/escaped.txt")],
+  ])
+  func `an archive entry outside the pack is refused`(entries: [ArchiveEntry]) throws {
+    let scratch = try Scratch()
+    let aar = scratch.url.appending(path: "escape.aar")
+    try archive(entries, to: aar)
+    let staging = scratch.url.appending(path: "staging", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+
+    #expect(throws: (any Error).self) { try PackArchive.extract(aar, into: staging) }
+
+    #expect(
+      !FileManager.default.fileExists(atPath: scratch.url.appending(path: "escaped.txt").path))
+  }
+
+  /// One entry of a hand-made archive, for what `aa` would never write.
+  struct ArchiveEntry: Sendable, CustomTestStringConvertible {
+    let path: String
+    let link: String?
+
+    static func file(_ path: String) -> Self { Self(path: path, link: nil) }
+    static func link(_ path: String, to target: String) -> Self { Self(path: path, link: target) }
+
+    var testDescription: String { link.map { "\(path) -> \($0)" } ?? path }
+  }
+
+  private func archive(_ entries: [ArchiveEntry], to archive: URL) throws {
+    let file = try #require(
+      ArchiveByteStream.fileStream(
+        path: FilePath(archive.path), mode: .writeOnly, options: [.create, .truncate],
+        permissions: FilePermissions(rawValue: 0o644)))
+    let compressed = try #require(
+      ArchiveByteStream.compressionStream(using: .lzfse, writingTo: file))
+    let encoder = try #require(ArchiveStream.encodeStream(writingTo: compressed))
+    let contents = Array("escaped".utf8)
+    for entry in entries {
+      let header = ArchiveHeader()
+      let type: ArchiveHeader.EntryType = entry.link == nil ? .regularFile : .link
+      header.append(.uint(key: ArchiveHeader.FieldKey("TYP"), value: UInt64(type.rawValue)))
+      header.append(.string(key: ArchiveHeader.FieldKey("PAT"), value: entry.path))
+      header.append(.uint(key: ArchiveHeader.FieldKey("MOD"), value: 0o644))
+      if let link = entry.link {
+        header.append(.string(key: ArchiveHeader.FieldKey("LNK"), value: link))
+      } else {
+        header.append(.blob(key: ArchiveHeader.FieldKey("DAT"), size: UInt64(contents.count)))
+      }
+      try encoder.writeHeader(header)
+      if entry.link == nil {
+        try contents.withUnsafeBytes { bytes in
+          try encoder.writeBlob(key: ArchiveHeader.FieldKey("DAT"), from: bytes)
+        }
+      }
+    }
+    try encoder.close()
+    try compressed.close()
+    try file.close()
+  }
+
+  // MARK: - Launch argument
+
+  @Test func `a URL argument is downloaded from`() {
+    #expect(
+      PackInstaller.source(fromArgument: "http://127.0.0.1:8765/legacy-xml.aar")
+        == URL(string: "http://127.0.0.1:8765/legacy-xml.aar"))
+  }
+
+  @Test func `a path argument is a file`() {
+    #expect(
+      PackInstaller.source(fromArgument: "/tmp/legacy xml.aar")
+        == URL(filePath: "/tmp/legacy xml.aar"))
+  }
+
+  /// An app launched from the Finder or Xcode has no shell to expand it.
+  @Test func `a tilde in a path argument is expanded`() {
+    let source = PackInstaller.source(fromArgument: "~/legacy-xml.aar")
+    #expect(source.isFileURL)
+    #expect(!source.path(percentEncoded: false).contains("~"))
+  }
 }

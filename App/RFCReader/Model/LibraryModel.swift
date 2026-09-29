@@ -171,13 +171,9 @@ final class LibraryModel {
     /// path (#36). Logged, not shown: nothing on screen asked for it.
     private func installPackFromLaunchArgument() {
       guard let argument = UserDefaults.standard.string(forKey: "installPack") else { return }
-      // A path is expanded here: an app launched from the Finder or Xcode has no
-      // shell to expand `~`, and its working directory is `/`. Installed on every
-      // launch the argument is set for, which is what a developer setting it in a
-      // scheme wants while iterating on a pack.
-      let source =
-        URL(string: argument).flatMap { $0.scheme == nil ? nil : $0 }
-        ?? URL(fileURLWithPath: (argument as NSString).expandingTildeInPath)
+      // Installed on every launch the argument is set for, which is what a
+      // developer setting it in a scheme wants while iterating on a pack.
+      let source = PackInstaller.source(fromArgument: argument)
       Task(name: "Install data pack") {
         do {
           let pack = try await installLegacyPack(from: source)
