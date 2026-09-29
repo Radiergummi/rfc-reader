@@ -181,8 +181,9 @@ final class LibraryModel {
 
   /// Asks the RFC Editor for the index, sending what identifies the one kept so an
   /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
-  /// false is the automatic daily check, which waits for a network that is neither
-  /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any.
+  /// false is the automatic daily check, which does not run on a network that is
+  /// metered or in Low Data Mode and is tried again at the next launch; a person's
+  /// Retry or pull to refresh takes any.
   func refreshIndex(onExpensiveNetworks: Bool = true) async {
     do {
       // Only with an index in memory: without one, a `304` would leave nothing to
@@ -198,7 +199,7 @@ final class LibraryModel {
       }
       switch fetched {
       case .unchanged:
-        indexState = .ready(updatedAt: try await store.recordUnchangedIndex())
+        indexState = .ready(updatedAt: try await store.recordUnchangedIndex(validators))
       case .changed(let data, let validators):
         // Off the main actor: the parse alone is about a second (#124).
         let prepared = try await Self.parse(data)

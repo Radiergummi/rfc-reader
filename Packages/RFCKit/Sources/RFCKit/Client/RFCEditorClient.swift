@@ -27,7 +27,6 @@ extension URLSession: HTTPTransport {
   public static let rfcEditor: URLSession = {
     let configuration = URLSessionConfiguration.default
     configuration.urlCache = nil
-    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
     return URLSession(configuration: configuration)
   }()
 }
@@ -53,7 +52,7 @@ public struct CacheValidators: Codable, Sendable, Hashable {
   }
 
   /// Asks for the resource only if it no longer matches. Both are sent: a server
-  /// that honours `If-None-Match` ignores `If-Modified-Since` (RFC 9110, 13.1.3).
+  /// that honors `If-None-Match` ignores `If-Modified-Since` (RFC 9110, 13.1.3).
   func condition(_ request: inout URLRequest) {
     if let entityTag {
       request.setValue(entityTag, forHTTPHeaderField: "If-None-Match")

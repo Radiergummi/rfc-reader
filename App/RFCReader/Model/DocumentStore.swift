@@ -97,9 +97,10 @@ actor DocumentStore {
     return try? JSONDecoder().decode(IndexCheck.self, from: data)
   }
 
-  /// Records that a check found the index unchanged, and returns when.
-  func recordUnchangedIndex() throws -> Date {
-    let check = IndexCheck(checkedAt: .now, validators: indexCheck()?.validators)
+  /// Records that a check sending `validators` found the index unchanged, and
+  /// returns when.
+  func recordUnchangedIndex(_ validators: CacheValidators?) throws -> Date {
+    let check = IndexCheck(checkedAt: .now, validators: validators)
     try storeCheck(check)
     return check.checkedAt
   }
