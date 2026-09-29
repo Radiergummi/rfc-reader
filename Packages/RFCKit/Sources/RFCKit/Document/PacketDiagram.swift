@@ -90,6 +90,8 @@ private struct Recognizer {
 
   // MARK: - Ruler
 
+  private static let digits = Array("0123456789")
+
   /// The bits' line, `0 1 2 … 9 0 1`: a digit every two columns, each the bit's
   /// number modulo ten, and nothing else.
   private static func units(_ line: [Character]) -> (origin: Int, bits: Int)? {
@@ -97,7 +99,7 @@ private struct Recognizer {
     var bits = 0
     var column = origin
     while column < line.count {
-      guard line[column] == Character(String(bits % 10)) else { return nil }
+      guard line[column] == Self.digits[bits % 10] else { return nil }
       bits += 1
       if column + 1 < line.count, line[column + 1] != " " { return nil }
       column += 2
@@ -114,7 +116,7 @@ private struct Recognizer {
     let bitsUnder = digits.map { column, character -> Int? in
       let offset = column - origin
       guard offset >= 0, offset % 2 == 0, offset / 2 < bits,
-        character == Character(String(offset / 20 % 10))
+        character == Self.digits[offset / 20 % 10]
       else { return nil }
       return offset / 2
     }
@@ -240,6 +242,13 @@ private struct Recognizer {
     guard ends.count == 1, let end = ends.first else { return nil }
     var starts = [0]
     for bit in 1..<end {
+      // A tilde standing alone there would end a field of no fixed length, which
+      // only a row's ends can mark.
+      let tilde = lines.contains { line in
+        Self.character(line, boundary(bit)) == "~" && Self.character(line, boundary(bit) - 1) == " "
+          && Self.character(line, boundary(bit) + 1) == " "
+      }
+      guard !tilde else { return nil }
       let delimited = lines.map { Self.character($0, boundary(bit)) == "|" }
       if delimited.allSatisfy({ $0 }) {
         starts.append(bit)
@@ -258,13 +267,17 @@ private struct Recognizer {
 
   // MARK: - Fields
 
+  /// What a rule is drawn with: `-`, or `=` for a double rule.
+  private static let rules: Set<Character> = ["-", "="]
+
   /// Whether a border is open over `bit`: no rule drawn there, so the field above
-  /// continues below. A rule's `-` runs into another `-` or a corner; one between
-  /// letters is a hyphen in a name written across the border.
+  /// continues below. A rule's `-` or `=` runs into another like it or a corner; one
+  /// between letters is part of a name written across the border, as a hyphen.
   private func isOpen(_ border: [Character], _ bit: Int) -> Bool {
-    guard Self.character(border, cell(bit)) == "-" else { return true }
+    let character = Self.character(border, cell(bit))
+    guard Self.rules.contains(character) else { return true }
     let beside = [cell(bit) - 1, cell(bit) + 1].map { Self.character(border, $0) }
-    return !beside.contains { $0 == "-" || $0 == "+" }
+    return !beside.contains { $0 == character || $0 == "+" }
   }
 
   private func fields(rows: [Row], borders: [[Character]]) -> PacketDiagram? {
@@ -275,16 +288,19 @@ private struct Recognizer {
       let below = index < rows.count ? rows[index].end : 0
       guard endBit(of: border) == max(above, below) else { return nil }
       let overlap = index == 0 || index == rows.count ? 0 : min(above, below)
-      for bit in overlap..<max(above, below) where isOpen(border, bit) {
+      guard !(overlap..<max(above, below)).contains(where: { isOpen(border, $0) }) else {
         return nil
       }
     }
 
     // Segment `(row, index)` is joined with the one under it wherever the border
     // between them is open, and only there.
-    var parent = [Int: Int]()
-    func key(_ row: Int, _ index: Int) -> Int { row * 1_000 + index }
-    func find(_ node: Int) -> Int {
+    struct Key: Hashable {
+      var row: Int
+      var index: Int
+    }
+    var parent = [Key: Key]()
+    func find(_ node: Key) -> Key {
       var node = node
       while let next = parent[node], next != node { node = next }
       return node
@@ -298,7 +314,7 @@ private struct Recognizer {
         guard let upper = segmentIndex(row, bit), let lower = segmentIndex(row + 1, bit) else {
           return nil
         }
-        parent[find(key(row + 1, lower))] = find(key(row, upper))
+        parent[find(Key(row: row + 1, index: lower))] = find(Key(row: row, index: upper))
       }
     }
     // A border has to agree with itself: open wherever the two segments it lies
@@ -309,7 +325,7 @@ private struct Recognizer {
         guard let upper = segmentIndex(row, bit), let lower = segmentIndex(row + 1, bit) else {
           return nil
         }
-        let joined = find(key(row, upper)) == find(key(row + 1, lower))
+        let joined = find(Key(row: row, index: upper)) == find(Key(row: row + 1, index: lower))
         guard joined == isOpen(border, bit) else { return nil }
       }
     }
@@ -320,21 +336,26 @@ private struct Recognizer {
       var index: Int
       var segment: Range<Int>
     }
-    var groups: [Int: [Part]] = [:]
-    var order: [Int] = []
+    var groups: [Key: [Part]] = [:]
+    var order: [Key] = []
     for (row, content) in rows.enumerated() {
       for (index, segment) in content.segments.enumerated() {
-        let root = find(key(row, index))
+        let root = find(Key(row: row, index: index))
         if groups[root] == nil { order.append(root) }
         groups[root, default: []].append(Part(row: row, index: index, segment: segment))
       }
     }
-    // A field is contiguous bits: one segment a row. Two in one row, joined through
-    // the rows around them, are not a field the diagram can mean.
-    for parts in groups.values where Set(parts.map(\.row)).count < parts.count {
-      return nil
+    // A field is contiguous bits: it runs to the end of every row but its last, and
+    // from the start of every row but its first. So it has one segment a row, and
+    // two in one row, joined through the rows around them, are refused with the
+    // rest.
+    for parts in groups.values {
+      guard parts.dropLast().allSatisfy({ $0.segment.upperBound == bits }),
+        parts.dropFirst().allSatisfy({ $0.segment.lowerBound == 0 })
+      else { return nil }
     }
-    let fields = order.map { root -> PacketDiagram.Field in
+    var fields: [PacketDiagram.Field] = []
+    for root in order {
       let parts = groups[root]!
       let first = parts[0]
       var fragments: [String] = []
@@ -351,13 +372,20 @@ private struct Recognizer {
             max(
               segment.lowerBound, next.segment.lowerBound)..<min(
               segment.upperBound, next.segment.upperBound)
+          // A corner is where a delimiter meets the border, and inside the part the
+          // field continues under, none does.
+          let corner = open.dropFirst().contains {
+            Self.character(borders[row + 1], boundary($0)) == "+"
+          }
+          guard !corner else { return nil }
           fragments.append(text(of: borders[row + 1], over: open))
         }
       }
-      return PacketDiagram.Field(
-        name: Self.name(from: fragments), row: first.row, bitOffset: first.segment.lowerBound,
-        bitWidth: parts.map(\.segment.count).reduce(0, +), rowSpan: parts.count,
-        isVariableLength: parts.contains { rows[$0.row].variableSegments.contains($0.index) })
+      fields.append(
+        PacketDiagram.Field(
+          name: Self.name(from: fragments), row: first.row, bitOffset: first.segment.lowerBound,
+          bitWidth: parts.map(\.segment.count).reduce(0, +), rowSpan: parts.count,
+          isVariableLength: parts.contains { rows[$0.row].variableSegments.contains($0.index) }))
     }
     return PacketDiagram(bitsPerRow: bits, fields: fields)
   }

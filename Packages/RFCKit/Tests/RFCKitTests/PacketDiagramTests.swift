@@ -250,6 +250,25 @@ struct PacketDiagramTests {
     #expect(diagram.fields == [field("Hop-by-Hop", row: 0, offset: 0, width: 32, rows: 2)])
   }
 
+  /// A rule of `=` closes a border as one of `-` does, where a header ends and what
+  /// it carries begins.
+  @Test func `a double rule closes the border under a field`() throws {
+    let diagram = try #require(
+      recognize(
+        Self.ruler16 + [
+          Self.border16,
+          "   |             Source            |",
+          "   +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+",
+          "   |            Payload            |",
+          Self.border16,
+        ]))
+    #expect(
+      diagram.fields == [
+        field("Source", row: 0, offset: 0, width: 16),
+        field("Payload", row: 1, offset: 0, width: 16),
+      ])
+  }
+
   /// Anything further off is not the grid the ruler numbers.
   @Test func `a grid two columns off its ruler is not a packet diagram`() {
     #expect(
@@ -314,6 +333,47 @@ struct PacketDiagramTests {
         "   |       |     Middle    |       |",
         openAtBothEnds,
         "   |             Last              |",
+        Self.border16,
+      ]
+    #expect(recognize(lines) == nil)
+  }
+
+  /// A field continued into the next row picks up where it left off: it runs to
+  /// the end of every row but its last, and from the start of every row but its
+  /// first. The same bits of two rows are not contiguous.
+  @Test func `a field over the same bits of two rows is not a packet diagram`() {
+    let lines =
+      Self.ruler16 + [
+        Self.border16,
+        "   |       |       Kind            |",
+        "   +  Tall +-+-+-+-+-+-+-+-+-+-+-+-+",
+        "   |       |       Size            |",
+        Self.border16,
+      ]
+    #expect(recognize(lines) == nil)
+  }
+
+  /// A tilde standing on a boundary inside a row would be the end of a field of
+  /// no fixed length, which only a row's ends can mark.
+  @Test func `a tilde on a boundary inside a row is not a packet diagram`() {
+    let lines =
+      Self.ruler16 + [
+        Self.border16,
+        "   |      Type     ~     Value     ~",
+        Self.border16,
+      ]
+    #expect(recognize(lines) == nil)
+  }
+
+  /// A corner stands where a delimiter meets a border. One inside a field that
+  /// continues past the border meets none.
+  @Test func `a corner inside a field continued past a border is not a packet diagram`() {
+    let lines =
+      Self.ruler16 + [
+        Self.border16,
+        "   |                               |",
+        "   +               +               +",
+        "   |            Address            |",
         Self.border16,
       ]
     #expect(recognize(lines) == nil)
