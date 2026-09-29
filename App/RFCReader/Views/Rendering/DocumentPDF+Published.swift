@@ -12,11 +12,11 @@ import RFCReaderKit
 nonisolated extension DocumentPDF {
   /// The RFC as published, each of its pages on one sheet of paper, set in a
   /// fixed-width font with no running header or footer: the published page's own
-  /// header, footer and `[Page n]` are what it has. How the text divides into pages,
-  /// and the size that fits the longest page and widest line, is `PublishedPages`.
+  /// header, footer and `[Page n]` are what it has. How the text divides into
+  /// sheets, and the size they are set at, is `PublishedPages`.
   ///
-  /// Drawn as lines rather than laid out: a published page is already set, a line
-  /// of text to a line of paper, and nothing on it may wrap.
+  /// Drawn as lines rather than laid out: a published page is already set, and
+  /// `PublishedPages` has decided every line of every sheet, wrapping included.
   static func publishedPDF(_ source: String, layout: PrintLayout) -> Data {
     let published = PublishedPages(source)
     let preferred = PlatformFont.monospacedSystemFont(
@@ -24,7 +24,8 @@ nonisolated extension DocumentPDF {
     // Lines are spaced by the measurements the size was worked out from, so a
     // page that was found to fit does.
     let metrics = PublishedPages.Metrics(preferred)
-    let size = published.fontSize(in: layout.contentRect.size, metrics: metrics)
+    let sheets = published.sheets(in: layout.contentRect.size, metrics: metrics)
+    let size = sheets.fontSize
     let lineHeight = metrics.lineHeight * size
     let attributes: [NSAttributedString.Key: Any] = [
       .font: PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular),
@@ -40,7 +41,7 @@ nonisolated extension DocumentPDF {
     guard let consumer = CGDataConsumer(data: data as CFMutableData),
       let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
     else { return Data() }
-    for page in published.pages {
+    for page in sheets.pages {
       context.beginPDFPage(nil)
       // Black on the white paper, whatever the screen's appearance.
       context.setFillColor(CGColor(gray: 0, alpha: 1))
