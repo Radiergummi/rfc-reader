@@ -259,9 +259,12 @@ private struct Recognizer {
   // MARK: - Fields
 
   /// Whether a border is open over `bit`: no rule drawn there, so the field above
-  /// continues below.
+  /// continues below. A rule's `-` runs into another `-` or a corner; one between
+  /// letters is a hyphen in a name written across the border.
   private func isOpen(_ border: [Character], _ bit: Int) -> Bool {
-    Self.character(border, cell(bit)) != "-"
+    guard Self.character(border, cell(bit)) == "-" else { return true }
+    let beside = [cell(bit) - 1, cell(bit) + 1].map { Self.character(border, $0) }
+    return !beside.contains { $0 == "-" || $0 == "+" }
   }
 
   private func fields(rows: [Row], borders: [[Character]]) -> PacketDiagram? {
@@ -326,10 +329,14 @@ private struct Recognizer {
         groups[root, default: []].append(Part(row: row, index: index, segment: segment))
       }
     }
+    // A field is contiguous bits: one segment a row. Two in one row, joined through
+    // the rows around them, are not a field the diagram can mean.
+    for parts in groups.values where Set(parts.map(\.row)).count < parts.count {
+      return nil
+    }
     let fields = order.map { root -> PacketDiagram.Field in
       let parts = groups[root]!
       let first = parts[0]
-      let rowsSpanned = Set(parts.map(\.row))
       var fragments: [String] = []
       for part in parts {
         let (row, segment) = (part.row, part.segment)
@@ -349,7 +356,7 @@ private struct Recognizer {
       }
       return PacketDiagram.Field(
         name: Self.name(from: fragments), row: first.row, bitOffset: first.segment.lowerBound,
-        bitWidth: parts.map(\.segment.count).reduce(0, +), rowSpan: rowsSpanned.count,
+        bitWidth: parts.map(\.segment.count).reduce(0, +), rowSpan: parts.count,
         isVariableLength: parts.contains { rows[$0.row].variableSegments.contains($0.index) })
     }
     return PacketDiagram(bitsPerRow: bits, fields: fields)

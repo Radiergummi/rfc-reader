@@ -235,6 +235,21 @@ struct PacketDiagramTests {
       ])
   }
 
+  /// A hyphen in a name written across an open border is part of the name, not a
+  /// rule that closes the border under it.
+  @Test func `a hyphenated name across an open border keeps the field whole`() throws {
+    let diagram = try #require(
+      recognize(
+        Self.ruler16 + [
+          Self.border16,
+          "   |                               |",
+          "   +          Hop-by-Hop           +",
+          "   |                               |",
+          Self.border16,
+        ]))
+    #expect(diagram.fields == [field("Hop-by-Hop", row: 0, offset: 0, width: 32, rows: 2)])
+  }
+
   /// Anything further off is not the grid the ruler numbers.
   @Test func `a grid two columns off its ruler is not a packet diagram`() {
     #expect(
@@ -284,6 +299,23 @@ struct PacketDiagramTests {
         Self.border16,
       ]
     // The second line has text where the first has a delimiter.
+    #expect(recognize(lines) == nil)
+  }
+
+  /// Two fields in one row joined through the rows around them would make one
+  /// field of bits that are not contiguous.
+  @Test func `a field drawn twice in one row is not a packet diagram`() {
+    let openAtBothEnds = "   +       +-+-+-+-+-+-+-+-+       +"
+    let lines =
+      Self.ruler16 + [
+        Self.border16,
+        "   |       First   |    Second     |",
+        openAtBothEnds,
+        "   |       |     Middle    |       |",
+        openAtBothEnds,
+        "   |             Last              |",
+        Self.border16,
+      ]
     #expect(recognize(lines) == nil)
   }
 
