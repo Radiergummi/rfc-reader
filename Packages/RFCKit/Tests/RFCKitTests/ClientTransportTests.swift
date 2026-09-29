@@ -21,11 +21,7 @@ struct ClientTransportTests {
 
     override func startLoading() {
       Self.lastRequest = request
-      // `URLResponse()` exists on Apple platforms only; FoundationNetworking needs a URL.
-      let fallback = URLResponse(
-        url: request.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
-      client?.urlProtocol(
-        self, didReceive: Self.response ?? fallback, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didReceive: Self.response!, cacheStoragePolicy: .notAllowed)
       client?.urlProtocol(self, didLoad: Data("body".utf8))
       client?.urlProtocolDidFinishLoading(self)
     }
@@ -39,18 +35,19 @@ struct ClientTransportTests {
     StubProtocol.lastRequest = nil
   }
 
-  private static func session() -> URLSession {
+  /// One session for the suite, answered by the stub.
+  private static let session: URLSession = {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StubProtocol.self]
     return URLSession(configuration: configuration)
-  }
+  }()
 
   private static let url = URL(string: "https://www.rfc-editor.org/rfc/rfc9110.xml")!
 
   @Test func `the transport asks for the formats the client reads`() async throws {
     StubProtocol.response = HTTPURLResponse(
       url: Self.url, statusCode: 200, httpVersion: nil, headerFields: nil)
-    let (data, response) = try await URLSessionTransport(session: Self.session())
+    let (data, response) = try await URLSessionTransport(session: Self.session)
       .data(for: Self.url)
     #expect(String(decoding: data, as: UTF8.self) == "body")
     #expect(response.statusCode == 200)
@@ -63,7 +60,7 @@ struct ClientTransportTests {
     StubProtocol.response = URLResponse(
       url: Self.url, mimeType: nil, expectedContentLength: 4, textEncodingName: nil)
     await #expect {
-      _ = try await URLSessionTransport(session: Self.session()).data(for: Self.url)
+      _ = try await URLSessionTransport(session: Self.session).data(for: Self.url)
     } throws: { error in
       guard case .invalidResponse(let url) = error as? RFCEditorClient.ClientError else {
         return false
@@ -72,7 +69,8 @@ struct ClientTransportTests {
     }
   }
 
-  /// A malformed index names what it was reading and keeps why it failed.
+  /// A malformed index or metadata record names what it was reading and keeps why it
+  /// failed.
   @Test func `a decoding error keeps the error beneath it`() async throws {
     struct Garbage: HTTPTransport {
       func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
@@ -88,6 +86,13 @@ struct ClientTransportTests {
       guard case .decoding(let context, let underlying) = error as? RFCEditorClient.ClientError
       else { return false }
       return context == "rfc-index.xml" && underlying is RFCIndexParser.ParseError
+    }
+    await #expect {
+      _ = try await RFCEditorClient(transport: Garbage()).fetchMetadata(.rfc(9110))
+    } throws: { error in
+      guard case .decoding(let context, let underlying) = error as? RFCEditorClient.ClientError
+      else { return false }
+      return context == "rfc9110.json" && underlying is DecodingError
     }
   }
 }

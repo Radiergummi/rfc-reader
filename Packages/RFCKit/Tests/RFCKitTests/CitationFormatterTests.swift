@@ -4,7 +4,6 @@ import Testing
 
 @Suite("Citations")
 struct CitationFormatterTests {
-
   @Test func `full citation matches RFC editor style`() throws {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     let citation = CitationFormatter.cite(http, style: .full)

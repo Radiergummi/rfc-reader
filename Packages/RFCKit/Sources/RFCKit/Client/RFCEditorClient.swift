@@ -237,7 +237,7 @@ public enum RecentFeedParser {
       \(second: .twoDigits) \(timeZone: .specificName(.short))
       """,
     locale: Locale(identifier: "en_US_POSIX"),
-    timeZone: TimeZone(identifier: "GMT")!,
+    timeZone: .gmt,
     isLenient: false)
 
   public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
