@@ -46,7 +46,7 @@ Something has to read the headers of every adopted draft and keep the result.
 | Question | Decision | Why |
 |---|---|---|
 | Where the scan runs | A scheduled GitHub Action, publishing one JSON file for the app and one scan record for the next run. | One crawler for all users instead of one per device, and it runs on infrastructure the project already has. A pack-time snapshot would be as stale as the pack, and drafts change weekly. |
-| Which drafts count | Only adopted drafts: in a stream (IETF, IRTF, IAB, Independent), and not in a state that means "not adopted yet" or "stopped" (see [Adopted](#adopted)). | "Being revised" must be a statement the reader can trust. An individual draft's `obsoletes` is a proposal, not a revision under way. The scanner can record individual drafts later if the display ever wants them. |
+| Which drafts count | Only adopted drafts: in a stream (IETF, IRTF, IAB, Independent, Editorial), and not in a state that means "not adopted yet" or "stopped" (see [Adopted](#adopted)). | "Being revised" must be a statement the reader can trust. An individual draft's `obsoletes` is a proposal, not a revision under way. The scanner can record individual drafts later if the display ever wants them. |
 | Where it shows | The reader's status banner and the inspector's Relationships section. Not in lists, not as notifications. | That is where readers already look for status. List markers and notifications (#191) use the same data later. |
 | Name | `revisions`: `corpus-build revisions`, `.github/workflows/revisions.yml`, the release tag `revisions`, the file `revisions.json`, the type `RFCRevisions`. | Short, and it says what the file holds. |
 | Following the draft | Its name links to its datatracker page, opened in the browser. | The errata link already works that way. Reading drafts in the app is VISION.md Tier 2. |
@@ -100,6 +100,10 @@ failed has not changed since, a filter on `time` never selects it again.
    page's `Obsoletes:` and `Updates:` lines, including numbers continued on the next line and the
    `(if approved)` suffix.
 
+   Both readings are a public `DraftHeader` type in RFCKit, beside the parser whose list
+   parsing it reuses. An internal function is out of `RFCCorpusKit`'s reach, because
+   `RFCCorpusKit` is another module.
+
    A missing attribute or line means the draft revises nothing. It is not an error. An
    attribute that is present but gives no number is logged, since `parseDocumentList` silently
    drops entries such as `RFC6265` or a draft name, and a silent drop hides an entry.
@@ -133,7 +137,7 @@ public struct RFCRevisions: Codable, Sendable, Equatable {
     public var draft: String            // "draft-ietf-httpbis-rfc6265bis"
     public var revision: String         // "22"
     public var published: Date          // when this revision was posted
-    public var stream: String           // "ietf", "irtf", "iab", "ise"
+    public var stream: String           // "ietf", "irtf", "iab", "ise", "editorial"
     public var group: String?           // "httpbis"; nil when AD-sponsored or not in a group
     public var intendedStatus: String?  // "Proposed Standard"
     public var stage: RevisionStage
@@ -152,21 +156,27 @@ any value it does not know.
 A draft counts when it is active, has a stream, and none of its states is one of these:
 
 - IETF stream: "Candidate for WG Adoption", "Call For Adoption By WG Issued",
-  "Parked WG Document", "Dead WG Document";
+  "Adopted for WG Info Only", "Parked WG Document", "Dead WG Document";
 - IRTF stream: "Candidate RG Document", "Parked RG Document", "Dead IRTF Document",
   "Replaced";
 - IAB stream: "Candidate IAB Document", "Parked IAB Document", "Dead IAB Document",
   "Replaced", "Sent to a Different Organization for Publication";
 - Independent stream: "Submission Received", "Replaced",
   "No Longer In Independent Submission Stream";
+- Editorial stream: "Replaced editorial stream document", "Dead editorial stream document";
 - IESG: "Dead", "DNP-waiting for AD note", "DNP-announcement to be sent".
+
+"Adopted for WG Info Only" is adoption without publication: the working group keeps the draft
+for reference and will not publish it, so it is no revision.
 
 A draft with no stream state counts only if its IESG state has moved past "I-D Exists" and
 "AD is watching". That keeps AD-sponsored drafts and leaves out drafts that merely carry a
 stream. The exclusions apply to all of a draft's states, whatever its stream, because states
 and stream need not agree (see the 2014 draft above). The rule is a pure function in
 `RFCCorpusKit` with a table test. The state names are datatracker's, as listed by
-`doc/state/?type=<type>` on 29 September 2026.
+`doc/state/?type=<type>` on 29 September 2026. The rules compare each state by its type's slug
+and its own (`draft-iesg`/`idexists`), which datatracker keeps stable. The names here are for
+people.
 
 ### Stages
 
@@ -179,7 +189,7 @@ it furthest first:
 | `approved` | Approved for publication | IESG "Approved-announcement to be sent" or "Approved-announcement sent"; IAB "Approved by IAB, To Be Sent to RFC Editor" |
 | `iesgReview` | Under IESG review | IESG "Waiting for Writeup", "Waiting for AD Go-Ahead", "IESG Evaluation", "IESG Evaluation - Defer"; a stream state "In IESG Review" |
 | `ietfLastCall` | In IETF Last Call | IESG "Last Call Requested", "In Last Call" |
-| `submitted` | Submitted for publication | IESG "Publication Requested", "AD Evaluation", "Expert Review"; IETF "Submitted to IESG for Publication"; IRTF "Waiting for IRTF Chair", "Awaiting IRSG Reviews", "IRSG Review", "In IRSG Poll"; IAB "Community Review", "IAB Review"; Independent "Finding Reviewers", "In ISE Review", "Response to Review Needed" |
+| `submitted` | Submitted for publication | IESG "Publication Requested", "AD Evaluation", "Expert Review"; IETF "Submitted to IESG for Publication"; IRTF "Waiting for IRTF Chair", "Awaiting IRSG Reviews", "IRSG Review", "In IRSG Poll"; IAB "Community Review", "IAB Review"; Independent "Finding Reviewers", "In ISE Review", "Response to Review Needed"; Editorial "Editorial stream document under RSAB review" |
 | `lastCall` | In working group last call | IETF "In WG Last Call"; IRTF "In RG Last Call" |
 | `inGroup` | In the working group | any other state of an adopted draft |
 
@@ -202,8 +212,8 @@ degrades to the vaguest true answer instead of a wrong one.
   it had one, and the next run tries it again.
 - **Datatracker is unreachable or answers with errors** on the listing or the state names. The
   run fails and publishes nothing, so the previous files stay live.
-- **The result shrinks by more than half** against the previous `revisions.json`, which had at
-  least ten RFCs in it. The run fails instead of publishing. A real change in the drafts does
+- **The result shrinks by more than half** against what the previous scan record projects to,
+  which had at least ten RFCs in it. The run fails instead of publishing. A real change in the drafts does
   not do that; a broken query or a changed API does. The floor keeps small numbers from
   tripping it. A `workflow_dispatch` input, `allow-shrink`, publishes anyway, for the day the
   shrink is real.
@@ -244,8 +254,10 @@ The file's stable URL is
 - **Cache.** `DocumentStore` keeps the last good file on disk, with the time it was fetched,
   beside the cached index. `LibraryModel` loads it at launch, before any network request, so the
   banner is right offline.
-- **Refresh.** At launch, and whenever the app becomes active (`scenePhase` turning `.active`)
-  more than 24 hours after the last successful fetch. There is no background refresh; #191 adds
+- **Refresh.** At launch, and whenever the app becomes active more than 24 hours after the last
+  successful fetch. `LibraryModel` observes the platform's did-become-active notification
+  (`NSApplication`'s, `UIApplication`'s). `scenePhase` is not used: on macOS the reader's roots
+  are hosted, outside SwiftUI's scene environment. There is no background refresh; #191 adds
   that.
 - **A failed fetch, or a file that does not decode** (including an unknown `version`), leaves
   the cached copy in place. Nothing is shown to the reader.
