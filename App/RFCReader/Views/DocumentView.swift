@@ -328,6 +328,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -697,7 +698,12 @@ struct DocumentView: View {
   /// what discards a canceled one. `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
+    let name = document.header.id?.displayName ?? "untitled"
+    return signposter.withIntervalSignpost(
+      "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
+    ) {
+      DocumentTextBuilder.build(document, style: style)
+    }
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.

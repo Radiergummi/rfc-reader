@@ -89,7 +89,11 @@ extension DocumentTextBuilder {
       guard display.isChip else {
         return NSAttributedString(string: display.text, attributes: attributes)
       }
-      return chipRun(display.text, attributes: attributes)
+      var chipAttributes = attributes
+      if referenceKinds.kind(of: xref.target) == .informative {
+        chipAttributes[.rfcInformative] = "informative"
+      }
+      return chipRun(display.text, attributes: chipAttributes)
 
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)
@@ -234,7 +238,7 @@ extension DocumentTextBuilder {
 
   func url(for xref: CrossReference) -> URL? {
     switch xref.target {
-    case .document(let id, let section):
+    case .document(let id, let section, _):
       return RFCLink(id: id, section: section).appURL
     case .anchor(let anchor):
       let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor

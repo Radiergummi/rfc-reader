@@ -139,13 +139,17 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
     let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
+    // An informative citation is background to the specification rather than part
+    // of it, and reads so beside a normative one (#184). Half the tint, not a
+    // different shape: a chip whose kind no list says is drawn as a normative one.
+    let lighterTint = RFCColors.accent.withAlphaComponent(0.075).cgColor
     for chip in chips {
       fill(
         chip.rect.offsetBy(dx: point.x, dy: point.y),
         radius: FragmentGeometry.chipRadius,
         corners: FragmentGeometry.Corners(
           leading: chip.roundsLeading, trailing: chip.roundsTrailing),
-        color: tint,
+        color: chip.isInformative ? lighterTint : tint,
         in: context
       )
     }

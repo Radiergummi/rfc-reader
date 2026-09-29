@@ -139,6 +139,34 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(document.section(anchor: "appendix-B") != nil)
     #expect(document.section(anchor: "appendix-C") != nil)
   }
+
+  /// RFC 8011 names its status codes as lettered subsections, `B.1.4.1.  ` and a code
+  /// in lower case. The appendix pattern wanted a capital after the number, and they
+  /// were unnumbered sections beside their parents, titled with the whole line. They
+  /// are appendices now, each under the one its number is under (#201).
+  @Test func `a lettered subsection nests under its appendix`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc8011"))
+    let appendix = try #require(document.section(anchor: "appendix-B"))
+    let values = try #require(appendix.subsections.first { $0.number == "B.1" })
+    let clientErrors = try #require(values.subsections.first { $0.number == "B.1.4" })
+    let code = try #require(clientErrors.subsections.first { $0.number == "B.1.4.1" })
+    #expect(code.isAppendix)
+    #expect(code.anchor == "appendix-B.1.4.1")
+    #expect(code.titleText.hasPrefix("client-error-"))
+  }
+
+  /// RFC 1043 numbers its appendices `APPENDIX 1` and `APPENDIX 2`, and has no section
+  /// 2 heading of its own. Its prose cites `Section 2`, which named no section and must
+  /// not link to one: an appendix's number is not a section's.
+  @Test func `a section citation does not link to an appendix's number`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1043"))
+    #expect(document.section(anchor: "appendix-2") != nil)
+    let targets = document.everyCrossReference.compactMap { reference -> String? in
+      if case .anchor(let anchor) = reference.target { return anchor }
+      return nil
+    }
+    #expect(!targets.contains("section-2"))
+  }
 }
 
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
@@ -318,5 +346,43 @@ struct CorpusBackedBodyLayoutTests {
         $0.hasPrefix("Experience suggests that one of the most important factors")
       })
     #expect(experience.hasSuffix("not the protocol but the operating system."))
+  }
+}
+
+@Suite("Corpus-backed: unnumbered headings", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedUnnumberedHeadingTests {
+  /// The front matter ends at the first line that could be a heading, and that test is
+  /// kept lax: refusing prose there as the body does ran RFC 783's front matter on past
+  /// its summary, set at column 0 under a centered `Summary`, and lost it (#201). The
+  /// summary stays in the lead-in.
+  @Test func `a summary at column 0 is not swallowed into the front matter`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc783"))
+    #expect(leadInText(document).contains { $0.contains("its name comes") })
+  }
+}
+
+@Suite("Corpus-backed: omitted boilerplate", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedOmittedBoilerplateTests {
+  /// An omitted section, such as `Status of this Memo`, runs to the next heading. A
+  /// column-0 line refused as a heading used to end it all the same, and when it was
+  /// refused as prose what follows went with the boilerplate: RFC 1198's list of the
+  /// X Consortium's standards, under a sentence at column 0 (#201). It ends there
+  /// still, and the list is the body's.
+  @Test func `a sentence refused as a heading still ends omitted boilerplate`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1198"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(text.contains { $0.contains("Bitmap Distribution Format") })
+    #expect(!document.allSections.contains { $0.titleText.hasPrefix("The following documents") })
+  }
+
+  /// A refused line can continue a block rather than start one: RFC 7231's contents
+  /// has an entry wrapped to column 0 in the middle of a block. The omitted contents end
+  /// at that line, as they did when it was a heading, and the lines of its block
+  /// before it are the contents' still.
+  @Test func `a refused line inside a block ends the boilerplate at that line`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc7231"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(!text.contains { $0.contains("Payment Required ....") })
+    #expect(text.contains { $0.contains("Origination Date ....") })
   }
 }

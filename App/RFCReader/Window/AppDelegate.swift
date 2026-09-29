@@ -2,6 +2,7 @@
   import AppKit
   import Observation
   import RFCKit
+  import os
 
   /// Makes windows, because nothing else does any more.
   ///
@@ -16,11 +17,16 @@
 
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self
+      signposter.emitEvent("Launched")
       // Before anything can route a link, since routing may need a window.
       LibraryModel.shared.windows = self
       // The scene's `.task` did this; there is no scene on macOS any more.
-      Task(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
+      // Immediate, so that the bootstrap has started reading the cached index by
+      // the time the window below is made (#367). A plain task waited for the
+      // window, and the list for both, one after the other.
+      Task.immediate(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       openWindow(tabbedWith: nil, inBackground: false)
+      signposter.emitEvent("First window made")
       warnIfTheStoreDidNotOpen()
     }
 

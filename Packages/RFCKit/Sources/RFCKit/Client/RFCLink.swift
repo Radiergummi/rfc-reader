@@ -4,7 +4,10 @@ import Foundation
 /// its own `rfc://` scheme, rfc-editor.org, datatracker.ietf.org and tools.ietf.org.
 public struct RFCLink: Hashable, Sendable {
   public var id: DocumentID
-  /// Section or appendix number, e.g. `4.2` or `A.1`.
+  /// Section or appendix number, e.g. `4.2` or `A.1`. An appendix numbered like a
+  /// section, as legacy RFCs number `Appendix 1`, is its anchor, `appendix-1`: the
+  /// number alone names section 1. A place is a number or an anchor, and
+  /// `RFCDocument.anchor(forPlace:)` resolves either.
   public var section: String?
 
   public init(id: DocumentID, section: String? = nil) {

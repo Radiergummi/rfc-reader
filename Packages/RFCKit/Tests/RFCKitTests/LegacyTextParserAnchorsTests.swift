@@ -74,7 +74,7 @@ struct LegacyTextParserAnchorsTests {
     let rfc2347 = LegacyTextParser.parse(try Fixtures.string("rfc2347.txt"))
     #expect(
       rfc2347.crossReferences.contains {
-        $0.target == .document(.rfc(2348), section: nil) && $0.text == "[2]"
+        $0.target == .document(.rfc(2348), section: nil, entry: "RFC2348") && $0.text == "[2]"
       })
     // And one that cites no document is `ref-` and the label spelled as a name.
     let rfc1556 = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(

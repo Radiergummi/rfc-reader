@@ -30,13 +30,13 @@ struct RetryingTransportTests {
 
     var requests: Int { count.withLock { $0 } }
 
-    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
       count.withLock { $0 += 1 }
       let outcome = outcomes.withLock { $0.isEmpty ? .status(200) : $0.removeFirst() }
       switch outcome {
       case .status(let status):
         let response = HTTPURLResponse(
-          url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+          url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
         return (Data("body \(status)".utf8), response)
       case .failure(let code):
         throw URLError(code)
@@ -63,7 +63,7 @@ struct RetryingTransportTests {
     let transport = ScriptedTransport([.status(503), .status(500)])
     let sleeps = Sleeps()
     let (data, response) = try await Self.retrying(transport, sleeps: sleeps)
-      .data(for: Self.url)
+      .response(for: URLRequest(url: Self.url))
     #expect(response.statusCode == 200)
     #expect(data == Data("body 200".utf8))
     #expect(transport.requests == 3)
@@ -74,7 +74,9 @@ struct RetryingTransportTests {
     let transport = ScriptedTransport([
       .failure(.timedOut), .status(429), .failure(.networkConnectionLost),
     ])
-    let response = try await Self.retrying(transport, sleeps: Sleeps()).data(for: Self.url).1
+    let response = try await Self.retrying(transport, sleeps: Sleeps()).response(
+      for: URLRequest(url: Self.url)
+    ).1
     #expect(response.statusCode == 200)
     #expect(transport.requests == 4)
   }
@@ -84,7 +86,9 @@ struct RetryingTransportTests {
   @Test func `retries are bounded, and the last answer is returned`() async throws {
     let transport = ScriptedTransport(Array(repeating: .status(502), count: 10))
     let sleeps = Sleeps()
-    let response = try await Self.retrying(transport, sleeps: sleeps).data(for: Self.url).1
+    let response = try await Self.retrying(transport, sleeps: sleeps).response(
+      for: URLRequest(url: Self.url)
+    ).1
     #expect(response.statusCode == 502)
     #expect(transport.requests == 4)
     #expect(sleeps.recorded.count == 3)
@@ -93,7 +97,7 @@ struct RetryingTransportTests {
   @Test func `the last network failure is thrown once the attempts run out`() async {
     let transport = ScriptedTransport(Array(repeating: .failure(.timedOut), count: 10))
     await #expect(throws: URLError.self) {
-      try await Self.retrying(transport, sleeps: Sleeps()).data(for: Self.url)
+      try await Self.retrying(transport, sleeps: Sleeps()).response(for: URLRequest(url: Self.url))
     }
     #expect(transport.requests == 4)
   }
@@ -102,7 +106,9 @@ struct RetryingTransportTests {
   func `a client error is not retried`(status: Int) async throws {
     let transport = ScriptedTransport([.status(status)])
     let sleeps = Sleeps()
-    let response = try await Self.retrying(transport, sleeps: sleeps).data(for: Self.url).1
+    let response = try await Self.retrying(transport, sleeps: sleeps).response(
+      for: URLRequest(url: Self.url)
+    ).1
     #expect(response.statusCode == status)
     #expect(transport.requests == 1)
     #expect(sleeps.recorded.isEmpty)
@@ -111,7 +117,7 @@ struct RetryingTransportTests {
   @Test func `a canceled request is not retried`() async {
     let transport = ScriptedTransport([.failure(.cancelled)])
     await #expect(throws: URLError.self) {
-      try await Self.retrying(transport, sleeps: Sleeps()).data(for: Self.url)
+      try await Self.retrying(transport, sleeps: Sleeps()).response(for: URLRequest(url: Self.url))
     }
     #expect(transport.requests == 1)
   }
@@ -120,7 +126,8 @@ struct RetryingTransportTests {
   @Test func `each delay is scaled by the jitter`() async throws {
     let transport = ScriptedTransport([.status(503), .status(503)])
     let sleeps = Sleeps()
-    _ = try await Self.retrying(transport, sleeps: sleeps, jitter: 0.5).data(for: Self.url)
+    _ = try await Self.retrying(transport, sleeps: sleeps, jitter: 0.5).response(
+      for: URLRequest(url: Self.url))
     #expect(sleeps.recorded == [.milliseconds(500), .seconds(1)])
   }
 

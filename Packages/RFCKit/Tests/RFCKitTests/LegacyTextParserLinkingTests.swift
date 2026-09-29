@@ -31,7 +31,7 @@ struct LegacyTextParserLinkingTests {
     // references, 253 of them chips. The rest were exactly this case.
     let canonical = try #require(
       xrefs.first { xref in
-        guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+        guard case .document(let id, _, _) = xref.target, id.series == .rfc else { return false }
         return xref.isCanonicalLabel
       }, "without this, 98% of the library shows no chips")
     #expect(canonical.text == nil)

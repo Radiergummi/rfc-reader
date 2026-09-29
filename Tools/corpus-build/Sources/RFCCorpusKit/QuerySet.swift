@@ -68,7 +68,7 @@ public struct QuerySet {
       for case .paragraph(let paragraph) in section.blocks.flattened {
         let located = paragraph.inlines.locatedPlainText
         for citation in located.crossReferences {
-          guard case .document(let target, let targetSection?) = citation.reference.target,
+          guard case .document(let target, let targetSection?, _) = citation.reference.target,
             let sentence = Self.sentence(around: citation.range, in: located.text)
           else { continue }
           candidates.append(

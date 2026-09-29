@@ -42,28 +42,51 @@ public enum LegacyTextParser {
   struct RawSection {
     var heading: HeadingInfo?
     var blocks: [RawBlock] = []
+    /// The first line that took a heading's place but was refused as an unnumbered one,
+    /// by its block and its place in that block: where omitted boilerplate ends, as it
+    /// did when that line was a heading.
+    var refusedHeadingLine: (block: Int, line: Int)?
   }
 
   static let numberedHeadingPattern = Pattern(
     #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
-  private static let appendixHeadingPattern = Pattern(
-    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#)
-  /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
-  /// pattern of its own rather than a colon allowed in the one above, whose
-  /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
-  /// column 0 is as often a question's answer.
-  private static let colonAppendixHeadingPattern = Pattern(
-    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#)
+  /// An appendix heading that names itself one (#201): `Appendix` or `Annex` in any case
+  /// after its capital, then its number -- a letter, a Roman or an Arabic numeral, with
+  /// any subsections -- and the title, set off by a full stop, a colon, dashes, or by
+  /// spaces alone where it does not start in lower case, or no title at all:
+  /// `Appendix A. Title`, `APPENDIX 1 - TITLE`, `Annex B (informative): Title`,
+  /// `Appendix II.  Title`, `Appendix A--Title`, `Appendix A:`. A full stop or colon has
+  /// a space or the line's end after it, so `Appendix A.12).` and a contents entry's
+  /// `Appendix A.......35` are not one, and without a separator a lower-case word is
+  /// prose, `Appendix A describes`. `Appendix IANA` has no number, and `Appendix: Title`
+  /// none either: those stay unnumbered headings.
+  private static let namedAppendixHeadingPattern = Pattern(
+    #/^A(?i:ppendix|nnex)\s+(?<number>(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*)(?:\s*[.:](?=\s|$)|\s*-+|(?=\s+[^\s\p{Ll}])|$)\s*(?<title>.*)$/#
+  )
+  /// An appendix heading by its letter alone, `A.1. Title` or `B Title`, with a capital
+  /// to start its title.
+  private static let letteredAppendixHeadingPattern = Pattern(
+    #/^(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#)
+  /// A lettered subsection set off like a heading, by a full stop and a space or by two
+  /// spaces, `B.1.2.  title` or `C.4  title`, whatever its title starts with: RFC 8011's
+  /// status codes and RFC 1094's XDR types are in lower case. Not a number and a
+  /// single space, which is a reference in prose (`A.2 for more`) or an ITU name
+  /// (`X.25 switch`).
+  private static let appendixSubsectionHeadingPattern = Pattern(
+    #/^(?<number>[A-Z](?:\.\d+)+)(?:\.\s+|\s{2,})(?<title>\S.*)$/#)
 
   /// The number and title of an appendix heading, in any shape the parser reads one:
-  /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
+  /// named (`namedAppendixHeadingPattern`), by its letter, or as a lettered subsection.
   /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
   /// lines rather than through a whole document.
   static func appendixHeading(in line: String) -> (number: String, title: String)? {
-    if let match = line.firstMatch(of: appendixHeadingPattern) {
+    if let match = line.firstMatch(of: namedAppendixHeadingPattern) {
       return (String(match.number), String(match.title))
     }
-    if let match = line.firstMatch(of: colonAppendixHeadingPattern) {
+    if let match = line.firstMatch(of: letteredAppendixHeadingPattern) {
+      return (String(match.number), String(match.title))
+    }
+    if let match = line.firstMatch(of: appendixSubsectionHeadingPattern) {
       return (String(match.number), String(match.title))
     }
     return nil
@@ -366,8 +389,15 @@ public enum LegacyTextParser {
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
           startsBlock: current.isEmpty)
         {
-          flushBlock()
-          sections.append(RawSection(heading: heading))
+          if heading.number == nil, refusesUnnumberedHeading(heading.title) {
+            let last = sections.count - 1
+            sections[last].refusedHeadingLine =
+              sections[last].refusedHeadingLine ?? (sections[last].blocks.count, current.count)
+            current.append(string)
+          } else {
+            flushBlock()
+            sections.append(RawSection(heading: heading))
+          }
         } else {
           current.append(string)
         }
@@ -395,7 +425,9 @@ public enum LegacyTextParser {
     var header = prepared.header
 
     // Collect known section numbers and reference anchors for link resolution.
-    let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
+    // An appendix numbered like a section, `Appendix 2`, is not what `Section 2` cites.
+    let sectionNumbers = Set(
+      sections.compactMap { $0.heading.flatMap { $0.isAppendix ? nil : $0.number } })
     let bibliographies = Self.settlingEntryAnchors(
       sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
@@ -414,7 +446,7 @@ public enum LegacyTextParser {
       for reference in bibliographies[index] ?? []
       where referenceTargets[reference.displayAnchor] == nil {
         referenceTargets[reference.displayAnchor] =
-          reference.documentID.map { .document($0, section: nil) }
+          reference.documentID.map { .document($0, section: nil, entry: reference.anchor) }
           ?? .anchor(reference.anchor)
       }
     }
@@ -439,17 +471,26 @@ public enum LegacyTextParser {
       if heading.number == nil {
         let isAbstract = lowered == "abstract" && !abstractTaken
         if isAbstract || Self.isBoilerplateTitle(lowered) {
-          let extent = Self.boilerplateExtent(
+          var extent = Self.boilerplateExtent(
             of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
             proseIndent: proseIndent)
+          // Omitted boilerplate ends where a heading's place is taken, whether or not
+          // the line there is a heading: refused as prose, RFC 1198's sentence at column
+          // 0 took the list of standards under it into its `Status of this Memo`. Where
+          // the line continues a block, the lines before it are the boilerplate's.
+          var blocks = raw.blocks
+          if !isAbstract, let refused = raw.refusedHeadingLine, refused.block < extent {
+            blocks[refused.block].lines.removeFirst(refused.line)
+            extent = refused.block
+          }
           if isAbstract {
             header.abstract = Self.blocks(
               from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
             abstractTaken = true
           }
-          if extent < raw.blocks.count {
+          if extent < blocks.count {
             let body = Self.blocks(
-              from: Array(raw.blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
+              from: Array(blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
             if !body.isEmpty {
               flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
             }

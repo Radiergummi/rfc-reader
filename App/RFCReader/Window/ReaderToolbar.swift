@@ -4,6 +4,8 @@
   import RFCReaderKit
 
   extension NSToolbarItem.Identifier {
+    static let rfcNewCollection = NSToolbarItem.Identifier("rfc.newCollection")
+    static let rfcSidebarToggle = NSToolbarItem.Identifier("rfc.sidebarToggle")
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
@@ -401,8 +403,20 @@
         // Over the sidebar, beside the traffic lights, where Notes and Mail put
         // it: a tracking separator on the sidebar's own divider gives the toolbar
         // a section that ends with the sidebar, and what is declared before it
-        // lands inside that section.
-        .toggleSidebar, .rfcSidebarSeparator,
+        // lands inside that section. New Collection stands at the section's
+        // trailing edge, against the sidebar's divider, as Notes keeps New Note
+        // and Mail keeps Compose: the sidebar's one action, over the sidebar it
+        // adds to (#349).
+        //
+        // The toggle is ours, not AppKit's `.toggleSidebar`. With the sidebar
+        // collapsed its section shrinks to the two buttons, which then touch, and
+        // Liquid Glass joins the system item to its neighbor with a neck: two
+        // circles half fused. Two items of our own touching become one capsule,
+        // as Cite, Share and More do, and apart they are two circles exactly like
+        // the system's (compared in screenshots of both states). Spacing them
+        // does not help: a `.space` gets no width while collapsed, and a spacer
+        // view pushed New Collection into the overflow menu.
+        .rfcSidebarToggle, .flexibleSpace, .rfcNewCollection, .rfcSidebarSeparator,
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
@@ -528,6 +542,13 @@
         item.menu = moreMenu
         return item
 
+      case .rfcSidebarToggle:
+        return button(identifier, "Sidebar", "sidebar.left", #selector(toggleSidebar))
+
+      case .rfcNewCollection:
+        return button(
+          identifier, "New Collection", "folder.badge.plus", #selector(newEmptyCollection))
+
       case .rfcPanelToggle:
         return button(
           identifier, "Contents", "list.bullet.rectangle.portrait", #selector(togglePanel))
@@ -617,6 +638,10 @@
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
+      case NSToolbarItem.Identifier.rfcNewCollection.rawValue,
+        NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
+        // Neither needs a document, so a window without one has both.
+        return true
       default:
         return id != nil
       }
@@ -629,6 +654,7 @@
     @objc private func togglePanel() { controller.press(.navigation) }
     @objc private func toggleInfo() { controller.press(.info) }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
+    @objc private func toggleSidebar() { controller.toggleSidebar() }
 
     /// What an item of Cite, More or Add to Collection does.
     @objc private func performMenuAction(_ sender: NSMenuItem) {
@@ -657,6 +683,8 @@
         navigation.collectionEditor = .create(adding: id)
       }
     }
+
+    @objc private func newEmptyCollection() { controller.newCollection() }
 
     @objc private func printDocument() { controller.printDocument() }
     @objc private func exportDocument() { controller.exportDocument() }

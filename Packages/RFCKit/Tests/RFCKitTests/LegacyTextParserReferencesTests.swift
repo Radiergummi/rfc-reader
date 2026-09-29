@@ -118,7 +118,8 @@ struct LegacyTextParserReferencesTests {
     let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(
       \.target)
     #expect(!cited.isEmpty)
-    #expect(cited.allSatisfy { $0 == .document(.rfc(1883), section: nil) }, "\(cited)")
+    #expect(
+      cited.allSatisfy { $0 == .document(.rfc(1883), section: nil, entry: "RFC1883") }, "\(cited)")
   }
 
   @Test func `a references heading names references as a word`() {

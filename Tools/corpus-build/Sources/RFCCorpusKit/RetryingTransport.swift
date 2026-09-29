@@ -48,11 +48,11 @@ public struct RetryingTransport: HTTPTransport {
     Double.random(in: 0.5...1.5)
   }
 
-  public func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+  public func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     var delay = baseDelay
     for _ in 1..<attempts {
       do {
-        let (data, response) = try await transport.data(for: url)
+        let (data, response) = try await transport.response(for: request)
         if !Self.isTransient(status: response.statusCode) { return (data, response) }
       } catch let error as URLError where error.code != .cancelled {
         // A network failure: retried like a transient status.
@@ -60,7 +60,7 @@ public struct RetryingTransport: HTTPTransport {
       try await sleep(delay * jitter())
       delay *= 2
     }
-    return try await transport.data(for: url)
+    return try await transport.response(for: request)
   }
 
   /// A status that says the same request may succeed later.

@@ -6,18 +6,24 @@
 /// `Section N` references. Written and read here only, so none of them can drift.
 enum SectionAnchor {
   private static let sectionPrefix = "section-"
-  private static let appendixPrefix = "appendix-"
+  static let appendixPrefix = "appendix-"
 
-  /// `4.2` → `section-4.2`, `A.1` → `appendix-A.1`.
+  /// `4.2` → `section-4.2`, `A.1` → `appendix-A.1`. An appendix numbered like a
+  /// section is named by its anchor already, `appendix-1`, and stays as it is.
   static func anchor(forSectionNumber number: String) -> String {
-    number.first?.isLetter == true ? "\(appendixPrefix)\(number)" : "\(sectionPrefix)\(number)"
+    if number.hasPrefix(appendixPrefix) { return number }
+    return number.first?.isLetter == true
+      ? "\(appendixPrefix)\(number)" : "\(sectionPrefix)\(number)"
   }
 
-  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil.
+  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
+  /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
+  /// read as `1`, it named section 1.
   static func sectionNumber(fromAnchor anchor: String) -> String? {
     for prefix in [sectionPrefix, appendixPrefix] where anchor.hasPrefix(prefix) {
       let number = String(anchor.dropFirst(prefix.count))
-      return number.isEmpty ? nil : number
+      guard !number.isEmpty else { return nil }
+      return prefix == appendixPrefix && number.first?.isNumber == true ? anchor : number
     }
     return nil
   }

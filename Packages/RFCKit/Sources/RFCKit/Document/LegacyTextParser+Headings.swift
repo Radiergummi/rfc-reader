@@ -46,6 +46,13 @@ extension LegacyTextParser {
   /// Where a heading is allowed to sit. It starts at column 0, and in a document whose
   /// body starts there too — so that the indent says nothing — it also has to stand alone
   /// between blank lines. `heading(from:)` judges the text; this judges the position.
+  ///
+  /// An unnumbered heading also has to pass `refusesUnnumberedHeading`, which
+  /// `rawSections` asks rather than `heading(from:)`, whose other caller is the front
+  /// matter's end: there the test is kept lax on purpose. The stricter one moved the
+  /// front matter's end in 41 documents, most of them later, and what it ran on past was
+  /// lost: RFC 783's summary. Omitted boilerplate ends at a refused line too, for the
+  /// same reason.
   static func heading(
     at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
   ) -> HeadingInfo? {
@@ -121,6 +128,68 @@ extension LegacyTextParser {
     guard !headerLinePrefixes.contains(where: { lowered.hasPrefix($0) }) else { return nil }
     return HeadingInfo(
       number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())")
+  }
+
+  /// How an appendix heading with no number opens: the word `Appendix` or `Annex`,
+  /// capitalized or in capitals. Not a lower-case `appendix`, which is wrapped prose,
+  /// and not followed by a number: a numbered appendix heading is read as one before
+  /// this, so what is left is prose that names one, `Appendix B holds the drawings`.
+  private static let appendixOpening = Pattern(
+    #/A(?i:ppendix|nnex)\b(?!\s+(?:[A-Z]|[IVX]+|\d+)\b)/#)
+
+  /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
+  /// definitions, braces, table rules and box drawing, arrows.
+  private static let codePunctuation = ["::=", "{", "}", "|", "+--", "---", "===", "->"]
+
+  /// Words a title-cased heading leaves in lower case: `Transmission of IP Datagrams
+  /// over Ethernet` is title case all the same. Only words of four letters or more,
+  /// because `isSentenceCase` looks at no shorter word.
+  private static let minorWords: Set<String> = [
+    "about", "above", "across", "after", "against", "along", "among", "around", "before",
+    "behind", "below", "beneath", "beside", "besides", "between", "beyond", "despite",
+    "down", "during", "except", "from", "inside", "into", "like", "near", "onto",
+    "outside", "over", "past", "since", "than", "through", "throughout", "toward",
+    "towards", "under", "underneath", "until", "unto", "upon", "versus", "with", "within",
+    "without",
+  ]
+
+  /// True for a column-0 line that passed every other test for an unnumbered heading,
+  /// but reads as something else: prose, a MIB line, a grammar or a drawing (#201).
+  ///
+  /// Measured over the legacy corpus, half of the 62,924 unnumbered headings the parser
+  /// made were one of these, and every sample of them was wrong:
+  ///
+  /// - a lower-case start: MIB lines (`dot1qTpGroupLearnt OBJECT-TYPE`), wrapped prose,
+  ///   `o` list items;
+  /// - code or diagram punctuation (`codePunctuation`): ASN.1, ABNF, table rules, boxes;
+  /// - a sentence's end, `.`, `;` or `,`: prose, protocol traces, data lines. `etc.`
+  ///   ends a heading's list as often as a sentence, and is let through;
+  /// - sentence case past 50 characters, where the samples turn from titles into prose.
+  ///
+  /// Title case, all capitals and short sentence case (`How to read this memo`) are
+  /// where the real headings are. Their false positives, table rows and header-field
+  /// lines, need the neighboring lines to judge, which is a second pass.
+  static func refusesUnnumberedHeading(_ title: String) -> Bool {
+    guard let first = title.first else { return true }
+    // A numbered appendix is an appendix heading and never reaches this test. One with
+    // no number lands here, and the rules would refuse four over the corpus for a full
+    // stop or their length: `Appendix: Title.`, `Appendix - a long title in sentence
+    // case`. What they start with says heading, whatever follows it.
+    if title.prefixMatch(of: appendixOpening) != nil { return false }
+    if first.isLowercase { return true }
+    if codePunctuation.contains(where: { title.contains($0) }) { return true }
+    if let last = title.last, ".;,".contains(last), !title.hasSuffix("etc.") { return true }
+    return title.count > 50 && isSentenceCase(title)
+  }
+
+  /// Neither all capitals nor title case: some word of four letters or more that is not
+  /// a minor word starts in lower case.
+  private static func isSentenceCase(_ title: String) -> Bool {
+    title.split(separator: " ").contains { word in
+      let letters = word.filter(\.isLetter)
+      guard letters.count >= 4, !minorWords.contains(letters.lowercased()) else { return false }
+      return letters.first?.isLowercase == true
+    }
   }
 
   static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {

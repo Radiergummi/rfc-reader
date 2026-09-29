@@ -136,7 +136,7 @@ struct RFCXMLSerializerTests {
 
     let canonical = try #require(
       xrefs.first { xref in
-        guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+        guard case .document(let id, _, _) = xref.target, id.series == .rfc else { return false }
         return xref.isCanonicalLabel
       }, "round trip must preserve canonical RFC refs")
     #expect(
@@ -299,6 +299,20 @@ struct RFCXMLSerializerCorpusFindingsTests {
           }
         }
       })
+  }
+
+  /// An appendix that is a bibliography, RFC 2049's `Appendix C -- References`, is
+  /// written as `<references>`, and its `pn` names it an appendix. Read back, it was a
+  /// numbered section that was not one (#201).
+  @Test func `a references appendix round trips as an appendix`() throws {
+    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let appendix = try #require(parsed.section(anchor: "appendix-C"))
+    #expect(appendix.isAppendix)
+    #expect(appendix.blocks.contains { if case .references = $0 { true } else { false } })
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(parsed).utf8))
+    let readBack = try #require(reparsed.section(anchor: "appendix-C"))
+    #expect(readBack.number == "C")
+    #expect(readBack.isAppendix)
   }
 
   /// `anchor` and `pn` are both `xsd:ID`, so `<section anchor="section-1" pn="section-1">`

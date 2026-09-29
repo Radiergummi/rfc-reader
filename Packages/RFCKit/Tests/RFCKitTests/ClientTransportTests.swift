@@ -44,13 +44,12 @@ struct ClientTransportTests {
 
   private static let url = URL(string: "https://www.rfc-editor.org/rfc/rfc9110.xml")!
 
-  @Test func `the transport asks for the formats the client reads`() async throws {
+  @Test func `the client asks for the formats it reads`() async throws {
     StubProtocol.response = HTTPURLResponse(
       url: Self.url, statusCode: 200, httpVersion: nil, headerFields: nil)
-    let (data, response) = try await URLSessionTransport(session: Self.session)
-      .data(for: Self.url)
+    let data = try await RFCEditorClient(transport: URLSessionTransport(session: Self.session))
+      .fetchDocumentData(.rfc(9110), format: .xml)
     #expect(String(decoding: data, as: UTF8.self) == "body")
-    #expect(response.statusCode == 200)
     #expect(
       StubProtocol.lastRequest?.value(forHTTPHeaderField: "Accept")
         == "application/xml, text/plain, application/json")
@@ -60,7 +59,8 @@ struct ClientTransportTests {
     StubProtocol.response = URLResponse(
       url: Self.url, mimeType: nil, expectedContentLength: 4, textEncodingName: nil)
     await #expect {
-      _ = try await URLSessionTransport(session: Self.session).data(for: Self.url)
+      _ = try await URLSessionTransport(session: Self.session).response(
+        for: URLRequest(url: Self.url))
     } throws: { error in
       guard case .invalidResponse(let url) = error as? RFCEditorClient.ClientError else {
         return false
@@ -72,10 +72,10 @@ struct ClientTransportTests {
   /// A malformed index names what it was reading and keeps why it failed.
   @Test func `a decoding error keeps the error beneath it`() async throws {
     struct Garbage: HTTPTransport {
-      func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+      func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         (
           Data("<not-the-index".utf8),
-          HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         )
       }
     }

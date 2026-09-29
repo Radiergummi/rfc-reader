@@ -35,7 +35,8 @@ struct DocumentFallbackTests {
       lock.withLock { asked }
     }
 
-    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+      let url = request.url!
       lock.withLock { asked.append(url.pathExtension) }
       let answer = answers[url.pathExtension] ?? .status(404)
       switch answer {
@@ -133,12 +134,14 @@ struct DocumentFallbackTests {
 
   @Test func `the index is fetched through the client`() async throws {
     let transport = Transport(xml: .body(Data("<rfc-index/>".utf8)))
-    #expect(
-      try await RFCEditorClient(transport: transport).fetchIndexData() == Data("<rfc-index/>".utf8))
+    let fetched = try await RFCEditorClient(transport: transport)
+      .fetchIndexData(unlessMatching: nil, onExpensiveNetworks: true)
+    #expect(fetched == .changed(Data("<rfc-index/>".utf8), nil))
 
     let failing = Transport(xml: .status(500))
     await #expect(throws: RFCEditorClient.ClientError.self) {
-      _ = try await RFCEditorClient(transport: failing).fetchIndexData()
+      _ = try await RFCEditorClient(transport: failing)
+        .fetchIndexData(unlessMatching: nil, onExpensiveNetworks: true)
     }
   }
 }

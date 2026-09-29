@@ -93,7 +93,8 @@ struct DocumentTraversalTests {
   /// with the words inside emphasis and strong text flattened out.
   @Test func `every run of prose is reached, headings included`() {
     let cited = document.proseInlines.compactMap { inline -> Int? in
-      guard case .crossReference(let xref) = inline, case .document(let id, _) = xref.target else {
+      guard case .crossReference(let xref) = inline, case .document(let id, _, _) = xref.target
+      else {
         return nil
       }
       return id.number

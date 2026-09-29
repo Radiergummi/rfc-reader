@@ -164,4 +164,23 @@ struct BuilderChipTests {
     let url = try #require(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL)
     #expect(url.absoluteString == "rfc://9110")
   }
+
+  /// An informative citation's chip is marked for its lighter tint; a normative one,
+  /// and one whose kind no list says, is drawn as before (#184).
+  @Test func `only an informative citation's chip is marked informative`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+    var marks: [DocumentID: Bool] = [:]
+    let whole = NSRange(location: 0, length: built.text.length)
+    built.text.enumerateAttribute(.rfcChip, in: whole) { value, range, _ in
+      guard value != nil,
+        let box = built.text.attribute(.rfcReference, at: range.location, effectiveRange: nil)
+          as? ReferenceBox,
+        case .document(let id, _, _) = box.reference.target
+      else { return }
+      marks[id] =
+        built.text.attribute(.rfcInformative, at: range.location, effectiveRange: nil) != nil
+    }
+    #expect(marks[.rfc(5116)] == true)
+    #expect(marks[.rfc(2119)] == false)
+  }
 }

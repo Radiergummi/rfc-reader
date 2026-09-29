@@ -75,7 +75,12 @@ struct FetchCommand: AsyncParsableCommand {
       index = try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path))
     } else {
       Self.logger.info("downloading index", metadata: ["url": "\(RFCEditorEndpoints.index)"])
-      let data = try await Self.client.fetchIndexData()
+      // Asked unconditionally, so the answer is the index itself, never a 304.
+      let fetch = try await Self.client.fetchIndexData(
+        unlessMatching: nil, onExpensiveNetworks: true)
+      guard case .changed(let data, _) = fetch else {
+        throw RFCEditorClient.ClientError.httpStatus(304, RFCEditorEndpoints.index)
+      }
       try data.write(to: outDirectory.appending(path: "rfc-index.xml"), options: .atomic)
       index = try RFCIndexParser.parse(data)
     }
