@@ -257,7 +257,8 @@ corpus-overrides-check: corpus-tool
 # output, not a measure of the legacy corpus. Not part of `check`: it needs the
 # network the first time.
 corpus-score: corpus-fetch-xml
-	$(CORPUS_BIN) fetch --out $(CORPUS) --format modern-text $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+	$(CORPUS_BIN) fetch --out $(CORPUS) --format modern-text --index $(CORPUS)/rfc-index.xml \
+	  $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
 	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
 	  --out $(CORPUS)/score.json
 

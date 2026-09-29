@@ -49,7 +49,10 @@ struct FetchCommand: AsyncParsableCommand {
 
   private static let logger = Logger(command: "fetch")
 
-  @Option(help: "The corpus directory. Documents land in text.noindex or xml.noindex inside it.")
+  @Option(
+    help:
+      "The corpus directory. Documents land in text.noindex, xml.noindex or modern-text.noindex inside it."
+  )
   var out: String
 
   @Option(help: "Which documents to fetch: the legacy text, the XML, or the XML's own text.")

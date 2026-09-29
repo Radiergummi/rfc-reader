@@ -9,23 +9,25 @@ import RFCKit
 ///
 /// Blocks are compared by content, not by position: the parser keeps no source
 /// lines on its blocks, and xml2rfc renders artwork, source code and headings
-/// close enough to literally that one normalised text recognises both.
+/// close enough to literally that one normalized text recognizes both.
 ///
 /// A regression floor, not a measure of the legacy corpus: xml2rfc's output is
 /// uniform — indent 3, wrapped at 72, never justified, no tabs — and the documents
 /// that break the parser have no analogue in it.
 public enum GroundTruth {
-  public enum Kind: String, Codable, CaseIterable, Sendable, Comparable {
+  public enum Kind: String, CaseIterable, Sendable {
     case artwork
     case sourceCode
     case heading
-
-    public static func < (lhs: Kind, rhs: Kind) -> Bool {
-      allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
-    }
+    /// Artwork and source code alike, matched whatever they were called. Plain text
+    /// cannot say what is code, so the parser calls every verbatim block artwork,
+    /// and a grammar it kept whole is still a block it got right. The per-kind
+    /// scores say what it called the block; this one says whether it found it.
+    /// No extracted block has this kind: `score` derives it.
+    case verbatim
   }
 
-  /// A block as it is scored: its kind and its normalised content.
+  /// A block as it is scored: its kind and its normalized content.
   public struct Block: Hashable, Sendable {
     public var kind: Kind
     public var content: String
@@ -36,8 +38,9 @@ public enum GroundTruth {
     }
   }
 
-  /// How the blocks the parser found compare with the ones the XML has.
-  public struct Counts: Codable, Equatable, Sendable {
+  /// How the blocks the parser found compare with the ones the XML has. Written
+  /// with its precision and recall, so score.json can be read as it is.
+  public struct Counts: Encodable, Equatable, Sendable {
     /// In both.
     public var truePositives: Int
     /// Found by the parser, and not in the XML: invented, or split or merged.
@@ -63,7 +66,7 @@ public enum GroundTruth {
       ratio(truePositives, truePositives + falseNegatives)
     }
 
-    /// Every block that is wrong one way or the other: how to rank documents.
+    /// Every block that is wrong one way or the other.
     public var errors: Int { falsePositives + falseNegatives }
 
     private func ratio(_ part: Int, _ whole: Int) -> Double? {
@@ -80,45 +83,63 @@ public enum GroundTruth {
         falsePositives: lhs.falsePositives + rhs.falsePositives,
         falseNegatives: lhs.falseNegatives + rhs.falseNegatives)
     }
+
+    private enum CodingKeys: String, CodingKey {
+      case truePositives, falsePositives, falseNegatives, precision, recall
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(truePositives, forKey: .truePositives)
+      try container.encode(falsePositives, forKey: .falsePositives)
+      try container.encode(falseNegatives, forKey: .falseNegatives)
+      try container.encodeIfPresent(precision, forKey: .precision)
+      try container.encodeIfPresent(recall, forKey: .recall)
+    }
   }
 
   // MARK: - Extraction
 
-  /// Every heading, artwork and source code block of `document`, in document
-  /// order: each section's heading, then its blocks, nested ones included, then its
-  /// subsections. The abstract has no heading of its own.
+  /// Every heading of `document`, then every artwork and source code block, each
+  /// in document order. Scoring does not depend on the order. Artwork with no text
+  /// is left out: xml2rfc prints a placeholder for artwork it has only as SVG, so
+  /// the text can never hold it.
   public static func blocks(of document: RFCDocument) -> [Block] {
-    var blocks = verbatim(in: document.header.abstract)
-    for section in document.allSections {
-      blocks.append(
-        Block(kind: .heading, content: normalize(number: section.number, title: section.titleText)))
-      blocks += verbatim(in: section.blocks)
+    let headings = document.allSections.map { section in
+      Block(kind: .heading, content: normalize(number: section.number, title: section.titleText))
     }
-    return blocks
-  }
-
-  private static func verbatim(in blocks: [RFCKit.Block]) -> [Block] {
-    blocks.flattened.compactMap { block in
-      guard case .preformatted(let content) = block else { return nil }
+    let verbatim = document.blocks.compactMap { block -> Block? in
+      guard case .preformatted(let content) = block, content.type != "svg" else { return nil }
+      let text = normalize(verbatim: content.text)
+      guard !text.isEmpty else { return nil }
       let kind: Kind =
         switch content.kind {
         case .artwork: .artwork
         case .sourceCode: .sourceCode
         }
-      return Block(kind: kind, content: normalize(verbatim: content.text))
+      return Block(kind: kind, content: text)
     }
+    return headings + verbatim
   }
 
-  // MARK: - Normalisation
+  // MARK: - Normalization
 
   /// Verbatim text as it compares: blank lines and trailing spaces dropped, and the
   /// indentation all its lines share removed, so xml2rfc's three spaces and an
   /// author's own margin compare equal while a diagram keeps its shape. A page
-  /// break inside a figure leaves blank lines, which is why those go too.
+  /// break inside a figure leaves blank lines, which is why those go too. So do the
+  /// `<CODE BEGINS>` and `<CODE ENDS>` lines xml2rfc writes around marked source
+  /// code, which the element does not hold.
   public static func normalize(verbatim text: String) -> String {
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
       .map { line in String(line.reversed().drop(while: \.isWhitespace).reversed()) }
       .filter { !$0.isEmpty }
+    if let first = lines.first, first.drop(while: \.isWhitespace).hasPrefix("<CODE BEGINS>") {
+      lines.removeFirst()
+    }
+    if let last = lines.last, last.drop(while: \.isWhitespace) == "<CODE ENDS>" {
+      lines.removeLast()
+    }
     let margin = lines.map { $0.prefix(while: { $0 == " " }).count }.min() ?? 0
     return lines.map { String($0.dropFirst(margin)) }.joined(separator: "\n")
   }
@@ -140,8 +161,17 @@ public enum GroundTruth {
 
   /// `found` against `expected`, per kind, as multisets: a block found twice and
   /// expected once is one true positive and one false positive. Every kind has an
-  /// entry, zero or not.
+  /// entry, zero or not, `verbatim` included.
   public static func score(found: [Block], expected: [Block]) -> [Kind: Counts] {
+    var counts = match(found: found, expected: expected)
+    let asVerbatim = { (blocks: [Block]) in
+      blocks.filter { $0.kind != .heading }.map { Block(kind: .verbatim, content: $0.content) }
+    }
+    counts[.verbatim] = match(found: asVerbatim(found), expected: asVerbatim(expected))[.verbatim]
+    return counts
+  }
+
+  private static func match(found: [Block], expected: [Block]) -> [Kind: Counts] {
     var counts = Dictionary(uniqueKeysWithValues: Kind.allCases.map { ($0, Counts.zero) })
     var remaining = Dictionary(expected.map { ($0, 1) }, uniquingKeysWith: +)
     for block in found {
@@ -162,31 +192,17 @@ public enum GroundTruth {
 /// `corpus/score.json`: the totals per kind, and every document worst first.
 /// Kinds are keyed by name, and every one is present, so two runs' files diff
 /// line for line.
-public struct GroundTruthReport: Codable, Sendable {
-  public struct Total: Codable, Sendable {
-    public var truePositives: Int
-    public var falsePositives: Int
-    public var falseNegatives: Int
-    public var precision: Double?
-    public var recall: Double?
-
-    init(_ counts: GroundTruth.Counts) {
-      truePositives = counts.truePositives
-      falsePositives = counts.falsePositives
-      falseNegatives = counts.falseNegatives
-      precision = counts.precision
-      recall = counts.recall
-    }
-  }
-
-  public struct Document: Codable, Sendable {
+public struct GroundTruthReport: Encodable, Sendable {
+  public struct Document: Encodable, Sendable {
     /// The file stem, `rfc9110`.
     public var document: String
+    /// Its headings' errors and its verbatim blocks', so a grammar kept whole as
+    /// artwork counts as the block it is, not as a miss and an invention.
     public var errors: Int
     public var kinds: [String: GroundTruth.Counts]
   }
 
-  public var kinds: [String: Total]
+  public var kinds: [String: GroundTruth.Counts]
   public var documents: [Document]
 
   /// Ranked by errors, most first, and by number where they tie, so the order
@@ -199,10 +215,11 @@ public struct GroundTruthReport: Codable, Sendable {
         totals[kind, default: .zero] += count
       }
     }
-    kinds = Dictionary(uniqueKeysWithValues: totals.map { ($0.key.rawValue, Total($0.value)) })
+    kinds = Dictionary(uniqueKeysWithValues: totals.map { ($0.key.rawValue, $0.value) })
     var ranked: [(number: Int, document: Document)] = []
     for (id, counts) in scored {
-      let errors = counts.values.map(\.errors).reduce(0, +)
+      let errors = [GroundTruth.Kind.heading, .verbatim].compactMap { counts[$0]?.errors }
+        .reduce(0, +)
       var byName: [String: GroundTruth.Counts] = [:]
       for (kind, count) in counts { byName[kind.rawValue] = count }
       ranked.append((id.number, Document(document: id.fileStem, errors: errors, kinds: byName)))
