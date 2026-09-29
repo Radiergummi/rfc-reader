@@ -82,4 +82,28 @@ struct DefinedTermsTests {
     }
     #expect(paragraph.plainText.hasPrefix("A widget is the unit"))
   }
+
+  /// A prepared document numbers what its author did not anchor, and the parser anchors
+  /// a paragraph or a section by that `pn`, so the term lands where its definition does.
+  @Test func `a primary index entry takes its element's part number when it has no anchor`()
+    throws
+  {
+    let xml = """
+      <rfc><middle>
+        <section pn="section-3">
+          <name>Intermediaries</name>
+          <t pn="section-3-2"><iref primary="true" item="relay"/>A relay passes messages on.</t>
+          <section pn="section-3.1">
+            <name>Tunnels</name>
+            <iref primary="true" item="tunnel"/>
+            <t>A tunnel passes them on blindly.</t>
+          </section>
+        </section>
+      </middle></rfc>
+      """
+    let root = try XMLTree.parse(Data(xml.utf8))
+    let terms = RFCXMLParser.primaryIndexTerms(in: root)
+    #expect(terms.map(\.term) == ["relay", "tunnel"])
+    #expect(terms.map(\.anchor) == ["section-3-2", "section-3.1"])
+  }
 }

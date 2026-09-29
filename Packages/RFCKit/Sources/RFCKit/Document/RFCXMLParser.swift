@@ -53,7 +53,7 @@ public struct RFCXMLParser: Sendable {
     var document = RFCDocument(header: header, sections: sections, source: .xml)
     document.abbreviations = Abbreviations.defined(in: document)
     document.definedTerms = DefinedTerms.defined(
-      in: document, indexed: Self.primaryIndexTerms(in: root, builder: builder))
+      in: document, indexed: builder.primaryIndexTerms(in: root))
     return document
   }
 
@@ -71,39 +71,9 @@ public struct RFCXMLParser: Sendable {
 
   // MARK: - Builder
 
-  /// The terms primary index entries define (#176): `<iref primary="true">` without a
-  /// subitem, each defined by the element it sits in, at that element's anchor or its
-  /// section's. With a subitem an entry files a name under a group (`Grammar` /
-  /// `ALPHA`, `Fields` / `Content-Type`), an index heading rather than a term.
+  /// The terms primary index entries define; see `Builder.primaryIndexTerms(in:)`.
   static func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
-    primaryIndexTerms(
-      in: root, builder: Builder(referenceTargets: Builder.referenceTargets(in: root)))
-  }
-
-  private static func primaryIndexTerms(in root: XMLTree.Element, builder: Builder)
-    -> [DefinedTerm]
-  {
-    var terms: [DefinedTerm] = []
-    func visit(_ element: XMLTree.Element, anchor: String?) {
-      let anchor = element["anchor"] ?? anchor
-      for child in element.elements {
-        guard child.name == "iref" else {
-          visit(child, anchor: anchor)
-          continue
-        }
-        guard child["primary"] == "true", child["subitem"] == nil, let item = child["item"]
-        else { continue }
-        // Directly in a section, an entry marks the section; there is no one element
-        // to show as its definition.
-        let definition =
-          element.name == "section"
-          ? []
-          : builder.parseBlocks(in: XMLTree.Element(name: "wrapper", children: [.element(element)]))
-        terms.append(DefinedTerm(term: item, anchor: anchor, definition: definition))
-      }
-    }
-    visit(root, anchor: nil)
-    return terms
+    Builder(referenceTargets: Builder.referenceTargets(in: root)).primaryIndexTerms(in: root)
   }
 
   private struct Builder {
@@ -457,6 +427,33 @@ public struct RFCXMLParser: Sendable {
       child.name == "contact" && parent.name == "section"
     }
 
+    /// The terms primary index entries define (#176): `<iref primary="true">` without a
+    /// subitem, each defined by the element it sits in, at that element's anchor or its
+    /// section's. With a subitem an entry files a name under a group (`Grammar` /
+    /// `ALPHA`, `Fields` / `Content-Type`), an index heading rather than a term. An
+    /// entry directly in a section marks the section, and has no one block to show as
+    /// its definition.
+    func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
+      var terms: [DefinedTerm] = []
+      func visit(_ element: XMLTree.Element, anchor: String?) {
+        // As a paragraph or a section is anchored: the author's, else the part number.
+        let anchor = element["anchor"] ?? element["pn"] ?? anchor
+        // Built once, for the first entry, however many the element holds.
+        lazy var definition: [Block] = parseBlock(element).map { [$0] } ?? []
+        for child in element.elements {
+          guard child.name == "iref" else {
+            visit(child, anchor: anchor)
+            continue
+          }
+          guard child["primary"] == "true", child["subitem"] == nil, let item = child["item"]
+          else { continue }
+          terms.append(DefinedTerm(term: item, anchor: anchor, definition: definition))
+        }
+      }
+      visit(root, anchor: nil)
+      return terms
+    }
+
     /// Converts the children of a container element into blocks. Runs of loose text
     /// and inline elements (as found inside `<li>` or `<dd>`) become implicit paragraphs.
     func parseBlocks(in element: XMLTree.Element) -> [Block] {
@@ -491,7 +488,7 @@ public struct RFCXMLParser: Sendable {
       return blocks
     }
 
-    private func parseBlock(_ element: XMLTree.Element) -> Block? {
+    func parseBlock(_ element: XMLTree.Element) -> Block? {
       switch element.name {
       case "t":
         let inlines = normalize(parseInlines(element.children))
