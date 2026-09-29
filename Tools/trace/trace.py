@@ -22,14 +22,14 @@ Python 3.9 or later, standard library only.
 """
 
 import argparse
+import json
+import plistlib
 import signal
 import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
-
-SUBSYSTEM = "me.mazetti.rfc-reader"
 
 # What the session does, in order. Opening a document returns as soon as the app
 # has taken the request, so each step is followed by a wait long enough for its
@@ -61,9 +61,13 @@ def main():
     if arguments.output.exists():
         sys.exit(f"{arguments.output} exists already; name another trace")
 
+    # The signposts' subsystem is the bundle identifier (`Signposts.swift`).
+    with open(arguments.app / "Contents" / "Info.plist", "rb") as info:
+        subsystem = plistlib.load(info)["CFBundleIdentifier"]
+
     process_id = record(executable, arguments.output, parse_scenario(arguments.scenario))
     print(f"trace: {arguments.output}\n")
-    print_signposts(arguments.output, process_id)
+    print_signposts(arguments.output, process_id, subsystem)
     print_hangs(arguments.output, process_id)
 
 
@@ -85,8 +89,13 @@ def parse_scenario(text):
     steps = []
     for step in text.split(";"):
         action, _, argument = step.strip().partition(" ")
+        if not action:
+            continue
         if action == "wait":
-            steps.append((action, float(argument)))
+            try:
+                steps.append((action, float(argument)))
+            except ValueError:
+                sys.exit(f"'{step.strip()}' needs a number of seconds, such as 'wait 4'")
         elif action in ("open", "search"):
             steps.append((action, argument))
         else:
@@ -120,9 +129,9 @@ def record(executable, output, scenario):
             if action == "wait":
                 time.sleep(argument)
             elif action == "open":
-                script(app.pid, f"app.openRfc('{argument}')")
+                script(app.pid, f"app.openRfc({json.dumps(argument)})")
             elif action == "search":
-                script(app.pid, f"app.windows[0].searchText = '{argument}'")
+                script(app.pid, f"app.windows[0].searchText = {json.dumps(argument)}")
     finally:
         app.terminate()
         app.wait()
@@ -206,12 +215,12 @@ def thread_name(cells):
     return "main" if name.startswith("Main Thread") else "background"
 
 
-def print_signposts(trace, process_id):
+def print_signposts(trace, process_id, subsystem):
     # Keyed on everything that tells two signposts apart, because the template
     # records Points of Interest into two tables, and the export has both.
     unique = {}
     for cells in export_rows(trace, "os-signpost"):
-        if pid_of(cells) != process_id or formatted(cells, "subsystem") != SUBSYSTEM:
+        if pid_of(cells) != process_id or formatted(cells, "subsystem") != subsystem:
             continue
         key = tuple(formatted(cells, mnemonic) for mnemonic in ("time", "thread", "event-type", "identifier", "name"))
         unique.setdefault(key, cells)

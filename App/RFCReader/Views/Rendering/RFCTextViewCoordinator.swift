@@ -270,7 +270,11 @@ final class RFCTextViewCoordinator: NSObject {
   private func beginLayout() {
     layoutTask?.cancel()
     endLayoutInterval()
-    layoutInterval = signposter.beginInterval("Lay out document")
+    // An ID of its own, because several text views lay out at once: every
+    // window and tab, and a force-click preview.
+    layoutInterval = signposter.beginInterval(
+      "Lay out document", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     laidOutEnd = nil
     laidOutThrough = 0
     ensureLayout(through: Self.layoutSlice)
@@ -287,7 +291,10 @@ final class RFCTextViewCoordinator: NSObject {
         // out — an empty document, or a text view that has gone away. Either
         // way the end stays unknown, which is the safe state, and looping on
         // it would spin.
-        guard self.laidOutThrough > before else { return }
+        guard self.laidOutThrough > before else {
+          self.endLayoutInterval()
+          return
+        }
       }
     }
   }
@@ -314,9 +321,10 @@ final class RFCTextViewCoordinator: NSObject {
     endLayoutInterval()
   }
 
-  /// Ends the layout interval `beginLayout()` began: when the last slice lands, or
-  /// when a newer layout replaces it before then, so a trace shows the replaced
-  /// one ending where it stopped rather than never ending.
+  /// Ends the layout interval `beginLayout()` began: when the last slice lands,
+  /// when a newer layout replaces it before then, or when a slice finds nothing
+  /// left to lay out, so a trace shows a layout that stopped ending where it
+  /// stopped rather than never ending.
   private func endLayoutInterval() {
     guard let layoutInterval else { return }
     signposter.endInterval("Lay out document", layoutInterval)

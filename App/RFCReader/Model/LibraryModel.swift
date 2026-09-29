@@ -181,8 +181,12 @@ final class LibraryModel {
   func refreshIndex() async {
     do {
       let interval = signposter.beginInterval("Fetch index")
-      let data = try await client.fetchIndexData()
-      signposter.endInterval("Fetch index", interval)
+      let data: Data
+      do {
+        // Ended on a throw too, so an offline refresh does not leave it open.
+        defer { signposter.endInterval("Fetch index", interval) }
+        data = try await client.fetchIndexData()
+      }
       // Off the main actor: the parse alone is about a second (#124).
       let prepared = try await Self.parse(data)
       try await store.storeIndex(data)

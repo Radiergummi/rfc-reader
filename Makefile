@@ -186,13 +186,16 @@ install: build-app
 #   make trace
 #   make trace TRACE_SCENARIO='wait 6; open 9110; wait 5'
 #
+# The scenario reaches the script through the environment, not spliced into the
+# recipe, so a quote in a search does not end the shell's string.
 TRACE_SCENARIO ?=
+export TRACE_SCENARIO
 trace: CONFIGURATION := Release
 trace: build-app
 	@app='$(call built_app,platform=macOS)'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
-	    $(if $(TRACE_SCENARIO),--scenario '$(TRACE_SCENARIO)')
+	    $(if $(TRACE_SCENARIO),--scenario "$$TRACE_SCENARIO")
 
 ## Build the corpus pipeline in release mode
 # Phony rather than a rule on $(CORPUS_BIN): swift build tracks its own sources
