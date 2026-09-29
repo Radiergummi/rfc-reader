@@ -77,6 +77,6 @@ The line is the entry point, not the size of the input. If a test calls `parse`,
 
 `RFCReader.xcodeproj`, `App/RFCReader/Info.plist` and `App/RFCReader/RFCReader.entitlements` are produced by XcodeGen from `project.yml` and are gitignored — edit `project.yml`, never the generated project. `corpus/` is a working directory; only `corpus/overrides/` is committed.
 
-`.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; the handful of test lines asserting a whole reflowed paragraph carry a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
+`.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; a line that has to run past the cap carries a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
 
 Layout belongs to swift-format, on its defaults: `.swift-format` sets nothing else, and a deviation needs a reason good enough to write down. Where a SwiftLint rule disagrees with swift-format's output, the SwiftLint rule gives way.
