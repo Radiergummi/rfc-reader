@@ -15,6 +15,12 @@ import RFCReaderKit
 /// `nonisolated`, as its superclass is: TextKit 2 may lay out and draw off the
 /// main thread.
 nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
+  /// The fragment every layout manager of built text asks its delegate for: the
+  /// reader's, and a print's (`DocumentPDF`), so the two cannot draw differently.
+  static func make(for textElement: NSTextElement) -> NSTextLayoutFragment {
+    RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
+  }
+
   static let cardPadding = FragmentGeometry.cardPadding
   static let rulePadding: CGFloat = 8
   static let ruleWidth: CGFloat = 3
