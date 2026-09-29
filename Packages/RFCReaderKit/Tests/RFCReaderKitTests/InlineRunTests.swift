@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Inline runs")
-@MainActor
 struct InlineRunTests {
   private let style = ReadingStyle()
 

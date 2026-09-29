@@ -15,6 +15,9 @@ public struct ReferenceGroup: Identifiable, Sendable {
 
   public var id: String { title }
 
+  /// From the title, as `ReferenceList.kind` is, so the two cannot disagree.
+  public var kind: ReferenceList.Kind { ReferenceList.Kind(title: title) }
+
   public init(title: String, entries: [Reference]) {
     self.title = title
     self.entries = entries
@@ -33,7 +36,62 @@ public struct ReferenceGroup: Identifiable, Sendable {
   }
 }
 
+/// The kind of the list holding each bibliography entry, by the entry's anchor and
+/// by the documents it names, a reference group's members included, so a build
+/// asks once per chip without walking every entry of every list (#184).
+public struct ReferenceKinds: Sendable {
+  private var byAnchor: [String: ReferenceList.Kind] = [:]
+  private var byDocument: [DocumentID: ReferenceList.Kind] = [:]
+
+  public init(_ groups: [ReferenceGroup]) {
+    for group in groups {
+      let kind = group.kind
+      for entry in group.entries {
+        byAnchor[entry.anchor] = Self.stronger(byAnchor[entry.anchor], kind)
+        if let id = entry.documentID {
+          byDocument[id] = Self.stronger(byDocument[id], kind)
+        }
+        // A group's members are found through it: a bare mention of RFC 8126
+        // records no entry, and only the group's own series (BCP 26) names one.
+        for id in entry.members {
+          byDocument[id] = Self.stronger(byDocument[id], kind)
+        }
+      }
+    }
+  }
+
+  /// The kind of the list holding the entry `target` names: found by anchor, by
+  /// the entry the parser resolved a document citation to, or else by the document
+  /// an entry, or a group's member, names; unknown where no list holds it or no
+  /// list says.
+  public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
+    switch target {
+    case .anchor(let anchor):
+      byAnchor[anchor] ?? .unknown
+    case .document(let id, _, let entry):
+      entry.flatMap { byAnchor[$0] } ?? byDocument[id] ?? .unknown
+    }
+  }
+
+  /// Normative where a document lists an entry in both, since it is then part of
+  /// the specification.
+  private static func stronger(_ current: ReferenceList.Kind?, _ other: ReferenceList.Kind)
+    -> ReferenceList.Kind
+  {
+    if current == .normative || other == .normative { return .normative }
+    if current == .informative || other == .informative { return .informative }
+    return .unknown
+  }
+}
+
 extension [ReferenceGroup] {
+  /// Whether a citation of `target` is normative or informative: the kind of the
+  /// list holding its entry. See `ReferenceKinds`, which a build keeps to answer
+  /// this for every chip.
+  public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
+    ReferenceKinds(self).kind(of: target)
+  }
+
   /// The entry a citation names by `anchor`, from whichever bibliography holds it:
   /// what a preview of the citation shows, since the body leaves the entries out.
   public func entry(anchor: String) -> Reference? {

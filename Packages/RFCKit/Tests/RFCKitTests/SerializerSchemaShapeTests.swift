@@ -51,7 +51,7 @@ struct SerializerSchemaShapeTests {
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
     let cited = { (document: RFCDocument) in
       document.everyCrossReference.compactMap { xref -> DocumentID? in
-        if case .document(let id, _) = xref.target { id } else { nil }
+        if case .document(let id, _, _) = xref.target { id } else { nil }
       }
     }
     #expect(cited(document).contains(.rfc(2104)))

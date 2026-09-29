@@ -34,6 +34,8 @@ public final class DocumentTextBuilder {
   private(set) var bodyColour: PlatformColor = RFCColors.label
   let output = NSMutableAttributedString()
   var entries: [AnchorIndex.Entry] = []
+  /// See `BuiltDocument.keepsWithNext`.
+  var keepsWithNext: Set<Int> = []
 
   /// The advance of one unscaled monospaced character, per body size. It depends
   /// only on the style, and a document can hold hundreds of artwork blocks, each of
@@ -62,19 +64,32 @@ public final class DocumentTextBuilder {
   /// with `referenceScheme`. Collected before anything is emitted.
   var referenceAnchors: Set<String> = []
 
+  /// Which kind of list holds each bibliography entry, for whether a citation's
+  /// chip is informative. Collected before anything is emitted, as
+  /// `referenceAnchors` is.
+  var referenceKinds = ReferenceKinds([])
+
   init(style: ReadingStyle) {
     self.style = style
   }
 
-  public static func build(_ document: RFCDocument, style: ReadingStyle) -> BuiltDocument {
+  /// - Parameter title: a title block to open the text with. The reader has none —
+  ///   its title is the header view above the text — but a printed page has nothing
+  ///   above the text, so a print passes one (#375).
+  public static func build(
+    _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil
+  ) -> BuiltDocument {
     let builder = DocumentTextBuilder(style: style)
+    if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
     builder.reserveChipPadding()
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
-    return BuiltDocument(text: builder.output, anchors: AnchorIndex(builder.entries))
+    return BuiltDocument(
+      text: builder.output, anchors: AnchorIndex(builder.entries),
+      keepsWithNext: builder.keepsWithNext)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -84,10 +99,12 @@ public final class DocumentTextBuilder {
   /// `scroll(to:)` has to reach all of them, but every consumer of the reader's
   /// visible anchor resolves it with `RFCDocument.section(anchor:)`, so reporting a
   /// paragraph anchor would silently break all of them. Only `appendSection` passes
-  /// one, which is the one place that knows.
-  func mark(_ anchor: String?, heading: String? = nil) {
+  /// one, which is the one place that knows, and passes the section's `number` with
+  /// it.
+  func mark(_ anchor: String?, heading: String? = nil, number: String? = nil) {
     guard let anchor, !anchor.isEmpty else { return }
-    entries.append(AnchorIndex.Entry(anchor: anchor, offset: output.length, heading: heading))
+    entries.append(
+      AnchorIndex.Entry(anchor: anchor, offset: output.length, heading: heading, number: number))
   }
 
   func append(_ string: String, _ attributes: [NSAttributedString.Key: Any]) {
@@ -108,9 +125,47 @@ public final class DocumentTextBuilder {
 }
 
 extension DocumentTextBuilder {
+  /// The document's title and the lines under it, as text at the top of the storage
+  /// rather than a view over it: what the reader's header view shows, for a page
+  /// that has no header view (#375).
+  public struct TitleBlock: Sendable, Equatable {
+    public let title: String
+    /// Set smaller and quieter, a line each: identity, date, authors.
+    public let details: [String]
+  }
+
+  /// The title's size against the body's: as large on paper as a large title is
+  /// against the body on screen.
+  static let titleScale: CGFloat = 2
+
+  func appendTitle(_ title: TitleBlock) {
+    let details = title.details.filter { !$0.isEmpty }
+    keepsWithNext.insert(output.length)
+    append(
+      title.title + "\n",
+      [
+        .font: PlatformFont.systemFont(ofSize: style.bodySize * Self.titleScale, weight: .semibold),
+        .foregroundColor: RFCColors.label,
+        .paragraphStyle: paragraphStyle(
+          spacingAfter: style.paragraphSpacing * (details.isEmpty ? 2 : 0.6),
+          lineHeightMultiple: 1),
+      ].merging(Self.headingLevel(depth: 1)) { current, _ in current })
+    for (index, detail) in details.enumerated() {
+      let isLast = index == details.count - 1
+      append(
+        detail + "\n",
+        [
+          .font: style.captionFont,
+          .foregroundColor: RFCColors.secondaryLabel,
+          .paragraphStyle: paragraphStyle(spacingAfter: isLast ? style.paragraphSpacing * 2 : 0),
+        ])
+    }
+  }
+
   func appendDocument(_ document: RFCDocument) {
-    referenceAnchors = Set(
-      ReferenceGroup.groups(in: document).flatMap { $0.entries.map(\.anchor) })
+    let bibliography = ReferenceGroup.groups(in: document)
+    referenceKinds = ReferenceKinds(bibliography)
+    referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
     appendAbstract(document.header.abstract)
     for section in document.sections {
       appendSection(section, depth: 1)
@@ -131,6 +186,7 @@ extension DocumentTextBuilder {
   private func appendAbstract(_ blocks: [Block]) {
     guard !blocks.isEmpty else { return }
     mark(Self.abstractAnchor)
+    keepsWithNext.insert(output.length)
     append(
       "Abstract\n",
       [
@@ -182,7 +238,8 @@ extension DocumentTextBuilder {
     // instead — see `ReferencesPanel` in the app — and is skipped here, heading
     // and all, rather than left behind as an empty "9. References".
     guard !Self.holdsOnlyReferences(section) else { return }
-    mark(section.anchor, heading: section.displayTitle)
+    mark(section.anchor, heading: section.displayTitle, number: section.number)
+    keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
     // is in `base`, so the anchor, the font and the spacing carry across the
