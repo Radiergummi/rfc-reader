@@ -55,7 +55,9 @@ public struct Requirement: Sendable, Hashable {
 /// quotations or the references. The paragraph declaring the key words is not a requirement.
 public enum Requirements {
   public static func extract(from document: RFCDocument) -> [Requirement] {
-    let cited = Set(document.referencedDocuments)
+    // A part of BCP 14 uses its own key words in their BCP 14 sense without citing
+    // itself, which is not among the documents it references.
+    let cited = Set(document.referencedDocuments + [document.header.id].compactMap(\.self))
     let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
     guard !cited.isDisjoint(with: bcp14) else { return [] }
     let isHeuristic = document.source == .text
