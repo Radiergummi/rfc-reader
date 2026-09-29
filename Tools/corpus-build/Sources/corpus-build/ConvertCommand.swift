@@ -180,7 +180,7 @@ struct ConvertCommand: AsyncParsableCommand {
     }
 
     let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
-    let text = DocumentConverter.text(decoding: bytes)
+    let text = LegacyTextParser.text(decoding: bytes)
     let metadata = ConversionPlan.rfcNumber(of: stem).flatMap { job.index?[$0] }
     let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
     try conversion.xml.write(to: outputURL, options: .atomic)

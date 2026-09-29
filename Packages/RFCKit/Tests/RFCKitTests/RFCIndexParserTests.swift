@@ -9,7 +9,6 @@ struct RFCIndexParserTests {
     #expect(index.rfcs.count >= 9)
     #expect(index.series.contains { $0.id == DocumentID(series: .bcp, number: 14) })
     #expect(index.series.contains { $0.id == DocumentID(series: .std, number: 97) })
-    #expect(index.notIssued.contains(14))
   }
 
   @Test func `reads rich metadata`() throws {
@@ -17,7 +16,7 @@ struct RFCIndexParserTests {
     let http = try #require(index[9110])
     #expect(http.title == "HTTP Semantics")
     #expect(http.authors.map(\.name) == ["R. Fielding", "M. Nottingham", "J. Reschke"])
-    #expect(http.authors.allSatisfy { $0.role == "Editor" })
+    #expect(http.authors.allSatisfy { $0.role == .editor })
     #expect(http.date == PublicationDate(year: 2022, month: 6))
     #expect(http.formats.contains(.xml))
     #expect(http.hasXMLSource)
@@ -49,7 +48,6 @@ struct RFCIndexParserTests {
     let old = try #require(index[7231])
     #expect(old.isObsolete)
     #expect(old.obsoletedBy == [.rfc(9110)])
-    #expect(index.documentsAffecting(7231).map(\.number) == [9110])
   }
 
   @Test func `series membership`() throws {

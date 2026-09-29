@@ -108,9 +108,13 @@ struct ReadingPlaceTests {
     let table = RFCKit.Table(
       title: "Status Codes",
       number: 1,
-      header: [[[.text("Code")], [.text("Description")], [.text("Ref.")]]],
+      header: [
+        RFCKit.Table.Row(cells: [[.text("Code")], [.text("Description")], [.text("Ref.")]])
+      ],
       rows: [
-        [[.text("404")], [.text("Not found, which is a short description")], [.text("6.5.4")]]
+        RFCKit.Table.Row(cells: [
+          [.text("404")], [.text("Not found, which is a short description")], [.text("6.5.4")],
+        ])
       ],
       anchor: "table-1"
     )

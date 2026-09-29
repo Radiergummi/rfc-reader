@@ -77,7 +77,7 @@ struct AuthorCardTests {
 
   // MARK: - Contact card
 
-  private func author(_ contact: AuthorContact?, role: String? = nil) -> Author {
+  private func author(_ contact: AuthorContact?, role: Author.Role? = nil) -> Author {
     Author(name: "Mark Nottingham", role: role, contact: contact)
   }
 
@@ -100,15 +100,8 @@ struct AuthorCardTests {
   }
 
   @Test func `an editor is marked as one`() {
-    #expect(AuthorCard.contact(for: author(nil, role: "editor")).jobTitle == "Editor")
+    #expect(AuthorCard.contact(for: author(nil, role: .editor)).jobTitle == "Editor")
     #expect(AuthorCard.contact(for: author(nil)).jobTitle == "")
-  }
-
-  /// "Editor" is the one role the index and both parsers record; another role is
-  /// not promoted to it.
-  @Test func `only an editor's role makes an editor`() {
-    #expect(AuthorCard.contact(for: author(nil, role: "Ed.")).jobTitle == "Editor")
-    #expect(AuthorCard.contact(for: author(nil, role: "contributor")).jobTitle == "")
   }
 
   @Test func `every published field reaches the card`() {

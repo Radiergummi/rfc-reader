@@ -24,14 +24,9 @@ extension DocumentTextBuilder {
     // Before the label, so the label is inside the card it names.
     let start = output.length
     if content.kind == .sourceCode, let type = content.type, !type.isEmpty {
-      append(
-        type.uppercased() + "\n",
-        [
-          .font: style.captionFont,
-          .foregroundColor: RFCColors.secondaryLabel,
-          .rfcVerbatim: box,
-          .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: 0),
-        ])
+      var label = captionAttributes(paragraphStyle(indent: indent, spacingAfter: 0))
+      label[.rfcVerbatim] = box
+      append(type.uppercased() + "\n", label)
     }
 
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil

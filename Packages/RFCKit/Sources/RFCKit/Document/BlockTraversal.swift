@@ -26,7 +26,7 @@ extension Block {
     switch self {
     case .paragraph(let paragraph): [paragraph.inlines]
     case .definitionList(let items): items.map(\.term)
-    case .table(let table): Array((table.header + table.rows).joined())
+    case .table(let table): (table.header + table.rows).flatMap(\.cells)
     case .references(let list): list.entries.map(\.annotation)
     case .list, .preformatted, .figure, .blockQuote, .aside: []
     }
@@ -42,7 +42,7 @@ extension Block {
       case .definitionList(let items): items.flatMap { [$0.anchor, $0.definitionAnchor] }
       case .preformatted(let content): [content.anchor]
       case .figure(let figure): [figure.anchor]
-      case .table(let table): [table.anchor] + table.headerRowAnchors + table.rowAnchors
+      case .table(let table): [table.anchor] + (table.header + table.rows).map(\.anchor)
       case .blockQuote, .aside: []
       case .references(let list): list.entries.map(\.anchor)
       }

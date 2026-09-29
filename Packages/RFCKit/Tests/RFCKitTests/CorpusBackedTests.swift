@@ -6,8 +6,9 @@ import Testing
 // Findings about what the parser makes of a whole document, over documents read from
 // a fetched corpus rather than committed as fixtures (`CorpusText`). `make
 // test-corpus` fetches them and runs these; everywhere else they are skipped. The
-// guards these findings led to are tested over a few lines each, beside the other
-// corpus findings; these check that the whole document still comes out that way.
+// guards these findings led to are tested over a few lines each, in the suite of the
+// parser stage they belong to; these check that the whole document still comes out
+// that way.
 
 /// The text of every block of the document's lead-in, a list's items included, so a
 /// finding about what leaves the lead-in holds whatever kind of block it would be.
@@ -143,10 +144,7 @@ struct CorpusBackedAppendixHeadingTests {
 @Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedCatalogueTests {
   private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
-    document.everyBlock.compactMap {
-      if case .definitionList(let items) = $0 { return items }
-      return nil
-    }
+    document.everyBlock.compactMap(\.definitionItems)
   }
 
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
@@ -211,5 +209,114 @@ struct CorpusBackedCatalogueTests {
       #expect(terms == terms.sorted(), "a catalogue restarts its numbering: \(terms)")
       #expect(entries.allSatisfy { $0.definition.count == 1 })
     }
+  }
+}
+
+@Suite("Corpus-backed: references sections", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedReferencesSectionTests {
+  /// The first section of that title with anything in it: RFC 2196's contents
+  /// listing leaves an empty `9. References` of its own ahead of the real one.
+  private static func section(titled title: String, in stem: String) throws -> Section {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    return try #require(
+      document.firstSection { $0.title.plainText == title && !$0.blocks.isEmpty })
+  }
+
+  private static func holdsEntries(_ block: Block) -> Bool {
+    if case .references(let list) = block { return !list.entries.isEmpty }
+    return false
+  }
+
+  /// RFC 1958 opens its references with a note on why there are only two, and RFC
+  /// 2196 with a warning that some may be hard to find. A references section kept
+  /// only its entries, so what came before the first one was dropped (74 documents).
+  @Test func `the text before the first entry is kept`() throws {
+    for (stem, opening) in [
+      ("rfc1958", "Note that the references have been deliberately limited"),
+      ("rfc2196", "The following references may not be available"),
+    ] {
+      let references = try Self.section(titled: "References", in: stem)
+      guard case .paragraph(let first)? = references.blocks.first else {
+        Issue.record(
+          "\(stem) opens its references with \(String(describing: references.blocks.first))")
+        continue
+      }
+      #expect(first.plainText.hasPrefix(opening), "\(stem)")
+      #expect(references.blocks.contains(where: Self.holdsEntries), "\(stem) lost its entries")
+    }
+  }
+
+  /// RFC 6186's `Priority for Domain Preferences` has `references` inside
+  /// `preferences`, and was read as a bibliography from its first bracketed line.
+  @Test func `a heading that says preferences is not a bibliography`() throws {
+    let section = try Self.section(titled: "Priority for Domain Preferences", in: "rfc6186")
+    #expect(!section.blocks.contains { if case .references = $0 { true } else { false } })
+    #expect(
+      section.blocks.contains {
+        guard case .paragraph(let paragraph) = $0 else { return false }
+        return paragraph.plainText.hasPrefix("The priority field in the SRV RR")
+      })
+  }
+}
+
+@Suite("Corpus-backed: body layouts", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedBodyLayoutTests {
+  /// RFC 5193 sets its title at column 0 under a header block whose right-hand
+  /// column runs on past the left one. Shapes found in the first full corpus run
+  /// (September 2026).
+  @Test func `a title at column zero is the title`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5193"))
+    #expect(document.header.id == .rfc(5193))
+    #expect(
+      document.header.title
+        == "Protocol for Carrying Authentication for Network Access (PANA) Framework")
+    #expect(document.header.date == PublicationDate(year: 2008, month: 5))
+  }
+
+  /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
+  /// every entry matched the numbered-heading pattern.
+  @Test func `tab indented contents entries are not headings`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1142"))
+    let scope = document.allSections.filter { $0.titleText == "Scope and Field of Application" }
+    #expect(scope.map(\.number) == ["1"])
+  }
+
+  /// RFC 775 indents its headings like its body, so the scan for the end of the front
+  /// matter never finds a column-0 heading. The text still has to survive.
+  @Test func `a document without column zero headings keeps its prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc775"))
+    #expect(document.header.title == "DIRECTORY ORIENTED FTP COMMANDS")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(
+      paragraphs.contains { $0.hasPrefix("As a part of the Remote Site Maintenance (RSM) project") }
+    )
+    #expect(paragraphs.contains("We have added four commands to our server:"))
+  }
+
+  /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+  /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
+  /// every one of those paragraphs artwork.
+  @Test func `paragraphs with a first line indent are prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc722"))
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(
+      paragraphs.contains {
+        $0.hasPrefix("A model is developed of interactions between programs. Salient features")
+      })
+    #expect(!document.artworkText.contains { $0.contains("Using this model as a template") })
+  }
+
+  /// RFC 817 is typeset double spaced: a single blank line is a wrapped line and two
+  /// or more are the real break. No paragraph ever formed and every line stood alone,
+  /// so it produced 577 sections for 658 lines of text.
+  @Test func `a double spaced document is collapsed`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc817"))
+    #expect(document.allSections.count < 20, "\(document.allSections.count) sections")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    let experience = try #require(
+      paragraphs.first {
+        $0.hasPrefix("Experience suggests that one of the most important factors")
+      })
+    #expect(experience.hasSuffix("not the protocol but the operating system."))
   }
 }

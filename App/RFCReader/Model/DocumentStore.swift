@@ -184,7 +184,7 @@ actor DocumentStore {
   func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
-      return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+      return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
     let (data, isKept) = try await originalTexts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
@@ -193,6 +193,6 @@ actor DocumentStore {
       try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
       hasGrown = true
     }
-    return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 }

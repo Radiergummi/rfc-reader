@@ -41,6 +41,9 @@ extension DocumentTextBuilder {
       }
       output.append(firstLine)
       if case .paragraph(let paragraph) = first {
+        // Set on the marker's line rather than through `appendParagraph`, so its
+        // anchor is marked here, where its text starts.
+        mark(paragraph.anchor)
         output.append(inlineRuns(paragraph.inlines, base: attributes))
         append("\n", attributes)
         appendBlocks(Array(item.blocks.dropFirst()), indent: markerColumn)
@@ -71,53 +74,13 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// The RFCXML list formats: "1", "a", "A", "i", "I", or a template such as
-  /// "(%c)" or "%d.". Moved from `ListBlockView.marker(at:)` unchanged.
+  /// The marker the item at `index` is drawn with. A numbered list's is its
+  /// `ListNumbering`'s, which the parsers read once from either source.
   static func marker(for style: ListBlock.Style, at index: Int) -> String {
     switch style {
-    case .bullet:
-      return "•"
-    case .bare:
-      return ""
-    case .numbered(let format, let start):
-      let value = start + index
-      switch format {
-      case nil, "1": return "\(value)."
-      case "a": return "\(letter(value, upper: false))."
-      case "A": return "\(letter(value, upper: true))."
-      case "i": return "\(roman(value))."
-      case "I": return "\(roman(value).uppercased())."
-      case let template?:
-        return
-          template
-          .replacingOccurrences(of: "%d", with: String(value))
-          .replacingOccurrences(of: "%c", with: letter(value, upper: false))
-          .replacingOccurrences(of: "%C", with: letter(value, upper: true))
-          .replacingOccurrences(of: "%i", with: roman(value))
-          .replacingOccurrences(of: "%I", with: roman(value).uppercased())
-      }
+    case .bullet: "•"
+    case .bare: ""
+    case .numbered(let numbering): numbering.marker(at: index)
     }
-  }
-
-  private static func letter(_ number: Int, upper: Bool) -> String {
-    let letters = "abcdefghijklmnopqrstuvwxyz"
-    let character = String(letters[letters.index(letters.startIndex, offsetBy: (number - 1) % 26)])
-    return upper ? character.uppercased() : character
-  }
-
-  private static func roman(_ number: Int) -> String {
-    let table: [(Int, String)] = [
-      (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
-      (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
-    ]
-    var remaining = number
-    var result = ""
-    for (arabic, symbol) in table {
-      while remaining >= arabic {
-        result += symbol
-        remaining -= arabic
-      }
-    }
-    return result
   }
 }

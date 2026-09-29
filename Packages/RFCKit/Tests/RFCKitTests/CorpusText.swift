@@ -1,5 +1,7 @@
 import Foundation
 
+@testable import RFCKit
+
 /// Legacy RFC texts read from a fetched corpus rather than from the fixtures.
 ///
 /// A fixture is RFC text committed to the repository, and the repository takes no
@@ -20,14 +22,12 @@ enum CorpusText {
     directory != nil
   }
 
-  /// The document `stem` names, such as `rfc1178`, decoded as corpus-build decodes it:
-  /// UTF-8, or Windows-1252 for the older documents that are not.
+  /// The document `stem` names, such as `rfc1178`, decoded as every reader of the
+  /// format decodes it, through `LegacyTextParser.text(decoding:)`.
   static func text(_ stem: String) throws -> String {
     guard let directory else { throw CorpusTextError.notConfigured }
     let bytes = try Data(contentsOf: directory.appendingPathComponent("\(stem).txt"))
-    return String(data: bytes, encoding: .utf8)
-      ?? String(data: bytes, encoding: .windowsCP1252)
-      ?? String(decoding: bytes, as: UTF8.self)
+    return LegacyTextParser.text(decoding: bytes)
   }
 }
 

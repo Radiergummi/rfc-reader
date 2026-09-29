@@ -36,15 +36,18 @@ public struct RFCXMLParser: Sendable {
     let header = builder.parseHeader(root)
     var sections: [Section] = []
     if let middle = root.first("middle") {
-      sections += builder.parseSections(in: middle, appendix: false)
+      sections += builder.parseSections(in: middle, appendix: false, position: nil)
     }
     if let back {
+      var count = 0
       for element in back.elements {
         switch element.name {
         case "references":
-          sections.append(builder.parseReferencesSection(element))
+          count += 1
+          sections.append(builder.parseReferencesSection(element, position: "back-\(count)"))
         case "section":
-          sections.append(builder.parseSection(element, appendix: true))
+          count += 1
+          sections.append(builder.parseSection(element, appendix: true, position: "back-\(count)"))
         default:
           break
         }
@@ -147,23 +150,12 @@ public struct RFCXMLParser: Sendable {
       }
       header.obsoletes = parseDocumentList(rfc["obsoletes"])
       header.updates = parseDocumentList(rfc["updates"])
-      header.category = rfc["category"].flatMap(categoryName)
+      header.category = rfc["category"].flatMap(DocumentHeader.Category.init(parsing:))
       header.draftName = rfc["docName"]
       header.precedingDraft =
         rfc.all("link").first { RFCXMLParser.relation($0["rel"], includes: "prev") }?["href"]
         .flatMap(URL.init(string:))
       return header
-    }
-
-    private func categoryName(_ category: String) -> String {
-      switch category {
-      case "std": "Standards Track"
-      case "bcp": "Best Current Practice"
-      case "info": "Informational"
-      case "exp": "Experimental"
-      case "historic": "Historic"
-      default: category
-      }
     }
 
     private func parseDocumentList(_ value: String?) -> [DocumentID] {
@@ -185,7 +177,7 @@ public struct RFCXMLParser: Sendable {
         name = element.first("organization")?.normalizedText
       }
       guard let name, !name.isEmpty else { return nil }
-      let role = element["role"] == "editor" ? "Editor" : nil
+      let role = element["role"].flatMap(Author.Role.init(parsing:))
       return Author(name: name, role: role, contact: parseContact(element))
     }
 
@@ -240,26 +232,41 @@ public struct RFCXMLParser: Sendable {
 
     // MARK: Sections
 
-    func parseSections(in parent: XMLTree.Element, appendix: Bool) -> [Section] {
-      parent.elements.compactMap { child in
+    /// Sections of `parent`, whose own position is `position` (nil for `<middle>`).
+    func parseSections(in parent: XMLTree.Element, appendix: Bool, position: String?) -> [Section] {
+      func childPosition(_ count: Int) -> String {
+        position.map { "\($0).\(count)" } ?? "\(count)"
+      }
+      var count = 0
+      return parent.elements.compactMap { child in
         switch child.name {
-        case "section": parseSection(child, appendix: appendix)
+        case "section":
+          count += 1
+          return parseSection(child, appendix: appendix, position: childPosition(count))
         // Not valid RFCXML, but our serializer emits it for a references subsection
         // whose siblings are ordinary sections; keep it as a subsection.
-        case "references": parseReferencesSection(child)
-        default: nil
+        case "references":
+          count += 1
+          return parseReferencesSection(child, position: childPosition(count))
+        default:
+          return nil
         }
       }
     }
 
-    func parseSection(_ element: XMLTree.Element, appendix: Bool) -> Section {
+    /// `position` is where the section sits among its siblings -- `2.1`, `back-1` --
+    /// and names a section that has neither `anchor` nor `pn`, as in unprepped XML.
+    /// An anchor keys deep links and reading positions, so it has to come out the same
+    /// on every parse.
+    func parseSection(_ element: XMLTree.Element, appendix: Bool, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let isNumbered = element["numbered"] != "false"
-      let anchor = element["anchor"] ?? partNumber ?? UUID().uuidString
+      let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
       let blocks = parseBlocks(in: element)
-      let subsections = parseSections(in: element, appendix: appendix || numbering.isAppendix)
+      let subsections = parseSections(
+        in: element, appendix: appendix || numbering.isAppendix, position: position)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
@@ -284,24 +291,21 @@ public struct RFCXMLParser: Sendable {
     private func sectionNumber(fromPartNumber partNumber: String?) -> (
       number: String?, isAppendix: Bool
     ) {
-      guard var value = partNumber, value.hasPrefix("section-") else { return (nil, false) }
-      value.removeFirst("section-".count)
-      if value.hasPrefix("appendix.") {
-        value.removeFirst("appendix.".count)
-        var parts = value.split(separator: ".").map(String.init)
-        if let first = parts.first { parts[0] = first.uppercased() }
-        return (parts.joined(separator: "."), true)
+      switch partNumber.flatMap(PartNumber.init) {
+      case .section(let number): (number, false)
+      case .appendix(let number): (number, true)
+      case .figure, .table, nil: (nil, false)
       }
-      if value.first?.isNumber == true { return (value, false) }
-      return (nil, false)
     }
 
-    func parseReferencesSection(_ element: XMLTree.Element) -> Section {
+    /// `position` names an anchorless list, as it does a section in `parseSection`.
+    func parseReferencesSection(_ element: XMLTree.Element, position: String) -> Section {
       let partNumber = element["pn"]
       let numbering = sectionNumber(fromPartNumber: partNumber)
       let title = parseHeadingTitle(element, fallback: "References")
       var entries: [Reference] = []
       var subsections: [Section] = []
+      var count = 0
       for child in element.elements {
         switch child.name {
         case "reference":
@@ -309,7 +313,8 @@ public struct RFCXMLParser: Sendable {
         case "referencegroup":
           entries.append(parseReferenceGroup(child))
         case "references":
-          subsections.append(parseReferencesSection(child))
+          count += 1
+          subsections.append(parseReferencesSection(child, position: "\(position).\(count)"))
         default:
           break
         }
@@ -318,7 +323,7 @@ public struct RFCXMLParser: Sendable {
         entries.isEmpty
         ? [] : [.references(ReferenceList(title: title.plainText, entries: entries))]
       return Section(
-        anchor: element["anchor"] ?? partNumber ?? "references",
+        anchor: element["anchor"] ?? partNumber ?? "unanchored-references-\(position)",
         number: numbering.number,
         title: title,
         blocks: blocks,
@@ -339,8 +344,10 @@ public struct RFCXMLParser: Sendable {
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
+      // Name and role only: an entry's `<author>` may carry an address, and the
+      // bibliography has no use for one.
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
-        author.role == nil ? author.name : "\(author.name), Ed."
+        Author(name: author.name, role: author.role)
       }
       let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
@@ -374,7 +381,7 @@ public struct RFCXMLParser: Sendable {
       let memberNames = members.compactMap { $0.documentID?.displayName }
       var seriesInfo: [SeriesInfo] = []
       if let id = DocumentID(label: anchor) {
-        seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
+        seriesInfo.append(SeriesInfo(id))
       }
       return Reference(
         anchor: anchor,
@@ -475,7 +482,7 @@ public struct RFCXMLParser: Sendable {
         let start = element["start"].flatMap(Int.init) ?? 1
         return .list(
           ListBlock(
-            style: .numbered(format: element["type"], start: start),
+            style: .numbered(ListNumbering(type: element["type"], start: start)),
             items: parseListItems(element),
             isCompact: element["spacing"] == "compact"
           ))
@@ -491,10 +498,10 @@ public struct RFCXMLParser: Sendable {
         let chosen = alternatives.first { $0["type"] == "ascii-art" } ?? alternatives.first
         return chosen.map { .preformatted(parseArtwork($0, kind: .artwork)) }
       case "figure":
-        let number = element["pn"].flatMap { partNumber -> Int? in
-          guard partNumber.hasPrefix("figure-") else { return nil }
-          return Int(partNumber.dropFirst("figure-".count))
-        }
+        let number: Int? =
+          if case .figure(let number)? = element["pn"].flatMap(PartNumber.init) { number } else {
+            nil
+          }
         var inner = element
         inner.children.removeAll {
           if case .element(let child) = $0 {
@@ -600,36 +607,29 @@ public struct RFCXMLParser: Sendable {
     }
 
     private func parseTable(_ element: XMLTree.Element) -> Table {
-      func cells(of rows: [XMLTree.Element]) -> [[[Inline]]] {
-        rows.map { row in
-          row.elements.filter { $0.name == "th" || $0.name == "td" }
-            .map { normalize(parseInlines($0.children)) }
+      func rows(_ elements: [XMLTree.Element]) -> [Table.Row] {
+        elements.map { row in
+          Table.Row(
+            cells: row.elements.filter { $0.name == "th" || $0.name == "td" }
+              .map { normalize(parseInlines($0.children)) },
+            anchor: row["anchor"])
         }
-      }
-      // Empty unless some row has one, as `Table.rowAnchors` documents.
-      func anchors(of rows: [XMLTree.Element]) -> [String?] {
-        rows.contains { $0["anchor"] != nil } ? rows.map { $0["anchor"] } : []
       }
       // RFC 7991 allows more than one `<tbody>`: RFC 9911's tables of YANG types
       // put each group of related types in its own, and reading only the first
-      // dropped all but the counters. The cells and the anchors are read from the
-      // same list of rows, so they cannot fall out of step.
+      // dropped all but the counters.
       let headerRows = element.first("thead")?.all("tr") ?? []
       let bodyRows = element.elements
         .filter { $0.name == "tbody" || $0.name == "tfoot" }
         .flatMap { $0.all("tr") }
-      let number = element["pn"].flatMap { partNumber -> Int? in
-        guard partNumber.hasPrefix("table-") else { return nil }
-        return Int(partNumber.dropFirst("table-".count))
-      }
+      let number: Int? =
+        if case .table(let number)? = element["pn"].flatMap(PartNumber.init) { number } else { nil }
       return Table(
         title: element.first("name")?.normalizedText,
         number: number,
-        header: cells(of: headerRows),
-        rows: cells(of: bodyRows),
-        anchor: element["anchor"],
-        rowAnchors: anchors(of: bodyRows),
-        headerRowAnchors: anchors(of: headerRows)
+        header: rows(headerRows),
+        rows: rows(bodyRows),
+        anchor: element["anchor"]
       )
     }
 
@@ -806,7 +806,7 @@ extension RFCXMLParser {
   /// sets it, one detail per line, with the email and web addresses as links.
   static func addressInlines(_ author: Author) -> [Inline] {
     var lines: [[Inline]] = [
-      [.text(author.role == "Editor" ? "\(author.name) (editor)" : author.name)]
+      [.text(author.isEditor ? "\(author.name) (editor)" : author.name)]
     ]
     if let contact = author.contact {
       // An organization's own entry names it already: `parseAuthor` falls back to

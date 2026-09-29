@@ -90,25 +90,35 @@ public enum FileFormat: String, Sendable, Codable, CaseIterable, Hashable {
 }
 
 public struct Author: Hashable, Sendable, Codable {
+  /// The one role a source states: RFCXML's `role` allows only `editor`, and the
+  /// index and a legacy header state nothing else.
+  public enum Role: String, Hashable, Sendable, Codable {
+    case editor
+
+    /// Reads a role however a source spells it: the index and RFCXML write
+    /// "editor", and a legacy header "Editor", "Ed." or "Ed". Nil for any other.
+    public init?(parsing text: String) {
+      guard text.lowercased().hasPrefix("ed") else { return nil }
+      self = .editor
+    }
+  }
+
   public var name: String
-  /// Role such as `Editor`, when present.
-  public var role: String?
+  public var role: Role?
   /// What the document itself publishes about the author beyond the name: RFCXML's
   /// `<organization>` and `<address>`. Nil when it publishes nothing, which is
   /// every author the RFC index or a legacy header names. Nothing here is looked
   /// up or inferred (#19).
   public var contact: AuthorContact?
 
-  public init(name: String, role: String? = nil, contact: AuthorContact? = nil) {
+  public init(name: String, role: Role? = nil, contact: AuthorContact? = nil) {
     self.name = name
     self.role = role
     self.contact = contact
   }
 
-  /// Whether the role is an editor's, however it is spelled: the index and RFCXML
-  /// write "editor", and a legacy header "Editor" or "Ed.".
   public var isEditor: Bool {
-    role?.lowercased().hasPrefix("ed") == true
+    role == .editor
   }
 
   /// The name as the reader shows it, an editor's marked as one: "R. Fielding, Ed."
@@ -340,15 +350,12 @@ public struct SeriesEntry: Hashable, Sendable, Codable, Identifiable {
 public struct RFCIndex: Sendable {
   public let rfcs: [RFCMetadata]
   public let series: [SeriesEntry]
-  /// RFC numbers that were allocated but never issued.
-  public let notIssued: [Int]
 
   private let byNumber: [Int: Int]
 
-  public init(rfcs: [RFCMetadata], series: [SeriesEntry] = [], notIssued: [Int] = []) {
+  public init(rfcs: [RFCMetadata], series: [SeriesEntry] = []) {
     self.rfcs = rfcs.sorted { $0.number < $1.number }
     self.series = series
-    self.notIssued = notIssued
     var lookup: [Int: Int] = [:]
     lookup.reserveCapacity(rfcs.count)
     for (offset, rfc) in self.rfcs.enumerated() {
@@ -369,14 +376,5 @@ public struct RFCIndex: Sendable {
 
   public func series(_ id: DocumentID) -> SeriesEntry? {
     series.first { $0.id == id }
-  }
-
-  /// Highest RFC number in the index.
-  public var latestNumber: Int? { rfcs.last?.number }
-
-  /// RFCs that reference the given one via obsoletes/updates; useful for a lineage view.
-  public func documentsAffecting(_ number: Int) -> [RFCMetadata] {
-    let target = DocumentID.rfc(number)
-    return rfcs.filter { $0.obsoletes.contains(target) || $0.updates.contains(target) }
   }
 }

@@ -353,7 +353,7 @@ struct ReferenceRow: View {
         }
       } else {
         Text(entry.title).font(.callout).fixedSize(horizontal: false, vertical: true)
-        let byline = entry.authors.joined(separator: ", ")
+        let byline = entry.authors.map(\.displayName).joined(separator: ", ")
         let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
         if !detail.isEmpty {
           Text(detail)

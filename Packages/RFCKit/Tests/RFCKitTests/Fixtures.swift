@@ -10,6 +10,13 @@ enum Fixtures {
     return try Data(contentsOf: url)
   }
 
+  /// The fixture parsed as its format is: RFCXML for `.xml`, legacy text otherwise,
+  /// decoded as every reader of the format decodes it.
+  static func document(_ name: String) throws -> RFCDocument {
+    let data = try data(name)
+    return name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+  }
+
   static func string(_ name: String) throws -> String {
     String(decoding: try data(name), as: UTF8.self)
   }
