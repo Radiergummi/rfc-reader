@@ -48,21 +48,6 @@ struct AccessibleReadingTests {
     NSRange(location: 0, length: text.length)
   }
 
-  /// A chip's symbol is an attachment and its joiner an invisible character, and
-  /// both reached VoiceOver as part of the link: "\u{FFFC}\u{2060}RFC 3530"
-  /// (#300). What is read is the chip's name alone.
-  @Test func `a chip is read as its name alone`() {
-    let citation = Inline.crossReference(
-      CrossReference(target: .document(.rfc(3530), section: nil)))
-    let text = built(
-      Fixtures.document(.paragraph(Paragraph([.text("See "), citation, .text(".")]))))
-    #expect(text.string.contains("\u{FFFC}"))
-    let spoken = reading(whole(text), in: text)
-    // The chip's name is set with a no-break space, "RFC\u{00A0}3530".
-    #expect(spoken.contains("See RFC\u{00A0}3530."))
-    #expect(!spoken.contains("\u{FFFC}") && !spoken.contains("\u{2060}"))
-  }
-
   @Test func `prose is read exactly as it is`() {
     let text = built(Fixtures.document(.paragraph(Paragraph(text: "A plain paragraph."))))
     #expect(AccessibleReading.pieces(of: whole(text), in: text) == [.text(whole(text))])
@@ -229,11 +214,8 @@ struct AccessibleReadingTests {
       guard let box = value as? VerbatimBox, AccessibleReading.isDiagram(box) else { return }
       diagramCharacters.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
     }
-    // Only diagrams and chip symbols go unread, and every diagram is under a label.
-    let chipSymbols = AccessibleReading.chipSymbols(in: whole(text), of: text).reduce(
-      into: IndexSet()
-    ) { $0.formUnion(IndexSet(integersIn: $1.location..<NSMaxRange($1))) }
-    #expect(covered.union(diagramCharacters).union(chipSymbols).count == text.length)
+    // Only diagrams go unread, and all of them are under a label.
+    #expect(covered.union(diagramCharacters).count == text.length)
     #expect(labels == diagrams)
   }
 

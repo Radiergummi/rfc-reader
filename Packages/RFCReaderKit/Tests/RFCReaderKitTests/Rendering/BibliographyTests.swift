@@ -25,7 +25,27 @@ struct BibliographyTests {
     #expect(entry.accessibilityLabel == "RFC 1, Host Software, S. Crocker, April 1969")
   }
 
-  /// An entry in no series is spoken by the tag the document cites it with, and
+  /// The row shows the tag the document cites the entry by, and what VoiceOver says
+  /// holds it, so the tag heard in the prose finds its row.
+  @Test func `a tagged entry is spoken by its tag and then its document's name`() {
+    let entry = Reference(
+      anchor: "HTTP", title: "HTTP Semantics", date: PublicationDate(year: 2022, month: 6),
+      seriesInfo: [SeriesInfo(name: "STD", value: "97"), SeriesInfo(name: "rfc", value: "09110")])
+    #expect(entry.accessibilityLabel == "HTTP, RFC 9110, HTTP Semantics, STD 97, June 2022")
+  }
+
+  /// An entry the legacy parser could not structure is its own words, series and
+  /// date included, so nothing is added to them.
+  @Test func `an unstructured entry is spoken as its own words`() {
+    let entry = Reference(
+      anchor: "RFC791", title: "", seriesInfo: [SeriesInfo(.rfc(791))],
+      rawText: "Postel, J., Internet Protocol, STD 5, RFC 791, September 1981.")
+    #expect(
+      entry.accessibilityLabel
+        == "RFC 791, Postel, J., Internet Protocol, STD 5, RFC 791, September 1981.")
+  }
+
+  /// An entry in no series is spoken by its tag
   /// keeps whatever series it does name.
   @Test func `an entry outside the series is spoken by its tag`() {
     let entry = Reference(

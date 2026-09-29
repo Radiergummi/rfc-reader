@@ -103,21 +103,37 @@ extension [ReferenceGroup] {
 }
 
 extension Reference {
-  /// What VoiceOver says for the entry's row, as one stop (#300): the document's
-  /// name, or for an entry in no series the tag it is cited by, then its title, its
-  /// authors, any other series it names, and its date, with commas between. Not the
-  /// anchor, which `RFC0001` spells out letter by letter, and not the row's middle
-  /// dots, which can be read aloud.
+  /// What VoiceOver says for the entry's row, as one stop (#300): its tag, the
+  /// document's name, then its title, its authors, any other series it names, and
+  /// its date, with commas between.
+  ///
+  /// The tag is what the row shows and the prose cites (`HTTP`, `1`), so it comes
+  /// first, and only where it is not the document's name already: `RFC0001` is `RFC
+  /// 1`, which VoiceOver says as words rather than spelling the anchor out. Commas,
+  /// not the row's middle dots, which can be read aloud. An entry the legacy parser
+  /// could not structure is its own words, which hold its series and date already.
   public var accessibilityLabel: String {
-    let name = documentID?.displayName ?? displayAnchor
-    let title = title.isEmpty ? rawText ?? "" : title
+    let id = documentID
+    var names: [String] = []
+    if id == nil || DocumentID(label: displayAnchor) != id {
+      names.append(displayAnchor)
+    }
+    if let id { names.append(id.displayName) }
+    guard !title.isEmpty else {
+      return (names + [rawText ?? ""]).filter { !$0.isEmpty }.joined(separator: ", ")
+    }
     let authors = authors.map(\.displayName).joined(separator: ", ")
     let series =
       seriesInfo
-      .filter { $0.name != "DOI" }
+      // Compared as documents, the way `documentID` reads them, so `rfc 0791` is
+      // not said again after `RFC 791`.
+      .filter { info in
+        guard info.name != "DOI" else { return false }
+        guard let id else { return true }
+        return Reference(anchor: "", title: "", seriesInfo: [info]).documentID != id
+      }
       .map { "\($0.name) \($0.value)" }
-      .filter { $0 != name }
-    let parts = [name, title, authors] + series + [date?.formatted ?? ""]
+    let parts = names + [title, authors] + series + [date?.formatted ?? ""]
     return parts.filter { !$0.isEmpty }.joined(separator: ", ")
   }
 

@@ -73,22 +73,11 @@ public enum AccessibleReading {
       }
     }
 
-    // A chip's symbol and the joiner behind it are silent: the attachment and an
-    // invisible character reached VoiceOver as part of the link's name (#300).
-    func readSkippingChipSymbols(_ range: NSRange) {
-      var start = range.location
-      for silent in chipSymbols(in: range, of: text) {
-        read(NSRange(location: start, length: silent.location - start))
-        start = NSMaxRange(silent)
-      }
-      read(NSRange(location: start, length: NSMaxRange(range) - start))
-    }
-
     text.enumerateAttribute(.rfcVerbatim, in: range) { value, piece, _ in
       guard let box = value as? VerbatimBox, isDiagram(box),
         let diagram = text.extent(ofBox: .rfcVerbatim, at: piece.location)
       else {
-        readSkippingChipSymbols(piece)
+        read(piece)
         return
       }
       if piece.location == diagram.location {
@@ -101,28 +90,6 @@ public enum AccessibleReading {
       }
     }
     return pieces
-  }
-
-  /// The symbol and joiner that open each chip in `range`, clipped to it, in order:
-  /// `DocumentTextBuilder.chipRun` puts U+FFFC then U+2060 before the chip's name.
-  static func chipSymbols(in range: NSRange, of text: NSAttributedString) -> [NSRange] {
-    let whole = NSRange(location: 0, length: text.length)
-    let characters = text.string as NSString
-    var symbols: [NSRange] = []
-    text.enumerateAttribute(.rfcChip, in: range) { value, piece, _ in
-      guard value != nil else { return }
-      var chip = NSRange()
-      _ = text.attribute(.rfcChip, at: piece.location, longestEffectiveRange: &chip, in: whole)
-      var length = 0
-      for (offset, unit) in [(0, 0xFFFC), (1, 0x2060)] {
-        let location = chip.location + offset
-        guard location < NSMaxRange(chip), characters.character(at: location) == unit else { break }
-        length += 1
-      }
-      let silent = NSIntersectionRange(NSRange(location: chip.location, length: length), piece)
-      if silent.length > 0, symbols.last != silent { symbols.append(silent) }
-    }
-    return symbols
   }
 
   /// Whether a verbatim block is said as a label rather than read: artwork that is

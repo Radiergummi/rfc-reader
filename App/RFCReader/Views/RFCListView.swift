@@ -76,6 +76,10 @@ struct RFCListView: View {
         filter: navigation.filter
       )
       .tag(rfc.id)
+      // A combined element with no trait has the role AXUnknown on macOS, which
+      // says nothing of what it is (#300). Here, where the row selects rather
+      // than presses: elsewhere `RFCRow` is a button's label, and is a button.
+      .accessibilityAddTraits(.isStaticText)
       // An item provider rather than `.draggable`: it cooperates with `.onMove`,
       // which a collection's own list also uses (#349).
       .itemProvider { NSItemProvider(object: rfc.id.fileStem as NSString) }
@@ -421,9 +425,6 @@ struct RFCRow: View {
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
-    // A combined element with no trait has the role AXUnknown on macOS, which
-    // says nothing of what it is (#300). The row selects; the text is its label.
-    .accessibilityAddTraits(.isStaticText)
   }
 
   #if os(macOS)

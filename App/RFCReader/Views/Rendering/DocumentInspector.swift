@@ -347,7 +347,9 @@ struct ReferenceRow: View {
           }
         #endif
       } else {
-        entryDescription
+        // Not a button, so the combined element needs a role of its own, or macOS
+        // exposes it as AXUnknown (#300).
+        entryDescription.accessibilityAddTraits(.isStaticText)
         // An entry that names no RFC opens nothing in the reader, so where it
         // lives is the one way on from it — and what a citation of it reveals the
         // row for.
