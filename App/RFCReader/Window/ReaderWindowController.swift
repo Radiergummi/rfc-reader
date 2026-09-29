@@ -351,9 +351,13 @@
       splitController.toggleSidebar(nil)
     }
 
+    func showSidebar() {
+      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
+    }
+
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
-      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
+      showSidebar()
       guard let field = FirstResponderSearch.searchField(in: sidebarItem.viewController.view)
       else { return }
       window?.makeFirstResponder(field)

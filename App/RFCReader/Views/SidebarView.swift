@@ -50,8 +50,8 @@ struct SidebarView: View {
         .padding(.vertical, 8)
       }
     // New Collection is File > New Collection… on the Mac, and a toolbar button
-    // beside the sidebar toggle (`ReaderToolbar`), never in the sidebar itself: a
-    // fixed button at its foot read as out of place (#349).
+    // at the trailing edge of the sidebar's section (`ReaderToolbar`), never in the
+    // sidebar itself: a fixed button at its foot read as out of place (#349).
     #else
       // Beside Edit, as Notes keeps New Folder (#349).
       .toolbar {

@@ -383,10 +383,11 @@
         // Over the sidebar, beside the traffic lights, where Notes and Mail put
         // it: a tracking separator on the sidebar's own divider gives the toolbar
         // a section that ends with the sidebar, and what is declared before it
-        // lands inside that section. New Collection stands before the toggle, as
-        // Shortcuts keeps New Folder: the sidebar's one action, over the sidebar
-        // it adds to (#349).
-        .rfcNewCollection, .toggleSidebar, .rfcSidebarSeparator,
+        // lands inside that section. New Collection stands at the section's
+        // trailing edge, against the sidebar's divider, as Notes keeps New Note
+        // and Mail keeps Compose: the sidebar's one action, over the sidebar it
+        // adds to (#349).
+        .toggleSidebar, .flexibleSpace, .rfcNewCollection, .rfcSidebarSeparator,
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
@@ -656,7 +657,9 @@
 
     /// The toolbar's New Collection button, which makes an empty collection as
     /// File > New Collection… does; only the Bookmark menu's adds the open document.
+    /// It opens a collapsed sidebar first, so the collection is in view once made.
     @objc private func newEmptyCollection() {
+      controller.showSidebar()
       navigation.collectionEditor = .create(adding: nil)
     }
 
