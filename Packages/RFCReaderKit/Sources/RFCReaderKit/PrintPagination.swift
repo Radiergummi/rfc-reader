@@ -102,16 +102,24 @@ public enum PrintPagination {
     return first..<end
   }
 
-  /// The first index of `spans` whose span satisfies `isPast`, which is false up
-  /// to some index and true from there on; the end index when it never holds.
-  private static func boundary(
-    in spans: ArraySlice<Span>, where isPast: (Span) -> Bool
+  /// The page holding `y`, a position in the laid-out document: the last page
+  /// whose top is at or above it. What an exported PDF places a destination or a
+  /// link on (#376). Nil above the first page, or with no pages.
+  public static func page(containing y: CGFloat, in pages: [Page]) -> Int? {
+    let after = boundary(in: pages[...]) { $0.top > y }
+    return after > 0 ? after - 1 : nil
+  }
+
+  /// The first index of `elements` that satisfies `isPast`, which is false up to
+  /// some index and true from there on; the end index when it never holds.
+  private static func boundary<Element>(
+    in elements: ArraySlice<Element>, where isPast: (Element) -> Bool
   ) -> Int {
-    var low = spans.startIndex
-    var high = spans.endIndex
+    var low = elements.startIndex
+    var high = elements.endIndex
     while low < high {
       let middle = low + (high - low) / 2
-      if isPast(spans[middle]) {
+      if isPast(elements[middle]) {
         high = middle
       } else {
         low = middle + 1

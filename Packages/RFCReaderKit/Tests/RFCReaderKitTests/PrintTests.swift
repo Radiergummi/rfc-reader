@@ -51,9 +51,12 @@ struct PrintLayoutTests {
   @Test func `a page's first line is drawn at the top of the column`() {
     let layout = PrintLayout(paperSize: PrintLayout.isoA4)
     let page = PrintPagination.Page(top: 300, bottom: 900)
-    #expect(layout.origin(of: CGPoint(x: 0, y: 300), on: page) == layout.contentRect.origin)
+    let line = CGSize(width: 100, height: 12)
     #expect(
-      layout.origin(of: CGPoint(x: 12, y: 350), on: page)
+      layout.onPaper(CGRect(origin: CGPoint(x: 0, y: 300), size: line), page: page).origin
+        == layout.contentRect.origin)
+    #expect(
+      layout.onPaper(CGRect(origin: CGPoint(x: 12, y: 350), size: line), page: page).origin
         == CGPoint(x: layout.contentRect.minX + 12, y: layout.contentRect.minY + 50))
   }
 

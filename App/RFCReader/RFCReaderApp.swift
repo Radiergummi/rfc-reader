@@ -143,6 +143,12 @@ struct DocumentCommands: Commands {
       }
     #endif
     #if os(macOS)
+      // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
+      CommandGroup(replacing: .importExport) {
+        Button("Export…") { active.controller?.exportDocument() }
+          .keyboardShortcut("e", modifiers: [.command, .shift])
+          .disabled(!showsDocument)
+      }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.
       CommandGroup(replacing: .printItem) {

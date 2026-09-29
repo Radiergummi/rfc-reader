@@ -29,12 +29,15 @@ public struct ReadingStyle: Sendable, Equatable {
   public var lineHeightMultiple: CGFloat
   /// Off by default: colour marks a link, and a chip's tint marks a reference.
   /// An underline is the reader's to ask for, and then it goes under every link,
-  /// chips included.
+  /// chips included. In a build with no live links (`emitsLinks`), where nothing
+  /// else colours a link, the builder colours it too (`RFCColors.link`): an
+  /// exported PDF's links look like links (#376).
   public var underlinesLinks: Bool
-  /// Whether a link is a link at all. On by default; off for a print, where a link
-  /// cannot be followed and a text layout manager with no text view to say
-  /// otherwise underlines and recolours every `.link` run (#375). The text of a
-  /// link stays.
+  /// Whether a link is a live `.link` run. On by default; off for paper, where a
+  /// text layout manager with no text view to say otherwise underlines and
+  /// recolours every `.link` run (#375). The text of a link stays, and where it
+  /// goes is kept as `.rfcLinkTarget`, which an exported PDF makes a link of again
+  /// (#376).
   public var emitsLinks: Bool
   /// How a cross reference's label is set: as a chip on screen, and as text on
   /// paper, where a chip breaks the line it sits in and there is nothing to tap.
@@ -161,6 +164,9 @@ public enum ReferenceStyle: Sendable, Equatable {
   /// Ordinary text a little heavier than the text around it, in its colour, with
   /// no symbol: a print's.
   case plainText
+  /// The label alone, looking like every other link the style sets: an exported
+  /// PDF's, whose links are underlined and coloured (`ReadingStyle.underlinesLinks`).
+  case link
 }
 
 /// How wide the reader sets its text.

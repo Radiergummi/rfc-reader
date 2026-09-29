@@ -11,7 +11,8 @@ import RFCReaderKit
 #endif
 
 /// The open RFC as a PDF laid out for paper: what Print hands the system's print
-/// panel, and what Export as PDF will save (#375, #376).
+/// panel, and what Export as PDF saves, with its links and outline
+/// (`DocumentPDF+Export.swift`) (#375, #376).
 ///
 /// Not the reader's text view sent to a printer. The reader is built for the
 /// window's column, draws in the current appearance, and has its title in a hosted
@@ -59,38 +60,67 @@ nonisolated enum DocumentPDF {
   /// it is drawn is TextKit's to decide, and either way it has to be paper's.
   @concurrent
   static func render(_ content: Content, paperSize: CGSize) async -> Data {
-    var data = Data()
-    inLightAppearance {
-      data = layOutAndDraw(content, layout: PrintLayout(paperSize: paperSize))
-    }
-    return data
-  }
-
-  private static func layOutAndDraw(_ content: Content, layout: PrintLayout) -> Data {
+    let layout = PrintLayout(paperSize: paperSize)
     switch content {
     case .document(let document, let furniture):
-      let built = DocumentTextBuilder.build(
-        document, style: layout.style, title: furniture.titleBlock)
-      return draw(
-        built.text, keepingWithNext: built.keepsWithNext, layout: layout, furniture: furniture)
+      return buildAndLayOut(
+        document, style: layout.style, furniture: furniture, layout: layout
+      ) { _, laidOut in
+        pdf(laidOut, layout: layout, furniture: furniture)
+      }
     case .original(let source):
-      return publishedPDF(source, layout: layout)
+      return inLightAppearance { publishedPDF(source, layout: layout) }
+    }
+  }
+
+  /// `document` built for `layout`'s paper and laid out, handed to `body` with what
+  /// the build knows about it. All of it in the light appearance, what `body` draws
+  /// included, for the reason `render` gives. A print and an export both go
+  /// through here, so a PDF exported in Dark Mode is as white as a print (#376).
+  ///
+  /// - Parameter style: `layout.style` for a print, `layout.exportStyle` for an
+  ///   export, whose links look like links.
+  static func buildAndLayOut<Result>(
+    _ document: RFCDocument, style: ReadingStyle, furniture: PrintFurniture,
+    layout: PrintLayout,
+    _ body: (BuiltDocument, LaidOut) -> Result
+  ) -> Result {
+    inLightAppearance {
+      let built = DocumentTextBuilder.build(
+        document, style: style, title: furniture.titleBlock)
+      return layOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout) {
+        laidOut in
+        body(built, laidOut)
+      }
     }
   }
 
   // MARK: - Layout
 
-  /// Lays `text` out at the page's column and draws it a page at a time.
+  /// Text laid out at a page's column, and broken into pages: what `layOut` hands
+  /// its body, and only good while that body runs.
+  nonisolated struct LaidOut {
+    let manager: NSTextLayoutManager
+    /// In document order, top-down.
+    let fragments: [NSTextLayoutFragment]
+    /// Each fragment's extent, for `PrintPagination.spans(_:on:)`.
+    let spans: [PrintPagination.Span]
+    let pages: [PrintPagination.Page]
+  }
+
+  /// Lays `text` out at the page's column, breaks it into pages and hands the
+  /// result to `body`, which draws it and, for an export, measures it again to
+  /// place its links and destinations.
   ///
-  /// The storage, layout manager and fragment factory are held for the whole call,
-  /// explicitly: a layout manager holds its delegate and its storage weakly, and a
-  /// fragment its layout manager, and a local's lifetime ends at its last use, not
-  /// at the end of its scope. Released early, the layout falls back to plain
-  /// fragments or finds no text, and the fragments draw no decorations.
-  private static func draw(
+  /// The storage, layout manager and fragment factory are held until `body`
+  /// returns, explicitly: a layout manager holds its delegate and its storage
+  /// weakly, and a fragment its layout manager, and a local's lifetime ends at its
+  /// last use, not at the end of its scope. Released early, the layout falls back
+  /// to plain fragments or finds no text, and the fragments draw no decorations.
+  private static func layOut<Result>(
     _ text: NSAttributedString, keepingWithNext: Set<Int>, layout: PrintLayout,
-    furniture: PrintFurniture
-  ) -> Data {
+    _ body: (LaidOut) -> Result
+  ) -> Result {
     let storage = NSTextContentStorage()
     let manager = NSTextLayoutManager()
     let factory = FragmentFactory()
@@ -115,15 +145,15 @@ nonisolated enum DocumentPDF {
         let bounds = line.typographicBounds
         lines.append(
           PrintPagination.Line(
-            minY: frame.minY + bounds.minY, maxY: frame.minY + bounds.maxY, keepsWithNext: keeps))
+            minY: frame.minY + bounds.minY, maxY: frame.minY + bounds.maxY, keepsWithNext: keeps
+          ))
       }
       fragments.append(fragment)
       spans.append(PrintPagination.Span(minY: frame.minY, maxY: frame.maxY))
       return true
     }
     let pages = PrintPagination.pages(of: lines, pageHeight: layout.contentRect.height)
-    return pdf(
-      pages: pages, fragments: fragments, spans: spans, layout: layout, furniture: furniture)
+    return body(LaidOut(manager: manager, fragments: fragments, spans: spans, pages: pages))
   }
 
   /// The reader's own fragment class, so a print has the cards and rules the screen
@@ -141,10 +171,8 @@ nonisolated enum DocumentPDF {
 
   // MARK: - Drawing
 
-  private static func pdf(
-    pages: [PrintPagination.Page], fragments: [NSTextLayoutFragment],
-    spans: [PrintPagination.Span], layout: PrintLayout, furniture: PrintFurniture
-  ) -> Data {
+  /// Draws `laidOut` a page at a time, with the running header and footer.
+  static func pdf(_ laidOut: LaidOut, layout: PrintLayout, furniture: PrintFurniture) -> Data {
     let data = NSMutableData()
     var mediaBox = CGRect(origin: .zero, size: layout.paperSize)
     guard let consumer = CGDataConsumer(data: data as CFMutableData),
@@ -152,7 +180,7 @@ nonisolated enum DocumentPDF {
     else { return Data() }
     withCurrentContext(context) {
       let running = RunningLines(furniture, layout: layout)
-      for (index, page) in pages.enumerated() {
+      for (index, page) in laidOut.pages.enumerated() {
         context.beginPDFPage(nil)
         context.saveGState()
         // Top-down, as the text view the fragments were written for draws.
@@ -160,8 +188,8 @@ nonisolated enum DocumentPDF {
         context.scaleBy(x: 1, y: -1)
         running.draw(page: index + 1, in: context)
         context.clip(to: layout.clipRect(for: page))
-        for fragment in fragments[PrintPagination.spans(spans, on: page)] {
-          let origin = layout.origin(of: fragment.layoutFragmentFrame.origin, on: page)
+        for fragment in laidOut.fragments[PrintPagination.spans(laidOut.spans, on: page)] {
+          let origin = layout.onPaper(fragment.layoutFragmentFrame, page: page).origin
           fragment.draw(at: origin, in: context)
         }
         context.restoreGState()
@@ -176,16 +204,16 @@ nonisolated enum DocumentPDF {
 
   /// The reader's colours are dynamic; paper is white, so they resolve as they do
   /// in the light appearance.
-  private static func inLightAppearance(_ body: () -> Void) {
+  private static func inLightAppearance<Result>(_ body: () -> Result) -> Result {
+    // Both platforms run `body` before they return, so `result` is always set.
+    var result: Result?
     #if canImport(UIKit)
-      UITraitCollection(userInterfaceStyle: .light).performAsCurrent(body)
+      UITraitCollection(userInterfaceStyle: .light).performAsCurrent { result = body() }
     #else
-      if let light = NSAppearance(named: .aqua) {
-        light.performAsCurrentDrawingAppearance(body)
-      } else {
-        body()
-      }
+      guard let light = NSAppearance(named: .aqua) else { return body() }
+      light.performAsCurrentDrawingAppearance { result = body() }
     #endif
+    return result!
   }
 
   /// `context` as the platform's current graphics context, for drawing that reaches

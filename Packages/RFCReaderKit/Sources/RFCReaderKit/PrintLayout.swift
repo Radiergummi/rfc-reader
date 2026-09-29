@@ -90,14 +90,12 @@ public struct PrintLayout: Sendable, Equatable {
     CGRect(x: 0, y: contentRect.minY, width: paperSize.width, height: page.height)
   }
 
-  /// Where a layout fragment whose frame starts at `fragmentOrigin`, in the
-  /// document's coordinates, is drawn on `page`: the page's top line at the top of
-  /// the column.
-  public func origin(of fragmentOrigin: CGPoint, on page: PrintPagination.Page) -> CGPoint {
-    CGPoint(
-      x: contentRect.minX + fragmentOrigin.x,
-      y: contentRect.minY + fragmentOrigin.y - page.top
-    )
+  /// `rect`, in the laid-out document's coordinates, where `page` puts it on
+  /// paper: the page's slice of the document starts at the top of the column.
+  /// Where a fragment is drawn, and where an exported PDF's links and
+  /// destinations go (#376).
+  public func onPaper(_ rect: CGRect, page: PrintPagination.Page) -> CGRect {
+    rect.offsetBy(dx: contentRect.minX, dy: contentRect.minY - page.top)
   }
 
   /// The style a document is built in for this paper: the print body size, set to
@@ -109,5 +107,14 @@ public struct PrintLayout: Sendable, Equatable {
     ReadingStyle(
       bodySize: Self.bodySize, measure: contentRect.width, lineHeightMultiple: 1.2,
       emitsLinks: false, references: .plainText)
+  }
+
+  /// The style an exported PDF is built in (#376): the print's, but read on screen,
+  /// so every link, a reference included, is underlined in the link colour.
+  public var exportStyle: ReadingStyle {
+    var exported = style
+    exported.underlinesLinks = true
+    exported.references = .link
+    return exported
   }
 }
