@@ -31,6 +31,20 @@
   /// What stays here is the AppKit half: the event hook, the hit test, and
   /// `makeFirstResponder`.
   final class ReaderWindow: NSWindow {
+    /// ⌘K opens Go to RFC as the menu's ⌘L does. The window answers it rather than
+    /// the menu, which gives an item one key equivalent; it asks the way ⌘L does, by
+    /// setting `isShowingGoToSheet`, so both reach the one palette.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+      if QuickOpenShortcut.matches(
+        characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags),
+        let controller = windowController as? ReaderWindowController
+      {
+        controller.navigation.isShowingGoToSheet = true
+        return true
+      }
+      return super.performKeyEquivalent(with: event)
+    }
+
     override func sendEvent(_ event: NSEvent) {
       if event.type == .leftMouseDown { giveFocus(toViewUnder: event) }
       super.sendEvent(event)

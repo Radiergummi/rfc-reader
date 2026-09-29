@@ -106,6 +106,16 @@ import SwiftUI
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
       }
+      // ⌘K opens Go to RFC too, where most apps with a palette put it. The menu's
+      // item holds ⌘L, and one item gets one shortcut, so this invisible button
+      // carries the other, drawn transparent and kept out of VoiceOver's way.
+      .background {
+        Button("Go to RFC") { navigation.isShowingGoToSheet = true }
+          .keyboardShortcut("k", modifiers: .command)
+          .opacity(0)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
+      }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
       }
