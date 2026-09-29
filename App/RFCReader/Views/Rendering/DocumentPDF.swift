@@ -74,14 +74,7 @@ nonisolated enum DocumentPDF {
       return draw(
         built.text, keepingWithNext: built.keepsWithNext, layout: layout, furniture: furniture)
     case .original(let source):
-      let text = NSAttributedString(
-        string: source,
-        attributes: [
-          .font: PlatformFont.monospacedSystemFont(
-            ofSize: PrintLayout.originalTextSize, weight: .regular),
-          .foregroundColor: RFCColors.label,
-        ])
-      return draw(text, keepingWithNext: [], layout: layout, furniture: furniture)
+      return publishedPDF(source, layout: layout)
     }
   }
 
