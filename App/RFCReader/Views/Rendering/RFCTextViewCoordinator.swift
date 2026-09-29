@@ -1010,6 +1010,6 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     textLayoutFragmentFor location: any NSTextLocation,
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
+    RFCTextLayoutFragment.make(for: textElement)
   }
 }
