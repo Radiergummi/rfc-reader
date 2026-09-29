@@ -37,8 +37,8 @@ public struct ReferenceGroup: Identifiable, Sendable {
 }
 
 /// The kind of the list holding each bibliography entry, by the entry's anchor and
-/// by the document it names, so a build asks once per chip without walking every
-/// entry of every list (#184).
+/// by the documents it names, a reference group's members included, so a build
+/// asks once per chip without walking every entry of every list (#184).
 public struct ReferenceKinds: Sendable {
   private var byAnchor: [String: ReferenceList.Kind] = [:]
   private var byDocument: [DocumentID: ReferenceList.Kind] = [:]
@@ -51,13 +51,19 @@ public struct ReferenceKinds: Sendable {
         if let id = entry.documentID {
           byDocument[id] = Self.stronger(byDocument[id], kind)
         }
+        // A group's members are found through it: a bare mention of RFC 8126
+        // records no entry, and only the group's own series (BCP 26) names one.
+        for id in entry.members {
+          byDocument[id] = Self.stronger(byDocument[id], kind)
+        }
       }
     }
   }
 
   /// The kind of the list holding the entry `target` names: found by anchor, by
   /// the entry the parser resolved a document citation to, or else by the document
-  /// an entry names; unknown where no list holds it or no list says.
+  /// an entry, or a group's member, names; unknown where no list holds it or no
+  /// list says.
   public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
     switch target {
     case .anchor(let anchor):

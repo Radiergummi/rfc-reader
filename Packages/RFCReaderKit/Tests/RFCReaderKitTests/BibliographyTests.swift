@@ -50,6 +50,20 @@ struct BibliographyTests {
     #expect(groups.kind(of: .document(.rfc(8126), section: nil)) == .unknown)
   }
 
+  /// A bare mention of a group's member records no entry, and no entry's series
+  /// names the member; the group keeps its members' documents, so the mention has
+  /// the group's kind.
+  @Test func `a mention of a reference group's member has the group's kind`() {
+    let group = Reference(
+      anchor: "BCP26", title: "BCP 26 consists of RFC 8126",
+      seriesInfo: [
+        SeriesInfo(name: "BCP", value: "26")
+      ],
+      members: [.rfc(8126)])
+    let groups = [ReferenceGroup(title: "Informative References", entries: [group])]
+    #expect(groups.kind(of: .document(.rfc(8126), section: "4.1")) == .informative)
+  }
+
   /// A document that lists an entry in both counts it as part of the specification.
   @Test func `an entry in both lists is normative`() {
     let entry = Reference(

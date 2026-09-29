@@ -466,6 +466,11 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
   /// pinning a living standard to the commit the RFC was written against. Empty
   /// when there is none.
   public var annotation: [Inline]
+  /// The documents a `<referencegroup>` stands for, its members' (RFC 8126 for
+  /// BCP 26): the group is one entry in its list, under its own series, so a
+  /// mention of a member finds the group's entry through these (#184). Empty for
+  /// any other entry.
+  public var members: [DocumentID]
 
   public var id: String { anchor }
 
@@ -478,7 +483,8 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     seriesInfo: [SeriesInfo] = [],
     url: URL? = nil,
     rawText: String? = nil,
-    annotation: [Inline] = []
+    annotation: [Inline] = [],
+    members: [DocumentID] = []
   ) {
     self.anchor = anchor
     self.displayAnchor = displayAnchor ?? anchor
@@ -489,6 +495,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     self.url = url
     self.rawText = rawText
     self.annotation = annotation
+    self.members = members
   }
 
   /// The RFC/BCP/STD this reference points at, when it is one.

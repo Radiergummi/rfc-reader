@@ -78,6 +78,16 @@ struct ReferenceKindTests {
       Self.targets(in: document).contains(.document(.rfc(8949), section: "3.3", entry: "STD94")))
   }
 
+  /// A group names only its own series, so it keeps its members' documents: what a
+  /// bare mention of a member, which records no entry, finds the group by.
+  @Test func `a reference group keeps the documents its members are`() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9682.xml"))
+    let entries = Self.entries(in: document)
+    #expect(entries.first { $0.anchor == "STD94" }?.members == [.rfc(8949)])
+    #expect(entries.first { $0.anchor == "STD68" }?.members == [.rfc(5234)])
+    #expect(entries.allSatisfy { $0.anchor.hasPrefix("STD") || $0.members.isEmpty })
+  }
+
   @Test func `a legacy citation records the entry it resolved to`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let entry = try #require(Self.entries(in: document).first { $0.documentID == .rfc(733) })

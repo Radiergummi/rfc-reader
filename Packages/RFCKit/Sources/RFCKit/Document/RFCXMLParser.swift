@@ -398,7 +398,8 @@ public struct RFCXMLParser: Sendable {
         date: members.count == 1 ? members[0].date : nil,
         seriesInfo: seriesInfo,
         url: element["target"].flatMap(URL.init(string:)),
-        annotation: groupAnnotation(of: members)
+        annotation: groupAnnotation(of: members),
+        members: members.compactMap(\.documentID)
       )
     }
 
