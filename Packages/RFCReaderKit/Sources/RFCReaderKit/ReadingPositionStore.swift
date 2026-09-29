@@ -36,7 +36,7 @@ public enum ReadingPositionStore {
 
   /// Records where the reader left the document.
   public static func save(
-    _ place: ReadingPlace?, for id: DocumentID, at date: Date = .now, in context: ModelContext
+    _ place: ReadingPlace, for id: DocumentID, at date: Date = .now, in context: ModelContext
   ) {
     if let existing = stored(for: id, in: context) {
       existing.place = place

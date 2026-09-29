@@ -65,15 +65,14 @@ import SwiftUI
     }
 
     private var bookmarkButton: some View {
-      let bookmarked = isBookmarked
       // A tap bookmarks, as before; a long press adds to a collection (#349).
-      return Menu {
+      Menu {
         AddToCollectionItems(
           document: id, library: library, navigation: navigation, undoManager: undoManager)
       } label: {
         Label(
-          bookmarked ? "Remove Bookmark" : "Bookmark",
-          systemImage: bookmarked ? "bookmark.fill" : "bookmark")
+          isBookmarked ? "Remove Bookmark" : "Bookmark",
+          systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
       } primaryAction: {
         toggleBookmark()
       }

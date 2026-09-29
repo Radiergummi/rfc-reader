@@ -18,11 +18,6 @@ struct DocumentView: View {
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    // Only the iOS toolbar reads these. On macOS the bookmark button is the
-    // window's, and a `@Query` left outside this guard ran a live fetch of every
-    // bookmark per open document that nothing read. Here rather than in the
-    // toolbar, which is `ToolbarContent`, not a view.
-    @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
@@ -119,7 +114,7 @@ struct DocumentView: View {
         .toolbar {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
-            reader: reader, isBookmarked: bookmarks.contains { $0.documentKey == id.fileStem },
+            reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
             openURL: systemOpenURL, showsInspector: $showsInspector)
         }
         // An overlay rather than an inset: it floats over the text and takes no
@@ -161,7 +156,10 @@ struct DocumentView: View {
       }
       .onChange(of: buildInputs, initial: true) {
         // Captures the reader, not the view; see `DocumentSession.startLoad`.
-        session.requestBuild(for: buildInputs) { [reader] built, document in
+        session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
+          // A replaced reader lives on through its fade (`ReaderHost`), and its
+          // rebuild must not list its sections under the next document.
+          guard navigation.selection == id else { return }
           Self.listSections(of: document, in: built, into: reader)
         }
       }
@@ -331,11 +329,11 @@ struct DocumentView: View {
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
-    session.startLoad(from: library) { [reader, library, modelContext, id] loaded in
+    session.startLoad(from: library) { [reader, library, navigation, modelContext, id] loaded in
+      // Not over the next document's reader state; see `requestBuild`'s caller.
+      guard navigation.selection == id else { return }
       reader.groups = ReferenceGroup.groups(in: loaded)
-      reader.info = library.metadata(id).map {
-        DocumentInfo($0, authors: loaded.header.authors, in: library.index)
-      }
+      reader.info = Self.info(for: id, authors: loaded.header.authors, in: library)
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
@@ -352,9 +350,15 @@ struct DocumentView: View {
   /// again once the document is here, whose own authors carry the contact details
   /// their chips open.
   private func deriveInfo() {
-    reader.info = metadata.map {
-      DocumentInfo($0, authors: session.state.document?.header.authors, in: library.index)
-    }
+    reader.info = Self.info(
+      for: id, authors: session.state.document?.header.authors, in: library)
+  }
+
+  /// Static, so the load's callback can derive it without capturing the view.
+  private static func info(
+    for id: DocumentID, authors: [Author]?, in library: LibraryModel
+  ) -> DocumentInfo? {
+    library.metadata(id).map { DocumentInfo($0, authors: authors, in: library.index) }
   }
 
   /// The sections the storage actually holds, straight from the index the builder
@@ -378,7 +382,8 @@ struct DocumentView: View {
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
   /// cancellation, so a build that has started runs to the end;
-  /// `DocumentSession.requestBuild` is what discards a cancelled one. `DocumentPreview` builds through it too.
+  /// `DocumentSession.requestBuild` is what discards a canceled one.
+  /// `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
     DocumentTextBuilder.build(document, style: style)

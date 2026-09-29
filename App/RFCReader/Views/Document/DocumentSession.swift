@@ -35,12 +35,12 @@ struct BuildInputs: Equatable {
 /// Owned by the view rather than by `.task`, which ties the work to appearance: in a
 /// collapsed split view, a reader pushed over one that was popped is told it
 /// disappeared the moment it appears, and is never told it appeared again. `.task`
-/// cancelled the fetch on that notice and nothing started it again, so the reader
+/// canceled the fetch on that notice and nothing started it again, so the reader
 /// spun forever while on screen (#252 was the same cancellation, shown as an error).
 ///
 /// A reference held in the view's state, so it goes when that state does, which is
 /// when the view is replaced by the next document's (`.id(selection)`): the old
-/// reader's fetch and 650 ms build are cancelled then, rather than running on for a
+/// reader's fetch and 650 ms build are canceled then, rather than running on for a
 /// document nobody will see. Disappearing is not going (#252).
 @Observable
 final class DocumentSession {
@@ -118,7 +118,7 @@ final class DocumentSession {
       trace("build skipped, inputs unchanged")
       return
     case .cancel:
-      trace("build cancelled, back to the inputs on screen")
+      trace("build canceled, back to the inputs on screen")
       build?.cancel()
       buildingFor = nil
       return
@@ -126,8 +126,14 @@ final class DocumentSession {
       break
     }
     build?.cancel()
+    // Recorded only once a build starts: a request with nothing to build yet would
+    // otherwise name a build that does not exist, and the same inputs coming back
+    // would be kept waiting for it.
+    guard let document = state.document, let style = inputs.style else {
+      buildingFor = nil
+      return
+    }
     buildingFor = inputs
-    guard let document = state.document, let style = inputs.style else { return }
     let delay = state.buildDelay
     trace("building")
     build = Task(name: "Build document") { [weak self] in

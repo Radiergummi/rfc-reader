@@ -109,7 +109,7 @@ struct LoadStateTests {
   }
 
   /// Appearing again asks with nothing changed: the build under way stands rather
-  /// than being cancelled and paid for twice.
+  /// than being canceled and paid for twice.
   @Test func `the inputs of the build under way leave it to finish`() {
     #expect(BuildRequest.decide(18, built: 17, building: 18) == .keep)
   }

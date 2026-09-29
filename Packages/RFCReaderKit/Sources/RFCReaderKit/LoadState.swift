@@ -85,7 +85,7 @@ public struct LoadState {
 /// generic so the rule is tested here, away from the SwiftUI types the reader's
 /// own inputs carry.
 public enum BuildRequest: Equatable {
-  /// Build for the new inputs, cancelling any build under way.
+  /// Build for the new inputs, canceling any build under way.
   case start
   /// Leave things as they are: the build under way, or on screen, is for these.
   case keep
