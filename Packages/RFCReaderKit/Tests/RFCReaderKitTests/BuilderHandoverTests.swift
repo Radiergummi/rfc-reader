@@ -86,12 +86,15 @@ struct BuilderHandoverTests {
     for column in [712.0, 512.0] {
       #if canImport(AppKit)
         let textView = NSTextView(usingTextLayoutManager: true)
-        textView.frame = CGRect(x: 0, y: 0, width: column, height: 4_000)
+        textView.frame = CGRect(x: 0, y: 0, width: column, height: 0)
         textView.textContainer?.lineFragmentPadding = 0
         let storage = try #require(textView.textContentStorage)
         let layout = try #require(textView.textLayoutManager)
         storage.install(built.text)
         layout.ensureLayout(for: layout.documentRange)
+        // As tall as the whole document, so every chip is drawn: RFC 8999 runs to
+        // about 6,600 pt at 712, and its last chip sits below 5,800.
+        textView.frame.size.height = layout.usageBoundsForTextContainer.maxY
         let bitmap = try #require(textView.bitmapImageRepForCachingDisplay(in: textView.bounds))
         textView.cacheDisplay(in: textView.bounds, to: bitmap)
       #else
