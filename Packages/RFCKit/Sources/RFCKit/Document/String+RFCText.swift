@@ -1,12 +1,15 @@
 import Foundation
 
-extension UnsafeBufferPointer<UInt8> {
+extension Span<UInt8> {
   /// Whether `literal`'s bytes start at `index`: a substring test that does not start
   /// the regex engine or break graphemes, for literals the caller knows are ASCII.
   func holds(_ literal: StaticString, at index: Int) -> Bool {
-    let count = literal.utf8CodeUnitCount
-    guard index >= 0, index + count <= self.count else { return false }
-    return (0..<count).allSatisfy { self[index + $0] == literal.utf8Start[$0] }
+    let length = literal.utf8CodeUnitCount
+    guard index >= 0, index + length <= count else { return false }
+    for offset in 0..<length where self[index + offset] != literal.utf8Start[offset] {
+      return false
+    }
+    return true
   }
 }
 

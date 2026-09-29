@@ -76,7 +76,7 @@ extension LegacyTextParser {
   }
 
   /// A digit, a run of two or more spaces, a digit: `1   2` in a table.
-  private static func digitGapDigit(_ bytes: UnsafeBufferPointer<UInt8>, at index: Int) -> Bool {
+  private static func digitGapDigit(_ bytes: Span<UInt8>, at index: Int) -> Bool {
     var end = index + 1
     while end < bytes.count, isSpace(bytes[end]) { end += 1 }
     return end - index - 1 >= 2 && end < bytes.count
@@ -113,18 +113,16 @@ extension LegacyTextParser {
 
   /// `line` trimmed as `.whitespaces` trims it -- spaces and tabs, in ASCII -- when every
   /// byte is ASCII and none is `\r`; nil otherwise, for the caller to use the regex.
-  private static func withTrimmedASCII(_ line: String, _ body: (UnsafeBufferPointer<UInt8>) -> Bool)
-    -> Bool?
-  {
-    var line = line
-    return line.withUTF8 { bytes in
-      guard bytes.allSatisfy({ $0 < 0x80 && $0 != UInt8(ascii: "\r") }) else { return nil }
-      var start = bytes.startIndex
-      var end = bytes.endIndex
-      while start < end, bytes[start] == 0x20 || bytes[start] == 0x09 { start += 1 }
-      while end > start, bytes[end - 1] == 0x20 || bytes[end - 1] == 0x09 { end -= 1 }
-      return body(UnsafeBufferPointer(rebasing: bytes[start..<end]))
+  private static func withTrimmedASCII(_ line: String, _ body: (Span<UInt8>) -> Bool) -> Bool? {
+    let bytes = line.utf8Span.span
+    for index in bytes.indices where bytes[index] >= 0x80 || bytes[index] == UInt8(ascii: "\r") {
+      return nil
     }
+    var start = 0
+    var end = bytes.count
+    while start < end, bytes[start] == 0x20 || bytes[start] == 0x09 { start += 1 }
+    while end > start, bytes[end - 1] == 0x20 || bytes[end - 1] == 0x09 { end -= 1 }
+    return body(bytes.extracting(start..<end))
   }
 
   /// `\s` over ASCII: space, and tab through carriage return.
