@@ -39,14 +39,14 @@ Block (enum)
   definitionList([DefinitionItem])  term inlines + definition blocks
   preformatted(Preformatted)        artwork or sourceCode, verbatim text, optional language
   figure(Figure) · table(Table) · blockQuote · aside
-  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines
+  references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines; its kind (normative, informative, unknown) is derived from its title
 
 Inline (enum)
   text · emphasis · strong · code · superscript · subscript · link(URL) · crossReference · lineBreak
 
 CrossReference.target
-  .anchor(String)                          same document
-  .document(DocumentID, section: String?)  another RFC, optionally a section
+  .anchor(String)                                          same document
+  .document(DocumentID, section: String?, entry: String?)  another RFC, optionally a section, and the bibliography entry the citation resolved to
 ```
 
 Design choices worth knowing:
@@ -261,6 +261,14 @@ Some documents are pinned and never go: bookmarks, because a bookmark is a promi
 The encoded form is not a format. Nothing persists it, and a synthesized decoder requires every key, so adding a field, even one with a default such as `abbreviations`, or renaming a case or an associated-value label breaks every payload written before. Whatever first keeps encoded models versions the cache and discards it on a mismatch; committing to a stable format, with migrations, is that change's decision.
 
 `Block` and `Inline` are no longer `indirect`: every recursive case already goes through an array, so the compiler needs no box. That trades pointers for inline payloads, measured: a `Block` is 88 bytes of array stride instead of 8 and an `Inline` 64, and the parsed model of RFC 9271 takes 31% more heap (415 to 544 KB), RFC 9842 23% and RFC 793 7%, with no measurable difference in a full corpus conversion. Should that start to matter, `indirect` on the largest cases alone (`table`, `crossReference`, `link`) is the cheaper form.
+
+## Decision: a citation records the bibliography entry it resolved to
+
+*Decided September 2026 (issue #184).* Whether a citation is normative or informative is the kind of the list holding its entry, and the kind comes from the list's title (`ReferenceList.Kind`, derived, never stored; numbering, a trailing colon and a trailing parenthetical such as an ordering note are set aside, the rest of the title must match whole). For a citation by anchor the entry is the anchor. For a `.document` citation the renderer used to find the entry by the document it names, and that fails exactly where RFCXML groups: a `<referencegroup>` is one entry in its list, under the group's anchor and series (BCP 26), so a citation of its member RFC 8126 named a document no entry's series names. Measured over the XML corpus, that left 106 citations in 22 documents with no kind. Guessing the group from its members at render time would have been a second resolution beside the parser's, so the parser, which already resolves the citation (see "Cross references are resolved at parse time"), records the entry it resolved to on the target, `entry`: the reference's own anchor, or a member's group's. The legacy parser records the entry a `[label]` citation resolved to in the same way; neither records one for a bare mention the bibliography did not match, which falls back to finding the entry by document. With `entry`, all 106 citations get their group's kind and no citation in the corpus loses one; with the parenthetical set aside, RFC 3543's two lists and their 53 citations get one too.
+
+`entry` is part of the target's equality, so two citations of one document through different entries are different targets. `RFCXMLSerializer` does not read it and still writes a citation's target as the first entry naming its document, so the converted corpus is byte for byte what it was. In 569 legacy documents that first entry is not the one the prose cited (887 citations, such as an erratum listed before the RFC it corrects); writing `entry` instead would change what those citations read as, and is left for its own decision (#456).
+
+A group's members resolve through their group. A bare mention in prose ("Section 4.1 of RFC 8126") is linked without the bibliography, so it records no `entry`, and the fallback by document found nothing for a group's member: the group's entry carries only the group's own series. The XML parser therefore keeps the members' documents on the group's `Reference` (`members`), and `ReferenceKinds` indexes them beside the entry's own document. Measured over the XML corpus: 111 bare mentions of a group's member in 25 documents had no kind, and all 111 now have their group's; no mention's kind changed otherwise.
 
 ## Decision: the Mac is scriptable through a dictionary over the same models
 

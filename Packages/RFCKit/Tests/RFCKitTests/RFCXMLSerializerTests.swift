@@ -139,7 +139,7 @@ struct RFCXMLSerializerTests {
 
     let canonical = try #require(
       xrefs.first { xref in
-        guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+        guard case .document(let id, _, _) = xref.target, id.series == .rfc else { return false }
         return xref.isCanonicalLabel
       }, "round trip must preserve canonical RFC refs")
     #expect(

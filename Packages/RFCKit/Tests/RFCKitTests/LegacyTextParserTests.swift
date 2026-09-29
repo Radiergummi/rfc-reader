@@ -246,7 +246,7 @@ struct LegacyTextParserTests {
     // references, 253 of them chips. The rest were exactly this case.
     let canonical = try #require(
       xrefs.first { xref in
-        guard case .document(let id, _) = xref.target, id.series == .rfc else { return false }
+        guard case .document(let id, _, _) = xref.target, id.series == .rfc else { return false }
         return xref.isCanonicalLabel
       }, "without this, 98% of the library shows no chips")
     #expect(canonical.text == nil)
@@ -1402,7 +1402,7 @@ struct LegacyTextCorpusFindingsTests {
     let rfc2347 = LegacyTextParser.parse(try Fixtures.string("rfc2347.txt"))
     #expect(
       rfc2347.crossReferences.contains {
-        $0.target == .document(.rfc(2348), section: nil) && $0.text == "[2]"
+        $0.target == .document(.rfc(2348), section: nil, entry: "RFC2348") && $0.text == "[2]"
       })
     // And one that cites no document is `ref-` and the label spelled as a name.
     let rfc1556 = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(
@@ -1478,7 +1478,8 @@ struct LegacyTextCorpusFindingsTests {
     let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(
       \.target)
     #expect(!cited.isEmpty)
-    #expect(cited.allSatisfy { $0 == .document(.rfc(1883), section: nil) }, "\(cited)")
+    #expect(
+      cited.allSatisfy { $0 == .document(.rfc(1883), section: nil, entry: "RFC1883") }, "\(cited)")
   }
 
   /// The stricter rule applies only to documents whose body is not indented: where the

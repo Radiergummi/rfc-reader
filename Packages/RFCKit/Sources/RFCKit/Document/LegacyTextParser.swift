@@ -785,7 +785,7 @@ public enum LegacyTextParser {
       for reference in bibliographies[index] ?? []
       where referenceTargets[reference.displayAnchor] == nil {
         referenceTargets[reference.displayAnchor] =
-          reference.documentID.map { .document($0, section: nil) }
+          reference.documentID.map { .document($0, section: nil, entry: reference.anchor) }
           ?? .anchor(reference.anchor)
       }
     }

@@ -150,7 +150,7 @@ public struct QuerySet {
         text += "\n"
       case .crossReference(let reference):
         let label = reference.displayLabel
-        if case .document(let id, let section) = reference.target, let section {
+        if case .document(let id, let section, _) = reference.target, let section {
           citations.append(
             Citation(
               target: id.description,
