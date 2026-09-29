@@ -86,6 +86,39 @@ struct ABNFTests {
     #expect(rules.map(\.isIncremental) == [false, true])
   }
 
+  /// A grammar defines each rule once and adds to it only with `=/`. Pseudocode and
+  /// listings of settings assign one name twice, which ABNF does not.
+  @Test func `a rule defined twice does not parse`() {
+    #expect(ABNF.parse(Self.text("limit = first-bound", "limit = second-bound")) == nil)
+  }
+
+  /// Rule names are case-insensitive, so two spellings of one name are one rule.
+  @Test func `a rule defined twice in two spellings does not parse`() {
+    #expect(ABNF.parse(Self.text("Limit = first-bound", "LIMIT = second-bound")) == nil)
+  }
+
+  /// A listing of settings quotes its values and a message layout marks what is
+  /// optional; neither makes a repeated definition a grammar's.
+  @Test(arguments: [
+    ["Region  = \"North\"", "Unit    = \"Records\"", "Unit    = \"Archive\""],
+    ["kind=OPEN   [id] name arguments", "kind=CLOSE  id   outcome results"],
+    ["limit = first-bound / other-bound", "limit = second-bound"],
+  ])
+  func `a rule defined twice with no repetition or numeric value fails`(lines: [String]) {
+    #expect(ABNF.parse(lines.joined(separator: "\n")) == nil, "\(lines)")
+  }
+
+  /// Grammars in the legacy series define a name twice where `=/` or another name was
+  /// meant. A repetition or a numeric value says the block is a grammar all the same.
+  @Test(arguments: [
+    ["stamp = \"at\" \"=\" day-part [ day-part ]", "day-part = 8DIGIT", "day-part = 6DIGIT"],
+    ["entry = LF 1*SP entry-id", "entry-id = 1*3DIGIT", "entry = name SP entry-id"],
+    ["marker = open-marker / close-marker", "marker = %x00-0F"],
+  ])
+  func `a rule defined twice beside a repetition or a numeric value parses`(lines: [String]) {
+    #expect(ABNF.parse(lines.joined(separator: "\n")) != nil, "\(lines)")
+  }
+
   @Test(arguments: [
     "x = y + 1;",
     "result = compute(a, b)",

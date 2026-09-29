@@ -26,6 +26,10 @@ enum ABNF {
     /// numeric value (`%x41`). Groups and prose values (`<…>`) are left out: code and
     /// placeholders have those too.
     var usesGrammarSyntax: Bool
+    /// Whether the definition has a repetition (`*`, `#`, or a count) or a numeric value
+    /// (`%x41`): the syntax no listing of settings or message layout has, which says a
+    /// block defining a name twice is a grammar with an error in it.
+    var usesRepetitionOrNumericValue: Bool
   }
 
   /// Whether `text` is a grammar: it parses, and a rule uses syntax only a grammar has,
@@ -43,14 +47,24 @@ enum ABNF {
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
   /// only a comment are skipped; every other line either starts a rule at column 0 or
   /// continues the one before it, set deeper.
+  ///
+  /// A name is defined with `=` once, whatever its case, and added to only with `=/`:
+  /// listings of settings and message layouts assign one name twice. Grammars in the
+  /// legacy series do too, where `=/` or another name was meant, so a repeated
+  /// definition is refused only in a block without a repetition or a numeric value.
   static func parse(_ text: String) -> [Rule]? {
     var rules: [Rule] = []
+    var defined: Set<String> = []
+    var definesANameTwice = false
     var current: String?
     func finishRule() -> Bool {
       guard let source = current else { return true }
       current = nil
       var parser = RuleParser(source)
       guard let rule = parser.rule() else { return false }
+      if !rule.isIncremental, !defined.insert(rule.name.lowercased()).inserted {
+        definesANameTwice = true
+      }
       rules.append(rule)
       return true
     }
@@ -76,6 +90,7 @@ enum ABNF {
       }
     }
     guard finishRule(), !rules.isEmpty else { return nil }
+    if definesANameTwice, !rules.contains(where: \.usesRepetitionOrNumericValue) { return nil }
     return rules
   }
 
@@ -106,6 +121,7 @@ enum ABNF {
     private var position = 0
     private var references: [String] = []
     private var usesGrammarSyntax = false
+    private var usesRepetitionOrNumericValue = false
 
     init(_ source: String) {
       characters = Array(source)
@@ -123,7 +139,8 @@ enum ABNF {
       guard position == characters.count else { return nil }
       return Rule(
         name: name, isIncremental: isIncremental, references: references,
-        usesGrammarSyntax: usesGrammarSyntax)
+        usesGrammarSyntax: usesGrammarSyntax,
+        usesRepetitionOrNumericValue: usesRepetitionOrNumericValue)
     }
 
     private var next: Character? {
@@ -210,9 +227,11 @@ enum ABNF {
       if take("*") || take("#") {
         _ = skipDigits(Self.isDecimalDigit)
         usesGrammarSyntax = true
+        usesRepetitionOrNumericValue = true
       } else if counted {
         if startsHexNumber() { return false }
         usesGrammarSyntax = true
+        usesRepetitionOrNumericValue = true
       }
       return element()
     }
@@ -281,6 +300,7 @@ enum ABNF {
       guard let base = next?.lowercased().first, "sixdb".contains(base) else { return false }
       position += 1
       if base == "s" || base == "i" { return delimitedValue(opening: "\"", closing: "\"") }
+      usesRepetitionOrNumericValue = true
       let isDigit: (Character) -> Bool =
         switch base {
         case "x": { $0.isHexDigit }
