@@ -544,6 +544,20 @@ final class RFCTextViewCoordinator: NSObject {
     textView?.textLayoutManager?.attributedText?.reference(at: offset)
   }
 
+  /// The link a reference's runs carry. Read from the storage rather than from
+  /// what the platform says was pressed: a chip's leading glyph is an attachment,
+  /// which UIKit reports as one, not as the link it is part of.
+  private func link(at offset: Int) -> URL? {
+    let value = textView?.textLayoutManager?.attributedText?.attribute(
+      .link, at: offset, effectiveRange: nil)
+    return value.flatMap(Self.url(fromLink:))
+  }
+
+  /// A link attribute's value as a URL: AppKit may hand it over as its string.
+  private static func url(fromLink link: Any) -> URL? {
+    link as? URL ?? (link as? String).flatMap(URL.init(string:))
+  }
+
   /// The card for a reference, on either platform, or nil when it would say no
   /// more than the reference already does. Another document has its title and
   /// abstract; a place in this one has only its section's heading; a bibliography
@@ -593,8 +607,11 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
-      guard case .link(let url) = textItem.content, let library, let documentID,
-        let box = reference(at: textItem),
+      // `UITextItem.range` is a plain `NSRange` — already the absolute character
+      // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
+      guard let library, let documentID,
+        let (box, range) = reference(at: textItem.range.location),
+        let url = link(at: range.location),
         let target = LinkPreview.resolve(url, from: documentID, in: library.index)
       else { return .init(menu: defaultMenu) }
       let host: UIHostingController<AnyView>
@@ -627,10 +644,13 @@ final class RFCTextViewCoordinator: NSObject {
       return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
     }
 
-    private func reference(at textItem: UITextItem) -> ReferenceBox? {
-      // `UITextItem.range` is a plain `NSRange` — already the absolute character
-      // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
-      reference(at: textItem.range.location)?.box
+    /// A document preview holds a whole second build, so it goes with its menu
+    /// rather than waiting for the next long press to replace it.
+    func textView(
+      _ textView: UITextView, textItemMenuWillEndFor textItem: UITextItem,
+      animator: any UIContextMenuInteractionAnimating
+    ) {
+      animator.addCompletion { [weak self] in self?.referencePreviewHost = nil }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -835,18 +855,6 @@ final class RFCTextViewCoordinator: NSObject {
         let url = link(at: range.location)
       else { return nil }
       return (url, range.location)
-    }
-
-    /// The link a reference's runs carry.
-    private func link(at offset: Int) -> URL? {
-      let value = textView?.textLayoutManager?.attributedText?.attribute(
-        .link, at: offset, effectiveRange: nil)
-      return value.flatMap(Self.url(fromLink:))
-    }
-
-    /// A link attribute's value as a URL: AppKit may hand it over as its string.
-    private static func url(fromLink link: Any) -> URL? {
-      link as? URL ?? (link as? String).flatMap(URL.init(string:))
     }
 
     /// The preview is a reader of its own — its own text view and storage, built by

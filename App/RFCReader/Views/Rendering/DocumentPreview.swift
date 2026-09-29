@@ -10,8 +10,9 @@ import SwiftUI
 /// scrolls like the reader does, opened at the place the reference names. Links
 /// inside it are not followed: a click anywhere in it is the commit, which `commit`
 /// turns into opening that place in the reader underneath. On iOS a context menu's
-/// preview takes no touches, and UIKit's tap on it is the commit instead. The reader's own body
-/// stays one text storage; this lives in a popover beside it.
+/// preview takes no touches, and UIKit's tap on it is the commit instead. The
+/// reader's own body stays one text storage; this lives beside it, in a popover on
+/// macOS and a context menu on iOS.
 struct DocumentPreview: View {
   let library: LibraryModel
   let id: DocumentID
