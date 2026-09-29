@@ -570,6 +570,13 @@ struct LegacyTextCorpusFindingsTests {
     #expect(lines.contains { $0.hasPrefix("    0 -- Escape") })
   }
 
+  /// Each line of a block is expanded from its own column 0, so a whole figure can be
+  /// expanded at once (#31): the columns do not run on across a newline.
+  @Test func `tab expansion starts every line at column zero`() {
+    #expect("abc\n\tx".expandingTabs() == "abc\n        x")
+    #expect("abcdefg\t|".expandingTabs() == "abcdefg |")
+  }
+
   /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on
   /// facing pages, and it names no RFC, so the running-header pattern never matched it
   /// (#52). Each page then opened with `Transmission Control Protocol` at column 0,

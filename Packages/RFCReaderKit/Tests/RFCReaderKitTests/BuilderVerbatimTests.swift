@@ -279,4 +279,39 @@ struct BuilderVerbatimTests {
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.displayedText(of: content, indent: 0) == content.text)
   }
+
+  /// 168 artwork and source-code blocks in 65 published RFCXML documents carry a
+  /// literal tab, and the verbatim style sets no tab stops, so each tab went to the
+  /// next default stop, a distance in points unrelated to the monospaced columns
+  /// around it, and the figure sheared (#31). The RFC Editor's own text rendering
+  /// expands them to eight-column stops, each line on its own.
+  @Test func `a tab in artwork is spaces to the next eighth column`() {
+    let content = Preformatted(kind: .artwork, text: "\t|\n  \t|\nabcdefgh\t|")
+    let builder = DocumentTextBuilder(style: style)
+    #expect(
+      builder.displayedText(of: content, indent: 0)
+        == "        |\n        |\nabcdefgh        |")
+  }
+
+  /// Scaled by the columns it is drawn in, not by its characters: three tabs are
+  /// twenty-four columns.
+  @Test func `a block with tabs scales by its expanded width`() {
+    let builder = DocumentTextBuilder(style: style)
+    let tabbed = Preformatted(kind: .artwork, text: String(repeating: "\t", count: 15) + "|")
+    let spaced = String(repeating: " ", count: 120) + "|"
+    let text = builder.displayedText(of: tabbed, indent: 0)
+    #expect(text == spaced)
+    #expect(builder.monospaceScale(for: text, indent: 0) < 1)
+  }
+
+  /// What is shown changes; what the block is does not.
+  @Test func `the box keeps a tabbed block's tabs`() throws {
+    let content = Preformatted(kind: .artwork, text: "\t|", anchor: "tabbed")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let offset = try #require(built.anchors.offset(of: "tabbed"))
+    let box = try #require(
+      built.text.attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox)
+    #expect(box.content.text == "\t|")
+    #expect(!built.text.string.contains("\t"))
+  }
 }
