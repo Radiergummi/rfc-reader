@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -22,6 +22,15 @@ SWIFT_SOURCES = $(shell find App Packages Tools -name '*.swift' -not -path '*/.b
 
 PROJECT := RFCReader.xcodeproj
 SCHEME  := RFCReader
+
+# The XcodeGen release the project is generated with, and its zip's SHA-256
+# (#165). CI installs exactly this through `xcodegen-install`; `xcodeproj` runs
+# that install when there is one, the xcodegen on the PATH otherwise, and warns
+# when the one it runs is another version.
+XCODEGEN_VERSION := 2.46.0
+XCODEGEN_SHA256  := 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+XCODEGEN_DIR     ?= .build/xcodegen
+XCODEGEN          = $(or $(wildcard $(XCODEGEN_DIR)/xcodegen/bin/xcodegen),xcodegen)
 
 ## Lint all Swift sources
 # --strict because .swiftlint.yml is tuned to the tree as it stands: every rule
@@ -126,6 +135,20 @@ $(CORPUS)/xml.noindex/%.xml:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
+## Download the pinned XcodeGen release into XCODEGEN_DIR, checking its SHA-256
+# Its binary is then XCODEGEN_DIR/xcodegen/bin/xcodegen, which `xcodeproj` prefers
+# to the PATH's. The zip is written under a partial name first, so a download
+# that fails its check is never unpacked, and a previous install is removed
+# before unpacking, so no file of another release is left beside this one.
+xcodegen-install:
+	@mkdir -p $(XCODEGEN_DIR)
+	curl -fsSL --retry 3 -o $(XCODEGEN_DIR)/xcodegen.zip.part https://github.com/yonaskolb/XcodeGen/releases/download/$(XCODEGEN_VERSION)/xcodegen.zip
+	echo "$(XCODEGEN_SHA256)  $(XCODEGEN_DIR)/xcodegen.zip.part" | shasum -a 256 -c -
+	mv $(XCODEGEN_DIR)/xcodegen.zip.part $(XCODEGEN_DIR)/xcodegen.zip
+	rm -rf $(XCODEGEN_DIR)/xcodegen
+	unzip -q $(XCODEGEN_DIR)/xcodegen.zip -d $(XCODEGEN_DIR)
+	$(XCODEGEN_DIR)/xcodegen/bin/xcodegen --version
+
 ## Generate the Xcode project from project.yml
 # Phony: XcodeGen's `sources:` entries are folder-based, so a source file added
 # or removed under App/RFCReader has to be picked up even when project.yml
@@ -133,8 +156,19 @@ $(CORPUS)/xml.noindex/%.xml:
 # left build-app failing with a confusing "cannot find X in scope". xcodegen
 # runs in about a second, so regenerating unconditionally costs nothing next
 # to the xcodebuild it precedes.
+#
+# Another XcodeGen version is a warning, not a failure: the project is
+# generated and gitignored, and a Homebrew upgrade should not stop a build.
 xcodeproj:
-	xcodegen generate
+	@if ! command -v $(XCODEGEN) >/dev/null; then \
+	  echo "XcodeGen $(XCODEGEN_VERSION) is not installed: make xcodegen-install, or brew install xcodegen" >&2; \
+	  exit 1; \
+	fi; \
+	installed=$$($(XCODEGEN) --version 2>/dev/null | sed 's/^Version: //'); \
+	if [ "$$installed" != "$(XCODEGEN_VERSION)" ]; then \
+	  echo "warning: $(XCODEGEN) reports version '$$installed'; this project is generated with $(XCODEGEN_VERSION)" >&2; \
+	fi
+	$(XCODEGEN) generate
 
 # Signed with the team project.yml names, provisioning included: automatic signing
 # may create the profile and register this Mac or the attached iPhone on the way.

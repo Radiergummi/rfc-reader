@@ -1,5 +1,6 @@
-# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (brew install
-# xcodegen) to produce RFCReader.xcodeproj; edit this file, never the generated project.
+# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (the pinned
+# release from `make xcodegen-install`, or Homebrew's) to produce
+# RFCReader.xcodeproj; edit this file, never the generated project.
 name: RFCReader
 options:
   bundleIdPrefix: me.mazetti
@@ -95,7 +96,6 @@ targets:
         SWIFT_APPROACHABLE_CONCURRENCY: "YES"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.

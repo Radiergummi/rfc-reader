@@ -23,7 +23,7 @@ Every RFC, beautifully readable, instantly searchable, and one tap from any refe
 
 ```sh
 swift test --package-path Packages/RFCKit   # core library, any Swift 6.3 toolchain
-brew install xcodegen && xcodegen generate  # then open RFCReader.xcodeproj
+make xcodegen-install xcodeproj             # then open RFCReader.xcodeproj
 ```
 
 ## Data
