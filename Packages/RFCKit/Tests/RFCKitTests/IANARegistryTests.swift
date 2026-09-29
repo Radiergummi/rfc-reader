@@ -243,13 +243,27 @@ struct IANARegistryTests {
     }
   }
 
-  /// Answers the registry's own URL with `body`, and anything else with a 404.
-  private struct RegistryTransport: HTTPTransport {
+  /// Answers the registry's own URL with `body`, and anything else with a 404, and
+  /// keeps the request it was sent.
+  private final class RegistryTransport: HTTPTransport, @unchecked Sendable {
     let registry: IANARegistry
     let body: String
     let status: Int
+    private let lock = NSLock()
+    private var sent: URLRequest?
+
+    init(registry: IANARegistry, body: String, status: Int) {
+      self.registry = registry
+      self.body = body
+      self.status = status
+    }
+
+    var request: URLRequest? {
+      lock.withLock { sent }
+    }
 
     func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+      lock.withLock { sent = request }
       let url = request.url!
       let found = url == registry.url
       let response = HTTPURLResponse(
@@ -261,7 +275,7 @@ struct IANARegistryTests {
   @Test func `the client fetches a registry from IANA and reads it`() async throws {
     let client = RFCEditorClient(
       transport: RegistryTransport(registry: .httpStatusCodes, body: Self.statusCodes, status: 200))
-    let fetched = try await client.fetchRegistry(.httpStatusCodes)
+    let fetched = try await client.fetchRegistry(.httpStatusCodes, onExpensiveNetworks: true)
     #expect(fetched.entries.map(\.value) == ["100", "102", "104", "425"])
     #expect(fetched.data == Data(Self.statusCodes.utf8))
   }
@@ -271,9 +285,33 @@ struct IANARegistryTests {
     let client = RFCEditorClient(
       transport: RegistryTransport(registry: .tlsAlerts, body: "<html>", status: 503))
     await #expect(throws: RFCEditorClient.ClientError.self) {
-      try await client.fetchRegistry(.tlsAlerts)
+      try await client.fetchRegistry(.tlsAlerts, onExpensiveNetworks: true)
     }
   }
+
+  #if !canImport(FoundationNetworking)
+    /// Refreshing a registry already kept is a fetch nobody is waiting for, like the
+    /// daily index check (#314).
+    @Test func `a refresh nobody asked for waits for a cheap network`() async throws {
+      let transport = RegistryTransport(
+        registry: .httpStatusCodes, body: Self.statusCodes, status: 200)
+      _ = try await RFCEditorClient(transport: transport)
+        .fetchRegistry(.httpStatusCodes, onExpensiveNetworks: false)
+      let request = try #require(transport.request)
+      #expect(!request.allowsExpensiveNetworkAccess)
+      #expect(!request.allowsConstrainedNetworkAccess)
+    }
+
+    @Test func `a first fetch takes any network`() async throws {
+      let transport = RegistryTransport(
+        registry: .httpStatusCodes, body: Self.statusCodes, status: 200)
+      _ = try await RFCEditorClient(transport: transport)
+        .fetchRegistry(.httpStatusCodes, onExpensiveNetworks: true)
+      let request = try #require(transport.request)
+      #expect(request.allowsExpensiveNetworkAccess)
+      #expect(request.allowsConstrainedNetworkAccess)
+    }
+  #endif
 
   @Test func `each registry names the file IANA publishes it in`() {
     #expect(

@@ -227,7 +227,8 @@ final class LibraryModel {
     Task(name: "Refresh registries") { await refreshRegistries() }
   }
 
-  /// Reads the cached registries, then fetches those that are due. A registry that
+  /// Reads the cached registries, then fetches those that are due: a first fetch on
+  /// any network, a refresh only on a cheap one (`RegistryRefresh`). A registry that
   /// cannot be fetched keeps its cached entries, and is logged rather than shown
   /// (#125): the palette still finds RFCs without it.
   private func refreshRegistries() async {
@@ -236,10 +237,13 @@ final class LibraryModel {
     registriesCheckedAt = .now
     var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
-    for registry in cached.stale {
+    let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
+    for fetch in fetches {
+      let registry = fetch.registry
       let fetched: (entries: [RegistryEntry], data: Data)
       do {
-        fetched = try await client.fetchRegistry(registry)
+        fetched = try await (fetch.onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchRegistry(registry, onExpensiveNetworks: fetch.onExpensiveNetworks)
       } catch {
         libraryLog.error(
           "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
