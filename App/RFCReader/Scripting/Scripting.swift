@@ -148,7 +148,11 @@
       get {
         guard let reader = controller?.reader else { return ScriptCode.contents }
         if reader.pane == .info { return ScriptCode.info }
-        return reader.tab == .references ? ScriptCode.references : ScriptCode.contents
+        switch reader.tab {
+        case .contents: return ScriptCode.contents
+        case .references: return ScriptCode.references
+        case .requirements: return ScriptCode.requirements
+        }
       }
       set {
         guard let reader = controller?.reader else { return }
@@ -158,6 +162,9 @@
         case ScriptCode.references:
           reader.pane = .navigation
           reader.tab = .references
+        case ScriptCode.requirements:
+          reader.pane = .navigation
+          reader.tab = .requirements
         default:
           reader.pane = .navigation
           reader.tab = .contents
@@ -251,6 +258,7 @@
   enum ScriptCode {
     static let contents = code("RIpC")
     static let references = code("RIpR")
+    static let requirements = code("RIpQ")
     static let info = code("RIpI")
     static let newTab = code("RPnT")
     static let newWindow = code("RPnW")
