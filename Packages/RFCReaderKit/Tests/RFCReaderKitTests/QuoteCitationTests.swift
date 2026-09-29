@@ -158,6 +158,90 @@ struct QuoteCitationTests {
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
+  /// Plain text is for where Markdown is not rendered: the quote as it reads, with no
+  /// `>`, fence, entity or link syntax, paragraphs a blank line apart, a figure's lines
+  /// and indentation as drawn, and the citation with its URL spelled out.
+  @Test func `the plain text is the quote without markdown syntax`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "Send <field-name> & more.")),
+        .paragraph(Paragraph(text: "As drawn:")),
+        .preformatted(Preformatted(kind: .artwork, text: "+--+\n  |  |\n\n+--+"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Send", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: "8.3")
+    #expect(
+      quote.plainText == """
+        Send <field-name> & more.
+
+        As drawn:
+
+        +--+
+          |  |
+
+        +--+
+
+        — RFC 9110, Section 8.3, https://www.rfc-editor.org/rfc/rfc9110#section-8.3
+        """)
+  }
+
+  /// HTML is a blockquote of one paragraph per paragraph and one `pre` per figure, and
+  /// the citation a link after it.
+  @Test func `the html quotes paragraphs and figures and links the citation`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "First paragraph.")),
+        .preformatted(Preformatted(kind: .artwork, text: "+--+\n  |  |\n\n+--+")),
+        .paragraph(Paragraph(text: "Second paragraph."))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "First", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: "8.3")
+    #expect(
+      quote.html == """
+        <meta charset="utf-8">
+        <blockquote>
+        <p>First paragraph.</p>
+        <pre>+--+
+          |  |
+
+        +--+</pre>
+        <p>Second paragraph.</p>
+        </blockquote>
+        <p>— <cite><a href="https://www.rfc-editor.org/rfc/rfc9110#section-8.3">RFC 9110, Section 8.3</a></cite></p>
+        """)
+  }
+
+  /// Markup characters in the quote are text, in prose and in a figure alike.
+  @Test func `the html escapes markup characters`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "Send <field-name> & \"quoted\" 'value'.")),
+        .preformatted(Preformatted(kind: .artwork, text: "<a> -> <b> & \"c\""))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Send", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.html.contains(
+        "<p>Send &lt;field-name&gt; &amp; &quot;quoted&quot; &#39;value&#39;.</p>"))
+    #expect(quote.html.contains("<pre>&lt;a&gt; -&gt; &lt;b&gt; &amp; &quot;c&quot;</pre>"))
+  }
+
+  /// The document alone is cited by its info page, in every flavour.
+  @Test func `the citation names its url in plain text and links it in html`() {
+    let quote = QuoteCitation.quote(
+      of: NSAttributedString(string: "Quoted."), document: .rfc(9110), section: nil)
+    #expect(quote.plainText == "Quoted.\n\n— RFC 9110, https://www.rfc-editor.org/info/rfc9110")
+    #expect(
+      quote.html.hasSuffix(
+        "<p>— <cite><a href=\"https://www.rfc-editor.org/info/rfc9110\">RFC 9110</a></cite></p>"))
+  }
+
   @Test func `an appendix is cited as one`() {
     let quote = QuoteCitation.quote(
       of: NSAttributedString(string: "Text."), document: .rfc(9110), section: "A")

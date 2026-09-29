@@ -23,14 +23,18 @@ import RFCKit
 /// reader without the app. The text is `SelectionText`'s, so a reference reads as its
 /// label, as Copy writes it.
 public enum QuoteCitation {
-  /// The flavours for the pasteboard. The Markdown also goes in the plain-text flavour:
-  /// GitHub, Slack and most editors paste plain text, and `> quote` and a Markdown link
-  /// read well as text anyway.
+  /// The flavours for the pasteboard, each target taking the richest it reads.
   public struct Quote {
-    /// The uniform type the Markdown is also written under.
+    /// The uniform type the Markdown is written under.
     public static let markdownType = "net.daringfireball.markdown"
 
+    /// The quote as it reads, with no Markdown syntax: paragraphs a blank line apart, a
+    /// figure's lines as drawn, and the citation with its URL spelled out.
+    public var plainText: String
     public var markdown: String
+    /// A `blockquote` of one `p` per paragraph and one `pre` per figure, and the
+    /// citation a link after it. No styles, so the target's own apply.
+    public var html: String
     /// The quote as text and the citation as a real link, for rich targets such as Mail
     /// and Notes.
     public var rich: NSAttributedString
@@ -90,8 +94,35 @@ public enum QuoteCitation {
     let text = blocks.map { $0.lines.joined(separator: "\n") }.joined(separator: "\n\n")
     let rich = NSMutableAttributedString(string: text + "\n\n— ")
     rich.append(NSAttributedString(string: label, attributes: [.link: url]))
+
+    // The charset, or a target reading the flavour as Latin-1 garbles the dash.
+    let html =
+      (["<meta charset=\"utf-8\">", "<blockquote>"]
+      + blocks.map { block in
+        let content = escapingHTML(block.lines.joined(separator: "\n"))
+        return block.isVerbatim ? "<pre>\(content)</pre>" : "<p>\(content)</p>"
+      }
+      + [
+        "</blockquote>",
+        "<p>— <cite><a href=\"\(escapingHTML(url.absoluteString))\">\(escapingHTML(label))</a></cite></p>",
+      ]).joined(separator: "\n")
+
     return Quote(
-      markdown: quoted.joined(separator: "\n>\n") + "\n\n— " + citation, rich: rich)
+      plainText: text + "\n\n— " + label + ", " + url.absoluteString,
+      markdown: quoted.joined(separator: "\n>\n") + "\n\n— " + citation,
+      html: html,
+      rich: rich)
+  }
+
+  /// `text` as HTML text or an attribute value: the characters markup is made of, as
+  /// entities.
+  private static func escapingHTML(_ text: String) -> String {
+    text
+      .replacingOccurrences(of: "&", with: "&amp;")
+      .replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;")
+      .replacingOccurrences(of: "\"", with: "&quot;")
+      .replacingOccurrences(of: "'", with: "&#39;")
   }
 
   /// A run of the selection that is quoted as one Markdown block: a paragraph, or the

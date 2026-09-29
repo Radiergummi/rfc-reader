@@ -29,13 +29,15 @@ import RFCReaderKit
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
-    /// Copy as Quote: the Markdown as plain text and as Markdown, the rich flavour as
-    /// RTF. Offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
+    /// Copy as Quote: one item carrying the plain text, the Markdown, the HTML and the
+    /// rich flavour as RTF. Offered in the edit menu beside Copy
+    /// (`RFCTextViewCoordinator`).
     func copyAsQuote() {
       guard let quote = quoteSelection(selectedRange) else { return }
       var item: [String: Any] = [
-        UTType.utf8PlainText.identifier: quote.markdown,
+        UTType.utf8PlainText.identifier: quote.plainText,
         QuoteCitation.Quote.markdownType: quote.markdown,
+        UTType.html.identifier: quote.html,
       ]
       if let rtf = quote.rtf {
         item[UTType.rtf.identifier] = rtf
@@ -84,15 +86,16 @@ import RFCReaderKit
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
-    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
-    /// and as Markdown, the rich flavour as RTF (#186).
+    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the plain text, the
+    /// Markdown, the HTML and the rich flavour as RTF (#186).
     @objc func copyAsQuote(_ sender: Any?) {
       guard let quote = quoteSelection(selectedRange()) else { return }
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
-      pasteboard.setString(quote.markdown, forType: .string)
+      pasteboard.setString(quote.plainText, forType: .string)
       pasteboard.setString(
         quote.markdown, forType: NSPasteboard.PasteboardType(QuoteCitation.Quote.markdownType))
+      pasteboard.setString(quote.html, forType: .html)
       if let rtf = quote.rtf {
         pasteboard.setData(rtf, forType: .rtf)
       }
