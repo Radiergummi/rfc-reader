@@ -29,10 +29,27 @@ enum CorpusText {
       ?? String(data: bytes, encoding: .windowsCP1252)
       ?? String(decoding: bytes, as: UTF8.self)
   }
+
+  /// The directory of `rfcNNNN.xml` files, the RFCs authored in RFCXML, where one is set.
+  static var xmlDirectory: URL? {
+    guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_XML"], !path.isEmpty
+    else { return nil }
+    return URL(fileURLWithPath: path, isDirectory: true)
+  }
+
+  static var isXMLAvailable: Bool {
+    xmlDirectory != nil
+  }
+
+  /// The RFCXML of the document `stem` names, such as `rfc9110`.
+  static func xml(_ stem: String) throws -> Data {
+    guard let xmlDirectory else { throw CorpusTextError.notConfigured }
+    return try Data(contentsOf: xmlDirectory.appendingPathComponent("\(stem).xml"))
+  }
 }
 
 enum CorpusTextError: Error {
-  /// `RFC_CORPUS_TEXT` is not set; a suite that reads the corpus is enabled only
-  /// where it is.
+  /// `RFC_CORPUS_TEXT`, or `RFC_CORPUS_XML`, is not set; a suite that reads the corpus
+  /// is enabled only where it is.
   case notConfigured
 }

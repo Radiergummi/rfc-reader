@@ -71,20 +71,30 @@ test-app:
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
 CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc355 rfc674 rfc6614 rfc793
+# The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
-# RFC_CORPUS_TEXT, and are skipped wherever it is unset, as in `make test` and on CI.
+# RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
+# `make test` and on CI.
 # Filtered by their type names, all `CorpusBacked...`: --filter matches a test's
 # identifier, not the `Corpus-backed: ...` name its suite displays.
-test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
-	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) swift test --package-path $(RFCKIT) --filter CorpusBacked
+test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
+  $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
+	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
+	  swift test --package-path $(RFCKIT) --filter CorpusBacked
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a
 # partial file first, so an interrupted download is not taken for the document.
 $(CORPUS)/text.noindex/%.txt:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
+
+# One RFC authored in RFCXML, fetched where `make corpus-fetch-xml` would have put it.
+$(CORPUS)/xml.noindex/%.xml:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 ## Generate the Xcode project from project.yml
 # Phony: XcodeGen's `sources:` entries are folder-based, so a source file added
