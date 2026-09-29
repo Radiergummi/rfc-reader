@@ -51,7 +51,7 @@ struct AuthorCardTests {
     // would recolour everyone — is a deliberate one. FNV-1a 64 of the name, modulo 8.
     #expect(count == 8)
     #expect(tint == 1)
-    #expect(AuthorMonogram.tintColour(for: "Mark Nottingham") == AuthorMonogram.palette[1])
+    #expect(AuthorMonogram.tintColor(for: "Mark Nottingham") == AuthorMonogram.palette[1])
   }
 
   /// The initials are small bold text, so they are held to the HIG's 4.5:1 for text
@@ -61,7 +61,7 @@ struct AuthorCardTests {
   @Test func `every tint's initials clear 4.5 to 1`() {
     for tint in AuthorMonogram.palette {
       #expect(
-        AuthorMonogram.initialsColour.contrast(with: tint) >= AuthorMonogram.minimumContrast,
+        AuthorMonogram.initialsColor.contrast(with: tint) >= AuthorMonogram.minimumContrast,
         "\(tint)")
     }
     #expect(AuthorMonogram.minimumContrast == 4.5)

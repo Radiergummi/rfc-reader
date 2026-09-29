@@ -7,7 +7,7 @@ import RFCKit
 /// `scroll(to:)`. It serves two purposes at once: on the way in it is the deep link's
 /// target section, and on the way out it is where the reader had scrolled to, so
 /// coming back does not dump them at the top of a 200-page RFC.
-public struct Place: Hashable, Sendable {
+public struct HistoryEntry: Hashable, Sendable {
   public let id: DocumentID
   public var section: String?
 
@@ -25,9 +25,9 @@ public struct Place: Hashable, Sendable {
 /// also why this lives in the package rather than the App target — it is a pure state
 /// machine, and the App target has no test bundle.
 public struct NavigationHistory: Sendable {
-  public private(set) var current: Place?
-  private var backward: [Place] = []
-  private var forward: [Place] = []
+  public private(set) var current: HistoryEntry?
+  private var backward: [HistoryEntry] = []
+  private var forward: [HistoryEntry] = []
   /// Whether the last move struck out somewhere new, rather than stepping back or
   /// forward through what was already here.
   private var arrivedByGoing = false
@@ -40,7 +40,7 @@ public struct NavigationHistory: Sendable {
   ///
   /// This is what a list's selection reads, so it has to be able to say "nothing"
   /// while the history still holds where the reader was (#261).
-  public var shown: Place? { isHidden ? nil : current }
+  public var shown: HistoryEntry? { isHidden ? nil : current }
 
   public var canGoBack: Bool { !backward.isEmpty }
   public var canGoForward: Bool { !forward.isEmpty }
@@ -51,7 +51,7 @@ public struct NavigationHistory: Sendable {
   /// Nil when Back would leave the document, after stepping back or forward, and
   /// once the offer is settled: it is for undoing a jump just made, not for
   /// walking the history.
-  public var returnOffer: Place? {
+  public var returnOffer: HistoryEntry? {
     guard arrivedByGoing, let current = shown, let previous = backward.last,
       previous.id == current.id
     else { return nil }
@@ -69,7 +69,7 @@ public struct NavigationHistory: Sendable {
   /// clicking the same link twice must not stack two identical entries to walk back
   /// through. Striking out in a new direction drops whatever was ahead, as a browser
   /// does.
-  public mutating func go(to place: Place, leaving position: String? = nil) {
+  public mutating func go(to place: HistoryEntry, leaving position: String? = nil) {
     defer { isHidden = false }
     guard place != current else { return }
     // Reopening the hidden document from its row, which names no section: back
@@ -90,7 +90,7 @@ public struct NavigationHistory: Sendable {
   /// Step back, recording `position` as the spot being left behind so that going
   /// forward again returns to it.
   @discardableResult
-  public mutating func goBack(leaving position: String? = nil) -> Place? {
+  public mutating func goBack(leaving position: String? = nil) -> HistoryEntry? {
     guard let previous = backward.popLast() else { return nil }
     if var leaving = current {
       leaving.section = position ?? leaving.section
@@ -104,7 +104,7 @@ public struct NavigationHistory: Sendable {
 
   /// The mirror of `goBack(leaving:)`.
   @discardableResult
-  public mutating func goForward(leaving position: String? = nil) -> Place? {
+  public mutating func goForward(leaving position: String? = nil) -> HistoryEntry? {
     guard let next = forward.popLast() else { return nil }
     if var leaving = current {
       leaving.section = position ?? leaving.section

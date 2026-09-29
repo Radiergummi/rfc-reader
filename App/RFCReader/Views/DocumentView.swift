@@ -464,7 +464,7 @@ struct DocumentView: View {
     ///
     /// In a single column only: beside other columns, the back/forward pair is in
     /// the bar.
-    private var visibleReturn: Place? {
+    private var visibleReturn: HistoryEntry? {
       horizontalSizeClass == .compact ? navigation.returnOffer : nil
     }
 

@@ -15,7 +15,7 @@ extension DocumentTextBuilder {
     let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
     let attributes: [NSAttributedString.Key: Any] = [
       .font: style.bodyFont,
-      .foregroundColor: bodyColour,
+      .foregroundColor: bodyColor,
       .paragraphStyle: paragraphStyle(
         indent: markerColumn,
         firstLineIndent: indent,
@@ -57,7 +57,7 @@ extension DocumentTextBuilder {
   func appendDefinitionList(_ items: [DefinitionItem], indent: CGFloat) {
     let termAttributes: [NSAttributedString.Key: Any] = [
       .font: style.boldBodyFont,
-      .foregroundColor: bodyColour,
+      .foregroundColor: bodyColor,
       .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.3),
     ]
     for item in items {

@@ -66,9 +66,9 @@ private struct Monogram: View {
   var body: some View {
     Text(AuthorMonogram.initials(for: name))
       .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-      .foregroundStyle(Color(AuthorMonogram.initialsColour))
+      .foregroundStyle(Color(AuthorMonogram.initialsColor))
       .frame(width: size, height: size)
-      .background(Color(AuthorMonogram.tintColour(for: name)), in: .circle)
+      .background(Color(AuthorMonogram.tintColor(for: name)), in: .circle)
       .accessibilityHidden(true)
   }
 }
@@ -76,8 +76,8 @@ private struct Monogram: View {
 extension Color {
   /// A colour whose contrast RFCReaderKit has measured, drawn as exactly those sRGB
   /// values in every appearance.
-  fileprivate init(_ colour: SRGBColour) {
-    self.init(.sRGB, red: colour.red, green: colour.green, blue: colour.blue)
+  fileprivate init(_ color: SRGBColor) {
+    self.init(.sRGB, red: color.red, green: color.green, blue: color.blue)
   }
 }
 

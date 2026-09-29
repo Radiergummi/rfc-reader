@@ -461,7 +461,8 @@ final class RFCTextViewCoordinator: NSObject {
           visibleTop: edge,
           distance: Self.headingLineHeight
         ),
-        subtitle: subtitle(atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
+        runningHeading: runningHeading(
+          atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
       )
       // Steady for almost all of a document; only a change is news.
       guard state != lastToolbarTitle else { return }
@@ -473,18 +474,18 @@ final class RFCTextViewCoordinator: NSObject {
   #if !canImport(UIKit)
     /// The section the toolbar's subtitle names, from the paragraph under the
     /// toolbar's edge — `edge` is in container coordinates.
-    private func subtitle(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
-      -> ToolbarSubtitle.State
+    private func runningHeading(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
+      -> RunningHeading.State
     {
       // Above the container is the header, which belongs to no section.
       guard edge >= 0, let layout,
         let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
       else { return .steady(nil) }
       let frame = fragment.layoutFragmentFrame
-      return ToolbarSubtitle.state(
+      return RunningHeading.state(
         in: sectionIndex,
         topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
-        crossing: ToolbarSubtitle.crossing(
+        crossing: RunningHeading.crossing(
           edge: edge,
           fragmentTop: frame.minY,
           fragmentHeight: frame.height,

@@ -12,7 +12,7 @@ import Testing
 @Suite("Platform types")
 @MainActor
 struct PlatformTests {
-  @Test func `dynamic colours are not resolved`() {
+  @Test func `dynamic colors are not resolved`() {
     // The point of RFCColors is that the values stored in the attributed string
     // resolve at draw time, so dark mode costs a redraw and never a rebuild.
     #expect(RFCColors.label !== RFCColors.secondaryLabel)
@@ -32,18 +32,18 @@ struct PlatformTests {
     #expect(aside.alpha > card.alpha && aside.alpha < 0.15, "aside alpha \(aside.alpha)")
   }
 
-  private func resolved(_ colour: PlatformColor, dark: Bool) throws -> (
+  private func resolved(_ color: PlatformColor, dark: Bool) throws -> (
     white: CGFloat, alpha: CGFloat
   ) {
     var white: CGFloat = -1
     var alpha: CGFloat = -1
     #if canImport(UIKit)
       let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
-      _ = colour.resolvedColor(with: traits).getWhite(&white, alpha: &alpha)
+      _ = color.resolvedColor(with: traits).getWhite(&white, alpha: &alpha)
     #else
       let appearance = try #require(NSAppearance(named: dark ? .darkAqua : .aqua))
       appearance.performAsCurrentDrawingAppearance {
-        colour.usingColorSpace(.genericGray)?.getWhite(&white, alpha: &alpha)
+        color.usingColorSpace(.genericGray)?.getWhite(&white, alpha: &alpha)
       }
     #endif
     return (white, alpha)

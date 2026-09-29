@@ -82,10 +82,10 @@
       label(.systemFont(ofSize: 11), .secondaryLabelColor)
     }
 
-    private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
+    private static func label(_ font: NSFont, _ color: NSColor) -> NSTextField {
       let field = NSTextField(labelWithString: "")
       field.font = font
-      field.textColor = colour
+      field.textColor = color
       field.lineBreakMode = .byTruncatingTail
       field.cell?.usesSingleLineMode = true
       // Truncated rather than pushing its title wider than it was given.
@@ -157,7 +157,7 @@
   /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises out
   /// from under the toolbar's bottom edge and fades in as the heading passes under
   /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`. Its subtitle
-  /// names the section being read; see `ToolbarSubtitle`.
+  /// names the section being read; see `RunningHeading`.
   private final class DocumentTitleView: NSView {
     private let title = TitleStack.titleLabel()
     /// The subtitle's line, clipped to itself: a section's heading hands over to
@@ -226,15 +226,15 @@
     func update(_ state: ToolbarTitleState) {
       let previous = self.state
       self.state = state
-      if state.subtitle.outgoing != previous.subtitle.outgoing
-        || state.subtitle.incoming != previous.subtitle.incoming
+      if state.runningHeading.outgoing != previous.runningHeading.outgoing
+        || state.runningHeading.incoming != previous.runningHeading.incoming
       {
         applyText()
       }
       if state.reveal != previous.reveal {
         placeContent()
       }
-      if state.subtitle.progress != previous.subtitle.progress {
+      if state.runningHeading.progress != previous.runningHeading.progress {
         placeHandOver()
       }
     }
@@ -264,8 +264,8 @@
     /// Each label only when its words change: a label assigned the same string
     /// redraws for nothing.
     private func applyText() {
-      let outgoingText = state.subtitle.outgoing ?? documentTitle
-      let incomingText = state.subtitle.incoming ?? documentTitle
+      let outgoingText = state.runningHeading.outgoing ?? documentTitle
+      let incomingText = state.runningHeading.incoming ?? documentTitle
       if outgoing.stringValue != outgoingText { outgoing.stringValue = outgoingText }
       if incoming.stringValue != incomingText { incoming.stringValue = incomingText }
     }
@@ -293,7 +293,7 @@
     /// The hand-over: the outgoing heading rises out of the subtitle's line as
     /// the incoming one rises in, each transparent while the line's edge cuts it.
     private func placeHandOver() {
-      let handOver = state.subtitle.progress
+      let handOver = state.runningHeading.progress
       let width = lineWidth
       outgoing.frame = CGRect(
         x: 0, y: handOver * subtitleHeight, width: width, height: subtitleHeight)

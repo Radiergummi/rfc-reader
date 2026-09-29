@@ -148,9 +148,9 @@ struct BuilderStructureTests {
     let abstractFont: PlatformFont? = attribute(.font, at: abstract)
     let headingFont: PlatformFont? = attribute(.font, at: heading)
     #expect(abstractFont == headingFont)
-    let abstractColour: PlatformColor? = attribute(.foregroundColor, at: abstract)
-    let headingColour: PlatformColor? = attribute(.foregroundColor, at: heading)
-    #expect(abstractColour == headingColour)
+    let abstractColor: PlatformColor? = attribute(.foregroundColor, at: abstract)
+    let headingColor: PlatformColor? = attribute(.foregroundColor, at: heading)
+    #expect(abstractColor == headingColor)
     let abstractParagraph = try #require(
       attribute(.paragraphStyle, at: abstract) as NSParagraphStyle?)
     let headingParagraph = try #require(
@@ -285,10 +285,10 @@ struct BuilderStructureTests {
       built.text.attribute(.font, at: bodyOffset, effectiveRange: nil) as? PlatformFont)
     #expect(abstractFont.pointSize < bodyFont.pointSize)
 
-    let abstractColour =
+    let abstractColor =
       built.text.attribute(.foregroundColor, at: abstractOffset, effectiveRange: nil)
       as? PlatformColor
-    #expect(abstractColour == RFCColors.secondaryLabel)
+    #expect(abstractColor == RFCColors.secondaryLabel)
     #expect(
       built.text.attribute(.foregroundColor, at: bodyOffset, effectiveRange: nil) as? PlatformColor
         == RFCColors.label)

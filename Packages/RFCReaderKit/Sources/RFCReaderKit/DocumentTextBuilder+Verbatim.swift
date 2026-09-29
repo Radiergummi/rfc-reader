@@ -35,7 +35,7 @@ extension DocumentTextBuilder {
       body,
       [
         .font: style.monospacedFont(scale: scale),
-        .foregroundColor: bodyColour,
+        .foregroundColor: bodyColor,
         .rfcVerbatim: box,
         .paragraphStyle: paragraphStyle(
           indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),

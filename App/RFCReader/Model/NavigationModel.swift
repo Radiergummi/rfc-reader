@@ -136,7 +136,7 @@ final class NavigationModel: Identifiable {
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
   /// Where Back returns to, straight after a jump within the document on screen.
-  var returnOffer: Place? { history.returnOffer }
+  var returnOffer: HistoryEntry? { history.returnOffer }
 
   func settleReturnOffer() {
     history.settleReturnOffer()
@@ -152,7 +152,7 @@ final class NavigationModel: Identifiable {
     if id.series != .rfc, let first = index?.series(id)?.members.first {
       id = first
     }
-    go(to: Place(id: id, section: link.section))
+    go(to: HistoryEntry(id: id, section: link.section))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
     sidebarSelection = .all
@@ -182,14 +182,14 @@ final class NavigationModel: Identifiable {
   /// for `.series`, from the members those entries resolve to. A list that could
   /// show a series row would have to come back through `open`.
   func select(_ id: DocumentID) {
-    go(to: Place(id: id))
+    go(to: HistoryEntry(id: id))
   }
 
   /// A jump within the document already open — a section link in the prose, or a
   /// row in the table of contents. Its own history entry, so Back undoes it.
   func jump(toSection section: String) {
     guard let id = selection else { return }
-    go(to: Place(id: id, section: section))
+    go(to: HistoryEntry(id: id, section: section))
   }
 
   func goBack() {
@@ -202,14 +202,14 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: Place) {
+  private func go(to place: HistoryEntry) {
     let before = history.current
     history.go(to: place, leaving: visiblePosition)
     guard history.current != before else { return }
     arrive(at: place)
   }
 
-  private func arrive(at place: Place) {
+  private func arrive(at place: HistoryEntry) {
     scrollRequest = place.section.map { ScrollRequest(section: $0) }
     visiblePosition = place.section
   }

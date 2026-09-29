@@ -10,8 +10,8 @@ import Testing
 /// every other tab with it.
 @Suite("Navigation history")
 struct NavigationHistoryTests {
-  private func place(_ number: Int, _ section: String? = nil) -> Place {
-    Place(id: .rfc(number), section: section)
+  private func place(_ number: Int, _ section: String? = nil) -> HistoryEntry {
+    HistoryEntry(id: .rfc(number), section: section)
   }
 
   // MARK: - Returning from a jump within a document (#254)

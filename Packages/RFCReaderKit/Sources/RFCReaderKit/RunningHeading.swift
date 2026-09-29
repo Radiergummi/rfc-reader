@@ -1,6 +1,7 @@
 import CoreGraphics
 
-/// What the subtitle under the reader's toolbar title says as the document scrolls.
+/// The running heading: what the subtitle under the reader's toolbar title says as
+/// the document scrolls.
 ///
 /// The document's title until the first section's heading passes under the
 /// toolbar — over the title page and the abstract, which belong to no section —
@@ -13,7 +14,7 @@ import CoreGraphics
 /// the reading position (`ReadingPlaceTracker`): that one counts the abstract as
 /// section one and switches as a heading reaches the top, where this names no
 /// section over the abstract and switches as a heading's last line passes.
-public enum ToolbarSubtitle {
+public enum RunningHeading {
   public struct State: Equatable, Sendable {
     /// The heading on its way out, nil for the document's title.
     public let outgoing: String?
@@ -80,20 +81,20 @@ public enum ToolbarSubtitle {
 }
 
 /// Everything the reader tells its toolbar title as it scrolls: how far the title
-/// has come in (`ToolbarTitleReveal`), and what its subtitle says.
+/// has come in (`ToolbarTitleReveal`), and what its subtitle says (`RunningHeading`).
 public struct ToolbarTitleState: Equatable, Sendable {
   public let reveal: CGFloat
-  public let subtitle: ToolbarSubtitle.State
+  public let runningHeading: RunningHeading.State
 
-  public init(reveal: CGFloat, subtitle: ToolbarSubtitle.State) {
+  public init(reveal: CGFloat, runningHeading: RunningHeading.State) {
     self.reveal = reveal
-    self.subtitle = subtitle
+    self.runningHeading = runningHeading
   }
 
   /// The title in full, over the document's own title: where there is no header
   /// on screen to show them instead.
-  public static let shown = ToolbarTitleState(reveal: 1, subtitle: .steady(nil))
+  public static let shown = ToolbarTitleState(reveal: 1, runningHeading: .steady(nil))
 
   /// Nothing in the toolbar, because the header is showing it.
-  public static let hidden = ToolbarTitleState(reveal: 0, subtitle: .steady(nil))
+  public static let hidden = ToolbarTitleState(reveal: 0, runningHeading: .steady(nil))
 }

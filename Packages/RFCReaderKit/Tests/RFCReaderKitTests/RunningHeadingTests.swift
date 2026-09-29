@@ -4,8 +4,8 @@ import Testing
 
 @testable import RFCReaderKit
 
-@Suite("Toolbar subtitle")
-struct ToolbarSubtitleTests {
+@Suite("Running heading")
+struct RunningHeadingTests {
   /// Two sections, their headings at offsets 100 and 500. Everything before 100 is
   /// the title page and the abstract.
   private let sections = AnchorIndex([
@@ -13,8 +13,8 @@ struct ToolbarSubtitleTests {
     AnchorIndex.Entry(anchor: "section-2", offset: 500, heading: "2. Terminology"),
   ])
 
-  private func state(at start: Int, crossing: CGFloat = 0) -> ToolbarSubtitle.State {
-    ToolbarSubtitle.state(in: sections, topFragmentStart: start, crossing: crossing)
+  private func state(at start: Int, crossing: CGFloat = 0) -> RunningHeading.State {
+    RunningHeading.state(in: sections, topFragmentStart: start, crossing: crossing)
   }
 
   /// The abstract belongs to no section, so the document's title stays.
@@ -29,7 +29,7 @@ struct ToolbarSubtitleTests {
   @Test func `the first heading replaces the documents title`() {
     let crossing = state(at: 100, crossing: 0.25)
     #expect(
-      crossing == ToolbarSubtitle.State(outgoing: nil, incoming: "1. Introduction", progress: 0.25))
+      crossing == RunningHeading.State(outgoing: nil, incoming: "1. Introduction", progress: 0.25))
   }
 
   /// Inside a section, its heading shows outright.
@@ -42,7 +42,7 @@ struct ToolbarSubtitleTests {
     let crossing = state(at: 500, crossing: 0.5)
     #expect(
       crossing
-        == ToolbarSubtitle.State(
+        == RunningHeading.State(
           outgoing: "1. Introduction", incoming: "2. Terminology", progress: 0.5))
   }
 
@@ -56,17 +56,17 @@ struct ToolbarSubtitleTests {
 
   /// A document with no sections keeps its title throughout.
   @Test func `no sections keeps the documents title`() {
-    let none = ToolbarSubtitle.state(in: AnchorIndex([]), topFragmentStart: 900, crossing: 1)
+    let none = RunningHeading.state(in: AnchorIndex([]), topFragmentStart: 900, crossing: 1)
     #expect(none == .steady(nil))
   }
 }
 
-@Suite("Toolbar subtitle crossing")
-struct ToolbarSubtitleCrossingTests {
+@Suite("Running heading crossing")
+struct RunningHeadingCrossingTests {
   /// A heading fragment at y = 100 with 12 pt of space above its one 30 pt line,
   /// which therefore runs from 112 to 142.
   private func crossing(atEdge edge: CGFloat) -> CGFloat {
-    ToolbarSubtitle.crossing(
+    RunningHeading.crossing(
       edge: edge, fragmentTop: 100, fragmentHeight: 42,
       lastLine: CGRect(x: 0, y: 12, width: 300, height: 30))
   }
@@ -87,7 +87,7 @@ struct ToolbarSubtitleCrossingTests {
   /// the edge halfway down the first line has not started it.
   @Test func `a wrapped heading hands over on its last line`() {
     let wrapped: (CGFloat) -> CGFloat = { edge in
-      ToolbarSubtitle.crossing(
+      RunningHeading.crossing(
         edge: edge, fragmentTop: 100, fragmentHeight: 72,
         lastLine: CGRect(x: 0, y: 42, width: 300, height: 30))
     }
@@ -97,7 +97,7 @@ struct ToolbarSubtitleCrossingTests {
 
   /// A fragment without lines counts as one line its own height.
   @Test func `a fragment without lines is one line`() {
-    let bare = ToolbarSubtitle.crossing(
+    let bare = RunningHeading.crossing(
       edge: 120, fragmentTop: 100, fragmentHeight: 40, lastLine: nil)
     #expect(bare == 0.5)
   }

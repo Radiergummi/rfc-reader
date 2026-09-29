@@ -4,7 +4,7 @@ import Foundation
 /// colour does not expose: a system colour resolves differently by appearance,
 /// platform and OS release, so a colour whose contrast is checked has to be one the
 /// code states itself.
-public struct SRGBColour: Hashable, Sendable {
+public struct SRGBColor: Hashable, Sendable {
   public var red: Double
   public var green: Double
   public var blue: Double
@@ -23,9 +23,9 @@ public struct SRGBColour: Hashable, Sendable {
       blue: Double(hex & 0xFF) / 255)
   }
 
-  public static let white = SRGBColour(red: 1, green: 1, blue: 1)
+  public static let white = SRGBColor(red: 1, green: 1, blue: 1)
   /// For the tests, which check the contrast formula against its extremes.
-  static let black = SRGBColour(red: 0, green: 0, blue: 0)
+  static let black = SRGBColor(red: 0, green: 0, blue: 0)
 
   /// WCAG 2.x relative luminance: each channel linearised from the sRGB curve, then
   /// weighted by how bright the eye finds it. 0 is black, 1 is white.
@@ -35,7 +35,7 @@ public struct SRGBColour: Hashable, Sendable {
 
   /// WCAG 2.x contrast ratio, (L1 + 0.05) / (L2 + 0.05) with L1 the lighter: from
   /// 1:1 for a colour against itself to 21:1 for white against black. Symmetric.
-  public func contrast(with other: SRGBColour) -> Double {
+  public func contrast(with other: SRGBColor) -> Double {
     let lighter = max(relativeLuminance, other.relativeLuminance)
     let darker = min(relativeLuminance, other.relativeLuminance)
     return (lighter + 0.05) / (darker + 0.05)

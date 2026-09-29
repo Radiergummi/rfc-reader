@@ -10,7 +10,7 @@ public enum ReturnOffer {
   /// reader had scrolled to, but a deep link or a section link can record the
   /// number itself. Resolved through `RFCDocument.anchor(forPlace:)`, which is how
   /// the reader jumps to it, so the label names the section a tap on it goes to.
-  public static func title(for place: Place, in document: RFCDocument?) -> String {
+  public static func title(for place: HistoryEntry, in document: RFCDocument?) -> String {
     guard let section = place.section else { return "Back to Top" }
     guard let document,
       let number = document.section(anchor: document.anchor(forPlace: section))?.number
