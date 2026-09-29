@@ -777,6 +777,7 @@ public struct LegacyTextParser: Sendable {
     var document = RFCDocument(
       header: header, sections: Self.nest(Self.makingAnchorsUnique(flat)), source: .text)
     document.abbreviations = Abbreviations.defined(in: document)
+    document.definedTerms = DefinedTerms.defined(in: document)
     return document
   }
 

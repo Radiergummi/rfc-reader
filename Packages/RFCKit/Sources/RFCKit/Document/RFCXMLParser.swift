@@ -52,6 +52,8 @@ public struct RFCXMLParser: Sendable {
     }
     var document = RFCDocument(header: header, sections: sections, source: .xml)
     document.abbreviations = Abbreviations.defined(in: document)
+    document.definedTerms = DefinedTerms.defined(
+      in: document, indexed: Self.primaryIndexTerms(in: root, builder: builder))
     return document
   }
 
@@ -68,6 +70,41 @@ public struct RFCXMLParser: Sendable {
   }
 
   // MARK: - Builder
+
+  /// The terms primary index entries define (#176): `<iref primary="true">` without a
+  /// subitem, each defined by the element it sits in, at that element's anchor or its
+  /// section's. With a subitem an entry files a name under a group (`Grammar` /
+  /// `ALPHA`, `Fields` / `Content-Type`), an index heading rather than a term.
+  static func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
+    primaryIndexTerms(
+      in: root, builder: Builder(referenceTargets: Builder.referenceTargets(in: root)))
+  }
+
+  private static func primaryIndexTerms(in root: XMLTree.Element, builder: Builder)
+    -> [DefinedTerm]
+  {
+    var terms: [DefinedTerm] = []
+    func visit(_ element: XMLTree.Element, anchor: String?) {
+      let anchor = element["anchor"] ?? anchor
+      for child in element.elements {
+        guard child.name == "iref" else {
+          visit(child, anchor: anchor)
+          continue
+        }
+        guard child["primary"] == "true", child["subitem"] == nil, let item = child["item"]
+        else { continue }
+        // Directly in a section, an entry marks the section; there is no one element
+        // to show as its definition.
+        let definition =
+          element.name == "section"
+          ? []
+          : builder.parseBlocks(in: XMLTree.Element(name: "wrapper", children: [.element(element)]))
+        terms.append(DefinedTerm(term: item, anchor: anchor, definition: definition))
+      }
+    }
+    visit(root, anchor: nil)
+    return terms
+  }
 
   private struct Builder {
     /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes.
