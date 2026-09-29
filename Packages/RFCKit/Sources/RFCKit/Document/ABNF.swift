@@ -18,7 +18,8 @@ enum ABNF {
     var name: String
     /// A `=/` rule, adding alternatives to one defined before it.
     var isIncremental: Bool
-    /// The rule names the definition refers to, each once, in order of first mention.
+    /// The rule names the definition refers to, each once whatever its case, as first
+    /// spelled and in order of first mention.
     var references: [String]
     /// Whether the definition uses syntax only a grammar has: an alternative (`/`), a
     /// repetition (`*`, `#`, or a count), an option (`[ ]`), a quoted literal or a
@@ -30,7 +31,7 @@ enum ABNF {
   /// Whether `text` is a grammar: it parses, and a rule uses syntax only a grammar has,
   /// or there are two rules or more and one refers to another. `token = 1*tchar` is one;
   /// `count = max;` is not, although it parses, and neither is a list of assignments in
-  /// pseudocode (`lowest = infinity`), whose rules refer to nothing among them.
+  /// pseudocode (`smallest = unbounded`), whose rules refer to nothing among them.
   static func recognizes(_ text: String) -> Bool {
     guard let rules = parse(text) else { return false }
     if rules.contains(where: \.usesGrammarSyntax) { return true }
@@ -53,17 +54,17 @@ enum ABNF {
       rules.append(rule)
       return true
     }
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    let lines = text.components(separatedBy: "\n")
     // The block's own indentation is not the rule's: RFCXML keeps it inside
     // `<sourcecode>`, and a rule starts at the least indented line that is not only a
     // comment. A comment may sit further left than the rules it heads (RFC 9271).
     let indent =
       lines.filter { line in
-        line.contains { !$0.isWhitespace } && line.first { $0 != " " } != ";"
+        !line.isBlank && line.first { $0 != " " } != ";"
       }
-      .map { $0.prefix { $0 == " " }.count }.min() ?? 0
+      .map(\.leadingSpaceCount).min() ?? 0
     for line in lines {
-      let unindented = line.dropFirst(min(indent, line.prefix { $0 == " " }.count))
+      let unindented = line.dropFirst(min(indent, line.leadingSpaceCount))
       guard let content = withoutComment(unindented) else { return nil }
       guard content.contains(where: { !$0.isWhitespace }) else { continue }
       if content.first?.isWhitespace == true {
@@ -135,14 +136,15 @@ enum ABNF {
       return true
     }
 
-    /// Takes the next character if it is one of `options`, compared without case: the
-    /// letters after `%` may be written either way.
-    private mutating func takeLetter(_ options: String) -> Character? {
-      guard let next, options.contains(where: { $0 == Character(next.lowercased()) }) else {
-        return nil
-      }
-      position += 1
-      return Character(next.lowercased())
+    /// Skips the characters that are digits by `isDigit`, and says whether there were any.
+    private mutating func skipDigits(_ isDigit: (Character) -> Bool) -> Bool {
+      let start = position
+      while let next, isDigit(next) { position += 1 }
+      return position > start
+    }
+
+    private static func isDecimalDigit(_ character: Character) -> Bool {
+      character.isASCII && character.isNumber
     }
 
     @discardableResult
@@ -204,20 +206,14 @@ enum ABNF {
     /// number, not a repetition: test vectors are valid ABNF by the letter, `4c0ffee`
     /// reading as four of a rule named `c0ffee` and `0x7` as none of `x7`.
     private mutating func repetition() -> Bool {
-      var repeated = false
-      var counted = false
-      while let next, next.isASCII, next.isNumber {
-        position += 1
-        repeated = true
-        counted = true
-      }
+      let counted = skipDigits(Self.isDecimalDigit)
       if take("*") || take("#") {
-        repeated = true
-        counted = false
-        while let next, next.isASCII, next.isNumber { position += 1 }
+        _ = skipDigits(Self.isDecimalDigit)
+        usesGrammarSyntax = true
+      } else if counted {
+        if startsHexNumber() { return false }
+        usesGrammarSyntax = true
       }
-      if counted, startsHexNumber() { return false }
-      if repeated { usesGrammarSyntax = true }
       return element()
     }
 
@@ -225,7 +221,9 @@ enum ABNF {
     private func startsHexNumber() -> Bool {
       guard let next else { return false }
       if next == "x" || next == "X" { return true }
-      let name = characters[position...].prefix { $0.isASCII && ($0.isLetter || $0.isNumber) }
+      let name = characters[position...].prefix { character in
+        character.isASCII && (character.isLetter || character.isNumber || character == "-")
+      }
       return !name.isEmpty && name.allSatisfy(\.isHexDigit)
     }
 
@@ -241,16 +239,19 @@ enum ABNF {
         return enclosedAlternation(closing: "]")
       case "\"":
         usesGrammarSyntax = true
-        return quotedLiteral()
+        return delimitedValue(opening: "\"", closing: "\"")
       case "%":
         position += 1
         usesGrammarSyntax = true
         return numericOrCasedValue()
       case "<":
-        return proseValue()
+        return delimitedValue(opening: "<", closing: ">")
       default:
         guard let name = ruleName() else { return false }
-        if !references.contains(name) { references.append(name) }
+        // Rule names are case-insensitive: one name in two spellings is one reference.
+        if !references.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+          references.append(name)
+        }
         return true
       }
     }
@@ -262,46 +263,34 @@ enum ABNF {
       return take(closing)
     }
 
-    /// `DQUOTE *(%x20-21 / %x23-7E) DQUOTE`.
-    private mutating func quotedLiteral() -> Bool {
-      guard take("\"") else { return false }
-      while let next, next != "\"" {
+    /// A quoted literal, `DQUOTE *(%x20-21 / %x23-7E) DQUOTE`, or a prose value, `<`
+    /// then printable characters but `>`, then `>`.
+    private mutating func delimitedValue(opening: Character, closing: Character) -> Bool {
+      guard take(opening) else { return false }
+      while let next, next != closing {
         guard let value = next.asciiValue, (0x20...0x7E).contains(value) else { return false }
         position += 1
       }
-      return take("\"")
-    }
-
-    /// `<` then printable characters but `>`, then `>`.
-    private mutating func proseValue() -> Bool {
-      guard take("<") else { return false }
-      while let next, next != ">" {
-        guard let value = next.asciiValue, (0x20...0x7E).contains(value) else { return false }
-        position += 1
-      }
-      return take(">")
+      return take(closing)
     }
 
     /// After `%`: `s` or `i` and a quoted literal (RFC 7405), or `x`, `d` or `b` and a
     /// number in that base, followed by `.`-joined numbers or one `-` range.
     private mutating func numericOrCasedValue() -> Bool {
-      guard let base = takeLetter("sixdb") else { return false }
-      if base == "s" || base == "i" { return quotedLiteral() }
-      let digits: (Character) -> Bool =
+      // The letters after `%` may be written in either case.
+      guard let base = next?.lowercased().first, "sixdb".contains(base) else { return false }
+      position += 1
+      if base == "s" || base == "i" { return delimitedValue(opening: "\"", closing: "\"") }
+      let isDigit: (Character) -> Bool =
         switch base {
         case "x": { $0.isHexDigit }
-        case "d": { $0.isASCII && $0.isNumber }
+        case "d": Self.isDecimalDigit
         default: { $0 == "0" || $0 == "1" }
         }
-      func number(_ parser: inout RuleParser) -> Bool {
-        let start = parser.position
-        while let next = parser.next, digits(next) { parser.position += 1 }
-        return parser.position > start
-      }
-      guard number(&self) else { return false }
-      if take("-") { return number(&self) }
+      guard skipDigits(isDigit) else { return false }
+      if take("-") { return skipDigits(isDigit) }
       while take(".") {
-        guard number(&self) else { return false }
+        guard skipDigits(isDigit) else { return false }
       }
       return true
     }

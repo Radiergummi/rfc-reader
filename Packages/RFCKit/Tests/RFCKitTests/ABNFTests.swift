@@ -26,6 +26,13 @@ struct ABNFTests {
     #expect(rules[2].references == ["ALPHA"])
   }
 
+  /// Rule names are case-insensitive: a name mentioned in two spellings is one reference,
+  /// kept as first spelled.
+  @Test func `a reference is listed once whatever its case`() throws {
+    let rules = try #require(ABNF.parse("mixed = LETTER / letter / Letter"))
+    #expect(rules[0].references == ["LETTER"])
+  }
+
   /// A rule continues on any line set deeper than the one it starts on, and a comment
   /// runs from `;` to the end of its line, even inside a continued rule.
   @Test func `continuation lines and comments belong to their rule`() throws {
@@ -122,11 +129,17 @@ struct ABNFTests {
     #expect(ABNF.recognizes("four-digits = 4DIGIT"), "a count before a real name is a repetition")
   }
 
+  /// A rule name runs on past a hyphen: a first part made only of hex letters does not
+  /// make a counted name a hex number.
+  @Test func `a counted name with a hyphen after hex letters is a repetition`() {
+    #expect(ABNF.recognizes("quad = 4bead-part"))
+  }
+
   /// Assignments in pseudocode or a configuration parse as plain rules: without syntax
   /// only a grammar has, the rules have to refer to one another.
   @Test func `plain rules that refer to nothing among them are not a grammar`() {
-    #expect(!ABNF.recognizes(Self.text("lowest = infinity", "current = infinity")))
-    #expect(!ABNF.recognizes(Self.text("e=<email-address>", "p=<phone-number>")))
+    #expect(!ABNF.recognizes(Self.text("smallest = unbounded", "latest = unbounded")))
+    #expect(!ABNF.recognizes(Self.text("k=<first-setting>", "m=<second-setting>")))
   }
 
   @Test func `two plain rules are recognised`() {
@@ -139,15 +152,14 @@ struct ABNFTests {
   /// source code typed `abnf`, as RFCXML writes it.
   @Test func `RFC 5234's grammars are source code typed abnf`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
-    let grammars = document.blocks.compactMap { block -> Preformatted? in
-      guard case .preformatted(let preformatted) = block, preformatted.type == "abnf" else {
-        return nil
-      }
+    let verbatim = document.blocks.compactMap { block -> Preformatted? in
+      guard case .preformatted(let preformatted) = block else { return nil }
       return preformatted
     }
-    #expect(grammars.allSatisfy { $0.kind == .sourceCode })
-    #expect(grammars.contains { $0.text.contains("rulelist") })
-    #expect(grammars.contains { $0.text.contains("ALPHA") && $0.text.contains("%x41-5A") })
+    let grammar = verbatim.filter { $0.text.contains("rulelist") }
+    let coreRules = verbatim.filter { $0.text.contains("%x41-5A") }
+    #expect(!grammar.isEmpty && !coreRules.isEmpty)
+    #expect((grammar + coreRules).allSatisfy { $0.kind == .sourceCode && $0.type == "abnf" })
   }
 
   /// A diagram stays artwork.
