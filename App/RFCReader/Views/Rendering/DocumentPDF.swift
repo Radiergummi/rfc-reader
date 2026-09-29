@@ -63,7 +63,9 @@ nonisolated enum DocumentPDF {
     let layout = PrintLayout(paperSize: paperSize)
     switch content {
     case .document(let document, let furniture):
-      return buildAndLayOut(document, furniture: furniture, layout: layout) { _, laidOut in
+      return buildAndLayOut(
+        document, style: layout.style, furniture: furniture, layout: layout
+      ) { _, laidOut in
         pdf(laidOut, layout: layout, furniture: furniture)
       }
     case .original(let source):
@@ -75,13 +77,17 @@ nonisolated enum DocumentPDF {
   /// the build knows about it. All of it in the light appearance, what `body` draws
   /// included, for the reason `render` gives. A print and an export both go
   /// through here, so a PDF exported in Dark Mode is as white as a print (#376).
+  ///
+  /// - Parameter style: `layout.style` for a print, `layout.exportStyle` for an
+  ///   export, whose links look like links.
   static func buildAndLayOut<Result>(
-    _ document: RFCDocument, furniture: PrintFurniture, layout: PrintLayout,
+    _ document: RFCDocument, style: ReadingStyle, furniture: PrintFurniture,
+    layout: PrintLayout,
     _ body: (BuiltDocument, LaidOut) -> Result
   ) -> Result {
     inLightAppearance {
       let built = DocumentTextBuilder.build(
-        document, style: layout.style, title: furniture.titleBlock)
+        document, style: style, title: furniture.titleBlock)
       return layOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout) {
         laidOut in
         body(built, laidOut)

@@ -34,7 +34,9 @@ nonisolated extension DocumentPDF {
   {
     let layout = PrintLayout(paperSize: paperSize)
     let furniture = PrintFurniture(header: document.header, metadata: metadata)
-    return buildAndLayOut(document, furniture: furniture, layout: layout) { built, laidOut in
+    return buildAndLayOut(
+      document, style: layout.exportStyle, furniture: furniture, layout: layout
+    ) { built, laidOut in
       let pages = pdf(laidOut, layout: layout, furniture: furniture)
       let outline = PDFExport.outline(of: document, built: built)
       let marks = PDFMarks(

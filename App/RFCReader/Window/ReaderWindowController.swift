@@ -525,6 +525,7 @@
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true
+      panel.tagNames = ExportFormat.tagNames(for: library.metadata(id))
       isExporting = true
       panel.beginSheetModal(for: window) { [library] response in
         guard response == .OK, let url = panel.url else {
@@ -534,11 +535,17 @@
         // Read here, not captured earlier: the chooser is what the panel's pop-up
         // changed, and holding it in this closure is what keeps it alive.
         let format = chooser.format
+        let tags = panel.tagNames ?? []
         Task {
           do {
             let data = try await DocumentExport.data(
               for: id, as: format, paperSize: NSPrintInfo.shared.paperSize, library: library)
             try data.write(to: url, options: .atomic)
+            // The panel only collects the tags; the file is written after it, and
+            // an atomic write replaces it, so they are set on what was written.
+            if !tags.isEmpty {
+              try (url as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
+            }
             self.isExporting = false
           } catch {
             self.isExporting = false

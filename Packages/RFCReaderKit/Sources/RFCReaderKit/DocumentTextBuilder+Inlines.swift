@@ -77,8 +77,13 @@ extension DocumentTextBuilder {
       // model's to say — `CrossReference.display`, which `plainText` answers
       // from too, so the screen and a copied selection cannot disagree.
       let display = xref.display
-      if style.references == .plainText {
+      switch style.references {
+      case .chip:
+        break
+      case .plainText:
         attributes[.font] = style.referenceFont(matching: font(in: base))
+        return NSAttributedString(string: display.text, attributes: attributes)
+      case .link:
         return NSAttributedString(string: display.text, attributes: attributes)
       }
       guard let chip = display.chip else {
@@ -102,9 +107,17 @@ extension DocumentTextBuilder {
 
   /// What makes a run a link: the URL, and the underline when the reader asked
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
-  /// links (`ReadingStyle.emitsLinks`), only where it goes, as `.rfcLinkTarget`.
+  /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
+  /// the link colour with the underline, since nothing else colours it there.
   private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
-    guard style.emitsLinks else { return [.rfcLinkTarget: url] }
+    guard style.emitsLinks else {
+      guard style.underlinesLinks else { return [.rfcLinkTarget: url] }
+      return [
+        .rfcLinkTarget: url,
+        .foregroundColor: RFCColors.link,
+        .underlineStyle: NSUnderlineStyle.single.rawValue,
+      ]
+    }
     var attributes: [NSAttributedString.Key: Any] = [.link: url]
     if style.underlinesLinks {
       attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue

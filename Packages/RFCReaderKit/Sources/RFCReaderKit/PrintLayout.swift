@@ -108,4 +108,13 @@ public struct PrintLayout: Sendable, Equatable {
       bodySize: Self.bodySize, measure: contentRect.width, lineHeightMultiple: 1.2,
       emitsLinks: false, references: .plainText)
   }
+
+  /// The style an exported PDF is built in (#376): the print's, but read on screen,
+  /// so every link, a reference included, is underlined in the link colour.
+  public var exportStyle: ReadingStyle {
+    var exported = style
+    exported.underlinesLinks = true
+    exported.references = .link
+    return exported
+  }
 }

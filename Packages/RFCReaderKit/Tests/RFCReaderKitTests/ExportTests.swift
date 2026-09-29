@@ -14,8 +14,31 @@ import UniformTypeIdentifiers
 
 @Suite("Export: formats")
 struct ExportFormatTests {
-  @Test func `a file is named as the RFC Editor names its own`() {
-    #expect(ExportFormat.pdf.fileName(for: .rfc(9110)) == "rfc9110.pdf")
+  private let june = PublicationDate(year: 2026, month: 6)
+
+  @Test func `a file is named by its series and number`() {
+    #expect(ExportFormat.pdf.fileName(for: .rfc(10042)) == "RFC-10042.pdf")
+    #expect(ExportFormat.pdf.fileName(for: DocumentID(series: .bcp, number: 14)) == "BCP-14.pdf")
+    #expect(ExportFormat.fileStem(for: .rfc(9110)) == "RFC-9110")
+  }
+
+  /// Finder tags: the series, the working group and the status, and nothing empty.
+  @Test func `a file is tagged with its working group and status`() {
+    let metadata = RFCMetadata(
+      id: .rfc(10042), title: "A Protocol", date: june, currentStatus: .informational,
+      workingGroup: "sshm")
+    #expect(ExportFormat.tagNames(for: metadata) == ["RFC", "sshm", "Informational"])
+  }
+
+  @Test func `a file from no working group, of no known status, is tagged RFC alone`() {
+    let none = RFCMetadata(
+      id: .rfc(10042), title: "A Protocol", date: june, currentStatus: .unknown,
+      workingGroup: "NON WORKING GROUP")
+    #expect(ExportFormat.tagNames(for: none) == ["RFC"])
+    #expect(ExportFormat.tagNames(for: nil) == ["RFC"])
+    let empty = RFCMetadata(
+      id: .rfc(10042), title: "A Protocol", date: june, currentStatus: .historic, workingGroup: "")
+    #expect(ExportFormat.tagNames(for: empty) == ["RFC", "Historic"])
   }
 
   /// Changing the format keeps a name the user typed, and swaps its extension.
@@ -23,6 +46,15 @@ struct ExportFormatTests {
     #expect(ExportFormat.pdf.renaming("rfc9110.md") == "rfc9110.pdf")
     #expect(ExportFormat.pdf.renaming("HTTP semantics") == "HTTP semantics.pdf")
     #expect(ExportFormat.pdf.renaming("notes.v2.txt") == "notes.v2.pdf")
+    #expect(ExportFormat.pdf.renaming("RFC-10042.pdf") == "RFC-10042.pdf")
+    #expect(ExportFormat.pdf.renaming("RFC-10042") == "RFC-10042.pdf")
+  }
+
+  /// A dot in a name is not always an extension: only a suffix that names a file
+  /// type is replaced.
+  @Test func `a new format keeps a dot that is not an extension`() {
+    #expect(ExportFormat.pdf.renaming("RFC-10042 v1.2") == "RFC-10042 v1.2.pdf")
+    #expect(ExportFormat.pdf.renaming("RFC-10042 v1.2.pdf") == "RFC-10042 v1.2.pdf")
   }
 
   @Test func `PDF is rendered, and typed as a PDF`() {
@@ -106,6 +138,36 @@ struct ExportLinkTests {
     #expect(urls(.link, in: paper.text).isEmpty)
   }
 
+  /// An exported PDF is read on screen: a reference is an ordinary link, underlined
+  /// in the link colour, and neither a chip nor a print's plain text.
+  @Test func `an export's references are underlined links, not chips`() throws {
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
+    #expect(layout.exportStyle.references == .link)
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: layout.exportStyle)
+    let whole = NSRange(location: 0, length: built.text.length)
+    var chips = 0
+    built.text.enumerateAttribute(.rfcChip, in: whole) { value, _, _ in
+      if value != nil { chips += 1 }
+    }
+    #expect(chips == 0)
+    #expect(!built.text.string.contains("\u{FFFC}"))
+    #expect(urls(.link, in: built.text).isEmpty)
+
+    var linked = 0
+    var references = 0
+    built.text.enumerateAttribute(.rfcLinkTarget, in: whole) { value, range, _ in
+      guard value != nil else { return }
+      linked += 1
+      built.text.enumerateAttributes(in: range) { attributes, _, _ in
+        if attributes[.rfcReference] != nil { references += 1 }
+        #expect(attributes[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
+        #expect(attributes[.foregroundColor] as? PlatformColor == RFCColors.link)
+      }
+    }
+    #expect(linked > 0)
+    #expect(references > 0)
+  }
+
   private func urls(_ key: NSAttributedString.Key, in text: NSAttributedString) -> [URL] {
     var found: [URL] = []
     text.enumerateAttribute(key, in: NSRange(location: 0, length: text.length)) { value, _, _ in
@@ -152,6 +214,21 @@ struct ExportOutlineTests {
     #expect(info.subject == "RFC 9999")
     #expect(info.author == "A. Writer, Ed.")
     #expect(info.keywords == ["examples"])
+  }
+
+  private let june = PublicationDate(year: 2026, month: 6)
+
+  /// Keywords carry what the file's tags say too: the working group and the status.
+  @Test func `the file's keywords include its working group and status`() {
+    let header = DocumentHeader(
+      id: .rfc(10042), title: "A Protocol", date: june, keywords: ["hybrid"])
+    let metadata = RFCMetadata(
+      id: .rfc(10042), title: "A Protocol", date: june, keywords: ["ignored"],
+      currentStatus: .informational,
+      workingGroup: "sshm")
+    let info = PDFExport.Info(header: header, metadata: metadata)
+    #expect(info.title == "RFC 10042: A Protocol")
+    #expect(info.keywords == ["hybrid", "sshm", "Informational"])
   }
 
   @Test func `a document with no number is titled by its title alone`() {

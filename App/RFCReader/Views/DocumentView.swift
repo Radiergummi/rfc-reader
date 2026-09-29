@@ -218,7 +218,7 @@ struct DocumentView: View {
             }),
           document: exported,
           contentType: (exported?.format ?? .pdf).contentType,
-          defaultFilename: id.fileStem
+          defaultFilename: ExportFormat.fileStem(for: id)
         ) { _ in
           exported = nil
           isExporting = false

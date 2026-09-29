@@ -93,15 +93,19 @@ public enum PDFExport {
     public let author: String
     /// `RFC 9110`.
     public let subject: String
+    /// The document's own keywords, then its working group and status, as its
+    /// Finder tags say them (`ExportFormat.tagNames(for:)`).
     public let keywords: [String]
 
     public init(header: DocumentHeader, metadata: RFCMetadata?) {
       let summary = HeaderSummary(header: header, metadata: metadata)
-      let designation = (header.id ?? metadata?.id)?.displayName
-      title = designation.map { "\($0): \(summary.title)" } ?? summary.title
+      let id = header.id ?? metadata?.id
+      title = PrintFurniture.documentTitle(id: id, title: summary.title)
       author = summary.authors.map(\.displayName).joined(separator: ", ")
-      subject = designation ?? ""
-      keywords = header.keywords.isEmpty ? (metadata?.keywords ?? []) : header.keywords
+      subject = id?.displayName ?? ""
+      let own = header.keywords.isEmpty ? (metadata?.keywords ?? []) : header.keywords
+      let filing = ExportFormat.classification(metadata).filter { !own.contains($0) }
+      keywords = own + filing
     }
   }
 

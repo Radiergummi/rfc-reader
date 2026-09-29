@@ -43,18 +43,43 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     contentType.preferredFilenameExtension ?? rawValue
   }
 
-  /// `rfc9110.pdf`: the name the RFC Editor gives its own files, so an export sits
-  /// beside a download of the same document under the name one would expect.
+  /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
+  /// name in Finder, rather than the RFC Editor's `rfc10042`.
   public func fileName(for id: DocumentID) -> String {
-    "\(id.fileStem).\(pathExtension)"
+    "\(Self.fileStem(for: id)).\(pathExtension)"
+  }
+
+  /// `RFC-10042`: a file name without its extension, which iOS's Save to Files adds
+  /// for the format itself.
+  public static func fileStem(for id: DocumentID) -> String {
+    "\(id.series.rawValue)-\(id.number)"
   }
 
   /// `name` with this format's extension in place of the one it has: what the save
   /// panel's name field becomes when the format changes, keeping whatever the
-  /// name was changed to.
+  /// name was changed to. Only a suffix that names a file type is an extension:
+  /// the `.2` of `RFC-10042 v1.2` is part of the name, and stays.
   public func renaming(_ name: String) -> String {
-    let stem = (name as NSString).deletingPathExtension
+    let suffix = (name as NSString).pathExtension
+    let isFileType = UTType(filenameExtension: suffix).map { !$0.isDynamic } ?? false
+    let stem = isFileType ? (name as NSString).deletingPathExtension : name
     return "\(stem.isEmpty ? name : stem).\(pathExtension)"
+  }
+
+  /// The Finder tags an exported file is offered with (Mac): `RFC`, the working
+  /// group, and the status, as the reader's lists show it. Nothing the index does
+  /// not know.
+  public static func tagNames(for metadata: RFCMetadata?) -> [String] {
+    ["RFC"] + classification(metadata)
+  }
+
+  /// The working group and the status: what an exported file's tags and its PDF
+  /// keywords both say it is filed under.
+  static func classification(_ metadata: RFCMetadata?) -> [String] {
+    let status = metadata?.currentStatus
+    return [metadata?.namedWorkingGroup, status == .unknown ? nil : status?.displayName]
+      .compactMap { $0 }
+      .filter { !$0.isEmpty }
   }
 
   /// The format a stored choice names, or the first one when it names none: the
