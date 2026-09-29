@@ -411,6 +411,7 @@ public enum LegacyTextParser {
     -> [BlockDiagnostics]
   {
     let prepared = prepared(text, title: title)
+    var locator = SourceLocator(text)
     return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in
@@ -421,9 +422,59 @@ public enum LegacyTextParser {
           // A catalogue is a list too, offered the block before the prose test.
           claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil
             || catalogueEntries(block.lines) != nil,
-          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
+          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent),
+          sourceLines: locator.locate(block.lines)
         )
       }
+    }
+  }
+
+  /// Finds blocks in the source they came from, in document order.
+  ///
+  /// A block's lines are source lines, depaginated but otherwise as given: control
+  /// characters removed, tabs expanded, trailing space trimmed, which is how each source
+  /// line is read here too. Lines are numbered as the text splits at its newlines, before
+  /// anything is removed, because that is how a reader of the source counts them: an
+  /// overstrike can remove a newline, and numbering after it would put every later block
+  /// a line early. Each block starts at the next source line equal to its first, and its
+  /// other lines follow in order, past at most a page break's furniture between two of
+  /// them. Found once per diagnosis, rather than carried through depagination and
+  /// segmentation, which are the parser's hot path.
+  private struct SourceLocator {
+    /// The most lines a page break puts between two lines of a block: the edge lines
+    /// `recurringFurniture` drops at the foot and the head of a page, up to four each,
+    /// the footer, the form feed, the running header and the blanks around them.
+    private static let furnitureSpan = 24
+
+    private let lines: [String]
+    private var cursor = 0
+
+    init(_ text: String) {
+      lines = text.replacingOccurrences(of: "\r\n", with: "\n")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map { line in
+          removingControlCharacters(String(line))
+            .replacingOccurrences(of: "\u{0C}", with: "")
+            .expandingTabs()
+            .trimmingTrailingWhitespace()
+        }
+    }
+
+    /// The 1-based source lines of `block`, or nil when one of its lines is not where
+    /// it should be. Nothing is guessed: a block not found leaves the cursor where it
+    /// was, so the blocks after it are still found.
+    mutating func locate(_ block: [String]) -> ClosedRange<Int>? {
+      guard let first = block.first,
+        let start = lines[cursor...].firstIndex(of: first)
+      else { return nil }
+      var end = start
+      for line in block.dropFirst() {
+        let window = lines[(end + 1)..<min(end + 1 + Self.furnitureSpan, lines.count)]
+        guard let next = window.firstIndex(of: line) else { return nil }
+        end = next
+      }
+      cursor = end + 1
+      return (start + 1)...(end + 1)
     }
   }
 
@@ -1902,6 +1953,7 @@ public enum LegacyTextParser {
     -> ProseDiagnostics
   {
     var diagnosis = ProseDiagnostics()
+    diagnosis.indentLimit = maxIndent
     guard let first = lines.first else {
       diagnosis.rejections = [.noLines]
       return diagnosis
@@ -1918,11 +1970,16 @@ public enum LegacyTextParser {
     // a MIB module's text, whose `DESCRIPTION` clauses and comments are sentences: a
     // block with an assignment in it, or an ASN.1 comment, is the module's (RFC 8096's
     // `... obsoleted by IP-MIB::ipv6IpForwarding." ::= { ipv6MIBObjects 1 }`).
+    //
+    // A thorough diagnosis asks it of a block too deep as well: whether a looser limit
+    // would take the block, or refuse it as code instead, is what makes a near miss (#43).
+    if indent > classicProseIndent, indent <= maxIndent || thorough {
+      diagnosis.readsAsDeepProse =
+        readsLikeSentences(lines, share: (of: 1, in: 2)) && !readsAsModuleText(lines)
+    }
     if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
-    } else if indent > classicProseIndent,
-      !readsLikeSentences(lines, share: (of: 1, in: 2)) || readsAsModuleText(lines)
-    {
+    } else if indent > classicProseIndent, !diagnosis.readsAsDeepProse {
       diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {
