@@ -380,6 +380,16 @@
       }
     }
 
+    /// An empty collection, from the toolbar's New Collection and File > New
+    /// Collection… alike; only the Bookmark menu's adds the open document. It opens
+    /// a collapsed sidebar first, so the collection is in view once made, and the
+    /// sheet comes in once the sidebar has slid open.
+    func newCollection() {
+      revealSidebar { [navigation] in
+        navigation.collectionEditor = .create(adding: nil)
+      }
+    }
+
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
     func focusSearch() {
       if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }

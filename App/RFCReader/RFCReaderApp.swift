@@ -114,7 +114,7 @@ struct DocumentCommands: Commands {
         .keyboardShortcut("l", modifiers: .command)
         .disabled(openDocument == nil)
       #if os(macOS)
-        Button("New Collection…") { navigation?.collectionEditor = .create(adding: nil) }
+        Button("New Collection…") { active.controller?.newCollection() }
           .keyboardShortcut("n", modifiers: [.command, .shift])
           .disabled(navigation == nil)
       #endif

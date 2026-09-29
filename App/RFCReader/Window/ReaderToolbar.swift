@@ -673,15 +673,7 @@
       navigation.collectionEditor = .create(adding: id)
     }
 
-    /// The toolbar's New Collection button, which makes an empty collection as
-    /// File > New Collection… does; only the Bookmark menu's adds the open document.
-    /// It opens a collapsed sidebar first, so the collection is in view once made,
-    /// and the sheet comes in once the sidebar has slid open (`revealSidebar`).
-    @objc private func newEmptyCollection() {
-      controller.revealSidebar { [navigation] in
-        navigation.collectionEditor = .create(adding: nil)
-      }
-    }
+    @objc private func newEmptyCollection() { controller.newCollection() }
 
     @objc private func printDocument() { controller.printDocument() }
     @objc private func exportDocument() { controller.exportDocument() }
