@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: artwork")
-@MainActor
 struct BuilderVerbatimTests {
   private let style = ReadingStyle()
 

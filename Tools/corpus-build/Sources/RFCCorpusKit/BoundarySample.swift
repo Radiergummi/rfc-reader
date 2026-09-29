@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 import RFCKit
 
@@ -98,7 +99,7 @@ public enum BoundarySample {
       entries.append(
         Entry(
           document: document, startLine: range.lowerBound, endLine: range.upperBound,
-          sha256: Manifest.sha256(of: Data(source.utf8)), criterion: criterion.name,
+          sha256: Manifest.hex(SHA256.hash(data: Data(source.utf8))), criterion: criterion.name,
           rejection: rejection.rawValue,
           measurement: criterion.measurement, margin: criterion.margin))
     }

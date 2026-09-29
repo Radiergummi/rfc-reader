@@ -7,13 +7,7 @@ import Foundation
 /// distinguishes prose from ASCII art, re-joins paragraphs split across pages and
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
-public struct LegacyTextParser: Sendable {
-  public init() {}
-
-  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
-    LegacyTextParser().parse(text, title: title)
-  }
-
+public enum LegacyTextParser {
   public static func parse(_ data: Data) -> RFCDocument {
     parse(String(decoding: data, as: UTF8.self))
   }
@@ -25,9 +19,9 @@ public struct LegacyTextParser: Sendable {
     case pageBreak
   }
 
-  nonisolated(unsafe) private static let footerPattern = #/\[Page \d+\]\s*$/#
-  nonisolated(unsafe) private static let runningHeaderPattern =
-    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#
+  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
+  private static let runningHeaderPattern = Pattern(
+    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
   /// Removes form feeds, running headers and page footers, keeping everything else verbatim.
   public static func stripPagination(_ text: String) -> String {
@@ -381,16 +375,16 @@ public struct LegacyTextParser: Sendable {
     var blocks: [RawBlock] = []
   }
 
-  nonisolated(unsafe) private static let numberedHeadingPattern =
-    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
-  nonisolated(unsafe) private static let appendixHeadingPattern =
-    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
+  private static let numberedHeadingPattern = Pattern(
+    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
+  private static let appendixHeadingPattern = Pattern(
+    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#)
   /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
   /// pattern of its own rather than a colon allowed in the one above, whose
   /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
   /// column 0 is as often a question's answer.
-  nonisolated(unsafe) private static let colonAppendixHeadingPattern =
-    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#
+  private static let colonAppendixHeadingPattern = Pattern(
+    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#)
 
   /// The number and title of an appendix heading, in any shape the parser reads one:
   /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
@@ -734,7 +728,7 @@ public struct LegacyTextParser: Sendable {
   /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
   /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
   /// is where the two are told apart.
-  public func parse(_ text: String, title: String? = nil) -> RFCDocument {
+  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header
@@ -1139,8 +1133,9 @@ public struct LegacyTextParser: Sendable {
     return previousRow[second.count]
   }
 
-  nonisolated(unsafe) private static let dateLinePattern =
+  private static let dateLinePattern = Pattern(
     #/(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+(?:\d{1,2},?\s+)?\d{4}/#
+  )
 
   /// A line that is a date and nothing else, as a title page sets its publication date:
   /// RFC 822's `August 13, 1982`, RFC 907's `July 1984`.
@@ -1173,7 +1168,7 @@ public struct LegacyTextParser: Sendable {
     return entries > 0 && entries * 2 >= lines.count
   }
 
-  nonisolated(unsafe) private static let romanPageNumberPattern = #/x{0,3}(?:ix|iv|v?i{0,3})/#
+  private static let romanPageNumberPattern = Pattern(#/x{0,3}(?:ix|iv|v?i{0,3})/#)
 
   /// A lower-case roman numeral up to `xxxix`, further than any front section's pages
   /// run. Spelt out rather than taken as any run of the letters, because `ill` and
@@ -1302,10 +1297,11 @@ public struct LegacyTextParser: Sendable {
     return nil
   }
 
-  nonisolated(unsafe) private static let monthYearPattern =
+  private static let monthYearPattern = Pattern(
     #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
-  nonisolated(unsafe) private static let authorPattern =
-    #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#
+  )
+  private static let authorPattern = Pattern(
+    #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#)
 
   /// The line that states the document's number, in any of the spellings the series has
   /// used (#51): `Request for Comments: 793`, `RFC # 64`, `NWG/RFC# 276`, `NWG RFC 103`, `RFC-811`,
@@ -1314,9 +1310,9 @@ public struct LegacyTextParser: Sendable {
   /// is not always in the left column (RFC 811 sets it on the right) and a label spaced
   /// widely enough from its number is split from it by the column split
   /// (`Request for Comments:    50`).
-  nonisolated(unsafe) private static let numberLinePattern =
+  private static let numberLinePattern = Pattern(
     #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#
-    .ignoresCase()
+      .ignoresCase())
 
   private static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
     var header = DocumentHeader(title: "")
@@ -1394,8 +1390,10 @@ public struct LegacyTextParser: Sendable {
     }
   }
 
+  private static let digitsPattern = Pattern(#/\d+/#)
+
   private static func documentIDs(in text: String) -> [DocumentID] {
-    text.matches(of: #/\d+/#).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
+    text.matches(of: digitsPattern).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
   }
 
   // MARK: Headings
@@ -1555,38 +1553,38 @@ public struct LegacyTextParser: Sendable {
 
   // MARK: Blocks
 
-  nonisolated(unsafe) private static let bulletPattern =
-    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
+  private static let bulletPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#)
   /// A catalogue entry: `NUMBER[letter]  - text`, the RFC index of RFC 1012, the
   /// standards summaries' `2352 - A Convention ...`, numbered steps and value tables
   /// (#204). The text may not start with a digit, or `3 - 2` would be an entry.
-  nonisolated(unsafe) private static let catalogueEntryPattern =
-    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#
+  private static let catalogueEntryPattern = Pattern(
+    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#)
   /// A column gap in a catalogue entry's text: a run of three spaces or more after a
   /// word. After a colon it is no column: `3 - NAME:   description` is a name and its
   /// description, the spaces aligning the descriptions (RFC 5412, 5416, 8231).
   /// `internalGapPattern` counted four spaces after a colon and not three, so RFC
   /// 8231 came out as one row a list among rows kept as artwork.
-  nonisolated(unsafe) private static let catalogueGapPattern = #/[^.?!:\s]\s{3,}\S/#
+  private static let catalogueGapPattern = Pattern(#/[^.?!:\s]\s{3,}\S/#)
   /// Arithmetic in an entry's text: a formula set on a line of its own opens with a
   /// number and a minus as well (RFC 5879's `1 - (1 - x / y) ^ 4 == ...`).
-  nonisolated(unsafe) private static let formulaPattern = #/==|\s\^\s/#
+  private static let formulaPattern = Pattern(#/==|\s\^\s/#)
   /// A second entry on the entry's line (RFC 3423's `1 - TCP, 2 - SCTP`), which is
   /// not the first one's text.
-  nonisolated(unsafe) private static let secondEntryPattern = #/,\s*\d+[a-z]? +- +\S/#
+  private static let secondEntryPattern = Pattern(#/,\s*\d+[a-z]? +- +\S/#)
   /// How far past an entry's text column a continuation may stand: a column or two
   /// either way is how a description under an entry is set, and a caption centred
   /// under a legend stands well past it (RFC 793's at 26 against 12).
   private static let catalogueContinuationSlack = 2
-  nonisolated(unsafe) private static let numberedItemPattern =
-    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
+  private static let numberedItemPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#)
   /// `containsArtwork` answers the same question byte by byte; an alternative added
   /// here has to be added there, and `` `the byte scans agree with the regexes` `` is the guard.
-  nonisolated(unsafe) static let artworkPattern =
-    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+  static let artworkPattern = Pattern(
+    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#)
   /// A run of three or more spaces between two non-space characters, not following
   /// sentence punctuation: a column gap rather than the gap after a full stop.
-  nonisolated(unsafe) static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+  static let internalGapPattern = Pattern(#/[^.?!:]\s{3,}\S/#)
 
   /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
   /// of every block the prose test sees. Swift's regex engine tries each alternative
@@ -2304,8 +2302,8 @@ public struct LegacyTextParser: Sendable {
   /// 1993.]`. Leading whitespace is excluded for the same reason -- `[ ]` and
   /// `[ a:defaultValue = "" ]` are schema fragments, not citations.
 
-  nonisolated(unsafe) private static let referenceStartPattern =
-    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#
+  private static let referenceStartPattern = Pattern(
+    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#)
   /// A page footer `depaginate` could not see. `footerPattern` is anchored to the
   /// end of the line, and the earliest RFCs set the footer the other way round --
   /// `[Page 0]` at the left margin with the author out at the right (RFC 753, 759,
@@ -2313,7 +2311,7 @@ public struct LegacyTextParser: Sendable {
   /// one bracket of an anchor's shape that never names a reference. Four documents,
   /// and without this each gains a `<reference anchor="Page 52">` whose title is
   /// whatever the footer's author column said.
-  nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
+  private static let pageFooterAnchorPattern = Pattern(#/Page\s+\d+/#)
 
   private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
     var references: [Reference] = []
@@ -2346,6 +2344,17 @@ public struct LegacyTextParser: Sendable {
     return references
   }
 
+  /// What `reference(anchor:text:)` reads out of an entry, once per bibliography entry:
+  /// hoisted, because a literal inside the function was a new `Regex` for every entry,
+  /// compiled again on its first match (#146).
+  private static let referenceRFCPattern = Pattern(#/\bRFC\s?(\d+)/#)
+  private static let referenceOlderRFCPattern = Pattern(
+    #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+  private static let referenceBCPPattern = Pattern(#/\bBCP\s?(\d+)/#)
+  private static let referenceSTDPattern = Pattern(#/\bSTD\s?(\d+)/#)
+  private static let referenceTitlePattern = Pattern(#/"([^"]+)"/#)
+  private static let referenceURLPattern = Pattern(#/https?:\/\/[^\s>,]+/#)
+
   private static func reference(anchor label: String, text: String) -> Reference {
     var seriesInfo: [SeriesInfo] = []
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
@@ -2354,24 +2363,24 @@ public struct LegacyTextParser: Sendable {
     // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
     // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
     // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
-    if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#)
-      ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+    if let match = text.firstMatch(of: referenceRFCPattern)
+      ?? text.firstMatch(of: referenceOlderRFCPattern)
     {
       seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
       seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
     }
-    if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceBCPPattern) {
       seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))
     }
-    if let match = text.firstMatch(of: #/\bSTD\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceSTDPattern) {
       seriesInfo.append(SeriesInfo(name: "STD", value: String(match.1)))
     }
-    let title = text.firstMatch(of: #/"([^"]+)"/#).map { String($0.1) } ?? ""
+    let title = text.firstMatch(of: referenceTitlePattern).map { String($0.1) } ?? ""
     let date = text.firstMatch(of: monthYearPattern).map {
       PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
     }
-    let url = text.firstMatch(of: #/https?:\/\/[^\s>,]+/#).flatMap {
+    let url = text.firstMatch(of: referenceURLPattern).flatMap {
       URL(string: String($0.output).trimmingTrailingPunctuation())
     }
     var reference = Reference(
@@ -2425,16 +2434,21 @@ struct InlineLinker: Sendable {
   /// A pattern and the literal it cannot match without, defined together: `link`
   /// reaches a pattern only through `matches(in:given:)`, so no pass can run under
   /// another pattern's gate.
-  struct Gated<Output> {
-    let regex: Regex<Output>
-    let gate: KeyPath<Literals, Bool>
+  struct Gated<Output: Sendable>: Sendable {
+    let regex: Pattern<Output>
+    let gate: any KeyPath<Literals, Bool> & Sendable
+
+    init(regex: Regex<Output>, gate: any KeyPath<Literals, Bool> & Sendable) {
+      self.regex = Pattern(regex)
+      self.gate = gate
+    }
 
     func matches(in text: String, given literals: Literals) -> [Regex<Output>.Match] {
       literals[keyPath: gate] ? text.matches(of: regex) : []
     }
   }
 
-  nonisolated(unsafe) static let sectionOfRFCPattern = Gated(
+  static let sectionOfRFCPattern = Gated(
     regex: #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#,
     gate: \.sectionOfRFC
   )
@@ -2444,7 +2458,7 @@ struct InlineLinker: Sendable {
   /// neither this pattern nor the bare one. Anything that is not a document once
   /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
   /// the bare pattern picks up whatever RFC sits inside it.
-  nonisolated(unsafe) static let bracketPattern = Gated(
+  static let bracketPattern = Gated(
     regex: #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#, gate: \.bracket)
   /// Deliberately blind to a preceding `[`. A multi-anchor citation
   /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
@@ -2456,17 +2470,17 @@ struct InlineLinker: Sendable {
   /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
   /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
   /// larger of the two shapes going unlinked.
-  nonisolated(unsafe) static let bareRFCPattern = Gated(
+  static let bareRFCPattern = Gated(
     regex: #/\bRFC[\s\-]?(?<number>\d+)\b/#, gate: \.rfc)
   /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
   /// reference but only the first carries the word, so the numbers are linked where
   /// they stand and the sentence is left to read as it was set.
-  nonisolated(unsafe) static let rfcListPattern = Gated(
+  static let rfcListPattern = Gated(
     regex: #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#, gate: \.rfcs)
-  nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
-  nonisolated(unsafe) static let sectionPattern = Gated(
+  private static let listNumberPattern = Pattern(#/\d{1,5}/#)
+  static let sectionPattern = Gated(
     regex: #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#, gate: \.section)
-  nonisolated(unsafe) static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
+  static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
 
   /// What a matched mention reads as: nil when the document spelled the reference
   /// the way the series spells itself, so the label composes back identically, and
@@ -2687,10 +2701,15 @@ extension String {
     return result
   }
 
+  /// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
+  /// every title `heading(from:)` reads, a contents entry's included: a static pattern,
+  /// as a literal in the function was a new `Regex` per line (#146).
+  private static let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
+
   func trimmingTrailingDots() -> String {
     var result = trimmingTrailingWhitespace()
     // Table-of-contents style "Title ....... 7" leaders.
-    if let match = result.firstMatch(of: #/\s*\.{3,}\s*\d*$/#) {
+    if let match = result.firstMatch(of: Self.contentsLeaderPattern) {
       result.removeSubrange(match.range)
     }
     return result
