@@ -21,6 +21,9 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// written (issue #67). Both parsers collect them as their last step, so the
   /// expansion is read from the document the reader is shown.
   public var abbreviations: [String: Abbreviation] = [:]
+  /// The terms the document defines itself, keyed by the term as written (#176). See
+  /// `DefinedTerms`.
+  public var definedTerms: [String: DefinedTerm] = [:]
 
   public init(header: DocumentHeader, sections: [Section], source: DocumentSource) {
     self.header = header
