@@ -353,12 +353,30 @@
 
     /// Opens a collapsed sidebar. Animated where nothing waits on it; ⌥⌘F opens it at
     /// once, because it focuses the search field inside it straight after.
-    func showSidebar(animated: Bool = false) {
-      guard sidebarItem.isCollapsed else { return }
-      if animated {
-        sidebarItem.animator().isCollapsed = false
-      } else {
+    ///
+    /// `then` runs once the sidebar is open: straight away when it already was, and
+    /// after the slide when it was not. A sheet has to wait for it, because the two
+    /// cannot move together. AppKit opens a sheet in a run loop of its own
+    /// (`NSSheetMoveHelper openSheet` → `NSMoveHelper _doAnimation`, sampled), in a
+    /// private mode that the split view's animation is not scheduled in, so a slide
+    /// begun beside a sheet held still for the sheet's 300 ms and only then set
+    /// out (measured: the list's leading edge at 0 pt until 0.317 s, at 200 pt by
+    /// 0.548 s).
+    func showSidebar(animated: Bool = false, then: (@MainActor @Sendable () -> Void)? = nil) {
+      guard sidebarItem.isCollapsed else {
+        then?()
+        return
+      }
+      guard animated else {
         sidebarItem.isCollapsed = false
+        then?()
+        return
+      }
+      NSAnimationContext.runAnimationGroup { _ in
+        sidebarItem.animator().isCollapsed = false
+      } completionHandler: {
+        // AppKit calls it on the main thread; the SDK only does not say so.
+        MainActor.assumeIsolated { then?() }
       }
     }
 

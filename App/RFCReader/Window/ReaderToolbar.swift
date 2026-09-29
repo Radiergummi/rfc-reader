@@ -657,10 +657,12 @@
 
     /// The toolbar's New Collection button, which makes an empty collection as
     /// File > New Collection… does; only the Bookmark menu's adds the open document.
-    /// It opens a collapsed sidebar first, so the collection is in view once made.
+    /// It opens a collapsed sidebar first, so the collection is in view once made,
+    /// and the sheet comes in once the sidebar has slid open (`showSidebar`).
     @objc private func newEmptyCollection() {
-      controller.showSidebar(animated: true)
-      navigation.collectionEditor = .create(adding: nil)
+      controller.showSidebar(animated: true) { [navigation] in
+        navigation.collectionEditor = .create(adding: nil)
+      }
     }
 
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
