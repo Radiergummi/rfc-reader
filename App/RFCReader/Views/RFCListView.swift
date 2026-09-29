@@ -547,6 +547,7 @@ private struct PickerTarget: Identifiable {
 
     func body(content: Content) -> some View {
       content.contextMenu {
+        Button(isBookmarked ? "Remove Bookmark" : "Bookmark", action: toggleBookmark)
         Menu("Add to Collection") {
           AddToCollectionItems(
             document: rfc.id, library: library, navigation: navigation,
@@ -556,6 +557,13 @@ private struct PickerTarget: Identifiable {
           Button("Remove from Collection") { remove(rfc.id) }
         }
       }
+    }
+
+    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(rfc.id) }
+
+    private func toggleBookmark() {
+      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
+      library.toggleBookmark(rfc.id, title: title)
     }
   }
 #endif
