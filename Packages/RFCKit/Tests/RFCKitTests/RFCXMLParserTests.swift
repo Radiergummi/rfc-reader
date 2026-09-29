@@ -383,6 +383,23 @@ struct RFCXMLParserTests {
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
   }
 
+  /// RFC 8761 cites a draft and a codec specification, neither in a series, by the
+  /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
+  /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
+  @Test func `a citation of an entry outside the series keeps its brackets`() throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml"))
+    let xrefs = document.proseInlines.compactMap { inline -> CrossReference? in
+      guard case .crossReference(let xref) = inline else { return nil }
+      return xref
+    }
+    let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
+    #expect(draft.label == "[14]")
+    let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
+    #expect(codec.label == "[6]")
+    let table = try #require(xrefs.first { $0.target == .anchor("codec-levels") })
+    #expect(table.label == "Table 7")
+  }
+
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
   /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
   /// Reading only the first kept the six counters and dropped the rest.
