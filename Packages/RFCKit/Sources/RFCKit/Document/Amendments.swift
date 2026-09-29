@@ -12,14 +12,15 @@ public struct Amendment: Sendable, Hashable, Codable {
   /// Its section, as the citation names it: `4.2`, or `B` for an appendix. What
   /// `RFCLink` takes, not an anchor.
   public var section: String
-  /// The amending document, when it states its own number.
-  public var amending: DocumentID?
+  /// The amending document.
+  public var amending: DocumentID
   /// The anchor of the amending document's section the citation sits in, or nil for
-  /// its abstract.
+  /// the abstract in its front matter. A converted legacy abstract that holds more
+  /// than `<abstract>` can is the body section `abstract`, and has that anchor.
   public var amendingSection: String?
 
   public init(
-    amended: DocumentID, section: String, amending: DocumentID?, amendingSection: String?
+    amended: DocumentID, section: String, amending: DocumentID, amendingSection: String?
   ) {
     self.amended = amended
     self.section = section
@@ -37,32 +38,29 @@ public struct Amendment: Sendable, Hashable, Codable {
 /// introduction. Only documents the header says it updates count, so an ordinary
 /// citation of another document's section is never read as an amendment; and a
 /// citation of a whole document names no section, which the document-level status
-/// already covers.
+/// already covers. A document that does not state its own number amends nothing,
+/// since a row that cannot say which document amends answers nothing.
 public enum Amendments {
   public static func links(in document: RFCDocument) -> [Amendment] {
     let updated = Set(document.header.updates)
-    guard !updated.isEmpty else { return [] }
+    guard let amending = document.header.id, !updated.isEmpty else { return [] }
     var seen: Set<Amendment> = []
     var links: [Amendment] = []
-    func collect(_ inlines: [Inline], from anchor: String?) {
-      for inline in inlines.flattened {
+    for place in document.proseInlinesBySection {
+      for inline in place.inlines {
         guard case .crossReference(let xref) = inline,
-          case .document(let id, let section?) = xref.target, updated.contains(id)
+          case .document(let id, let section?) = xref.target,
+          updated.contains(id)
         else { continue }
         let link = Amendment(
-          amended: id, section: section, amending: document.header.id, amendingSection: anchor)
-        if seen.insert(link).inserted { links.append(link) }
-      }
-    }
-    for block in document.header.abstract.flattened {
-      for run in block.proseRuns { collect(run, from: nil) }
-    }
-    // Each section's own heading and blocks, not its subsections': a citation
-    // belongs to the section it is read in.
-    for section in document.allSections {
-      collect(section.title, from: section.anchor)
-      for block in section.blocks.flattened {
-        for run in block.proseRuns { collect(run, from: section.anchor) }
+          amended: id,
+          section: section,
+          amending: amending,
+          amendingSection: place.sectionAnchor
+        )
+        if seen.insert(link).inserted {
+          links.append(link)
+        }
       }
     }
     return links

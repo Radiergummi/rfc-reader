@@ -92,12 +92,22 @@ extension RFCDocument {
   /// Not captions, which are plain strings in the model, and not artwork or source
   /// code, which are set as typed; see `Block.proseRuns`.
   public var proseInlines: [Inline] {
-    var runs = header.abstract.flattened.flatMap(\.proseRuns)
+    proseInlinesBySection.flatMap(\.inlines)
+  }
+
+  /// `proseInlines`, grouped by the place they are read in: the abstract first, with
+  /// no anchor, then each section with its own heading and blocks, not its
+  /// subsections'. For a question that has to say where a citation sits.
+  public var proseInlinesBySection: [(sectionAnchor: String?, inlines: [Inline])] {
+    let abstract = header.abstract.flattened.flatMap(\.proseRuns)
+    var places: [(sectionAnchor: String?, inlines: [Inline])] = [
+      (sectionAnchor: nil, inlines: abstract.flatMap(\.flattened))
+    ]
     for section in allSections {
-      runs.append(section.title)
-      runs += section.blocks.flattened.flatMap(\.proseRuns)
+      let runs = [section.title] + section.blocks.flattened.flatMap(\.proseRuns)
+      places.append((sectionAnchor: section.anchor, inlines: runs.flatMap(\.flattened)))
     }
-    return runs.flatMap(\.flattened)
+    return places
   }
 
   /// The first section, depth first, that `matches`, without building the list of

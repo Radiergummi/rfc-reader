@@ -31,35 +31,56 @@ struct AmendmentsTests {
     #expect(links.contains { $0.amended == .rfc(7450) && $0.section == "5.1.3.3" })
   }
 
-  /// A section of a document it only cites is not amended: RFC 9601 cites sections
-  /// of documents it does not update, and none of them is a link.
+  /// A section of a document it only cites is not amended: RFC 9601 cites
+  /// Section 5.3 of RFC 3168, which it does not update, and that is no link.
   @Test func `a section citation of any other document is not an amendment`() throws {
     let document = try Self.document("rfc9601.xml")
-    let updated = Set(document.header.updates)
-    let cited = document.proseInlines.compactMap { inline -> DocumentID? in
-      guard case .crossReference(let xref) = inline,
-        case .document(let id, let section) = xref.target,
-        section != nil
-      else { return nil }
-      return id
+    #expect(!document.header.updates.contains(.rfc(3168)))
+    let citesRFC3168 = document.proseInlines.contains { inline in
+      guard case .crossReference(let xref) = inline else { return false }
+      return xref.target == .document(.rfc(3168), section: "5.3")
     }
-    #expect(
-      cited.contains { !updated.contains($0) }, "the fixture must cite another document's section")
-    #expect(Amendments.links(in: document).allSatisfy { updated.contains($0.amended) })
+    #expect(citesRFC3168, "the fixture must cite a section of a document it does not update")
+    #expect(!Amendments.links(in: document).contains { $0.amended == .rfc(3168) })
   }
 
-  /// A document that updates nothing amends nothing, however many sections it cites.
+  /// A document that updates nothing amends nothing, however many sections it
+  /// cites: RFC 9290 cites sections of other documents and updates none.
   @Test func `a document that updates nothing amends nothing`() throws {
-    let document = try Self.document("rfc8999.xml")
+    let document = try Self.document("rfc9290.xml")
     #expect(document.header.updates.isEmpty)
+    let citesASection = document.proseInlines.contains { inline in
+      guard case .crossReference(let xref) = inline,
+        case .document(_, _?) = xref.target
+      else { return false }
+      return true
+    }
+    #expect(citesASection, "the fixture must cite a section of another document")
     #expect(Amendments.links(in: document).isEmpty)
   }
 
-  /// One link per place, however often that section cites the same section.
+  /// One link per place, however often that place cites the same section: RFC 9601
+  /// cites sections of the documents it updates twelve times, two of them repeats.
   @Test func `a section amending the same section twice is one link`() throws {
-    let links = Amendments.links(in: try Self.document("rfc9682.xml"))
-    let keys = links.map { "\($0.amended) \($0.section) \($0.amendingSection ?? "")" }
-    #expect(keys.count == Set(keys).count)
-    #expect(!links.isEmpty)
+    let document = try Self.document("rfc9601.xml")
+    let updated = Set(document.header.updates)
+    let citations = document.proseInlines.filter { inline in
+      guard case .crossReference(let xref) = inline,
+        case .document(let id, _?) = xref.target
+      else { return false }
+      return updated.contains(id)
+    }
+    let links = Amendments.links(in: document)
+    #expect(citations.count == 12)
+    #expect(links.count == 10)
+    #expect(Set(links).count == links.count)
+  }
+
+  /// A row that cannot say which document amends is no use to a reader asking which
+  /// later documents amend the open one.
+  @Test func `a document without a number amends nothing`() throws {
+    var document = try Self.document("rfc9283.xml")
+    document.header.id = nil
+    #expect(Amendments.links(in: document).isEmpty)
   }
 }
