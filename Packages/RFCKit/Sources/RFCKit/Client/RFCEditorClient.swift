@@ -29,6 +29,20 @@ extension URLSession: HTTPTransport {
     configuration.urlCache = nil
     return URLSession(configuration: configuration)
   }()
+
+  /// The session for a fetch nobody is waiting for, such as the daily index check:
+  /// `rfcEditor`'s, except that it does not use a cellular, hotspot or Low Data
+  /// Mode path, and waits for one it may use rather than failing (#314).
+  public static let rfcEditorOnCheapNetworks: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.urlCache = nil
+    configuration.waitsForConnectivity = true
+    #if !canImport(FoundationNetworking)
+      configuration.allowsExpensiveNetworkAccess = false
+      configuration.allowsConstrainedNetworkAccess = false
+    #endif
+    return URLSession(configuration: configuration)
+  }()
 }
 
 /// What a server said identifies the version of a resource it sent, so a later
@@ -162,9 +176,9 @@ public actor RFCEditorClient {
   /// still matches `validators`.
   ///
   /// `onExpensiveNetworks` false is a fetch nobody is waiting for, such as the
-  /// daily refresh: it does not run on a cellular, hotspot or Low Data Mode path,
-  /// and fails instead, to be tried again at the next launch. A person's Retry
-  /// passes true.
+  /// daily refresh: it does not run on a cellular, hotspot or Low Data Mode path.
+  /// It fails there, unless the transport waits for a path it may use, as
+  /// `URLSession.rfcEditorOnCheapNetworks` does. A person's Retry passes true.
   public func fetchIndexData(unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool)
     async throws -> IndexFetch
   {

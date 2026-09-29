@@ -125,6 +125,10 @@ final class LibraryModel {
   }
 
   private let client = RFCEditorClient()
+  /// For the automatic daily check, which waits for a network that is neither
+  /// metered nor in Low Data Mode instead of failing (#314).
+  private let clientOnCheapNetworks = RFCEditorClient(
+    transport: URLSession.rfcEditorOnCheapNetworks)
   private let store = DocumentStore()
   private var search: IndexSearch?
 
@@ -181,25 +185,28 @@ final class LibraryModel {
 
   /// Asks the RFC Editor for the index, sending what identifies the one kept so an
   /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
-  /// false is the automatic daily check, which does not run on a network that is
-  /// metered or in Low Data Mode and is tried again at the next launch; a person's
-  /// Retry or pull to refresh takes any.
+  /// false is the automatic daily check, which waits for a network that is neither
+  /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
+  /// and fails at once when there is none.
   func refreshIndex(onExpensiveNetworks: Bool = true) async {
     do {
       // Only with an index in memory: without one, a `304` would leave nothing to
       // show, so the whole index is asked for.
-      let validators = index == nil ? nil : await store.indexCheck()?.validators
+      let kept = index == nil ? nil : await store.indexCheck()
+      let validators = kept?.validators(at: .now)
       let interval = signposter.beginInterval("Fetch index")
       let fetched: IndexFetch
       do {
         // Ended on a throw too, so an offline refresh does not leave it open.
         defer { signposter.endInterval("Fetch index", interval) }
-        fetched = try await client.fetchIndexData(
-          unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
+        fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
       }
       switch fetched {
       case .unchanged:
-        indexState = .ready(updatedAt: try await store.recordUnchangedIndex(validators))
+        // A `304` answers only a request that sent validators, which came from `kept`.
+        guard let kept else { break }
+        indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
       case .changed(let data, let validators):
         // Off the main actor: the parse alone is about a second (#124).
         let prepared = try await Self.parse(data)

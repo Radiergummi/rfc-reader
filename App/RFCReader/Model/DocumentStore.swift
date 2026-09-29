@@ -106,7 +106,7 @@ actor DocumentStore {
     await snapshotWrite?.value
     try data.write(to: indexURL, options: .atomic)
     writeSnapshot(of: index)
-    try storeCheck(IndexCheck(checkedAt: .now, validators: validators))
+    try storeCheck(IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators))
   }
 
   /// The last check of the index kept on disk, or nil when there is no index on
@@ -118,10 +118,11 @@ actor DocumentStore {
     return try? JSONDecoder().decode(IndexCheck.self, from: data)
   }
 
-  /// Records that a check sending `validators` found the index unchanged, and
-  /// returns when.
-  func recordUnchangedIndex(_ validators: CacheValidators?) throws -> Date {
-    let check = IndexCheck(checkedAt: .now, validators: validators)
+  /// Records that a check sent with `kept`'s validators found the index unchanged,
+  /// and returns when.
+  func recordUnchangedIndex(_ kept: IndexCheck) throws -> Date {
+    var check = kept
+    check.checkedAt = .now
     try storeCheck(check)
     return check.checkedAt
   }
