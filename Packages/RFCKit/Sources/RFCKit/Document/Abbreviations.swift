@@ -49,37 +49,23 @@ enum Abbreviations {
     return found
   }
 
-  /// Every block that holds prose, in document order. Artwork and source code are
-  /// set as the author typed them rather than written as prose, and bibliography
-  /// entries are other documents' words.
+  /// Every run of prose in `blocks` and the blocks nested in them, in document
+  /// order, as `Block.proseRuns` has it, and a glossary entry where a definition
+  /// list is one. Artwork and source code are set as the author typed them rather
+  /// than written as prose, and a bibliography is other documents' words -- its
+  /// annotations included, which `proseRuns` counts as prose for cross references.
   private static func visit(
     _ blocks: [Block], _ found: ([(short: String, long: String)]) -> Void
   ) {
-    for block in blocks {
-      switch block {
-      case .paragraph(let paragraph):
-        found(expansions(in: paragraph.inlines.plainText))
-      case .list(let list):
-        for item in list.items { visit(item.blocks, found) }
-      case .definitionList(let items):
+    for block in blocks.flattened {
+      if case .references = block { continue }
+      for run in block.proseRuns { found(expansions(in: run.plainText)) }
+      if case .definitionList(let items) = block {
         for item in items {
-          let term = item.term.plainText
-          found(expansions(in: term))
-          if let pair = glossaryEntry(term: term, definition: item.definition) {
+          if let pair = glossaryEntry(term: item.term.plainText, definition: item.definition) {
             found([pair])
           }
-          visit(item.definition, found)
         }
-      case .figure(let figure):
-        visit(figure.blocks, found)
-      case .table(let table):
-        for cell in (table.header + table.rows).joined() {
-          found(expansions(in: cell.plainText))
-        }
-      case .blockQuote(let inner), .aside(let inner):
-        visit(inner, found)
-      case .preformatted, .references:
-        break
       }
     }
   }

@@ -77,19 +77,10 @@ extension DocumentTextBuilder {
       // model's to say — `CrossReference.display`, which `plainText` answers
       // from too, so the screen and a copied selection cannot disagree.
       let display = xref.display
-      guard let chip = display.chip else {
+      guard display.isChip else {
         return NSAttributedString(string: display.text, attributes: attributes)
       }
-      let result = NSMutableAttributedString()
-      result.append(
-        NSAttributedString(
-          string: String(display.text[display.text.startIndex..<chip.lowerBound]),
-          attributes: attributes))
-      result.append(chipRun(String(display.text[chip]), attributes: attributes))
-      result.append(
-        NSAttributedString(string: String(display.text[chip.upperBound...]), attributes: attributes)
-      )
-      return result
+      return chipRun(display.text, attributes: attributes)
 
     case .lineBreak:
       return NSAttributedString(string: "\n", attributes: base)

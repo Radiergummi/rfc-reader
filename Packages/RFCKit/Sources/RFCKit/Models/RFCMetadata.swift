@@ -340,15 +340,12 @@ public struct SeriesEntry: Hashable, Sendable, Codable, Identifiable {
 public struct RFCIndex: Sendable {
   public let rfcs: [RFCMetadata]
   public let series: [SeriesEntry]
-  /// RFC numbers that were allocated but never issued.
-  public let notIssued: [Int]
 
   private let byNumber: [Int: Int]
 
-  public init(rfcs: [RFCMetadata], series: [SeriesEntry] = [], notIssued: [Int] = []) {
+  public init(rfcs: [RFCMetadata], series: [SeriesEntry] = []) {
     self.rfcs = rfcs.sorted { $0.number < $1.number }
     self.series = series
-    self.notIssued = notIssued
     var lookup: [Int: Int] = [:]
     lookup.reserveCapacity(rfcs.count)
     for (offset, rfc) in self.rfcs.enumerated() {
@@ -369,14 +366,5 @@ public struct RFCIndex: Sendable {
 
   public func series(_ id: DocumentID) -> SeriesEntry? {
     series.first { $0.id == id }
-  }
-
-  /// Highest RFC number in the index.
-  public var latestNumber: Int? { rfcs.last?.number }
-
-  /// RFCs that reference the given one via obsoletes/updates; useful for a lineage view.
-  public func documentsAffecting(_ number: Int) -> [RFCMetadata] {
-    let target = DocumentID.rfc(number)
-    return rfcs.filter { $0.obsoletes.contains(target) || $0.updates.contains(target) }
   }
 }

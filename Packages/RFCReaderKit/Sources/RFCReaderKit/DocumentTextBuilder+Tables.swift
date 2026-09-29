@@ -33,7 +33,8 @@ extension DocumentTextBuilder {
     // the widest content in its column, so measuring both in the regular font
     // under-measures and lets a tab stop fall through to defaultTabInterval.
     let rows: [(cells: [[Inline]], font: PlatformFont)] =
-      table.header.map { ($0, style.boldBodyFont) } + table.rows.map { ($0, style.bodyFont) }
+      table.header.map { ($0.cells, style.boldBodyFont) }
+      + table.rows.map { ($0.cells, style.bodyFont) }
     let columns = rows.map { $0.cells.count }.max() ?? 0
     guard columns > 0 else { return [] }
     return (0..<columns).map { column in
@@ -69,17 +70,14 @@ extension DocumentTextBuilder {
     // Only the font differs between a header row and a data row, and nothing in
     // either varies down the table, so both are built once here rather than per
     // row.
-    let dataAttributes: [NSAttributedString.Key: Any] =
-      [.font: style.bodyFont, .foregroundColor: bodyColour, .paragraphStyle: rowStyle]
+    let dataAttributes = bodyAttributes(rowStyle)
     var headerAttributes = dataAttributes
     headerAttributes[.font] = style.boldBodyFont
 
     for (index, row) in (table.header + table.rows).enumerated() {
-      let isHeader = index < table.header.count
-      let attributes = isHeader ? headerAttributes : dataAttributes
-      let bodyIndex = index - table.header.count
-      mark(isHeader ? table.anchor(ofHeaderRow: index) : table.anchor(ofRow: bodyIndex))
-      for (column, cell) in row.enumerated() {
+      let attributes = index < table.header.count ? headerAttributes : dataAttributes
+      mark(row.anchor)
+      for (column, cell) in row.cells.enumerated() {
         if column > 0 { append("\t", attributes) }
         output.append(inlineRuns(cell, base: attributes))
       }
@@ -88,16 +86,12 @@ extension DocumentTextBuilder {
   }
 
   private func appendStackedTable(_ table: RFCKit.Table, indent: CGFloat) {
-    let headers = table.header.first ?? []
+    let headers = table.header.first?.cells ?? []
     // Nothing here varies by row or cell, so the three dictionaries are built
     // once for the whole table rather than once per cell.
     let cellIndent = indent + style.indentStep
-    let attributes: [NSAttributedString.Key: Any] = [
-      .font: style.bodyFont,
-      .foregroundColor: bodyColour,
-      .paragraphStyle: paragraphStyle(
-        indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25),
-    ]
+    let attributes = bodyAttributes(
+      paragraphStyle(indent: cellIndent, spacingAfter: style.paragraphSpacing * 0.25))
     var labelAttributes = attributes
     labelAttributes[.font] = style.boldBodyFont
     labelAttributes[.foregroundColor] = RFCColors.secondaryLabel
@@ -105,10 +99,10 @@ extension DocumentTextBuilder {
 
     // The header has no row of its own here: it labels every cell instead. A link
     // to a header row lands at the top of the table, where the first label is.
-    for index in table.header.indices { mark(table.anchor(ofHeaderRow: index)) }
-    for (index, row) in table.rows.enumerated() {
-      mark(table.anchor(ofRow: index))
-      for (column, cell) in row.enumerated() {
+    for row in table.header { mark(row.anchor) }
+    for row in table.rows {
+      mark(row.anchor)
+      for (column, cell) in row.cells.enumerated() {
         if column < headers.count {
           output.append(inlineRuns(headers[column], base: labelAttributes))
           append("  ", attributes)
@@ -122,21 +116,19 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// `Figure 3: Packet layout`, or just the title when the block is unnumbered.
+  /// `Figure 3: Packet layout`; `Figure 3` when the block has no title, as xml2rfc's
+  /// text and HTML writers caption every numbered figure and table, so the prose's
+  /// "see Figure 3" has something to find; just the title when it is unnumbered.
   static func caption(_ kind: String, number: Int?, title: String?) -> String? {
-    guard let title else { return nil }
-    return number.map { "\(kind) \($0): \(title)" } ?? title
+    guard let number else { return title }
+    return title.map { "\(kind) \(number): \($0)" } ?? "\(kind) \(number)"
   }
 
   func appendCaption(_ caption: String?, indent: CGFloat) {
     guard let caption, !caption.isEmpty else { return }
     append(
       caption + "\n",
-      [
-        .font: style.captionFont,
-        .foregroundColor: RFCColors.secondaryLabel,
-        .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center),
-      ])
+      captionAttributes(
+        paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing, alignment: .center)))
   }
 }

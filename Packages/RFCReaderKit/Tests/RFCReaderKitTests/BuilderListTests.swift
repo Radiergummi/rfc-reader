@@ -20,21 +20,19 @@ struct BuilderListTests {
     #expect(DocumentTextBuilder.marker(for: .bare, at: 3) == "")
   }
 
-  @Test func `decimal markers respect the start`() {
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: nil, start: 1), at: 0) == "1.")
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "1", start: 5), at: 2) == "7.")
+  /// The counting itself is `ListNumbering`'s, and tested there; the builder draws
+  /// what it says.
+  @Test func `a numbered marker is drawn as its numbering says`() {
+    let numbering = ListNumbering(type: "(%c)", start: 1)
+    #expect(DocumentTextBuilder.marker(for: .numbered(numbering), at: 1) == "(b)")
   }
 
-  @Test func `letter and roman markers`() {
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "a", start: 1), at: 0) == "a.")
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "A", start: 1), at: 25) == "Z.")
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "i", start: 1), at: 3) == "iv.")
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "I", start: 1), at: 8) == "IX.")
-  }
-
-  @Test func `template markers`() {
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "(%c)", start: 1), at: 1) == "(b)")
-    #expect(DocumentTextBuilder.marker(for: .numbered(format: "%d)", start: 1), at: 2) == "3)")
+  /// `letter(_:)` used to index a string by `(number - 1) % 26`, which traps for a
+  /// start of 0 or below: `<ol type="a" start="0">` is valid RFCXML.
+  @Test func `a lettered list starting at zero draws`() {
+    let numbering = ListNumbering(type: "a", start: 0)
+    #expect(DocumentTextBuilder.marker(for: .numbered(numbering), at: 0) == "0.")
+    #expect(DocumentTextBuilder.marker(for: .numbered(numbering), at: 1) == "a.")
   }
 
   @Test func `list items appear as text with their markers`() {
@@ -87,6 +85,25 @@ struct BuilderListTests {
     let term = try Fixtures.offset(of: "SHALL", in: built.text)
     #expect(empty == term + "SHALL".utf16.count)
     #expect(try Fixtures.offset(of: "SHOULD", in: built.text) > empty)
+  }
+
+  /// A prepped `<li><t pn="section-2-3.1">` is set on the item's first line, beside
+  /// its marker, and a link to the paragraph lands where its text starts, as a
+  /// second paragraph's would.
+  @Test func `a list items first paragraph is indexed at its text`() throws {
+    let item = ListItem(
+      blocks: [
+        .paragraph(Paragraph(text: "first paragraph", anchor: "section-1-1.1")),
+        .paragraph(Paragraph(text: "second paragraph", anchor: "section-1-1.2")),
+      ],
+      anchor: "section-1-1")
+    let list = ListBlock(style: .bullet, items: [item])
+    let built = DocumentTextBuilder.build(Fixtures.document(.list(list)), style: style)
+
+    let first = try #require(built.anchors.offset(of: "section-1-1.1"))
+    #expect(try Fixtures.offset(of: "first paragraph", in: built.text) == first)
+    let second = try #require(built.anchors.offset(of: "section-1-1.2"))
+    #expect(try Fixtures.offset(of: "second paragraph", in: built.text) == second)
   }
 
   @Test func `a list item hangs its marker left of its text`() throws {

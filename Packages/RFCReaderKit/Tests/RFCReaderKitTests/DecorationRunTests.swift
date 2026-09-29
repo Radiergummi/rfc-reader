@@ -47,16 +47,16 @@ struct DecorationRunTests {
     let table = RFCKit.Table(
       title: nil,
       number: nil,
-      header: [[[Inline.text("Field")], [Inline.text("Meaning")]]],
+      header: [RFCKit.Table.Row(cells: [[Inline.text("Field")], [Inline.text("Meaning")]])],
       rows: [
-        [
+        RFCKit.Table.Row(cells: [
           [Inline.text("alpha")],
           [Inline.text(String(repeating: "a long prose description ", count: 4))],
-        ],
-        [
+        ]),
+        RFCKit.Table.Row(cells: [
           [Inline.text("beta")],
           [Inline.text(String(repeating: "another long description ", count: 4))],
-        ],
+        ]),
       ],
       anchor: "table-1"
     )

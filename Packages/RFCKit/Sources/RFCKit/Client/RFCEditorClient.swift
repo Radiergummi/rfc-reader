@@ -9,11 +9,18 @@ public protocol HTTPTransport: Sendable {
   func data(for url: URL) async throws -> (Data, HTTPURLResponse)
 }
 
-extension URLSession: HTTPTransport {
+/// The transport over a `URLSession`, asking for the formats the RFC Editor serves.
+public struct URLSessionTransport: HTTPTransport {
+  private let session: URLSession
+
+  public init(session: URLSession = .shared) {
+    self.session = session
+  }
+
   public func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
     var request = URLRequest(url: url)
     request.setValue("application/xml, text/plain, application/json", forHTTPHeaderField: "Accept")
-    let (data, response) = try await data(for: request)
+    let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
       throw RFCEditorClient.ClientError.invalidResponse(url)
     }
@@ -24,27 +31,31 @@ extension URLSession: HTTPTransport {
 /// Fetches and parses documents from the RFC Editor.
 ///
 /// Callers decide about caching; this type only knows how to get bytes and turn them
-/// into models. Keeping it an actor makes it trivially safe to share across the app.
-public actor RFCEditorClient {
+/// into models. It holds nothing but its transport, so it is a value any task can
+/// share, and a method that parses is `@concurrent`: a large document is parsed off
+/// the caller's actor, and two fetches parse side by side rather than in turn.
+public struct RFCEditorClient: Sendable {
   public enum ClientError: Error, Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
-    case decoding(String)
+    /// The body at the URL did not decode; the decoder's own error.
+    case decoding(URL, any Error)
   }
 
   private let transport: any HTTPTransport
 
-  public init(transport: any HTTPTransport = URLSession.shared) {
+  public init(transport: any HTTPTransport = URLSessionTransport()) {
     self.transport = transport
   }
 
+  @concurrent
   public func fetchIndex() async throws -> RFCIndex {
     let data = try await fetch(RFCEditorEndpoints.index)
     do {
       return try RFCIndexParser.parse(data)
     } catch {
-      throw ClientError.decoding("rfc-index.xml: \(error)")
+      throw ClientError.decoding(RFCEditorEndpoints.index, error)
     }
   }
 
@@ -55,6 +66,7 @@ public actor RFCEditorClient {
 
   /// Parses a document, preferring the semantic XML source when available and
   /// falling back to the plain-text rendering otherwise.
+  @concurrent
   public func fetchDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil) async throws
     -> RFCDocument
   {
@@ -78,6 +90,7 @@ public actor RFCEditorClient {
   /// text after one would start a second request and report *its* failure instead.
   /// XML that is there but does not parse falls back to the text too, so the
   /// document stays readable, and the parse error comes back beside it.
+  @concurrent
   public func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil)
     async throws -> FetchedDocument
   {
@@ -113,15 +126,7 @@ public actor RFCEditorClient {
     try await fetch(RFCEditorEndpoints.index)
   }
 
-  public func fetchMetadata(_ id: DocumentID) async throws -> RFCEditorMetadataRecord {
-    let data = try await fetch(RFCEditorEndpoints.metadata(id), notFoundAs: id)
-    do {
-      return try JSONDecoder().decode(RFCEditorMetadataRecord.self, from: data)
-    } catch {
-      throw ClientError.decoding("\(id.fileStem).json: \(error)")
-    }
-  }
-
+  @concurrent
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)
     return try RecentFeedParser.parse(data)
@@ -141,49 +146,6 @@ public actor RFCEditorClient {
       throw ClientError.httpStatus(response.statusCode, url)
     }
   }
-}
-
-/// The RFC Editor's per-document JSON (`/rfc/rfc9110.json`).
-public struct RFCEditorMetadataRecord: Codable, Sendable {
-  public var docID: String
-  public var title: String
-  public var authors: [String]
-  public var format: [String]
-  public var pageCount: String?
-  public var pubStatus: String
-  public var status: String
-  public var source: String?
-  public var abstract: String?
-  public var pubDate: String
-  public var keywords: [String]
-  public var obsoletes: [String]
-  public var obsoletedBy: [String]
-  public var updates: [String]
-  public var updatedBy: [String]
-  public var seeAlso: [String]
-  public var doi: String?
-  public var errataURL: String?
-  public var draft: String?
-
-  enum CodingKeys: String, CodingKey {
-    case docID = "doc_id"
-    case title, authors, format
-    case pageCount = "page_count"
-    case pubStatus = "pub_status"
-    case status, source, abstract
-    case pubDate = "pub_date"
-    case keywords, obsoletes
-    case obsoletedBy = "obsoleted_by"
-    case updates
-    case updatedBy = "updated_by"
-    case seeAlso = "see_also"
-    case doi
-    case errataURL = "errata_url"
-    case draft
-  }
-
-  public var id: DocumentID? { DocumentID(parsing: docID) }
-  public var currentStatus: PublicationStatus { PublicationStatus(rawValue: status) ?? .unknown }
 }
 
 /// One entry of the "Recent RFCs" RSS feed.
@@ -234,16 +196,14 @@ public enum RecentFeedParser {
           id: .rfc(number),
           title: String(match.title).trimmingCharacters(in: .whitespaces),
           summary: item.first("description")?.text.collapsingWhitespace() ?? "",
-          link: item.first("link")?.text.trimmingCharacters(in: .whitespacesAndNewlines).flatMap(
-            URL.init(string:)),
-          publishedAt: item.first("pubDate")?.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .flatMap(formatter.date(from:))
+          link: item.first("link").flatMap {
+            URL(string: $0.text.trimmingCharacters(in: .whitespacesAndNewlines))
+          },
+          publishedAt: item.first("pubDate").flatMap {
+            formatter.date(from: $0.text.trimmingCharacters(in: .whitespacesAndNewlines))
+          }
         ))
     }
     return items
   }
-}
-
-extension String {
-  fileprivate func flatMap<T>(_ transform: (String) -> T?) -> T? { transform(self) }
 }

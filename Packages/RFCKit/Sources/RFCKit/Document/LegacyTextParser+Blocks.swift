@@ -180,9 +180,11 @@ extension LegacyTextParser {
       {
         // Merge adjacent list blocks of the same style into one list, and adjacent
         // catalogue blocks into one catalogue: RFC 1012 sets a blank line between
-        // every entry, so each arrives as a block of its own.
+        // every entry, so each arrives as a block of its own. A numbered block
+        // joins the list above only when its first marker is that list's next one:
+        // RFC 1927 starts each of its lists at `1)`, a blank line apart.
         if case .list(let list) = parsed, case .list(var previous)? = result.last,
-          previous.style == list.style
+          list.continues(previous)
         {
           previous.items += list.items
           result[result.count - 1] = .list(previous)
@@ -337,9 +339,11 @@ extension LegacyTextParser {
       return (.bullet, match.indent.count)
     }
     if let match = first.firstMatch(of: numberedItemPattern) {
-      let marker = String(match.marker)
-      let format = marker.first == "(" ? "(%d)" : (marker.first?.isLetter == true ? "%c." : "%d.")
-      return (.numbered(format: format, start: 1), match.indent.count)
+      // The first item's marker says how the list counts and where from: `(a)` is
+      // letters in parentheses, and a list that resumes after an interruption starts
+      // at its own `4.`, not at 1.
+      let numbering = ListNumbering(marker: match.marker) ?? ListNumbering()
+      return (.numbered(numbering), match.indent.count)
     }
     return nil
   }
@@ -728,5 +732,18 @@ extension LegacyTextParser {
     }
     guard !items.isEmpty else { return nil }
     return (style, items)
+  }
+}
+
+extension ListBlock {
+  /// Whether this list, parsed from a block of its own, is more of `previous`: the
+  /// same bullets, or numbering that picks up where `previous` stopped.
+  fileprivate func continues(_ previous: ListBlock) -> Bool {
+    switch (style, previous.style) {
+    case (.numbered(let numbering), .numbered(let previousNumbering)):
+      numbering.continues(previousNumbering, itemCount: previous.items.count)
+    default:
+      style == previous.style
+    }
   }
 }

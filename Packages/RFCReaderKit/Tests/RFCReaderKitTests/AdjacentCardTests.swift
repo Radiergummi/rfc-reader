@@ -77,7 +77,9 @@ struct AdjacentCardTests {
     // Two different decorations, which were two runs before verbatim blocks were.
     [
       Block.table(
-        RFCKit.Table(title: nil, number: nil, header: [[[.text("H")]]], rows: [[[.text("r")]]])),
+        RFCKit.Table(
+          title: nil, number: nil, header: [RFCKit.Table.Row(cells: [[.text("H")]])],
+          rows: [RFCKit.Table.Row(cells: [[.text("r")]])])),
       .preformatted(Preformatted(kind: .artwork, text: "BBBB")),
     ],
   ])

@@ -238,8 +238,8 @@ public struct Paragraph: Sendable, Hashable, Codable {
 public struct ListBlock: Sendable, Hashable, Codable {
   public enum Style: Sendable, Hashable, Codable {
     case bullet
-    /// Numbered with the given format, e.g. `%d.` or `(%c)`; nil means plain decimal.
-    case numbered(format: String?, start: Int)
+    /// Numbered, counting as `ListNumbering` says.
+    case numbered(ListNumbering)
     /// No marker; used for hanging indents and the RFCXML `empty` attribute.
     case bare
   }
@@ -328,41 +328,33 @@ public struct Figure: Sendable, Hashable, Codable {
 }
 
 public struct Table: Sendable, Hashable, Codable {
+  /// One row: its cells, and its anchor (`<tr anchor>`) if it has one. A document
+  /// can cite a row, as RFC 9271 does its `EventFSD` (#166), and the schema lets a
+  /// `<thead>` row carry an anchor just as a body row can.
+  public struct Row: Sendable, Hashable, Codable {
+    public var cells: [[Inline]]
+    public var anchor: String?
+
+    public init(cells: [[Inline]], anchor: String? = nil) {
+      self.cells = cells
+      self.anchor = anchor
+    }
+  }
+
   public var title: String?
   public var number: Int?
-  public var header: [[[Inline]]]
-  public var rows: [[[Inline]]]
+  public var header: [Row]
+  public var rows: [Row]
   public var anchor: String?
-  /// Each body row's anchor (`<tr anchor>`), by index into `rows`; shorter than
-  /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
-  /// `EventFSD` (#166).
-  public var rowAnchors: [String?]
-  /// The same for the header rows, by index into `header`. The schema lets a
-  /// `<thead>` row carry an anchor just as a body row can, and a link to one
-  /// should land as surely.
-  public var headerRowAnchors: [String?]
 
   public init(
-    title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil, rowAnchors: [String?] = [], headerRowAnchors: [String?] = []
+    title: String?, number: Int? = nil, header: [Row], rows: [Row], anchor: String? = nil
   ) {
     self.title = title
     self.number = number
     self.header = header
     self.rows = rows
     self.anchor = anchor
-    self.rowAnchors = rowAnchors
-    self.headerRowAnchors = headerRowAnchors
-  }
-
-  /// The anchor of body row `index`, if it has one.
-  public func anchor(ofRow index: Int) -> String? {
-    rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
-  }
-
-  /// The anchor of header row `index`, if it has one.
-  public func anchor(ofHeaderRow index: Int) -> String? {
-    headerRowAnchors.indices.contains(index) ? headerRowAnchors[index] : nil
   }
 }
 
@@ -511,7 +503,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// Which is the same question as whether the source had anything to say about the
   /// wording. An author's own words and a document's own tag are both answers a
   /// renderer must not overrule; everything else is ours.
-  public var isCanonicalLabel: Bool { text == nil }
+  var isCanonicalLabel: Bool { text == nil }
 
   /// The label this reference shows in plain text: the source's words when it has
   /// them, otherwise the one composed from the target. `[Inline].plainText` and the
@@ -535,8 +527,8 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
   }
 
-  /// How a reader lays this reference out: the text it shows, and which part of
-  /// that text -- if any -- may be drawn as a chip.
+  /// How a reader lays this reference out: the text it shows, and whether it may be
+  /// drawn as a chip.
   ///
   /// One rule, in one place, because the screen and a copied selection have to
   /// agree. The renderer used to compose the section form itself while `plainText`
@@ -544,29 +536,30 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// "Section 4.2 of [RFC 9110]".
   public struct Display: Sendable, Equatable {
     public let text: String
-    /// The span of `text` a chip covers, or nil when the reference reads as
-    /// ordinary link text.
-    public let chip: Range<String.Index>?
+    /// Whether all of `text` is drawn as one chip; when not, the reference reads as
+    /// ordinary link text. A chip is always the whole reference: the section is a
+    /// suffix of the document it is in, so there is no text beside it to leave out.
+    public let isChip: Bool
   }
 
   public var display: Display {
     // Words from the source, or a reference within this document: neither is ours
     // to restyle.
     guard text == nil, case .document(let id, let section) = target else {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     // `bare` is the source asking for the section number alone. Drawing "RFC 9110
     // § 4.2" over the top of that would be answering a question it already
     // answered.
     if sectionFormat == .bare, section != nil {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     let name = Self.nonBreakingLabel(id.displayName)
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
     let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
-    return Display(text: composed, chip: composed.startIndex..<composed.endIndex)
+    return Display(text: composed, isChip: true)
   }
 
   /// The text a reader shows for this reference -- what `[Inline].plainText`
@@ -594,8 +587,6 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// One predicate for both parsers on purpose: they each used to decide it, and
   /// they disagreed, so the same reference could draw as a chip from one source
   /// format and as plain text from the other.
-  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
-
   public static func isCanonicalTag(_ tag: String, for id: DocumentID) -> Bool {
     // One pass, no `CharacterSet`: this runs per bracket match over every document
     // in the corpus, and `id.description` ("RFC9110") already has the separator
@@ -608,6 +599,10 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
     return squeezed.caseInsensitiveCompare(id.description) == .orderedSame
   }
+
+  /// What `isCanonicalTag` strips from a tag before comparing: the brackets and
+  /// either kind of space, which are presentation, not the name.
+  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
 }
 
 public enum Inline: Sendable, Hashable, Codable {
