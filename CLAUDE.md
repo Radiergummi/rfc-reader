@@ -15,6 +15,7 @@ Everything goes through the `Makefile`:
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | the Swift packages (RFCKit, corpus-build, and RFCReaderKit on a Mac) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
+| `make xcodegen-install` | the pinned XcodeGen release, SHA-256 checked, into `.build/xcodegen`, which `make xcodeproj` then prefers to the `PATH` (what CI runs) |
 | `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
@@ -61,7 +62,7 @@ Standing constraints those documents establish, which are easy to violate by acc
    2. a test through `parse` over a fixture already committed in `Packages/RFCKit/Tests/RFCKitTests/Fixtures/` that has the right shape;
    3. a corpus-backed test.
 
-   Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and the CI run on every push skip them; the weekly `Corpus-backed tests` workflow runs them. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input; it refuses to run when a test reads a document the list lacks. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
+   Corpus-backed suites are named `Corpus-backed: <topic>` and read `rfcNNNN.txt` through the `CorpusText` helper from the directory in the environment variable `RFC_CORPUS_TEXT`. They are enabled only when that variable is set, so `make check` and the CI run on every push skip them; the weekly `Corpus-backed tests` workflow runs them. `make test-corpus` fetches the documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS` into `corpus/text.noindex/` and runs them, so adding a document to that list is how a new corpus-backed test gets its input; it refuses to run when a test reads a document the list lacks. An RFC authored in RFCXML is read the same way, as `rfcNNNN.xml` from `RFC_CORPUS_XML`, listed in `CORPUS_TEST_XML_DOCUMENTS` and fetched into `corpus/xml.noindex/`. A finding from a full corpus run that no committed fixture shows goes in one of these suites.
 2. Fix the heuristic when a class of documents is wrong. When exactly one document is, the correction waits for [#197](https://github.com/Radiergummi/rfc-reader/issues/197), which makes an override an RFC 5261 patch on the converter's output. Until then an override is a whole converted document, which is RFC text, so no new one is committed. `corpus/overrides/rfc1142.xml` predates this, and #197 decides what becomes of it.
 3. For a wide change, run `make corpus CORPUS_LIMIT=` and compare `corpus/report.json` against the previous run.
 

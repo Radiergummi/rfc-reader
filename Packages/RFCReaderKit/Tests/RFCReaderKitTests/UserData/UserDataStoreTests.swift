@@ -80,6 +80,26 @@ struct UserDataStoreTests {
     #expect(position?.updatedAt == opened)
   }
 
+  @Test func `a document never opened has no position`() throws {
+    let container = try makeContainer()
+    #expect(try ReadingPositionStore.position(for: .rfc(9110), in: container.mainContext) == nil)
+  }
+
+  /// RFC 1, BCP 1 and STD 1 share a number, not a position.
+  @Test func `documents with one number keep positions of their own`() throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    let bcp = DocumentID(series: .bcp, number: 1)
+    try ReadingPositionStore.save(
+      ReadingPlace(anchor: "section-1", offset: 0), for: .rfc(1), in: context)
+    try ReadingPositionStore.save(
+      ReadingPlace(anchor: "section-2", offset: 0), for: bcp, in: context)
+
+    #expect(
+      try ReadingPositionStore.position(for: .rfc(1), in: context)?.place?.anchor == "section-1")
+    #expect(try ReadingPositionStore.position(for: bcp, in: context)?.place?.anchor == "section-2")
+  }
+
   @Test func `a document opened for the first time has a row and no place`() throws {
     let container = try makeContainer()
     let context = container.mainContext

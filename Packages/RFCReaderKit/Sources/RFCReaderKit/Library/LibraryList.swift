@@ -48,13 +48,20 @@ public struct LibraryList: Hashable, Sendable {
   }
 
   /// The rows, as the options show them. `search` is the index's own; without one,
-  /// a query finds nothing more than the filter already lists.
-  public func rows(in index: RFCIndex, search: IndexSearch?) -> [RFCMetadata] {
-    options.apply(to: unshaped(in: index, search: search), filter: filter, query: query)
+  /// a query finds nothing more than the filter already lists. `hits` are its hits
+  /// for `query`, best first, when they were searched ahead, off the main actor
+  /// (#124); without them the query is searched here.
+  public func rows(
+    in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
+  ) -> [RFCMetadata] {
+    options.apply(
+      to: unshaped(in: index, search: search, hits: hits), filter: filter, query: query)
   }
 
   /// Newest first, as every list is built, or in order of relevance for a search.
-  private func unshaped(in index: RFCIndex, search: IndexSearch?) -> [RFCMetadata] {
+  private func unshaped(
+    in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]?
+  ) -> [RFCMetadata] {
     let base: [RFCMetadata]
     switch filter {
     case .all: base = index.rfcs.reversed()
@@ -68,15 +75,22 @@ public struct LibraryList: Hashable, Sendable {
     case .collection: base = members.compactMap { index[$0] }
     }
 
-    guard !query.isEmpty, let search else { return base }
+    guard !query.isEmpty else { return base }
     // Every hit, not the top few hundred: the search scores and sorts all of them
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = search.search(query, limit: .max)
+    let found: [RFCMetadata]
+    if let hits {
+      found = hits
+    } else if let search {
+      found = search.search(query, limit: .max).map(\.rfc)
+    } else {
+      return base
+    }
     // Everything is allowed in the whole library, so there is nothing to filter.
-    if case .all = filter { return hits.map(\.rfc) }
+    if case .all = filter { return found }
     let allowed = Set(base.map(\.number))
-    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
+    return found.filter { allowed.contains($0.number) }
   }
 }

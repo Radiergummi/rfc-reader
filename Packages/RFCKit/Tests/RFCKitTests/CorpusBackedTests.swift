@@ -430,3 +430,54 @@ struct CorpusBackedOmittedBoilerplateTests {
     #expect(text.contains { $0.contains("Origination Date ....") })
   }
 }
+
+@Suite("Corpus-backed: packet diagrams", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPacketDiagramTests {
+  /// RFC 791's IPv4 header, as the parser hands it over: every field, with its
+  /// width, the three-bit Flags included.
+  @Test func `the IPv4 header in RFC 791 is recognized with every field`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc791"))
+    let artwork = try #require(
+      document.blocks.lazy.compactMap { block -> String? in
+        guard case .preformatted(let content) = block, content.text.contains("Total Length")
+        else { return nil }
+        return content.text
+      }.first)
+    let diagram = try #require(PacketDiagram.recognize(artwork))
+    #expect(
+      diagram.fields.map(\.name) == [
+        "Version", "IHL", "Type of Service", "Total Length", "Identification", "Flags",
+        "Fragment Offset", "Time to Live", "Protocol", "Header Checksum", "Source Address",
+        "Destination Address", "Options", "Padding",
+      ])
+    #expect(diagram.fields.map(\.bitWidth) == [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32, 24, 8])
+  }
+}
+
+@Suite("Corpus-backed: defined terms", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedDefinedTermsTests {
+  /// RFC 9110 marks a definition with a primary index entry in the paragraph that
+  /// gives it, and a status code's with one directly in its section (#176).
+  @Test func `a primary index entry defines its term where the document does`() throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml("rfc9110"))
+    let upstream = try #require(document.definedTerms["upstream"])
+    #expect(upstream.anchor == "section-3.7-4")
+    #expect(upstream.definition.count == 1)
+    let status = try #require(document.definedTerms["100 Continue (status code)"])
+    #expect(status.anchor == "status.100")
+    #expect(status.definition.isEmpty, "an entry directly in a section has no one block")
+  }
+
+  /// RFC 9114 marks `connection error` in its section and defines it in its
+  /// terminology list: the term lands on the list item, with its definition.
+  @Test func `a definition list entry supplies an index entry's definition`() throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml("rfc9114"))
+    for (term, anchor) in [
+      ("connection error", "section-2.2-4.7"), ("stream error", "section-2.2-4.25"),
+    ] {
+      let defined = try #require(document.definedTerms[term])
+      #expect(defined.anchor == anchor, "\(term)")
+      #expect(!defined.definition.isEmpty, "\(term)")
+    }
+  }
+}

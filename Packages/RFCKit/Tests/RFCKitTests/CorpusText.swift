@@ -2,7 +2,8 @@ import Foundation
 
 @testable import RFCKit
 
-/// Legacy RFC texts read from a fetched corpus rather than from the fixtures.
+/// RFCs read from a fetched corpus rather than from the fixtures: legacy texts, and
+/// the RFCs authored in RFCXML.
 ///
 /// A fixture is RFC text committed to the repository, and the repository takes no
 /// more of it. A finding that needs a whole document, because it is about what the
@@ -33,11 +34,28 @@ enum CorpusText {
     let bytes = try Data(contentsOf: file)
     return LegacyTextParser.text(decoding: bytes)
   }
+
+  /// The directory of `rfcNNNN.xml` files, the RFCs authored in RFCXML, where one is set.
+  static var xmlDirectory: URL? {
+    guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_XML"], !path.isEmpty
+    else { return nil }
+    return URL(fileURLWithPath: path, isDirectory: true)
+  }
+
+  static var isXMLAvailable: Bool {
+    xmlDirectory != nil
+  }
+
+  /// The RFCXML of the document `stem` names, such as `rfc9110`.
+  static func xml(_ stem: String) throws -> Data {
+    guard let xmlDirectory else { throw CorpusTextError.notConfigured }
+    return try Data(contentsOf: xmlDirectory.appendingPathComponent("\(stem).xml"))
+  }
 }
 
 enum CorpusTextError: Error {
-  /// `RFC_CORPUS_TEXT` is not set; a suite that reads the corpus is enabled only
-  /// where it is.
+  /// `RFC_CORPUS_TEXT`, or `RFC_CORPUS_XML`, is not set; a suite that reads the corpus
+  /// is enabled only where it is.
   case notConfigured
   /// The document is not in the directory: `make test-corpus` fetches only the
   /// documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS`.

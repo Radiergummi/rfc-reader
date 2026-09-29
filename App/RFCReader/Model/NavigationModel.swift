@@ -44,7 +44,15 @@ final class NavigationModel: Identifiable {
       if filterChoice.enters(since: oldValue) { takeListInputs() }
     }
   }
-  var searchText = ""
+  /// What is typed into search. The list follows `appliedQuery`, not this.
+  var searchText = "" {
+    didSet { followSearchText(pausing: true) }
+  }
+  /// The query the list, its count and the sidebar's results are computed for: the
+  /// search text, trimmed, once typing pauses and its hits are ready (#124). Until
+  /// then the list keeps the results it has, as Mail and Finder do.
+  private(set) var appliedQuery = ""
+  @ObservationIgnored private var pendingSearch: Task<Void, Never>?
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -168,6 +176,52 @@ final class NavigationModel: Identifiable {
   func search(_ text: String) {
     sidebarSelection = .all
     searchText = text
+    applySearchWithoutPause()
+  }
+
+  // MARK: - Search
+
+  /// Applies the search text without waiting for a pause in typing: Return in the
+  /// field, or a search asked for with a click. The list still follows once the
+  /// query's hits are ready.
+  func applySearchWithoutPause() {
+    followSearchText(pausing: false)
+  }
+
+  /// Sets the search text and applies it before returning, searching on the main
+  /// actor: for a script, which reads the list straight after setting the text.
+  func setSearchTextSynchronously(_ text: String) {
+    searchText = text
+    pendingSearch?.cancel()
+    pendingSearch = nil
+    appliedQuery = AppliedSearch.query(for: text)
+  }
+
+  /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
+  /// or at once when it is cleared.
+  private func followSearchText(pausing: Bool) {
+    pendingSearch?.cancel()
+    pendingSearch = nil
+    switch AppliedSearch.step(applying: searchText, over: appliedQuery, pausing: pausing) {
+    case nil:
+      // Typed back to the query on show: nothing is left to apply.
+      return
+    case .apply(let query):
+      appliedQuery = query
+    case .search(let query, let delay):
+      pendingSearch = Task(name: "Apply search") { [library] in
+        if delay > .zero {
+          do {
+            try await Task.sleep(for: delay)
+          } catch {
+            return
+          }
+        }
+        await library.prepareSearch(query)
+        guard !Task.isCancelled else { return }
+        appliedQuery = query
+      }
+    }
   }
 
   /// A row picked in the document list.

@@ -117,6 +117,7 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
+        self.recheckSpotlight()
       }
     }
   }
@@ -258,6 +259,76 @@ final class LibraryModel {
       indexState = .failed(error.localizedDescription)
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
+    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
+    // fetch them for nothing.
+    #if os(macOS)
+      Task(name: "Load registries") { await refreshRegistries() }
+    #endif
+  }
+
+  // MARK: - Registries
+
+  /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
+  /// the palette asks on each keystroke, and nothing on screen lists them.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+
+  /// Registries change more often than RFCs, but not by the day.
+  private static let registryMaximumAge: TimeInterval = 7 * 86_400
+
+  /// When the registries were last checked, nil until launch first checks them.
+  @ObservationIgnored private var registriesCheckedAt: Date?
+
+  /// Checks the registries again if the last check is older than
+  /// `registryMaximumAge`: the palette asks as it opens, since the app may stay open
+  /// for weeks after the check at launch.
+  func refreshRegistriesIfDue() {
+    guard let checked = registriesCheckedAt,
+      checked.timeIntervalSinceNow < -Self.registryMaximumAge
+    else { return }
+    Task(name: "Refresh registries") { await refreshRegistries() }
+  }
+
+  /// Reads the cached registries, then fetches those that are due: a first fetch on
+  /// any network, a refresh only on a cheap one (`RegistryRefresh`). A registry that
+  /// cannot be fetched keeps its cached entries, and is logged rather than shown
+  /// (#125): the palette still finds RFCs without it.
+  private func refreshRegistries() async {
+    // Set before the first suspension, so a palette opened meanwhile does not start
+    // a second check.
+    registriesCheckedAt = .now
+    var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
+    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+    let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
+    for fetch in fetches {
+      let registry = fetch.registry
+      let fetched: (entries: [RegistryEntry], data: Data)
+      do {
+        fetched = try await (fetch.onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchRegistry(registry, onExpensiveNetworks: fetch.onExpensiveNetworks)
+      } catch {
+        libraryLog.error(
+          "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+        continue
+      }
+      // Listed as soon as it is read, not after the slowest of the others, and
+      // whether or not it can be kept for the next launch.
+      cached.entries[registry] = fetched.entries
+      registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+      do {
+        try await store.storeRegistry(fetched.data, for: registry)
+      } catch {
+        libraryLog.error(
+          "caching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+  }
+
+  /// The registry values `query` names exactly: `425`, `tls alert 70`,
+  /// `application/dns-message`.
+  func registryMatches(for query: String) -> [RegistryEntry] {
+    RegistryLookup.matches(query, in: registryEntries)
   }
 
   #if DEBUG
@@ -363,8 +434,38 @@ final class LibraryModel {
     self.topWorkingGroups = prepared.topWorkingGroups
     self.indexCounts = prepared.counts
     listCache = RecentValues(capacity: Self.listCacheCapacity)
+    hitCache = RecentValues(capacity: Self.listCacheCapacity)
+    indexGeneration += 1
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
+    indexForSpotlight(prepared.index.rfcs)
+  }
+
+  // MARK: - Spotlight
+
+  /// The Spotlight indexing under way (#178), canceled when a newer one starts.
+  @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
+  /// When the last one started, so an activation knows whether the week has turned.
+  @ObservationIgnored private var spotlightCheckedAt: Date?
+
+  private func indexForSpotlight(_ rfcs: [RFCMetadata]) {
+    // A launch with a day-old cache applies it, then the refreshed index: the first
+    // indexing gives way, so the older index cannot finish last and win.
+    spotlightIndexing?.cancel()
+    spotlightCheckedAt = .now
+    spotlightIndexing = Task(name: "Index for Spotlight") {
+      await SpotlightIndexer.update(rfcs)
+    }
+  }
+
+  /// On activation: an app left running past its items' `lifetime` would otherwise
+  /// lose every RFC from Spotlight, since only a newer index checks. Once a week at
+  /// most, and the indexer skips an unchanged state.
+  private func recheckSpotlight() {
+    guard let index, let spotlightCheckedAt,
+      SpotlightEntry.isRecheckDue(lastCheckedAt: spotlightCheckedAt, now: .now)
+    else { return }
+    indexForSpotlight(index.rfcs)
   }
 
   // MARK: - Revisions
@@ -485,7 +586,7 @@ final class LibraryModel {
     let filter = scene.filter
     let key = LibraryList(
       filter: filter,
-      query: scene.searchText,
+      query: scene.appliedQuery,
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : [],
@@ -523,7 +624,7 @@ final class LibraryModel {
     let computed = signposter.withIntervalSignpost(
       "List", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
     ) {
-      key.rows(in: index, search: search)
+      key.rows(in: index, search: search, hits: hitCache.value(for: key.query))
     }
     listCache.store(computed, for: key)
     return computed
@@ -534,6 +635,41 @@ final class LibraryModel {
   /// list that has not arrived yet.
   func listSubtitle(for scene: NavigationModel) -> String {
     indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
+  }
+
+  /// Every hit for a query, best first, searched off the main actor by
+  /// `prepareSearch(_:)` before a scene applies the query (#124), so a list
+  /// computed for it only filters. The scan measures 7–11 ms in Release and up to
+  /// 98 ms in Debug. A query that is not here, as after `apply` or for a script,
+  /// is searched on the spot.
+  ///
+  /// Not observed, for the reason `listCache` gives; applying the query is what
+  /// the list observes.
+  @ObservationIgnored private var hitCache = RecentValues<String, [RFCMetadata]>(
+    capacity: listCacheCapacity)
+  /// Counts the indexes `apply` has installed, so a search that outlived its index
+  /// is not kept.
+  @ObservationIgnored private var indexGeneration = 0
+
+  /// Searches for `query` off the main actor, so the list can apply it without
+  /// scanning the index in a view update.
+  func prepareSearch(_ query: String) async {
+    guard !query.isEmpty, hitCache.value(for: query) == nil, let search else { return }
+    let generation = indexGeneration
+    let hits = await Self.hits(in: search, for: query)
+    // A new index landed meanwhile, so these are hits in the old one; or typing
+    // moved on, and a query nobody applies would push out one that is applied.
+    guard indexGeneration == generation, !Task.isCancelled else { return }
+    hitCache.store(hits, for: query)
+  }
+
+  @concurrent
+  private static func hits(in search: IndexSearch, for query: String) async -> [RFCMetadata] {
+    signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
+    ) {
+      search.search(query, limit: .max).map(\.rfc)
+    }
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
@@ -675,18 +811,45 @@ final class LibraryModel {
 
   /// Opens `link` in a tab of its own, either behind the current one or in front.
   ///
-  /// Through AppKit, because on macOS the app makes its own windows: there is no
+  /// On macOS through AppKit, because the app makes its own windows: there is no
   /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
-  /// controller rather than by SwiftUI.
+  /// controller rather than by SwiftUI. Nothing can be passed to a window as it is
+  /// made, so the link waits in `pendingSceneLink` for the window that appears to
+  /// take it in `register(_:)`.
   ///
-  /// Nothing can be passed to a window as it is made, so the link waits in
-  /// `pendingSceneLink` for the window that appears to take it in `register(_:)`.
+  /// On iPad a window of its own, asked of UIKit with a user activity carrying the
+  /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
+  /// app's `WindowGroup` is a plain one, which cannot take a value. A new window
+  /// always comes to the front there, so `inBackground` does not apply.
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
       pendingSceneLink = link
       windows?.openTab(inBackground: inBackground)
+    #else
+      guard opensNewWindows else { return }
+      let activity = NSUserActivity(activityType: SceneRequest.activityType)
+      activity.userInfo = SceneRequest.userInfo(for: link)
+      UIApplication.shared.activateSceneSession(
+        for: UISceneSessionActivationRequest(role: .windowApplication, userActivity: activity)
+      ) { @Sendable error in
+        // Sendable: UIKit does not promise to call this on the main thread, and a
+        // main-actor closure called off it traps.
+        libraryLog.error(
+          "opening a window failed: \(String(describing: error), privacy: .public)")
+      }
     #endif
   }
+
+  #if !os(macOS)
+    /// Whether this device can show another window: an iPad, not an iPhone. Menus
+    /// offer Open in New Window only where it is.
+    var opensNewWindows: Bool { UIApplication.shared.supportsMultipleScenes }
+
+    /// Opens `id` in a window of its own, from a menu that offers it.
+    func openWindow(for id: DocumentID) {
+      openInNewScene(RFCLink(id: id), inBackground: false)
+    }
+  #endif
 
   #if os(macOS)
     /// Where a document asked for by name opens.

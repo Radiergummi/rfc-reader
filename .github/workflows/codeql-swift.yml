@@ -39,9 +39,11 @@ jobs:
           persist-credentials: false
 
       # Before init, not in the build: everything after init runs under CodeQL's
-      # tracer, which Homebrew sees as Rosetta and refuses to install under.
+      # tracer, which would trace the download and the unpacking as well.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        # The release the Makefile pins, checked against its SHA-256 (#165), into
+        # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
+        run: make xcodegen-install
 
       - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:

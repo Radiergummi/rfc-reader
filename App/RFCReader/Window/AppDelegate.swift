@@ -2,6 +2,7 @@
   import AppKit
   import Observation
   import RFCKit
+  import RFCReaderKit
   import os
 
   /// Makes windows, because nothing else does any more.
@@ -72,6 +73,16 @@
         guard let link = RFCLink(url: url) else { continue }
         LibraryModel.shared.route(link)
       }
+    }
+
+    /// An RFC chosen in Spotlight (#178), routed the way a link from outside is.
+    func application(
+      _ application: NSApplication, continue userActivity: NSUserActivity,
+      restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
+    ) -> Bool {
+      guard let id = SpotlightEntry.documentID(from: userActivity) else { return false }
+      LibraryModel.shared.route(RFCLink(id: id))
+      return true
     }
 
     /// Opens a window as a tab of the window the user is looking at — ⌘T, the tab

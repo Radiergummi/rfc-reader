@@ -117,7 +117,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
       - name: Install XcodeGen
-        run: brew install xcodegen
+        # The release the Makefile pins, checked against its SHA-256 (#165), into
+        # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
+        run: make xcodegen-install
       # The newest cache any earlier run saved: entries are keyed on their inputs,
       # so a stale one is never used, only not hit.
       - name: Restore the compilation cache

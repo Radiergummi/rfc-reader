@@ -1,5 +1,6 @@
-# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (brew install
-# xcodegen) to produce RFCReader.xcodeproj; edit this file, never the generated project.
+# XcodeGen project spec. `make xcodeproj` runs `xcodegen generate` (the pinned
+# release from `make xcodegen-install`, or Homebrew's) to produce
+# RFCReader.xcodeproj; edit this file, never the generated project.
 name: RFCReader
 options:
   bundleIdPrefix: me.mazetti
@@ -59,6 +60,14 @@ targets:
           - CFBundleURLName: org.rfc-editor.document
             CFBundleURLSchemes: [rfc]
         UILaunchScreen: {}
+        # iPad opens an RFC in a window of its own (#158); an iPhone has one scene
+        # whatever this says.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        # The activity a new window is asked for with (`SceneRequest.activityType`),
+        # declared so the scene is handed it.
+        NSUserActivityTypes:
+          - me.mazetti.rfc-reader.open
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -92,7 +101,6 @@ targets:
         # held to the same rules as the code it calls.
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
-        ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on
         # rather than ignores, so the variant it cannot read is not even an input.
