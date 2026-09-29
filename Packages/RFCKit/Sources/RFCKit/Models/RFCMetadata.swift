@@ -387,3 +387,29 @@ public struct RFCIndex: Sendable {
     return rfcs.filter { $0.obsoletes.contains(target) || $0.updates.contains(target) }
   }
 }
+
+/// Coded as what the RFC Editor's index says, and nothing derived from it: the
+/// lookup by number is rebuilt on decoding. The app keeps a snapshot of the index
+/// in this form, because decoding it is about a third of the time the XML parse
+/// takes, and the parse ran at every launch.
+extension RFCIndex: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case rfcs, series, notIssued
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      rfcs: try container.decode([RFCMetadata].self, forKey: .rfcs),
+      series: try container.decode([SeriesEntry].self, forKey: .series),
+      notIssued: try container.decode([Int].self, forKey: .notIssued)
+    )
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(rfcs, forKey: .rfcs)
+    try container.encode(series, forKey: .series)
+    try container.encode(notIssued, forKey: .notIssued)
+  }
+}

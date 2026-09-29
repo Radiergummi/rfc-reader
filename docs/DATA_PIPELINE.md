@@ -141,6 +141,8 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 
 The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
 
+`.github/workflows/revisions.yml` runs daily and on demand. It builds corpus-build and runs `corpus-build revisions`, which lists every active, adopted Internet-Draft on datatracker and reads the header of each one that changed. It uploads `revisions.json` (adopted drafts that intend to obsolete or update an RFC, which the app fetches) and `revisions-scan.json` (the scanner's record for its next run) to the `revisions` prerelease. A run that loses more than half the RFCs of the previous one fails instead of publishing; the `allow-shrink` input overrides that. See `docs/superpowers/specs/2026-09-29-rfc-revisions-design.md`.
+
 ## Repository layout for the data
 
 ```

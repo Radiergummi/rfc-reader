@@ -785,7 +785,7 @@ public enum LegacyTextParser {
       for reference in bibliographies[index] ?? []
       where referenceTargets[reference.displayAnchor] == nil {
         referenceTargets[reference.displayAnchor] =
-          reference.documentID.map { .document($0, section: nil) }
+          reference.documentID.map { .document($0, section: nil, entry: reference.anchor) }
           ?? .anchor(reference.anchor)
       }
     }
@@ -2284,6 +2284,11 @@ public enum LegacyTextParser {
     let text = lines.map { line in
       String(line.dropFirst(min(indent, line.leadingSpaceCount)))
     }.joined(separator: "\n")
+    // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
+    // typed `abnf` (#45). Only what would otherwise be artwork; no prose verdict changes.
+    if ABNF.recognizes(text) {
+      return [.preformatted(Preformatted(kind: .sourceCode, text: text, type: "abnf"))]
+    }
     // "Figure 3: Title" captions directly under artwork are common; keep them attached.
     return [.preformatted(Preformatted(kind: .artwork, text: text))]
   }
