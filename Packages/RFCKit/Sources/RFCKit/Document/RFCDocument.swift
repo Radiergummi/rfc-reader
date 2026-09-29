@@ -65,7 +65,7 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
     for inline in proseInlines {
-      if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
+      if case .crossReference(let xref) = inline, case .document(let id, _, _) = xref.target {
         seen.insert(id)
       }
     }
@@ -399,6 +399,49 @@ public struct ReferenceList: Sendable, Hashable, Codable {
     self.title = title
     self.entries = entries
   }
+
+  /// Whether the documents a list names are part of the specification or background
+  /// to it: what "read this next" means for a citation (#184).
+  public enum Kind: Sendable, Hashable {
+    case normative
+    case informative
+    /// A list whose title says neither: the single `References` of a document from
+    /// before about RFC 2200, and anything else a document calls its bibliography.
+    case unknown
+
+    /// The kind a list's title names. The whole title is matched, numbering, a
+    /// trailing colon and a trailing parenthetical aside, because a title that
+    /// merely contains the word says nothing: the corpus has sections whose title
+    /// ends in "and Normative References" that are about the rule for citing them
+    /// and list nothing. The parenthetical is how a list says how it is ordered,
+    /// as RFC 3543's two lists do, and leaves its kind what it was.
+    public init(title: String) {
+      let punctuation = CharacterSet(charactersIn: ":.").union(.whitespaces)
+      var trimmed = title.lowercased()
+        .drop { $0.isNumber || $0 == "." || $0.isWhitespace }
+        .trimmingCharacters(in: punctuation)
+      if trimmed.hasSuffix(")"), let opening = trimmed.lastIndex(of: "(") {
+        trimmed = String(trimmed[..<opening]).trimmingCharacters(in: punctuation)
+      }
+      let words =
+        trimmed
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+      switch words {
+      case "normative references", "normative":
+        self = .normative
+      case "informative references", "informational references", "non-normative references",
+        "informative":
+        self = .informative
+      default:
+        self = .unknown
+      }
+    }
+  }
+
+  /// Derived from the title rather than stored, so the two cannot disagree and
+  /// neither parser nor the serializer has anything more to carry.
+  public var kind: Kind { Kind(title: title) }
 }
 
 /// One bibliographic entry, e.g. `[RFC7301]`.
@@ -423,6 +466,11 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
   /// pinning a living standard to the commit the RFC was written against. Empty
   /// when there is none.
   public var annotation: [Inline]
+  /// The documents a `<referencegroup>` stands for, its members' (RFC 8126 for
+  /// BCP 26): the group is one entry in its list, under its own series, so a
+  /// mention of a member finds the group's entry through these (#184). Empty for
+  /// any other entry.
+  public var members: [DocumentID]
 
   public var id: String { anchor }
 
@@ -435,7 +483,8 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     seriesInfo: [SeriesInfo] = [],
     url: URL? = nil,
     rawText: String? = nil,
-    annotation: [Inline] = []
+    annotation: [Inline] = [],
+    members: [DocumentID] = []
   ) {
     self.anchor = anchor
     self.displayAnchor = displayAnchor ?? anchor
@@ -446,6 +495,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     self.url = url
     self.rawText = rawText
     self.annotation = annotation
+    self.members = members
   }
 
   /// The RFC/BCP/STD this reference points at, when it is one.
@@ -466,7 +516,14 @@ public struct CrossReference: Sendable, Hashable, Codable {
     /// Another place in the same document, by anchor.
     case anchor(String)
     /// Another RFC, optionally a specific section within it.
-    case document(DocumentID, section: String?)
+    ///
+    /// `entry` is the anchor of the bibliography entry the citation resolved to, when
+    /// it resolved to one: what a citation's kind is read from (#184). It is not
+    /// always the anchor the source cites: a `<referencegroup>` is one entry in its
+    /// list, so a citation of RFC 8126 inside the group for BCP 26 names the group's
+    /// entry. Nil for a mention nothing in the bibliography matched, such as a bare
+    /// "RFC 3986" in prose.
+    case document(DocumentID, section: String?, entry: String? = nil)
   }
 
   /// How the source asked a section reference to be worded.
@@ -522,7 +579,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
     switch target {
     case .anchor(let anchor):
       return anchor
-    case .document(let id, let section):
+    case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
       let sectionLabel = Self.nonBreakingLabel("Section \(section)")
@@ -552,7 +609,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
   public var display: Display {
     // Words from the source, or a reference within this document: neither is ours
     // to restyle.
-    guard text == nil, case .document(let id, let section) = target else {
+    guard text == nil, case .document(let id, let section, _) = target else {
       return Display(text: label, chip: nil)
     }
     // `bare` is the source asking for the section number alone. Drawing "RFC 9110

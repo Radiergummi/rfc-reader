@@ -15,8 +15,11 @@ struct RevisionsFetchTests {
     let status: Int
     let body: Data
 
-    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
-      (body, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+      (
+        body,
+        HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+      )
     }
   }
 

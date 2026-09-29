@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -7,6 +7,7 @@
 RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
+BENCHMARKS   := Tools/benchmarks
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
 # The corpus working directory (see the corpus targets below). Set here rather
@@ -70,7 +71,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc355 rfc674 rfc6614 rfc793
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1140 rfc1178 rfc1198 rfc1343 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc355 rfc674 rfc6614 rfc7231 rfc783 rfc793 rfc8011
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
@@ -79,6 +80,35 @@ CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 
 # identifier, not the `Corpus-backed: ...` name its suite displays.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) swift test --package-path $(RFCKIT) --filter CorpusBacked
+
+## Run the benchmarks, fetching the documents they read
+# Release builds of the parsers, the search and the document builder, over real
+# RFCs (Tools/benchmarks). Not part of `check`: the numbers are this machine's,
+# and the first run needs the network. A change is measured against a baseline
+# saved before it:
+#
+#   make benchmark BENCHMARK_ARGS='baseline update before'
+#   make benchmark BENCHMARK_ARGS='baseline compare before'
+#   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
+#
+BENCHMARK_CORPUS := $(CORPUS)/benchmarks
+BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc5661.txt rfc793.txt
+BENCHMARK_ARGS ?=
+benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+# The benchmarks' inputs have a directory of their own, fetched once and then
+# left alone: a baseline compares only while its inputs stay the same, and the
+# corpus pipeline refetches its rfc-index.xml and converts whatever lies in
+# text.noindex. Written to a partial file first, like the legacy RFCs below.
+$(BENCHMARK_CORPUS)/rfc-index.xml:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
+
+$(BENCHMARK_CORPUS)/%:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a
 # partial file first, so an interrupted download is not taken for the document.
@@ -175,6 +205,32 @@ install: build-app
 	  rm -rf '/Applications/$(SCHEME).app'; \
 	  cp -R "$$app" /Applications/; \
 	  echo "installed /Applications/$(SCHEME).app"
+
+## Record a Time Profiler trace of a scripted session and print the signposts
+# Release, because that is what ships and what the numbers should describe; a
+# Debug build is often several times slower in Swift code, and misleads. The
+# session opens three large documents and searches (`Tools/trace/trace.py` has
+# it); name another with TRACE_SCENARIO. The trace is kept in traces/ for
+# Instruments, where the same intervals sit in the Points of Interest lane.
+#
+# The app runs against its real sandbox container, so Recently Read, reading
+# positions and window restoration are the real ones, and the session can
+# change them. It ends the copy it launched with SIGTERM, as `make run` ends a
+# running one, but leaves any other running copy alone.
+#
+#   make trace
+#   make trace TRACE_SCENARIO='wait 6; open 9110; wait 5'
+#
+# The scenario reaches the script through the environment, not spliced into the
+# recipe, so a quote in a search does not end the shell's string.
+TRACE_SCENARIO ?=
+export TRACE_SCENARIO
+trace: CONFIGURATION := Release
+trace: build-app
+	@app='$(call built_app,platform=macOS)'; \
+	  Tools/trace/trace.py --app "$$app" \
+	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
+	    $(if $(TRACE_SCENARIO),--scenario "$$TRACE_SCENARIO")
 
 ## Build the corpus pipeline in release mode
 # Phony rather than a rule on $(CORPUS_BIN): swift build tracks its own sources
