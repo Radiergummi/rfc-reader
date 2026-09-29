@@ -86,7 +86,7 @@ actor DocumentStore {
   }
 
   /// Off the actor and after the caller has its index: encoding the whole index
-  /// is about 100 ms, which a launch should not wait for, and a document opened
+  /// takes about 165 ms, which a launch should not wait for, and a document opened
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   private func writeSnapshot(of index: RFCIndex) {
@@ -97,6 +97,8 @@ actor DocumentStore {
 
   @concurrent
   private static func write(_ index: RFCIndex, to url: URL) async {
+    let interval = signposter.beginInterval("Write index snapshot")
+    defer { signposter.endInterval("Write index snapshot", interval) }
     do {
       try IndexSnapshot.encode(index).write(to: url, options: .atomic)
     } catch {
