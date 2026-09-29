@@ -139,6 +139,17 @@ final class LibraryModel {
     // main thread, and the parse, which needs nothing from it, runs beside it rather
     // than after it (#367). Every `await` stays below this line.
     async let cached = Self.loadCachedIndex(from: store)
+    // Just Published needs neither the index nor the downloads, so it starts beside
+    // them rather than after the index is applied. It is decoration: a failure leaves
+    // it empty, and is logged rather than shown (#125).
+    Task(name: "Fetch recent RFCs") {
+      do {
+        recent = try await client.fetchRecent()
+      } catch {
+        libraryLog.error(
+          "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
+      }
+    }
     await refreshDownloadedNumbers()
     do {
       if let (prepared, updatedAt) = try await cached {
@@ -152,16 +163,6 @@ final class LibraryModel {
       }
     } catch {
       indexState = .failed(error.localizedDescription)
-    }
-    // Just Published is decoration: a failure leaves it empty, and is logged
-    // rather than shown (#125).
-    Task(name: "Fetch recent RFCs") {
-      do {
-        recent = try await client.fetchRecent()
-      } catch {
-        libraryLog.error(
-          "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
-      }
     }
   }
 
