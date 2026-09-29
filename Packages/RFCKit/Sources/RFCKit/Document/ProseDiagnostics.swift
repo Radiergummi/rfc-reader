@@ -42,6 +42,13 @@ public struct ProseDiagnostics: Sendable {
   /// against: the margin of an `indentTooDeep` refusal is taken from it (#43).
   public var indentLimit: Int = 0
 
+  /// Whether a block set past the classic cap reads as sentences and not as a MIB
+  /// module's text, which is what excuses that indent within the document's limit.
+  /// Recorded past the limit too, where `deepIndentNotSentences` is never asked: it says
+  /// whether a looser limit would take the block or refuse it as code (#43). False at
+  /// the classic cap or within it, where the question does not arise.
+  public var readsAsDeepProse = false
+
   /// How far the first line is offset from `indent`. May be negative.
   public var firstLineIndent: Int = 0
 
@@ -124,22 +131,21 @@ public struct BlockDiagnostics: Sendable {
   public var claimedByList: Bool
   /// The verdict and its reasons.
   public var diagnosis: ProseDiagnostics
-  /// The source lines the block came from, 1-based and inclusive, counted in the text
-  /// as given: where a sample of blocks points, without copying them (#43). A block
-  /// broken by page furniture spans the furniture too.
-  public var startLine: Int
-  public var endLine: Int
+  /// The source lines the block came from, 1-based and inclusive, counted as the text
+  /// as given splits at its newlines: where a sample of blocks points, without copying
+  /// them (#43). A block broken by page furniture spans the furniture too. Nil for a
+  /// block whose lines could not all be found in the source.
+  public var sourceLines: ClosedRange<Int>?
 
   public init(
     section: String, firstLine: String, lineCount: Int, claimedByList: Bool,
-    diagnosis: ProseDiagnostics, startLine: Int, endLine: Int
+    diagnosis: ProseDiagnostics, sourceLines: ClosedRange<Int>?
   ) {
     self.section = section
     self.firstLine = firstLine
     self.lineCount = lineCount
     self.claimedByList = claimedByList
     self.diagnosis = diagnosis
-    self.startLine = startLine
-    self.endLine = endLine
+    self.sourceLines = sourceLines
   }
 }

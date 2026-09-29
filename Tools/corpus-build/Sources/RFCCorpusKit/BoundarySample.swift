@@ -1,4 +1,3 @@
-import Crypto
 import Foundation
 import RFCKit
 
@@ -19,7 +18,9 @@ public enum BoundarySample {
     /// The block's source lines, 1-based and inclusive.
     public var startLine: Int
     public var endLine: Int
-    /// SHA-256 of those source lines, joined by newlines.
+    /// SHA-256 of those source lines, joined by newlines, as UTF-8: of the text as
+    /// `convert` decoded it, which for the few Windows-1252 documents is not the bytes
+    /// of the file.
     public var sha256: String
     /// Which boundary: `indent`, `artwork`, `sentences` or `justified`.
     public var criterion: String
@@ -41,7 +42,8 @@ public enum BoundarySample {
   /// The boundary criterion `diagnosis` meets, or nil when it was refused by no guard,
   /// by more than one, or by one but not narrowly:
   ///
-  /// - **indent:** set one or two columns past its document's limit;
+  /// - **indent:** set one or two columns past its document's limit, and reading as
+  ///   the sentences a limit that deep would excuse;
   /// - **artwork:** one artwork match in the whole block, an incidental `->` or `...`;
   /// - **sentences:** justified but for reading as sentences, with a sentence ratio in
   ///   [0.5, 0.6), just under the three fifths that tell asks for;
@@ -51,8 +53,10 @@ public enum BoundarySample {
     guard diagnosis.isNearMiss, let rejection = diagnosis.rejections.first else { return nil }
     switch rejection {
     case .indentTooDeep:
+      // A looser limit excuses only sentences past the classic cap; code set that deep
+      // would be refused as code instead.
       let over = diagnosis.indent - diagnosis.indentLimit
-      guard (1...2).contains(over) else { return nil }
+      guard (1...2).contains(over), diagnosis.readsAsDeepProse else { return nil }
       return Criterion(name: "indent", measurement: Double(diagnosis.indent), margin: Double(over))
     case .artworkPattern:
       guard diagnosis.artworkMatches == 1 else { return nil }
@@ -71,26 +75,34 @@ public enum BoundarySample {
     }
   }
 
-  /// The boundary entries among one document's diagnosed blocks. A block the list
+  /// The boundary entries among one document's diagnosed blocks, and how many blocks
+  /// on the boundary could not be found in the source to point at. A block the list
   /// parser claimed is skipped: it was never put to the prose test, so its refusals
   /// describe a decision that was not taken.
   public static func entries(for blocks: [BlockDiagnostics], in text: String, document: String)
-    -> [Entry]
+    -> (entries: [Entry], unlocated: Int)
   {
     let lines = text.replacingOccurrences(of: "\r\n", with: "\n")
       .split(separator: "\n", omittingEmptySubsequences: false)
-    return blocks.compactMap { block in
-      guard !block.claimedByList, block.startLine > 0,
+    var entries: [Entry] = []
+    var unlocated = 0
+    for block in blocks {
+      guard !block.claimedByList,
         let criterion = criterion(for: block.diagnosis),
         let rejection = block.diagnosis.rejections.first
-      else { return nil }
-      let range = (block.startLine - 1)..<min(block.endLine, lines.count)
-      let source = lines[range].joined(separator: "\n")
-      let hash = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
-      return Entry(
-        document: document, startLine: block.startLine, endLine: block.endLine, sha256: hash,
-        criterion: criterion.name, rejection: rejection.rawValue,
-        measurement: criterion.measurement, margin: criterion.margin)
+      else { continue }
+      guard let range = block.sourceLines else {
+        unlocated += 1
+        continue
+      }
+      let source = lines[(range.lowerBound - 1)..<range.upperBound].joined(separator: "\n")
+      entries.append(
+        Entry(
+          document: document, startLine: range.lowerBound, endLine: range.upperBound,
+          sha256: Manifest.sha256(of: Data(source.utf8)), criterion: criterion.name,
+          rejection: rejection.rawValue,
+          measurement: criterion.measurement, margin: criterion.margin))
     }
+    return (entries, unlocated)
   }
 }

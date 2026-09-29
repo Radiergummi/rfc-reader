@@ -13,11 +13,16 @@ public struct Manifest: Codable, Sendable {
     public init(path: String, data: Data) {
       self.path = path
       self.bytes = data.count
-      self.sha256 = SHA256.hash(data: data).map { byte in
-        let digits = String(byte, radix: 16)
-        return byte < 0x10 ? "0" + digits : digits
-      }.joined()
+      self.sha256 = Manifest.sha256(of: data)
     }
+  }
+
+  /// The SHA-256 of `data`, as lower-case hex.
+  static func sha256(of data: Data) -> String {
+    SHA256.hash(data: data).map { byte in
+      let digits = String(byte, radix: 16)
+      return byte < 0x10 ? "0" + digits : digits
+    }.joined()
   }
 
   public var version: String

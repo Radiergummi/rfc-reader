@@ -351,8 +351,8 @@ struct ProseDiagnosticsTests {
   // MARK: Where a block is (#43)
 
   /// A block's line range in the source, so a sample of blocks can name them without
-  /// copying their text. Through the page furniture and the lead-in: every block's
-  /// first line is the source line it points at.
+  /// copying their text. Through the page furniture and the lead-in: every block is
+  /// found, and its first line is the source line it points at.
   @Test(arguments: ["rfc2119.txt", "rfc793.txt", "rfc757.txt", "rfc1245.txt"])
   func `every diagnosed block points at its own lines in the source`(fixture: String) throws {
     let text = try Fixtures.string(fixture)
@@ -363,11 +363,12 @@ struct ProseDiagnosticsTests {
     #expect(!blocks.isEmpty)
     var previous = 0
     for block in blocks {
-      #expect(block.startLine > previous, "blocks come in source order: \(block.firstLine)")
-      #expect(block.endLine >= block.startLine + block.lineCount - 1)
-      let line = source[block.startLine - 1].trimmingCharacters(in: .whitespaces)
+      let lines = try #require(block.sourceLines, "every line found: \(block.firstLine)")
+      #expect(lines.lowerBound > previous, "blocks come in source order: \(block.firstLine)")
+      #expect(lines.count >= block.lineCount)
+      let line = source[lines.lowerBound - 1].trimmingCharacters(in: .whitespaces)
       #expect(String(line.prefix(80)) == block.firstLine)
-      previous = block.startLine
+      previous = lines.upperBound
     }
   }
 
@@ -377,5 +378,21 @@ struct ProseDiagnosticsTests {
     let diagnosis = LegacyTextParser.diagnose(lines, maxIndent: 7)
     #expect(diagnosis.indentLimit == 7)
     #expect(diagnosis.rejections == [.indentTooDeep])
+  }
+
+  /// A block set too deep is refused for its indent alone, and the guard that excuses a
+  /// deep indent is never asked. Whether it would have been is what says a looser limit
+  /// takes the block, or only moves the refusal to what it says: the code line of a
+  /// deeper cap is past the limit here, and would be refused as code under it (#43).
+  @Test func `a block too deep records whether a deeper cap would excuse it`() {
+    let sentences = [
+      "         Using a word that has strong semantic implications in the",
+      "         current context will cause confusion.",
+    ]
+    #expect(LegacyTextParser.diagnose(sentences, maxIndent: 7).readsAsDeepProse)
+    let code = ["         ::= { ifMauEntry 4 }"]
+    let diagnosis = LegacyTextParser.diagnose(code, maxIndent: 7)
+    #expect(diagnosis.rejections == [.indentTooDeep])
+    #expect(!diagnosis.readsAsDeepProse)
   }
 }

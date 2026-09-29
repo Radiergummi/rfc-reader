@@ -12,7 +12,7 @@ public struct DocumentConverter: Sendable {
   /// Whether to count the lines dropped as page furniture into the report.
   public var countsFurniture: Bool
   /// Whether to collect the blocks on the prose test's decision boundary. Diagnosing
-  /// costs what `diagnosesProse` does.
+  /// costs what `diagnosesProse` does, once for both.
   public var samplesBoundary: Bool
 
   public init(
@@ -46,13 +46,13 @@ public struct DocumentConverter: Sendable {
       document.header.obsoletes = metadata.obsoletes
       document.header.updates = metadata.updates
     }
-    let prose =
-      diagnosesProse ? ProseReport(diagnosing: text, id: stem, title: metadata?.title) : nil
+    // Diagnosed once for both reports.
+    let blocks =
+      diagnosesProse || samplesBoundary
+      ? LegacyTextParser.proseDiagnostics(for: text, title: metadata?.title) : []
+    let prose = diagnosesProse ? ProseReport(diagnosed: blocks, id: stem) : nil
     let boundary =
-      samplesBoundary
-      ? BoundarySample.entries(
-        for: LegacyTextParser.proseDiagnostics(for: text, title: metadata?.title), in: text,
-        document: stem) : nil
+      samplesBoundary ? BoundarySample.entries(for: blocks, in: text, document: stem) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
     let serializer = RFCXMLSerializer(
       options: .init(
@@ -64,6 +64,9 @@ public struct DocumentConverter: Sendable {
 
     var report = DocumentReport(document: document, id: stem, overridden: false)
     if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
+    if let unlocated = boundary?.unlocated, unlocated > 0 {
+      report.warnings.append("\(unlocated) blocks on the boundary not found in the source")
+    }
     // Round-trip check: the XML must parse back into the same section tree.
     do {
       let reparsed = try RFCXMLParser.parse(xml)
@@ -75,7 +78,7 @@ public struct DocumentConverter: Sendable {
     } catch {
       report.warnings.append("generated XML does not parse: \(error)")
     }
-    return Conversion(xml: xml, report: report, prose: prose, boundary: boundary)
+    return Conversion(xml: xml, report: report, prose: prose, boundary: boundary?.entries)
   }
 
   /// The text of a legacy RFC file. 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather

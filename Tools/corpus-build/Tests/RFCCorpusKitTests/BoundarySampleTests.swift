@@ -9,11 +9,12 @@ import Testing
 @Suite("Boundary sample")
 struct BoundarySampleTests {
   private static func block(
-    _ diagnosis: ProseDiagnostics, startLine: Int = 3, endLine: Int = 4, claimedByList: Bool = false
+    _ diagnosis: ProseDiagnostics, sourceLines: ClosedRange<Int>? = 3...4,
+    claimedByList: Bool = false
   ) -> BlockDiagnostics {
     BlockDiagnostics(
       section: "section-1", firstLine: "a line", lineCount: 2, claimedByList: claimedByList,
-      diagnosis: diagnosis, startLine: startLine, endLine: endLine)
+      diagnosis: diagnosis, sourceLines: sourceLines)
   }
 
   private static func indented(_ indent: Int, limit: Int = 6) -> ProseDiagnostics {
@@ -21,6 +22,7 @@ struct BoundarySampleTests {
     diagnosis.rejections = [.indentTooDeep]
     diagnosis.indent = indent
     diagnosis.indentLimit = limit
+    diagnosis.readsAsDeepProse = true
     return diagnosis
   }
 
@@ -60,16 +62,24 @@ struct BoundarySampleTests {
     #expect(BoundarySample.criterion(for: Self.indented(8))?.margin == 2)
   }
 
+  /// Past the classic cap a looser limit excuses only sentences, so a block too deep
+  /// that reads as code would be refused as code instead: two guards, not one.
+  @Test func `an indent a looser limit would refuse as code is not on the boundary`() {
+    var code = Self.indented(7)
+    code.readsAsDeepProse = false
+    #expect(Self.criterion(code) == nil)
+  }
+
   @Test func `a single artwork match is on the boundary`() {
     #expect(Self.criterion(Self.artwork(1)) == "artwork")
     #expect(Self.criterion(Self.artwork(2)) == nil)
   }
 
-  @Test func `a sentence ratio just under three fifths is on the boundary`() {
+  @Test func `a sentence ratio just under three fifths is on the boundary`() throws {
     let near = Self.gapped(dissenting: ["readsLikeSentences"], sentenceRatio: 0.55)
     #expect(Self.criterion(near) == "sentences")
-    let margin = try? #require(BoundarySample.criterion(for: near)?.margin)
-    #expect(abs((margin ?? 0) - 0.05) < 0.0001)
+    let margin = try #require(BoundarySample.criterion(for: near)?.margin)
+    #expect(abs(margin - 0.05) < 0.0001)
     #expect(
       Self.criterion(Self.gapped(dissenting: ["readsLikeSentences"], sentenceRatio: 0.45)) == nil)
   }
@@ -88,10 +98,20 @@ struct BoundarySampleTests {
 
   /// The list parser took it before the prose test; its refusals describe nothing.
   @Test func `a block the list parser claimed is never sampled`() {
-    let entries = BoundarySample.entries(
+    let sample = BoundarySample.entries(
       for: [Self.block(Self.artwork(1), claimedByList: true)], in: "one\ntwo\nthree\nfour",
       document: "rfc1")
-    #expect(entries.isEmpty)
+    #expect(sample.entries.isEmpty)
+    #expect(sample.unlocated == 0)
+  }
+
+  /// A block on the boundary that was not found in the source is counted, not dropped
+  /// without a trace.
+  @Test func `a block not found in the source is counted`() {
+    let sample = BoundarySample.entries(
+      for: [Self.block(Self.artwork(1), sourceLines: nil)], in: "one\ntwo", document: "rfc1")
+    #expect(sample.entries.isEmpty)
+    #expect(sample.unlocated == 1)
   }
 
   /// An entry names the block by line range and hash, never by its text.
@@ -99,16 +119,16 @@ struct BoundarySampleTests {
     let text = "first\nsecond\nthe block's line\nand its next\nafter"
     let entry = try #require(
       BoundarySample.entries(
-        for: [Self.block(Self.artwork(1), startLine: 3, endLine: 4)], in: text, document: "rfc9"
-      ).first)
+        for: [Self.block(Self.artwork(1), sourceLines: 3...4)], in: text, document: "rfc9"
+      ).entries.first)
     #expect(entry.document == "rfc9")
     #expect(entry.startLine == 3 && entry.endLine == 4)
     #expect(entry.criterion == "artwork" && entry.rejection == "artworkPattern")
     #expect(entry.sha256.count == 64)
     let other = try #require(
       BoundarySample.entries(
-        for: [Self.block(Self.artwork(1), startLine: 1, endLine: 2)], in: text, document: "rfc9"
-      ).first)
+        for: [Self.block(Self.artwork(1), sourceLines: 1...2)], in: text, document: "rfc9"
+      ).entries.first)
     #expect(other.sha256 != entry.sha256, "the hash is of the block's own lines")
   }
 }
