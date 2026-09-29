@@ -25,7 +25,10 @@ struct ConvertCommand: AsyncParsableCommand {
   @Option(help: "Where to write the per-document report.")
   var report: String?
 
-  @Option(help: "The RFC index, for each document's title and what it obsoletes and updates.")
+  @Option(
+    help:
+      "The RFC index, for each document's title, number, authors and date, and what it obsoletes and updates."
+  )
   var index: String?
 
   @Option(help: "Where to write what the prose test decided. Roughly doubles the run.")
@@ -190,6 +193,10 @@ struct ConvertCommand: AsyncParsableCommand {
     let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
     let text = LegacyTextParser.text(decoding: bytes)
     let metadata = ConversionPlan.rfcNumber(of: stem).flatMap { job.index?[$0] }
+    if job.index != nil, metadata == nil {
+      // The header keeps the title page's values (#218). It should not happen for a legacy RFC.
+      Self.logger.warning("no index entry", metadata: ["document": "\(stem)"])
+    }
     let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
     try conversion.xml.write(to: outputURL, options: .atomic)
     var entry = conversion.report

@@ -38,6 +38,33 @@ actor DocumentStore {
   /// has not grown is not enumerated again.
   private var hasGrown = true
 
+  /// The installed data packs (#36), in a folder of the cache's directory but not
+  /// part of the cache: a pack is installed and replaced whole, never evicted a
+  /// document at a time. The cache's index and eviction read only the bodies the
+  /// store names itself, at the directory's top level, so a folder is never one.
+  private var packsDirectory: URL {
+    directory.appending(path: "Packs", directoryHint: .isDirectory)
+  }
+
+  /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
+  /// is installed.
+  private lazy var legacyPack: InstalledPack? = Self.installedPack(
+    in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
+  private static let legacyPackName = "legacy-xml"
+  /// One install at a time: two would unpack into one destination and race to
+  /// swap it in.
+  private var isInstallingPack = false
+
+  struct AlreadyInstalling: Error, CustomStringConvertible {
+    var description: String { "A data pack is already being installed." }
+  }
+
+  struct DownloadFailed: Error, CustomStringConvertible {
+    let url: URL
+    let status: Int
+    var description: String { "\(url.absoluteString) answered HTTP \(status)" }
+  }
+
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
@@ -117,8 +144,10 @@ actor DocumentStore {
 
     if let document = await parseCached(id) {
       // A removal while the parse ran took the body off the disk, and the memo
-      // does not bring it back.
-      if cachedDocuments.contains(id) { parsed.insert(document, for: id) }
+      // does not bring it back; a document the pack serves is not the cache's.
+      if cachedDocuments.contains(id) || legacyPack?.file(for: id) != nil {
+        parsed.insert(document, for: id)
+      }
       return document
     }
 
@@ -131,7 +160,10 @@ actor DocumentStore {
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
-    parsed.insert(fetched.document, for: id)
+    // A pack installed while this was in flight serves the document from now on.
+    if legacyPack?.file(for: id) == nil {
+      parsed.insert(fetched.document, for: id)
+    }
     return fetched.document
   }
 
@@ -139,20 +171,25 @@ actor DocumentStore {
   private func parseCached(_ id: DocumentID) async -> RFCDocument? {
     if let running = parsing[id] { return await running.value }
     let xml = fileURL(id, format: .xml)
+    let pack = legacyPack?.file(for: id)
     let text = fileURL(id, format: .text)
-    let parse = Task { await Self.parseCached(id, xml: xml, text: text) }
+    let parse = Task { await Self.parseCached(id, xml: xml, pack: pack, text: text) }
     parsing[id] = parse
     let document = await parse.value
     parsing[id] = nil
     return document
   }
 
-  /// The cached body parsed, the XML when there is one that parses, otherwise the
-  /// text; nil when neither is on disk. Off the actor, as a parse of a long
+  /// The cached body parsed, the XML when there is one that parses, then the data
+  /// pack's, then the text; nil when none is on disk. The pack comes before a cached
+  /// `.txt`: it is the single XML path it exists for, and a `.txt` cached before it
+  /// arrived still serves Original Text. Off the actor, as a parse of a long
   /// document takes long enough that `cachedNumbers()` and the other calls would
   /// otherwise wait for it.
   @concurrent
-  private static func parseCached(_ id: DocumentID, xml: URL, text: URL) async -> RFCDocument? {
+  private static func parseCached(_ id: DocumentID, xml: URL, pack: URL?, text: URL) async
+    -> RFCDocument?
+  {
     if let data = try? Data(contentsOf: xml) {
       do {
         return try RFCXMLParser.parse(data)
@@ -161,6 +198,15 @@ actor DocumentStore {
         // that no longer parses is worth knowing about.
         storeLog.error(
           "\(id.displayName, privacy: .public): cached XML did not parse: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    if let pack {
+      do {
+        return try RFCXMLParser.parse(Data(contentsOf: pack))
+      } catch {
+        storeLog.error(
+          "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
         )
       }
     }
@@ -182,6 +228,61 @@ actor DocumentStore {
       )
     }
     return fetched
+  }
+
+  // MARK: - Data packs (#36)
+
+  /// The pack in `directory`, or nil when none is installed there or its manifest
+  /// does not read. That is logged, because the store would otherwise fall back to
+  /// the network with no sign of why.
+  private static func installedPack(in directory: URL) -> InstalledPack? {
+    guard FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) else {
+      return nil
+    }
+    do {
+      return try InstalledPack(contentsOf: directory)
+    } catch {
+      storeLog.error(
+        "the installed data pack is unreadable: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  /// Installs the legacy XML pack from an `.aar`, an unpacked folder, or a URL to
+  /// download one from, replacing the installed one only once the new one has
+  /// verified. Documents already parsed are parsed again on their next open, so
+  /// they come from the pack.
+  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    // Checked and set without a suspension between them, so a second install
+    // arriving while the first is off the actor is refused rather than raced.
+    guard !isInstallingPack else { throw AlreadyInstalling() }
+    isInstallingPack = true
+    defer { isInstallingPack = false }
+    let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
+    legacyPack = pack
+    // Parsed again on their next open, from the pack; nothing else it could serve.
+    for id in parsed.keys where pack.file(for: id) != nil {
+      parsed.remove(id)
+    }
+    return pack
+  }
+
+  /// Off the actor: a whole pack is unpacked and every file hashed.
+  @concurrent
+  private static func install(_ source: URL, as name: String, in packs: URL) async throws
+    -> InstalledPack
+  {
+    guard !source.isFileURL else {
+      return try PackInstaller.install(source, as: name, in: packs)
+    }
+    let (downloaded, response) = try await URLSession.shared.download(from: source)
+    defer { try? FileManager.default.removeItem(at: downloaded) }
+    // An error page is not an archive, and would be reported as one that failed
+    // to unpack.
+    if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+      throw DownloadFailed(url: source, status: status)
+    }
+    return try PackInstaller.install(downloaded, as: name, in: packs)
   }
 
   // MARK: - Eviction (#39)

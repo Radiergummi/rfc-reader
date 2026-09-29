@@ -13,16 +13,21 @@ struct InlineLinker: Sendable {
   /// A pattern and the literal it cannot match without, defined together: `link`
   /// reaches a pattern only through `matches(in:given:)`, so no pass can run under
   /// another pattern's gate.
-  struct Gated<Output> {
-    let regex: Regex<Output>
-    let gate: KeyPath<Literals, Bool>
+  struct Gated<Output: Sendable>: Sendable {
+    let regex: Pattern<Output>
+    let gate: any KeyPath<Literals, Bool> & Sendable
+
+    init(regex: Regex<Output>, gate: any KeyPath<Literals, Bool> & Sendable) {
+      self.regex = Pattern(regex)
+      self.gate = gate
+    }
 
     func matches(in text: String, given literals: Literals) -> [Regex<Output>.Match] {
       literals[keyPath: gate] ? text.matches(of: regex) : []
     }
   }
 
-  nonisolated(unsafe) static let sectionOfRFCPattern = Gated(
+  static let sectionOfRFCPattern = Gated(
     regex: #/\bSection\s+(?<section>\d+(?:\.\d+)*)\s+of\s+\[?RFC\s?(?<number>\d+)\]?/#,
     gate: \.sectionOfRFC
   )
@@ -32,7 +37,7 @@ struct InlineLinker: Sendable {
   /// neither this pattern nor the bare one. Anything that is not a document once
   /// parsed -- `[Page 3]`, `[see RFC 2119 and others]` -- is discarded below, and
   /// the bare pattern picks up whatever RFC sits inside it.
-  nonisolated(unsafe) static let bracketPattern = Gated(
+  static let bracketPattern = Gated(
     regex: #/\[(?<anchor>[A-Za-z0-9][A-Za-z0-9.\-_ ]*)\]/#, gate: \.bracket)
   /// Deliberately blind to a preceding `[`. A multi-anchor citation
   /// (`[RFC2582,FF96,Hoe96]`) is not a bracket this parser may eat -- the tags
@@ -44,17 +49,17 @@ struct InlineLinker: Sendable {
   /// as its ordinary prose spelling, and `DocumentID` has always read the hyphen as
   /// a separator. Prose held 2,223 of those against 1,640 plain ones, so it was the
   /// larger of the two shapes going unlinked.
-  nonisolated(unsafe) static let bareRFCPattern = Gated(
+  static let bareRFCPattern = Gated(
     regex: #/\bRFC[\s\-]?(?<number>\d+)\b/#, gate: \.rfc)
   /// One list, written once: `RFCs 734, 736, 747 and 749`. Each number is its own
   /// reference but only the first carries the word, so the numbers are linked where
   /// they stand and the sentence is left to read as it was set.
-  nonisolated(unsafe) static let rfcListPattern = Gated(
+  static let rfcListPattern = Gated(
     regex: #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#, gate: \.rfcs)
-  nonisolated(unsafe) private static let listNumberPattern = #/\d{1,5}/#
-  nonisolated(unsafe) static let sectionPattern = Gated(
+  private static let listNumberPattern = Pattern(#/\d{1,5}/#)
+  static let sectionPattern = Gated(
     regex: #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#, gate: \.section)
-  nonisolated(unsafe) static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
+  static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
 
   /// What a matched mention reads as: nil when the document spelled the reference
   /// the way the series spells itself, so the label composes back identically, and

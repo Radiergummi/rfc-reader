@@ -125,6 +125,13 @@ public struct Author: Hashable, Sendable, Codable {
   public var displayName: String {
     isEditor ? "\(name), Ed." : name
   }
+
+  /// The last word of the name, which is what a citation inverts and a page footer
+  /// names: "R. Fielding" is "Fielding". The whole name when it is one word.
+  public var surname: String {
+    guard let lastSpace = name.lastIndex(of: " ") else { return name }
+    return String(name[name.index(after: lastSpace)...])
+  }
 }
 
 /// An author's affiliation and address, as RFCXML's `<author>` states them.

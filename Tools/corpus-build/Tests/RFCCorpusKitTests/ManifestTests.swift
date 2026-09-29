@@ -1,5 +1,6 @@
 import Foundation
 import RFCCorpusKit
+import RFCKit
 import Testing
 
 /// The manifest is what the app checks a downloaded pack against, so its digests

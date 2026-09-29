@@ -20,7 +20,6 @@ import Testing
 /// These call `FragmentGeometry` directly, which is the code the reader draws and hit
 /// tests with. Reinstating either bug fails them.
 @Suite("Chip geometry: element-relative line indexing")
-@MainActor
 struct ChipLineGeometryTests {
   /// A laid-out paragraph wide enough to wrap, with chips scattered through it.
   private struct Fixture {

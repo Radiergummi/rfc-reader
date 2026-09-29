@@ -83,6 +83,12 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+    /// Whether a print is being prepared or its sheet is up; see `printDocument()`.
+    @State private var isPrinting = false
+    /// A finished export, while Save to Files is showing it (#376).
+    @State private var exported: ExportedFile?
+    /// Whether an export is being made or Save to Files is up; see `exportDocument(as:)`.
+    @State private var isExporting = false
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
@@ -206,6 +212,22 @@ struct DocumentView: View {
         .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
           .presentationDetents([.medium, .large])
+        }
+        .fileExporter(
+          isPresented: Binding(
+            get: { exported != nil },
+            set: {
+              if !$0 {
+                exported = nil
+                isExporting = false
+              }
+            }),
+          document: exported,
+          contentType: (exported?.format ?? .pdf).contentType,
+          defaultFilename: ExportFormat.fileStem(for: id)
+        ) { _ in
+          exported = nil
+          isExporting = false
         }
       #endif
       .onAppear {
@@ -432,7 +454,8 @@ struct DocumentView: View {
       withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
-    /// What is used least: the original text, and the document's pages elsewhere.
+    /// What is used least: the original text, the document's pages elsewhere, and
+    /// Export and Print, which are iOS's own: the formats listed, and the print sheet.
     private var moreMenu: some View {
       Menu {
         MenuSections(
@@ -440,6 +463,13 @@ struct DocumentView: View {
             showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
             precedingDraft: reader.precedingDraft),
           perform: perform)
+        Divider()
+        Menu("Export", systemImage: "square.and.arrow.down") {
+          ForEach(ExportFormat.allCases) { format in
+            Button(format.name) { exportDocument(as: format) }
+          }
+        }
+        Button("Print…", systemImage: "printer") { printDocument() }
       } label: {
         Label("More", systemImage: "ellipsis")
       }
@@ -457,6 +487,54 @@ struct DocumentView: View {
       case .openErrata(let url), .openPrecedingDraft(let url): systemOpenURL(url)
       case .openDatatracker: systemOpenURL(RFCEditorEndpoints.datatracker(id))
       case .toggleCollection, .newCollection: break
+      }
+    }
+
+    /// Save to Files, with the document in `format` (#376). Laid out for the region's
+    /// paper, as a print is.
+    private func exportDocument(as format: ExportFormat) {
+      // A second tap while the file is made would make it again, and present Save to
+      // Files over the first.
+      guard !isExporting else { return }
+      isExporting = true
+      Task {
+        guard
+          let data = try? await DocumentExport.data(
+            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isExporting = false
+          return
+        }
+        exported = ExportedFile(data: data, format: format)
+      }
+    }
+
+    /// The system's print sheet, with the document laid out for paper (#375). Laid
+    /// out for the region's paper; the sheet scales it to whatever paper is chosen.
+    private func printDocument() {
+      // A second tap while the PDF is built would build it again and present the
+      // shared controller twice.
+      guard !isPrinting else { return }
+      isPrinting = true
+      let original = reader.showOriginal
+      Task {
+        guard
+          let data = try? await DocumentPDF.make(
+            for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isPrinting = false
+          return
+        }
+        let info = UIPrintInfo.printInfo()
+        info.jobName = PrintFurniture.documentTitle(
+          id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printingItem = data
+        controller.present(animated: true) { _, _, _ in isPrinting = false }
       }
     }
 
@@ -741,11 +819,13 @@ struct DocumentHeaderView: View {
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
 
+    /// Merged by `HeaderSummary`, which a printed page's title block reads too.
     init(header: DocumentHeader, metadata: RFCMetadata?) {
-      title = header.title
-      date = (header.date ?? metadata?.date)?.formatted
-      workingGroup = header.workingGroup ?? metadata?.workingGroup
-      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
+      let summary = HeaderSummary(header: header, metadata: metadata)
+      title = summary.title
+      date = summary.date
+      workingGroup = summary.workingGroup
+      authors = summary.authors
       self.metadata = metadata
     }
   }

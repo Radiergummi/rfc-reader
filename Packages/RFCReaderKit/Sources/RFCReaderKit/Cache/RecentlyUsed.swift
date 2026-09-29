@@ -16,6 +16,9 @@ public struct RecentlyUsed<Key: Hashable, Value> {
     self.capacity = capacity
   }
 
+  /// Every key held, the least recently used first.
+  public var keys: [Key] { order }
+
   /// The value for `key`, which is then the most recently used.
   public mutating func value(for key: Key) -> Value? {
     guard let value = values[key] else { return nil }

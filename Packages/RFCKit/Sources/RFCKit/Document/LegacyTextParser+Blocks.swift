@@ -1,38 +1,38 @@
 import Foundation
 
 extension LegacyTextParser {
-  nonisolated(unsafe) private static let bulletPattern =
-    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#
+  private static let bulletPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>[o\-\*\u{2022}])\s+(?<text>\S.*)$/#)
   /// A catalog entry: `NUMBER[letter]  - text`, the RFC index of RFC 1012, the
   /// standards summaries' `2352 - A Convention ...`, numbered steps and value tables
   /// (#204). The text may not start with a digit, or `3 - 2` would be an entry.
-  nonisolated(unsafe) private static let catalogEntryPattern =
-    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#
+  private static let catalogEntryPattern = Pattern(
+    #/^(?<indent> {0,8})(?<term>\d+[a-z]?) +- +(?<text>[^\d\s].*)$/#)
   /// A column gap in a catalog entry's text: a run of three spaces or more after a
   /// word. After a colon it is no column: `3 - NAME:   description` is a name and its
   /// description, the spaces aligning the descriptions (RFC 5412, 5416, 8231).
   /// `internalGapPattern` counted four spaces after a colon and not three, so RFC
   /// 8231 came out as one row a list among rows kept as artwork.
-  nonisolated(unsafe) private static let catalogGapPattern = #/[^.?!:\s]\s{3,}\S/#
+  private static let catalogGapPattern = Pattern(#/[^.?!:\s]\s{3,}\S/#)
   /// Arithmetic in an entry's text: a formula set on a line of its own opens with a
   /// number and a minus as well (RFC 5879's `1 - (1 - x / y) ^ 4 == ...`).
-  nonisolated(unsafe) private static let formulaPattern = #/==|\s\^\s/#
+  private static let formulaPattern = Pattern(#/==|\s\^\s/#)
   /// A second entry on the entry's line (RFC 3423's `1 - TCP, 2 - SCTP`), which is
   /// not the first one's text.
-  nonisolated(unsafe) private static let secondEntryPattern = #/,\s*\d+[a-z]? +- +\S/#
+  private static let secondEntryPattern = Pattern(#/,\s*\d+[a-z]? +- +\S/#)
   /// How far past an entry's text column a continuation may stand: a column or two
   /// either way is how a description under an entry is set, and a caption centered
   /// under a legend stands well past it (RFC 793's at 26 against 12).
   private static let catalogContinuationSlack = 2
-  nonisolated(unsafe) private static let numberedItemPattern =
-    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#
+  private static let numberedItemPattern = Pattern(
+    #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#)
   /// `containsArtwork` answers the same question byte by byte; an alternative added
   /// here has to be added there, and `` `the byte scans agree with the regexes` `` is the guard.
-  nonisolated(unsafe) static let artworkPattern =
-    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#
+  static let artworkPattern = Pattern(
+    #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#)
   /// A run of three or more spaces between two non-space characters, not following
   /// sentence punctuation: a column gap rather than the gap after a full stop.
-  nonisolated(unsafe) static let internalGapPattern = #/[^.?!:]\s{3,}\S/#
+  static let internalGapPattern = Pattern(#/[^.?!:]\s{3,}\S/#)
 
   /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
   /// of every block the prose test sees. Swift's regex engine tries each alternative

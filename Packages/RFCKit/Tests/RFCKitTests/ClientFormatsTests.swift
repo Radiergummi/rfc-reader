@@ -16,8 +16,26 @@ struct ClientFormatsTests {
     #expect(first.id == .rfc(10050))
     #expect(first.title == "Protocol-Specific Profiles for JSContact")
     #expect(first.link?.absoluteString == "https://www.rfc-editor.org/info/rfc10050/")
-    #expect(first.publishedAt != nil)
     #expect(first.summary.hasPrefix("This document defines"))
+  }
+
+  /// RFC 822 dates, pinned before the parse moved from a `DateFormatter` to a
+  /// `Date.ParseStrategy` (#148): every item has one, and they are the feed's instants.
+  @Test func `every recent RFC has the date the feed gives`() throws {
+    let recent = try RecentFeedParser.parse(try Fixtures.data("rfcrss.xml"))
+    #expect(recent.allSatisfy { $0.publishedAt != nil })
+    #expect(recent.first?.publishedAt == Date(timeIntervalSince1970: 1_789_776_000))
+    #expect(recent.contains { $0.publishedAt == Date(timeIntervalSince1970: 1_786_665_600) })
+  }
+
+  /// A date that does not exist is no date, as it was with the `DateFormatter`,
+  /// rather than rolling over into the next month.
+  @Test func `an impossible feed date does not parse`() {
+    #expect(
+      (try? Date("Thu, 31 Sep 2026 00:00:00 GMT", strategy: RecentFeedParser.dateStrategy)) == nil)
+    #expect(
+      (try? Date("Wed, 30 Sep 2026 00:00:00 GMT", strategy: RecentFeedParser.dateStrategy))
+        == Date(timeIntervalSince1970: 1_790_726_400))
   }
 
   @Test func `endpoints`() {

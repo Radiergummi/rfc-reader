@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: tables")
-@MainActor
 struct BuilderTableTests {
   private func row(_ strings: [String]) -> RFCKit.Table.Row {
     RFCKit.Table.Row(cells: strings.map { [Inline.text($0)] })

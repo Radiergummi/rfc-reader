@@ -18,8 +18,8 @@ extension LegacyTextParser {
   /// 1993.]`. Leading whitespace is excluded for the same reason -- `[ ]` and
   /// `[ a:defaultValue = "" ]` are schema fragments, not citations.
 
-  nonisolated(unsafe) private static let referenceStartPattern =
-    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#
+  private static let referenceStartPattern = Pattern(
+    #/^\s*\[(?<anchor>[^\]\s][^\]]{0,39})\]\s*(?<text>.*)$/#)
   /// A page footer `depaginate` could not see. `footerPattern` is anchored to the
   /// end of the line, and the earliest RFCs set the footer the other way round --
   /// `[Page 0]` at the left margin with the author out at the right (RFC 753, 759,
@@ -27,7 +27,7 @@ extension LegacyTextParser {
   /// one bracket of an anchor's shape that never names a reference. Four documents,
   /// and without this each gains a `<reference anchor="Page 52">` whose title is
   /// whatever the footer's author column said.
-  nonisolated(unsafe) private static let pageFooterAnchorPattern = #/Page\s+\d+/#
+  private static let pageFooterAnchorPattern = Pattern(#/Page\s+\d+/#)
 
   /// The anchor and the rest of the line, where `line` opens a reference entry.
   private static func entryStart(_ line: String) -> (anchor: String, text: Substring)? {
@@ -84,6 +84,17 @@ extension LegacyTextParser {
     return references
   }
 
+  /// What `reference(anchor:text:)` reads out of an entry, once per bibliography entry:
+  /// hoisted, because a literal inside the function was a new `Regex` for every entry,
+  /// compiled again on its first match (#146).
+  private static let referenceRFCPattern = Pattern(#/\bRFC\s?(\d+)/#)
+  private static let referenceOlderRFCPattern = Pattern(
+    #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+  private static let referenceBCPPattern = Pattern(#/\bBCP\s?(\d+)/#)
+  private static let referenceSTDPattern = Pattern(#/\bSTD\s?(\d+)/#)
+  private static let referenceTitlePattern = Pattern(#/"([^"]+)"/#)
+  private static let referenceURLPattern = Pattern(#/https?:\/\/[^\s>,]+/#)
+
   private static func reference(anchor label: String, text: String) -> Reference {
     var seriesInfo: [SeriesInfo] = []
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
@@ -92,24 +103,24 @@ extension LegacyTextParser {
     // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
     // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
     // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
-    if let match = text.firstMatch(of: #/\bRFC\s?(\d+)/#)
-      ?? text.firstMatch(of: #/\b(?:RFC|(?i:Request for Comments):?)[\s\-#]*(\d+)/#)
+    if let match = text.firstMatch(of: referenceRFCPattern)
+      ?? text.firstMatch(of: referenceOlderRFCPattern)
     {
       seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
       seriesInfo.append(SeriesInfo(id))
     }
-    if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceBCPPattern) {
       seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))
     }
-    if let match = text.firstMatch(of: #/\bSTD\s?(\d+)/#) {
+    if let match = text.firstMatch(of: referenceSTDPattern) {
       seriesInfo.append(SeriesInfo(name: "STD", value: String(match.1)))
     }
-    let title = text.firstMatch(of: #/"([^"]+)"/#).map { String($0.1) } ?? ""
+    let title = text.firstMatch(of: referenceTitlePattern).map { String($0.1) } ?? ""
     let date = text.firstMatch(of: monthYearPattern).map {
       PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
     }
-    let url = text.firstMatch(of: #/https?:\/\/[^\s>,]+/#).flatMap {
+    let url = text.firstMatch(of: referenceURLPattern).flatMap {
       URL(string: String($0.output).trimmingTrailingPunctuation())
     }
     var reference = Reference(

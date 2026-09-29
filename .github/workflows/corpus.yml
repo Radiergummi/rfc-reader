@@ -54,10 +54,10 @@ jobs:
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
-      # make for the Makefile, xmllint for the schema check, zstd for the pack, gh for
-      # the previous report. The image carries none of them.
+      # make for the Makefile, xmllint for the schema check, gh for the previous
+      # report. The image carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils zstd gh >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils gh >/dev/null
 
       # The last successful run's report is this run's baseline: convert compares its
       # schema results with the report it replaces and fails on any document that
@@ -100,28 +100,32 @@ jobs:
       # Two packs from the one directory, split at RFC 8650: the converted legacy
       # documents wait on the IETF Trust's answer about redistribution, and the
       # RFC Editor's own RFCXML, already licensed for it, must not wait with them
-      # (docs/DATA_PIPELINE.md). The manifest lists the files of both and ships
-      # beside them.
+      # (docs/DATA_PIPELINE.md). Each pack is a folder of its documents with a
+      # manifest of its own at its root, listing exactly those files, which is what
+      # the app verifies an installed pack against. corpus/manifest.json still
+      # lists both.
       - name: Pack
         run: |
+          mkdir -p packs/legacy-xml packs/modern-xml
           cd corpus/xml.noindex
           # rfcNNNN.xml: the second field between "c" and "." is the number.
           find . -maxdepth 1 -name 'rfc*.xml' -printf '%f\n' | sort -V |
             awk -F'[c.]' '{ print > (($2 + 0 >= 8650) ? "../modern.list" : "../legacy.list") }'
           touch ../legacy.list ../modern.list
-          # convert writes xml.noindex (kept out of Spotlight); a pack's directory is xml.
-          # Nothing of the run goes into the archive, not the files' dates, owners or
-          # modes, so the same documents make the same pack.
           for pack in legacy modern; do
-            tar --zstd -cf "$GITHUB_WORKSPACE/$pack-xml-$VERSION.tar.zst" \
-              --format=gnu --mtime=@0 --owner=0 --group=0 --numeric-owner --mode='a=r,u+w' \
-              --transform 's,^,xml/,' -T "../$pack.list"
+            xargs -a "../$pack.list" -r cp -t "$GITHUB_WORKSPACE/packs/$pack-xml"
             echo "$pack: $(wc -l < "../$pack.list") documents"
           done
-          ls -la "$GITHUB_WORKSPACE"/*.tar.zst
+          cd "$GITHUB_WORKSPACE"
+          # Written outside the folder and then moved in, so it does not list itself.
+          for pack in legacy-xml modern-xml; do
+            Tools/corpus-build/.build/release/corpus-build manifest \
+              --dir "packs/$pack" --out "packs/$pack.json" --version "$VERSION"
+            mv "packs/$pack.json" "packs/$pack/manifest.json"
+          done
 
       # Also when convert failed on a regression: the report names the documents.
-      - name: Upload report and packs as workflow artifacts
+      - name: Upload report and pack folders as workflow artifacts
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -130,14 +134,46 @@ jobs:
             corpus/report.json
             corpus/prose.json
             corpus/manifest.json
-            legacy-xml-*.tar.zst
-            modern-xml-*.tar.zst
+            packs/
+
+  # Apple Archive with LZFSE, which the app reads with Apple's own frameworks and so
+  # gains no dependency for (#36). Nothing on Linux writes the Apple Archive
+  # container, so the archive is made here, by `aa`, Apple's own writer of it.
+  archive:
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Download the pack folders
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: corpus-${{ inputs.version }}
+
+      - name: Archive
+        run: |
+          for pack in legacy-xml modern-xml; do
+            aa archive -a lzfse -d "packs/$pack" -o "$pack-$VERSION.aar"
+          done
+          ls -la ./*.aar
+
+      # With the manifest of both, which the release carries beside them.
+      - name: Upload packs as workflow artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packs-${{ inputs.version }}
+          path: |
+            *.aar
+            corpus/manifest.json
 
   # The only job that can write to the repository: it checks nothing out and runs
-  # no code of ours or anyone's, only gh over the artifact the build uploaded.
+  # no code of ours or anyone's, only gh over the artifact the archive job uploaded.
   publish:
     if: ${{ inputs.publish }}
-    needs: build
+    needs: archive
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -151,8 +187,8 @@ jobs:
     steps:
       - name: Publish release
         run: |
-          gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir packs
-          gh release create "corpus-$VERSION" packs/legacy-xml-*.tar.zst packs/modern-xml-*.tar.zst \
+          gh run download "$GITHUB_RUN_ID" --name "packs-$VERSION" --dir packs
+          gh release create "corpus-$VERSION" packs/legacy-xml-*.aar packs/modern-xml-*.aar \
             packs/corpus/manifest.json \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

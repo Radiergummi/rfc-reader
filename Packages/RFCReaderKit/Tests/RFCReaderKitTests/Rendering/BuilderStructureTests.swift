@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: document structure")
-@MainActor
 struct BuilderStructureTests {
   private let style = ReadingStyle()
 

@@ -9,7 +9,12 @@ public protocol HTTPTransport: Sendable {
   func data(for url: URL) async throws -> (Data, HTTPURLResponse)
 }
 
-/// The transport over a `URLSession`, asking for the formats the RFC Editor serves.
+/// The transport the client uses unless handed another: a `URLSession`, asked for the
+/// formats the client reads.
+///
+/// A struct around the session rather than an extension of `URLSession`, which would
+/// add a public `data(for: URL)` to a system type, beside its own `data(from:)` and
+/// `data(for: URLRequest)` (#148).
 public struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
   private let userAgent: String?
@@ -44,8 +49,9 @@ public struct RFCEditorClient: Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
-    /// The body at the URL did not decode; the decoder's own error.
-    case decoding(URL, any Error)
+    /// What was being read, and why it could not be: the parser's own error, kept
+    /// rather than turned into words.
+    case decoding(context: String, underlying: any Error)
   }
 
   private let transport: any HTTPTransport
@@ -60,7 +66,7 @@ public struct RFCEditorClient: Sendable {
     do {
       return try RFCIndexParser.parse(data)
     } catch {
-      throw ClientError.decoding(RFCEditorEndpoints.index, error)
+      throw ClientError.decoding(context: "rfc-index.xml", underlying: error)
     }
   }
 
@@ -168,7 +174,21 @@ public enum RecentFeedParser {
     case malformed(XMLSyntaxError)
   }
 
-  nonisolated(unsafe) private static let titlePattern = #/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#
+  private static let titlePattern = Pattern(#/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)
+
+  /// An RFC 822 date, `Sat, 19 Sep 2026 00:00:00 GMT`: a `Sendable` value made once,
+  /// where a `DateFormatter` was built for every parse (#148). The time zone field is
+  /// read, not assumed. Strict, as the `DateFormatter` was: a date that does not
+  /// exist, `31 Sep`, is no date rather than the first of the next month.
+  static let dateStrategy = Date.ParseStrategy(
+    format: """
+      \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \
+      \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\
+      \(second: .twoDigits) \(timeZone: .specificName(.short))
+      """,
+    locale: Locale(identifier: "en_US_POSIX"),
+    timeZone: .gmt,
+    isLenient: false)
 
   public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
     let root: XMLTree.Element
@@ -177,10 +197,6 @@ public enum RecentFeedParser {
     } catch {
       throw .malformed(error)
     }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-
     var items: [RecentRFC] = []
     for item in root.first("channel")?.all("item") ?? [] {
       let rawTitle = item.first("title")?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -192,12 +208,10 @@ public enum RecentFeedParser {
           id: .rfc(number),
           title: String(match.title).trimmingCharacters(in: .whitespaces),
           summary: item.first("description")?.text.collapsingWhitespace() ?? "",
-          link: item.first("link").flatMap {
-            URL(string: $0.text.trimmingCharacters(in: .whitespacesAndNewlines))
-          },
-          publishedAt: item.first("pubDate").flatMap {
-            formatter.date(from: $0.text.trimmingCharacters(in: .whitespacesAndNewlines))
-          }
+          link: (item.first("link")?.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap(URL.init(string:)),
+          publishedAt: (item.first("pubDate")?.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap { try? Date($0, strategy: dateStrategy) }
         ))
     }
     return items

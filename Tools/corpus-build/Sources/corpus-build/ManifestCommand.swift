@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import Logging
 import RFCCorpusKit
+import RFCKit
 
 struct ManifestCommand: ParsableCommand {
   static let configuration = CommandConfiguration(

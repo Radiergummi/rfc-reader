@@ -611,7 +611,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
 
   /// A label should never break between its word and its number, so "RFC 9110"
   /// and "Section 4.2" are joined with U+00A0.
-  nonisolated(unsafe) private static let labelNumberPattern = #/(\p{L})[ \t]+(\d)/#
+  private static let labelNumberPattern = Pattern(#/(\p{L})[ \t]+(\d)/#)
 
   static func nonBreakingLabel(_ label: String) -> String {
     label.replacing(labelNumberPattern) { match in "\(match.1)\u{00A0}\(match.2)" }

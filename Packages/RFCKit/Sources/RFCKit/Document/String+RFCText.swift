@@ -58,10 +58,15 @@ extension String {
     return result
   }
 
+  /// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
+  /// every title `heading(from:)` reads, a contents entry's included: a static pattern,
+  /// as a literal in the function was a new `Regex` per line (#146).
+  private static let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
+
   func trimmingTrailingDots() -> String {
     var result = trimmingTrailingWhitespace()
     // Table-of-contents style "Title ....... 7" leaders.
-    if let match = result.firstMatch(of: #/\s*\.{3,}\s*\d*$/#) {
+    if let match = result.firstMatch(of: Self.contentsLeaderPattern) {
       result.removeSubrange(match.range)
     }
     return result

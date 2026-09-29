@@ -7,7 +7,6 @@ import Testing
 /// What VoiceOver is given for a range of the reader's text (#12): prose as it is,
 /// a diagram as one spoken label instead of its box drawing.
 @Suite("Accessible reading")
-@MainActor
 struct AccessibleReadingTests {
   private let style = ReadingStyle()
 

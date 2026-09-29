@@ -176,36 +176,40 @@ extension LegacyTextParser {
   /// A month's full name, as a title page and a references entry spell it: the one
   /// list both month patterns are built on. `PublicationDate.month(from:)` numbers
   /// every one of them, which a test holds it to.
-  nonisolated(unsafe) private static let monthName = ChoiceOf {
-    "January"
-    "February"
-    "March"
-    "April"
-    "May"
-    "June"
-    "July"
-    "August"
-    "September"
-    "October"
-    "November"
-    "December"
-  }
+  private static let monthName = Pattern(
+    Regex {
+      ChoiceOf {
+        "January"
+        "February"
+        "March"
+        "April"
+        "May"
+        "June"
+        "July"
+        "August"
+        "September"
+        "October"
+        "November"
+        "December"
+      }
+    })
 
   /// `August 13, 1982`, `13 August 1982`, `July 1984`.
-  nonisolated(unsafe) private static let dateLinePattern = Regex {
-    Optionally {
-      Repeat(.digit, 1...2)
+  private static let dateLinePattern = Pattern(
+    Regex {
+      Optionally {
+        Repeat(.digit, 1...2)
+        OneOrMore(.whitespace)
+      }
+      monthName
       OneOrMore(.whitespace)
-    }
-    monthName
-    OneOrMore(.whitespace)
-    Optionally {
-      Repeat(.digit, 1...2)
-      Optionally(",")
-      OneOrMore(.whitespace)
-    }
-    Repeat(.digit, count: 4)
-  }
+      Optionally {
+        Repeat(.digit, 1...2)
+        Optionally(",")
+        OneOrMore(.whitespace)
+      }
+      Repeat(.digit, count: 4)
+    })
 
   /// A line that is a date and nothing else, as a title page sets its publication date:
   /// RFC 822's `August 13, 1982`, RFC 907's `July 1984`.
@@ -238,7 +242,7 @@ extension LegacyTextParser {
     return entries > 0 && entries * 2 >= lines.count
   }
 
-  nonisolated(unsafe) private static let romanPageNumberPattern = #/x{0,3}(?:ix|iv|v?i{0,3})/#
+  private static let romanPageNumberPattern = Pattern(#/x{0,3}(?:ix|iv|v?i{0,3})/#)
 
   /// A lower-case roman numeral up to `xxxix`, further than any front section's pages
   /// run. Spelt out rather than taken as any run of the letters, because `ill` and
@@ -368,13 +372,14 @@ extension LegacyTextParser {
   }
 
   /// A month and a year, `May 2008`, each captured.
-  nonisolated(unsafe) static let monthYearPattern = Regex {
-    Capture { monthName }
-    OneOrMore(.whitespace)
-    Capture { Repeat(.digit, count: 4) }
-  }
-  nonisolated(unsafe) private static let authorPattern =
-    #/^(?<name>(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+)(?<editor>,\s*Ed(?:itor)?\.?)?$/#
+  static let monthYearPattern = Pattern(
+    Regex {
+      Capture { monthName }
+      OneOrMore(.whitespace)
+      Capture { Repeat(.digit, count: 4) }
+    })
+  private static let authorPattern = Pattern(
+    #/^(?<name>(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+)(?<editor>,\s*Ed(?:itor)?\.?)?$/#)
 
   /// The author a title page's right-hand column names, if it names one: initials and
   /// a surname, and an editor's suffix in any spelling the pattern accepts -- `, Ed.`,
@@ -391,9 +396,9 @@ extension LegacyTextParser {
   /// is not always in the left column (RFC 811 sets it on the right) and a label spaced
   /// widely enough from its number is split from it by the column split
   /// (`Request for Comments:    50`).
-  nonisolated(unsafe) static let numberLinePattern =
+  static let numberLinePattern = Pattern(
     #/(?:^|\s{2})(?:NWG\s*/?\s*)?(?:RFC|Requests?\s+(?:for\s+)?Comm+ents?)\s*(?:(?:#|:|-|No\.)\s*)*(?:RFC\s*)?(\d+)\b/#
-    .ignoresCase()
+      .ignoresCase())
 
   static func parseFrontMatter(_ lines: [String]) -> DocumentHeader {
     var header = DocumentHeader(title: "")
@@ -469,7 +474,9 @@ extension LegacyTextParser {
     }
   }
 
+  private static let digitsPattern = Pattern(#/\d+/#)
+
   private static func documentIDs(in text: String) -> [DocumentID] {
-    text.matches(of: #/\d+/#).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
+    text.matches(of: digitsPattern).compactMap { Int($0.output) }.map { DocumentID.rfc($0) }
   }
 }

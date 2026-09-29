@@ -15,6 +15,7 @@ struct CorpusBuild: AsyncParsableCommand {
     abstract: "The offline half of RFC Reader's data pipeline.",
     subcommands: [
       FetchCommand.self, ConvertCommand.self, ManifestCommand.self, QueriesCommand.self,
+      ScoreCommand.self,
     ]
   )
 }

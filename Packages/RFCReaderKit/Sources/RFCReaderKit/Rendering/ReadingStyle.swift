@@ -13,7 +13,7 @@ import SwiftUI
 /// string, so switching to dark mode or changing the accent redraws rather than
 /// rebuilding. Only a change here costs a rebuild, and a rebuild loses the reader's
 /// place until the anchor index puts it back.
-public struct ReadingStyle: Sendable, Equatable {
+public struct ReadingStyle: Sendable, Hashable {
   /// The body text's point size: the reader's own size, scaled for the system's
   /// text size. Everything else measured from the body — captions, code, spacing,
   /// indents — follows from this.
@@ -30,8 +30,19 @@ public struct ReadingStyle: Sendable, Equatable {
   public var lineHeightMultiple: CGFloat
   /// Off by default: color marks a link, and a chip's tint marks a reference.
   /// An underline is the reader's to ask for, and then it goes under every link,
-  /// chips included.
+  /// chips included. In a build with no live links (`emitsLinks`), where nothing
+  /// else colors a link, the builder colors it too (`RFCColors.link`): an
+  /// exported PDF's links look like links (#376).
   public var underlinesLinks: Bool
+  /// Whether a link is a live `.link` run. On by default; off for paper, where a
+  /// text layout manager with no text view to say otherwise underlines and
+  /// recolors every `.link` run (#375). The text of a link stays, and where it
+  /// goes is kept as `.rfcLinkTarget`, which an exported PDF makes a link of again
+  /// (#376).
+  public var emitsLinks: Bool
+  /// How a cross reference's label is set: as a chip on screen, and as text on
+  /// paper, where a chip breaks the line it sits in and there is nothing to tap.
+  public var references: ReferenceStyle
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
@@ -43,13 +54,16 @@ public struct ReadingStyle: Sendable, Equatable {
   public init(
     bodySize: CGFloat = 17, measure: CGFloat = ReaderLayout.idealMeasure,
     lineHeightMultiple: CGFloat = 1.25,
-    underlinesLinks: Bool = false, textSize: DynamicTypeSize = .large
+    underlinesLinks: Bool = false, emitsLinks: Bool = true, references: ReferenceStyle = .chip,
+    textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
     self.textSize = textSize
     self.measure = measure
     self.lineHeightMultiple = lineHeightMultiple
     self.underlinesLinks = underlinesLinks
+    self.emitsLinks = emitsLinks
+    self.references = references
   }
 
   /// The same style at a different size — everything else about reading it is
@@ -76,6 +90,18 @@ public struct ReadingStyle: Sendable, Equatable {
     return PlatformFont.systemFont(ofSize: surrounding.pointSize, weight: weight)
       .adding(traits: slant)
   }
+  /// A reference set as text (`ReferenceStyle.plainText`) in `surrounding`: medium,
+  /// or the surrounding weight where that is already heavier, as in a heading, at
+  /// its size and slant.
+  public func referenceFont(matching surrounding: PlatformFont) -> PlatformFont {
+    let weight = max(surrounding.weight.rawValue, PlatformFont.Weight.medium.rawValue)
+    let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
+    return PlatformFont.systemFont(
+      ofSize: surrounding.pointSize, weight: PlatformFont.Weight(rawValue: weight)
+    )
+    .adding(traits: slant)
+  }
+
   /// Inline code set in `surrounding` prose: monospaced, a little smaller, and at
   /// the surrounding weight and slant, so code in a heading stays heading-sized and
   /// code in emphasis stays italic (#154).

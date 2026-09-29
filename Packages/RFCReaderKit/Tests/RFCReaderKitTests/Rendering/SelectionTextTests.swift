@@ -5,7 +5,6 @@ import Testing
 @testable import RFCReaderKit
 
 @Suite("Selection text")
-@MainActor
 struct SelectionTextTests {
   private func copied(_ inlines: [Inline]) -> String {
     SelectionText.plainText(of: Fixtures.inlineRun(inlines))

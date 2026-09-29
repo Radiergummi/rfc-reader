@@ -594,6 +594,18 @@
           menu.addItem(item)
         }
       }
+      // Export and Print are the Mac's own: a chooser and the print panel, where
+      // iOS lists the formats and presents its print sheet.
+      if menu === moreMenu {
+        menu.addItem(.separator())
+        for (title, action) in [
+          ("Export…", #selector(exportDocument)), ("Print…", #selector(printDocument)),
+        ] {
+          let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+          item.target = self
+          menu.addItem(item)
+        }
+      }
     }
 
     // MARK: - Validation
@@ -645,6 +657,9 @@
         navigation.collectionEditor = .create(adding: id)
       }
     }
+
+    @objc private func printDocument() { controller.printDocument() }
+    @objc private func exportDocument() { controller.exportDocument() }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {

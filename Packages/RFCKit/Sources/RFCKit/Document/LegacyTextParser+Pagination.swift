@@ -11,9 +11,9 @@ extension LegacyTextParser {
     }
   }
 
-  nonisolated(unsafe) private static let footerPattern = #/\[Page \d+\]\s*$/#
-  nonisolated(unsafe) private static let runningHeaderPattern =
-    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#
+  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
+  private static let runningHeaderPattern = Pattern(
+    #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
   /// Removes form feeds, running headers and page footers, keeping everything else verbatim.
   public static func stripPagination(_ text: String) -> String {

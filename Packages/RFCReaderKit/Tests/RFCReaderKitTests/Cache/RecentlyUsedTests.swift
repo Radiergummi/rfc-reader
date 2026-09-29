@@ -20,6 +20,7 @@ struct RecentlyUsedTests {
     recent.insert("one", for: .rfc(1))
     recent.insert("two", for: .rfc(2))
     recent.insert("three", for: .rfc(3))
+    #expect(recent.keys == [.rfc(2), .rfc(3)])
     #expect(recent.value(for: .rfc(1)) == nil)
     #expect(recent.value(for: .rfc(2)) == "two")
     #expect(recent.value(for: .rfc(3)) == "three")

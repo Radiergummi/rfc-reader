@@ -7,13 +7,7 @@ import Foundation
 /// distinguishes prose from ASCII art, re-joins paragraphs split across pages and
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
-public struct LegacyTextParser: Sendable {
-  public init() {}
-
-  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
-    LegacyTextParser().parse(text, title: title)
-  }
-
+public enum LegacyTextParser {
   public static func parse(_ data: Data) -> RFCDocument {
     parse(text(decoding: data))
   }
@@ -50,16 +44,16 @@ public struct LegacyTextParser: Sendable {
     var blocks: [RawBlock] = []
   }
 
-  nonisolated(unsafe) static let numberedHeadingPattern =
-    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
-  nonisolated(unsafe) private static let appendixHeadingPattern =
-    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
+  static let numberedHeadingPattern = Pattern(
+    #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#)
+  private static let appendixHeadingPattern = Pattern(
+    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#)
   /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
   /// pattern of its own rather than a colon allowed in the one above, whose
   /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
   /// column 0 is as often a question's answer.
-  nonisolated(unsafe) private static let colonAppendixHeadingPattern =
-    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#
+  private static let colonAppendixHeadingPattern = Pattern(
+    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#)
 
   /// The number and title of an appendix heading, in any shape the parser reads one:
   /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
@@ -344,7 +338,7 @@ public struct LegacyTextParser: Sendable {
   /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
   /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
   /// is where the two are told apart.
-  public func parse(_ text: String, title: String? = nil) -> RFCDocument {
+  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header

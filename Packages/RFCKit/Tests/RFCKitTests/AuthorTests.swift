@@ -56,4 +56,11 @@ struct AuthorTests {
     #expect(plain?.role == nil)
     #expect(LegacyTextParser.author(in: "Some Company, Inc.") == nil)
   }
+
+  /// What a citation inverts and a printed page's footer names (#375).
+  @Test func `a surname is the name's last word`() {
+    #expect(Author(name: "A. Writer").surname == "Writer")
+    #expect(Author(name: "Anne B. Writer", role: .editor).surname == "Writer")
+    #expect(Author(name: "Writer").surname == "Writer")
+  }
 }

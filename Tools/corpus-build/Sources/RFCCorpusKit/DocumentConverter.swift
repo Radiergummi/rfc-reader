@@ -29,15 +29,12 @@ public struct DocumentConverter: Sendable {
   /// Converts the text of the document `stem` (`rfc2119`, from `rfc2119.txt`).
   ///
   /// `metadata` is the RFC index's entry for it, where the run has an index: the RFC
-  /// Editor's own record of each document's title and of what it obsoletes and updates,
-  /// which a title page states less reliably than anything else in the document
-  /// (#170, #171).
+  /// Editor's own record of each document's title, number, authors and date, and of
+  /// what it obsoletes and updates, which a title page states less reliably than
+  /// anything else in the document (#170, #171, #218). See `IndexHeader`.
   public func convert(text: String, stem: String, metadata: RFCMetadata?) -> Conversion {
     var document = LegacyTextParser.parse(text, title: metadata?.title)
-    if let metadata {
-      document.header.obsoletes = metadata.obsoletes
-      document.header.updates = metadata.updates
-    }
+    let notes = metadata.map { IndexHeader.apply($0, to: &document.header) } ?? []
     let prose =
       diagnosesProse ? ProseReport(diagnosing: text, id: stem, title: metadata?.title) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
@@ -51,6 +48,7 @@ public struct DocumentConverter: Sendable {
     let xml = Data(serialization.xml.utf8)
 
     var report = DocumentReport(document: document, id: stem, overridden: false)
+    report.warnings += notes
     report.warnings += serialization.warnings
     if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
     // Round-trip check: the XML must parse back into the same section tree.
