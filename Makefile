@@ -183,6 +183,11 @@ install: build-app
 # it); name another with TRACE_SCENARIO. The trace is kept in traces/ for
 # Instruments, where the same intervals sit in the Points of Interest lane.
 #
+# The app runs against its real sandbox container, so Recently Read, reading
+# positions and window restoration are the real ones, and the session can
+# change them. It ends the copy it launched with SIGTERM, as `make run` ends a
+# running one, but leaves any other running copy alone.
+#
 #   make trace
 #   make trace TRACE_SCENARIO='wait 6; open 9110; wait 5'
 #
