@@ -493,7 +493,10 @@
             isPrinting = false
             return
           }
-          operation.jobTitle = id.displayName
+          // The one field of the Save as PDF sheet a print can fill: its Author,
+          // Subject and Keywords have no public setting (#375).
+          operation.jobTitle = PrintFurniture.documentTitle(
+            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
           operation.runModal(
             for: window, delegate: self,
             didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)

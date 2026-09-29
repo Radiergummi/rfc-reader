@@ -81,6 +81,7 @@ struct PrintLayoutTests {
     #expect(layout.style.measure == layout.contentRect.width)
     #expect(layout.style.bodySize == PrintLayout.bodySize)
     #expect(!layout.style.emitsLinks)
+    #expect(layout.style.references == .plainText)
   }
 
   /// The published text's artwork only reads at its own 72 columns, so they have to
@@ -315,6 +316,16 @@ struct PrintFurnitureTests {
     #expect(full.authors == [Author(name: "A. Writer")])
   }
 
+  /// The job title, which the print panel's Save as PDF sheet offers as the file's
+  /// title: the designation and the title, as an exported PDF's title says it.
+  @Test func `a print job is titled with the designation and the whole title`() {
+    #expect(
+      PrintFurniture.documentTitle(id: .rfc(9999), title: "A Protocol for Examples")
+        == "RFC 9999: A Protocol for Examples")
+    #expect(PrintFurniture.documentTitle(id: nil, title: "A Protocol") == "A Protocol")
+    #expect(PrintFurniture.documentTitle(id: .rfc(9999), title: nil) == "RFC 9999")
+  }
+
   @Test func `pages are numbered as an RFC numbers them`() {
     #expect(PrintFurniture.pageLabel(7) == "[Page 7]")
   }
@@ -326,20 +337,50 @@ struct BuilderTitleTests {
   private let title = DocumentTextBuilder.TitleBlock(
     title: "A Protocol for Examples", details: ["RFC 9999 · June 2026", "", "A. Writer"])
 
-  @Test func `a print's build has no links, and keeps its chips`() throws {
+  @Test func `a print's build has no links`() throws {
     let built = DocumentTextBuilder.build(
       try Fixtures.rfc8999(), style: PrintLayout(paperSize: PrintLayout.letter).style)
     let whole = NSRange(location: 0, length: built.text.length)
     var links = 0
-    var chips = 0
     built.text.enumerateAttribute(.link, in: whole) { value, _, _ in
       if value != nil { links += 1 }
     }
-    built.text.enumerateAttribute(.rfcChip, in: whole) { value, _, _ in
-      if value != nil { chips += 1 }
-    }
     #expect(links == 0)
-    #expect(chips > 0)
+  }
+
+  @Test func `a print's references are ordinary text, not chips`() throws {
+    let document = try Fixtures.rfc8999()
+    let screen = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let paper = DocumentTextBuilder.build(
+      document, style: PrintLayout(paperSize: PrintLayout.letter).style)
+    #expect(count(.rfcChip, in: screen.text) > 0)
+    #expect(count(.rfcChip, in: paper.text) == 0)
+    #expect(count(.attachment, in: paper.text) == 0)
+    #expect(!paper.text.string.contains("\u{FFFC}"))
+    #expect(!paper.text.string.contains("\u{2060}"))
+
+    let whole = NSRange(location: 0, length: paper.text.length)
+    var references = 0
+    paper.text.enumerateAttribute(.rfcReference, in: whole) { value, range, _ in
+      guard value != nil else { return }
+      references += 1
+      paper.text.enumerateAttributes(in: range) { attributes, _, _ in
+        #expect(attributes[.kern] == nil)
+        #expect(attributes[.foregroundColor] as? PlatformColor == RFCColors.label)
+        #expect(attributes[.underlineStyle] == nil)
+        let weight = (attributes[.font] as? PlatformFont)?.weight.rawValue ?? 0
+        #expect(abs(weight - PlatformFont.Weight.medium.rawValue) < 0.01)
+      }
+    }
+    #expect(references > 0)
+  }
+
+  private func count(_ key: NSAttributedString.Key, in text: NSAttributedString) -> Int {
+    var found = 0
+    text.enumerateAttribute(key, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+      if value != nil { found += 1 }
+    }
+    return found
   }
 
   @Test func `the reader's build has no title block`() throws {

@@ -33,10 +33,13 @@ public struct ReadingStyle: Sendable, Equatable {
   public var underlinesLinks: Bool
   /// Whether a link is a live `.link` run. On by default; off for paper, where a
   /// text layout manager with no text view to say otherwise underlines and
-  /// recolours every `.link` run (#375). The text of a link stays, and so does a
-  /// reference's chip, and where it goes is kept as `.rfcLinkTarget`, which an
-  /// exported PDF makes a link of again (#376).
+  /// recolours every `.link` run (#375). The text of a link stays, and where it
+  /// goes is kept as `.rfcLinkTarget`, which an exported PDF makes a link of again
+  /// (#376).
   public var emitsLinks: Bool
+  /// How a cross reference's label is set: as a chip on screen, and as text on
+  /// paper, where a chip breaks the line it sits in and there is nothing to tap.
+  public var references: ReferenceStyle
 
   /// Artwork is set tighter than prose, so a diagram's vertical strokes stay close
   /// to joined up. Source code keeps `lineHeightMultiple`: it is read as text.
@@ -47,7 +50,8 @@ public struct ReadingStyle: Sendable, Equatable {
   ///   who nudges the reader up a step expects it to stay large, and larger.
   public init(
     bodySize: CGFloat = 17, measure: CGFloat = 712, lineHeightMultiple: CGFloat = 1.25,
-    underlinesLinks: Bool = false, emitsLinks: Bool = true, textSize: DynamicTypeSize = .large
+    underlinesLinks: Bool = false, emitsLinks: Bool = true, references: ReferenceStyle = .chip,
+    textSize: DynamicTypeSize = .large
   ) {
     self.bodySize = bodySize * TextSizeMetrics.body(textSize) / TextSizeMetrics.body(.large)
     self.textSize = textSize
@@ -55,6 +59,7 @@ public struct ReadingStyle: Sendable, Equatable {
     self.lineHeightMultiple = lineHeightMultiple
     self.underlinesLinks = underlinesLinks
     self.emitsLinks = emitsLinks
+    self.references = references
   }
 
   /// The same style at a different size — everything else about reading it is
@@ -81,6 +86,18 @@ public struct ReadingStyle: Sendable, Equatable {
     return PlatformFont.systemFont(ofSize: surrounding.pointSize, weight: weight)
       .adding(traits: slant)
   }
+  /// A reference set as text (`ReferenceStyle.plainText`) in `surrounding`: medium,
+  /// or the surrounding weight where that is already heavier, as in a heading, at
+  /// its size and slant.
+  public func referenceFont(matching surrounding: PlatformFont) -> PlatformFont {
+    let weight = max(surrounding.weight.rawValue, PlatformFont.Weight.medium.rawValue)
+    let slant = surrounding.fontDescriptor.symbolicTraits.intersection(RFCTraits.italic)
+    return PlatformFont.systemFont(
+      ofSize: surrounding.pointSize, weight: PlatformFont.Weight(rawValue: weight)
+    )
+    .adding(traits: slant)
+  }
+
   /// Inline code set in `surrounding` prose: monospaced, a little smaller, and at
   /// the surrounding weight and slant, so code in a heading stays heading-sized and
   /// code in emphasis stays italic (#154).
@@ -136,6 +153,15 @@ public struct ReadingStyle: Sendable, Equatable {
 
   /// The most of the column one indent step may take.
   static let indentShare: CGFloat = 0.08
+}
+
+/// How a cross reference's label is set.
+public enum ReferenceStyle: Sendable, Equatable {
+  /// Tinted, behind its `doc.text` symbol (`.rfcChip`): the reader's.
+  case chip
+  /// Ordinary text a little heavier than the text around it, in its colour, with
+  /// no symbol: a print's.
+  case plainText
 }
 
 /// How wide the reader sets its text.
