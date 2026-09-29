@@ -23,14 +23,14 @@ import RFCKit
 /// reader without the app. The text is `SelectionText`'s, so a reference reads as its
 /// label, as Copy writes it.
 public enum QuoteCitation {
-  /// The flavours for the pasteboard, each target taking the richest it reads.
+  /// The flavors for the pasteboard, each target taking the richest it reads.
   public struct Quote {
     /// The uniform type the Markdown is written under.
     public static let markdownType = "net.daringfireball.markdown"
 
     public var markdown: String
-    /// The plain-text flavour is the Markdown too. A web page reads only plain text and
-    /// HTML, never the Markdown flavour, so GitHub keeps the `>` quote only if the plain
+    /// The plain-text flavor is the Markdown too. A web page reads only plain text and
+    /// HTML, never the Markdown flavor, so GitHub keeps the `>` quote only if the plain
     /// text has it; Slack and chat apps paste plain text as well.
     public var plainText: String { markdown }
     /// A `blockquote` of one `p` per paragraph and one `pre` per figure, and the
@@ -40,7 +40,7 @@ public enum QuoteCitation {
     /// and Notes.
     public var rich: NSAttributedString
 
-    /// `rich` as RTF, the flavour rich targets read.
+    /// `rich` as RTF, the flavor rich targets read.
     public var rtf: Data? {
       try? rich.data(
         from: NSRange(location: 0, length: rich.length),
@@ -64,9 +64,14 @@ public enum QuoteCitation {
     -> Quote?
   {
     guard range.length > 0, NSMaxRange(range) <= built.text.length else { return nil }
+    // Cited from the first character quoted: a selection dragged from the end of one
+    // section's last line opens on its line break, but quotes only the next section.
+    let first = (built.text.string as NSString).rangeOfCharacter(
+      from: CharacterSet.whitespacesAndNewlines.inverted, options: [], range: range
+    ).location
     return quote(
       of: built.text.attributedSubstring(from: range), document: document,
-      section: section(at: range.location, anchors: built.anchors))
+      section: section(at: first == NSNotFound ? range.location : first, anchors: built.anchors))
   }
 
   public static func quote(
@@ -77,10 +82,16 @@ public enum QuoteCitation {
       // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
       // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
       // it becomes HTML. A fence is taken literally, so its lines are left as drawn.
-      let lines =
-        block.isVerbatim
-        ? ["```"] + block.lines + ["```"]
-        : block.lines.map { $0.replacingOccurrences(of: "<", with: "&lt;") }
+      let lines: [String]
+      if let box = block.box {
+        // Longer than any run of backticks in the block, or its own fence line would
+        // close this one. A source-code block's type is the info string.
+        let fence = String(repeating: "`", count: max(3, longestBacktickRun(in: block.lines) + 1))
+        let info = box.content.kind == .sourceCode ? box.content.type ?? "" : ""
+        lines = [fence + info] + block.lines + [fence]
+      } else {
+        lines = block.lines.map { $0.replacingOccurrences(of: "<", with: "&lt;") }
+      }
       return lines.map { $0.isEmpty ? ">" : "> \($0)" }.joined(separator: "\n")
     }
 
@@ -92,11 +103,23 @@ public enum QuoteCitation {
     let label = formatter.cite(metadata, section: section, style: .short)
     let url = CitationFormatter.url(for: document, section: section)
 
-    let text = blocks.map { $0.lines.joined(separator: "\n") }.joined(separator: "\n\n")
-    let rich = NSMutableAttributedString(string: text + "\n\n— ")
+    // A figure in a fixed-pitch font, or a rich target lays it out in a proportional
+    // one and its columns fall apart. Menlo rather than the system's monospaced font,
+    // which RTF can only name by a private name no other platform resolves.
+    let fixedPitch =
+      PlatformFont(name: "Menlo-Regular", size: 12)
+      ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+    let rich = NSMutableAttributedString()
+    for block in blocks {
+      rich.append(
+        NSAttributedString(
+          string: block.lines.joined(separator: "\n") + "\n\n",
+          attributes: block.isVerbatim ? [.font: fixedPitch] : [:]))
+    }
+    rich.append(NSAttributedString(string: "— "))
     rich.append(NSAttributedString(string: label, attributes: [.link: url]))
 
-    // The charset, or a target reading the flavour as Latin-1 garbles the dash.
+    // The charset, or a target reading the flavor as Latin-1 garbles the dash.
     let html =
       (["<meta charset=\"utf-8\">", "<blockquote>"]
       + blocks.map { block in
@@ -130,13 +153,29 @@ public enum QuoteCitation {
   /// reflows them nor collapses their spaces.
   private struct Block {
     var lines: [String]
-    var isVerbatim: Bool
+    /// The verbatim block the lines are from; nil for prose.
+    var box: VerbatimBox?
+    var isVerbatim: Bool { box != nil }
+  }
+
+  private static func longestBacktickRun(in lines: [String]) -> Int {
+    var longest = 0
+    for line in lines {
+      var run = 0
+      for character in line {
+        run = character == "`" ? run + 1 : 0
+        longest = max(longest, run)
+      }
+    }
+    return longest
   }
 
   /// The selection's blocks. The reader ends every paragraph, heading and list item
   /// with a single line break and draws the gap between them as paragraph spacing,
   /// so each line of prose is a paragraph of its own; only a verbatim block's lines
-  /// belong together. A reference reads as its label, through `SelectionText`.
+  /// belong together, told apart from the next block's by their box. The label the
+  /// reader puts above source code is not the code, and is left out. A reference reads
+  /// as its label, through `SelectionText`.
   private static func blocks(of selection: NSAttributedString) -> [Block] {
     var blocks: [Block] = []
     let string = selection.string as NSString
@@ -146,17 +185,22 @@ public enum QuoteCitation {
       let line = SelectionText.plainText(of: selection.attributedSubstring(from: range))
         .trimmingTrailingSpaces()
       // An empty line has no character of its own; its line break carries the attribute.
-      let isVerbatim =
+      let box =
         enclosingRange.length > 0
-        && selection.attribute(.rfcVerbatim, at: enclosingRange.location, effectiveRange: nil)
-          != nil
-      if isVerbatim, blocks.last?.isVerbatim == true {
+        ? selection.attribute(.rfcVerbatim, at: enclosingRange.location, effectiveRange: nil)
+          as? VerbatimBox
+        : nil
+      if let box, let last = blocks.last?.box, last === box {
         blocks[blocks.count - 1].lines.append(line)
-      } else if isVerbatim || !line.isEmpty {
-        blocks.append(Block(lines: [line], isVerbatim: isVerbatim))
+      } else if let box {
+        // The label is the first line of its block, and reads as the type uppercased.
+        let isLabel = box.content.kind == .sourceCode && line == box.content.type?.uppercased()
+        blocks.append(Block(lines: isLabel ? [] : [line], box: box))
+      } else if !line.isEmpty {
+        blocks.append(Block(lines: [line], box: nil))
       }
     }
-    return blocks
+    return blocks.filter { !$0.lines.isEmpty }
   }
 }
 

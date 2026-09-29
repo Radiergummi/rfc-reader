@@ -134,7 +134,7 @@ struct QuoteCitationTests {
 
   /// GitHub drops what reads as an HTML tag, a `<field-name>` among them, so the
   /// Markdown writes a `<` in prose as an entity. A fence takes its lines literally,
-  /// and the rich flavour is not Markdown, so neither is escaped.
+  /// and the rich flavor is not Markdown, so neither is escaped.
   @Test func `a less-than sign is escaped in prose and nowhere else`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
@@ -254,7 +254,7 @@ struct QuoteCitationTests {
 
   /// Rich text has the quote as text and the citation as a real link, with none of the
   /// Markdown syntax.
-  @Test func `the rich flavour links the citation`() throws {
+  @Test func `the rich flavor links the citation`() throws {
     let quote = QuoteCitation.quote(
       of: NSAttributedString(string: "Quoted."), document: .rfc(9110), section: "8.3")
     #expect(quote.rich.string == "Quoted.\n\n— RFC 9110, Section 8.3")
@@ -262,5 +262,123 @@ struct QuoteCitationTests {
     let link = try #require(
       quote.rich.attribute(.link, at: label.location, effectiveRange: nil) as? URL)
     #expect(link.absoluteString == "https://www.rfc-editor.org/rfc/rfc9110#section-8.3")
+  }
+
+  /// A selection dragged from the end of one section's last line opens on that
+  /// section's line break, but quotes only the next section: that is the one cited.
+  @Test func `a selection opening on the previous section's line break cites the next`() throws {
+    let built = DocumentTextBuilder.build(
+      RFCDocument(
+        header: DocumentHeader(title: "T"),
+        sections: [
+          Section(
+            anchor: "section-1", number: "1", title: "One",
+            blocks: [.paragraph(Paragraph(text: "Earlier."))]),
+          Section(
+            anchor: "section-2", number: "2", title: "Two",
+            blocks: [.paragraph(Paragraph(text: "Later."))]),
+        ],
+        source: .xml),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Earlier.", in: built.text) + "Earlier.".utf16.count
+    let end = try Fixtures.offset(of: "Later.", in: built.text) + "Later.".utf16.count
+    let quote = try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: end - start), in: built, document: .rfc(9110)))
+    #expect(quote.markdown.hasSuffix("(https://www.rfc-editor.org/rfc/rfc9110#section-2)"))
+  }
+
+  /// A figure's own fence line would close a fence of the same length, and the rest of
+  /// the figure would render as Markdown.
+  @Test func `a figure holding a fence is fenced by a longer one`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "```\ncode\n```"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "```", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        """
+        > ````
+        > ```
+        > code
+        > ```
+        > ````
+
+        """))
+  }
+
+  /// Two blocks in a row are two figures, not one: they are told apart by their box.
+  @Test func `two figures in a row are fenced apart`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .artwork, text: "+--+")),
+        .preformatted(Preformatted(kind: .artwork, text: "+==+"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "+--+", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        """
+        > ```
+        > +--+
+        > ```
+        >
+        > ```
+        > +==+
+        > ```
+
+        """))
+    #expect(quote.html.contains("<pre>+--+</pre>\n<pre>+==+</pre>"))
+  }
+
+  /// The reader labels source code with its type, which is not part of the code: the
+  /// label is the fence's info string, and nowhere in the quote's lines.
+  @Test func `a source code label is the fence's info string`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .sourceCode, text: "rule = 1*DIGIT", type: "abnf"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "ABNF", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        """
+        > ```abnf
+        > rule = 1*DIGIT
+        > ```
+
+        """))
+    #expect(quote.html.contains("<pre>rule = 1*DIGIT</pre>"))
+    #expect(quote.rich.string.hasPrefix("rule = 1*DIGIT\n"))
+  }
+
+  /// Rich targets lay a figure out in the font they are given: a proportional one
+  /// breaks its columns.
+  @Test func `the rich flavor sets a figure in a fixed-pitch font`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "As drawn:")),
+        .preformatted(Preformatted(kind: .artwork, text: "+--+"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "As drawn", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    let figure = (quote.rich.string as NSString).range(of: "+--+")
+    let font = try #require(
+      quote.rich.attribute(.font, at: figure.location, effectiveRange: nil) as? PlatformFont)
+    #if canImport(UIKit)
+      #expect(font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace))
+    #else
+      #expect(font.fontDescriptor.symbolicTraits.contains(.monoSpace))
+    #endif
+    #expect(quote.rich.attribute(.font, at: 0, effectiveRange: nil) == nil)
   }
 }

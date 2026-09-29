@@ -40,7 +40,7 @@ final class ReaderState {
   /// Whether there is anything to describe. The panel draws nothing without it.
   var hasDocument = false
 
-  /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is greyed out
+  /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
   /// without one, as Copy is (#186). Reported by the text view's coordinator.
   var hasSelection = false
 

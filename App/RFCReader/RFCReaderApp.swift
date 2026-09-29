@@ -123,13 +123,11 @@ struct DocumentCommands: Commands {
       // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
       // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
       CommandGroup(after: .pasteboard) {
-        // Sent down the responder chain to the reader's text view (#186). Focused
-        // first, as Find does: with the sidebar or the contents panel focused, the
-        // action reached no text view. Greyed out without a selection, as Copy is; the
-        // original text is not the reader's, and has no quote to copy.
+        // Handed to the reader's text view (#186); see
+        // `ReaderWindowController.copyAsQuote()`. Grayed out without a selection, as
+        // Copy is; the original text is not the reader's, and has no quote to copy.
         Button("Copy as Quote") {
-          active.controller?.focusSearchableText()
-          NSApp.sendAction(#selector(ReaderTextView.copyAsQuote(_:)), to: nil, from: nil)
+          active.controller?.copyAsQuote()
         }
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(

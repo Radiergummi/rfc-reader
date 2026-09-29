@@ -445,6 +445,15 @@
       window.makeFirstResponder(text)
     }
 
+    /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
+    /// responder chain, which reaches no text view with the sidebar, the contents
+    /// panel or the find bar focused: the find bar is the scroll view's, a parent of
+    /// the text view, not a child.
+    func copyAsQuote() {
+      let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {

@@ -34,7 +34,7 @@ struct RFCTextView: View {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
-  /// Whether the reader has a selection, which greys out Edit ▸ Copy as Quote without
+  /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
