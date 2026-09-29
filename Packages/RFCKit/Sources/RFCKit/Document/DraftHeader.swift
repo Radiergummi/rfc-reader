@@ -28,7 +28,11 @@ public struct DraftHeader: Equatable, Sendable {
   }
 
   public static func parse(text data: Data) -> DraftHeader {
-    parse(frontPage: String(decoding: data, as: UTF8.self).components(separatedBy: .newlines))
+    // Split on `Character.isNewline`, where "\r\n" is one character: `.newlines` would
+    // see a line and a blank one, and end the header block after its first line.
+    parse(
+      frontPage: String(decoding: data, as: UTF8.self)
+        .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init))
   }
 
   /// The header block is the lines from the first that is not blank to the next blank

@@ -109,4 +109,16 @@ struct DraftHeaderTests {
     ]
     #expect(DraftHeader.parse(frontPage: lines) == DraftHeader())
   }
+
+  /// "\r\n" is one line break, not a line and a blank one that would end the header
+  /// block after its first line.
+  @Test func `a front page with CRLF line endings is read`() {
+    let page = [
+      "Example Working Group                                          A. Author",
+      "Internet-Draft                                             Example Corp",
+      "Obsoletes: 9990 (if approved)                                 B. Writer",
+      "Intended status: Standards Track",
+    ].joined(separator: "\r\n")
+    #expect(DraftHeader.parse(text: Data(page.utf8)) == DraftHeader(obsoletes: [9990]))
+  }
 }
