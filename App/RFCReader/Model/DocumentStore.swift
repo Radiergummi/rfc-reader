@@ -31,6 +31,18 @@ actor DocumentStore {
   /// has not grown is not enumerated again.
   private var hasGrown = true
 
+  /// The installed data packs (#36), beside the cache rather than in it: a pack is
+  /// installed and replaced whole, never evicted a document at a time.
+  private var packsDirectory: URL {
+    directory.appending(path: "Packs", directoryHint: .isDirectory)
+  }
+
+  /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
+  /// is installed.
+  private lazy var legacyPack: InstalledPack? = try? InstalledPack(
+    contentsOf: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
+  private static let legacyPackName = "legacy-xml"
+
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
@@ -113,6 +125,14 @@ actor DocumentStore {
       parsed[id] = document
       return document
     }
+    // Before a cached `.txt`: the pack is the single XML path it exists for, and a
+    // `.txt` cached before it arrived still serves Original Text.
+    if let packURL = legacyPack?.file(for: id), let data = try? Data(contentsOf: packURL),
+      let document = try? RFCXMLParser.parse(data)
+    {
+      parsed[id] = document
+      return document
+    }
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
       let document = LegacyTextParser.parse(data)
@@ -147,6 +167,30 @@ actor DocumentStore {
       )
     }
     return fetched
+  }
+
+  // MARK: - Data packs (#36)
+
+  /// Installs the legacy XML pack from an `.aar`, an unpacked folder, or a URL to
+  /// download one from, replacing the installed one only once the new one has
+  /// verified. Documents already parsed are parsed again on their next open, so
+  /// they come from the pack.
+  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
+    legacyPack = pack
+    parsed.removeAll()
+    return pack
+  }
+
+  /// Off the actor: a whole pack is unpacked and every file hashed.
+  @concurrent
+  private static func install(_ source: URL, as name: String, in packs: URL) async throws
+    -> InstalledPack
+  {
+    guard !source.isFileURL else { return try PackInstaller.install(source, as: name, in: packs) }
+    let (downloaded, _) = try await URLSession.shared.download(from: source)
+    defer { try? FileManager.default.removeItem(at: downloaded) }
+    return try PackInstaller.install(downloaded, as: name, in: packs)
   }
 
   // MARK: - Eviction (#39)
