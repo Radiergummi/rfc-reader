@@ -73,7 +73,7 @@ struct BuilderHandoverTests {
   /// That is safe while the reuse stays on the main actor and nothing the text
   /// views do writes to the build, which is what this pins: the build reads the
   /// same after two text views have laid it out, at two different columns, and
-  /// drawn it — drawing is where AppKit makes an attachment's cell and view.
+  /// drawn it — drawing is where AppKit would give an attachment a cell.
   @MainActor
   @Test func `a build installed into two text views is left as it was`() throws {
     let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: ReadingStyle())
@@ -113,16 +113,22 @@ struct BuilderHandoverTests {
     #expect(Self.attachmentStates(in: built.text) == attachments)
   }
 
-  /// What a text view could change about an attachment: its bounds, its image and
-  /// its contents, per attachment, in document order.
+  /// What a text view could change about an attachment: its bounds, its image, its
+  /// contents and, on the Mac, its cell, per attachment, in document order.
   private static func attachmentStates(in text: NSAttributedString) -> [String] {
     var states: [String] = []
     text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) {
       value, range, _ in
       guard let attachment = value as? NSTextAttachment else { return }
       let image = attachment.image.map { "\(ObjectIdentifier($0))" } ?? "none"
+      #if canImport(AppKit)
+        let cell = attachment.attachmentCell.map { "\(ObjectIdentifier($0))" } ?? "none"
+      #else
+        let cell = "none"
+      #endif
       states.append(
-        "\(range.location) \(attachment.bounds) \(image) \(attachment.contents?.count ?? -1)")
+        "\(range.location) \(attachment.bounds) \(image) \(attachment.contents?.count ?? -1) \(cell)"
+      )
     }
     return states
   }

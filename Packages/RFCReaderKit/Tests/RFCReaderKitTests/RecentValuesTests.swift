@@ -73,8 +73,12 @@ struct RecentValuesTests {
     underlined.underlinesLinks.toggle()
     #expect(key != BuildKey(document: document, style: underlined))
     #expect(key != BuildKey(document: document, style: style.scaled(by: 1.1)))
+    // The body scales with the text size, so it is set back to the default's to
+    // tell the keys apart by the text size alone.
     let larger = ReadingStyle(textSize: .xxxLarge)
-    #expect(larger.textSize != style.textSize)
-    #expect(key != BuildKey(document: document, style: larger))
+    let largerText = larger.scaled(by: style.bodySize / larger.bodySize)
+    #expect(largerText.bodySize == style.bodySize)
+    #expect(largerText.textSize != style.textSize)
+    #expect(key != BuildKey(document: document, style: largerText))
   }
 }

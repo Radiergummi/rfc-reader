@@ -20,8 +20,8 @@ public struct RecentValues<Key: Hashable, Value> {
     self.capacity = capacity
   }
 
-  /// The keys held, least recently used first.
-  public var keys: [Key] { entries.map(\.key) }
+  /// The keys held, least recently used first; for the tests.
+  var keys: [Key] { entries.map(\.key) }
 
   /// The value for `key`, which then counts as the most recently used.
   public mutating func value(for key: Key) -> Value? {

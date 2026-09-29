@@ -107,15 +107,15 @@ struct DocumentPreview: View {
     let style = ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks)
     let key = BuildKey(document: id, style: style)
     do {
+      let kept = library.keptPreview(for: key)
       let shown: Loaded
-      if let kept = library.previews.value(for: key) {
+      if let kept {
         shown = kept
       } else {
         let document = try await library.document(for: id)
         shown = Loaded(
           document: document, built: await DocumentView.build(document, style: style),
           bibliography: ReferenceGroup.groups(in: document))
-        library.previews.store(shown, for: key)
       }
       loaded = shown
       // Resolved the way the reader resolves a jump, so the preview opens where a
@@ -123,6 +123,11 @@ struct DocumentPreview: View {
       if let place {
         scrollTarget = ReaderScrollTarget(
           anchor: shown.document.anchor(forPlace: place), animated: false)
+      }
+      // After the text is shown: asking whether the document is still downloaded
+      // waits for the store, which may be parsing another document.
+      if kept == nil {
+        await library.keep(shown, for: key)
       }
     } catch {
       failure = error.localizedDescription

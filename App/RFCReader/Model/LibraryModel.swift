@@ -258,13 +258,27 @@ final class LibraryModel {
   /// than a spinner. Four, at 4.5 to 8 MB a build.
   ///
   /// The whole preview rather than the build alone, so a build is never paired with
-  /// another parse of its document; and a document's previews go when it is
-  /// removed or evicted, since its next open parses it afresh (`forgetPreviews`).
-  /// Empty on iOS, which has no such preview.
+  /// another parse of its document. A document's previews go when it is removed or
+  /// evicted (`forgetPreviews`), as the store's parse of it does, so what is gone
+  /// from the disk is gone from memory too. Empty on iOS, which has no such preview.
   ///
   /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
   /// drawn from it.
-  @ObservationIgnored var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(capacity: 4)
+  @ObservationIgnored private var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(
+    capacity: 4)
+
+  /// What the last preview of `key` showed, if it is still kept.
+  func keptPreview(for key: BuildKey) -> DocumentPreview.Loaded? {
+    previews.value(for: key)
+  }
+
+  /// Keeps `preview` for the next preview of `key`, unless its document was removed
+  /// or evicted while it was being fetched and built: its previews were forgotten
+  /// then, and this one would come back after them.
+  func keep(_ preview: DocumentPreview.Loaded, for key: BuildKey) async {
+    guard await store.isCached(key.document) else { return }
+    previews.store(preview, for: key)
+  }
 
   private func forgetPreviews(of documents: some Sequence<DocumentID>) {
     let documents = Set(documents)
