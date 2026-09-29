@@ -104,10 +104,21 @@ struct DocumentInspector: View {
     case .references:
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
-      ReferencesView(groups: groups, revealed: revealed, open: openDocument)
+      ReferencesView(
+        groups: groups, revealed: revealed, open: openDocument,
+        openInNewWindow: openInNewWindow)
     case .requirements:
       RequirementsView(requirements: requirements, document: document, select: selectSection)
     }
+  }
+
+  /// Offered on iPad, where a reference can open in a window of its own (#158).
+  private var openInNewWindow: ((DocumentID) -> Void)? {
+    #if os(macOS)
+      nil
+    #else
+      library.opensNewWindows ? { library.openWindow(for: $0) } : nil
+    #endif
   }
 }
 
@@ -259,6 +270,7 @@ struct ReferencesView: View {
   let groups: [ReferenceGroup]
   let revealed: ReaderState.RevealedReference?
   let open: (DocumentID) -> Void
+  let openInNewWindow: ((DocumentID) -> Void)?
 
   /// The revealed entry, marked for a moment so the eye finds it in the list.
   @State private var highlighted: String?
@@ -274,7 +286,7 @@ struct ReferencesView: View {
               ForEach(group.entries) { entry in
                 // Identified by its anchor already (`Reference.id`), which is
                 // what the reveal scrolls to.
-                ReferenceRow(entry: entry, open: open)
+                ReferenceRow(entry: entry, open: open, openInNewWindow: openInNewWindow)
                   .listRowBackground(
                     highlighted == entry.anchor
                       ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
@@ -306,6 +318,8 @@ struct ReferencesView: View {
 struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
+  /// Nil where a reference cannot open in a window of its own.
+  let openInNewWindow: ((DocumentID) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -319,6 +333,17 @@ struct ReferenceRow: View {
           entryDescription.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        #if !os(macOS)
+          .contextMenu {
+            if let openInNewWindow {
+              Button {
+                openInNewWindow(id)
+              } label: {
+                Label("Open in New Window", systemImage: "macwindow.badge.plus")
+              }
+            }
+          }
+        #endif
       } else {
         entryDescription
         // An entry that names no RFC opens nothing in the reader, so where it
