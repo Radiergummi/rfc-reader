@@ -109,8 +109,11 @@ jobs:
             awk -F'[c.]' '{ print > (($2 + 0 >= 8650) ? "../modern.list" : "../legacy.list") }'
           touch ../legacy.list ../modern.list
           # convert writes xml.noindex (kept out of Spotlight); a pack's directory is xml.
+          # Nothing of the run goes into the archive, not the files' dates, owners or
+          # modes, so the same documents make the same pack.
           for pack in legacy modern; do
             tar --zstd -cf "$GITHUB_WORKSPACE/$pack-xml-$VERSION.tar.zst" \
+              --format=gnu --mtime=@0 --owner=0 --group=0 --numeric-owner --mode='a=r,u+w' \
               --transform 's,^,xml/,' -T "../$pack.list"
             echo "$pack: $(wc -l < "../$pack.list") documents"
           done

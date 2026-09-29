@@ -37,7 +37,7 @@ The serializer marks every generated file: a leading comment naming the source f
 
 ### Licensing: what we know, and the fallback if the answer is no
 
-The app is going to be public and possibly sold, so this is not a formality. Status of the question, to be resolved before the first public release of a legacy pack; private use meanwhile needs nothing.
+The app is going to be public and possibly sold, so this is not a formality. Status of the question, to be resolved before the first public release of a legacy pack; private use meanwhile needs nothing. The IETF Trust has been asked (route 1 below), and its answer is pending.
 
 What the licences say, as far as we know today (verify against the current text):
 
@@ -47,7 +47,7 @@ What the licences say, as far as we know today (verify against the current text)
 
 Marking up unchanged text is a format conversion, and arguably a "derivative work that assists in implementation", but "may not be modified in any way" is exactly the kind of clause a cautious reading trips over. Three routes, in order of preference:
 
-1. **Ask.** The IETF Trust (trustees@ietf.org) has granted permissions for tooling before, and a reader app that helps people use RFCs is squarely in the spirit of the licences. A written permission for "publishing the text of legacy RFCs, unchanged, with added RFCXML structure markup" settles it. Reach out with the generated file for a well-known RFC attached so they can see exactly what is being distributed.
+1. **Ask.** The IETF Trust (trustees@ietf.org) has granted permissions for tooling before, and a reader app that helps people use RFCs is squarely in the spirit of the licences. A written permission for "publishing the text of legacy RFCs, unchanged, with added RFCXML structure markup" settles it. *Asked; the answer is what is pending.*
 2. **Ship structure, not text.** If publishing marked-up text is not permitted, the pack can carry only *structure sidecars*: for each legacy RFC, the byte ranges of the original `.txt` and the role of each range (section heading with number, paragraph, list item, artwork, reference entry, cross-reference target). The app fetches or caches the verbatim `.txt` from the RFC Editor, verifies its hash against the sidecar, and applies the structure at runtime. No RFC text ever leaves the RFC Editor's servers through us, the pack is metadata about a document rather than a copy of it, and the runtime cost is trivial (applying offsets, no heuristics). `LegacyTextParser` would gain a mode that emits ranges instead of a document, and the pipeline would emit sidecars instead of XML. This is a modest change to the pipeline and none to the reader.
 3. **Keep the on-device renderer forever.** If even sidecars felt too close to the line, the app fetches the `.txt` and runs `LegacyTextParser` on device, as it does today. Unfortunate, because heuristic fixes then ship with app updates rather than data updates, but entirely workable; the parser already exists and handles RFC 2616 in under a second.
 
@@ -61,7 +61,7 @@ All stages are subcommands of `Tools/corpus-build`, a Swift package that depends
 rfc-index.xml ──▶ fetch ──▶ corpus/text.noindex/rfcNNNN.txt      (8,457 files, one-time, resumable)
                               │
                               ▼
-                            convert ──▶ corpus/xml.noindex/rfcNNNN.xml   (+ corpus/report.json)
+                            convert ──▶ corpus/xml.noindex/rfcNNNN.xml   (+ corpus/report.json, corpus/prose.json)
                               ▲
 rfc-index.xml ──▶ fetch --format xml ─┘                          (1,378 files, no conversion)
       RFCs authored in RFCXML are already in the runtime format; `hasXMLSource`
@@ -81,9 +81,9 @@ rfc-index.xml ──▶ fetch --format xml ─┘                          (1,37
 The packs split at RFC 8650 so that the RFC Editor's own RFCXML, already licensed for redistribution, never waits on the licensing question the converted legacy documents are held by.
 
 - **fetch** reads the index, picks every RFC without an XML format, and downloads the `.txt` with bounded concurrency (default 6, be polite to the RFC Editor). Existing files are skipped, so re-runs only fetch what is new or missing. `--limit N` for smoke tests.
-- **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). `--only 5 822` converts just those documents from `--in`, and fails if one has no text there; it refuses `--report`, which would replace the corpus report with one that holds only those documents. An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, and correct a single document with an override. No new override is committed until #197 makes one a patch on the converter's output rather than a whole converted document, which is RFC text. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes: `make corpus-overrides-check` reruns every such script against the current converter and fails on any difference. It needs the source text, so it is not part of `make check`; what is, is corpus-build's `Corpus overrides` suite, which parses every committed override and pins what RFC 1142's script recovers.
+- **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). With `--diagnostics` it also writes `prose.json`, what the prose test decided across the corpus and where it decided narrowly; `make corpus` asks for it. `--only 5 822` converts just those documents from `--in`, and fails if one has no text there; it refuses `--report`, which would replace the corpus report with one that holds only those documents. An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, and correct a single document with an override. No new override is committed until #197 makes one a patch on the converter's output rather than a whole converted document, which is RFC text. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes: `make corpus-overrides-check` reruns every such script against the current converter and fails on any difference. It needs the source text, so it is not part of `make check`; what is, is corpus-build's `Corpus overrides` suite, which parses every committed override and pins what RFC 1142's script recovers.
   With `--schema`, every written file is also validated against xml2rfc's RFCXML v3 schema (`Tools/corpus-build/Schema/`, `xmllint --relaxng`), and the report's `schema` field says why a document fails: `[]` validates, otherwise a list of causes (`front-without-author`, `anchor-equals-pn`, …). The causes are found in the document rather than read from libxml2's messages, which cascade — one refused attribute on `<section>` was 203,612 lines over the corpus. A failure none of them explains is `unexplained`, with libxml2's first message as a warning: that bucket is where a new kind of failure shows up — in a document with no known cause. One that already has a known cause can hide a new kind behind it, so the causes say what a document contains rather than everything xmllint refused, and the bucket watches more of the corpus as known causes are fixed. Our parser round-tripping its own output never proved it was RFCXML, since it tolerates what it writes; the schema check is what does. From here on a regression is a document that stops validating: convert compares its results with the report it replaces (`SchemaComparison`) and exits non-zero, after writing the new report, when any document validated before and does not now. `make corpus` first runs `make corpus-schema-control`, which has xmllint validate RFCs 8999, 9113 and 9220 as the RFC Editor published them, so a broken schema or validator stops the run before its counts are read.
-- **manifest** hashes every file so the app can verify downloads and fetch individual documents by path.
+- **manifest** hashes every file in `xml.noindex` so the app can verify downloads and fetch individual documents by path. It records the packs' version and, per document, its file name, size and SHA-256, and nothing of the run, so the same files make the same manifest.
 
 Regression review is a diff of two `report.json` files: a heuristic change that moves counts on hundreds of documents gets looked at before it ships. The reports for the 1969 RFCs already show what to expect: RFC 2 flags "more artwork than prose" (its hand-typed layout is indistinguishable from diagrams) and RFC 3 has no recognisable front matter. Those become overrides or targeted heuristics; the 1990s and 2000s RFCs, which are the bulk, follow the strict format the parser is built for.
 
@@ -115,31 +115,33 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 ## Delivery mechanism
 
 - **Hosting.** GitHub Releases on this repository (or a dedicated `rfc-reader-data` repository) to start: free, CDN-backed, 2 GB per asset, and every pack is a tagged, immutable version. Move to a Cloudflare R2 bucket behind a custom domain if download volume ever matters; the manifest format does not change.
-- **Manifest.** `manifest.json` lists every pack with version, size and SHA-256, and every file inside the XML packs by path and hash. The app verifies what it downloads and can also fetch a single document out of a pack by path once packs are served unpacked (R2 stage).
+- **Manifest.** `manifest.json` carries the packs' version and every document inside the XML packs by file name, size and SHA-256. It does not list the packs themselves yet, their archives' sizes and hashes, nor which pack a document is in, which today is its number: below 8650 legacy, from 8650 modern. The app is to verify what it downloads against it, and can also fetch a single document out of a pack by path once packs are served unpacked (R2 stage).
 - **On the device.** Apple's Background Assets framework is built for exactly this: large optional downloads hosted by the developer, fetched at install time or in the background, not counted against the App Store download size, with managed storage and eviction. On-demand resources are being phased out in its favour, so do not build on ODR.
 - **Versioning.** Packs are versioned `YYYY.MM[.patch]`. The legacy XML pack changes only when the heuristics or overrides change, which is rare. The index, graph and errata refresh whenever the RFC Editor publishes; the FTS and embedding packs are rebuilt after any XML change.
 
 ## Automation
 
-`.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest`, compresses the packs and attaches them to a release. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack simply reproduces byte-for-byte unless the code changed.
+`.github/workflows/corpus.yml` runs `make corpus` — fetch, convert and manifest — in a read-only job, packs the two archives and uploads them with the reports as the run's artifact; a separate job that builds nothing attaches them to a release, and only when asked to. It is `workflow_dispatch` only for now: a full run's `report.json` is reviewed, and what it exposes fixed in the heuristics, before anything is published. Each run's baseline is the report of the last successful one, so a document that stops validating fails the run. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs. The legacy pack then reproduces byte-for-byte unless the converter, the overrides, the index's record of a document or the tools that pack it changed: the archives carry no dates, owners or modes from the run, and the manifest no date.
 
-The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
+The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. So `corpus/text.noindex` is cached between runs: a full run saves it under its run ID, the next restores the newest (CI's cache pruning keeps only that one), and since fetch skips what is already there, the RFC Editor is asked only for what was published since.
 
 ## Repository layout for the data
 
 ```
 corpus/                      (git-ignored working directory, or a separate data repository)
 ├── rfc-index.xml            snapshot used for this run
-├── text/rfcNNNN.txt         fetched sources, byte-for-byte as served
+├── text.noindex/rfcNNNN.txt fetched sources, byte-for-byte as served
 ├── overrides/
 │   ├── rfcNNNN.xml          hand-corrected documents, committed and reviewed
 │   └── rfcNNNN.py           the script behind a mechanically corrected one (Python 3.9+)
-├── xml/rfcNNNN.xml          generated output
-├── report.json              per-document counts and warnings
-└── manifest.json
+├── xml.noindex/rfcNNNN.xml  generated output, and the RFC Editor's own XML beside it
+├── report.json              per-document counts, warnings and schema causes
+├── prose.json               the prose test's decisions (convert --diagnostics)
+├── manifest.json
+└── queries-xref.json        the search judgement set, from `make corpus-queries`
 ```
 
-Overrides are the only part that must be under version control; everything else is reproducible from the index and the RFC Editor.
+The `.noindex` suffixes keep Spotlight from indexing the pipeline's output as it is written, which held a full run to a quarter of the corpus in two hours (#38); the Makefile has the measurement. Overrides are the only part under version control; everything else is reproducible from the index and the RFC Editor.
 
 ## How the app consumes packs
 
@@ -150,9 +152,9 @@ Overrides are the only part that must be under version control; everything else 
 
 ## Open work, in order
 
-1. Run the full `fetch` and `convert` once, review `report.json`, fix the heuristic classes it exposes (1970s RFCs, hanging-indent definition lists), write the first overrides.
+1. Fix the heuristic classes the full run's `report.json` exposes (1970s RFCs, hanging-indent definition lists). A single document that is wrong waits for #197, which makes an override a patch on the converter's output rather than a whole converted document; until then no new override is committed.
 2. Add `graph` and `errata` builders to `corpus-build` (both are small transformations of data we already parse).
 3. Add the `fts` builder (GRDB or the sqlite3 C library, FTS5, section rows) and the app-side reader.
 4. Pick and convert the embedding model; add the `embeddings` builders; hybrid rerank in the app.
 5. Background Assets integration and the Offline settings screen.
-6. Resolve the licensing question for public distribution of `legacy-xml` (ask the Trust; fall back to structure sidecars).
+6. Resolve the licensing question for public distribution of `legacy-xml`: the Trust has been asked; if the answer is no, fall back to structure sidecars.

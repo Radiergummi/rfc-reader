@@ -30,8 +30,7 @@ struct ManifestCommand: ParsableCommand {
       let data = try Data(contentsOf: directory.appending(path: name))
       entries.append(Manifest.Entry(path: name, data: data))
     }
-    let manifest = Manifest(
-      version: version, generatedAt: ISO8601DateFormatter().string(from: .now), files: entries)
+    let manifest = Manifest(version: version, files: entries)
     try writeJSON(manifest, to: output.path)
     Self.logger.info(
       "wrote manifest", metadata: ["entries": "\(entries.count)", "path": "\(output.path)"])
