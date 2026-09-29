@@ -62,9 +62,8 @@ public enum BoundarySample {
       guard diagnosis.artworkMatches == 1 else { return nil }
       return Criterion(name: "artwork", measurement: 1, margin: 1)
     case .internalGap:
-      let dissent = diagnosis.justification.dissenting
-      guard dissent.count == 1, let only = dissent.first else { return nil }
-      if only == "readsLikeSentences" {
+      guard diagnosis.justification.dissenting.count == 1 else { return nil }
+      if !diagnosis.justification.readsLikeSentences {
         let ratio = diagnosis.sentenceRatio
         guard (0.5..<0.6).contains(ratio) else { return nil }
         return Criterion(name: "sentences", measurement: ratio, margin: 0.6 - ratio)

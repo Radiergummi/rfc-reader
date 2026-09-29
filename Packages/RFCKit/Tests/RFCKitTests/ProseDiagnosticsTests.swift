@@ -386,13 +386,26 @@ struct ProseDiagnosticsTests {
   /// deeper cap is past the limit here, and would be refused as code under it (#43).
   @Test func `a block too deep records whether a deeper cap would excuse it`() {
     let sentences = [
-      "         Using a word that has strong semantic implications in the",
-      "         current context will cause confusion.",
+      "         A server that receives a request it cannot parse returns an",
+      "         error to the client and closes the connection afterwards.",
     ]
     #expect(LegacyTextParser.diagnose(sentences, maxIndent: 7).readsAsDeepProse)
     let code = ["         ::= { ifMauEntry 4 }"]
     let diagnosis = LegacyTextParser.diagnose(code, maxIndent: 7)
     #expect(diagnosis.rejections == [.indentTooDeep])
+    #expect(!diagnosis.readsAsDeepProse)
+  }
+
+  /// A MIB module's text past the limit reads as sentences, but a looser limit would
+  /// still refuse it as the module's, so it is not deep prose either.
+  @Test func `a modules text too deep is not deep prose`() {
+    let clause = [
+      "         The number of requests the agent has answered since it was",
+      "         last restarted, counted once for each reply it sent.\"",
+      "         ::= { exampleCounters 2 }",
+    ]
+    let diagnosis = LegacyTextParser.diagnose(clause, maxIndent: 7)
+    #expect(diagnosis.rejections.first == .indentTooDeep)
     #expect(!diagnosis.readsAsDeepProse)
   }
 }
