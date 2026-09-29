@@ -83,6 +83,20 @@ final class RFCTextViewCoordinator: NSObject {
   var bibliography: [ReferenceGroup] = []
   /// The document on screen; see `RFCTextView.documentID`.
   var documentID: DocumentID?
+  /// Section anchor to number; see `RFCTextView.sectionNumbers`.
+  var sectionNumbers: [String: String] = [:]
+
+  /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
+  /// or nil when nothing is selected (#186). Which section and what it says are
+  /// `QuoteCitation`'s.
+  func quote(of range: NSRange) -> QuoteCitation.Quote? {
+    guard let documentID, let built, range.length > 0, NSMaxRange(range) <= built.text.length
+    else { return nil }
+    return QuoteCitation.quote(
+      of: built.text.attributedSubstring(from: range), document: documentID,
+      section: QuoteCitation.section(
+        at: range.location, anchors: built.anchors, numbers: sectionNumbers))
+  }
   /// See `RFCTextView.commitsOnClick`.
   var commitsOnClick: (() -> Void)?
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called

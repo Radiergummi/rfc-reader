@@ -3,6 +3,7 @@ import RFCReaderKit
 
 #if canImport(UIKit)
   import UIKit
+  import UniformTypeIdentifiers
 
   /// The reader's text view, which copies what it means rather than what it holds.
   ///
@@ -23,6 +24,26 @@ import RFCReaderKit
       guard contentInset.bottom != safeAreaInsets.bottom else { return }
       contentInset.bottom = safeAreaInsets.bottom
       verticalScrollIndicatorInsets.bottom = safeAreaInsets.bottom
+    }
+
+    /// The quote for a range of the text, from the coordinator (#186).
+    var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+
+    /// Copy as Quote: the Markdown as plain text and as Markdown, the rich flavour as
+    /// RTF. Offered in the edit menu beside Copy (`RFCTextViewCoordinator`).
+    func copyAsQuote() {
+      guard let quote = quoteSelection(selectedRange) else { return }
+      var item: [String: Any] = [
+        UTType.plainText.identifier: quote.markdown,
+        "net.daringfireball.markdown": quote.markdown,
+      ]
+      if let rtf = try? quote.rich.data(
+        from: NSRange(location: 0, length: quote.rich.length),
+        documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+      {
+        item[UTType.rtf.identifier] = rtf
+      }
+      UIPasteboard.general.items = [item]
     }
 
     override func copy(_ sender: Any?) {
@@ -63,6 +84,27 @@ import RFCReaderKit
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
     var willTrackMouseDown: () -> Bool = { false }
+    /// The quote for a range of the text, from the coordinator (#186).
+    var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+
+    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
+    /// and as Markdown, the rich flavour as RTF (#186).
+    @objc func copyAsQuote(_ sender: Any?) {
+      guard let quote = quoteSelection(selectedRange()) else { return }
+      let pasteboard = NSPasteboard.general
+      pasteboard.clearContents()
+      pasteboard.setString(quote.markdown, forType: .string)
+      pasteboard.setString(
+        quote.markdown, forType: NSPasteboard.PasteboardType("net.daringfireball.markdown"))
+      if let rtf = quote.rich.rtf(from: NSRange(location: 0, length: quote.rich.length)) {
+        pasteboard.setData(rtf, forType: .rtf)
+      }
+    }
+
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+      if menuItem.action == #selector(copyAsQuote(_:)) { return selectedRange().length > 0 }
+      return super.validateMenuItem(menuItem)
+    }
 
     /// Look Up from the menu or the keyboard: a reference under the selection is
     /// still previewed rather than looked up. A force click never arrives here; see
@@ -182,14 +224,22 @@ import RFCReaderKit
       let standard = super.menu(for: event)
       let text = attributedString()
       let clicked = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+      // A copy, so the items are never left behind in a menu AppKit hands out again.
+      let result = (standard?.copy() as? NSMenu) ?? NSMenu()
+      // Copy as Quote, right after Copy where there is a selection (#186).
+      if selectedRange().length > 0 {
+        let quote = NSMenuItem(
+          title: "Copy as Quote", action: #selector(copyAsQuote(_:)), keyEquivalent: "")
+        quote.target = self
+        let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
+        result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
+      }
       guard
         let figure = FigureCopy.figure(at: clicked, in: text)
           ?? FigureCopy.figure(in: selectedRange(), of: text)
       else {
-        return standard
+        return result
       }
-      // A copy, so the item is never left behind in a menu AppKit hands out again.
-      let result = (standard?.copy() as? NSMenu) ?? NSMenu()
       let item = NSMenuItem(
         title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
       item.target = self

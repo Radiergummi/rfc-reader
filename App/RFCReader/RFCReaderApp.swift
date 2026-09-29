@@ -123,6 +123,13 @@ struct DocumentCommands: Commands {
       // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
       // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
       CommandGroup(after: .pasteboard) {
+        // Sent down the responder chain, so it reaches the focused reader's text view,
+        // which copies nothing without a selection (#186).
+        Button("Copy as Quote") {
+          NSApp.sendAction(#selector(ReaderTextView.copyAsQuote(_:)), to: nil, from: nil)
+        }
+        .keyboardShortcut("c", modifiers: [.command, .option, .shift])
+        .disabled(!showsDocument)
         Section {
           // Static title: whether this RFC is bookmarked is a SwiftData fetch,
           // not something the menu observes, so a "Remove Bookmark" label would

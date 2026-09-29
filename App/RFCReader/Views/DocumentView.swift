@@ -276,6 +276,7 @@ struct DocumentView: View {
       RFCTextView(
         built: built,
         bibliography: reader.groups,
+        sectionNumbers: sectionNumbers,
         measure: measure,
         documentID: id,
         lastVisibleAnchor: lastVisibleAnchor,

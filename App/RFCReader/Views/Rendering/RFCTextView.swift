@@ -19,6 +19,8 @@ struct RFCTextView: View {
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
+  /// Section anchor to number, for Copy as Quote's citation (#186).
+  let sectionNumbers: [String: String]
   /// The same preference `DocumentView` derives the build's column from, so the
   /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
@@ -47,6 +49,7 @@ struct RFCTextView: View {
   init(
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
+    sectionNumbers: [String: String] = [:],
     measure: MeasurePreference,
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
@@ -62,6 +65,7 @@ struct RFCTextView: View {
   ) {
     self.built = built
     self.bibliography = bibliography
+    self.sectionNumbers = sectionNumbers
     self.measure = measure
     self.documentID = documentID
     self.commitsOnClick = commitsOnClick
@@ -82,6 +86,7 @@ struct RFCTextView: View {
         inputs: ReaderInputs(
           built: built,
           bibliography: bibliography,
+          sectionNumbers: sectionNumbers,
           measure: measure,
           documentID: documentID,
           commitsOnClick: commitsOnClick,
@@ -118,6 +123,7 @@ struct ReaderScrollTarget: Equatable {
 struct ReaderInputs {
   let built: BuiltDocument
   let bibliography: [ReferenceGroup]
+  let sectionNumbers: [String: String]
   let measure: MeasurePreference
   let documentID: DocumentID
   let commitsOnClick: (() -> Void)?
@@ -139,6 +145,7 @@ struct ReaderInputs {
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
+    coordinator.sectionNumbers = sectionNumbers
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
@@ -211,6 +218,9 @@ struct ReaderInputs {
       textView.isFindInteractionEnabled = true
       textView.textLayoutManager?.delegate = context.coordinator
       textView.delegate = context.coordinator
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
+      }
 
       let host = UIHostingController(rootView: inputs.header)
       host.view.backgroundColor = .clear
@@ -269,6 +279,9 @@ struct ReaderInputs {
       }
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
+      }
+      textView.quoteSelection = { [weak coordinator = context.coordinator] range in
+        coordinator?.quote(of: range)
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
