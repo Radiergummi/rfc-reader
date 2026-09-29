@@ -28,10 +28,11 @@ public enum QuoteCitation {
     /// The uniform type the Markdown is written under.
     public static let markdownType = "net.daringfireball.markdown"
 
-    /// The quote as it reads, with no Markdown syntax: paragraphs a blank line apart, a
-    /// figure's lines as drawn, and the citation with its URL spelled out.
-    public var plainText: String
     public var markdown: String
+    /// The plain-text flavour is the Markdown too. A web page reads only plain text and
+    /// HTML, never the Markdown flavour, so GitHub keeps the `>` quote only if the plain
+    /// text has it; Slack and chat apps paste plain text as well.
+    public var plainText: String { markdown }
     /// A `blockquote` of one `p` per paragraph and one `pre` per figure, and the
     /// citation a link after it. No styles, so the target's own apply.
     public var html: String
@@ -108,7 +109,6 @@ public enum QuoteCitation {
       ]).joined(separator: "\n")
 
     return Quote(
-      plainText: text + "\n\n— " + label + ", " + url.absoluteString,
       markdown: quoted.joined(separator: "\n>\n") + "\n\n— " + citation,
       html: html,
       rich: rich)

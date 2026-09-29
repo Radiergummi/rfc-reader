@@ -158,10 +158,10 @@ struct QuoteCitationTests {
     #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
-  /// Plain text is for where Markdown is not rendered: the quote as it reads, with no
-  /// `>`, fence, entity or link syntax, paragraphs a blank line apart, a figure's lines
-  /// and indentation as drawn, and the citation with its URL spelled out.
-  @Test func `the plain text is the quote without markdown syntax`() throws {
+  /// The plain text is the Markdown: a web page reads only plain text and HTML, so
+  /// GitHub gets its `>` quote only from the plain text, and Slack and chat apps paste
+  /// plain text too.
+  @Test func `the plain text is the markdown`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(
         .paragraph(Paragraph(text: "Send <field-name> & more.")),
@@ -172,19 +172,8 @@ struct QuoteCitationTests {
     let selection = built.text.attributedSubstring(
       from: NSRange(location: start, length: built.text.length - start))
     let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: "8.3")
-    #expect(
-      quote.plainText == """
-        Send <field-name> & more.
-
-        As drawn:
-
-        +--+
-          |  |
-
-        +--+
-
-        — RFC 9110, Section 8.3, https://www.rfc-editor.org/rfc/rfc9110#section-8.3
-        """)
+    #expect(quote.plainText == quote.markdown)
+    #expect(quote.plainText.hasPrefix("> Send"))
   }
 
   /// HTML is a blockquote of one paragraph per paragraph and one `pre` per figure, and
@@ -232,11 +221,10 @@ struct QuoteCitationTests {
     #expect(quote.html.contains("<pre>&lt;a&gt; -&gt; &lt;b&gt; &amp; &quot;c&quot;</pre>"))
   }
 
-  /// The document alone is cited by its info page, in every flavour.
-  @Test func `the citation names its url in plain text and links it in html`() {
+  /// The document alone is cited by its info page, in the HTML as in the Markdown.
+  @Test func `the citation links the info page in html`() {
     let quote = QuoteCitation.quote(
       of: NSAttributedString(string: "Quoted."), document: .rfc(9110), section: nil)
-    #expect(quote.plainText == "Quoted.\n\n— RFC 9110, https://www.rfc-editor.org/info/rfc9110")
     #expect(
       quote.html.hasSuffix(
         "<p>— <cite><a href=\"https://www.rfc-editor.org/info/rfc9110\">RFC 9110</a></cite></p>"))

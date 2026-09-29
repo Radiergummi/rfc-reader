@@ -29,8 +29,8 @@ import RFCReaderKit
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
-    /// Copy as Quote: one item carrying the plain text, the Markdown, the HTML and the
-    /// rich flavour as RTF. Offered in the edit menu beside Copy
+    /// Copy as Quote: one item carrying the Markdown as plain text and as Markdown, the
+    /// HTML and the rich flavour as RTF. Offered in the edit menu beside Copy
     /// (`RFCTextViewCoordinator`).
     func copyAsQuote() {
       guard let quote = quoteSelection(selectedRange) else { return }
@@ -86,8 +86,8 @@ import RFCReaderKit
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
-    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the plain text, the
-    /// Markdown, the HTML and the rich flavour as RTF (#186).
+    /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
+    /// and as Markdown, the HTML and the rich flavour as RTF (#186).
     @objc func copyAsQuote(_ sender: Any?) {
       guard let quote = quoteSelection(selectedRange()) else { return }
       let pasteboard = NSPasteboard.general
