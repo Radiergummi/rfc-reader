@@ -2,9 +2,20 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-enum InspectorTab {
+enum InspectorTab: CaseIterable {
   case contents
   case references
+  /// Every BCP 14 requirement the document states (#180).
+  case requirements
+
+  /// Named once, for both platforms' tab bars (#258).
+  var title: String {
+    switch self {
+    case .contents: "Contents"
+    case .references: "References"
+    case .requirements: "Requirements"
+    }
+  }
 }
 
 /// The inspector beside the reader: the document's two navigational views, or what
@@ -20,6 +31,7 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
+  let requirements: [Requirement]
   let info: DocumentInfo?
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
@@ -59,8 +71,9 @@ struct DocumentInspector: View {
         // than the inspector column's: 10 and 8 left the control against the
         // sheet's top edge, its capsule ends inside the sheet's rounded corners.
         Picker("Panel", selection: $tab) {
-          Text("Contents").tag(InspectorTab.contents)
-          Text("References").tag(InspectorTab.references)
+          ForEach(InspectorTab.allCases, id: \.self) { tab in
+            Text(tab.title).tag(tab)
+          }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -92,6 +105,8 @@ struct DocumentInspector: View {
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
       ReferencesView(groups: groups, revealed: revealed, open: openDocument)
+    case .requirements:
+      RequirementsView(requirements: requirements, document: document, select: selectSection)
     }
   }
 }
@@ -128,6 +143,7 @@ struct PanelHost: View {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
+        requirements: reader.requirements,
         info: reader.info,
         document: navigation.selection,
         library: library,
@@ -197,11 +213,12 @@ private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
   var body: some View {
-    // No rule between the two: Pages draws one only between labels that are both
-    // unselected, and with two tabs one of them always is the pill.
+    // No rule between them: Pages draws one only between labels that are both
+    // unselected, and the pill sits between any two of these.
     HStack(spacing: 0) {
-      segment(.contents, "Contents")
-      segment(.references, "References")
+      ForEach(InspectorTab.allCases, id: \.self) { tab in
+        segment(tab, tab.title)
+      }
     }
     // The track the segments sit in, and the inset that keeps the selected pill
     // inside it rather than flush with its edge.

@@ -603,6 +603,7 @@ struct DocumentView: View {
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
+      reader.requirements = await Self.requirements(in: loaded)
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first }
@@ -663,6 +664,13 @@ struct DocumentView: View {
     // No place to restore here: the coordinator carries the line at the top of
     // the viewport into the new storage itself, which a section anchor — all
     // this view is told — could only approximate to the section's heading.
+  }
+
+  /// The Requirements tab's rows (#180), off the main actor: every sentence of the
+  /// document is split and read for key words.
+  @concurrent
+  private static func requirements(in document: RFCDocument) async -> [Requirement] {
+    Requirements.extract(from: document)
   }
 
   /// Off the main actor, and structured: unlike a detached task, it inherits the
