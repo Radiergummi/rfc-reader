@@ -7,8 +7,7 @@ import Testing
 /// either end of the document or a jump brings them back.
 @Suite("Reader chrome")
 struct ReaderChromeTests {
-  /// A document 10,000 pt long, scrolled by a finger unless said otherwise, with
-  /// the text view's top edge fixed, so the position and the offset move together.
+  /// A document 10,000 pt long, scrolled by a finger unless said otherwise.
   private struct Reader {
     var chrome: ReaderChrome = {
       var chrome = ReaderChrome()
@@ -109,8 +108,8 @@ struct ReaderChromeTests {
     #expect(!reader.chrome.isHidden)
   }
 
-  /// A jump, a restored place, or the text view keeping the text still while the
-  /// bars go: none of these is the reader scrolling, in either direction.
+  /// A jump or a restored place: neither is the reader scrolling, in either
+  /// direction.
   @Test func `a scroll the app makes neither hides nor shows`() {
     var reader = Reader.reading()
     reader.scroll(by: 500, byFinger: false)
@@ -121,17 +120,16 @@ struct ReaderChromeTests {
     #expect(reader.chrome.isHidden)
   }
 
-  /// The bars going moves the offset but not the text, and the position the text
-  /// view reports is the text's: the next scroll is measured from where it was.
+  /// The bars going takes the top bar's height off the inset, and so off the
+  /// distance from the top, while the text stays where it is: no scroll back.
   @Test func `the bars going is no scroll back`() {
     var reader = Reader.reading()
     reader.scroll(by: 100)
     #expect(reader.chrome.isHidden)
-    // The top bar's 54 pt: the offset falls, the text stays.
     reader.chrome.scrolled(
       ReaderChrome.Scroll(
         position: reader.offset, distanceFromTop: reader.offset - 54,
-        distanceToEnd: 10_000 - reader.offset + 54, isUserDriven: true))
+        distanceToEnd: 10_000 - reader.offset, isUserDriven: true))
     #expect(reader.chrome.isHidden)
   }
 
@@ -176,28 +174,5 @@ struct ReaderChromeTests {
     reader.scroll(by: 500)
     reader.chrome.tapped()
     #expect(!reader.chrome.isHidden)
-  }
-}
-
-/// The scroll offset that keeps the text still while the top bar goes or comes back.
-@Suite("Reader chrome: keeping the text in place")
-struct ReaderChromeOffsetTests {
-  @Test func `the offset moves with the edge`() {
-    #expect(ReaderChrome.offsetKeepingTextInPlace(500, edgeMovedBy: -54, within: 0...9_000) == 446)
-    #expect(ReaderChrome.offsetKeepingTextInPlace(446, edgeMovedBy: 54, within: 0...9_000) == 500)
-  }
-
-  @Test func `the offset stays at the top of the document`() {
-    #expect(ReaderChrome.offsetKeepingTextInPlace(0, edgeMovedBy: 54, within: 0...9_000) == 0)
-  }
-
-  @Test func `the offset stays when pulled past the top`() {
-    #expect(ReaderChrome.offsetKeepingTextInPlace(-30, edgeMovedBy: 54, within: 0...9_000) == -30)
-  }
-
-  @Test func `the offset stays within what the view can scroll to`() {
-    #expect(
-      ReaderChrome.offsetKeepingTextInPlace(8_980, edgeMovedBy: 54, within: 0...9_000) == 9_000)
-    #expect(ReaderChrome.offsetKeepingTextInPlace(20, edgeMovedBy: -54, within: 0...9_000) == 0)
   }
 }

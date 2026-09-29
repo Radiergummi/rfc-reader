@@ -6,14 +6,13 @@ import CoreGraphics
 ///
 /// Fed by the text view's scrolls and taps. Only a scroll the reader makes can hide
 /// the bars or show them by its direction; one the app makes — a jump, a restored
-/// place, the text view keeping the text still while the bars go — moves where the
-/// next run is measured from and nothing else.
+/// place — moves where the next run is measured from and nothing else.
 public struct ReaderChrome: Equatable, Sendable {
   /// One scroll, as the text view saw it.
   public struct Scroll: Equatable, Sendable {
     /// Where the text is on screen, y growing down the document: what the reader
-    /// sees move. Not the scroll offset alone, which also changes when the bars go
-    /// and the text view grows under them while the text stays where it was.
+    /// sees move. Not `distanceFromTop`, which also changes when the bars go and
+    /// the top bar's inset with them while the text stays where it was.
     public var position: CGFloat
     /// How far the top of what is visible is below the top of the document.
     public var distanceFromTop: CGFloat
@@ -39,13 +38,10 @@ public struct ReaderChrome: Equatable, Sendable {
   /// because someone scrolling back is usually looking for them, but not so little
   /// that a finger's wobble at the end of a drag brings them back.
   public static let showDistance: CGFloat = 20
-  /// How far from either end of the document the bars may go. More than the top
-  /// bar is tall: when it goes, the text view grows up into its place and the
-  /// scroll offset falls by its height to keep the text still, and from here that
-  /// leaves the offset clear of the top, where the bars come back. More than the
-  /// bottom bar is tall as well: the reader runs under it, so when it goes the room
-  /// to scroll past the last line shrinks by its height, and nearer the end than
-  /// that the offset would land on the end, where the bars come back at once.
+  /// How near either end of the document the bars stay. More than either bar is
+  /// tall: the bars going takes their height off the insets, and so off the
+  /// distance to either end, and nearer than this that would land on the end,
+  /// where the bars come straight back.
   public static let hideFloor: CGFloat = 120
 
   public private(set) var isHidden = false
@@ -75,7 +71,8 @@ public struct ReaderChrome: Equatable, Sendable {
       restartRun()
       return
     }
-    let delta = scroll.position - previous
+    let position = scroll.position
+    let delta = position - previous
     guard delta != 0 else { return }
     let down = delta > 0
     if down != runsDown || runStart == nil {
@@ -84,10 +81,10 @@ public struct ReaderChrome: Equatable, Sendable {
     }
     guard let runStart else { return }
     if down {
-      if scroll.position - runStart >= Self.hideDistance, Self.mayHide(at: scroll), isEnabled {
+      if position - runStart >= Self.hideDistance, Self.mayHide(at: scroll), isEnabled {
         isHidden = true
       }
-    } else if runStart - scroll.position >= Self.showDistance {
+    } else if runStart - position >= Self.showDistance {
       isHidden = false
     }
   }
@@ -108,20 +105,6 @@ public struct ReaderChrome: Equatable, Sendable {
   public mutating func jumped() {
     isHidden = false
     restartRun()
-  }
-
-  /// The scroll offset that keeps the text where it is on screen when the view's
-  /// top edge moves by `edgeMove` — the top bar going or coming back — within
-  /// `range`, the offsets the view can scroll to.
-  ///
-  /// At the top of the document, or pulled past it, the offset stays: there the
-  /// text follows the edge instead, so the top of the document is still what shows
-  /// when the bar comes back, rather than a bar's height of it scrolled away.
-  public static func offsetKeepingTextInPlace(
-    _ offset: CGFloat, edgeMovedBy edgeMove: CGFloat, within range: ClosedRange<CGFloat>
-  ) -> CGFloat {
-    guard offset > range.lowerBound else { return offset }
-    return min(range.upperBound, max(range.lowerBound, offset + edgeMove))
   }
 
   private static func mayHide(at scroll: Scroll) -> Bool {

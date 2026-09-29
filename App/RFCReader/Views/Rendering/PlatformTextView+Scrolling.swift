@@ -14,15 +14,17 @@
 extension PlatformTextView {
   /// The top of the viewport, in text-container coordinates.
   ///
-  /// On macOS, the top of the part the toolbar leaves uncovered: the window's
-  /// content runs under the toolbar and the tab bar, so the clip view's own top
-  /// edge is behind them. Measured from there, a jump put its heading under the
+  /// The top of the part the bars leave uncovered. On iOS the reader runs under
+  /// the navigation bar, whose height is the top content inset
+  /// (`ReaderTextView.safeAreaInsetsDidChange`); on macOS the window's content runs
+  /// under the toolbar and the tab bar, so the clip view's own top edge is behind
+  /// them. Measured from there, a jump put its heading under the
   /// toolbar and tracking named the section scrolled past as the one being read.
   /// `scroll(toY:)` and `viewportHeight` are measured the same way, so a jump
   /// lands where tracking then reads.
   var viewportTop: CGFloat {
     #if canImport(UIKit)
-      return contentOffset.y - textContainerInset.top
+      return contentOffset.y + contentInset.top - textContainerInset.top
     #else
       return unobscuredTop - textContainerOrigin.y
     #endif
@@ -63,7 +65,7 @@ extension PlatformTextView {
 
   var viewportHeight: CGFloat {
     #if canImport(UIKit)
-      return bounds.height
+      return bounds.height - contentInset.top
     #else
       guard let clip = enclosingScrollView?.contentView else { return bounds.height }
       return clip.bounds.height - clip.contentInsets.top
@@ -86,7 +88,8 @@ extension PlatformTextView {
   func scroll(toY y: CGFloat, animated: Bool = false) {
     #if canImport(UIKit)
       let animated = animated && !UIAccessibility.isReduceMotionEnabled
-      setContentOffset(CGPoint(x: 0, y: y), animated: animated)
+      // `y` is where the uncovered viewport starts; see `viewportTop`.
+      setContentOffset(CGPoint(x: 0, y: y - contentInset.top), animated: animated)
     #else
       guard let scroll = enclosingScrollView else { return }
       let clip = scroll.contentView

@@ -196,10 +196,9 @@ struct ReaderInputs {
       textView.textDragInteraction?.isEnabled = false
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
-      // `.never`: automatic adjustment moves `contentOffset`'s origin away from the
-      // top of the content, which is what the anchor arithmetic is expressed in.
-      // SwiftUI places the view below the top bar; the bottom safe area, which the
-      // reader runs under, is `ReaderTextView.safeAreaInsetsDidChange`'s.
+      // `.never`: the insets for the bars the reader runs under are set by hand, in
+      // `ReaderTextView.safeAreaInsetsDidChange`, which keeps the place when they
+      // change; automatic adjustment would not.
       textView.contentInsetAdjustmentBehavior = .never
       textView.textContainer.lineFragmentPadding = 0
       // The coordinator sizes the container to the column; see `layOut(width:measure:)`.

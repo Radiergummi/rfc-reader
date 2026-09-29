@@ -20,6 +20,11 @@ import SwiftUI
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
     let exportDocument: (ExportFormat) -> Void
     let printDocument: () -> Void
+    /// False while reading on has put the bars away (`ReaderChrome`). The bottom
+    /// bar goes by losing its items, which dissolve in place, rather than by
+    /// `.toolbarVisibility`, which slides it off the screen; the top bar cannot, as
+    /// hiding its back button would also turn off swiping back.
+    let showsBottomBar: Bool
 
     @Environment(\.undoManager) private var undoManager
 
@@ -41,29 +46,31 @@ import SwiftUI
         moreMenu
       }
 
-      ToolbarItemGroup(placement: .bottomBar) {
-        Button {
-          press(.navigation)
-        } label: {
-          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+      if showsBottomBar {
+        ToolbarItemGroup(placement: .bottomBar) {
+          Button {
+            press(.navigation)
+          } label: {
+            Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+          }
+          // The same chord as the Mac's (#157).
+          .keyboardShortcut("i", modifiers: [.command, .option])
+
+          Button {
+            press(.info)
+          } label: {
+            Label("Info", systemImage: "info.circle")
+          }
+          .keyboardShortcut("i", modifiers: .command)
+
+          citeMenu
         }
-        // The same chord as the Mac's (#157).
-        .keyboardShortcut("i", modifiers: [.command, .option])
 
-        Button {
-          press(.info)
-        } label: {
-          Label("Info", systemImage: "info.circle")
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+
+        ToolbarItem(placement: .bottomBar) {
+          bookmarkButton
         }
-        .keyboardShortcut("i", modifiers: .command)
-
-        citeMenu
-      }
-
-      ToolbarSpacer(.flexible, placement: .bottomBar)
-
-      ToolbarItem(placement: .bottomBar) {
-        bookmarkButton
       }
     }
 

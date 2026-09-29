@@ -138,10 +138,13 @@ struct DocumentView: View {
             id: id, metadata: metadata, library: library, navigation: navigation,
             reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
             openURL: systemOpenURL, showsInspector: $showsInspector,
-            exportDocument: exportDocument(as:), printDocument: printDocument)
+            exportDocument: exportDocument(as:), printDocument: printDocument,
+            showsBottomBar: !barsHidden)
         }
-        // Both bars, which leaves the status bar and the text between them.
-        .toolbarVisibility(barsHidden ? .hidden : .automatic, for: .navigationBar, .bottomBar)
+        // The top bar, which leaves the status bar; the bottom one goes by losing
+        // its items (`DocumentToolbar.showsBottomBar`). The reader runs under both,
+        // so neither moves it.
+        .toolbarVisibility(barsHidden ? .hidden : .automatic, for: .navigationBar)
         // The original text has no reader to bring them back with a tap, and the
         // reader made afresh on the way back starts with them showing.
         .onChange(of: reader.showOriginal) { barsHidden = false }
@@ -307,11 +310,13 @@ struct DocumentView: View {
         }
       )
       #if !os(macOS)
-        // To the bottom edge of the screen, under the home indicator, rather than
-        // stopping above it at a hard edge with a blank strip below. The text view
-        // makes that strip room to scroll the last line clear of it. Vertical
-        // only: the column is derived from the width, which this leaves alone.
-        .ignoresSafeArea(.container, edges: .bottom)
+        // Under the top bar, so it is glass over the text rather than a solid
+        // strip above it, and its going moves nothing; and to the bottom edge of
+        // the screen, under the home indicator, rather than stopping above it at a
+        // hard edge with a blank strip below. The text view makes both strips
+        // insets, room to scroll the text clear of them. Vertical only: the column
+        // is derived from the width, which this leaves alone.
+        .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
         // Deep link or restored reading position.
@@ -339,7 +344,7 @@ struct DocumentView: View {
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
-      withAnimation(.snappy) { barsHidden = hidden }
+      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
     #endif
   }
 

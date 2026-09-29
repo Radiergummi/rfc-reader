@@ -11,59 +11,32 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
-    /// The reader runs under the home indicator (`DocumentView` lets it into the
-    /// bottom safe area), so the strip that area covers becomes room to scroll the
-    /// last line clear of it rather than a place the text stops at.
+    /// The reader runs under both bars and the home indicator (`DocumentView` lets
+    /// it into the vertical safe areas), so the bars are glass over the text rather
+    /// than a solid strip above it, and the bars going or coming back moves nothing:
+    /// only these insets change, and the text stays where it is. At the top the
+    /// inset keeps the header clear of the top bar; at the bottom it is room to
+    /// scroll the last line clear of the bar and the home indicator.
     ///
-    /// By hand, because `contentInsetAdjustmentBehavior` is `.never`: automatic
-    /// adjustment would move `contentOffset`'s origin away from the top of the
-    /// content, which is what the anchor arithmetic is expressed in. Only the
-    /// bottom is set here, and a bottom inset leaves that origin where it is.
+    /// By hand, because `contentInsetAdjustmentBehavior` is `.never`. The top inset
+    /// moves `contentOffset`'s origin, so the scroll arithmetic asks for the
+    /// viewport through `PlatformTextView+Scrolling`, which measures from the inset's
+    /// edge, as the Mac does from the toolbar's. The offset stays when the inset
+    /// changes, except at the top of the document, which stays at the top — the
+    /// inset arriving on the first layout included.
     override func safeAreaInsetsDidChange() {
       super.safeAreaInsetsDidChange()
-      guard contentInset.bottom != safeAreaInsets.bottom else { return }
-      contentInset.bottom = safeAreaInsets.bottom
-      verticalScrollIndicatorInsets.bottom = safeAreaInsets.bottom
-    }
-
-    /// Where the view's top edge is on screen, or nil outside a window. Measured
-    /// against the root view rather than the window: a sheet scales the view behind
-    /// it down, which moves its edge in the window without moving the text.
-    var topEdge: CGFloat? {
-      guard let window else { return nil }
-      return convert(bounds.origin, to: window.rootViewController?.view ?? window).y
-    }
-
-    /// The top edge and the width at the last layout; see `keepTextInPlace()`.
-    private var placed: (top: CGFloat, width: CGFloat)?
-
-    override func layoutSubviews() {
-      super.layoutSubviews()
-      keepTextInPlace()
-    }
-
-    /// When the reader's bars go on iPhone (`ReaderChrome`), SwiftUI grows the
-    /// reader up into the top bar's place, and the text would move up with the
-    /// view's edge; when they come back, down again. The scroll offset moves by as
-    /// much instead, so the text stays where it is and only the strip the bar left
-    /// is new; at the top of the document the text follows the edge instead (see
-    /// `ReaderChrome.offsetKeepingTextInPlace`). Not when the width changed as well
-    /// — a rotation — which re-wraps and restores the place its own way
-    /// (`RFCTextViewCoordinator.layOut`).
-    private func keepTextInPlace() {
-      guard let top = topEdge else {
-        placed = nil
-        return
+      let insets = safeAreaInsets
+      if contentInset.top != insets.top {
+        let atTop = contentOffset.y <= -contentInset.top
+        contentInset.top = insets.top
+        verticalScrollIndicatorInsets.top = insets.top
+        if atTop { contentOffset.y = -insets.top }
       }
-      let previous = placed
-      placed = (top, bounds.width)
-      guard let previous, previous.width == bounds.width, previous.top != top else { return }
-      let lowest = -adjustedContentInset.top
-      let highest = max(lowest, contentSize.height + adjustedContentInset.bottom - bounds.height)
-      let y = ReaderChrome.offsetKeepingTextInPlace(
-        contentOffset.y, edgeMovedBy: top - previous.top, within: lowest...highest)
-      guard y != contentOffset.y else { return }
-      contentOffset.y = y
+      if contentInset.bottom != insets.bottom {
+        contentInset.bottom = insets.bottom
+        verticalScrollIndicatorInsets.bottom = insets.bottom
+      }
     }
 
     /// The quote for a range of the text, from the coordinator (#186).

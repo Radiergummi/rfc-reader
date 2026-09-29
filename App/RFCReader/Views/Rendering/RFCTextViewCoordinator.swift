@@ -759,16 +759,15 @@ final class RFCTextViewCoordinator: NSObject {
       reportChrome()
     }
 
-    /// The scroll as `ReaderChrome` wants it. The position is the offset less the
-    /// view's top edge, which stays put while `ReaderTextView.keepTextInPlace()`
-    /// moves both for a bar coming or going.
+    /// The scroll as `ReaderChrome` wants it. The position is the offset alone,
+    /// which stays put while the bars going or coming back changes the insets
+    /// (`ReaderTextView.safeAreaInsetsDidChange`).
     private func followChrome(_ scrollView: UIScrollView) {
-      guard let top = (scrollView as? ReaderTextView)?.topEdge else { return }
       let offset = scrollView.contentOffset.y
       let insets = scrollView.adjustedContentInset
       chrome.scrolled(
         ReaderChrome.Scroll(
-          position: offset - top,
+          position: offset,
           distanceFromTop: offset + insets.top,
           distanceToEnd: scrollView.contentSize.height + insets.bottom
             - scrollView.bounds.height - offset,
