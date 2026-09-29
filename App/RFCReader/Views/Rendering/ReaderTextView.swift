@@ -34,13 +34,10 @@ import RFCReaderKit
     func copyAsQuote() {
       guard let quote = quoteSelection(selectedRange) else { return }
       var item: [String: Any] = [
-        UTType.plainText.identifier: quote.markdown,
-        "net.daringfireball.markdown": quote.markdown,
+        UTType.utf8PlainText.identifier: quote.markdown,
+        QuoteCitation.Quote.markdownType: quote.markdown,
       ]
-      if let rtf = try? quote.rich.data(
-        from: NSRange(location: 0, length: quote.rich.length),
-        documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-      {
+      if let rtf = quote.rtf {
         item[UTType.rtf.identifier] = rtf
       }
       UIPasteboard.general.items = [item]
@@ -95,15 +92,10 @@ import RFCReaderKit
       pasteboard.clearContents()
       pasteboard.setString(quote.markdown, forType: .string)
       pasteboard.setString(
-        quote.markdown, forType: NSPasteboard.PasteboardType("net.daringfireball.markdown"))
-      if let rtf = quote.rich.rtf(from: NSRange(location: 0, length: quote.rich.length)) {
+        quote.markdown, forType: NSPasteboard.PasteboardType(QuoteCitation.Quote.markdownType))
+      if let rtf = quote.rtf {
         pasteboard.setData(rtf, forType: .rtf)
       }
-    }
-
-    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-      if menuItem.action == #selector(copyAsQuote(_:)) { return selectedRange().length > 0 }
-      return super.validateMenuItem(menuItem)
     }
 
     /// Look Up from the menu or the keyboard: a reference under the selection is
@@ -220,34 +212,34 @@ import RFCReaderKit
     /// "Copy Figure" for the figure under the click, or else the one the selection
     /// holds (issue #15). First in the menu, because on a figure it is what the
     /// menu was opened for. Which figure and what it copies are `FigureCopy`'s.
+    /// "Copy as Quote" right after Copy where there is a selection (#186).
     override func menu(for event: NSEvent) -> NSMenu? {
       let standard = super.menu(for: event)
       let text = attributedString()
       let clicked = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+      let figure =
+        FigureCopy.figure(at: clicked, in: text) ?? FigureCopy.figure(in: selectedRange(), of: text)
+      let quotes = selectedRange().length > 0
+      guard figure != nil || quotes else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
       let result = (standard?.copy() as? NSMenu) ?? NSMenu()
-      // Copy as Quote, right after Copy where there is a selection (#186).
-      if selectedRange().length > 0 {
+      if quotes {
         let quote = NSMenuItem(
           title: "Copy as Quote", action: #selector(copyAsQuote(_:)), keyEquivalent: "")
         quote.target = self
         let copyIndex = result.items.firstIndex { $0.action == #selector(NSText.copy(_:)) }
         result.insertItem(quote, at: copyIndex.map { $0 + 1 } ?? result.items.count)
       }
-      guard
-        let figure = FigureCopy.figure(at: clicked, in: text)
-          ?? FigureCopy.figure(in: selectedRange(), of: text)
-      else {
-        return result
+      if let figure {
+        let item = NSMenuItem(
+          title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = figure
+        if !result.items.isEmpty {
+          result.insertItem(.separator(), at: 0)
+        }
+        result.insertItem(item, at: 0)
       }
-      let item = NSMenuItem(
-        title: "Copy Figure", action: #selector(copyFigure(_:)), keyEquivalent: "")
-      item.target = self
-      item.representedObject = figure
-      if !result.items.isEmpty {
-        result.insertItem(.separator(), at: 0)
-      }
-      result.insertItem(item, at: 0)
       return result
     }
 

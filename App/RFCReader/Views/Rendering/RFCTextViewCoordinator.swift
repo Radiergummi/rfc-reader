@@ -87,15 +87,11 @@ final class RFCTextViewCoordinator: NSObject {
   var sectionNumbers: [String: String] = [:]
 
   /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
-  /// or nil when nothing is selected (#186). Which section and what it says are
-  /// `QuoteCitation`'s.
+  /// or nil when nothing is selected (#186); see `QuoteCitation`.
   func quote(of range: NSRange) -> QuoteCitation.Quote? {
-    guard let documentID, let built, range.length > 0, NSMaxRange(range) <= built.text.length
-    else { return nil }
+    guard let documentID, let built else { return nil }
     return QuoteCitation.quote(
-      of: built.text.attributedSubstring(from: range), document: documentID,
-      section: QuoteCitation.section(
-        at: range.location, anchors: built.anchors, numbers: sectionNumbers))
+      of: range, in: built, document: documentID, sectionNumbers: sectionNumbers)
   }
   /// See `RFCTextView.commitsOnClick`.
   var commitsOnClick: (() -> Void)?

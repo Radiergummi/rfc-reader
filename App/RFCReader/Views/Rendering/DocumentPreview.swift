@@ -36,6 +36,8 @@ struct DocumentPreview: View {
     let built: BuiltDocument
     /// What a citation of a bibliography entry in the preview previews (#198).
     let bibliography: [ReferenceGroup]
+    /// What Copy as Quote cites a selection in the preview from (#186).
+    let sectionNumbers: [String: String]
   }
 
   var body: some View {
@@ -74,6 +76,7 @@ struct DocumentPreview: View {
       RFCTextView(
         built: loaded.built,
         bibliography: loaded.bibliography,
+        sectionNumbers: loaded.sectionNumbers,
         measure: measure,
         documentID: id,
         commitsOnClick: commit,
@@ -107,7 +110,8 @@ struct DocumentPreview: View {
         document,
         style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
       loaded = Loaded(
-        document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
+        document: document, built: built, bibliography: ReferenceGroup.groups(in: document),
+        sectionNumbers: document.sectionNumbers)
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {

@@ -38,27 +38,59 @@ struct QuoteCitationTests {
     #expect(QuoteCitation.section(at: 20, anchors: anchors, numbers: numbers) == nil)
   }
 
+  /// A range of the reader's text is quoted from its own section, and one that
+  /// selects nothing, or runs past the text, quotes nothing.
+  @Test func `a range of the built text is quoted from its section`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Quoted", in: built.text)
+    let numbers = ["section-1": "1"]
+    let quote = try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: 7), in: built, document: .rfc(9110),
+        sectionNumbers: numbers))
+    #expect(
+      quote.markdown.hasSuffix(
+        "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
+    #expect(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: 0), in: built, document: .rfc(9110),
+        sectionNumbers: numbers) == nil)
+    #expect(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: built.text.length), in: built, document: .rfc(9110),
+        sectionNumbers: numbers) == nil)
+  }
+
   // MARK: What goes on the pasteboard
 
-  @Test func `the markdown quotes every line and cites the section`() {
+  @Test func `the markdown quotes the selection and cites the section`() {
     let quote = QuoteCitation.quote(
       of: NSAttributedString(string: "A sender MUST NOT generate this.\nIt is optional."),
       document: .rfc(9110), section: "8.3")
     #expect(
       quote.markdown == """
         > A sender MUST NOT generate this.
+        >
         > It is optional.
 
         — [RFC 9110, Section 8.3](https://www.rfc-editor.org/rfc/rfc9110#section-8.3)
         """)
   }
 
-  /// A blank line inside the quote stays inside it, as `>` alone; the selection's
-  /// own trailing line break adds no empty quoted line.
-  @Test func `blank and trailing lines are kept inside the quote`() {
-    let quote = QuoteCitation.quote(
-      of: NSAttributedString(string: "First paragraph.\n\nSecond paragraph.\n"),
-      document: .rfc(9110), section: nil)
+  /// The reader ends a paragraph with one line break and draws the gap between
+  /// paragraphs as spacing, so every paragraph of the selection is quoted as one of
+  /// its own, or Markdown runs them together.
+  @Test func `paragraphs stay apart in the quote`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "First paragraph.")),
+        .paragraph(Paragraph(text: "Second paragraph."))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "First", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
     #expect(
       quote.markdown == """
         > First paragraph.
@@ -67,6 +99,34 @@ struct QuoteCitationTests {
 
         — [RFC 9110](https://www.rfc-editor.org/info/rfc9110)
         """)
+    #expect(quote.rich.string == "First paragraph.\n\nSecond paragraph.\n\n— RFC 9110")
+  }
+
+  /// A figure's lines are its layout: fenced, so Markdown neither reflows them nor
+  /// collapses their spaces.
+  @Test func `a figure keeps its lines in a fence`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "As drawn:")),
+        .preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n\n+--+"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "As drawn", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        """
+        > As drawn:
+        >
+        > ```
+        > +--+
+        > |  |
+        >
+        > +--+
+        > ```
+
+        """))
   }
 
   @Test func `an appendix is cited as one`() {

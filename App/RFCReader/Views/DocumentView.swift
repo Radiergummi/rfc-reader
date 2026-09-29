@@ -525,10 +525,7 @@ struct DocumentView: View {
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
-      sectionNumbers = Dictionary(
-        loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
-        uniquingKeysWith: { first, _ in first }
-      )
+      sectionNumbers = loaded.sectionNumbers
       document = loaded
       deriveInfo()
       // Here rather than on appearing: once per opening, since each is a view of

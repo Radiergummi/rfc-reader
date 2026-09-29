@@ -49,7 +49,7 @@ struct RFCTextView: View {
   init(
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
-    sectionNumbers: [String: String] = [:],
+    sectionNumbers: [String: String],
     measure: MeasurePreference,
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
