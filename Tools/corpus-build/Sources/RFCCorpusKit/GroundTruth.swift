@@ -84,17 +84,8 @@ public enum GroundTruth {
         falseNegatives: lhs.falseNegatives + rhs.falseNegatives)
     }
 
-    private enum CodingKeys: String, CodingKey {
-      case truePositives, falsePositives, falseNegatives, precision, recall
-    }
-
     public func encode(to encoder: any Encoder) throws {
-      var container = encoder.container(keyedBy: CodingKeys.self)
-      try container.encode(truePositives, forKey: .truePositives)
-      try container.encode(falsePositives, forKey: .falsePositives)
-      try container.encode(falseNegatives, forKey: .falseNegatives)
-      try container.encodeIfPresent(precision, forKey: .precision)
-      try container.encodeIfPresent(recall, forKey: .recall)
+      try EncodedCounts(self).encode(to: encoder)
     }
   }
 
@@ -186,6 +177,24 @@ public enum GroundTruth {
       counts[block.kind]!.falseNegatives += left
     }
     return counts
+  }
+}
+
+/// `GroundTruth.Counts` as score.json spells it: its counts, and the ratios it
+/// computes from them.
+private struct EncodedCounts: Encodable {
+  var truePositives: Int
+  var falsePositives: Int
+  var falseNegatives: Int
+  var precision: Double?
+  var recall: Double?
+
+  init(_ counts: GroundTruth.Counts) {
+    truePositives = counts.truePositives
+    falsePositives = counts.falsePositives
+    falseNegatives = counts.falseNegatives
+    precision = counts.precision
+    recall = counts.recall
   }
 }
 
