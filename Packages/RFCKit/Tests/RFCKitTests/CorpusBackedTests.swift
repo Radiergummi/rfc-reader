@@ -332,6 +332,29 @@ struct CorpusBackedOmittedBoilerplateTests {
   }
 }
 
+@Suite("Corpus-backed: packet diagrams", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPacketDiagramTests {
+  /// RFC 791's IPv4 header, as the parser hands it over: every field, with its
+  /// width, the three-bit Flags included.
+  @Test func `the IPv4 header in RFC 791 is recognized with every field`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc791"))
+    let artwork = try #require(
+      document.blocks.lazy.compactMap { block -> String? in
+        guard case .preformatted(let content) = block, content.text.contains("Total Length")
+        else { return nil }
+        return content.text
+      }.first)
+    let diagram = try #require(PacketDiagram.recognize(artwork))
+    #expect(
+      diagram.fields.map(\.name) == [
+        "Version", "IHL", "Type of Service", "Total Length", "Identification", "Flags",
+        "Fragment Offset", "Time to Live", "Protocol", "Header Checksum", "Source Address",
+        "Destination Address", "Options", "Padding",
+      ])
+    #expect(diagram.fields.map(\.bitWidth) == [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32, 24, 8])
+  }
+}
+
 @Suite("Corpus-backed: defined terms", .enabled(if: CorpusText.isXMLAvailable))
 struct CorpusBackedDefinedTermsTests {
   /// RFC 9110 marks a definition with a primary index entry in the paragraph that

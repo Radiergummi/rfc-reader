@@ -80,7 +80,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1122 rfc1140 rfc1178 rfc1198 rfc1343 rfc1415 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc2569 rfc2910 rfc355 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc7231 rfc783 rfc793 rfc8011
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1122 rfc1140 rfc1178 rfc1198 rfc1343 rfc1415 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc2569 rfc2910 rfc355 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc7231 rfc783 rfc791 rfc793 rfc8011
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
 
