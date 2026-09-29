@@ -72,6 +72,17 @@ struct ReaderChromeTests {
     #expect(reader.chrome.isHidden)
   }
 
+  /// Hiding the bottom bar takes its height off the room to scroll past the last
+  /// line, so nearer the end than that it would land on the end and show them again.
+  @Test func `nothing hides near the end of the document`() {
+    var reader = Reader()
+    reader.scroll(to: 10_000 - ReaderChrome.hideFloor - ReaderChrome.hideDistance, byFinger: false)
+    reader.scroll(by: ReaderChrome.hideDistance + 1)
+    #expect(!reader.chrome.isHidden)
+    reader.chrome.tapped()
+    #expect(!reader.chrome.isHidden)
+  }
+
   @Test func `scrolling back shows them`() {
     var reader = Reader.reading()
     reader.scroll(by: 100)
@@ -165,5 +176,28 @@ struct ReaderChromeTests {
     reader.scroll(by: 500)
     reader.chrome.tapped()
     #expect(!reader.chrome.isHidden)
+  }
+}
+
+/// The scroll offset that keeps the text still while the top bar goes or comes back.
+@Suite("Reader chrome: keeping the text in place")
+struct ReaderChromeOffsetTests {
+  @Test func `the offset moves with the edge`() {
+    #expect(ReaderChrome.offsetKeepingTextInPlace(500, edgeMovedBy: -54, within: 0...9_000) == 446)
+    #expect(ReaderChrome.offsetKeepingTextInPlace(446, edgeMovedBy: 54, within: 0...9_000) == 500)
+  }
+
+  @Test func `the offset stays at the top of the document`() {
+    #expect(ReaderChrome.offsetKeepingTextInPlace(0, edgeMovedBy: 54, within: 0...9_000) == 0)
+  }
+
+  @Test func `the offset stays when pulled past the top`() {
+    #expect(ReaderChrome.offsetKeepingTextInPlace(-30, edgeMovedBy: 54, within: 0...9_000) == -30)
+  }
+
+  @Test func `the offset stays within what the view can scroll to`() {
+    #expect(
+      ReaderChrome.offsetKeepingTextInPlace(8_980, edgeMovedBy: 54, within: 0...9_000) == 9_000)
+    #expect(ReaderChrome.offsetKeepingTextInPlace(20, edgeMovedBy: -54, within: 0...9_000) == 0)
   }
 }

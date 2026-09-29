@@ -39,10 +39,13 @@ public struct ReaderChrome: Equatable, Sendable {
   /// because someone scrolling back is usually looking for them, but not so little
   /// that a finger's wobble at the end of a drag brings them back.
   public static let showDistance: CGFloat = 20
-  /// How far into the document the bars first may go. More than the top bar is
-  /// tall: when it goes, the text view grows up into its place and the scroll
-  /// offset falls by its height to keep the text still, and from here that leaves
-  /// the offset clear of the top, where the bars come back.
+  /// How far from either end of the document the bars may go. More than the top
+  /// bar is tall: when it goes, the text view grows up into its place and the
+  /// scroll offset falls by its height to keep the text still, and from here that
+  /// leaves the offset clear of the top, where the bars come back. More than the
+  /// bottom bar is tall as well: the reader runs under it, so when it goes the room
+  /// to scroll past the last line shrinks by its height, and nearer the end than
+  /// that the offset would land on the end, where the bars come back at once.
   public static let hideFloor: CGFloat = 120
 
   public private(set) var isHidden = false
@@ -107,8 +110,22 @@ public struct ReaderChrome: Equatable, Sendable {
     restartRun()
   }
 
+  /// The scroll offset that keeps the text where it is on screen when the view's
+  /// top edge moves by `edgeMove` — the top bar going or coming back — within
+  /// `range`, the offsets the view can scroll to.
+  ///
+  /// At the top of the document, or pulled past it, the offset stays: there the
+  /// text follows the edge instead, so the top of the document is still what shows
+  /// when the bar comes back, rather than a bar's height of it scrolled away.
+  public static func offsetKeepingTextInPlace(
+    _ offset: CGFloat, edgeMovedBy edgeMove: CGFloat, within range: ClosedRange<CGFloat>
+  ) -> CGFloat {
+    guard offset > range.lowerBound else { return offset }
+    return min(range.upperBound, max(range.lowerBound, offset + edgeMove))
+  }
+
   private static func mayHide(at scroll: Scroll) -> Bool {
-    scroll.distanceFromTop >= hideFloor && scroll.distanceToEnd > 0
+    scroll.distanceFromTop >= hideFloor && scroll.distanceToEnd >= hideFloor
   }
 
   private mutating func restartRun() {

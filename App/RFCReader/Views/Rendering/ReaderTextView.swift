@@ -46,8 +46,10 @@ import RFCReaderKit
     /// reader up into the top bar's place, and the text would move up with the
     /// view's edge; when they come back, down again. The scroll offset moves by as
     /// much instead, so the text stays where it is and only the strip the bar left
-    /// is new. Not when the width changed as well — a rotation — which re-wraps and
-    /// restores the place its own way (`RFCTextViewCoordinator.layOut`).
+    /// is new; at the top of the document the text follows the edge instead (see
+    /// `ReaderChrome.offsetKeepingTextInPlace`). Not when the width changed as well
+    /// — a rotation — which re-wraps and restores the place its own way
+    /// (`RFCTextViewCoordinator.layOut`).
     private func keepTextInPlace() {
       guard let top = topEdge else {
         placed = nil
@@ -58,7 +60,8 @@ import RFCReaderKit
       guard let previous, previous.width == bounds.width, previous.top != top else { return }
       let lowest = -adjustedContentInset.top
       let highest = max(lowest, contentSize.height + adjustedContentInset.bottom - bounds.height)
-      let y = min(highest, max(lowest, contentOffset.y + top - previous.top))
+      let y = ReaderChrome.offsetKeepingTextInPlace(
+        contentOffset.y, edgeMovedBy: top - previous.top, within: lowest...highest)
       guard y != contentOffset.y else { return }
       contentOffset.y = y
     }

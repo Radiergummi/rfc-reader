@@ -139,9 +139,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// The tap that shows and hides the bars, told apart from the text view's own
     /// recognizers in the gesture delegate.
     weak var chromeTap: UITapGestureRecognizer?
-    /// Whether the text had a selection when the tap began: that tap clears it, and
-    /// is not one for the bars.
-    private var tapClearsSelection = false
+    /// Whether the text had a selection when the tap began, or was still moving
+    /// after a flick: that tap clears the selection or stops the scroll, and is not
+    /// one for the bars.
+    private var tapIsNotForTheBars = false
   #endif
 
   /// Where section tracking last put the reader, written the moment it is computed.
@@ -785,9 +786,10 @@ final class RFCTextViewCoordinator: NSObject {
 
     /// A tap on the text brings the bars back, or puts them away. Not a tap on a
     /// link or a chip, which follows it; not one on the header, whose author chips
-    /// and banner links are buttons; and not one that clears a selection.
+    /// and banner links are buttons; and not one that clears a selection or stops
+    /// a flick.
     @objc func tappedText(_ tap: UITapGestureRecognizer) {
-      guard tap.state == .ended, !tapClearsSelection, let textView else { return }
+      guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
       let point = tap.location(in: textView)
       guard point.y >= textView.textContainerInset.top else { return }
       if let position = textView.closestPosition(to: point) {
@@ -828,8 +830,8 @@ final class RFCTextViewCoordinator: NSObject {
     func gestureRecognizer(
       _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
     ) -> Bool {
-      if gestureRecognizer === chromeTap {
-        tapClearsSelection = (textView?.selectedRange.length ?? 0) > 0
+      if gestureRecognizer === chromeTap, let textView {
+        tapIsNotForTheBars = textView.selectedRange.length > 0 || textView.isDecelerating
       }
       return true
     }
