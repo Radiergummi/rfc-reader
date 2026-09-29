@@ -67,8 +67,9 @@ final class RFCTextViewCoordinator: NSObject {
   var headerIdentity: DocumentHeaderView.Identity?
 
   /// Retained for the same reason as `headerHost`: the iOS long-press preview's
-  /// hosting controller must outlive the `UITargetedPreview` that wraps its view.
-  var referencePreviewHost: PlatformHostingController<ReferencePreview>?
+  /// hosting controller — a card's or a document's — must outlive the
+  /// `UITargetedPreview` that wraps its view.
+  var referencePreviewHost: PlatformHostingController<AnyView>?
 
   /// Injected explicitly: a hosting controller the coordinator builds — the
   /// reference preview, on both platforms — sits outside SwiftUI's environment
@@ -569,28 +570,58 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction
     ) -> UIAction? {
-      guard case .link(let url) = textItem.content else { return defaultAction }
-      // A tap carries no modifiers. Opening a reference elsewhere is the long-press
+      // A link the reader does not own, a web page, is UIKit's to open.
+      guard case .link(let url) = textItem.content, let documentID,
+        LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
+      else { return defaultAction }
+      // An action, not the link followed here and nil returned: UIKit asks for the
+      // primary action as a long press begins too, so following it here navigated
+      // before the preview could open (#29). Performed, it is the tap — on the
+      // link, or on the long press's preview, which is the preview's commit. A tap
+      // carries no modifiers. Opening a reference elsewhere is the long-press
       // menu's job on this platform, not a chord's.
-      return onLink(url, .here) ? nil : defaultAction
+      return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+        _ = self?.onLink(url, .here)
+      }
     }
 
-    /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
-    /// carrying `.rfcReference` gets the extra preview card above it.
+    /// The long-press preview: Safari's link preview, for documents (#29). A
+    /// reference to an RFC, or to a place in this one, previews that document at
+    /// that place; a bibliography entry that names no RFC gets its card. The
+    /// `defaultMenu` (Open, Copy, etc.) still shows beside it, and a tap on the
+    /// preview performs the item's primary action, which follows the reference.
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
-      guard let box = reference(at: textItem), let preview = preview(for: box.reference) else {
-        return .init(menu: defaultMenu)
+      guard case .link(let url) = textItem.content, let library, let documentID,
+        let box = reference(at: textItem),
+        let target = LinkPreview.resolve(url, from: documentID, in: library.index)
+      else { return .init(menu: defaultMenu) }
+      let host: UIHostingController<AnyView>
+      switch target {
+      case .card:
+        guard let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
+        host = UIHostingController(rootView: AnyView(preview))
+        // Sized here, the way the header host is in `layOut`: the preview is shown
+        // at its view's own size, and a hosting controller's view is not sized to
+        // its content until something lays it out.
+        host.view.frame.size = host.sizeThatFits(
+          in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
+      case .document(let id, let place):
+        // Measured against the window, not the text view: the preview is shown
+        // over the whole screen, whatever the reader's own width.
+        let screen = textView.window?.bounds.size ?? textView.bounds.size
+        let size = LinkPreview.documentSize(fitting: screen)
+        // The commit is the tap, performed as the primary action; nothing in a
+        // context menu's preview is clicked.
+        let preview = DocumentPreview(library: library, id: id, place: place, size: size) {}
+        // The preview's reader asks the environment for the library, and a hosting
+        // controller is outside every environment chain.
+        host = UIHostingController(rootView: AnyView(preview.environment(library)))
+        host.view.frame.size = size
       }
-      let host = UIHostingController(rootView: preview)
-      // Sized here, the way the header host is in `layOut`: the preview is shown
-      // at its view's own size, and a hosting controller's view is not sized to
-      // its content until something lays it out.
-      host.view.frame.size = host.sizeThatFits(
-        in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
-      // Opaque, as a context-menu preview's view is expected to be: the card has no
-      // background of its own, because on macOS the popover supplies one.
+      // Opaque, as a context-menu preview's view is expected to be: neither preview
+      // has a background of its own, because on macOS the popover supplies one.
       host.view.backgroundColor = .systemBackground
       referencePreviewHost = host
       return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
@@ -846,7 +877,7 @@ final class RFCTextViewCoordinator: NSObject {
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: preview.environment(library))
-      present(host, size: DocumentPreview.size, at: rect)
+      present(host, size: LinkPreview.documentSize, at: rect)
       isShowingDocumentPreview = true
     }
 

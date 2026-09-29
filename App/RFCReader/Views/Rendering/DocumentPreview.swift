@@ -2,23 +2,24 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// The document a reference names, as a force click previews it on macOS: Safari's
-/// link preview, for RFCs (#29). iOS's long press still shows the card.
+/// The document a reference names, as a force click (macOS) or a long press (iOS)
+/// previews it: Safari's link preview, for RFCs (#29).
 ///
 /// A reader of its own, not a picture of one — its own `RFCTextView`, its own text
 /// storage built by `DocumentTextBuilder` at the preview's width — so it reads and
 /// scrolls like the reader does, opened at the place the reference names. Links
 /// inside it are not followed: a click anywhere in it is the commit, which `commit`
-/// turns into opening that place in the reader underneath. The reader's own body
+/// turns into opening that place in the reader underneath. On iOS a context menu's
+/// preview takes no touches, and UIKit's tap on it is the commit instead. The reader's own body
 /// stays one text storage; this lives in a popover beside it.
 struct DocumentPreview: View {
   let library: LibraryModel
   let id: DocumentID
   /// A section number or an anchor, or nil for the top.
   let place: String?
+  /// Fixed while the preview is up: the document is built at its column.
+  var size = LinkPreview.documentSize
   let commit: () -> Void
-
-  static let size = CGSize(width: 560, height: 620)
 
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("underlineLinks") private var underlineLinks = false
@@ -45,7 +46,7 @@ struct DocumentPreview: View {
       content
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(width: Self.size.width, height: Self.size.height)
+    .frame(width: size.width, height: size.height)
     .task { await load() }
   }
 
@@ -102,7 +103,7 @@ struct DocumentPreview: View {
   private func load() async {
     do {
       let document = try await library.document(for: id)
-      let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
+      let column = ReaderLayout.column(forWidth: size.width, measure: measure)
       let built = await DocumentView.build(
         document,
         style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))

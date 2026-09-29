@@ -63,7 +63,7 @@ struct LinkPreviewTests {
   /// macOS's popover gets the whole preview; a phone's context menu gets what its
   /// screen leaves beside the gutters, and room under it for the menu.
   @Test func `the document preview is its full size where it fits`() {
-    let large = CGSize(width: 1_200, height: 1_000)
+    let large = CGSize(width: 1_200, height: 1_200)
     #expect(LinkPreview.documentSize(fitting: large) == LinkPreview.documentSize)
   }
 
