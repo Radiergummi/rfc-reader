@@ -1,0 +1,52 @@
+import Foundation
+import Testing
+
+@testable import RFCKit
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+@Suite("Revisions client")
+struct RevisionsClientTests {
+  /// One answer for every request.
+  private struct Answer: HTTPTransport {
+    let status: Int
+    let body: Data
+
+    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+      (body, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    }
+  }
+
+  private let file = RFCRevisions(
+    generatedAt: Date(timeIntervalSince1970: 1_790_000_000), revisions: [:])
+
+  @Test func `a published file is decoded, and its bytes come with it`() async throws {
+    let data = try file.encoded()
+    let fetched = try await RevisionsClient(transport: Answer(status: 200, body: data)).fetch()
+    #expect(fetched.revisions == file)
+    #expect(fetched.data == data)
+  }
+
+  /// `--clobber` deletes the asset before it uploads the new one.
+  @Test func `a missing file is an error, not an empty file`() async throws {
+    await #expect(throws: RFCEditorClient.ClientError.self) {
+      try await RevisionsClient(transport: Answer(status: 404, body: Data())).fetch()
+    }
+  }
+
+  @Test func `a file of an unknown version is an error`() async throws {
+    let json = String(decoding: try file.encoded(), as: UTF8.self)
+      .replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 2")
+    await #expect(throws: RFCRevisions.VersionError.unknown(2)) {
+      try await RevisionsClient(transport: Answer(status: 200, body: Data(json.utf8))).fetch()
+    }
+  }
+
+  @Test func `the file is fetched from the revisions release`() {
+    #expect(
+      RevisionsClient.url.absoluteString
+        == "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/revisions.json")
+  }
+}
