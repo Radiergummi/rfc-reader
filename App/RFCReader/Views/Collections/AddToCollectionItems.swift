@@ -35,7 +35,10 @@ struct AddToCollectionItems: View {
       } else {
         navigation.collectionEditor = .create(adding: document)
       }
-    default:
+    // Cite's and More's, which these items never offer. Spelled out rather than a
+    // `default`, so an action added to the menus has to be placed here too.
+    case .copyCitation, .copySectionLink, .toggleOriginalText, .openInfoPage, .openErrata,
+      .openDatatracker, .openPrecedingDraft:
       break
     }
   }
