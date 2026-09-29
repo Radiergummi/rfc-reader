@@ -97,14 +97,14 @@ struct SearchQueryTests {
     #expect(try completions("group:HT") == ["wg:httpbis"])
   }
 
-  /// "NON WORKING GROUP" names documents in the index; only a quoted value can
-  /// spell it, so completion writes one.
   /// "NON WORKING GROUP" is where the index files individual submissions, not a
   /// group: it has more documents than any group here, and is offered after them all.
   @Test func `the non-working-group bucket is offered last`() throws {
     #expect(try completions("wg:").last == #"wg:"non working group""#)
   }
 
+  /// "NON WORKING GROUP" names documents in the index; only a quoted value can
+  /// spell it, so completion writes one.
   @Test func `a working group with a space in its name is offered in quotes`() throws {
     #expect(try completions("wg:").contains(#"wg:"non working group""#))
     #expect(try completions("cache wg:no") == [#"cache wg:"non working group""#])

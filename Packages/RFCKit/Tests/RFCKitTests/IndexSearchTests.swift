@@ -60,6 +60,12 @@ struct IndexSearchTests {
     #expect(parsed.text == #"cache wg:""#)
   }
 
+  /// A space typed inside the quotes, before or after the value, is not part of it.
+  @Test func `a quoted value loses the spaces at its edges`() {
+    #expect(IndexSearch.parseQuery(#"author:" "#).filters.author == nil)
+    #expect(IndexSearch.parseQuery(#"wg:"httpbis ""#).filters.workingGroup == "httpbis")
+  }
+
   /// The query is being typed: the closing quote has not arrived yet.
   @Test func `an unclosed quote runs to the end of the query`() {
     let parsed = IndexSearch.parseQuery(#"cache author:"Roy Fiel"#)

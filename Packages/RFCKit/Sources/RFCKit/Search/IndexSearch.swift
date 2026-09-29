@@ -79,7 +79,7 @@ public struct IndexSearch: Sendable {
         continue
       }
       let key = qualifier.key.lowercased()
-      let value = SearchQuery.unquoted(qualifier.value)
+      let value = SearchQuery.unquoted(qualifier.value).trimmingCharacters(in: .whitespaces)
       // `wg:"` is still being typed; like `wg:`, it is free text until it has a value.
       guard !value.isEmpty else {
         words.append(token)
@@ -286,7 +286,7 @@ struct AuthorName: Sendable {
 
   /// The leading words that are initials, "J.K." or "SN", are the given names; the
   /// rest is the surname, "Le Faucheur" or "St. Johns". A name that is one word, or
-  /// an organisation's ("RFC Editor", "IAB and IESG"), is all surname.
+  /// an organization's ("RFC Editor", "IAB and IESG"), is all surname.
   init(_ name: String) {
     let words = name.split(separator: " ")
     let given = words.dropLast().prefix(while: Self.isInitials)
