@@ -149,9 +149,8 @@ actor DocumentStore {
   private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
     async throws -> RFCEditorClient.FetchedDocument
   {
-    let signpostID = signposter.makeSignpostID()
     let interval = signposter.beginInterval(
-      "Fetch document", id: signpostID, "\(id.displayName, privacy: .public)")
+      "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Fetch document", interval) }
     let fetched = try await client.fetchPreferredDocument(
       id, availableFormats: formats.isEmpty ? nil : formats)

@@ -324,11 +324,17 @@ final class RFCTextViewCoordinator: NSObject {
   /// Ends the layout interval `beginLayout()` began: when the last slice lands,
   /// when a newer layout replaces it before then, or when a slice finds nothing
   /// left to lay out, so a trace shows a layout that stopped ending where it
-  /// stopped rather than never ending.
+  /// stopped rather than never ending. `deinit` covers the last way it stops.
   private func endLayoutInterval() {
     guard let layoutInterval else { return }
     signposter.endInterval("Lay out document", layoutInterval)
     self.layoutInterval = nil
+  }
+
+  /// A tab or preview closed mid-layout takes the coordinator with it, and the
+  /// layout task's `[weak self]` loop then ends without a word.
+  deinit {
+    if let layoutInterval { signposter.endInterval("Lay out document", layoutInterval) }
   }
 
   // MARK: - Geometry
