@@ -650,9 +650,11 @@ final class RFCTextViewCoordinator: NSObject {
       let container = UIView(frame: host.view.frame)
       host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       container.addSubview(host.view)
-      // Untitled: UIKit titles the default menu with the link, which for a
-      // reference is the reader's own `rfc://` URL, and the preview names it better.
-      let menu = UIMenu(title: "", options: defaultMenu.options, children: defaultMenu.children)
+      let menu = referenceMenu(
+        defaultMenu,
+        sharing: LinkCopy.forLink(
+          url, from: documentID, in: library.index, bibliography: bibliography),
+        from: textView, at: range)
       return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
     }
 
