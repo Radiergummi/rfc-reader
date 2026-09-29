@@ -15,6 +15,7 @@ Everything goes through the `Makefile`:
 | `make lint` / `make fmt` | SwiftLint and swift-format, checking / fixing in place |
 | `make build` | both Swift packages (RFCKit, corpus-build) |
 | `make xcodeproj` | regenerate `RFCReader.xcodeproj` from `project.yml` |
+| `make xcodegen-install` | the pinned XcodeGen release, SHA-256 checked, into `.build/xcodegen` (what CI runs) |
 | `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |

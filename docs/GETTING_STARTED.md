@@ -1,6 +1,6 @@
 # Getting started
 
-You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26), [XcodeGen](https://github.com/yonaskolb/XcodeGen) for the project and [SwiftLint](https://github.com/realm/SwiftLint) for `make lint`; swift-format comes with the toolchain. RFCKit alone builds with any Swift 6.3 toolchain, including on Linux.
+You need a Mac with Xcode 26.4 or newer (the app targets iOS 26 and macOS 26), [XcodeGen](https://github.com/yonaskolb/XcodeGen) 2.46.0 for the project (Homebrew's, or exactly that release from `make xcodegen-install`, which is what CI uses) and [SwiftLint](https://github.com/realm/SwiftLint) for `make lint`; swift-format comes with the toolchain. RFCKit alone builds with any Swift 6.3 toolchain, including on Linux.
 
 ```sh
 brew install xcodegen swiftlint
