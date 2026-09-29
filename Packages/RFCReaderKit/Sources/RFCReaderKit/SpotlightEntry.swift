@@ -1,3 +1,5 @@
+import CoreSpotlight
+import CryptoKit
 import Foundation
 import RFCKit
 
@@ -7,7 +9,7 @@ import RFCKit
 /// Plain data, so what is indexed is decided here, under test, and the app only
 /// hands it to CoreSpotlight. Obsoleted RFCs are indexed too: people look them up
 /// by number, and the description says what replaced them.
-public struct SpotlightEntry: Equatable, Sendable {
+public struct SpotlightEntry: Sendable {
   /// The domain every RFC is indexed under, so the set can be replaced as a whole.
   public static let domain = "rfc-index"
 
@@ -33,8 +35,8 @@ public struct SpotlightEntry: Equatable, Sendable {
     }
     self.description = description
     keywords =
-      ["\(id.number)", id.displayName, id.displayName.replacingOccurrences(of: " ", with: "")]
-      + [metadata.workingGroup].compactMap { $0 }
+      ["\(id.number)", id.displayName, id.description]
+      + [metadata.namedWorkingGroup].compactMap { $0 }
       + metadata.authors.map(\.name)
       + metadata.keywords
   }
@@ -45,17 +47,32 @@ public struct SpotlightEntry: Equatable, Sendable {
   public static let lifetime: TimeInterval = 30 * 86_400
 
   /// What the Spotlight index remembers of the last indexing, which is skipped when
-  /// it is unchanged: the RFC index's date, and the week it was indexed in. The
-  /// week is there so an index that never changes, on a Mac that stays offline, is
-  /// still renewed before its items reach their `lifetime`.
-  public static func clientState(indexUpdatedAt: Date, now: Date) -> Data {
+  /// it is unchanged: a digest of the entries, and the week they were indexed in.
+  /// The digest is of what is indexed, not of when the index arrived, so a refresh
+  /// that brings the same index, or an app update's bundled one, is told apart by
+  /// its content alone. The week is there so an index that never changes, on a Mac
+  /// that stays offline, is still renewed before its items reach their `lifetime`.
+  public static func clientState(for entries: [SpotlightEntry], now: Date) -> Data {
+    var digest = SHA256()
+    // Each field ends with a unit separator and each entry with a record
+    // separator, so text moved from one field into the next is a change.
+    for entry in entries {
+      for field in [entry.identifier, entry.title, entry.description] + entry.keywords {
+        digest.update(data: Data(field.utf8))
+        digest.update(data: Data([0x1F]))
+      }
+      digest.update(data: Data([0x1E]))
+    }
     let week = Int(now.timeIntervalSince1970) / (7 * 86_400)
-    return Data("\(Int(indexUpdatedAt.timeIntervalSince1970)) \(week)".utf8)
+    return Data(digest.finalize()) + Data(" \(week)".utf8)
   }
 
-  /// The document a chosen result names, or nil for an identifier this app did not
-  /// index.
-  public static func documentID(fromIdentifier identifier: String) -> DocumentID? {
-    DocumentID(fileStem: identifier)
+  /// The document a chosen Spotlight result names, or nil for an activity that is
+  /// not one, or an identifier this app did not index.
+  public static func documentID(from activity: NSUserActivity) -> DocumentID? {
+    guard activity.activityType == CSSearchableItemActionType,
+      let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String
+    else { return nil }
+    return DocumentID(fileStem: identifier)
   }
 }

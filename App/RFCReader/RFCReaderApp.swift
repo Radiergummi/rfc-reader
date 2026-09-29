@@ -58,8 +58,8 @@ struct RFCReaderApp: App {
           }
           // An RFC chosen in Spotlight (#178), routed the same way.
           .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            if let link = SpotlightIndexer.link(from: activity) {
-              library.route(link)
+            if let id = SpotlightEntry.documentID(from: activity) {
+              library.route(RFCLink(id: id))
             }
           }
       }

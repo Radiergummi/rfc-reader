@@ -1,3 +1,4 @@
+import CoreSpotlight
 import Foundation
 import RFCKit
 import Testing
@@ -45,44 +46,74 @@ struct SpotlightEntryTests {
     #expect(SpotlightEntry(bare).description == "")
   }
 
+  /// The index's placeholder for an individual or independent submission is not a
+  /// group, and as a keyword it would match thousands of unrelated RFCs.
+  @Test func `a document from no working group has no group keyword`() {
+    var individual = Self.semantics
+    individual.workingGroup = "NON WORKING GROUP"
+    #expect(!SpotlightEntry(individual).keywords.contains("NON WORKING GROUP"))
+  }
+
   // MARK: - When to index again
 
   private static let day: TimeInterval = 86_400
-  private static let indexDate = Date(timeIntervalSince1970: 1_700_000_000)
+  private static let now = Date(timeIntervalSince1970: 1_700_006_400)
+  private static let entries = [SpotlightEntry(semantics)]
 
-  /// Nothing to do at a launch whose index is the one already indexed.
-  @Test func `the same index in the same week is not indexed again`() {
+  /// Nothing to do at a launch whose index is the one already indexed, whenever and
+  /// however it arrived: fetched again, read from the cache, or bundled.
+  @Test func `the same entries in the same week are not indexed again`() {
     let weekStart = Date(timeIntervalSince1970: 1_700_096_400)
     #expect(
-      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: weekStart)
+      SpotlightEntry.clientState(for: Self.entries, now: weekStart)
         == SpotlightEntry.clientState(
-          indexUpdatedAt: Self.indexDate, now: weekStart.addingTimeInterval(2 * Self.day)))
+          for: [SpotlightEntry(Self.semantics)], now: weekStart.addingTimeInterval(2 * Self.day)))
   }
 
-  @Test func `a new index is indexed again`() {
-    let now = Date(timeIntervalSince1970: 1_700_006_400)
+  @Test func `a changed entry is indexed again`() {
+    var obsoleted = Self.semantics
+    obsoleted.obsoletedBy = [.rfc(9999)]
     #expect(
-      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: now)
-        != SpotlightEntry.clientState(
-          indexUpdatedAt: Self.indexDate.addingTimeInterval(Self.day), now: now))
+      SpotlightEntry.clientState(for: Self.entries, now: Self.now)
+        != SpotlightEntry.clientState(for: [SpotlightEntry(obsoleted)], now: Self.now))
+  }
+
+  /// Where one field ends and the next begins is part of what is compared.
+  @Test func `moving text between fields is a change`() {
+    var first = SpotlightEntry(Self.semantics)
+    var second = first
+    first.keywords = ["ab", "c"]
+    second.keywords = ["a", "bc"]
+    #expect(
+      SpotlightEntry.clientState(for: [first], now: Self.now)
+        != SpotlightEntry.clientState(for: [second], now: Self.now))
   }
 
   /// Items expire, so an index that never changes, as on a Mac that stays offline,
   /// is still renewed before they do.
-  @Test func `the same index is indexed again a week on, before its items expire`() {
-    let now = Date(timeIntervalSince1970: 1_700_006_400)
+  @Test func `the same entries are indexed again a week on, before they expire`() {
     #expect(
-      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: now)
+      SpotlightEntry.clientState(for: Self.entries, now: Self.now)
         != SpotlightEntry.clientState(
-          indexUpdatedAt: Self.indexDate, now: now.addingTimeInterval(7 * Self.day)))
+          for: Self.entries, now: Self.now.addingTimeInterval(7 * Self.day)))
     #expect(SpotlightEntry.lifetime > 14 * Self.day)
   }
 
   /// A result arrives back as its identifier, and opens the RFC it names.
-  @Test func `the identifier names the document it came from`() {
-    let entry = SpotlightEntry(Self.semantics)
-    #expect(entry.identifier == "rfc9110")
-    #expect(SpotlightEntry.documentID(fromIdentifier: entry.identifier) == .rfc(9110))
-    #expect(SpotlightEntry.documentID(fromIdentifier: "not a document") == nil)
+  @Test func `a chosen result names the document it came from`() {
+    let activity = NSUserActivity(activityType: CSSearchableItemActionType)
+    activity.userInfo = [
+      CSSearchableItemActivityIdentifier: SpotlightEntry(Self.semantics).identifier
+    ]
+    #expect(SpotlightEntry.documentID(from: activity) == .rfc(9110))
+  }
+
+  @Test func `an activity that is not a chosen result names nothing`() {
+    let other = NSUserActivity(activityType: "me.mazetti.rfc-reader.other")
+    other.userInfo = [CSSearchableItemActivityIdentifier: "rfc9110"]
+    #expect(SpotlightEntry.documentID(from: other) == nil)
+    let foreign = NSUserActivity(activityType: CSSearchableItemActionType)
+    foreign.userInfo = [CSSearchableItemActivityIdentifier: "not a document"]
+    #expect(SpotlightEntry.documentID(from: foreign) == nil)
   }
 }

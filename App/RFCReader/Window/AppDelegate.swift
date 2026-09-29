@@ -2,6 +2,7 @@
   import AppKit
   import Observation
   import RFCKit
+  import RFCReaderKit
 
   /// Makes windows, because nothing else does any more.
   ///
@@ -71,8 +72,8 @@
       _ application: NSApplication, continue userActivity: NSUserActivity,
       restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
     ) -> Bool {
-      guard let link = SpotlightIndexer.link(from: userActivity) else { return false }
-      LibraryModel.shared.route(link)
+      guard let id = SpotlightEntry.documentID(from: userActivity) else { return false }
+      LibraryModel.shared.route(RFCLink(id: id))
       return true
     }
 

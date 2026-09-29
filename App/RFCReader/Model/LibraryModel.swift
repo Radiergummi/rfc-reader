@@ -224,11 +224,11 @@ final class LibraryModel {
     spotlightIndexing?.cancel()
     let rfcs = prepared.index.rfcs
     spotlightIndexing = Task(name: "Index for Spotlight") {
-      await SpotlightIndexer.update(rfcs, indexUpdatedAt: updatedAt)
+      await SpotlightIndexer.update(rfcs)
     }
   }
 
-  /// The Spotlight indexing under way (#178), cancelled when a newer index arrives.
+  /// The Spotlight indexing under way (#178), canceled when a newer index arrives.
   @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
 
   // MARK: - Lists

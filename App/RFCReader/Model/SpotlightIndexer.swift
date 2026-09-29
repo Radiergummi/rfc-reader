@@ -15,32 +15,33 @@ enum SpotlightIndexer {
   /// none holds much at once.
   nonisolated private static let batchSize = 500
 
-  /// Indexes `rfcs`, unless this index was indexed already this week
+  /// Indexes `rfcs`, unless the same entries were indexed already this week
   /// (`SpotlightEntry.clientState`). Off the main actor: building ten thousand
   /// attribute sets is work nobody waits for. A failure is logged, not shown (#125):
   /// the app works the same without it.
   @concurrent
-  static func update(_ rfcs: [RFCMetadata], indexUpdatedAt: Date) async {
+  static func update(_ rfcs: [RFCMetadata]) async {
     guard CSSearchableIndex.isIndexingAvailable() else { return }
     let index = CSSearchableIndex(name: SpotlightEntry.domain)
-    let state = SpotlightEntry.clientState(indexUpdatedAt: indexUpdatedAt, now: .now)
+    let entries = rfcs.map(SpotlightEntry.init)
+    let state = SpotlightEntry.clientState(for: entries, now: .now)
     do {
       if try await index.fetchLastClientState() == state { return }
       let expiration = Date.now.addingTimeInterval(SpotlightEntry.lifetime)
-      for start in stride(from: 0, to: rfcs.count, by: batchSize) {
+      for start in stride(from: 0, to: entries.count, by: batchSize) {
         // A newer index has replaced this one: it indexes everything itself, and
         // the client state is left for it to write.
         guard !Task.isCancelled else { return }
-        let end = min(start + batchSize, rfcs.count)
-        let items = rfcs[start..<end].map { item(SpotlightEntry($0), expiring: expiration) }
+        let end = min(start + batchSize, entries.count)
+        let items = entries[start..<end].map { item($0, expiring: expiration) }
         index.beginBatch()
         // No completion to wait for inside a batch: `endBatch` reports the outcome.
         index.indexSearchableItems(items, completionHandler: nil)
         // The state only with the last batch: an indexing cut short is done again
         // at the next launch rather than taken for finished.
-        try await index.endBatch(withClientState: end == rfcs.count ? state : Data())
+        try await index.endBatch(withClientState: end == entries.count ? state : Data())
       }
-      spotlightLog.debug("indexed \(rfcs.count) RFCs")
+      spotlightLog.debug("indexed \(entries.count) RFCs")
     } catch {
       spotlightLog.error(
         "indexing for Spotlight failed: \(String(describing: error), privacy: .public)")
@@ -59,14 +60,5 @@ enum SpotlightIndexer {
       attributeSet: attributes)
     item.expirationDate = expiration
     return item
-  }
-
-  /// The RFC a chosen Spotlight result names, if the activity is one.
-  static func link(from activity: NSUserActivity) -> RFCLink? {
-    guard activity.activityType == CSSearchableItemActionType,
-      let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-      let id = SpotlightEntry.documentID(fromIdentifier: identifier)
-    else { return nil }
-    return RFCLink(id: id)
   }
 }
