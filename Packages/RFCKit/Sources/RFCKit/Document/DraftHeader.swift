@@ -19,7 +19,7 @@ public struct DraftHeader: Equatable, Sendable {
   }
 
   public static func parse(xml data: Data) throws(XMLSyntaxError) -> DraftHeader {
-    let attributes = try XMLDriver.rootAttributes(of: data)
+    let attributes = try XMLDriver.rootAttributes(of: data, named: "rfc")
     var unreadable: [String] = []
     let obsoletes = numbers(
       in: attributes["obsoletes"], reading: listedNumbers, unreadable: &unreadable)
@@ -38,8 +38,8 @@ public struct DraftHeader: Equatable, Sendable {
 
   /// The header block is the lines from the first that is not blank to the next blank
   /// one. Its left column, up to the first tab or run of two spaces, carries the
-  /// labels; a list that runs on continues on the next line, indented, starting with a
-  /// number.
+  /// labels; a list that runs on continues on the next line, indented, holding
+  /// nothing but numbers.
   static func parse(frontPage lines: [String]) -> DraftHeader {
     enum Label {
       case obsoletes
@@ -74,9 +74,7 @@ public struct DraftHeader: Equatable, Sendable {
         flush()
         label = .updates
         collected = rest
-      } else if label != nil, line.first?.isWhitespace == true,
-        left.first?.isNumber == true || left.uppercased().hasPrefix("RFC")
-      {
+      } else if label != nil, line.first?.isWhitespace == true, continuesList(left) {
         collected += " " + left
       } else {
         flush()
@@ -113,6 +111,15 @@ public struct DraftHeader: Equatable, Sendable {
         guard let number = Int(token), number > 0 else { return nil }
         return number
       }
+  }
+
+  /// Whether a left column carries on a list: numbers, and nothing else but the
+  /// spellings `listedNumbers` reads past. A date alone in the right column,
+  /// "12 March 2026", starts with a number and is not one.
+  private static func continuesList(_ left: String) -> Bool {
+    let rest = left.replacingOccurrences(of: "(if approved)", with: "", options: .caseInsensitive)
+      .replacingOccurrences(of: "RFC", with: "", options: .caseInsensitive)
+    return !rest.contains(where: \.isLetter) && !listedNumbers(left).isEmpty
   }
 
   /// The line's text up to its first tab or run of two spaces, past its indent: the

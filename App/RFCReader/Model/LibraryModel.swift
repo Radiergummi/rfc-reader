@@ -330,10 +330,9 @@ final class LibraryModel {
     }
   }
 
-  /// The drafts revising `id`, for an RFC. Other series have no revisions: BCP 14 is
-  /// not RFC 14.
+  /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
-    RevisionsSummary(id.series == .rfc ? revisions : nil, rfc: id.number, now: .now)
+    RevisionsSummary(revisions, for: id, now: .now)
   }
 
   // MARK: - Lists

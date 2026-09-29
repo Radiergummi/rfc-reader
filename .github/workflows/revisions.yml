@@ -14,6 +14,11 @@ on:
         type: boolean
         default: false
 
+# One run at a time: two would upload over each other's assets.
+concurrency:
+  group: revisions
+  cancel-in-progress: false
+
 jobs:
   scan:
     runs-on: ubuntu-24.04
@@ -40,12 +45,17 @@ jobs:
 
       # Nothing to download on the first run. The test is for the scan itself, not the
       # release: a release whose first upload failed has none, and is a first run too,
-      # rather than a download that fails every day until someone repairs it.
+      # rather than a download that fails every day until someone repairs it. Only a
+      # missing release means that: any other failure to ask fails the run, which would
+      # otherwise rescan with no previous scan and so no shrink guard.
       - name: Download the previous scan
         run: |
           mkdir -p out
-          if gh release view revisions --json assets --jq '.assets[].name' 2>/dev/null |
-            grep -qx revisions-scan.json; then
+          if ! assets=$(gh release view revisions --json assets --jq '.assets[].name' 2>view.err); then
+            grep -q "release not found" view.err || { cat view.err >&2; exit 1; }
+            assets=""
+          fi
+          if printf '%s\n' "$assets" | grep -qx revisions-scan.json; then
             gh release download revisions --pattern revisions-scan.json --dir previous
             echo "SCAN=--scan previous/revisions-scan.json" >> "$GITHUB_ENV"
           fi

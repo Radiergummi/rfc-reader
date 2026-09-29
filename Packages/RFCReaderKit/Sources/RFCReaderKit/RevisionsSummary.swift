@@ -31,11 +31,14 @@ public struct RevisionsSummary: Equatable, Sendable {
   private static let dormantAfter: TimeInterval = 365 * 86_400
   private static let bannerLimit = 2
 
+  /// - Parameter document: only an RFC has revisions, as the file is keyed by RFC
+  ///   number: BCP 14 is not RFC 14.
   public init(
-    _ file: RFCRevisions?, rfc number: Int, now: Date, locale: Locale = .current,
+    _ file: RFCRevisions?, for document: DocumentID, now: Date, locale: Locale = .current,
     timeZone: TimeZone = .current
   ) {
-    revisions = (file?.revisions[number] ?? []).sorted { lhs, rhs in
+    let listed = document.series == .rfc ? file?.revisions[document.number] : nil
+    revisions = (listed ?? []).sorted { lhs, rhs in
       if lhs.stage != rhs.stage { return lhs.stage > rhs.stage }
       if lhs.relation != rhs.relation { return lhs.relation == .obsoletes }
       return lhs.draft < rhs.draft

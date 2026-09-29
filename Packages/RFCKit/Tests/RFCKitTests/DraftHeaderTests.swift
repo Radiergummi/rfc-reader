@@ -67,6 +67,14 @@ struct DraftHeaderTests {
     #expect(try DraftHeader.parse(xml: data).obsoletes == [9990])
   }
 
+  /// An archive that answers with an error page in place of the draft: the page
+  /// parses as far as its root, which is not a draft's, so the text is tried instead.
+  @Test func `a root that is not rfc is not a draft header`() {
+    let page = Data(
+      #"<!DOCTYPE html><html lang="en"><head><title>Error</title></head></html>"#.utf8)
+    #expect(throws: XMLSyntaxError.self) { try DraftHeader.parse(xml: page) }
+  }
+
   @Test func `a single number on the front page is read`() {
     let lines = [
       "",
@@ -103,6 +111,18 @@ struct DraftHeaderTests {
       "Intended status: Standards Track                           C. Somebody",
     ]
     #expect(DraftHeader.parse(frontPage: lines).updates == [9990, 9991, 9992, 9993])
+  }
+
+  /// A line holding only the right column, below the last label, is not more of
+  /// its list, even where it starts with a number.
+  @Test func `a right-column date below a list is not read as numbers`() {
+    let lines = [
+      "Example Working Group                                          A. Author",
+      "Internet-Draft                                             Example Corp",
+      "Updates: 9990 (if approved)                                   B. Writer",
+      "                                                          12 March 2026",
+    ]
+    #expect(DraftHeader.parse(frontPage: lines) == DraftHeader(updates: [9990]))
   }
 
   /// A value padded to line up with the labels around it is still the label's.

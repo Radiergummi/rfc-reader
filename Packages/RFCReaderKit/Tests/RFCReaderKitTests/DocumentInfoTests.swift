@@ -221,7 +221,7 @@ struct DocumentInfoTests {
           revision("draft-ietf-example-ext", .updates),
         ]
       ])
-    return RevisionsSummary(file, rfc: metadata.id.number, now: .now)
+    return RevisionsSummary(file, for: metadata.id, now: .now)
   }
 
   @Test func `drafts revising the document follow Updated by`() {
@@ -245,10 +245,9 @@ struct DocumentInfoTests {
     #expect(lines.map(\.title) == ["draft-ietf-example-bis-03"])
   }
 
-  /// BCP 14 is not RFC 14: the app asks only for an RFC's number, and a summary
-  /// with nothing in it adds no row.
+  /// A summary with nothing in it adds no row.
   @Test func `no drafts add no rows`() {
-    let empty = RevisionsSummary(nil, rfc: 1149, now: .now)
+    let empty = RevisionsSummary(nil, for: .rfc(1149), now: .now)
     #expect(section("Relationships", of: bare) == nil)
     #expect(
       DocumentInfo(bare, in: index, revisions: empty).sections.first { $0.title == "Relationships" }

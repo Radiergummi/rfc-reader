@@ -27,7 +27,7 @@ struct RevisionsSummaryTests {
     _ revisions: [RFCRevisions.Revision], generated: Date = now - day
   ) -> RevisionsSummary {
     RevisionsSummary(
-      RFCRevisions(generatedAt: generated, revisions: [9990: revisions]), rfc: 9990, now: now,
+      RFCRevisions(generatedAt: generated, revisions: [9990: revisions]), for: .rfc(9990), now: now,
       locale: locale, timeZone: utc)
   }
 
@@ -108,15 +108,23 @@ struct RevisionsSummaryTests {
 
   @Test func `an RFC nothing revises has no lines`() {
     let summary = RevisionsSummary(
-      RFCRevisions(generatedAt: Self.now, revisions: [9991: [Self.revision("draft-a")]]), rfc: 9990,
-      now: Self.now)
+      RFCRevisions(generatedAt: Self.now, revisions: [9991: [Self.revision("draft-a")]]),
+      for: .rfc(9990), now: Self.now)
     #expect(summary.isEmpty)
     #expect(summary.bannerLines.isEmpty)
     #expect(summary.moreText == nil)
   }
 
   @Test func `no file has no lines`() {
-    #expect(RevisionsSummary(nil, rfc: 9990, now: Self.now).isEmpty)
+    #expect(RevisionsSummary(nil, for: .rfc(9990), now: Self.now).isEmpty)
+  }
+
+  /// The file is keyed by RFC number, and only the RFC series has revisions.
+  @Test func `BCP 14 is not RFC 14`() {
+    let file = RFCRevisions(generatedAt: Self.now, revisions: [14: [Self.revision("draft-a")]])
+    #expect(RevisionsSummary(file, for: .rfc(14), now: Self.now).revisions.count == 1)
+    #expect(
+      RevisionsSummary(file, for: DocumentID(series: .bcp, number: 14), now: Self.now).isEmpty)
   }
 
   @Test func `an inspector line lists everything`() {
