@@ -14,9 +14,9 @@ let swiftSettings: [SwiftSetting] = [
 // downloads.
 //
 // RFCCorpusKit holds what is a pure function of its inputs -- converting one document,
-// the report and manifest types, the schema check's causes -- so tests call it rather
-// than re-implement it. corpus-build is the command line around it: arguments, files,
-// concurrency, logging (swift-log) and xmllint.
+// the report types and the manifest's hashing, the schema check's causes -- so tests
+// call it rather than re-implement it. corpus-build is the command line around it:
+// arguments, files, concurrency, logging (swift-log) and xmllint.
 let package = Package(
   name: "corpus-build",
   // RFCKit's floor.

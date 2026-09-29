@@ -19,6 +19,13 @@ struct PlanTests {
     #expect(xml == [8999, 9000, 9110])
   }
 
+  /// The text of the RFCs that have XML: the half the ordinary text fetch skips,
+  /// because xml2rfc generated it, fetched for `score` (#42).
+  @Test func `the paired text is the text of every RFC with XML`() throws {
+    #expect(
+      FetchPlan.pairedText(in: try Self.index(), limit: nil).map(\.number) == [8999, 9000, 9110])
+  }
+
   @Test func `fetch takes the first documents up to the limit`() throws {
     let text = FetchPlan.wanted(in: try Self.index(), format: .text, limit: 2).map(\.number)
     #expect(text == [1149, 2119])
