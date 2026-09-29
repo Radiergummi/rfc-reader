@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -298,6 +298,20 @@ corpus-overrides-check: corpus-tool
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
 	done; exit $$status
+
+## Score the legacy parser against the RFCs xml2rfc generated from XML
+# From RFC 8650 on, an RFC's text is generated from its XML, so the XML says what
+# the text's headings, artwork and source code are (#42). This fetches both, parses
+# the text with LegacyTextParser, and writes per-kind precision and recall, with
+# the worst documents first, to corpus/score.json -- beside report.json, so a diff
+# of either between runs is about one thing. A regression floor on uniform xml2rfc
+# output, not a measure of the legacy corpus. Not part of `check`: it needs the
+# network the first time.
+corpus-score: corpus-fetch-xml
+	$(CORPUS_BIN) fetch --out $(CORPUS) --format modern-text --index $(CORPUS)/rfc-index.xml \
+	  $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
+	  --out $(CORPUS)/score.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

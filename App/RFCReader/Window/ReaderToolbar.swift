@@ -571,6 +571,9 @@
         if reader.precedingDraft != nil {
           add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
         }
+        menu.addItem(.separator())
+        add(to: menu, "Export…", #selector(exportDocument))
+        add(to: menu, "Print…", #selector(printDocument))
 
       case collectionMenu:
         let library = LibraryModel.shared
@@ -643,6 +646,8 @@
     @objc private func newCollection() {
       navigation.collectionEditor = .create(adding: id)
     }
+    @objc private func printDocument() { controller.printDocument() }
+    @objc private func exportDocument() { controller.exportDocument() }
     @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
 
     @objc private func copyCitation(_ sender: NSMenuItem) {
