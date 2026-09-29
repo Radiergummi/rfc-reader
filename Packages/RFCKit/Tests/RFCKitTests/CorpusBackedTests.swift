@@ -6,8 +6,9 @@ import Testing
 // Findings about what the parser makes of a whole document, over documents read from
 // a fetched corpus rather than committed as fixtures (`CorpusText`). `make
 // test-corpus` fetches them and runs these; everywhere else they are skipped. The
-// guards these findings led to are tested over a few lines each, beside the other
-// corpus findings; these check that the whole document still comes out that way.
+// guards these findings led to are tested over a few lines each, in the suite of the
+// parser stage they belong to; these check that the whole document still comes out
+// that way.
 
 /// The text of every block of the document's lead-in, a list's items included, so a
 /// finding about what leaves the lead-in holds whatever kind of block it would be.
@@ -143,10 +144,7 @@ struct CorpusBackedAppendixHeadingTests {
 @Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedCatalogueTests {
   private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
-    document.everyBlock.compactMap {
-      if case .definitionList(let items) = $0 { return items }
-      return nil
-    }
+    document.everyBlock.compactMap(\.definitionItems)
   }
 
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,

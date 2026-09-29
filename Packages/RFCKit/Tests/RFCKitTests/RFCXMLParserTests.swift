@@ -6,7 +6,7 @@ import Testing
 @Suite("RFCXML v3 parser")
 struct RFCXMLParserTests {
   static func document() throws -> RFCDocument {
-    try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    try Fixtures.document("rfc8999.xml")
   }
 
   @Test func `header`() throws {
@@ -117,18 +117,12 @@ struct RFCXMLParserTests {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
 
-    let definitionLists = notation.blocks.compactMap { block -> [DefinitionItem]? in
-      if case .definitionList(let items) = block { return items }
-      return nil
-    }
+    let definitionLists = notation.blocks.compactMap(\.definitionItems)
     #expect(definitionLists.count == 1)
     #expect(definitionLists[0].count == 4)
     #expect(definitionLists[0][0].term.plainText == "x (A):")
 
-    let figures = notation.blocks.compactMap { block -> Figure? in
-      if case .figure(let figure) = block { return figure }
-      return nil
-    }
+    let figures = notation.blocks.compactMap(\.figure)
     #expect(figures.count == 1)
     #expect(figures[0].title == "Example Format")
     #expect(figures[0].number == 1)
@@ -161,10 +155,7 @@ struct RFCXMLParserTests {
       Issue.record("expected a paragraph")
       return
     }
-    let xrefs = paragraph.inlines.compactMap { inline -> CrossReference? in
-      if case .crossReference(let xref) = inline { return xref }
-      return nil
-    }
+    let xrefs = paragraph.inlines.compactMap(\.crossReference)
     let transport = try #require(xrefs.first)
     #expect(transport.target == .document(.rfc(9000), section: nil))
     #expect(transport.text == "[QUIC-TRANSPORT]")
@@ -179,10 +170,7 @@ struct RFCXMLParserTests {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
@@ -197,10 +185,7 @@ struct RFCXMLParserTests {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
@@ -242,10 +227,7 @@ struct RFCXMLParserTests {
       return
     }
     let xref = try #require(
-      paragraph.inlines.compactMap { inline -> CrossReference? in
-        if case .crossReference(let value) = inline { return value }
-        return nil
-      }.first)
+      paragraph.inlines.compactMap(\.crossReference).first)
     #expect(xref.text == nil, "the whole phrasing is ours to compose")
     #expect(xref.label == "Section\u{00A0}4.2 of [RFC\u{00A0}9110]")
   }
@@ -296,10 +278,7 @@ struct RFCXMLParserTests {
 
     func xrefs(_ block: Block?) -> [CrossReference] {
       guard case .paragraph(let paragraph)? = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
     #expect(
       xrefs(section.blocks.first).map(\.target) == [
@@ -405,10 +384,7 @@ struct RFCXMLParserTests {
   /// Reading only the first kept the six counters and dropped the rest.
   @Test func `every table body is read`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
-    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
-      if case .table(let table) = block { return table }
-      return nil
-    }
+    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap(\.table)
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
     #expect(table.rows.count == 32)

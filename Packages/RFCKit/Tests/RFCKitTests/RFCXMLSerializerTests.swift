@@ -131,10 +131,7 @@ struct RFCXMLSerializerTests {
 
     let xrefs = reparsed.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let canonical = try #require(

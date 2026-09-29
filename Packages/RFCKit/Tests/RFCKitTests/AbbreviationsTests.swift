@@ -10,18 +10,10 @@ import Testing
 /// taken from those documents.
 @Suite("Abbreviations")
 struct AbbreviationsTests {
-  private static func xml(_ name: String) throws -> RFCDocument {
-    try RFCXMLParser.parse(try Fixtures.data(name))
-  }
-
-  private static func text(_ name: String) throws -> RFCDocument {
-    LegacyTextParser.parse(try Fixtures.data(name))
-  }
-
   // MARK: Through the parsers
 
   @Test func `a legacy document expands at first use`() throws {
-    let abbreviations = try Self.text("rfc4801.txt").abbreviations
+    let abbreviations = try Fixtures.document("rfc4801.txt").abbreviations
     #expect(abbreviations["GMPLS"]?.expansion == "Generalized Multiprotocol Label Switching")
     #expect(abbreviations["SNMP"]?.expansion == "Simple Network Management Protocol")
     #expect(abbreviations["MIB"]?.expansion == "Management Information Base")
@@ -29,14 +21,14 @@ struct AbbreviationsTests {
 
   /// The expansion is the author's words, as written, capitals or not.
   @Test func `a lowercase expansion is the authors`() throws {
-    let abbreviations = try Self.text("rfc4801.txt").abbreviations
+    let abbreviations = try Fixtures.document("rfc4801.txt").abbreviations
     #expect(abbreviations["TCs"]?.expansion == "textual conventions")
   }
 
   /// Where it was expanded: the abstract has no section, and a later first use
   /// names its own.
   @Test func `each expansion knows its section`() throws {
-    let abbreviations = try Self.text("rfc4801.txt").abbreviations
+    let abbreviations = try Fixtures.document("rfc4801.txt").abbreviations
     #expect(abbreviations["GMPLS"]?.sectionAnchor == nil)
     #expect(abbreviations["SNMP"]?.sectionAnchor == "section-2")
   }
@@ -44,7 +36,7 @@ struct AbbreviationsTests {
   /// RFC 8761 section 2.2 is an abbreviations list: terms whose definition opens
   /// with the expansion, sometimes followed by an explanation that is not part of it.
   @Test func `a glossary is read`() throws {
-    let abbreviations = try Self.xml("rfc8761.xml").abbreviations
+    let abbreviations = try Fixtures.document("rfc8761.xml").abbreviations
     #expect(abbreviations["BD-Rate"]?.expansion == "Bjontegaard Delta Rate")
     #expect(abbreviations["GPU"]?.expansion == "Graphics Processing Unit")
     #expect(abbreviations["AI"]?.expansion == "All-Intra")
@@ -54,13 +46,13 @@ struct AbbreviationsTests {
   /// `FIZD` is defined as `just the First picture is Intra-coded, Zero structural
   /// Delay`: prose about the term, not letter for letter its expansion.
   @Test func `a glossary definition that is prose is not an expansion`() throws {
-    #expect(try Self.xml("rfc8761.xml").abbreviations["FIZD"] == nil)
+    #expect(try Fixtures.document("rfc8761.xml").abbreviations["FIZD"] == nil)
   }
 
   /// `576p (EDTV), 720x576` in a table cell: the letters of `EDTV` are nowhere
   /// before it, so there is nothing to show rather than something wrong.
   @Test func `an abbreviation with no expansion before it has none`() throws {
-    let abbreviations = try Self.xml("rfc8761.xml").abbreviations
+    let abbreviations = try Fixtures.document("rfc8761.xml").abbreviations
     #expect(abbreviations["EDTV"] == nil)
     #expect(abbreviations["SDTV"] == nil)
   }
@@ -68,7 +60,7 @@ struct AbbreviationsTests {
   /// RFC 8999 expands AEAD first inside a bibliography entry's abstract, which is
   /// another document's text; the document's own first expansion is in its appendix.
   @Test func `bibliography entries are not the documents words`() throws {
-    let abbreviation = try #require(try Self.xml("rfc8999.xml").abbreviations["AEAD"])
+    let abbreviation = try #require(try Fixtures.document("rfc8999.xml").abbreviations["AEAD"])
     #expect(abbreviation.expansion == "Authenticated Encryption with Associated Data")
     #expect(abbreviation.sectionAnchor == "bad-assumptions")
   }

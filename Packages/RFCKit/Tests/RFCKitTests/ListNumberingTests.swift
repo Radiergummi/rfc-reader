@@ -108,10 +108,7 @@ struct ListNumberingTests {
   // MARK: Through the parsers
 
   private static func lists(in document: RFCDocument) -> [ListBlock] {
-    document.blocks.compactMap { block in
-      if case .list(let list) = block { return list }
-      return nil
-    }
+    document.blocks.compactMap(\.list)
   }
 
   private static func numbering(ofListStarting text: String, in document: RFCDocument)
