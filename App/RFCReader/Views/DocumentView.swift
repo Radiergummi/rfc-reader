@@ -276,7 +276,6 @@ struct DocumentView: View {
       RFCTextView(
         built: built,
         bibliography: reader.groups,
-        sectionNumbers: sectionNumbers,
         measure: measure,
         documentID: id,
         lastVisibleAnchor: lastVisibleAnchor,
@@ -297,6 +296,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -525,7 +525,10 @@ struct DocumentView: View {
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
-      sectionNumbers = loaded.sectionNumbers
+      sectionNumbers = Dictionary(
+        loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
+        uniquingKeysWith: { first, _ in first }
+      )
       document = loaded
       deriveInfo()
       // Here rather than on appearing: once per opening, since each is a view of

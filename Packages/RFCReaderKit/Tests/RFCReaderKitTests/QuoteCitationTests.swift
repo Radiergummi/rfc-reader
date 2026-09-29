@@ -15,51 +15,54 @@ import Testing
 struct QuoteCitationTests {
   private let anchors = AnchorIndex([
     .init(anchor: "abstract", offset: 0),
-    .init(anchor: "section-8", offset: 100, heading: "8. Content"),
+    .init(anchor: "section-8", offset: 100, heading: "8. Content", number: "8"),
     .init(anchor: "figure-3", offset: 150),
-    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type"),
+    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type", number: "8.3"),
+    .init(anchor: "acknowledgements", offset: 300, heading: "Acknowledgements"),
   ])
-  private let numbers = ["section-8": "8", "section-8.3": "8.3", "appendix-a": "A"]
 
   // MARK: Which section
 
   @Test func `a selection is cited from the section it starts in`() {
-    #expect(QuoteCitation.section(at: 210, anchors: anchors, numbers: numbers) == "8.3")
-    #expect(QuoteCitation.section(at: 200, anchors: anchors, numbers: numbers) == "8.3")
+    #expect(QuoteCitation.section(at: 210, anchors: anchors) == "8.3")
+    #expect(QuoteCitation.section(at: 200, anchors: anchors) == "8.3")
   }
 
   /// A figure's anchor is not a section: the citation names what a reader looks up.
   @Test func `only a section anchor counts`() {
-    #expect(QuoteCitation.section(at: 160, anchors: anchors, numbers: numbers) == "8")
+    #expect(QuoteCitation.section(at: 160, anchors: anchors) == "8")
+  }
+
+  /// An unnumbered section has nothing to cite it by, so the document alone.
+  @Test func `an unnumbered section cites the document`() {
+    #expect(QuoteCitation.section(at: 310, anchors: anchors) == nil)
   }
 
   /// Before the first section, in the abstract or the header, the document alone.
   @Test func `a selection before any section cites the document`() {
-    #expect(QuoteCitation.section(at: 20, anchors: anchors, numbers: numbers) == nil)
+    #expect(QuoteCitation.section(at: 20, anchors: anchors) == nil)
   }
 
-  /// A range of the reader's text is quoted from its own section, and one that
-  /// selects nothing, or runs past the text, quotes nothing.
+  /// A range of the reader's text is quoted from its own section, which the build
+  /// alone knows, and one that selects nothing, or runs past the text, quotes nothing.
   @Test func `a range of the built text is quoted from its section`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph(text: "Quoted."))), style: ReadingStyle())
     let start = try Fixtures.offset(of: "Quoted", in: built.text)
-    let numbers = ["section-1": "1"]
     let quote = try #require(
       QuoteCitation.quote(
-        of: NSRange(location: start, length: 7), in: built, document: .rfc(9110),
-        sectionNumbers: numbers))
+        of: NSRange(location: start, length: 7), in: built, document: .rfc(9110)))
     #expect(
       quote.markdown.hasSuffix(
         "— [RFC 9110, Section 1](https://www.rfc-editor.org/rfc/rfc9110#section-1)"))
     #expect(
       QuoteCitation.quote(
-        of: NSRange(location: start, length: 0), in: built, document: .rfc(9110),
-        sectionNumbers: numbers) == nil)
+        of: NSRange(location: start, length: 0), in: built, document: .rfc(9110))
+        == nil)
     #expect(
       QuoteCitation.quote(
-        of: NSRange(location: start, length: built.text.length), in: built, document: .rfc(9110),
-        sectionNumbers: numbers) == nil)
+        of: NSRange(location: start, length: built.text.length), in: built, document: .rfc(9110))
+        == nil)
   }
 
   // MARK: What goes on the pasteboard
@@ -127,6 +130,32 @@ struct QuoteCitationTests {
         > ```
 
         """))
+  }
+
+  /// GitHub drops what reads as an HTML tag, a `<field-name>` among them, so the
+  /// Markdown writes a `<` in prose as an entity. A fence takes its lines literally,
+  /// and the rich flavour is not Markdown, so neither is escaped.
+  @Test func `a less-than sign is escaped in prose and nowhere else`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .paragraph(Paragraph(text: "Send <field-name> & more > less.")),
+        .preformatted(Preformatted(kind: .artwork, text: "<a> -> <b>"))),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Send", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: built.text.length - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(
+      quote.markdown.hasPrefix(
+        """
+        > Send &lt;field-name> & more > less.
+        >
+        > ```
+        > <a> -> <b>
+        > ```
+
+        """))
+    #expect(quote.rich.string.hasPrefix("Send <field-name> & more > less.\n\n<a> -> <b>"))
   }
 
   @Test func `an appendix is cited as one`() {

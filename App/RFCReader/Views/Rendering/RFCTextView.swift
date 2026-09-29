@@ -19,8 +19,6 @@ struct RFCTextView: View {
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
-  /// Section anchor to number, for Copy as Quote's citation (#186).
-  let sectionNumbers: [String: String]
   /// The same preference `DocumentView` derives the build's column from, so the
   /// inset settles on the column the next build measures against.
   let measure: MeasurePreference
@@ -36,6 +34,10 @@ struct RFCTextView: View {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  /// Whether the reader has a selection, which greys out Edit ▸ Copy as Quote without
+  /// one, as Copy is (#186). Reported on macOS only; see
+  /// `RFCTextViewCoordinator.reportSelection()`.
+  let onSelectionChange: (Bool) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -49,7 +51,6 @@ struct RFCTextView: View {
   init(
     built: BuiltDocument,
     bibliography: [ReferenceGroup],
-    sectionNumbers: [String: String],
     measure: MeasurePreference,
     documentID: DocumentID,
     commitsOnClick: (() -> Void)? = nil,
@@ -59,13 +60,13 @@ struct RFCTextView: View {
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
+    onSelectionChange: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
   ) {
     self.built = built
     self.bibliography = bibliography
-    self.sectionNumbers = sectionNumbers
     self.measure = measure
     self.documentID = documentID
     self.commitsOnClick = commitsOnClick
@@ -75,6 +76,7 @@ struct RFCTextView: View {
     self.onVisibleAnchorChange = onVisibleAnchorChange
     self.onLink = onLink
     self.onToolbarTitle = onToolbarTitle
+    self.onSelectionChange = onSelectionChange
     self.heading = heading
     self.headerIdentity = headerIdentity
     self.header = AnyView(header())
@@ -86,7 +88,6 @@ struct RFCTextView: View {
         inputs: ReaderInputs(
           built: built,
           bibliography: bibliography,
-          sectionNumbers: sectionNumbers,
           measure: measure,
           documentID: documentID,
           commitsOnClick: commitsOnClick,
@@ -96,6 +97,7 @@ struct RFCTextView: View {
           onVisibleAnchorChange: onVisibleAnchorChange,
           onLink: onLink,
           onToolbarTitle: onToolbarTitle,
+          onSelectionChange: onSelectionChange,
           heading: heading,
           library: library,
           header: header,
@@ -123,7 +125,6 @@ struct ReaderScrollTarget: Equatable {
 struct ReaderInputs {
   let built: BuiltDocument
   let bibliography: [ReferenceGroup]
-  let sectionNumbers: [String: String]
   let measure: MeasurePreference
   let documentID: DocumentID
   let commitsOnClick: (() -> Void)?
@@ -133,6 +134,7 @@ struct ReaderInputs {
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
   let onToolbarTitle: (ToolbarTitleState) -> Void
+  let onSelectionChange: (Bool) -> Void
   let heading: HeadingBox
   let library: LibraryModel
   let header: AnyView
@@ -145,10 +147,10 @@ struct ReaderInputs {
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
     coordinator.bibliography = bibliography
-    coordinator.sectionNumbers = sectionNumbers
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
+    coordinator.onSelectionChange = onSelectionChange
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }

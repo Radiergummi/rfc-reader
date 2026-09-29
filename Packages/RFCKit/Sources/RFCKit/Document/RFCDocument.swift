@@ -39,14 +39,6 @@ public struct RFCDocument: Sendable, Hashable, Codable {
     return result
   }
 
-  /// Every numbered section's number, by its anchor: what a place in the text is
-  /// cited as.
-  public var sectionNumbers: [String: String] {
-    Dictionary(
-      allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
-      uniquingKeysWith: { first, _ in first })
-  }
-
   public func section(anchor: String) -> Section? {
     firstSection { $0.anchor == anchor }
   }

@@ -43,27 +43,25 @@ public enum QuoteCitation {
     }
   }
 
-  /// The number of the section a selection starting at `offset` is cited from: the
-  /// nearest section anchor at or before it. Only a section counts, not a figure or a
-  /// paragraph anchor, so the citation names what a reader looks up; nil before the
-  /// first section, where the document alone is cited. A selection spanning sections
-  /// cites the first.
-  public static func section(at offset: Int, anchors: AnchorIndex, numbers: [String: String])
-    -> String?
-  {
-    anchors.sections.anchor(at: offset).flatMap { numbers[$0] }
+  /// The number of the section a selection starting at `offset` is cited from: that of
+  /// the nearest section anchor at or before it. Only a section counts, not a figure or
+  /// a paragraph anchor, so the citation names what a reader looks up; nil before the
+  /// first section and in an unnumbered one, where the document alone is cited. A
+  /// selection spanning sections cites the first.
+  public static func section(at offset: Int, anchors: AnchorIndex) -> String? {
+    let sections = anchors.sections
+    return sections.index(at: offset).flatMap { sections.entries[$0].number }
   }
 
   /// The quote for `range` of a built document's text, cited from the section it
   /// starts in, or nil when the range selects nothing of it.
-  public static func quote(
-    of range: NSRange, in built: BuiltDocument, document: DocumentID,
-    sectionNumbers: [String: String]
-  ) -> Quote? {
+  public static func quote(of range: NSRange, in built: BuiltDocument, document: DocumentID)
+    -> Quote?
+  {
     guard range.length > 0, NSMaxRange(range) <= built.text.length else { return nil }
     return quote(
       of: built.text.attributedSubstring(from: range), document: document,
-      section: section(at: range.location, anchors: built.anchors, numbers: sectionNumbers))
+      section: section(at: range.location, anchors: built.anchors))
   }
 
   public static func quote(
@@ -71,7 +69,13 @@ public enum QuoteCitation {
   ) -> Quote {
     let blocks = blocks(of: selection)
     let quoted = blocks.map { block in
-      let lines = block.isVerbatim ? ["```"] + block.lines + ["```"] : block.lines
+      // A `<` in prose is an entity, or GitHub takes `<field-name>` for a tag and
+      // drops it; `\<` renders only where Markdown is CommonMark, an entity wherever
+      // it becomes HTML. A fence is taken literally, so its lines are left as drawn.
+      let lines =
+        block.isVerbatim
+        ? ["```"] + block.lines + ["```"]
+        : block.lines.map { $0.replacingOccurrences(of: "<", with: "&lt;") }
       return lines.map { $0.isEmpty ? ">" : "> \($0)" }.joined(separator: "\n")
     }
 
