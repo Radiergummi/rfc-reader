@@ -20,6 +20,7 @@ Everything goes through the `Makefile`:
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
 | `make install` | build Release and copy it into `/Applications` |
 | `make trace` | build Release, record a Time Profiler trace of a scripted session into `traces/`, and print the app's signpost intervals; `TRACE_SCENARIO='wait 6; open 9110; wait 5'` for another session |
+| `make benchmark` | Release benchmarks of the index and document parsers, the search and the builder over real RFCs (`Tools/benchmarks`); `BENCHMARK_ARGS='baseline update before'`, then `'baseline compare before'` after a change |
 | `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,464 |
 
 The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle ID `me.mazetti.rfc-reader`) and may create provisioning profiles as they go. CI has no certificates and passes `CODE_SIGNING_ALLOWED=NO`, which does the same locally.

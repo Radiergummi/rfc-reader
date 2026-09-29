@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -79,6 +79,33 @@ CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 
 # identifier, not the `Corpus-backed: ...` name its suite displays.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt)
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) swift test --package-path $(RFCKIT) --filter CorpusBacked
+
+## Run the benchmarks, fetching the documents they read
+# Release builds of the parsers, the search and the document builder, over real
+# RFCs (Tools/benchmarks). Not part of `check`: the numbers are this machine's,
+# and the first run needs the network. A change is measured against a baseline
+# saved before it:
+#
+#   make benchmark BENCHMARK_ARGS='baseline update before'
+#   make benchmark BENCHMARK_ARGS='baseline compare before'
+#   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
+#
+BENCHMARK_INPUTS := rfc-index.xml xml.noindex/rfc9110.xml xml.noindex/rfc9000.xml \
+	text.noindex/rfc5661.txt text.noindex/rfc793.txt
+BENCHMARK_ARGS ?=
+benchmark: $(BENCHMARK_INPUTS:%=$(CORPUS)/%)
+	cd Tools/benchmarks && RFC_CORPUS=$(abspath $(CORPUS)) \
+	  swift package --disable-sandbox benchmark $(BENCHMARK_ARGS)
+
+$(CORPUS)/rfc-index.xml:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
+
+# One RFC authored in RFCXML, for the benchmarks; the legacy ones in this
+# directory are converted, not fetched, and are not asked for this way.
+$(CORPUS)/xml.noindex/%.xml:
+	@mkdir -p $(@D)
+	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a
 # partial file first, so an interrupted download is not taken for the document.
