@@ -745,7 +745,9 @@ final class LibraryModel {
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
-  /// there is one, otherwise the most recently used tab.
+  /// there is one, otherwise the tab the reader is in -- on macOS the one whose
+  /// window was key last, which a tab opened in the background does not displace --
+  /// and failing that the most recently used tab.
   ///
   /// A link can arrive before any scene has registered -- a URL or the Open RFC
   /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
@@ -763,7 +765,15 @@ final class LibraryModel {
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
     let open = scenes.compactMap(\.model)
-    guard let target = LinkRouting.target(for: link.id, in: open, showing: \.selection) else {
+    #if os(macOS)
+      let preferred = windows?.activeNavigation
+    #else
+      let preferred: NavigationModel? = nil
+    #endif
+    guard
+      let target = LinkRouting.target(
+        for: link.id, in: open, showing: \.selection, preferring: preferred)
+    else {
       openInNewWindow(link)
       return
     }

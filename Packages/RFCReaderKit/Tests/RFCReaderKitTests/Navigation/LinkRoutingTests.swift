@@ -13,8 +13,11 @@ struct LinkRoutingTests {
     let selection: DocumentID?
   }
 
-  private func target(for document: DocumentID, in tabs: [Tab]) -> String? {
-    LinkRouting.target(for: document, in: tabs, showing: \.selection)?.name
+  private func target(
+    for document: DocumentID, in tabs: [Tab], preferring preferred: Tab? = nil
+  ) -> String? {
+    LinkRouting.target(for: document, in: tabs, showing: \.selection, preferring: preferred)?
+      .name
   }
 
   @Test func `a tab already showing the document takes the link, however long ago it was used`() {
@@ -38,6 +41,20 @@ struct LinkRoutingTests {
       Tab(name: "third", selection: .rfc(2119)),
     ]
     #expect(target(for: .rfc(2119), in: tabs) == "second")
+  }
+
+  /// On macOS the tab of the window that was key last, which a tab opened behind it
+  /// or a script navigating another window must not displace (#277).
+  @Test func `a preferred tab takes it over the most recently used`() {
+    let key = Tab(name: "key", selection: .rfc(791))
+    let tabs = [Tab(name: "front", selection: .rfc(793)), key]
+    #expect(target(for: .rfc(9110), in: tabs, preferring: key) == "key")
+  }
+
+  @Test func `a tab already showing the document takes it over the preferred one`() {
+    let key = Tab(name: "key", selection: .rfc(791))
+    let tabs = [Tab(name: "front", selection: .rfc(9110)), key]
+    #expect(target(for: .rfc(9110), in: tabs, preferring: key) == "front")
   }
 
   @Test func `with no tab open nothing takes it`() {

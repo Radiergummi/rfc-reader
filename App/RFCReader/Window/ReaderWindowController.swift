@@ -661,13 +661,7 @@
 
     // MARK: - Lifetime
 
-    /// Also where this tab becomes the most recently used one, so an untargeted link
-    /// lands in the window the reader is in (#277). Every tab is a window of its
-    /// own, so selecting one in a tab group arrives here too. A change of selection
-    /// promotes the tab as well (`ReaderScene`), but clicking into a window or
-    /// switching to it with ⌘` changes nothing a selection sees.
     func windowDidBecomeKey(_ notification: Notification) {
-      library.activate(navigation)
       ActiveReaderWindow.shared.becameKey(self)
       placeInitialFocus()
     }
