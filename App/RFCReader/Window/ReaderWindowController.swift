@@ -43,6 +43,9 @@
     private var hasPlacedInitialFocus = false
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
+    /// Whether a print is being prepared or its panel is up, so a second ⌘P
+    /// neither builds the PDF again nor asks for a second sheet.
+    private var isPrinting = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -464,9 +467,18 @@
     /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
     /// chosen; a different paper picked in the panel itself is scaled to fit.
     func printDocument() {
-      guard let id = navigation.selection, reader.hasDocument, let window else { return }
-      let printInfo = NSPrintInfo.shared
+      guard !isPrinting, let id = navigation.selection, reader.hasDocument, let window else {
+        return
+      }
+      // The PDF's pages carry their own margins; AppKit's, left in, would shrink
+      // every page to fit inside a second set.
+      guard let printInfo = NSPrintInfo.shared.copy() as? NSPrintInfo else { return }
+      printInfo.leftMargin = 0
+      printInfo.rightMargin = 0
+      printInfo.topMargin = 0
+      printInfo.bottomMargin = 0
       let original = reader.showOriginal
+      isPrinting = true
       Task {
         do {
           let data = try await DocumentPDF.make(
@@ -474,13 +486,25 @@
           guard let pdf = PDFDocument(data: data),
             let operation = pdf.printOperation(
               for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
-          else { return }
+          else {
+            isPrinting = false
+            return
+          }
           operation.jobTitle = id.displayName
-          operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+          operation.runModal(
+            for: window, delegate: self,
+            didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
         } catch {
+          isPrinting = false
           _ = window.presentError(error)
         }
       }
+    }
+
+    @objc private func printOperationDidRun(
+      _ operation: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?
+    ) {
+      isPrinting = false
     }
 
     /// File > Page Setup…, which sets the paper `printDocument()` lays out for.

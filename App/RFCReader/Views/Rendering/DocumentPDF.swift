@@ -48,12 +48,25 @@ nonisolated enum DocumentPDF {
     return await render(content, furniture: furniture, paperSize: paperSize)
   }
 
-  /// Builds, lays out and draws, off the main actor.
+  /// Builds, lays out and draws, off the main actor, all of it in the light
+  /// appearance: whether a dynamic colour resolves when a line is laid out or when
+  /// it is drawn is TextKit's to decide, and either way it has to be paper's.
   @concurrent
   static func render(_ content: Content, furniture: PrintFurniture, paperSize: CGSize) async
     -> Data
   {
-    let layout = PrintLayout(paperSize: paperSize)
+    var data = Data()
+    inLightAppearance {
+      data = layOutAndDraw(content, furniture: furniture, layout: PrintLayout(paperSize: paperSize))
+    }
+    return data
+  }
+
+  private static func layOutAndDraw(
+    _ content: Content, furniture: PrintFurniture, layout: PrintLayout
+  )
+    -> Data
+  {
     switch content {
     case .document(let document):
       let built = DocumentTextBuilder.build(
@@ -76,9 +89,11 @@ nonisolated enum DocumentPDF {
 
   /// Lays `text` out at the page's column and draws it a page at a time.
   ///
-  /// The storage, layout manager and fragment factory are held for the whole call:
-  /// a fragment reaches its text through its layout manager, weakly, and draws its
-  /// decorations from what it finds there.
+  /// The storage, layout manager and fragment factory are held for the whole call,
+  /// explicitly: a layout manager holds its delegate and its storage weakly, and a
+  /// fragment its layout manager, and a local's lifetime ends at its last use, not
+  /// at the end of its scope. Released early, the layout falls back to plain
+  /// fragments or finds no text, and the fragments draw no decorations.
   private static func draw(
     _ text: NSAttributedString, keepingWithNext: Set<Int>, layout: PrintLayout,
     furniture: PrintFurniture
@@ -86,6 +101,7 @@ nonisolated enum DocumentPDF {
     let storage = NSTextContentStorage()
     let manager = NSTextLayoutManager()
     let factory = FragmentFactory()
+    defer { withExtendedLifetime((storage, manager, factory)) {} }
     manager.delegate = factory
     storage.addTextLayoutManager(manager)
     let container = NSTextContainer(
@@ -140,30 +156,23 @@ nonisolated enum DocumentPDF {
     guard let consumer = CGDataConsumer(data: data as CFMutableData),
       let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
     else { return Data() }
-    let column = layout.contentRect
-    inLightAppearance {
-      withCurrentContext(context) {
-        // Inside the light appearance, which the furniture's colour resolves in.
-        let running = RunningLines(furniture, layout: layout)
-        for (index, page) in pages.enumerated() {
-          context.beginPDFPage(nil)
-          context.saveGState()
-          // Top-down, as the text view the fragments were written for draws.
-          context.translateBy(x: 0, y: layout.paperSize.height)
-          context.scaleBy(x: 1, y: -1)
-          running.draw(page: index + 1, in: context)
-          context.clip(
-            to: CGRect(x: column.minX, y: column.minY, width: column.width, height: page.height))
-          for fragment in fragments[PrintPagination.spans(spans, on: page)] {
-            let frame = fragment.layoutFragmentFrame
-            let origin = CGPoint(
-              x: column.minX + frame.minX, y: column.minY + frame.minY - page.top)
-            fragment.draw(at: origin, in: context)
-            drawAttachments(of: fragment, at: origin)
-          }
-          context.restoreGState()
-          context.endPDFPage()
+    withCurrentContext(context) {
+      let running = RunningLines(furniture, layout: layout)
+      for (index, page) in pages.enumerated() {
+        context.beginPDFPage(nil)
+        context.saveGState()
+        // Top-down, as the text view the fragments were written for draws.
+        context.translateBy(x: 0, y: layout.paperSize.height)
+        context.scaleBy(x: 1, y: -1)
+        running.draw(page: index + 1, in: context)
+        context.clip(to: layout.clipRect(for: page))
+        for fragment in fragments[PrintPagination.spans(spans, on: page)] {
+          let origin = layout.origin(of: fragment.layoutFragmentFrame.origin, on: page)
+          fragment.draw(at: origin, in: context)
+          drawAttachments(of: fragment, at: origin)
         }
+        context.restoreGState()
+        context.endPDFPage()
       }
     }
     context.closePDF()

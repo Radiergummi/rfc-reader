@@ -14,10 +14,47 @@ import Testing
 
 @Suite("Print: page layout")
 struct PrintLayoutTests {
-  @Test func `the US prints on Letter and everywhere else on A4`() {
+  @Test func `the US prints on Letter and Europe on A4`() {
     #expect(PrintLayout.paperSize(for: Locale(identifier: "en_US")) == PrintLayout.letter)
     #expect(PrintLayout.paperSize(for: Locale(identifier: "de_DE")) == PrintLayout.isoA4)
     #expect(PrintLayout.paperSize(for: Locale(identifier: "en_GB")) == PrintLayout.isoA4)
+  }
+
+  /// Metric, and on Letter all the same: the measurement system is not the paper.
+  @Test func `a metric region on Letter prints on Letter`() {
+    #expect(PrintLayout.paperSize(for: Locale(identifier: "en_CA")) == PrintLayout.letter)
+    #expect(PrintLayout.paperSize(for: Locale(identifier: "fr_CA")) == PrintLayout.letter)
+    #expect(PrintLayout.paperSize(for: Locale(identifier: "es_MX")) == PrintLayout.letter)
+  }
+
+  @Test func `a locale without a region prints on A4`() {
+    #expect(PrintLayout.paperSize(for: Locale(identifier: "de")) == PrintLayout.isoA4)
+  }
+
+  /// A card's padding and a block quote's rule hang outside the column, into the
+  /// side margins, and a page must not cut them off.
+  @Test func `a page's clip leaves the decorations beside the column`() {
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
+    let clip = layout.clipRect(for: PrintPagination.Page(top: 300, bottom: 900))
+    let card = layout.contentRect.insetBy(dx: -FragmentGeometry.cardPadding, dy: 0)
+    #expect(clip.minX <= card.minX)
+    #expect(clip.maxX >= card.maxX)
+  }
+
+  @Test func `a page's clip holds its own lines and no others`() {
+    let layout = PrintLayout(paperSize: PrintLayout.letter)
+    let clip = layout.clipRect(for: PrintPagination.Page(top: 300, bottom: 900))
+    #expect(clip.minY == layout.contentRect.minY)
+    #expect(clip.height == 600)
+  }
+
+  @Test func `a page's first line is drawn at the top of the column`() {
+    let layout = PrintLayout(paperSize: PrintLayout.isoA4)
+    let page = PrintPagination.Page(top: 300, bottom: 900)
+    #expect(layout.origin(of: CGPoint(x: 0, y: 300), on: page) == layout.contentRect.origin)
+    #expect(
+      layout.origin(of: CGPoint(x: 12, y: 350), on: page)
+        == CGPoint(x: layout.contentRect.minX + 12, y: layout.contentRect.minY + 50))
   }
 
   @Test func `the text sits inside the margins`() {
