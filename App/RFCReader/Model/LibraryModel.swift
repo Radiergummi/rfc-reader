@@ -365,8 +365,9 @@ final class LibraryModel {
     guard !query.isEmpty, hitCache[query] == nil, let search else { return }
     let generation = indexGeneration
     let hits = await Self.hits(in: search, for: query)
-    // A new index landed meanwhile: these are hits in the old one.
-    guard indexGeneration == generation else { return }
+    // A new index landed meanwhile, so these are hits in the old one; or typing
+    // moved on, and a query nobody applies would push out one that is applied.
+    guard indexGeneration == generation, !Task.isCancelled else { return }
     if hitCache.count >= Self.listCacheLimit { hitCache.removeAll(keepingCapacity: true) }
     hitCache[query] = hits
   }

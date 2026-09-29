@@ -12,20 +12,30 @@ struct AppliedSearchTests {
   }
 
   @Test func `a new query waits for a pause in typing`() {
-    #expect(AppliedSearch.delay(applying: "http", over: "htt") == AppliedSearch.pause)
-    #expect(AppliedSearch.delay(applying: "quic", over: "") == AppliedSearch.pause)
+    #expect(
+      AppliedSearch.step(applying: "http", over: "htt", pausing: true)
+        == .search(query: "http", after: AppliedSearch.pause))
+    #expect(
+      AppliedSearch.step(applying: "quic ", over: "", pausing: true)
+        == .search(query: "quic", after: AppliedSearch.pause))
   }
 
-  @Test func `clearing the search applies at once`() {
-    #expect(AppliedSearch.delay(applying: "", over: "http") == .zero)
-    #expect(AppliedSearch.delay(applying: "   ", over: "http") == .zero)
+  @Test func `a query applied without pausing is searched at once`() {
+    #expect(
+      AppliedSearch.step(applying: "http", over: "", pausing: false)
+        == .search(query: "http", after: .zero))
+  }
+
+  @Test func `clearing the search applies before returning`() {
+    #expect(AppliedSearch.step(applying: "", over: "http", pausing: true) == .apply(query: ""))
+    #expect(AppliedSearch.step(applying: "   ", over: "http", pausing: true) == .apply(query: ""))
   }
 
   /// A space typed between words asks for the query already applied, so the list
   /// has nothing to follow.
   @Test func `the query already applied is not applied again`() {
-    #expect(AppliedSearch.delay(applying: "http ", over: "http") == nil)
-    #expect(AppliedSearch.delay(applying: "", over: "") == nil)
+    #expect(AppliedSearch.step(applying: "http ", over: "http", pausing: true) == nil)
+    #expect(AppliedSearch.step(applying: "", over: "", pausing: false) == nil)
   }
 
   @Test func `the pause is short enough to follow while reading`() {

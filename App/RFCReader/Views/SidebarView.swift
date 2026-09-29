@@ -72,7 +72,7 @@ struct SidebarView: View {
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
       .searchable(text: Bindable(navigation).searchText, prompt: "Search")
-      .onSubmit(of: .search) { navigation.applySearchNow() }
+      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
@@ -397,7 +397,7 @@ struct SidebarView: View {
         _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
       ) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-          navigation.applySearchNow()
+          navigation.applySearchWithoutPause()
         }
         return false
       }

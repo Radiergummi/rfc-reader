@@ -240,7 +240,7 @@ struct RFCListView: View {
       .searchable(
         text: $navigation.searchText, prompt: "Search \(library.title(for: navigation.filter))"
       )
-      .onSubmit(of: .search) { navigation.applySearchNow() }
+      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }

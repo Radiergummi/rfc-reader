@@ -13,16 +13,28 @@ public enum AppliedSearch {
   /// list follows while the reader looks at it.
   public static let pause = Duration.milliseconds(150)
 
+  /// How the query applied catches up with what is typed.
+  public enum Step: Equatable, Sendable {
+    /// Apply `query` before returning: the search is cleared, so there is nothing to
+    /// search for.
+    case apply(query: String)
+    /// Search for `query` off the main actor after `delay`, and apply it once its
+    /// hits are ready.
+    case search(query: String, after: Duration)
+  }
+
   /// The query `text` asks for.
   public static func query(for text: String) -> String {
     text.trimmingCharacters(in: .whitespaces)
   }
 
-  /// How long to wait before applying `text` over the query `applied`: nil when it
-  /// asks for the query already applied, zero when it clears the search.
-  public static func delay(applying text: String, over applied: String) -> Duration? {
+  /// How to apply `text` over the query `applied`: nil when it asks for the query
+  /// already applied. A new query waits for a pause in typing unless `pausing` is
+  /// false, as for Return in the field.
+  public static func step(applying text: String, over applied: String, pausing: Bool) -> Step? {
     let query = query(for: text)
     guard query != applied else { return nil }
-    return query.isEmpty ? .zero : pause
+    guard !query.isEmpty else { return .apply(query: query) }
+    return .search(query: query, after: pausing ? pause : .zero)
   }
 }
