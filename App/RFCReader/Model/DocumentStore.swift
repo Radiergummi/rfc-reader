@@ -16,6 +16,10 @@ actor DocumentStore {
   /// handful rather than all: a parsed document is several times its file, and a
   /// session can open hundreds.
   private var parsed = RecentlyUsed<DocumentID, RFCDocument>(capacity: 8)
+  /// The cached bodies being parsed, so a second open of one joins the parse rather
+  /// than running its own: the parse is off the actor, which is free meanwhile to
+  /// take the second request.
+  private var parsing: [DocumentID: Task<RFCDocument?, Never>] = [:]
 
   /// Which bodies are on disk, scanned once on first use and kept current by
   /// every write and removal below, so asking does not enumerate the directory.
@@ -111,9 +115,7 @@ actor DocumentStore {
     markOpened(id)
     if let cached = parsed.value(for: id) { return cached }
 
-    if let document = await Self.parseCached(
-      id, xml: fileURL(id, format: .xml), text: fileURL(id, format: .text))
-    {
+    if let document = await parseCached(id) {
       // A removal while the parse ran took the body off the disk, and the memo
       // does not bring it back.
       if cachedDocuments.contains(id) { parsed.insert(document, for: id) }
@@ -131,6 +133,18 @@ actor DocumentStore {
     hasGrown = true
     parsed.insert(fetched.document, for: id)
     return fetched.document
+  }
+
+  /// The cached body parsed, joining a parse of it already running.
+  private func parseCached(_ id: DocumentID) async -> RFCDocument? {
+    if let running = parsing[id] { return await running.value }
+    let xml = fileURL(id, format: .xml)
+    let text = fileURL(id, format: .text)
+    let parse = Task { await Self.parseCached(id, xml: xml, text: text) }
+    parsing[id] = parse
+    let document = await parse.value
+    parsing[id] = nil
+    return document
   }
 
   /// The cached body parsed, the XML when there is one that parses, otherwise the
