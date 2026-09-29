@@ -584,8 +584,10 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction
     ) -> UIAction? {
-      // A link the reader does not own, a web page, is UIKit's to open.
-      guard case .link(let url) = textItem.content, let documentID,
+      // A link the reader does not own, a web page, is UIKit's to open. Read from
+      // the storage, as the preview's is: a press on a chip's leading glyph is an
+      // attachment item, whose own default action follows nothing.
+      guard let url = link(at: textItem.range.location), let documentID,
         LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
       else { return defaultAction }
       // An action, not the link followed here and nil returned: UIKit asks for the
@@ -626,9 +628,9 @@ final class RFCTextViewCoordinator: NSObject {
           in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
       case .document(let id, let place):
         // Measured against the window, not the text view: the preview is shown
-        // over the whole screen, whatever the reader's own width.
-        let screen = textView.window?.bounds.size ?? textView.bounds.size
-        let size = LinkPreview.documentSize(fitting: screen)
+        // over the whole window, whatever the reader's own width.
+        guard let window = textView.window else { return .init(menu: defaultMenu) }
+        let size = LinkPreview.documentSize(fitting: window.bounds.size)
         // The commit is the tap, performed as the primary action; nothing in a
         // context menu's preview is clicked.
         let preview = DocumentPreview(library: library, id: id, place: place, size: size) {}
@@ -650,7 +652,13 @@ final class RFCTextViewCoordinator: NSObject {
       _ textView: UITextView, textItemMenuWillEndFor textItem: UITextItem,
       animator: any UIContextMenuInteractionAnimating
     ) {
-      animator.addCompletion { [weak self] in self?.referencePreviewHost = nil }
+      // Only the host this menu showed: a long press begun while the last menu was
+      // still fading out has installed its own by the time this completion runs.
+      let shown = referencePreviewHost
+      animator.addCompletion { [weak self] in
+        guard let self, self.referencePreviewHost === shown else { return }
+        self.referencePreviewHost = nil
+      }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -885,7 +893,7 @@ final class RFCTextViewCoordinator: NSObject {
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: preview.environment(library))
-      present(host, size: LinkPreview.documentSize, at: rect)
+      present(host, size: preview.size, at: rect)
       isShowingDocumentPreview = true
     }
 

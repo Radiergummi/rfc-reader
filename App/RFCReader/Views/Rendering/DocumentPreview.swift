@@ -24,6 +24,8 @@ struct DocumentPreview: View {
 
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("underlineLinks") private var underlineLinks = false
+  /// The reader follows Dynamic Type (#331), so the preview of it does too.
+  @Environment(\.dynamicTypeSize) private var textSize
   /// The reader's own preference, so the preview's build and its text view agree
   /// on the column, as `DocumentView` and the reader's do (#32).
   @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
@@ -107,7 +109,9 @@ struct DocumentPreview: View {
       let column = ReaderLayout.column(forWidth: size.width, measure: measure)
       let built = await DocumentView.build(
         document,
-        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
+        style: ReadingStyle(
+          bodySize: fontSize, measure: column, underlinesLinks: underlineLinks,
+          textSize: textSize))
       loaded = Loaded(
         document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
       // Resolved the way the reader resolves a jump, so the preview opens where a
