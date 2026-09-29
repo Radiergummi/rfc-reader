@@ -318,7 +318,7 @@ extension LegacyTextParser {
   /// attachment needs the column, and two copies of "does this line open an item"
   /// drift: a third marker shape added to one of them would leave the other blind
   /// to it, and lists of that shape would quietly lose their second paragraphs.
-  /// `parseBlocks` asks once per block and hands the answer down.
+  /// `blocks(from:proseIndent:linker:)` asks once per block and hands the answer down.
   static func listMarker(of lines: [String]) -> ListMarker? {
     guard let first = lines.first else { return nil }
     // Both patterns want one of these in the first column that is not a space, and
@@ -615,7 +615,6 @@ extension LegacyTextParser {
     let text = lines.map { line in
       String(line.dropFirst(min(indent, line.leadingSpaceCount)))
     }.joined(separator: "\n")
-    // "Figure 3: Title" captions directly under artwork are common; keep them attached.
     return [.preformatted(Preformatted(kind: .artwork, text: text))]
   }
 

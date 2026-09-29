@@ -43,7 +43,6 @@ public struct LegacyTextParser: Sendable {
     var title: String
     var isAppendix: Bool
     var anchor: String
-    var depth: Int
   }
 
   struct RawSection {

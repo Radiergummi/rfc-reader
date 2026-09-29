@@ -99,14 +99,12 @@ extension LegacyTextParser {
       let number = String(match.number)
       let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
-        number: number, title: title, isAppendix: false, anchor: "section-\(number)",
-        depth: number.split(separator: ".").count)
+        number: number, title: title, isAppendix: false, anchor: "section-\(number)")
     }
     if let (number, matched) = appendixHeading(in: trimmed) {
       let title = matched.trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
-        number: number, title: title, isAppendix: true, anchor: "appendix-\(number)",
-        depth: number.split(separator: ".").count)
+        number: number, title: title, isAppendix: true, anchor: "appendix-\(number)")
     }
     // Unnumbered heading: "Abstract", "Security Considerations", "Author's Address".
     let firstWord = trimmed.split(separator: " ").first.map { String($0).lowercased() } ?? ""
@@ -120,8 +118,7 @@ extension LegacyTextParser {
     let lowered = trimmed.lowercased()
     guard !headerLinePrefixes.contains(where: { lowered.hasPrefix($0) }) else { return nil }
     return HeadingInfo(
-      number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())",
-      depth: 1)
+      number: nil, title: trimmed, isAppendix: false, anchor: "name-\(trimmed.slugified())")
   }
 
   static func isReferencesHeading(_ heading: HeadingInfo) -> Bool {
