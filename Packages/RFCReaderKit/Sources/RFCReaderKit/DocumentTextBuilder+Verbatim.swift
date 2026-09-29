@@ -69,10 +69,16 @@ extension DocumentTextBuilder {
   /// can be far longer than the 129 columns fit-to-measure scaling was measured
   /// against, and a fold the header explains reads better than type too small to
   /// read. The header has to stay with the folds, since it is what explains them.
+  ///
+  /// Either way its tabs are spaces to the next eighth column, as the RFC Editor's
+  /// text rendering sets them: the verbatim style has no tab stops, and a default
+  /// stop is a distance in points, not in the block's columns, so a tabbed figure
+  /// sheared (#31). The box keeps the tabs; this is only what is drawn and measured.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    guard let unfolded = FoldedLines.unfold(content.text),
+    let published = content.text.expandingTabs()
+    guard let unfolded = FoldedLines.unfold(published),
       monospaceScale(for: unfolded, indent: indent) == 1
-    else { return content.text }
+    else { return published }
     return unfolded
   }
 

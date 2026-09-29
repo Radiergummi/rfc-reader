@@ -2790,8 +2790,10 @@ extension String {
   }
 
   /// Tabs replaced by spaces to the next multiple-of-eight column, which is what the
-  /// line printers and terminals these documents were typed for did with them.
-  func expandingTabs() -> String {
+  /// line printers and terminals these documents were typed for did with them, and
+  /// what the RFC Editor's text rendering still does with a tab in RFCXML artwork.
+  /// Each line counts from its own column 0, so a whole block can be expanded at once.
+  public func expandingTabs() -> String {
     // Over UTF-8: this runs on every line of every document, and `contains` over
     // Characters is an order of magnitude dearer for a test that almost always fails.
     guard utf8.contains(9) else { return self }
@@ -2803,6 +2805,9 @@ extension String {
         let width = 8 - column % 8
         result.append(contentsOf: repeatElement(" ", count: width))
         column += width
+      } else if character == "\n" {
+        result.append(character)
+        column = 0
       } else {
         result.append(character)
         column += 1
