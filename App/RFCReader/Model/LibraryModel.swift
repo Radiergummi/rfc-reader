@@ -300,6 +300,8 @@ final class LibraryModel {
     self.topWorkingGroups = prepared.topWorkingGroups
     self.indexCounts = prepared.counts
     listCache.removeAll()
+    hitCache.removeAll()
+    indexGeneration += 1
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
@@ -466,7 +468,7 @@ final class LibraryModel {
     let filter = scene.filter
     let key = ListKey(
       filter: filter,
-      query: scene.searchText.trimmingCharacters(in: .whitespaces),
+      query: scene.appliedQuery,
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : [],
@@ -537,15 +539,52 @@ final class LibraryModel {
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = signposter.withIntervalSignpost(
-      "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
-    ) {
-      search.search(key.query, limit: .max)
-    }
+    let hits =
+      hitCache[key.query]
+      ?? signposter.withIntervalSignpost(
+        "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+      ) {
+        search.search(key.query, limit: .max).map(\.rfc)
+      }
     // Everything is allowed in the whole library, so there is nothing to filter.
-    if case .all = filter { return hits.map(\.rfc) }
+    if case .all = filter { return hits }
     let allowed = Set(base.map(\.number))
-    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
+    return hits.filter { allowed.contains($0.number) }
+  }
+
+  /// Every hit for a query, best first, searched off the main actor by
+  /// `prepareSearch(_:)` before a scene applies the query (#124), so a list
+  /// computed for it only filters. The scan measures 7–11 ms in Release and up to
+  /// 98 ms in Debug. A query that is not here, as after `apply` or for a script,
+  /// is searched on the spot.
+  ///
+  /// Not observed, for the reason `listCache` gives; applying the query is what
+  /// the list observes.
+  @ObservationIgnored private var hitCache: [String: [RFCMetadata]] = [:]
+  /// Counts the indexes `apply` has installed, so a search that outlived its index
+  /// is not kept.
+  @ObservationIgnored private var indexGeneration = 0
+
+  /// Searches for `query` off the main actor, so the list can apply it without
+  /// scanning the index in a view update.
+  func prepareSearch(_ query: String) async {
+    guard !query.isEmpty, hitCache[query] == nil, let search else { return }
+    let generation = indexGeneration
+    let hits = await Self.hits(in: search, for: query)
+    // A new index landed meanwhile, so these are hits in the old one; or typing
+    // moved on, and a query nobody applies would push out one that is applied.
+    guard indexGeneration == generation, !Task.isCancelled else { return }
+    if hitCache.count >= Self.listCacheLimit { hitCache.removeAll(keepingCapacity: true) }
+    hitCache[query] = hits
+  }
+
+  @concurrent
+  private static func hits(in search: IndexSearch, for query: String) async -> [RFCMetadata] {
+    signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
+    ) {
+      search.search(query, limit: .max).map(\.rfc)
+    }
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.

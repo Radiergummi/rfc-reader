@@ -309,7 +309,7 @@ struct DocumentCommands: Commands {
           Picker("Sort By", selection: $navigation.listOptions.order) {
             ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
           }
-          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.searchText))
+          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery))
         }
         Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
       }

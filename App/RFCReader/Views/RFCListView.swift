@@ -95,7 +95,7 @@ struct RFCListView: View {
     // A collection in its own order can be rearranged and emptied (#349). Never
     // sectioned by year, so this is the branch a collection uses.
     let allowsMoving = navigation.listOptions.allowsMoving(
-      in: navigation.filter, query: navigation.searchText)
+      in: navigation.filter, query: navigation.appliedQuery)
     let visible = Array(window)
     let unsectioned = ForEach(window) { rfc in
       row(rfc, true)
@@ -118,7 +118,7 @@ struct RFCListView: View {
         // By year where the list is in order of publication, as Notes sections
         // its lists by date (#347). Over the window only: a later page's row may
         // join a year already on screen, which is above the reader by then.
-        if YearSections.apply(to: navigation.filter, query: navigation.searchText) {
+        if YearSections.apply(to: navigation.filter, query: navigation.appliedQuery) {
           ForEach(YearSections.sections(of: window)) { section in
             Section {
               ForEach(section.rfcs) { row($0, false) }
@@ -158,7 +158,7 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        let isUnsearched = navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        let isUnsearched = navigation.appliedQuery.isEmpty
         if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
@@ -172,7 +172,7 @@ struct RFCListView: View {
             "No \(library.title(for: navigation.filter))",
             systemImage: navigation.filter.systemImage)
         } else {
-          ContentUnavailableView.search(text: navigation.searchText)
+          ContentUnavailableView.search(text: navigation.appliedQuery)
         }
       }
     }
@@ -219,7 +219,7 @@ struct RFCListView: View {
     .onChange(of: navigation.listOptions) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
-    .onChange(of: navigation.searchText) {
+    .onChange(of: navigation.appliedQuery) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     // Only ever wider. A selection arriving from outside the list — a deep link, a
@@ -240,6 +240,7 @@ struct RFCListView: View {
       .searchable(
         text: $navigation.searchText, prompt: "Search \(library.title(for: navigation.filter))"
       )
+      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
@@ -271,7 +272,7 @@ struct RFCListView: View {
               Text(sort.title)
             }
           }
-        } else if ListOptions.canReorder(navigation.filter, query: navigation.searchText) {
+        } else if ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery) {
           Picker("Sort", selection: $navigation.listOptions.order) {
             ForEach(ListOptions.Order.allCases, id: \.self) { order in
               Text(order.title)

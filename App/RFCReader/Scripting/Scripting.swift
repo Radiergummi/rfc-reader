@@ -118,7 +118,8 @@
 
     @objc var scriptSearchText: String {
       get { controller?.navigation.searchText ?? "" }
-      set { controller?.navigation.searchText = newValue }
+      // A script reads the list straight after setting the text.
+      set { controller?.navigation.setSearchTextSynchronously(newValue) }
     }
 
     @objc var scriptListedRFCs: [ScriptableRFC] {
