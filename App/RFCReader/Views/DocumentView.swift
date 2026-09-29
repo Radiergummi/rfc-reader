@@ -660,9 +660,7 @@ struct DocumentView: View {
 
   #if !os(macOS)
     private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(
-        metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      library.toggleBookmark(id, title: title)
+      library.toggleBookmark(id, documentTitle: reader.documentTitle)
     }
 
     private func copyCitation(_ style: CitationStyle) {

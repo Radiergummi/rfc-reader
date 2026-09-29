@@ -147,9 +147,14 @@ final class LibraryModel {
     }
   }
 
-  /// Adds the bookmark or removes it, on the app's context. A failure is logged
-  /// rather than shown, as a collection's is (#125); the store has changed nothing.
-  func toggleBookmark(_ id: DocumentID, title: String) {
+  /// Adds the bookmark or removes it, on the app's context, titled from the index
+  /// or else `documentTitle`, what an open reader has parsed. A failure is logged
+  /// rather than shown, as a collection's is (#125). A failed lookup changes
+  /// nothing; a failed save leaves the change pending in the context, saved with
+  /// the next save that succeeds.
+  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+    let title = DocumentActions.bookmarkTitle(
+      metadata: metadata(id), documentTitle: documentTitle, id: id)
     do {
       try BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
     } catch {

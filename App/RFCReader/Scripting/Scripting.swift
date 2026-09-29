@@ -34,8 +34,7 @@
       get { LibraryModel.shared.bookmarkedDocuments.contains(id) }
       set {
         guard newValue != isBookmarked else { return }
-        let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: nil, id: id)
-        LibraryModel.shared.toggleBookmark(id, title: title)
+        LibraryModel.shared.toggleBookmark(id)
       }
     }
 

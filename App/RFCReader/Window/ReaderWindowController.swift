@@ -479,12 +479,7 @@
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
       guard let id = navigation.selection else { return }
-      let title = DocumentActions.bookmarkTitle(
-        metadata: library.metadata(id),
-        documentTitle: reader.documentTitle,
-        id: id
-      )
-      library.toggleBookmark(id, title: title)
+      library.toggleBookmark(id, documentTitle: reader.documentTitle)
     }
 
     // MARK: - Go to RFC

@@ -524,8 +524,7 @@ struct RFCRow: View {
     }
 
     private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
-      library.toggleBookmark(rfc.id, title: title)
+      library.toggleBookmark(rfc.id)
     }
   }
 #endif
@@ -568,8 +567,7 @@ private struct PickerTarget: Identifiable {
     private var isBookmarked: Bool { library.bookmarkedDocuments.contains(rfc.id) }
 
     private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
-      library.toggleBookmark(rfc.id, title: title)
+      library.toggleBookmark(rfc.id)
     }
   }
 #endif
