@@ -24,7 +24,7 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// Two sources, strictest first. A primary index entry, `<iref primary="true">`, is the
 /// author marking where a term is defined; few documents use it (RFC 9110 and the other
 /// HTTP core documents). A definition list is a definition only in a section that says
-/// it defines terms (`namesTerms`): most lists describe fields or notation, and
+/// it defines terms (`namesTerms`), or a subsection of one: most lists describe fields or notation, and
 /// `Type: 8 bits` defines no term. A list nested in a definition is not read either: it
 /// describes that term's parts. A term introduced in running prose, where a sentence
 /// names a thing and then calls it something, is not read: that is a heuristic nothing
@@ -32,18 +32,25 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// The first definition of a term wins, except that an index entry with no definition
 /// text, one placed directly in a section, gives way to any entry that has one.
 enum DefinedTerms {
-  /// Whether a section titled `title` defines terms: a Terminology or Glossary section,
-  /// one titled `Conventions and …`, one opening with Definitions or titled `Definition
-  /// of Terms`, or one whose title lists Definitions as an item of its own, as in
-  /// `Terms and Definitions` or `Symbols, Abbreviations, and Definitions`. A bare
-  /// `Conventions` or `Notational Conventions` describes notation, not terms. Definitions
-  /// qualified by a word before it (`Field`, `Option`, and `General` or `Technical` as
-  /// readily) are a format's parts as often as a document's terms, and are left out.
+  /// Whether a section titled `title` defines terms: one whose title holds Terminology,
+  /// Glossary or the noun Terms (`New Terms`, `Terms Used in This Document`), one titled
+  /// `Conventions and` Definitions, Terminology, Terms or Acronyms, one opening with
+  /// Definitions or titled `Definition of Terms`, or one whose title lists Definitions as
+  /// an item of its own, as in `Symbols, Abbreviations, and Definitions`. A bare
+  /// `Conventions`, `Notational Conventions` or `Conventions and Notation` describes
+  /// notation, not terms. Definitions qualified by a word before it (`Field`, `Option`,
+  /// and `General` or `Technical` as readily) are a format's parts as often as a
+  /// document's terms, and are left out.
   static func namesTerms(_ title: String) -> Bool {
     let lowered = title.lowercased()
     let words = lowered.split(whereSeparator: { !$0.isLetter }).map(String.init)
-    if words.contains("terminology") || words.contains("glossary")
-      || lowered.hasPrefix("conventions and ") || words.first == "definitions"
+    if words.contains("terminology") || words.contains("glossary") || words.contains("terms")
+      || words.first == "definitions"
+    {
+      return true
+    }
+    if words.starts(with: ["conventions", "and"]), words.count > 2,
+      ["definitions", "terminology", "terms", "acronyms"].contains(words[2])
     {
       return true
     }
@@ -62,7 +69,7 @@ enum DefinedTerms {
   }
 
   /// Every term the document defines: `indexed` first, from primary index entries, then
-  /// the definition lists of sections that name terms.
+  /// the definition lists of sections that name terms, and of their subsections.
   static func defined(in document: RFCDocument, indexed: [DefinedTerm] = [])
     -> [String: DefinedTerm]
   {
@@ -77,20 +84,29 @@ enum DefinedTerms {
     indexed.filter { !$0.definition.isEmpty }.forEach(record)
     indexed.filter(\.definition.isEmpty).forEach(record)
     var undefined = Set(found.values.filter(\.definition.isEmpty).map(\.term))
-    for section in document.allSections where namesTerms(section.title.plainText) {
-      for items in definitionLists(in: section.blocks) {
-        for item in items {
-          let defined = DefinedTerm(
-            term: term(item.term.plainText), anchor: item.anchor ?? section.anchor,
-            definition: item.definition)
-          if undefined.remove(defined.term) != nil {
-            found[defined.term] = defined
-          } else {
-            record(defined)
+    // A subsection of a section titled for its terms is one of its parts (`Core Terms`
+    // under Terminology), whatever its own title says.
+    func read(_ sections: [Section], inherited: Bool) {
+      for section in sections {
+        let namesTerms = inherited || namesTerms(section.title.plainText)
+        if namesTerms {
+          for items in definitionLists(in: section.blocks) {
+            for item in items {
+              let defined = DefinedTerm(
+                term: term(item.term.plainText), anchor: item.anchor ?? section.anchor,
+                definition: item.definition)
+              if undefined.remove(defined.term) != nil {
+                found[defined.term] = defined
+              } else {
+                record(defined)
+              }
+            }
           }
         }
+        read(section.subsections, inherited: namesTerms)
       }
     }
+    read(document.sections, inherited: false)
     return found
   }
 

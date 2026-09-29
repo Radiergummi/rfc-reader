@@ -15,7 +15,8 @@ struct DefinedTermsTests {
     "Definitions of Protocol State", "Terms and Definitions",
     "Notational Conventions and Definitions", "Symbols, Abbreviations, and Definitions",
     "Conventions, Definitions, and Acronyms", "Notation and Definitions", "Definition of Terms",
-    "Definitions of Terms Used Here",
+    "Definitions of Terms Used Here", "Terms", "New Terms", "Terms Used in This Document",
+    "Terms and Abbreviations", "Summary of Terms", "Conventions and Acronyms",
   ])
   func `a section titled for its terms defines them`(title: String) {
     #expect(DefinedTerms.namesTerms(title), "\(title)")
@@ -30,6 +31,7 @@ struct DefinedTermsTests {
     "Definition of the Header", "Message Definition", "Technical Definitions",
     "Additional Definitions", "Key Definitions", "General Definitions",
     "Message and Option Definitions", "Symbols and Option Definitions",
+    "Conventions and Notation", "Conventions and Assumptions", "Conventions and Licenses",
   ])
   func `any other section does not`(title: String) {
     #expect(!DefinedTerms.namesTerms(title), "\(title)")
@@ -57,6 +59,36 @@ struct DefinedTermsTests {
       ],
       source: .xml)
     #expect(Array(DefinedTerms.defined(in: document).keys) == ["Widget"])
+  }
+
+  /// A Terminology section can hold its lists in subsections of their own, titled for
+  /// what they hold rather than for terms; a subsection of any other section is still
+  /// read only when its own title names terms.
+  @Test func `a subsection of a section titled for its terms defines terms`() {
+    func list(_ term: String) -> Block {
+      .definitionList([
+        DefinitionItem(
+          term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
+      ])
+    }
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(
+          anchor: "terms", title: "Terminology", blocks: [],
+          subsections: [
+            Section(
+              anchor: "core", title: "Core Concepts", blocks: [list("Widget")],
+              subsections: [
+                Section(anchor: "deeper", title: "Details", blocks: [list("Gadget")])
+              ])
+          ]),
+        Section(
+          anchor: "format", title: "Message Format", blocks: [],
+          subsections: [Section(anchor: "header", title: "Header", blocks: [list("Flags")])]),
+      ],
+      source: .xml)
+    #expect(Set(DefinedTerms.defined(in: document).keys) == ["Widget", "Gadget"])
   }
 
   /// A document can indent its terminology by setting the list in a list item.
