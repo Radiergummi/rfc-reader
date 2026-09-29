@@ -4,15 +4,8 @@ import Logging
 
 // corpus-build: the offline half of RFC Reader's data pipeline.
 //
-//   corpus-build fetch    --out corpus [--format text|xml] [--index rfc-index.xml] [--limit N] [--concurrency 6]
-//   corpus-build convert  --in corpus/text.noindex --out corpus/xml.noindex [--overrides corpus/overrides] [--report corpus/report.json]
-//                         [--index corpus/rfc-index.xml] [--only 5 822 ...]
-//                         [--diagnostics corpus/prose.json] [--schema Tools/corpus-build/Schema/v3.rng]
-//   corpus-build manifest --dir corpus/xml.noindex --out corpus/manifest.json --version 2026.09
-//   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
-//                         [--limit 4000] [--seed 11] [--min-words 8]
-//
-// `corpus-build help <command>` says what each option does. See docs/DATA_PIPELINE.md
+// `corpus-build help` lists the commands and `corpus-build help <command>` what each
+// option does; the Makefile's corpus targets show them in use. See docs/DATA_PIPELINE.md
 // for the why and the pack layout.
 
 @main
@@ -39,10 +32,11 @@ enum PipelineError: Error, CustomStringConvertible {
 }
 
 /// `.sortedKeys` is what makes these files diffable between corpus runs, so the encoder
-/// is configured in one place rather than at each of the three call sites.
+/// is configured in one place rather than at each call site. Slashes are left unescaped:
+/// they are in paths, URLs and quoted prose, which is read by people as often as tools.
 func writeJSON(_ value: some Encodable, to path: String) throws {
   let encoder = JSONEncoder()
-  encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+  encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
   try encoder.encode(value).write(to: URL(fileURLWithPath: path), options: .atomic)
 }
 
