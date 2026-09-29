@@ -45,6 +45,16 @@ public struct PrintFurniture: Equatable, Sendable {
     )
   }
 
+  /// `RFC 9110: HTTP Semantics`: what a print job is called, which the print
+  /// panel's Save as PDF sheet offers as the file's title. Either half alone when
+  /// the other is unknown.
+  public static func documentTitle(id: DocumentID?, title: String?) -> String {
+    [id?.displayName, title]
+      .compactMap { $0 }
+      .filter { !$0.isEmpty }
+      .joined(separator: ": ")
+  }
+
   /// The trailing end of the footer, as an RFC numbers its pages.
   public static func pageLabel(_ number: Int) -> String {
     "[Page \(number)]"

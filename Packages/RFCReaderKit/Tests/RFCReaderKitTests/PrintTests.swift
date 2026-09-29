@@ -313,6 +313,16 @@ struct PrintFurnitureTests {
     #expect(full.authors == [Author(name: "A. Writer")])
   }
 
+  /// The job title, which the print panel's Save as PDF sheet offers as the file's
+  /// title: the designation and the title, as an exported PDF's title says it.
+  @Test func `a print job is titled with the designation and the whole title`() {
+    #expect(
+      PrintFurniture.documentTitle(id: .rfc(9999), title: "A Protocol for Examples")
+        == "RFC 9999: A Protocol for Examples")
+    #expect(PrintFurniture.documentTitle(id: nil, title: "A Protocol") == "A Protocol")
+    #expect(PrintFurniture.documentTitle(id: .rfc(9999), title: nil) == "RFC 9999")
+  }
+
   @Test func `pages are numbered as an RFC numbers them`() {
     #expect(PrintFurniture.pageLabel(7) == "[Page 7]")
   }

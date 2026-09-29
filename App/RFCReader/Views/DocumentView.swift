@@ -475,7 +475,8 @@ struct DocumentView: View {
           return
         }
         let info = UIPrintInfo.printInfo()
-        info.jobName = id.displayName
+        info.jobName = PrintFurniture.documentTitle(
+          id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
         info.outputType = .general
         let controller = UIPrintInteractionController.shared
         controller.printInfo = info
