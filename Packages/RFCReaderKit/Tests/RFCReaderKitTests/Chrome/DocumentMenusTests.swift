@@ -59,4 +59,16 @@ struct DocumentMenusTests {
     #expect(menu[0].map(\.isOn) == [true, false])
     #expect(menu[0].map(\.action) == [.toggleCollection(http), .toggleCollection(dns)])
   }
+
+  /// Each collection is shown as the sidebar shows it, as a folder in its color, so
+  /// the menu and the sidebar name the same collection the same way.
+  @Test func `a collection's item is its folder in its color`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "HTTP", color: .blue, members: []),
+      .init(id: UUID(), name: "DNS", color: .green, members: []),
+    ])
+    let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot)
+    #expect(menu[0].map(\.icon) == [.init("folder", color: .blue), .init("folder", color: .green)])
+    #expect(menu[1].map(\.icon) == [nil])
+  }
 }

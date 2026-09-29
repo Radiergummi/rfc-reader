@@ -21,16 +21,34 @@ public enum DocumentMenus {
     case newCollection
   }
 
+  /// An item's symbol, and the color it is drawn in where it has one of its own —
+  /// a collection's, as the sidebar draws it — rather than the menu's.
+  ///
+  /// Only an item that names a thing has one: macOS 27 hides menu icons unless an
+  /// item asks for its own, and keeps them for items that name an object rather
+  /// than an action, so every icon here is one a renderer shows.
+  public struct Icon: Hashable, Sendable {
+    public let symbol: String
+    public let color: CollectionColor?
+
+    public init(_ symbol: String, color: CollectionColor? = nil) {
+      self.symbol = symbol
+      self.color = color
+    }
+  }
+
   public struct Item: Hashable, Sendable {
     public let title: String
     public let action: Action
     /// On or off for an item that is a toggle, nil for one that is not.
     public let isOn: Bool?
+    public let icon: Icon?
 
-    public init(_ title: String, _ action: Action, isOn: Bool? = nil) {
+    public init(_ title: String, _ action: Action, isOn: Bool? = nil, icon: Icon? = nil) {
       self.title = title
       self.action = action
       self.isOn = isOn
+      self.icon = icon
     }
   }
 
@@ -64,7 +82,9 @@ public enum DocumentMenus {
   ) -> Sections {
     let containing = snapshot.collections(containing: document)
     let collections = snapshot.collections.map {
-      Item($0.name, .toggleCollection($0.id), isOn: containing.contains($0.id))
+      Item(
+        $0.name, .toggleCollection($0.id), isOn: containing.contains($0.id),
+        icon: Icon("folder", color: $0.color))
     }
     let create = [Item("New Collection…", .newCollection)]
     return collections.isEmpty ? [create] : [collections, create]

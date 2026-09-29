@@ -547,7 +547,13 @@ private struct PickerTarget: Identifiable {
 
     func body(content: Content) -> some View {
       content.contextMenu {
-        Button(isBookmarked ? "Remove Bookmark" : "Bookmark", action: toggleBookmark)
+        Button(action: toggleBookmark) {
+          Label(
+            isBookmarked ? "Remove Bookmark" : "Bookmark",
+            systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+        }
+        // macOS 27 hides a menu item's icon unless the label asks to keep it.
+        .labelStyle(.titleAndIcon)
         Menu("Add to Collection") {
           AddToCollectionItems(
             document: rfc.id, library: library, navigation: navigation,

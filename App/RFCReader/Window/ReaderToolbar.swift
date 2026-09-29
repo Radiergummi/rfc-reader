@@ -587,6 +587,10 @@
           item.target = self
           item.representedObject = entry.action
           if let isOn = entry.isOn { item.state = isOn ? .on : .off }
+          if let icon = entry.icon {
+            item.image = icon.image
+            item.showsImageOnMacOS27()
+          }
           menu.addItem(item)
         }
       }

@@ -13,11 +13,31 @@ struct MenuSections: View {
       if index > 0 { Divider() }
       ForEach(items, id: \.self) { item in
         if let isOn = item.isOn {
-          Toggle(item.title, isOn: Binding(get: { isOn }, set: { _ in perform(item.action) }))
+          Toggle(isOn: Binding(get: { isOn }, set: { _ in perform(item.action) })) {
+            label(for: item)
+          }
         } else {
-          Button(item.title) { perform(item.action) }
+          Button {
+            perform(item.action)
+          } label: {
+            label(for: item)
+          }
         }
       }
+    }
+  }
+
+  @ViewBuilder private func label(for item: DocumentMenus.Item) -> some View {
+    if let icon = item.icon?.label {
+      // macOS 27 hides a menu item's icon unless the label asks to keep it.
+      Label {
+        Text(item.title)
+      } icon: {
+        icon
+      }
+      .labelStyle(.titleAndIcon)
+    } else {
+      Text(item.title)
     }
   }
 }
