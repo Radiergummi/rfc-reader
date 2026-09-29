@@ -88,6 +88,6 @@ struct RequirementsTests {
       found = Requirements.extract(from: LegacyTextParser.parse(try Fixtures.data(name)))
     }
     #expect(!found.isEmpty)
-    #expect(found.allSatisfy(\.isHeuristic))
+    #expect(found.allSatisfy { $0.isHeuristic })
   }
 }

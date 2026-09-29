@@ -1,0 +1,187 @@
+import Foundation
+
+/// One of BCP 14's key words (RFC 2119, as RFC 8174 narrows it to uppercase).
+public enum BCP14Keyword: String, CaseIterable, Sendable, Hashable, Codable {
+  case must = "MUST"
+  case mustNot = "MUST NOT"
+  case required = "REQUIRED"
+  case shall = "SHALL"
+  case shallNot = "SHALL NOT"
+  case should = "SHOULD"
+  case shouldNot = "SHOULD NOT"
+  case recommended = "RECOMMENDED"
+  case notRecommended = "NOT RECOMMENDED"
+  case may = "MAY"
+  case optional = "OPTIONAL"
+}
+
+/// A sentence that states a requirement: what it says, the key words that make it
+/// one, and where it is.
+public struct Requirement: Sendable, Hashable {
+  /// In the order the sentence uses them.
+  public var keywords: [BCP14Keyword]
+  public var sentence: String
+  /// Where to go to read it: its paragraph's anchor, or its section's where the
+  /// paragraph has none, as in every document parsed from legacy text.
+  public var anchor: String
+  public var sectionAnchor: String
+  public var sectionNumber: String?
+  public var sectionTitle: String
+  /// True for a document parsed from legacy text, whose structure, and so whose
+  /// sentences and anchors, the parser recovered by heuristics.
+  public var isHeuristic: Bool
+
+  public init(
+    keywords: [BCP14Keyword], sentence: String, anchor: String, sectionAnchor: String,
+    sectionNumber: String?, sectionTitle: String, isHeuristic: Bool
+  ) {
+    self.keywords = keywords
+    self.sentence = sentence
+    self.anchor = anchor
+    self.sectionAnchor = sectionAnchor
+    self.sectionNumber = sectionNumber
+    self.sectionTitle = sectionTitle
+    self.isHeuristic = isHeuristic
+  }
+}
+
+/// Every BCP 14 requirement a document states (#180), in document order.
+///
+/// Only a document that cites RFC 2119 or RFC 8174 uses the key words in their
+/// BCP 14 sense, and only in uppercase (RFC 8174), so that is what is read, in XML
+/// and legacy text alike: RFCXML's `<bcp14>` becomes emphasis in the model, and
+/// legacy text never had it. Only prose states requirements: paragraphs, list
+/// items, definitions, table cells and asides, not artwork, source code,
+/// quotations or the references. The paragraph declaring the key words is not a requirement.
+public enum Requirements {
+  public static func extract(from document: RFCDocument) -> [Requirement] {
+    let cited = Set(document.referencedDocuments)
+    guard cited.contains(.rfc(2119)) || cited.contains(.rfc(8174)) else { return [] }
+    let isHeuristic = document.source == .text
+    var found: [Requirement] = []
+    for section in document.allSections {
+      func record(_ text: String, anchor: String?) {
+        // XML keeps the author's line breaks inside a paragraph.
+        let text = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for sentence in sentences(in: text) {
+          let keywords = keywords(in: sentence)
+          guard !keywords.isEmpty, !declaresKeywords(sentence) else { continue }
+          found.append(
+            Requirement(
+              keywords: keywords, sentence: sentence, anchor: anchor ?? section.anchor,
+              sectionAnchor: section.anchor, sectionNumber: section.number,
+              sectionTitle: section.titleText, isHeuristic: isHeuristic))
+        }
+      }
+      visit(section.blocks, record)
+    }
+    return found
+  }
+
+  /// The prose blocks, in document order, each with the anchor it lands on.
+  private static func visit(_ blocks: [Block], _ record: (String, String?) -> Void) {
+    for block in blocks {
+      switch block {
+      case .paragraph(let paragraph):
+        record(paragraph.plainText, paragraph.anchor)
+      case .list(let list):
+        for item in list.items { visit(item.blocks, record) }
+      case .definitionList(let items):
+        for item in items {
+          record(item.term.plainText, nil)
+          visit(item.definition, record)
+        }
+      case .aside(let inner):
+        visit(inner, record)
+      case .table(let table):
+        // A profile often states its requirements a row at a time: "CBOR MUST be
+        // used." A row lands on its own anchor where it has one.
+        for (index, row) in table.rows.enumerated() {
+          let anchor = index < table.rowAnchors.count ? table.rowAnchors[index] : nil
+          for cell in row { record(cell.plainText, anchor ?? table.anchor) }
+        }
+      case .preformatted, .figure, .blockQuote, .references:
+        break
+      }
+    }
+  }
+
+  /// The boilerplate that declares the key words, which names every one of them
+  /// and requires nothing.
+  private static func declaresKeywords(_ sentence: String) -> Bool {
+    sentence.contains("BCP 14") && sentence.contains("interpreted as described")
+      || sentence.contains("RFC 2119") && sentence.contains("interpreted as described")
+  }
+
+  // MARK: - Key words
+
+  /// The key words in `sentence`, in order: uppercase whole words only, a negated
+  /// one (`MUST NOT`, `NOT RECOMMENDED`) read whole before the one it contains.
+  static func keywords(in sentence: String) -> [BCP14Keyword] {
+    let words = sentence.split { !$0.isLetter }.map(String.init)
+    var found: [BCP14Keyword] = []
+    var index = 0
+    while index < words.count {
+      let word = words[index]
+      let next = index + 1 < words.count ? words[index + 1] : nil
+      if let pair = next.flatMap({ BCP14Keyword(rawValue: "\(word) \($0)") }) {
+        found.append(pair)
+        index += 2
+        continue
+      }
+      if word != "NOT", let single = BCP14Keyword(rawValue: word) {
+        found.append(single)
+      }
+      index += 1
+    }
+    return found
+  }
+
+  // MARK: - Sentences
+
+  /// Words a stop follows without ending the sentence.
+  private static let abbreviations: Set<String> = ["e.g", "i.e", "etc", "Sec", "cf", "vs", "Fig"]
+
+  /// `text` split into sentences, by a rule of our own, since RFCKit builds on
+  /// Linux, where `NLTokenizer` is not: a sentence ends at `.`, `!` or `?`, after any
+  /// closing quote or parenthesis, when a space and then a capital letter or a
+  /// digit follow, and the stop does not end an abbreviation such as `e.g.`.
+  static func sentences(in text: String) -> [String] {
+    let characters = Array(text)
+    var sentences: [String] = []
+    var start = 0
+    var index = 0
+    while index < characters.count {
+      guard ".!?".contains(characters[index]) else {
+        index += 1
+        continue
+      }
+      var end = index + 1
+      while end < characters.count, "\"')]”’".contains(characters[end]) { end += 1 }
+      var next = end
+      while next < characters.count, characters[next] == " " { next += 1 }
+      let endsSentence =
+        next > end && next < characters.count
+        && (characters[next].isUppercase || characters[next].isNumber)
+        && !endsAbbreviation(characters, at: index)
+      if endsSentence {
+        sentences.append(String(characters[start..<end]).trimmingCharacters(in: .whitespaces))
+        start = next
+      }
+      index = end
+    }
+    let rest = String(characters[start...]).trimmingCharacters(in: .whitespaces)
+    if !rest.isEmpty { sentences.append(rest) }
+    return sentences
+  }
+
+  /// Whether the stop at `index` ends one of `abbreviations`.
+  private static func endsAbbreviation(_ characters: [Character], at index: Int) -> Bool {
+    guard characters[index] == "." else { return false }
+    var start = index
+    while start > 0, characters[start - 1].isLetter || characters[start - 1] == "." {
+      start -= 1
+    }
+    return abbreviations.contains(String(characters[start..<index]))
+  }
+}
