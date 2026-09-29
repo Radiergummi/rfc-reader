@@ -181,49 +181,142 @@ struct EmptyDetailView: View {
     @Environment(NavigationModel.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
+    @State private var results = QuickOpenResults()
     @FocusState private var focused: Bool
 
-    private var resolved: RFCLink? {
-      DocumentReference.link(from: input)
+    /// What is typed, less the spaces around it, which change nothing it finds.
+    private var query: String {
+      input.normalizedQuery
+    }
+
+    /// Resolves on the keystroke, as the Mac's palette does, so the exact row never
+    /// waits for the search.
+    private var text: Binding<String> {
+      Binding {
+        input
+      } set: { text in
+        input = text
+        resolve(text.normalizedQuery)
+      }
     }
 
     var body: some View {
       NavigationStack {
         Form {
-          TextField("RFC number or link", text: $input)
+          TextField("RFC number or link", text: text)
             .focused($focused)
-            .onSubmit(open)
+            .onSubmit(openSelection)
             .keyboardType(.numbersAndPunctuation)
             .textInputAutocapitalization(.never)
-          status
+          if results.rows.isEmpty {
+            status
+          } else {
+            Section {
+              ForEach(results.rows, id: \.self) { row in
+                self.row(for: row)
+              }
+            }
+          }
         }
         .navigationTitle("Go to RFC")
         .toolbar {
           ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
           ToolbarItem(placement: .confirmationAction) {
-            Button("Open", action: open).disabled(resolved == nil)
+            Button("Open", action: openSelection).disabled(results.openable == nil)
           }
         }
       }
       .onAppear { focused = true }
+      // A series typed before the index loaded is listed as its members once it has.
+      .onChange(of: library.index != nil) { resolve(query) }
+      .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
     }
 
-    /// What the typed text resolves to, or what it would take to resolve: the one
+    /// What a search depends on. The index is part of it so that a sheet opened
+    /// before the index loaded searches again once it has.
+    private struct SearchKey: Equatable {
+      var query: String
+      var hasIndex: Bool
+    }
+
+    /// What the typed text would take to resolve, while nothing is listed: the one
     /// line under the field that turns a blind text box into something that tells
     /// the reader whether it understood them.
     @ViewBuilder
     private var status: some View {
-      if let link = resolved, let metadata = library.metadata(link.id) {
-        Text("\(link.id.displayName) — \(metadata.title)")
-      } else if !input.isEmpty {
-        Text("Not something I recognize as an RFC.")
-      } else {
+      if input.isEmpty {
         Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
+      } else if !results.isSearching {
+        Text("Not something I recognize as an RFC.")
       }
     }
 
-    private func open() {
-      guard let link = resolved else { return }
+    private func row(for row: QuickOpenResults.Row) -> some View {
+      Button {
+        open(row.link)
+      } label: {
+        HStack(spacing: 12) {
+          Text(row.link.id.displayName)
+            .fontWeight(.semibold)
+            .monospacedDigit()
+          Text(library.metadata(row.link.id)?.title ?? "Not in the index")
+            .lineLimit(1)
+            .foregroundStyle(.secondary)
+          if let section = row.link.section {
+            Spacer(minLength: 0)
+            Text("§ \(section)")
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          }
+        }
+      }
+      .tint(.primary)
+    }
+
+    /// What was typed, resolved exactly.
+    private func resolve(_ query: String) {
+      let exact = DocumentReference.link(from: query)
+      let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
+      results.show(query: query, exact: exact, members: members)
+    }
+
+    /// Runs per change of the query and is canceled by the next, which is the
+    /// debounce: only a pause long enough to outlast the sleep reaches the search.
+    private func search(_ query: String) async {
+      guard !query.isEmpty else { return }
+      // A link names its document outright, and no title or abstract contains one.
+      if query.contains("://"), DocumentReference.link(from: query) != nil {
+        finish(with: [], for: query)
+        return
+      }
+      guard library.index != nil else {
+        finish(with: [], for: query)
+        return
+      }
+      do {
+        try await Task.sleep(for: .milliseconds(120))
+      } catch {
+        return
+      }
+      let hits = await library.suggestions(for: query, limit: QuickOpenResults.limit)
+      guard !Task.isCancelled else { return }
+      finish(with: hits, for: query)
+    }
+
+    private func finish(with hits: [DocumentID], for query: String) {
+      if let opening = results.show(hits: hits, for: query) {
+        open(opening.link)
+      }
+    }
+
+    /// Return and Open: the top row, or the one the search still running selects.
+    private func openSelection() {
+      if let opening = results.activate(.current) {
+        open(opening.link)
+      }
+    }
+
+    private func open(_ link: RFCLink) {
       library.open(link, activation: .current, in: navigation)
       dismiss()
     }

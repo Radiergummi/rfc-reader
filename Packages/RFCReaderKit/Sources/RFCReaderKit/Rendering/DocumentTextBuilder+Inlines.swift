@@ -210,9 +210,16 @@ extension DocumentTextBuilder {
   /// RFCs are full of them. The attachment itself stays per run.
   private func chipSymbol(pointSize: CGFloat) -> PlatformImage? {
     if let cached = chipSymbols[pointSize] { return cached }
-    guard let symbol = PlatformImage.symbol(named: "doc.text", pointSize: pointSize) else {
+    guard let template = PlatformImage.symbol(named: "doc.text", pointSize: pointSize) else {
       return nil
     }
+    #if canImport(UIKit)
+      // UIKit draws an attachment's template symbol untinted, black on a dark page,
+      // where AppKit tints it; colored as the chip's own label is.
+      let symbol = template.withTintColor(RFCColors.accent, renderingMode: .alwaysOriginal)
+    #else
+      let symbol = template
+    #endif
     chipSymbols[pointSize] = symbol
     return symbol
   }
