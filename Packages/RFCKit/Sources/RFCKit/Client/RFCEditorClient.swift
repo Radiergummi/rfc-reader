@@ -141,6 +141,20 @@ public actor RFCEditorClient {
     return try RecentFeedParser.parse(data)
   }
 
+  /// An IANA registry (#175), read, with the bytes it was read from for the caller
+  /// to cache. From iana.org rather than the RFC Editor, through the same transport.
+  /// A response that is not a registry is an error, so an error page is never kept.
+  public func fetchRegistry(_ registry: IANARegistry) async throws -> (
+    entries: [RegistryEntry], data: Data
+  ) {
+    let data = try await fetch(registry.url)
+    do {
+      return (try IANARegistry.parse(data, as: registry), data)
+    } catch {
+      throw ClientError.decoding(context: registry.url.absoluteString, underlying: error)
+    }
+  }
+
   // MARK: - Private
 
   private func fetch(_ url: URL, notFoundAs id: DocumentID? = nil) async throws -> Data {

@@ -90,6 +90,50 @@ actor DocumentStore {
     try data.write(to: indexURL, options: .atomic)
   }
 
+  // MARK: - Registries
+
+  /// The IANA registries the Go to RFC palette looks values up in (#175), one file
+  /// each, as IANA serves it.
+  private var registriesDirectory: URL {
+    directory.appending(path: "Registries", directoryHint: .isDirectory)
+  }
+
+  private func registryURL(_ registry: IANARegistry) -> URL {
+    registriesDirectory.appending(path: "\(registry.file).xml")
+  }
+
+  /// Every cached registry's entries, and which registries are due a fetch: never
+  /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
+  /// entries are still returned, to use until the fetch succeeds.
+  func cachedRegistries(maximumAge: TimeInterval) -> (
+    entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
+  ) {
+    var entries: [IANARegistry: [RegistryEntry]] = [:]
+    var stale: [IANARegistry] = []
+    for registry in IANARegistry.allCases {
+      let url = registryURL(registry)
+      guard let data = try? Data(contentsOf: url),
+        let parsed = try? IANARegistry.parse(data, as: registry)
+      else {
+        stale.append(registry)
+        continue
+      }
+      entries[registry] = parsed
+      let fetched = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate
+      if (fetched ?? .distantPast).timeIntervalSinceNow < -maximumAge {
+        stale.append(registry)
+      }
+    }
+    return (entries, stale)
+  }
+
+  func storeRegistry(_ data: Data, for registry: IANARegistry) throws {
+    try FileManager.default.createDirectory(
+      at: registriesDirectory, withIntermediateDirectories: true)
+    try data.write(to: registryURL(registry), options: .atomic)
+  }
+
   // MARK: - Documents
 
   private func fileURL(_ id: DocumentID, format: FileFormat) -> URL {

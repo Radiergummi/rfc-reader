@@ -190,6 +190,37 @@ struct IANARegistryTests {
     }
   }
 
+  /// Answers the registry's own URL with `body`, and anything else with a 404.
+  private struct RegistryTransport: HTTPTransport {
+    let registry: IANARegistry
+    let body: String
+    let status: Int
+
+    func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+      let found = url == registry.url
+      let response = HTTPURLResponse(
+        url: url, statusCode: found ? status : 404, httpVersion: nil, headerFields: nil)!
+      return (found ? Data(body.utf8) : Data(), response)
+    }
+  }
+
+  @Test func `the client fetches a registry from IANA and reads it`() async throws {
+    let client = RFCEditorClient(
+      transport: RegistryTransport(registry: .httpStatusCodes, body: Self.statusCodes, status: 200))
+    let fetched = try await client.fetchRegistry(.httpStatusCodes)
+    #expect(fetched.entries.map(\.value) == ["100", "102", "104", "425"])
+    #expect(fetched.data == Data(Self.statusCodes.utf8))
+  }
+
+  /// An error page is not a registry, and must not be kept as one.
+  @Test func `a failed fetch is an error`() async {
+    let client = RFCEditorClient(
+      transport: RegistryTransport(registry: .tlsAlerts, body: "<html>", status: 503))
+    await #expect(throws: RFCEditorClient.ClientError.self) {
+      try await client.fetchRegistry(.tlsAlerts)
+    }
+  }
+
   @Test func `each registry names the file IANA publishes it in`() {
     #expect(
       IANARegistry.httpStatusCodes.url.absoluteString

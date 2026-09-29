@@ -164,6 +164,43 @@ final class LibraryModel {
           "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
       }
     }
+    Task(name: "Load registries") { await refreshRegistries() }
+  }
+
+  // MARK: - Registries
+
+  /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
+  /// the palette asks on each keystroke, and nothing on screen lists them.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+
+  /// Registries change more often than RFCs, but not by the day.
+  private static let registryMaximumAge: TimeInterval = 7 * 86_400
+
+  /// Reads the cached registries, then fetches those that are due. A registry that
+  /// cannot be fetched keeps its cached entries, and is logged rather than shown
+  /// (#125): the palette still finds RFCs without it.
+  private func refreshRegistries() async {
+    var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
+    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+    guard !cached.stale.isEmpty else { return }
+    for registry in cached.stale {
+      do {
+        let fetched = try await client.fetchRegistry(registry)
+        try await store.storeRegistry(fetched.data, for: registry)
+        cached.entries[registry] = fetched.entries
+      } catch {
+        libraryLog.error(
+          "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+  }
+
+  /// The registry values `query` names exactly: `425`, `tls alert 70`,
+  /// `application/dns-message`.
+  func registryMatches(for query: String) -> [RegistryEntry] {
+    RegistryLookup.matches(query, in: registryEntries)
   }
 
   #if DEBUG
