@@ -37,8 +37,10 @@ struct AmendmentsTests {
     let document = try Self.document("rfc9601.xml")
     #expect(!document.header.updates.contains(.rfc(3168)))
     let citesRFC3168 = document.proseInlines.contains { inline in
-      guard case .crossReference(let xref) = inline else { return false }
-      return xref.target == .document(.rfc(3168), section: "5.3")
+      guard case .crossReference(let xref) = inline,
+        case .document(.rfc(3168), "5.3", _) = xref.target
+      else { return false }
+      return true
     }
     #expect(citesRFC3168, "the fixture must cite a section of a document it does not update")
     #expect(!Amendments.links(in: document).contains { $0.amended == .rfc(3168) })
@@ -51,7 +53,7 @@ struct AmendmentsTests {
     #expect(document.header.updates.isEmpty)
     let citesASection = document.proseInlines.contains { inline in
       guard case .crossReference(let xref) = inline,
-        case .document(_, _?) = xref.target
+        case .document(_, _?, _) = xref.target
       else { return false }
       return true
     }
@@ -66,7 +68,7 @@ struct AmendmentsTests {
     let updated = Set(document.header.updates)
     let citations = document.proseInlines.filter { inline in
       guard case .crossReference(let xref) = inline,
-        case .document(let id, _?) = xref.target
+        case .document(let id, _?, _) = xref.target
       else { return false }
       return updated.contains(id)
     }

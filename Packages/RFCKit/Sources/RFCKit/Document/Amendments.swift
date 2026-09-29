@@ -56,7 +56,7 @@ public enum Amendments {
     where !bibliographies.contains(place.sectionAnchor) {
       for inline in place.inlines {
         guard case .crossReference(let xref) = inline,
-          case .document(let id, let section?) = xref.target,
+          case .document(let id, let section?, _) = xref.target,
           updated.contains(id)
         else { continue }
         let link = Amendment(
