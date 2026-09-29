@@ -87,6 +87,25 @@ struct BuilderListTests {
     #expect(try Fixtures.offset(of: "SHOULD", in: built.text) > empty)
   }
 
+  /// A prepped `<li><t pn="section-2-3.1">` is set on the item's first line, beside
+  /// its marker, and a link to the paragraph lands where its text starts, as a
+  /// second paragraph's would.
+  @Test func `a list items first paragraph is indexed at its text`() throws {
+    let item = ListItem(
+      blocks: [
+        .paragraph(Paragraph(text: "first paragraph", anchor: "section-1-1.1")),
+        .paragraph(Paragraph(text: "second paragraph", anchor: "section-1-1.2")),
+      ],
+      anchor: "section-1-1")
+    let list = ListBlock(style: .bullet, items: [item])
+    let built = DocumentTextBuilder.build(Fixtures.document(.list(list)), style: style)
+
+    let first = try #require(built.anchors.offset(of: "section-1-1.1"))
+    #expect(try Fixtures.offset(of: "first paragraph", in: built.text) == first)
+    let second = try #require(built.anchors.offset(of: "section-1-1.2"))
+    #expect(try Fixtures.offset(of: "second paragraph", in: built.text) == second)
+  }
+
   @Test func `a list item hangs its marker left of its text`() throws {
     let list = ListBlock(style: .bullet, items: [ListItem(text: "first")])
     let document = Fixtures.document(.list(list))
