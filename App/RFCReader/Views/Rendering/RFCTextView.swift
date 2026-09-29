@@ -307,8 +307,12 @@ struct ReaderInputs {
     /// the coordinator means it cannot outlive this view), but a popover already
     /// on screen would not otherwise close when the view goes away, and the
     /// tracking area does not retain the coordinator it reports to.
+    ///
+    /// `releaseDocument()` is the one that matters most: without it, what AppKit
+    /// keeps of the text view holds the whole document (#356).
     static func dismantleNSView(_ nsView: ReaderScrollView, coordinator: RFCTextViewCoordinator) {
       coordinator.tearDownHoverTracking()
+      coordinator.releaseDocument()
     }
   }
 #endif

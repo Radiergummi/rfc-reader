@@ -714,6 +714,38 @@ final class RFCTextViewCoordinator: NSObject {
       trackingArea = nil
     }
 
+    /// Detaches the text view from its text container, so what AppKit keeps of the
+    /// view after it is gone no longer holds the document (#356). Called from
+    /// `dismantleNSView`.
+    ///
+    /// A TextKit 2 text view's private subviews outlive it on macOS 27: the content
+    /// view that draws the text, and the viewport element view of every fragment on
+    /// screen. Measured with `heap` after ten opens: one text view, but eleven content
+    /// views, layout managers and storages, and 27,803 layout fragments, 35 MB a
+    /// document, never freed, and every build from the eighth open on 5 to 10 times
+    /// slower. A plain `NSTextView` in a small program leaks the same way, so it is
+    /// AppKit's, not this reader's: the subviews stay registered with the notification
+    /// center, by blocks that capture them.
+    ///
+    /// The subviews cannot be released from here, but what they reach can. Without
+    /// its container the content view no longer reaches the layout manager, which
+    /// takes the storage, the fragments and every attribute they drew with. Measured
+    /// in the same program: storages and content views all freed, and a dozen
+    /// fragments left per view, the ones on screen when it went. Emptying the storage
+    /// instead left the layout manager and storage behind.
+    ///
+    /// Detached through the container, the way AppKit documents it: `NSTextView`'s own
+    /// `textContainer` setter is not to be called directly, and measured in the same
+    /// program both free the same. The scroll observer goes too, so a viewport left
+    /// without a layout manager reports nothing to the window's toolbar title, which
+    /// the next reader already owns.
+    func releaseDocument() {
+      layoutTask?.cancel()
+      NotificationCenter.default.removeObserver(
+        self, name: NSView.boundsDidChangeNotification, object: nil)
+      textView?.textContainer?.textView = nil
+    }
+
     /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
     /// owner `mouseMoved:`, but the selector Swift derives for `mouseMoved(with:)`
     /// on a class that is not an `NSResponder` is `mouseMovedWith:`. AppKit checks
