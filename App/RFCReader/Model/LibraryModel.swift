@@ -10,6 +10,8 @@ private let libraryLog = Logger(
 
 #if os(macOS)
   import AppKit
+#else
+  import UIKit
 #endif
 
 /// Application state: the index, navigation, and the document cache.
@@ -35,6 +37,14 @@ final class LibraryModel {
   private(set) var index: RFCIndex?
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
+
+  /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
+  /// until the cached copy or a fetch has arrived.
+  private(set) var revisions: RFCRevisions?
+  @ObservationIgnored private var revisionsFetchedAt = Date.distantPast
+  @ObservationIgnored private var isRefreshingRevisions = false
+  @ObservationIgnored private var activations: (any NSObjectProtocol)?
+  private let revisionsClient = RevisionsClient()
 
   /// Every bookmarked document, fetched again on every save of the store: one set
   /// for the toolbars and scripts alike, which ask about the document on screen, so
@@ -65,6 +75,21 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         self?.refreshBookmarks()
         self?.refreshCollections()
+      }
+    }
+    // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
+    // SwiftUI's scene environment.
+    #if os(macOS)
+      let didBecomeActive = NSApplication.didBecomeActiveNotification
+    #else
+      let didBecomeActive = UIApplication.didBecomeActiveNotification
+    #endif
+    activations = NotificationCenter.default.addObserver(
+      forName: didBecomeActive, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        Task(name: "Refresh revisions") { await self.refreshRevisions(ifOlderThan: 86_400) }
       }
     }
   }
@@ -153,6 +178,7 @@ final class LibraryModel {
     }
     // Just Published is decoration: a failure leaves it empty, and is logged
     // rather than shown (#125).
+    Task(name: "Refresh revisions") { await refreshRevisions(ifOlderThan: 0) }
     Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
@@ -194,6 +220,38 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+  }
+
+  // MARK: - Revisions
+
+  /// Loads the cached file first, so the banner is right offline. Then fetches when
+  /// the last successful fetch is older than `interval`: every launch passes 0, an
+  /// activation a day. A failure keeps the cached copy and is logged, not shown (#125).
+  func refreshRevisions(ifOlderThan interval: TimeInterval) async {
+    guard !isRefreshingRevisions else { return }
+    isRefreshingRevisions = true
+    defer { isRefreshingRevisions = false }
+    if revisions == nil, let cached = await store.cachedRevisions() {
+      revisions = cached.revisions
+      revisionsFetchedAt = cached.fetchedAt
+    }
+    guard Date.now.timeIntervalSince(revisionsFetchedAt) >= interval else { return }
+    do {
+      let fetched = try await revisionsClient.fetch()
+      try await store.storeRevisions(fetched.data)
+      revisionsFetchedAt = .now
+      if fetched.revisions != revisions { revisions = fetched.revisions }
+    } catch {
+      libraryLog.error(
+        "fetching revisions failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// The drafts revising `id`, for an RFC. Other series have no revisions: BCP 14 is
+  /// not RFC 14.
+  func revisionsSummary(for id: DocumentID) -> RevisionsSummary? {
+    guard id.series == .rfc else { return nil }
+    return RevisionsSummary(revisions, rfc: id.number, now: .now)
   }
 
   // MARK: - Lists

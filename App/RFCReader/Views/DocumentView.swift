@@ -226,6 +226,7 @@ struct DocumentView: View {
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -498,7 +499,9 @@ struct DocumentView: View {
   /// their chips open.
   private func deriveInfo() {
     reader.info = metadata.map {
-      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+      DocumentInfo(
+        $0, authors: document?.header.authors, in: library.index,
+        revisions: library.revisionsSummary(for: $0.id))
     }
   }
 
@@ -788,7 +791,9 @@ struct StatusBanner: View {
   let metadata: RFCMetadata
 
   var body: some View {
-    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata {
+    let revisions = library.revisionsSummary(for: metadata.id)
+    let hasRevisions = revisions.map { !$0.isEmpty } ?? false
+    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata || hasRevisions {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
           row(
@@ -805,10 +810,38 @@ struct StatusBanner: View {
           }
           .font(.subheadline)
         }
+        if let revisions, hasRevisions {
+          ForEach(revisions.bannerLines) { line in
+            revisionRow(line)
+          }
+          if let more = revisions.moreText {
+            Text(more)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+        }
       }
       .padding(12)
       .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
+  }
+
+  /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
+  /// The whole row is the link to the draft's datatracker page.
+  private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
+    Link(destination: line.url) {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
+        Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
+        Text(line.title).foregroundStyle(.tint)
+        Text(line.detail).foregroundStyle(.secondary)
+      }
+    }
+    .buttonStyle(.plain)
+    .font(.subheadline)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(line.accessibilityLabel)
+    .accessibilityAddTraits(.isLink)
   }
 
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
