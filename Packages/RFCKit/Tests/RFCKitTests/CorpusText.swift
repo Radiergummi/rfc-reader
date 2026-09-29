@@ -26,7 +26,11 @@ enum CorpusText {
   /// format decodes it, through `LegacyTextParser.text(decoding:)`.
   static func text(_ stem: String) throws -> String {
     guard let directory else { throw CorpusTextError.notConfigured }
-    let bytes = try Data(contentsOf: directory.appendingPathComponent("\(stem).txt"))
+    let file = directory.appendingPathComponent("\(stem).txt")
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      throw CorpusTextError.notFetched(stem)
+    }
+    let bytes = try Data(contentsOf: file)
     return LegacyTextParser.text(decoding: bytes)
   }
 }
@@ -35,4 +39,18 @@ enum CorpusTextError: Error {
   /// `RFC_CORPUS_TEXT` is not set; a suite that reads the corpus is enabled only
   /// where it is.
   case notConfigured
+  /// The document is not in the directory: `make test-corpus` fetches only the
+  /// documents listed in the Makefile's `CORPUS_TEST_DOCUMENTS`.
+  case notFetched(String)
+}
+
+extension CorpusTextError: CustomStringConvertible {
+  var description: String {
+    switch self {
+    case .notConfigured:
+      "RFC_CORPUS_TEXT is not set"
+    case .notFetched(let stem):
+      "\(stem) is read by a corpus-backed test but not fetched: add it to CORPUS_TEST_DOCUMENTS"
+    }
+  }
 }
