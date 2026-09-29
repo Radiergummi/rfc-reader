@@ -273,7 +273,9 @@ struct DocumentView: View {
       // the title back to hidden after this view may already have appeared.
       .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
-      let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
+      let headerIdentity = DocumentHeaderView.Identity(
+        header: document.header, metadata: metadata,
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -715,13 +717,19 @@ struct DocumentHeaderView: View {
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
+    /// The banner's drafts, as lines rather than the summary, which carries the time
+    /// it was made and so would never compare equal.
+    let revisionLines: [RevisionsSummary.Line]
+    let moreRevisions: String?
 
-    init(header: DocumentHeader, metadata: RFCMetadata?) {
+    init(header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil) {
       title = header.title
       date = (header.date ?? metadata?.date)?.formatted
       workingGroup = header.workingGroup ?? metadata?.workingGroup
       authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
       self.metadata = metadata
+      revisionLines = revisions?.bannerLines ?? []
+      moreRevisions = revisions?.moreText
     }
   }
 
@@ -764,8 +772,11 @@ struct DocumentHeaderView: View {
           .font(.subheadline)
       }
       if let metadata = identity.metadata {
-        StatusBanner(library: library, navigation: navigation, metadata: metadata)
-          .padding(.top, 4)
+        StatusBanner(
+          library: library, navigation: navigation, metadata: metadata,
+          revisionLines: identity.revisionLines, moreRevisions: identity.moreRevisions
+        )
+        .padding(.top, 4)
       }
     }
     // The header is hosted, not placed by SwiftUI, and a hosting view lays its
@@ -789,11 +800,13 @@ struct StatusBanner: View {
   let library: LibraryModel
   let navigation: NavigationModel
   let metadata: RFCMetadata
+  /// From the header's identity, so a new `revisions.json` re-measures the header.
+  let revisionLines: [RevisionsSummary.Line]
+  let moreRevisions: String?
 
   var body: some View {
-    let revisions = library.revisionsSummary(for: metadata.id)
     if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata
-      || !revisions.isEmpty
+      || !revisionLines.isEmpty
     {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
@@ -811,11 +824,11 @@ struct StatusBanner: View {
           }
           .font(.subheadline)
         }
-        if !revisions.isEmpty {
-          ForEach(revisions.bannerLines) { line in
+        if !revisionLines.isEmpty {
+          ForEach(revisionLines) { line in
             revisionRow(line)
           }
-          if let more = revisions.moreText {
+          if let more = moreRevisions {
             Text(more)
               .font(.subheadline)
               .foregroundStyle(.secondary)
@@ -863,11 +876,10 @@ struct DraftLink<Label: View>: View {
   @ViewBuilder let label: Label
 
   var body: some View {
+    // On the link's own element, which keeps its trait and its action.
     Link(destination: line.url) { label }
       .buttonStyle(.plain)
-      .accessibilityElement(children: .ignore)
       .accessibilityLabel(line.accessibilityLabel)
-      .accessibilityAddTraits(.isLink)
   }
 }
 

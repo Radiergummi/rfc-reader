@@ -37,8 +37,9 @@ public struct DraftHeader: Equatable, Sendable {
   }
 
   /// The header block is the lines from the first that is not blank to the next blank
-  /// one. Its left column, up to the first run of two spaces, carries the labels; a
-  /// list that runs on continues on the next line, indented, starting with a number.
+  /// one. Its left column, up to the first tab or run of two spaces, carries the
+  /// labels; a list that runs on continues on the next line, indented, starting with a
+  /// number.
   static func parse(frontPage lines: [String]) -> DraftHeader {
     enum Label {
       case obsoletes
@@ -65,11 +66,11 @@ public struct DraftHeader: Equatable, Sendable {
 
     for line in block {
       let left = leftColumn(line)
-      if let rest = value(of: "Obsoletes:", in: left) {
+      if let rest = value(of: "Obsoletes:", in: line) {
         flush()
         label = .obsoletes
         collected = rest
-      } else if let rest = value(of: "Updates:", in: left) {
+      } else if let rest = value(of: "Updates:", in: line) {
         flush()
         label = .updates
         collected = rest
@@ -96,10 +97,10 @@ public struct DraftHeader: Equatable, Sendable {
     return numbers
   }
 
-  /// "9990, RFC 9991, rfc9992, [9993] (if approved)": the numbers, past an "RFC" or the
-  /// brackets around any. One
-  /// reading for the XML attribute and the text line alike: drafts write the prefix in
-  /// both, where a published RFC's own header never does.
+  /// "9990, RFC 9991, rfc9992, RFC-9993, [9994] (if approved)": the numbers, past an
+  /// "RFC" or the brackets around any. One reading for the XML attribute and the text
+  /// line alike: drafts write the prefix in both, where a published RFC's own header
+  /// never does.
   private static func listedNumbers(_ value: String) -> [Int] {
     value.replacingOccurrences(of: "(if approved)", with: "", options: .caseInsensitive)
       .split(whereSeparator: { $0 == "," || $0.isWhitespace })
@@ -107,23 +108,29 @@ public struct DraftHeader: Equatable, Sendable {
         // "[6265]" as a citation would write it.
         var token = token.trimmingPrefix("[")
         if token.hasSuffix("]") { token = token.dropLast() }
-        if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3) }
-        return Int(token)
+        // "RFC-9993": a hyphen, not a minus sign.
+        if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3).trimmingPrefix("-") }
+        guard let number = Int(token), number > 0 else { return nil }
+        return number
       }
   }
 
-  /// The line's text up to its first run of two spaces, past its indent: the author
-  /// column on the right never reaches it.
+  /// The line's text up to its first tab or run of two spaces, past its indent: the
+  /// author column on the right never reaches it.
   private static func leftColumn(_ line: String) -> String {
     let trimmed = line.drop(while: \.isWhitespace)
-    guard let gap = trimmed.range(of: "  ") else {
+    guard let gap = trimmed.firstRange(of: /\t| {2}/) else {
       return String(trimmed).trimmingCharacters(in: .whitespaces)
     }
     return String(trimmed[..<gap.lowerBound])
   }
 
-  private static func value(of label: String, in left: String) -> String? {
-    guard left.hasPrefix(label) else { return nil }
-    return String(left.dropFirst(label.count)).trimmingCharacters(in: .whitespaces)
+  /// The value after `label`, when the line starts with it. The column gap is looked
+  /// for past the label, so padding that lines a value up with its neighbors is not
+  /// taken for it.
+  private static func value(of label: String, in line: String) -> String? {
+    let trimmed = line.drop(while: \.isWhitespace)
+    guard trimmed.hasPrefix(label) else { return nil }
+    return leftColumn(String(trimmed.dropFirst(label.count)))
   }
 }

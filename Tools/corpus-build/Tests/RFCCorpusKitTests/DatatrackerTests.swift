@@ -23,6 +23,14 @@ struct DatatrackerTests {
         == "https://datatracker.ietf.org/api/v1/doc/document/?format=json&limit=100&offset=100")
   }
 
+  /// Unordered, the pages are separate queries that need not agree on an order, so a
+  /// draft could be listed twice or not at all.
+  @Test func `the listing is ordered, so its pages do not overlap`() throws {
+    let components = try #require(
+      URLComponents(url: Datatracker.draftsFirstPage, resolvingAgainstBaseURL: false))
+    #expect(components.queryItems?.contains(URLQueryItem(name: "order_by", value: "id")) == true)
+  }
+
   @Test func `the last page has no next`() {
     #expect(Datatracker.next(nil) == nil)
   }

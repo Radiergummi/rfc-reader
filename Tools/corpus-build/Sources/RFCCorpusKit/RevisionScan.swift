@@ -4,7 +4,8 @@ import RFCKit
 /// `revisions-scan.json`: what the revisions scanner has read, one entry per adopted
 /// draft read successfully, including drafts that revise nothing, so a daily run reads
 /// only what changed. A draft whose read failed keeps its previous entry, or has none:
-/// either way the listing no longer matches it, and the next run reads it again. `revisions.json` is a pure function of it. The app never reads it
+/// either way the listing no longer matches it, and the next run reads it again.
+/// `revisions.json` is a pure function of it. The app never reads it
 /// (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md, "The scan record").
 public struct RevisionScan: Codable, Sendable, Equatable {
   public var drafts: [String: Entry]

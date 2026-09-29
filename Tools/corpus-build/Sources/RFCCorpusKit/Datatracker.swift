@@ -7,10 +7,13 @@ public enum Datatracker {
   private static let base = RFCEditorEndpoints.datatrackerBase
 
   /// Every active draft in a stream, a hundred at a time. The rest follow `meta.next`.
+  /// Ordered by ID: unordered, each page is a query of its own, and a draft could land
+  /// on two pages or none. `name` does not allow ordering.
   public static let draftsFirstPage = base.appending(path: "api/v1/doc/document/")
     .appending(queryItems: [
       URLQueryItem(name: "format", value: "json"),
       URLQueryItem(name: "limit", value: "100"),
+      URLQueryItem(name: "order_by", value: "id"),
       URLQueryItem(name: "type", value: "draft"),
       URLQueryItem(name: "states__type", value: "draft"),
       URLQueryItem(name: "states__slug", value: "active"),

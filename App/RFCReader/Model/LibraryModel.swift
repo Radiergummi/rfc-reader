@@ -176,9 +176,9 @@ final class LibraryModel {
     } catch {
       indexState = .failed(error.localizedDescription)
     }
+    Task(name: "Refresh revisions") { await refreshRevisions() }
     // Just Published is decoration: a failure leaves it empty, and is logged
     // rather than shown (#125).
-    Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()

@@ -37,6 +37,13 @@ struct DraftHeaderTests {
     #expect(header == DraftHeader(obsoletes: [9990], updates: [9991, 9992]))
   }
 
+  /// A hyphen after the prefix is part of the spelling, not a sign, and a zero names
+  /// no RFC.
+  @Test func `a hyphenated prefix is read past, and zero is not a number`() throws {
+    let header = try DraftHeader.parse(xml: xml(#"obsoletes="RFC-9990" updates="0, 9991""#))
+    #expect(header == DraftHeader(obsoletes: [9990], updates: [9991]))
+  }
+
   /// A present attribute that yields no number is kept aside so the scanner can log
   /// the lost entry.
   @Test func `an attribute that names no number is unreadable`() throws {
@@ -96,6 +103,27 @@ struct DraftHeaderTests {
       "Intended status: Standards Track                           C. Somebody",
     ]
     #expect(DraftHeader.parse(frontPage: lines).updates == [9990, 9991, 9992, 9993])
+  }
+
+  /// A value padded to line up with the labels around it is still the label's.
+  @Test func `a label padded to its value is read`() {
+    let lines = [
+      "Internet-Draft                                             Example Corp",
+      "Updates:    9990 (if approved)                                B. Writer",
+      "Intended status: Standards Track",
+    ]
+    #expect(DraftHeader.parse(frontPage: lines) == DraftHeader(updates: [9990]))
+  }
+
+  /// A tab separates the columns as two spaces do: the date on the right is not a list
+  /// of RFCs.
+  @Test func `a tab ends the left column`() {
+    let lines = [
+      "Internet-Draft\t\t\t\t\tExample Corp",
+      "Updates: 9990\t\t\t\t\tMarch 12, 2026",
+      "Intended status: Standards Track",
+    ]
+    #expect(DraftHeader.parse(frontPage: lines) == DraftHeader(updates: [9990]))
   }
 
   @Test func `an RFC prefix on the front page is read past`() {
