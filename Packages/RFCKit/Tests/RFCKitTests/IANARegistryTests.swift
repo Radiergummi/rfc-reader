@@ -276,4 +276,40 @@ struct IANARegistryTests {
         == "https://www.iana.org/assignments/http-status-codes/http-status-codes.xml")
     #expect(IANARegistry.tlsAlerts.url.lastPathComponent == "tls-parameters.xml")
   }
+
+  // MARK: - Which reference a row opens
+
+  private static func entry(citing numbers: [Int]) -> RegistryEntry {
+    RegistryEntry(
+      registry: .httpFieldNames, value: "Example", name: nil,
+      references: numbers.map { RFCLink(id: .rfc($0)) })
+  }
+
+  private func opened(_ numbers: [Int], obsolete: Set<Int>) -> DocumentID? {
+    Self.entry(citing: numbers)
+      .reference(isObsolete: { id in obsolete.contains { id == .rfc($0) } })?.id
+  }
+
+  /// IANA lists a record's references oldest first: `HTTP2-Settings` cites RFC 7540,
+  /// which RFC 9113 obsoletes, then RFC 9113.
+  @Test func `the reference that is not obsoleted is opened`() {
+    #expect(opened([7540, 9113], obsolete: [7540]) == .rfc(9113))
+    #expect(opened([3230, 9530], obsolete: [3230]) == .rfc(9530))
+    #expect(opened([9113, 7540], obsolete: [7540]) == .rfc(9113))
+  }
+
+  /// TLS alert 111 cites RFC 6066 and RFC 9846, neither obsoleted: the later one.
+  @Test func `of several current references the last is opened`() {
+    #expect(opened([6066, 9846], obsolete: []) == .rfc(9846))
+  }
+
+  /// `Content-Base` cites RFC 2068 and RFC 2616, both obsoleted: the later one.
+  @Test func `when every reference is obsoleted the last is opened`() {
+    #expect(opened([2068, 2616], obsolete: [2068, 2616]) == .rfc(2616))
+  }
+
+  @Test func `a record with no reference opens nothing`() {
+    #expect(opened([], obsolete: []) == nil)
+    #expect(opened([8470], obsolete: [8470]) == .rfc(8470))
+  }
 }

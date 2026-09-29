@@ -180,10 +180,26 @@ final class LibraryModel {
   /// Registries change more often than RFCs, but not by the day.
   private static let registryMaximumAge: TimeInterval = 7 * 86_400
 
+  /// When the registries were last checked, nil until launch first checks them.
+  @ObservationIgnored private var registriesCheckedAt: Date?
+
+  /// Checks the registries again if the last check is older than
+  /// `registryMaximumAge`: the palette asks as it opens, since the app may stay open
+  /// for weeks after the check at launch.
+  func refreshRegistriesIfDue() {
+    guard let checked = registriesCheckedAt,
+      checked.timeIntervalSinceNow < -Self.registryMaximumAge
+    else { return }
+    Task(name: "Refresh registries") { await refreshRegistries() }
+  }
+
   /// Reads the cached registries, then fetches those that are due. A registry that
   /// cannot be fetched keeps its cached entries, and is logged rather than shown
   /// (#125): the palette still finds RFCs without it.
   private func refreshRegistries() async {
+    // Set before the first suspension, so a palette opened meanwhile does not start
+    // a second check.
+    registriesCheckedAt = .now
     var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
     for registry in cached.stale {

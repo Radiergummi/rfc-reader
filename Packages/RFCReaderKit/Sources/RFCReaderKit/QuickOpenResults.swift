@@ -41,7 +41,7 @@ public struct QuickOpenResults: Equatable, Sendable {
   public private(set) var query = ""
   /// What is typed, resolved exactly: one row, or one per member of a series.
   private var exact: [RFCLink] = []
-  /// The registry values it names, each opening the first RFC that defines it.
+  /// The registry values it names, each opening the current RFC that defines it.
   private var registry: [Row] = []
   private var hits: [DocumentID] = []
   /// The query `hits` were found for, which lags `query` while a search runs.
@@ -97,8 +97,11 @@ public struct QuickOpenResults: Equatable, Sendable {
   ///     that knows them is still loading.
   ///   - registry: The registry values the query names. One that cites no RFC has
   ///     nowhere to open, and is not listed.
+  ///   - isObsolete: Whether the index says an RFC is obsoleted, so that a registry
+  ///     value citing several opens the current one.
   public mutating func show(
-    query: String, exact: RFCLink?, members: [DocumentID] = [], registry: [RegistryEntry] = []
+    query: String, exact: RFCLink?, members: [DocumentID] = [], registry: [RegistryEntry] = [],
+    isObsolete: (DocumentID) -> Bool = { _ in false }
   ) {
     self.query = query
     // Typing on after ↵ is a change of mind.
@@ -114,7 +117,7 @@ public struct QuickOpenResults: Equatable, Sendable {
       rows = exact.map { [$0] } ?? []
     }
     let registryRows = registry.compactMap { entry in
-      entry.references.first.map { Row(link: $0, entry: entry) }
+      entry.reference(isObsolete: isObsolete).map { Row(link: $0, entry: entry) }
     }
     let isNew = rows != self.exact || registryRows != self.registry
     self.exact = rows

@@ -300,4 +300,17 @@ struct QuickOpenResultsTests {
     results.show(query: "104", exact: nil, registry: [provisional])
     #expect(results.rows.isEmpty)
   }
+
+  /// `HTTP2-Settings` cites RFC 7540, then RFC 9113, which obsoletes it: the row
+  /// opens the one the index says is current.
+  @Test func `a registry match opens the reference that is not obsoleted`() {
+    var results = QuickOpenResults()
+    let settings = RegistryEntry(
+      registry: .httpFieldNames, value: "HTTP2-Settings", name: nil,
+      references: [RFCLink(id: .rfc(7540)), RFCLink(id: .rfc(9113))])
+    results.show(
+      query: "HTTP2-Settings", exact: nil, registry: [settings],
+      isObsolete: { $0 == .rfc(7540) })
+    #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(9113))])
+  }
 }

@@ -161,4 +161,11 @@ public struct RegistryEntry: Sendable, Hashable {
     self.name = name
     self.references = references
   }
+
+  /// The reference to open: the last one not obsoleted, or the last one if every one
+  /// is. IANA lists a record's references oldest first, so the first is often the
+  /// RFC that a later one replaced: `HTTP2-Settings` cites RFC 7540, then RFC 9113.
+  public func reference(isObsolete: (DocumentID) -> Bool) -> RFCLink? {
+    references.last { !isObsolete($0.id) } ?? references.last
+  }
 }

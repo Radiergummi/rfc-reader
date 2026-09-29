@@ -68,6 +68,8 @@
       }
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
+      // The check at launch alone goes stale in an app left open for weeks.
+      .onAppear { library.refreshRegistriesIfDue() }
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { resolve(query) }
       .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
@@ -192,7 +194,8 @@
       let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
       results.show(
         query: query, exact: exact, members: members,
-        registry: library.registryMatches(for: query))
+        registry: library.registryMatches(for: query),
+        isObsolete: { library.metadata($0)?.isObsolete ?? false })
     }
 
     /// Runs per change of the query and is cancelled by the next, which is the debounce:
