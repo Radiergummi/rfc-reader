@@ -195,7 +195,7 @@ it furthest first:
 | `iesgReview` | Under IESG review | IESG "Waiting for Writeup", "Waiting for AD Go-Ahead", "IESG Evaluation", "IESG Evaluation - Defer"; a stream state "In IESG Review" |
 | `ietfLastCall` | In IETF Last Call | IESG "Last Call Requested", "In Last Call" |
 | `submitted` | Submitted for publication | IESG "Publication Requested", "AD Evaluation", "Expert Review"; IETF "Submitted to IESG for Publication"; IRTF "Waiting for IRTF Chair", "Awaiting IRSG Reviews", "IRSG Review", "In IRSG Poll"; IAB "Community Review", "IAB Review"; Independent "Finding Reviewers", "In ISE Review", "Response to Review Needed"; Editorial "Editorial stream document under RSAB review" |
-| `lastCall` | In working group last call | IETF "In WG Last Call"; IRTF "In RG Last Call" |
+| `lastCall` | In working group last call | IETF "In WG Last Call", "Waiting for WG Chair Go-Ahead", "WG Consensus: Waiting for Write-Up"; IRTF "In RG Last Call" |
 | `inGroup` | In the working group | any other state of an adopted draft |
 
 "In the working group" also covers research groups and the IAB program a draft sits in. The

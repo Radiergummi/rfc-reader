@@ -928,14 +928,16 @@ struct StatusBanner: View {
   }
 
   /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
-  /// The whole row is the link to the draft's datatracker page.
+  /// The whole row is the link to the draft's datatracker page. One `Text`, so a
+  /// narrow banner wraps it as a sentence rather than squeezing three columns.
   private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
-    DraftLink(line: line) {
+    let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
+    let title = Text(line.title).foregroundStyle(.tint)
+    let detail = Text(line.detail).foregroundStyle(.secondary)
+    return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
-        Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
-        Text(line.title).foregroundStyle(.tint)
-        Text(line.detail).foregroundStyle(.secondary)
+        Text("\(relation) \(title) \(detail)")
       }
     }
     .font(.subheadline)

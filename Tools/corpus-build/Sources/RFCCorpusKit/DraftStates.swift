@@ -91,7 +91,10 @@ public enum DraftStates {
       ("draft-stream-ise", "need-res"),
       ("draft-stream-editorial", "rsabpoll"):
       .submitted
-    case ("draft-stream-ietf", "wg-lc"), ("draft-stream-irtf", "rg-lc"):
+    // Past WG last call, waiting on the chair or the write-up: not submitted yet, and
+    // not back in the group either.
+    case ("draft-stream-ietf", "wg-lc"), ("draft-stream-ietf", "chair-w"),
+      ("draft-stream-ietf", "writeupw"), ("draft-stream-irtf", "rg-lc"):
       .lastCall
     default:
       .inGroup

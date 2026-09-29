@@ -81,6 +81,9 @@ struct DraftStatesTests {
     (DraftState("draft-stream-ise", "ise-rev"), .submitted),
     (DraftState("draft-stream-editorial", "rsabpoll"), .submitted),
     (DraftState("draft-stream-ietf", "wg-lc"), .lastCall),
+    // Past WG last call and not yet submitted: still that stage, never back in the group.
+    (DraftState("draft-stream-ietf", "chair-w"), .lastCall),
+    (DraftState("draft-stream-ietf", "writeupw"), .lastCall),
     (DraftState("draft-stream-irtf", "rg-lc"), .lastCall),
     (DraftState("draft-stream-ietf", "wg-doc"), .inGroup),
     (DraftState("draft-iesg", "idexists"), .inGroup),
