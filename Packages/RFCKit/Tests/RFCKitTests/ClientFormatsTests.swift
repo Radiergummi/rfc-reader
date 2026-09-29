@@ -43,7 +43,7 @@ struct ClientFormatsTests {
       }
     }
     let client = RFCEditorClient(transport: FakeTransport(text: try Fixtures.data("rfc1149.txt")))
-    let document = try await client.fetchDocument(.rfc(1149))
+    let document = try await client.fetchPreferredDocument(.rfc(1149)).document
     #expect(document.source == .text)
     #expect(document.header.id == .rfc(1149))
   }

@@ -69,15 +69,6 @@ public struct RFCEditorClient: Sendable {
     try await fetch(RFCEditorEndpoints.document(id, format: format), notFoundAs: id)
   }
 
-  /// Parses a document, preferring the semantic XML source when available and
-  /// falling back to the plain-text rendering otherwise.
-  @concurrent
-  public func fetchDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil) async throws
-    -> RFCDocument
-  {
-    try await fetchPreferredDocument(id, availableFormats: availableFormats).document
-  }
-
   /// A document fetched in the best format it has, with the bytes it came as.
   public struct FetchedDocument: Sendable {
     public let data: Data
