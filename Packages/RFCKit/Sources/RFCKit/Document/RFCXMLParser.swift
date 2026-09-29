@@ -316,7 +316,10 @@ public enum RFCXMLParser {
         number: numbering.number,
         title: title,
         blocks: blocks,
-        subsections: subsections
+        subsections: subsections,
+        // An appendix that is a bibliography, `Appendix C -- References`, says so in its
+        // `pn` like any other appendix.
+        isAppendix: numbering.isAppendix
       )
     }
 

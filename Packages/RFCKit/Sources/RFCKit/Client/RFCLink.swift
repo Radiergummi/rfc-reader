@@ -4,7 +4,10 @@ import Foundation
 /// its own `rfc://` scheme, rfc-editor.org, datatracker.ietf.org and tools.ietf.org.
 public struct RFCLink: Hashable, Sendable {
   public var id: DocumentID
-  /// Section or appendix number, e.g. `4.2` or `A.1`.
+  /// Section or appendix number, e.g. `4.2` or `A.1`. An appendix numbered like a
+  /// section, as legacy RFCs number `Appendix 1`, is its anchor, `appendix-1`: the
+  /// number alone names section 1. A place is a number or an anchor, and
+  /// `RFCDocument.anchor(forPlace:)` resolves either.
   public var section: String?
 
   public init(id: DocumentID, section: String? = nil) {
@@ -91,16 +94,22 @@ public struct RFCLink: Hashable, Sendable {
   /// `section(fromFragment:)` is the other half, and the two are kept together so
   /// neither can drift.
   static func fragment(for section: String) -> String {
-    section.first?.isLetter == true ? "appendix-\(section)" : "section-\(section)"
+    if section.hasPrefix(appendixPrefix) { return section }
+    return section.first?.isLetter == true ? "\(appendixPrefix)\(section)" : "section-\(section)"
   }
 
-  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil.
+  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
+  /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
+  /// read as `1`, it named section 1.
   private static func section(fromFragment fragment: String?) -> String? {
     guard let fragment else { return nil }
-    for prefix in ["section-", "appendix-"] where fragment.hasPrefix(prefix) {
+    for prefix in ["section-", appendixPrefix] where fragment.hasPrefix(prefix) {
       let value = String(fragment.dropFirst(prefix.count))
-      return value.isEmpty ? nil : value
+      guard !value.isEmpty else { return nil }
+      return prefix == appendixPrefix && value.first?.isNumber == true ? fragment : value
     }
     return nil
   }
+
+  static let appendixPrefix = "appendix-"
 }

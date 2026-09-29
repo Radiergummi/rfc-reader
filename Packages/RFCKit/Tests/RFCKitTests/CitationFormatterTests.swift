@@ -26,6 +26,8 @@ struct CitationFormatterTests {
     let http = try #require(try Fixtures.sampleIndex()[9110])
     #expect(CitationFormatter.cite(http, section: "4.2", style: .short) == "RFC 9110, Section 4.2")
     #expect(CitationFormatter.cite(http, section: "A", style: .short) == "RFC 9110, Appendix A")
+    #expect(
+      CitationFormatter.cite(http, section: "appendix-1", style: .short) == "RFC 9110, Appendix 1")
     #expect(CitationFormatter.cite(http, style: .url) == "https://www.rfc-editor.org/info/rfc9110")
     #expect(
       CitationFormatter.cite(http, section: "4.2", style: .url)

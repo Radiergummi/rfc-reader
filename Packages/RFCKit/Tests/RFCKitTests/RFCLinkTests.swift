@@ -75,6 +75,27 @@ struct RFCLinkTests {
     #expect(link.webURL.absoluteString == "https://www.rfc-editor.org/rfc/rfc9110#appendix-A.1")
   }
 
+  /// A legacy RFC can number its appendices like its sections, `Appendix 1` beside
+  /// section 1, and the number alone names the section. A link to such an appendix keeps
+  /// its anchor for the place, so it opens the appendix and still links back to it.
+  @Test func `an appendix numbered like a section stays an appendix`() throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://1163#appendix-1")!))
+    #expect(link.section == "appendix-1")
+    #expect(link.appURL.absoluteString == "rfc://1163#appendix-1")
+    #expect(link.webURL.absoluteString == "https://www.rfc-editor.org/rfc/rfc1163#appendix-1")
+    #expect(RFCLink(url: URL(string: "rfc://1163#section-1")!)?.section == "1")
+
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(anchor: "section-1", number: "1", title: "Introduction"),
+        Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true),
+      ],
+      source: .text)
+    #expect(document.anchor(forPlace: try #require(link.section)) == "appendix-1")
+    #expect(document.anchor(forPlace: "1") == "section-1")
+  }
+
   /// The prefix is the convention, not decoration: an unprefixed fragment is not a
   /// section, and `#page-12` stays unrecognised rather than becoming one. Both
   /// schemes are strict about it.

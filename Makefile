@@ -71,7 +71,7 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1140 rfc1178 rfc1343 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc355 rfc674 rfc6614 rfc793
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1140 rfc1178 rfc1198 rfc1343 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc355 rfc674 rfc6614 rfc7231 rfc783 rfc793 rfc8011
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
