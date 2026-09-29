@@ -44,6 +44,13 @@ struct IndexHeaderTests {
     #expect(Self.applied(index, to: page).header.date == PublicationDate(year: 1982, month: 8))
   }
 
+  @Test func `the index's date replaces a page date that differs`() {
+    let page = DocumentHeader(
+      id: .rfc(1234), title: "A Title", date: PublicationDate(year: 1983, month: 1))
+    let index = Self.entry(date: PublicationDate(year: 1982, month: 8))
+    #expect(Self.applied(index, to: page).header.date == PublicationDate(year: 1982, month: 8))
+  }
+
   @Test func `a page that states no number takes the index's, with a note`() {
     let page = DocumentHeader(title: "A Title")
     let (header, notes) = Self.applied(Self.entry(number: 1483), to: page)

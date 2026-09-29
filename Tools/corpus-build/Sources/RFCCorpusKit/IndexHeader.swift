@@ -6,7 +6,7 @@ import RFCKit
 /// The index is the RFC Editor's own record, and a title page states these facts less
 /// reliably than anything else in the document: RFC 5's date is `June 2, l969`, with a
 /// lower-case L for the 1, RFC 822's author and date come out empty, and RFC 1483
-/// spells its label `Reguest for Comments`, so no number is recognised at all (#218,
+/// spells its label `Reguest for Comments`, so no number is recognized at all (#218,
 /// #203). The title takes its own path, through `LegacyTextParser.parse(_:title:)`,
 /// because parsing needs it to filter the lead-in; nothing here is used while parsing.
 public enum IndexHeader {
@@ -27,7 +27,6 @@ public enum IndexHeader {
     }
     header.id = entry.id
     header.authors = entry.authors
-
     header.date = entry.date
     header.obsoletes = entry.obsoletes
     header.updates = entry.updates

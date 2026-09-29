@@ -185,6 +185,10 @@ struct ConvertCommand: AsyncParsableCommand {
     let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
     let text = DocumentConverter.text(decoding: bytes)
     let metadata = ConversionPlan.rfcNumber(of: stem).flatMap { job.index?[$0] }
+    if job.index != nil, metadata == nil {
+      // The header keeps the title page's values (#218). It should not happen for a legacy RFC.
+      Self.logger.warning("no index entry", metadata: ["document": "\(stem)"])
+    }
     let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
     try conversion.xml.write(to: outputURL, options: .atomic)
     var entry = conversion.report
