@@ -76,6 +76,12 @@ public struct QuickOpenResults: Equatable, Sendable {
     if query.isEmpty {
       hits = []
       hitsQuery = query
+    } else if let number = IndexSearch.number(in: query) {
+      // Which of the earlier hits a number still matches is known without the
+      // search, so those it does not go now rather than when its hits land: shown
+      // for that moment, each pushed the rows below it down and back up. What stays
+      // keeps its order.
+      hits.removeAll { !IndexSearch.matches($0, number: number) }
     }
     let rows: [RFCLink]
     if let exact, !members.isEmpty {

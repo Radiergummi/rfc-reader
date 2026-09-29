@@ -124,11 +124,8 @@ public struct IndexSearch: Sendable {
     let trimmed = text.trimmingCharacters(in: .whitespaces)
     let terms = trimmed.lowercased().split(separator: " ").map(String.init).filter { !$0.isEmpty }
 
-    // A query that is just a document number is a number, not words: the document
-    // it names, then every number it begins, newest first, since `991` is as often
-    // the start of 9910 as it is RFC 991.
-    if let id = DocumentID(parsing: trimmed), id.series == .rfc, filters.isEmpty {
-      return numberHits(id.number, limit: limit)
+    if filters.isEmpty, let number = Self.number(in: trimmed) {
+      return numberHits(number, limit: limit)
     }
 
     // Converted here rather than inside the loop: a needle allocated per entry
@@ -154,11 +151,29 @@ public struct IndexSearch: Sendable {
     return Array(hits.prefix(limit))
   }
 
+  /// The RFC number a query is, if it is nothing else: `991`, `RFC 991`. Such a
+  /// query is a number, not words — the document it names, then every number it
+  /// begins, newest first, since `991` is as often the start of 9910 as it is RFC 991.
+  /// Public so the palette can drop an earlier number's hits on the keystroke,
+  /// knowing without a search which of them still match.
+  public static func number(in query: String) -> Int? {
+    let (text, filters) = parseQuery(query)
+    let trimmed = text.trimmingCharacters(in: .whitespaces)
+    guard filters.isEmpty, let id = DocumentID(parsing: trimmed), id.series == .rfc else {
+      return nil
+    }
+    return id.number
+  }
+
+  /// Whether a number query matches the document: an RFC whose number begins with it.
+  public static func matches(_ id: DocumentID, number: Int) -> Bool {
+    id.series == .rfc && String(id.number).hasPrefix(String(number))
+  }
+
   private func numberHits(_ number: Int, limit: Int) -> [SearchHit] {
-    let typed = String(number)
     var hits = index[number].map { [SearchHit(rfc: $0, score: Int.max)] } ?? []
     let longer = index.rfcs
-      .filter { $0.number != number && String($0.number).hasPrefix(typed) }
+      .filter { $0.number != number && Self.matches($0.id, number: number) }
       .sorted { $0.number > $1.number }
     hits += longer.map { SearchHit(rfc: $0, score: $0.number) }
     return Array(hits.prefix(limit))

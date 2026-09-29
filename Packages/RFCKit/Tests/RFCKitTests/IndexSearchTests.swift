@@ -27,6 +27,18 @@ struct IndexSearchTests {
     #expect(search.search("99").map(\.rfc.number) == [9919, 9915, 9910, 991])
   }
 
+  @Test func `a number query is told apart from words, and says which numbers it matches`() {
+    #expect(IndexSearch.number(in: "991") == 991)
+    #expect(IndexSearch.number(in: " RFC 991 ") == 991)
+    #expect(IndexSearch.number(in: "991 http") == nil)
+    #expect(IndexSearch.number(in: "status:std 991") == nil)
+    #expect(IndexSearch.number(in: "BCP 14") == nil)
+    #expect(IndexSearch.matches(.rfc(9910), number: 991))
+    #expect(IndexSearch.matches(.rfc(991), number: 991))
+    #expect(!IndexSearch.matches(.rfc(9), number: 99))
+    #expect(!IndexSearch.matches(DocumentID(series: .bcp, number: 991), number: 991))
+  }
+
   @Test func `title words rank above abstract mentions`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
     let hits = search.search("HTTP semantics")

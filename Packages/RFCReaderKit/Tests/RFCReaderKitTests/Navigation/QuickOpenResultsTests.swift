@@ -7,6 +7,29 @@ import Testing
 /// search found for it.
 @Suite("Quick open results")
 struct QuickOpenResultsTests {
+  /// Typing `9` then `99`: until the search for `99` lands, the hits for `9` are
+  /// all there is. RFC 9 is not a number `99` begins, and showing it for that moment
+  /// pushed every row below it down and back up again. A number's hits are known
+  /// without searching, so the earlier ones that no longer match go on the keystroke,
+  /// and those that stay keep their order.
+  @Test func `an earlier number's hits that the new number does not begin go at once`() {
+    var results = QuickOpenResults()
+    results.show(query: "9", exact: RFCLink(id: .rfc(9)))
+    results.show(hits: [.rfc(9), .rfc(9999), .rfc(9998), .rfc(991), .rfc(99)], for: "9")
+    results.show(query: "99", exact: RFCLink(id: .rfc(99)))
+    #expect(results.rows.map(\.id) == [.rfc(99), .rfc(9999), .rfc(9998), .rfc(991)])
+  }
+
+  /// Words are not numbers: what `http` found may still match `http c`, and only
+  /// the search knows, so those hits stay until it answers.
+  @Test func `an earlier query's hits stay while words are searched`() {
+    var results = QuickOpenResults()
+    results.show(query: "http", exact: nil)
+    results.show(hits: [.rfc(9110), .rfc(9111)], for: "http")
+    results.show(query: "http c", exact: nil)
+    #expect(results.rows.map(\.id) == [.rfc(9110), .rfc(9111)])
+  }
+
   @Test func `nothing typed lists nothing and selects nothing`() {
     let results = QuickOpenResults()
     #expect(results.rows.isEmpty)
@@ -90,7 +113,8 @@ struct QuickOpenResultsTests {
     results.moveSelection(by: 1)
     results.show(query: "2", exact: RFCLink(id: .rfc(2)))
     #expect(results.selected == RFCLink(id: .rfc(2)))
-    #expect(results.rows.map(\.id) == [.rfc(2), .rfc(1)])
+    // RFC 1, found for `a`, is not a number `2` begins, so it is gone already.
+    #expect(results.rows.map(\.id) == [.rfc(2)])
   }
 
   /// A trailing space resolves to the same document; the row the reader arrowed to
