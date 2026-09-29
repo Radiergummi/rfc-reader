@@ -351,8 +351,15 @@
       splitController.toggleSidebar(nil)
     }
 
-    func showSidebar() {
-      if sidebarItem.isCollapsed { sidebarItem.isCollapsed = false }
+    /// Opens a collapsed sidebar. Animated where nothing waits on it; ⌥⌘F opens it at
+    /// once, because it focuses the search field inside it straight after.
+    func showSidebar(animated: Bool = false) {
+      guard sidebarItem.isCollapsed else { return }
+      if animated {
+        sidebarItem.animator().isCollapsed = false
+      } else {
+        sidebarItem.isCollapsed = false
+      }
     }
 
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.

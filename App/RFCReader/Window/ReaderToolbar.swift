@@ -659,7 +659,7 @@
     /// File > New Collection… does; only the Bookmark menu's adds the open document.
     /// It opens a collapsed sidebar first, so the collection is in view once made.
     @objc private func newEmptyCollection() {
-      controller.showSidebar()
+      controller.showSidebar(animated: true)
       navigation.collectionEditor = .create(adding: nil)
     }
 
