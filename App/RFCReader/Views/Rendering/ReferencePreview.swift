@@ -69,7 +69,7 @@ struct ReferencePreview: View {
       }
     } else {
       Text(entry.title).font(.headline).lineLimit(3)
-      let byline = entry.authors.joined(separator: ", ")
+      let byline = entry.authors.map(\.displayName).joined(separator: ", ")
       let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
       if !detail.isEmpty {
         Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(3)

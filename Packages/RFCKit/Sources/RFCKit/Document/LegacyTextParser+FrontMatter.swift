@@ -381,7 +381,7 @@ extension LegacyTextParser {
   /// `, Ed`, `, Editor`, `,Ed.` -- which is taken off the name and becomes the role.
   static func author(in column: String) -> Author? {
     guard let match = column.firstMatch(of: authorPattern) else { return nil }
-    return Author(name: String(match.name), role: match.editor == nil ? nil : "Editor")
+    return Author(name: String(match.name), role: match.editor == nil ? nil : .editor)
   }
 
   /// The line that states the document's number, in any of the spellings the series has
@@ -430,7 +430,8 @@ extension LegacyTextParser {
       } else if left.hasPrefix("Updates:") {
         header.updates = documentIDs(in: left)
       } else if left.hasPrefix("Category:") {
-        header.category = left.dropFirst("Category:".count).trimmingCharacters(in: .whitespaces)
+        header.category = DocumentHeader.Category(
+          parsing: String(left.dropFirst("Category:".count)))
       } else if header.id == nil, let number = statedNumber(in: line) {
         // The first one wins: a continuation line under `Obsoletes:` is set as
         // `            RFC #680` (RFC 733), and must not replace the number above it.

@@ -90,25 +90,35 @@ public enum FileFormat: String, Sendable, Codable, CaseIterable, Hashable {
 }
 
 public struct Author: Hashable, Sendable, Codable {
+  /// The one role a source states: RFCXML's `role` allows only `editor`, and the
+  /// index and a legacy header state nothing else.
+  public enum Role: String, Hashable, Sendable, Codable {
+    case editor
+
+    /// Reads a role however a source spells it: the index and RFCXML write
+    /// "editor", and a legacy header "Editor", "Ed." or "Ed". Nil for any other.
+    public init?(parsing text: String) {
+      guard text.lowercased().hasPrefix("ed") else { return nil }
+      self = .editor
+    }
+  }
+
   public var name: String
-  /// Role such as `Editor`, when present.
-  public var role: String?
+  public var role: Role?
   /// What the document itself publishes about the author beyond the name: RFCXML's
   /// `<organization>` and `<address>`. Nil when it publishes nothing, which is
   /// every author the RFC index or a legacy header names. Nothing here is looked
   /// up or inferred (#19).
   public var contact: AuthorContact?
 
-  public init(name: String, role: String? = nil, contact: AuthorContact? = nil) {
+  public init(name: String, role: Role? = nil, contact: AuthorContact? = nil) {
     self.name = name
     self.role = role
     self.contact = contact
   }
 
-  /// Whether the role is an editor's, however it is spelled: the index and RFCXML
-  /// write "editor", and a legacy header "Editor" or "Ed.".
   public var isEditor: Bool {
-    role?.lowercased().hasPrefix("ed") == true
+    role == .editor
   }
 
   /// The name as the reader shows it, an editor's marked as one: "R. Fielding, Ed."

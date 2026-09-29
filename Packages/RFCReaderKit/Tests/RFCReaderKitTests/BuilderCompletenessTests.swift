@@ -135,7 +135,9 @@ struct BuilderCompletenessTests {
     let reference = Reference(
       anchor: "RFC9110",
       title: "HTTP Semantics",
-      authors: ["R. Fielding", "M. Nottingham", "J. Reschke"],
+      authors: [
+        Author(name: "R. Fielding"), Author(name: "M. Nottingham"), Author(name: "J. Reschke"),
+      ],
       date: PublicationDate(year: 2022, month: 6),
       seriesInfo: [SeriesInfo(name: "RFC", value: "9110")]
     )

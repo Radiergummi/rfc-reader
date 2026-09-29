@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import RFCKit
@@ -5,13 +6,38 @@ import Testing
 /// An author's name as the reader shows it (#19, #25).
 @Suite("Author")
 struct AuthorTests {
-  /// The legacy parser records an editor as "Editor" or "Ed.", the index and RFCXML
+  /// The legacy parser reads an editor as "Editor" or "Ed.", the index and RFCXML
   /// as "editor"; all mean the same, and another role is not promoted to one.
-  @Test func `an editor is marked as one, however the role is spelled`() {
-    #expect(Author(name: "A. Author", role: "editor").displayName == "A. Author, Ed.")
-    #expect(Author(name: "B. Author", role: "Ed.").displayName == "B. Author, Ed.")
-    #expect(Author(name: "C. Author", role: "contributor").displayName == "C. Author")
+  @Test(arguments: ["editor", "Editor", "Ed.", "Ed", "ed."])
+  func `an editor's role is read however it is spelled`(_ spelling: String) {
+    #expect(Author.Role(parsing: spelling) == .editor)
+  }
+
+  @Test(arguments: ["contributor", "", "Director"])
+  func `another role is not an editor's`(_ spelling: String) {
+    #expect(Author.Role(parsing: spelling) == nil)
+  }
+
+  @Test func `an editor is marked as one`() {
+    #expect(Author(name: "A. Author", role: .editor).displayName == "A. Author, Ed.")
     #expect(Author(name: "D. Author").displayName == "D. Author")
+  }
+
+  /// A reference's authors were names with the editorship written into them as
+  /// `, Ed.`, which the serializer cut back off by its length. They are authors now,
+  /// and an editor survives the round trip as one.
+  @Test func `a reference's editor survives a round trip`() throws {
+    let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+    for document in [original, reparsed] {
+      let entry = try #require(
+        document.referenceLists.flatMap(\.entries).first { $0.anchor == "QUIC-TRANSPORT" })
+      #expect(
+        entry.authors == [
+          Author(name: "Jana Iyengar", role: .editor),
+          Author(name: "Martin Thomson", role: .editor),
+        ])
+    }
   }
 
   /// A title page's author column marks an editor as `, Ed.`, `, Ed`, `, Editor` or

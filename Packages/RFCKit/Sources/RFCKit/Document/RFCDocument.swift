@@ -77,6 +77,44 @@ public struct RFCDocument: Sendable, Hashable, Codable {
 }
 
 public struct DocumentHeader: Sendable, Hashable, Codable {
+  /// A document's category, RFCXML's `category` attribute: its code is the raw
+  /// value, and a legacy header's `Category:` line states its name.
+  public enum Category: String, Sendable, Hashable, Codable, CaseIterable {
+    case standardsTrack = "std"
+    case bestCurrentPractice = "bcp"
+    case informational = "info"
+    case experimental = "exp"
+    case historic
+
+    /// "Standards Track", as a header states it.
+    public var name: String {
+      switch self {
+      case .standardsTrack: "Standards Track"
+      case .bestCurrentPractice: "Best Current Practice"
+      case .informational: "Informational"
+      case .experimental: "Experimental"
+      case .historic: "Historic"
+      }
+    }
+
+    /// Reads the code or the name, in any case, and the `Standard Track` a few
+    /// legacy headers write. Nil for anything else: the FYI series' own
+    /// categories (`User Guides`, `On-line collections`) are none of these.
+    public init?(parsing text: String) {
+      let lowered = text.trimmingCharacters(in: .whitespaces).lowercased()
+      if lowered == "standard track" {
+        self = .standardsTrack
+        return
+      }
+      guard
+        let category = Self.allCases.first(where: {
+          $0.rawValue == lowered || $0.name.lowercased() == lowered
+        })
+      else { return nil }
+      self = category
+    }
+  }
+
   public var id: DocumentID?
   public var title: String
   public var abbreviatedTitle: String?
@@ -88,7 +126,7 @@ public struct DocumentHeader: Sendable, Hashable, Codable {
   public var area: String?
   public var obsoletes: [DocumentID]
   public var updates: [DocumentID]
-  public var category: String?
+  public var category: Category?
   public var draftName: String?
   /// The Internet-Draft this RFC was published from, as the RFC Editor links it
   /// (`<link rel="prev">`): a Datatracker URL naming the draft and, usually, its
@@ -108,7 +146,7 @@ public struct DocumentHeader: Sendable, Hashable, Codable {
     area: String? = nil,
     obsoletes: [DocumentID] = [],
     updates: [DocumentID] = [],
-    category: String? = nil,
+    category: Category? = nil,
     draftName: String? = nil,
     precedingDraft: URL? = nil
   ) {
@@ -409,7 +447,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
   /// `derivedAnchor`. Never a link key: anchors are.
   public var displayAnchor: String
   public var title: String
-  public var authors: [String]
+  public var authors: [Author]
   public var date: PublicationDate?
   /// `RFC 7301`, `DOI 10.17487/RFC7301`, `STD 90`, ...
   public var seriesInfo: [SeriesInfo]
@@ -427,7 +465,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     anchor: String,
     displayAnchor: String? = nil,
     title: String,
-    authors: [String] = [],
+    authors: [Author] = [],
     date: PublicationDate? = nil,
     seriesInfo: [SeriesInfo] = [],
     url: URL? = nil,

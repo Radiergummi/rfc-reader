@@ -24,7 +24,7 @@ struct RFCXMLParserTests {
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
     #expect(document.header.keywords.count == 7)
-    #expect(document.header.category == "Standards Track")
+    #expect(document.header.category == .standardsTrack)
     #expect(document.header.draftName == "draft-ietf-quic-invariants-13")
     #expect(document.header.abstract.count == 1)
     if case .paragraph(let paragraph) = document.header.abstract[0] {
@@ -330,7 +330,7 @@ struct RFCXMLParserTests {
     #expect(normative.entries.map(\.anchor) == ["RFC2119", "RFC8174"])
     let bcp = normative.entries[0]
     #expect(bcp.title == "Key words for use in RFCs to Indicate Requirement Levels")
-    #expect(bcp.authors == ["S. Bradner"])
+    #expect(bcp.authors == [Author(name: "S. Bradner")])
     #expect(bcp.date == PublicationDate(year: 1997, month: 3))
     #expect(bcp.documentID == .rfc(2119))
     #expect(bcp.url?.absoluteString == "https://www.rfc-editor.org/info/rfc2119")

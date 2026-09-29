@@ -16,7 +16,7 @@ struct RFCIndexParserTests {
     let http = try #require(index[9110])
     #expect(http.title == "HTTP Semantics")
     #expect(http.authors.map(\.name) == ["R. Fielding", "M. Nottingham", "J. Reschke"])
-    #expect(http.authors.allSatisfy { $0.role == "Editor" })
+    #expect(http.authors.allSatisfy { $0.role == .editor })
     #expect(http.date == PublicationDate(year: 2022, month: 6))
     #expect(http.formats.contains(.xml))
     #expect(http.hasXMLSource)

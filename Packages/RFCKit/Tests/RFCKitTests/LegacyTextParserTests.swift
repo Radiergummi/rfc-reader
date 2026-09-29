@@ -30,10 +30,10 @@ struct LegacyTextParserTests {
     #expect(abnf.header.id == .rfc(5234))
     #expect(abnf.header.title == "Augmented BNF for Syntax Specifications: ABNF")
     #expect(abnf.header.obsoletes == [.rfc(4234)])
-    #expect(abnf.header.category == "Standards Track")
+    #expect(abnf.header.category == .standardsTrack)
     #expect(
       abnf.header.authors == [
-        Author(name: "D. Crocker", role: "Editor"), Author(name: "P. Overell"),
+        Author(name: "D. Crocker", role: .editor), Author(name: "P. Overell"),
       ])
     #expect(abnf.header.date == PublicationDate(year: 2008, month: 1))
   }

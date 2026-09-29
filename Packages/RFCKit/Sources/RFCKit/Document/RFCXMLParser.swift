@@ -150,23 +150,12 @@ public struct RFCXMLParser: Sendable {
       }
       header.obsoletes = parseDocumentList(rfc["obsoletes"])
       header.updates = parseDocumentList(rfc["updates"])
-      header.category = rfc["category"].flatMap(categoryName)
+      header.category = rfc["category"].flatMap(DocumentHeader.Category.init(parsing:))
       header.draftName = rfc["docName"]
       header.precedingDraft =
         rfc.all("link").first { RFCXMLParser.relation($0["rel"], includes: "prev") }?["href"]
         .flatMap(URL.init(string:))
       return header
-    }
-
-    private func categoryName(_ category: String) -> String {
-      switch category {
-      case "std": "Standards Track"
-      case "bcp": "Best Current Practice"
-      case "info": "Informational"
-      case "exp": "Experimental"
-      case "historic": "Historic"
-      default: category
-      }
     }
 
     private func parseDocumentList(_ value: String?) -> [DocumentID] {
@@ -188,7 +177,7 @@ public struct RFCXMLParser: Sendable {
         name = element.first("organization")?.normalizedText
       }
       guard let name, !name.isEmpty else { return nil }
-      let role = element["role"] == "editor" ? "Editor" : nil
+      let role = element["role"].flatMap(Author.Role.init(parsing:))
       return Author(name: name, role: role, contact: parseContact(element))
     }
 
@@ -355,8 +344,10 @@ public struct RFCXMLParser: Sendable {
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
+      // Name and role only: an entry's `<author>` may carry an address, and the
+      // bibliography has no use for one.
       let authors = (front?.all("author") ?? []).compactMap(Self.parseAuthor).map { author in
-        author.role == nil ? author.name : "\(author.name), Ed."
+        Author(name: author.name, role: author.role)
       }
       let seriesInfo: [SeriesInfo] =
         (element.all("seriesInfo") + (front?.all("seriesInfo") ?? [])).compactMap {
@@ -815,7 +806,7 @@ extension RFCXMLParser {
   /// sets it, one detail per line, with the email and web addresses as links.
   static func addressInlines(_ author: Author) -> [Inline] {
     var lines: [[Inline]] = [
-      [.text(author.role == "Editor" ? "\(author.name) (editor)" : author.name)]
+      [.text(author.isEditor ? "\(author.name) (editor)" : author.name)]
     ]
     if let contact = author.contact {
       // An organization's own entry names it already: `parseAuthor` falls back to

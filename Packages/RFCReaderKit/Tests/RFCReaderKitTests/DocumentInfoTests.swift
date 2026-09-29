@@ -12,7 +12,7 @@ struct DocumentInfoTests {
   private let rich = RFCMetadata(
     id: .rfc(9110),
     title: "HTTP Semantics",
-    authors: [Author(name: "R. Fielding", role: "editor"), Author(name: "M. Nottingham")],
+    authors: [Author(name: "R. Fielding", role: .editor), Author(name: "M. Nottingham")],
     date: PublicationDate(year: 2022, month: 6),
     formats: [.text, .html, .xml, .pdf],
     pageCount: 194,
@@ -127,7 +127,7 @@ struct DocumentInfoTests {
   /// index never has; the index's names stand in until the document is here, as
   /// they do in the header.
   @Test func `the document's own authors stand in for the index's`() {
-    let own = [Author(name: "Roy T. Fielding", role: "editor")]
+    let own = [Author(name: "Roy T. Fielding", role: .editor)]
     let info = DocumentInfo(rich, authors: own, in: index)
     #expect(info.sections.first?.rows.first?.value == .authors(own))
     let unknown = DocumentInfo(rich, authors: [], in: index)

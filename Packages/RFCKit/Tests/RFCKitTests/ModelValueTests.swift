@@ -58,3 +58,41 @@ struct ModelValueTests {
     #expect(fixtures.contains("rfc8999.xml"))
   }
 }
+
+/// A header's category, read from RFCXML's code or a legacy header's name, and
+/// written back as the code. An unknown one was a string the serializer dropped
+/// without a word; now it is no category at all, and says so where it is read.
+@Suite("Model: category")
+struct CategoryTests {
+  @Test(arguments: [
+    ("std", DocumentHeader.Category.standardsTrack),
+    ("Standards Track", .standardsTrack),
+    ("Standard Track", .standardsTrack),
+    ("bcp", .bestCurrentPractice),
+    ("Best Current Practice", .bestCurrentPractice),
+    ("info", .informational),
+    ("Informational", .informational),
+    ("exp", .experimental),
+    ("Experimental", .experimental),
+    ("historic", .historic),
+    ("Historic", .historic),
+  ])
+  func `a category is read from its code or its name`(
+    _ text: String, _ category: DocumentHeader.Category
+  ) {
+    #expect(DocumentHeader.Category(parsing: text) == category)
+  }
+
+  @Test func `the code and the name of each category read back as it`() {
+    for category in DocumentHeader.Category.allCases {
+      #expect(DocumentHeader.Category(parsing: category.rawValue) == category)
+      #expect(DocumentHeader.Category(parsing: category.name) == category)
+    }
+  }
+
+  /// The FYI series' own categories, and nothing at all, are no RFC category.
+  @Test(arguments: ["User Guides", "On-line collections", ""])
+  func `what is not a category is none`(_ text: String) {
+    #expect(DocumentHeader.Category(parsing: text) == nil)
+  }
+}

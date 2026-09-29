@@ -119,7 +119,7 @@ struct RFCXMLSerializerTests {
     #expect(Self.signature(reparsed) == Self.signature(parsed))
     #expect(reparsed.referencedDocuments == parsed.referencedDocuments)
     #expect(reparsed.header.obsoletes == [.rfc(4234)])
-    #expect(reparsed.header.category == "Standards Track")
+    #expect(reparsed.header.category == .standardsTrack)
     #expect(xml.contains("<!-- test -->"))
     #expect(xml.contains("rel=\"alternate\""))
   }
@@ -272,7 +272,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
       let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
       let xml = RFCXMLSerializer().serialize(parsed)
       let authors = { (document: RFCDocument) in
-        document.allSections.flatMap(\.blocks).flatMap { block -> [[String]] in
+        document.allSections.flatMap(\.blocks).flatMap { block -> [[Author]] in
           guard case .references(let list) = block else { return [] }
           return list.entries.map(\.authors)
         }

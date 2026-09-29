@@ -146,7 +146,10 @@ private final class Reader: XMLEvents {
       entry.currentAuthorName = value
     case "author":
       if !entry.currentAuthorName.isEmpty {
-        entry.authors.append(Author(name: entry.currentAuthorName, role: entry.currentAuthorRole))
+        entry.authors.append(
+          Author(
+            name: entry.currentAuthorName,
+            role: entry.currentAuthorRole.flatMap(Author.Role.init(parsing:))))
       }
     case "month": entry.month = PublicationDate.month(from: value)
     case "day": entry.day = Int(value)

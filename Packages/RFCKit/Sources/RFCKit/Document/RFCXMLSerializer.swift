@@ -53,8 +53,8 @@ public struct RFCXMLSerializer: Sendable {
     if let id = document.header.id, id.series == .rfc {
       rfcAttributes.append(("number", String(id.number)))
     }
-    if let category = document.header.category, let code = Self.categoryCode(category) {
-      rfcAttributes.append(("category", code))
+    if let category = document.header.category {
+      rfcAttributes.append(("category", category.rawValue))
     }
     if let draft = document.header.draftName { rfcAttributes.append(("docName", draft)) }
     if !document.header.obsoletes.isEmpty {
@@ -144,7 +144,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
-      if author.isEditor { attributes.append(("role", "editor")) }
+      if let role = author.role { attributes.append(("role", role.rawValue)) }
       if let contact = author.contact {
         writer.open("author", attributes)
         writeContact(contact, writer: &writer)
@@ -295,10 +295,8 @@ public struct RFCXMLSerializer: Sendable {
       "title",
       text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
-      let isEditor = author.hasSuffix(", Ed.")
-      let name = isEditor ? String(author.dropLast(5)) : author
-      var authorAttributes: [(String, String)] = [("fullname", name)]
-      if isEditor { authorAttributes.append(("role", "editor")) }
+      var authorAttributes: [(String, String)] = [("fullname", author.name)]
+      if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
       writer.empty("author", authorAttributes)
     }
     // The published series' own spelling of an entry naming no one (RFC 9293's `offload`).
@@ -538,17 +536,6 @@ public struct RFCXMLSerializer: Sendable {
   /// series always does, and the parser reads the anchor back from it.
   private static func anchorAttribute(_ anchor: String, partNumber: String?) -> [(String, String)] {
     anchor == partNumber ? [] : [("anchor", anchor)]
-  }
-
-  static func categoryCode(_ category: String) -> String? {
-    switch category.lowercased() {
-    case "standards track", "std": "std"
-    case "best current practice", "bcp": "bcp"
-    case "informational", "info": "info"
-    case "experimental", "exp": "exp"
-    case "historic": "historic"
-    default: nil
-    }
   }
 
   private struct Writer {
