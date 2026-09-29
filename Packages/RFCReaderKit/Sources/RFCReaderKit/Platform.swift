@@ -49,6 +49,15 @@ public enum RFCColors {
     #endif
   }
 
+  /// A link, where no text view colours it: an exported PDF's (#376).
+  public static var link: PlatformColor {
+    #if canImport(UIKit)
+      .link
+    #else
+      .linkColor
+    #endif
+  }
+
   /// The card behind artwork and tables: a faint tint of the page, the way Apple's
   /// documentation sets a code listing. DocC darkens a white page to 247 and lifts a
   /// black one to 22, about 3% towards black and 9% towards white. A system fill

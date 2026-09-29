@@ -47,7 +47,7 @@ public enum DocumentActions {
     section: String?,
     style: CitationStyle
   ) -> String {
-    CitationFormatter().cite(metadata, section: style == .bibtex ? nil : section, style: style)
+    CitationFormatter.cite(metadata, section: style == .bibtex ? nil : section, style: style)
   }
 
   /// The shareable link to the place being read, as a string for the pasteboard.

@@ -32,6 +32,9 @@ struct RFCReaderApp: App {
       .commands {
         WindowCommands()
         DocumentCommands()
+        #if DEBUG
+          DeveloperCommands()
+        #endif
       }
     #else
       // Deliberately plain: neither `WindowGroup(id:)` nor `WindowGroup(for:)`
@@ -75,6 +78,40 @@ struct RFCReaderApp: App {
           AppDelegate.shared?.openTab(inBackground: false)
         }
         .keyboardShortcut("t", modifiers: .command)
+      }
+    }
+  }
+#endif
+
+#if os(macOS) && DEBUG
+  /// A developer's way in until packs have a Settings ▸ Offline of their own (#36):
+  /// install the legacy XML pack from an `.aar` or an unpacked folder.
+  struct DeveloperCommands: Commands {
+    var body: some Commands {
+      CommandMenu("Developer") {
+        Button("Install Data Pack…") { Self.chooseAndInstall() }
+      }
+    }
+
+    private static func chooseAndInstall() {
+      let panel = NSOpenPanel()
+      panel.message = "Choose a legacy XML pack: an .aar archive, or a folder with its manifest."
+      panel.canChooseFiles = true
+      panel.canChooseDirectories = true
+      panel.allowsMultipleSelection = false
+      guard panel.runModal() == .OK, let source = panel.url else { return }
+      Task {
+        let alert = NSAlert()
+        do {
+          let pack = try await LibraryModel.shared.installLegacyPack(from: source)
+          alert.messageText = "Installed Data Pack \(pack.manifest.version)"
+          alert.informativeText = "\(pack.manifest.files.count) documents."
+        } catch {
+          alert.alertStyle = .warning
+          alert.messageText = "Couldn’t Install the Data Pack"
+          alert.informativeText = String(describing: error)
+        }
+        alert.runModal()
       }
     }
   }
@@ -152,6 +189,22 @@ struct DocumentCommands: Commands {
       }
     #endif
     #if os(macOS)
+      // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
+      CommandGroup(replacing: .importExport) {
+        Button("Export…") { active.controller?.exportDocument() }
+          .keyboardShortcut("e", modifiers: [.command, .shift])
+          .disabled(!showsDocument)
+      }
+      // File > Page Setup… and Print…, which a SwiftUI app has only for a document
+      // scene (#375). Print is disabled unless a document is on screen.
+      CommandGroup(replacing: .printItem) {
+        Button("Page Setup…") { active.controller?.runPageSetup() }
+          .keyboardShortcut("p", modifiers: [.command, .shift])
+          .disabled(active.controller == nil)
+        Button("Print…") { active.controller?.printDocument() }
+          .keyboardShortcut("p", modifiers: .command)
+          .disabled(!showsDocument)
+      }
       // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
       // list's view options before.
       CommandGroup(after: .toolbar) {

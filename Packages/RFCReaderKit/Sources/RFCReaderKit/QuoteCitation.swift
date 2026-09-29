@@ -98,9 +98,8 @@ public enum QuoteCitation {
     // `short` and `markdown` read only the number; the rest of the metadata is not
     // needed, and not having it -- a document the index does not list -- costs nothing.
     let metadata = RFCMetadata(id: document, title: "", date: PublicationDate(year: 0))
-    let formatter = CitationFormatter()
-    let citation = formatter.cite(metadata, section: section, style: .markdown)
-    let label = formatter.cite(metadata, section: section, style: .short)
+    let citation = CitationFormatter.cite(metadata, section: section, style: .markdown)
+    let label = CitationFormatter.cite(metadata, section: section, style: .short)
     let url = CitationFormatter.url(for: document, section: section)
 
     // A figure in a fixed-pitch font, or a rich target lays it out in a proportional

@@ -9,11 +9,23 @@ public protocol HTTPTransport: Sendable {
   func data(for url: URL) async throws -> (Data, HTTPURLResponse)
 }
 
-extension URLSession: HTTPTransport {
+/// The transport the client uses unless handed another: a `URLSession`, asked for the
+/// formats the client reads.
+///
+/// A struct around the session rather than an extension of `URLSession`, which would
+/// add a public `data(for: URL)` to a system type, beside its own `data(from:)` and
+/// `data(for: URLRequest)` (#148).
+public struct URLSessionTransport: HTTPTransport {
+  private let session: URLSession
+
+  public init(session: URLSession = .shared) {
+    self.session = session
+  }
+
   public func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
     var request = URLRequest(url: url)
     request.setValue("application/xml, text/plain, application/json", forHTTPHeaderField: "Accept")
-    let (data, response) = try await data(for: request)
+    let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
       throw RFCEditorClient.ClientError.invalidResponse(url)
     }
@@ -30,12 +42,14 @@ public actor RFCEditorClient {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
-    case decoding(String)
+    /// What was being read, and why it could not be: the parser's own error, kept
+    /// rather than turned into words.
+    case decoding(context: String, underlying: any Error)
   }
 
   private let transport: any HTTPTransport
 
-  public init(transport: any HTTPTransport = URLSession.shared) {
+  public init(transport: any HTTPTransport = URLSessionTransport()) {
     self.transport = transport
   }
 
@@ -44,7 +58,7 @@ public actor RFCEditorClient {
     do {
       return try RFCIndexParser.parse(data)
     } catch {
-      throw ClientError.decoding("rfc-index.xml: \(error)")
+      throw ClientError.decoding(context: "rfc-index.xml", underlying: error)
     }
   }
 
@@ -118,7 +132,7 @@ public actor RFCEditorClient {
     do {
       return try JSONDecoder().decode(RFCEditorMetadataRecord.self, from: data)
     } catch {
-      throw ClientError.decoding("\(id.fileStem).json: \(error)")
+      throw ClientError.decoding(context: "\(id.fileStem).json", underlying: error)
     }
   }
 
@@ -212,6 +226,20 @@ public enum RecentFeedParser {
 
   nonisolated(unsafe) private static let titlePattern = #/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#
 
+  /// An RFC 822 date, `Sat, 19 Sep 2026 00:00:00 GMT`: a `Sendable` value made once,
+  /// where a `DateFormatter` was built for every parse (#148). The time zone field is
+  /// read, not assumed. Strict, as the `DateFormatter` was: a date that does not
+  /// exist, `31 Sep`, is no date rather than the first of the next month.
+  static let dateStrategy = Date.ParseStrategy(
+    format: """
+      \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \
+      \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\
+      \(second: .twoDigits) \(timeZone: .specificName(.short))
+      """,
+    locale: Locale(identifier: "en_US_POSIX"),
+    timeZone: .gmt,
+    isLenient: false)
+
   public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
     let root: XMLTree.Element
     do {
@@ -219,10 +247,6 @@ public enum RecentFeedParser {
     } catch {
       throw .malformed(error)
     }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-
     var items: [RecentRFC] = []
     for item in root.first("channel")?.all("item") ?? [] {
       let rawTitle = item.first("title")?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -234,16 +258,12 @@ public enum RecentFeedParser {
           id: .rfc(number),
           title: String(match.title).trimmingCharacters(in: .whitespaces),
           summary: item.first("description")?.text.collapsingWhitespace() ?? "",
-          link: item.first("link")?.text.trimmingCharacters(in: .whitespacesAndNewlines).flatMap(
-            URL.init(string:)),
-          publishedAt: item.first("pubDate")?.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .flatMap(formatter.date(from:))
+          link: (item.first("link")?.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap(URL.init(string:)),
+          publishedAt: (item.first("pubDate")?.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap { try? Date($0, strategy: dateStrategy) }
         ))
     }
     return items
   }
-}
-
-extension String {
-  fileprivate func flatMap<T>(_ transform: (String) -> T?) -> T? { transform(self) }
 }

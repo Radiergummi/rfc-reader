@@ -7,13 +7,7 @@ import Foundation
 /// distinguishes prose from ASCII art, re-joins paragraphs split across pages and
 /// links `[RFC2119]`, `RFC 2119`, `Section 4.2` and URLs. The original text is always
 /// kept available through `stripPagination(_:)` for an "as published" view.
-public struct LegacyTextParser: Sendable {
-  public init() {}
-
-  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
-    LegacyTextParser().parse(text, title: title)
-  }
-
+public enum LegacyTextParser {
   public static func parse(_ data: Data) -> RFCDocument {
     parse(String(decoding: data, as: UTF8.self))
   }
@@ -683,7 +677,7 @@ public struct LegacyTextParser: Sendable {
   /// (`Note on Reconnection Protocol` for RFC 671's `A Note on Reconnection
   /// Protocol`), and the page is what the author wrote. `title(page:index:titlePage:)`
   /// is where the two are told apart.
-  public func parse(_ text: String, title: String? = nil) -> RFCDocument {
+  public static func parse(_ text: String, title: String? = nil) -> RFCDocument {
     let prepared = Self.prepared(text, title: title)
     let (sections, proseIndent) = (prepared.sections, prepared.proseIndent)
     var header = prepared.header
