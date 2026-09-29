@@ -39,6 +39,7 @@ public struct IndexSearch: Sendable {
     var titleWords: Set<SearchText>
     var keywords: [SearchText]
     var authors: [SearchText]
+    var authorNames: [AuthorName]
     var abstract: SearchText
     var group: SearchText
   }
@@ -57,6 +58,7 @@ public struct IndexSearch: Sendable {
         titleWords: Set(words.map { SearchText(String($0)) }),
         keywords: rfc.keywords.map { SearchText($0.lowercased()) },
         authors: rfc.authors.map { SearchText($0.name.lowercased()) },
+        authorNames: rfc.authors.map { AuthorName($0.name) },
         abstract: SearchText(rfc.abstract?.lowercased() ?? ""),
         group: SearchText(rfc.workingGroup?.lowercased() ?? "")
       )
@@ -144,10 +146,11 @@ public struct IndexSearch: Sendable {
     let needles = terms.map(SearchText.init)
     // The query as the title bonus compares it, without the quotes of its phrases.
     let lowered = SearchText(terms.joined(separator: " "))
+    let author = filters.author.map(AuthorQuery.init)
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]
-      guard matches(rfc, filters: filters) else { continue }
+      guard matches(rfc, entry: entry, filters: filters, author: author) else { continue }
       if terms.isEmpty {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
@@ -163,15 +166,14 @@ public struct IndexSearch: Sendable {
     return Array(hits.prefix(limit))
   }
 
-  private func matches(_ rfc: RFCMetadata, filters: SearchFilters) -> Bool {
+  /// `author` is `filters.author` prepared once for the whole scan.
+  private func matches(
+    _ rfc: RFCMetadata, entry: Entry, filters: SearchFilters, author: AuthorQuery?
+  ) -> Bool {
     if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
     if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
     if let group = filters.workingGroup, rfc.workingGroup?.lowercased() != group { return false }
-    if let author = filters.author,
-      !rfc.authors.contains(where: { $0.name.lowercased().contains(author) })
-    {
-      return false
-    }
+    if let author, !entry.authorNames.contains(where: { $0.matches(author) }) { return false }
     if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
     if filters.excludeObsolete, rfc.isObsolete { return false }
     if filters.requiresXML, !rfc.hasXMLSource { return false }
@@ -270,4 +272,65 @@ struct SearchText: Hashable, Sendable {
       }
     }
   }
+}
+
+/// An author as the `author:` filter matches it: the initials and the surname of the
+/// name the index holds, "R. Fielding", folded to lowercase without diacritics.
+///
+/// The index holds given names as initials, so a query's given name can only be
+/// matched by its first letter: `Roy Fielding` finds "R. Fielding", and so does
+/// `Rob Fielding`.
+struct AuthorName: Sendable {
+  let initials: Set<Character>
+  let surname: SearchText
+
+  /// The leading words that are initials, "J.K." or "SN", are the given names; the
+  /// rest is the surname, "Le Faucheur" or "St. Johns". A name that is one word, or
+  /// an organisation's ("RFC Editor", "IAB and IESG"), is all surname.
+  init(_ name: String) {
+    let words = name.split(separator: " ")
+    let given = words.dropLast().prefix(while: Self.isInitials)
+    initials = Set(given.flatMap { word in folded(String(word)).filter(\.isLetter) })
+    surname = SearchText(folded(words.dropFirst(given.count).joined(separator: " ")))
+  }
+
+  /// Initials are capitals, and either carry a dot ("R.", "J.K.", "L-E.", "JP.") or
+  /// are at most two letters without one ("SN"). "St." has a small letter, and
+  /// "RFC" or "IAB" is three capitals without a dot, so both are surname.
+  private static func isInitials(_ word: Substring) -> Bool {
+    let letters = word.filter(\.isLetter)
+    guard !letters.isEmpty, letters.allSatisfy(\.isUppercase) else { return false }
+    return word.contains(".") || letters.count <= 2
+  }
+
+  /// Each word of the query matches the surname, or is a given name or an initial
+  /// that fits one of the author's initials and comes before the surname. The
+  /// surname is matched in part, as the query is still being typed.
+  func matches(_ query: AuthorQuery) -> Bool {
+    query.surnames.indices.contains { split in
+      surname.contains(query.surnames[split])
+        && query.initials[..<split].allSatisfy(initials.contains)
+    }
+  }
+}
+
+/// An `author:` value prepared once per search for `AuthorName.matches`.
+struct AuthorQuery: Sendable {
+  /// The first letter of each word of the value, as a given name or an initial.
+  let initials: [Character]
+  /// For each word of the value, it and the words after it: the surname, if the
+  /// words before it are given names.
+  let surnames: [SearchText]
+
+  init(_ value: String) {
+    let words = folded(value).split(separator: " ")
+    initials = words.compactMap(\.first)
+    surnames = words.indices.map { SearchText(words[$0...].joined(separator: " ")) }
+  }
+}
+
+/// `text` lowercased and without diacritics, so `kuhlewind` finds "Kühlewind"
+/// however its ü is spelled.
+private func folded(_ text: String) -> String {
+  text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
 }

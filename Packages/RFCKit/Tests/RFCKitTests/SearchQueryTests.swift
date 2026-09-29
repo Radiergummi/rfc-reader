@@ -91,16 +91,20 @@ struct SearchQueryTests {
   }
 
   @Test func `a working group is completed from the index`() throws {
-    #expect(try completions("wg:") == ["wg:httpbis", "wg:quic", "wg:tls"])
+    #expect(
+      try completions("wg:") == [#"wg:"non working group""#, "wg:httpbis", "wg:quic", "wg:tls"])
     #expect(try completions("wg:q") == ["wg:quic"])
     #expect(try completions("group:HT") == ["wg:httpbis"])
   }
 
-  /// "NON WORKING GROUP" names documents in the index, but only a quoted value can
-  /// spell it, and completion does not write one; offering it would complete to a
-  /// filter that matches nothing.
-  @Test func `a working group with a space in its name is not offered`() throws {
-    #expect(try !completions("wg:").contains { $0.contains("non") })
+  /// "NON WORKING GROUP" names documents in the index; only a quoted value can
+  /// spell it, so completion writes one.
+  @Test func `a working group with a space in its name is offered in quotes`() throws {
+    #expect(try completions("wg:").contains(#"wg:"non working group""#))
+    #expect(try completions("cache wg:no") == [#"cache wg:"non working group""#])
+    #expect(try completions(#"wg:"non w"#) == [#"wg:"non working group""#])
+    let completed = try #require(try completions("wg:no").first)
+    #expect(IndexSearch.parseQuery(completed).filters.workingGroup == "non working group")
   }
 
   @Test func `statuses and streams are completed from their vocabulary`() throws {

@@ -67,6 +67,36 @@ struct IndexSearchTests {
     #expect(parsed.text == "cache")
   }
 
+  /// A quote opens a quoted run only at the start of a word or right after `key:`;
+  /// anywhere else it is a character of the word, as the inch mark is here.
+  @Test func `a quote inside a word is part of it`() {
+    let parsed = IndexSearch.parseQuery(#"3.5" floppy status:bcp"#)
+    #expect(parsed.filters.statuses == [.bestCurrentPractice])
+    #expect(parsed.text == #"3.5" floppy"#)
+  }
+
+  @Test(arguments: [
+    (#"3.5" floppy status:bcp"#, [#"3.5""#, "floppy", "status:bcp"]),
+    (#"wg:ab"c d"#, [#"wg:ab"c"#, "d"]),
+    (#"a"b "c d""#, [#"a"b"#, #""c d""#]),
+    (#"by:"Roy Fielding" x"#, [#"by:"Roy Fielding""#, "x"]),
+  ])
+  func `a quote opens a run only at the start of a word or after a key`(
+    query: String, words: [String]
+  ) {
+    #expect(SearchQuery.words(in: query) == words)
+  }
+
+  @Test(arguments: [
+    (#"3.5""#, #"3.5""#),
+    (#""key words""#, "key words"),
+    (#""key words"#, "key words"),
+    ("\u{201E}key words\u{201C}", "key words"),
+  ])
+  func `only the quotes of a quoted run are taken off`(word: String, text: String) {
+    #expect(SearchQuery.unquoted(word) == text)
+  }
+
   @Test func `a quoted phrase stays one term of the free text`() {
     #expect(IndexSearch.parseQuery(#""key words" by:bradner"#).text == #""key words""#)
   }
@@ -88,6 +118,69 @@ struct IndexSearchTests {
     let inOrder = try #require(search.search(#""key words" for"#).first { $0.rfc.number == 2119 })
     let reversed = try #require(search.search(#"for "key words""#).first { $0.rfc.number == 2119 })
     #expect(inOrder.score == reversed.score + 50)
+  }
+
+  // MARK: Authors (#177)
+
+  /// The index holds an author as an initial and a surname, "R. Fielding"; a reader
+  /// may spell the given name out.
+  @Test(arguments: [
+    "author:fielding",
+    #"author:"R. Fielding""#,
+    #"author:"Roy Fielding""#,
+    "author:\u{201C}roy fielding\u{201D}",
+    #"by:"R Fielding""#,
+  ])
+  func `an author is found by surname, or by an initial or a given name before it`(query: String)
+    throws
+  {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search(query).contains { $0.rfc.number == 9110 })
+  }
+
+  /// The index holds no given names, so a lone one is read as a surname.
+  @Test func `a lone given name is read as a surname`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search("author:roy").isEmpty)
+  }
+
+  @Test func `a given name has to fit the author's initial`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search(#"author:"Mark Fielding""#).isEmpty)
+    #expect(search.search(#"author:"Mark Nottingham""#).contains { $0.rfc.number == 9110 })
+  }
+
+  /// A given name comes before the surname, as the index writes the name.
+  @Test func `a given name after the surname does not match`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    #expect(search.search(#"author:"Fielding Roy""#).isEmpty)
+  }
+
+  @Test(arguments: [
+    ("R. Fielding", "fielding", true),
+    ("R. Fielding", "fiel", true),
+    ("R. Fielding", "roy fielding", true),
+    ("R. Fielding", "r. fielding", true),
+    ("R. Fielding", "roy", false),
+    ("R. Fielding", "mark fielding", false),
+    ("J.K. Reynolds", "joyce k. reynolds", true),
+    ("J.K. Reynolds", "karen reynolds", true),
+    ("L-E. Jonsson", "lars-erik jonsson", true),
+    ("SN Bhatti", "saleem bhatti", true),
+    ("F. Le Faucheur", "francois le faucheur", true),
+    ("F. Le Faucheur", "le faucheur", true),
+    ("M. St. Johns", "michael st. johns", true),
+    ("RFC Editor", "rfc", true),
+    ("RFC Editor", "rfc editor", true),
+    ("IAB", "iab", true),
+    ("M. K\u{00FC}hlewind", "mirja kuhlewind", true),
+    ("M. Ku\u{0308}hlewind", "k\u{00FC}hlewind", true),
+    ("\u{00C9}. Vyncke", "eric vyncke", true),
+  ])
+  func `an author name matches a query by surname and initials`(
+    name: String, query: String, matches: Bool
+  ) {
+    #expect(AuthorName(name).matches(AuthorQuery(query)) == matches)
   }
 
   @Test func `filters apply`() throws {

@@ -62,6 +62,10 @@ public enum SearchQuery {
   /// The words of `query`, split at spaces outside quotes, each as typed. A quoted run
   /// is one word with its quotes (`author:"Roy Fielding"`, `"key words"`), and an
   /// unclosed one runs to the end of the query, which is still being typed (#177).
+  ///
+  /// A quote opens a run only at the start of a word or right after `key:`. Anywhere
+  /// else it is a character of the word: in `3.5" floppy status:bcp` it is an inch
+  /// mark, and `status:bcp` is still a filter.
   static func words(in query: String) -> [String] {
     var words: [String] = []
     var word = ""
@@ -72,16 +76,23 @@ public enum SearchQuery {
         word = ""
         continue
       }
-      // Every quote toggles, whatever its direction: Smart Punctuation picks the
-      // direction from the character before it, so after a colon it types ”, and
-      // “ closes a quote on a German keyboard.
-      if quotes.contains(character) {
+      // Any quote opens or closes, whatever its direction: Smart Punctuation picks
+      // the direction from the character before it, so after a colon it types ”,
+      // and “ closes a quote on a German keyboard.
+      if quotes.contains(character), quoted || opensQuote(after: word) {
         quoted.toggle()
       }
       word.append(character)
     }
     if !word.isEmpty { words.append(word) }
     return words
+  }
+
+  /// Whether a quote typed after `word`, the part of a word before it, opens a quoted
+  /// run: at the start of the word, or right after its key's colon.
+  private static func opensQuote(after word: String) -> Bool {
+    word.isEmpty
+      || (word.last == ":" && word.firstIndex(of: ":") == word.index(before: word.endIndex))
   }
 
   /// `word` read as a qualifier: the key before its first colon and the value after
@@ -94,9 +105,17 @@ public enum SearchQuery {
     return (key, word[word.index(after: colon)...])
   }
 
-  /// `word` without its quotes: a quoted value's text, or a phrase's.
+  /// `word` without the quotes of its quoted run: a quoted value's text, or a
+  /// phrase's. The run's opening quote is the word's first character, and the next
+  /// quote closes it; a quote anywhere else is the word's own, as `words(in:)` reads
+  /// it.
   static func unquoted(_ word: some StringProtocol) -> String {
-    String(word.filter { !quotes.contains($0) })
+    guard let first = word.first, quotes.contains(first) else { return String(word) }
+    var text = String(word.dropFirst())
+    if let closing = text.firstIndex(where: quotes.contains) {
+      text.remove(at: closing)
+    }
+    return text
   }
 
   /// A qualifier's value as written back: in quotes when it has a space, or it would
@@ -175,7 +194,7 @@ public enum SearchQuery {
     if matching.isEmpty, !typed.isEmpty, ["status", "stream", "has"].contains(qualifier.name) {
       return [Suggestion(completion: query, isUnknown: true)]
     }
-    return offer(matching.map { "\(qualifier.name):\($0)" })
+    return offer(matching.map { "\(qualifier.name):\(written($0))" })
   }
 
   /// The long `status:` spellings `parseQuery` also reads, and the value each means.
@@ -187,12 +206,12 @@ public enum SearchQuery {
   ]
 
   /// Every working group the index names, lowercased as `parseQuery` matches them,
-  /// most documents first. Not one with a space in its name ("NON WORKING GROUP"):
-  /// only a quoted value can spell it, and completion does not write one.
+  /// most documents first. One with a space in its name ("NON WORKING GROUP") is
+  /// offered in quotes, as `written` writes it.
   private static func workingGroups(in index: RFCIndex) -> [String] {
     var counts: [String: Int] = [:]
     for rfc in index.rfcs {
-      guard let group = rfc.workingGroup?.lowercased(), !group.contains(" ") else { continue }
+      guard let group = rfc.workingGroup?.lowercased() else { continue }
       counts[group, default: 0] += 1
     }
     return counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
