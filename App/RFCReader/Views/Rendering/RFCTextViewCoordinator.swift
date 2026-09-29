@@ -643,7 +643,14 @@ final class RFCTextViewCoordinator: NSObject {
       // has a background of its own, because on macOS the popover supplies one.
       host.view.backgroundColor = .systemBackground
       referencePreviewHost = host
-      return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
+      // UIKit makes the preview view the view of a controller of its own, which
+      // raises for a view that is already a controller's: the host's is. So the
+      // host's view goes inside a plain one, the way the header host's goes inside
+      // the text view.
+      let container = UIView(frame: host.view.frame)
+      host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      container.addSubview(host.view)
+      return UITextItem.MenuConfiguration(preview: .view(container), menu: defaultMenu)
     }
 
     /// A document preview holds a whole second build, so it goes with its menu
