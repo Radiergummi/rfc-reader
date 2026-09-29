@@ -110,6 +110,16 @@ public struct ReferenceHover {
     self.isPreviewReader = isPreviewReader
   }
 
+  /// Whether a move to `pointer`, in screen coordinates, would look at what is
+  /// under it. Not in a preview's reader, not while a document preview is up, and
+  /// not while the pointer is still where it followed a link: `handle` drops the
+  /// target of such a move, so the controller skips the hit test, which is a
+  /// TextKit layout query on every mouse move.
+  public func wantsTarget(at pointer: CGPoint) -> Bool {
+    guard !isPreviewReader, presentation != .documentPreview else { return false }
+    return pointer != linkClickPointer
+  }
+
   public mutating func handle(_ event: Event) -> [Effect] {
     switch event {
     case .pointerMoved(let pointer, let target):

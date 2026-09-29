@@ -135,6 +135,20 @@ struct ReferenceHoverTests {
     #expect(hover.linkClickPointer == nil)
   }
 
+  @Test func `a move whose target the rules would drop asks for no hit test`() {
+    var afterLink = ReferenceHover()
+    _ = afterLink.handle(.clickedLink(reference: first.box, pointer: here))
+    #expect(!afterLink.wantsTarget(at: here))
+    #expect(afterLink.wantsTarget(at: elsewhere))
+
+    var previewing = ReferenceHover()
+    _ = previewing.handle(.forceClickDocument(first))
+    #expect(!previewing.wantsTarget(at: elsewhere))
+
+    #expect(!ReferenceHover(isPreviewReader: true).wantsTarget(at: here))
+    #expect(ReferenceHover().wantsTarget(at: here))
+  }
+
   // MARK: - Force click
 
   @Test func `a force click shows the card, and its own click does not follow the link`() {

@@ -102,7 +102,9 @@
     /// name the tracking area was installed and no hover ever reached this.
     @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
-      send(.pointerMoved(location: NSEvent.mouseLocation, target: target(event.locationInWindow)))
+      let location = NSEvent.mouseLocation
+      let hit = state.wantsTarget(at: location) ? target(event.locationInWindow) : nil
+      send(.pointerMoved(location: location, target: hit))
     }
 
     @objc(mouseExited:)
