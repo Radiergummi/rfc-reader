@@ -44,8 +44,8 @@ struct BibliographyTests {
         SeriesInfo(name: "RFC", value: "9110")
       ])
     let groups = [
-      ReferenceGroup(title: "Informative References", kind: .informative, entries: [entry]),
-      ReferenceGroup(title: "Normative References", kind: .normative, entries: [entry]),
+      ReferenceGroup(title: "Informative References", entries: [entry]),
+      ReferenceGroup(title: "Normative References", entries: [entry]),
     ]
     #expect(groups.kind(of: .document(.rfc(9110), section: nil)) == .normative)
   }

@@ -54,7 +54,7 @@ public enum FragmentGeometry {
     public let rect: CGRect
     public let roundsLeading: Bool
     public let roundsTrailing: Bool
-    public var isInformative = false
+    public let isInformative: Bool
   }
 
   /// A decoration can span several fragments — a multi-line artwork block lays out

@@ -86,7 +86,7 @@ extension DocumentTextBuilder {
           string: String(display.text[display.text.startIndex..<chip.lowerBound]),
           attributes: attributes))
       var chipAttributes = attributes
-      if bibliography.kind(of: xref.target) == .informative {
+      if referenceKinds.kind(of: xref.target) == .informative {
         chipAttributes[.rfcInformative] = "informative"
       }
       result.append(chipRun(String(display.text[chip]), attributes: chipAttributes))

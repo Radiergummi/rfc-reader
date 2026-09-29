@@ -62,9 +62,10 @@ public final class DocumentTextBuilder {
   /// with `referenceScheme`. Collected before anything is emitted.
   var referenceAnchors: Set<String> = []
 
-  /// The document's bibliographies, for whether a citation's chip is informative.
-  /// Collected before anything is emitted, as `referenceAnchors` is.
-  var bibliography: [ReferenceGroup] = []
+  /// Which kind of list holds each bibliography entry, for whether a citation's
+  /// chip is informative. Collected before anything is emitted, as
+  /// `referenceAnchors` is.
+  var referenceKinds = ReferenceKinds([])
 
   init(style: ReadingStyle) {
     self.style = style
@@ -113,7 +114,8 @@ public final class DocumentTextBuilder {
 
 extension DocumentTextBuilder {
   func appendDocument(_ document: RFCDocument) {
-    bibliography = ReferenceGroup.groups(in: document)
+    let bibliography = ReferenceGroup.groups(in: document)
+    referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
     appendAbstract(document.header.abstract)
     for section in document.sections {

@@ -27,7 +27,8 @@ struct ReferenceKindTests {
   /// A section about the rule, not a list: matching on the word alone read it as one.
   @Test func `a title that only mentions normative references names no kind`() {
     #expect(
-      ReferenceList.Kind(title: "BCP, Experimental Protocols, and Normative References")
+      ReferenceList.Kind(
+        title: "Standards Track, Informational Documents, and Normative References")
         == .unknown)
   }
 

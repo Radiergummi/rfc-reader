@@ -411,8 +411,8 @@ public struct ReferenceList: Sendable, Hashable, Codable {
 
     /// The kind a list's title names. The whole title is matched, numbering and a
     /// trailing colon aside, because a title that merely contains the word says
-    /// nothing: the corpus has a section headed `BCP, Experimental Protocols, and
-    /// Normative References`, which is about the rule and lists nothing.
+    /// nothing: the corpus has sections whose title ends in "and Normative
+    /// References" that are about the rule for citing them and list nothing.
     public init(title: String) {
       let words = title.lowercased()
         .drop { $0.isNumber || $0 == "." || $0.isWhitespace }

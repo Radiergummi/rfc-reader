@@ -248,15 +248,16 @@ struct ChipLineGeometryTests {
   private func chipParagraph(_ inlines: [Inline], informative: Bool = false) throws
     -> ChipParagraph
   {
-    let built = DocumentTextBuilder.build(
+    var text = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph(inlines))), style: ReadingStyle()
     ).text
-    let text = NSMutableAttributedString(attributedString: built)
     if informative {
-      text.enumerateAttribute(.rfcChip, in: NSRange(location: 0, length: text.length)) {
+      let marked = NSMutableAttributedString(attributedString: text)
+      marked.enumerateAttribute(.rfcChip, in: NSRange(location: 0, length: marked.length)) {
         value, range, _ in
-        if value != nil { text.addAttribute(.rfcInformative, value: "informative", range: range) }
+        if value != nil { marked.addAttribute(.rfcInformative, value: "informative", range: range) }
       }
+      text = marked
     }
     let (storage, layout) = layOut(text, width: 2000)
     var found: (fragment: NSTextLayoutFragment, range: NSRange)?
