@@ -36,6 +36,8 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 
 ### Tier 0 — the core reader (MVP, "0.1")
 
+*Shipped. Items of later tiers that have shipped say so.*
+
 Browse and find
 - Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Snapshot bundled for offline first launch.
 - Instant type-ahead search over number, title, keywords, authors, working group, abstract. Query grammar: `wg:httpbis`, `author:fielding`, `status:std`, `status:current`, `year:2020-2022`, `has:xml`.
@@ -43,7 +45,7 @@ Browse and find
 - Command-L "Go to RFC…" accepting a number, `BCP 14`, or any rfc-editor.org / datatracker URL.
 
 Read
-- Native rendering of the document model: headings, paragraphs, lists, definition lists, tables, figures, monospaced artwork and code with copy button, references.
+- Native rendering of the document model: headings, paragraphs, lists, definition lists, tables, figures, monospaced artwork and code (copied with Copy Figure or an ordinary selection), references.
 - Legacy text RFCs: page furniture removed, paragraphs reflowed and re-joined across page breaks, prose vs. ASCII art detected, headings recovered, references linked. "Original text" toggle shows the file as published.
 - Status banner: obsoleted by / updated by / has errata, with one-tap navigation to the newer document.
 - Table of contents inspector that tracks the current section.
@@ -60,14 +62,14 @@ Reference
 ### Tier 1 — the reader people recommend ("0.2 – 0.3")
 
 - **Full-text search** across downloaded documents with snippets and section-level results (SQLite FTS5 via GRDB). Offer "download everything" (~600 MB of text) for people who want a complete offline corpus.
-- **Reference peek.** Long-press or hover a `[RFC7231]` link to see title, status, abstract and the referenced section, without leaving the page.
+- **Reference peek** *(shipped)*. Long-press or hover a `[RFC7231]` link to see title, status, abstract and the referenced section, without leaving the page.
 - **Lineage view.** For any RFC: what it obsoletes and updates, what obsoletes and updates it, drawn as a small graph. "Show me the current version of this" in one tap.
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.
-- **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection.
+- **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
 - **Highlights and notes**, synced, exportable as Markdown with citations attached.
 - **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs; Handoff between iPhone, iPad and Mac.
-- **Mac polish**: multiple windows and tabs, Services menu ("Open RFC" on selected text), Quick Look-style popover for reference links, printing and PDF export of the rendered document.
+- **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open RFC" on selected text), Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".
 
 ### Tier 2 — beyond RFCs ("later, if it earns its place")
@@ -96,7 +98,7 @@ Ideas from the first brainstorm session and where each one lands.
 | ABNF and other grammars, syntax highlighting for code (confirmed: ABNF, not "DNF") | Tier 1 | RFCXML labels `<sourcecode type="abnf">`, `json`, `http-message`, `yang`, `asn.1`, `c`; legacy text ABNF is detectable from `rulename =` lines. A small regex tokenizer per language in RFCKit produces tokens the renderer colours. No JavaScript-based highlighters. |
 | Working inter-spec links | Tier 0, done in the model | Cross references resolve to document and section at parse time. Still to add: Internet-Draft references (`[I-D.ietf-quic-http]`) and IANA registry URLs. |
 | Drafts, and a pleasing delta between versions | Tier 2 | Every draft revision is served as text (and XML for recent ones) from the IETF archive, so both sides parse into the same model. Diff at three levels: align sections by title and position, LCS over paragraphs, word-level diff inside changed paragraphs. The same engine gives "what changed from RFC 7231 to RFC 9110", probably the more valuable view for implementers. Fuzzy alignment after restructurings is the hard part. Drafts also enable "notify me when this draft has a new version". |
-| Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body will be a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See ARCHITECTURE.md. |
+| Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body is a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See ARCHITECTURE.md. |
 | Handoff between iPhone, iPad and Mac | Tier 1 | `NSUserActivity` carrying the `rfc://` link of the current section. |
 | ⌘-click a reference to open it in a new window (Mac) | Tier 1 | Falls out of navigation being a link. |
 
@@ -106,7 +108,7 @@ Ideas from the first brainstorm session and where each one lands.
 
 **iPad and Mac.** Three columns: sidebar, list, reader; the table of contents docks as an inspector on the right. Command-L jumps to a number, Command-F finds in document, Command-Option-I toggles contents, Command-D bookmarks. On Mac the reader opens in tabs, cross references can open in a new window with Command-click, and the menu bar has everything.
 
-**Reading typography.** Prose in the system serif or a well-chosen humanist face at a comfortable measure (about 70 characters), artwork in SF Mono in a subtle card that scrolls horizontally rather than wrapping. Headings numbered exactly as the RFC numbers them. Dark mode from day one.
+**Reading typography.** Prose in the system serif or a well-chosen humanist face at a comfortable measure (about 70 characters), artwork in SF Mono in a subtle card, never wrapped and scaled so its widest line fits the measure. Headings numbered exactly as the RFC numbers them. Dark mode from day one.
 
 **The status banner** sits between title and abstract, not in a toolbar. If a document is obsolete, the banner is red and the newer RFC is one tap away. That single design decision would already put this app ahead of the web.
 
@@ -129,7 +131,7 @@ RFC numbers passed 10000 in 2026 (RFC 10050 was published on 19 September 2026).
 ## Risks and open questions
 
 - **Legacy text parsing will never be perfect.** Definition lists with hanging indents, nested lists, and tables drawn in ASCII are hard to classify. Mitigation: bias toward preformatted (never mangle), keep the original text one toggle away, and let users report a misrendered section.
-- **Rendering performance.** A 1,400-paragraph document in a lazy stack is fine; scroll-to-anchor inside a lazy stack is less reliable. Fallback is a plain stack for documents under a threshold, or `UITextView`/`NSTextView` with TextKit 2 if SwiftUI text proves limiting.
+- **Rendering performance.** Settled: the reader body is one TextKit 2 text storage per document in `UITextView`/`NSTextView`, not a lazy stack of SwiftUI views; ARCHITECTURE.md has the decision.
 - **Search latency.** Metadata search over the whole index takes ~70 ms per query in the current in-memory implementation. Fine off the main actor with a debounce; FTS5 replaces it when full-text search arrives.
 - **Business model.** The app will be public and possibly sold. AGPL open source plus a paid App Store build is a legitimate combination (the source is free, the convenience and signing are not). This makes the licensing of the legacy XML pack a real question rather than a formality; see DATA_PIPELINE.md.
 - **Name.** "RFC Reader" is descriptive and probably taken. Worth a short list of alternatives before the App Store listing exists.
