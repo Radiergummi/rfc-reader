@@ -1,6 +1,3 @@
-import CoreGraphics
-import SwiftUI
-
 /// The reader's settings as user defaults hold them: each key and its default, once.
 ///
 /// The reader, the document preview and Settings each declare their own
@@ -22,14 +19,4 @@ public enum ReaderPreferences {
   /// Open documents in the original text rendering rather than the reader's.
   public static let preferOriginalTextKey = "preferOriginalText"
   public static let defaultPreferOriginalText = false
-
-  /// The style a reader at `column` builds with, from the settings. Every reader of
-  /// a document — the window's and a preview's — builds through this, so the two
-  /// cannot set the same settings differently.
-  public static func style(
-    fontSize: Double, underlineLinks: Bool, column: CGFloat, textSize: DynamicTypeSize = .large
-  ) -> ReadingStyle {
-    ReadingStyle(
-      bodySize: fontSize, measure: column, underlinesLinks: underlineLinks, textSize: textSize)
-  }
 }

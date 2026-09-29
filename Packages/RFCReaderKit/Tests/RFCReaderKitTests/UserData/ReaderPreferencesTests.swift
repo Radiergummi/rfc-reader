@@ -18,11 +18,4 @@ struct ReaderPreferencesTests {
     #expect(CGFloat(ReaderPreferences.defaultFontSize) == ReadingStyle().bodySize)
     #expect(ReaderPreferences.defaultUnderlineLinks == ReadingStyle().underlinesLinks)
   }
-
-  @Test func `the style carries every setting and the column`() {
-    let style = ReaderPreferences.style(
-      fontSize: 20, underlineLinks: true, column: 500, textSize: .xxLarge)
-    #expect(
-      style == ReadingStyle(bodySize: 20, measure: 500, underlinesLinks: true, textSize: .xxLarge))
-  }
 }

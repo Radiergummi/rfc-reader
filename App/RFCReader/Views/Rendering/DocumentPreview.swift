@@ -107,8 +107,7 @@ struct DocumentPreview: View {
       let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
       let built = await DocumentView.build(
         document,
-        style: ReaderPreferences.style(
-          fontSize: fontSize, underlineLinks: underlineLinks, column: column))
+        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
       loaded = Loaded(
         document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
       // Resolved the way the reader resolves a jump, so the preview opens where a

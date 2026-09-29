@@ -143,8 +143,8 @@ struct DocumentView: View {
 
     var style: ReadingStyle? {
       column.map {
-        ReaderPreferences.style(
-          fontSize: fontSize, underlineLinks: underlineLinks, column: $0, textSize: textSize)
+        ReadingStyle(
+          bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
       }
     }
   }
