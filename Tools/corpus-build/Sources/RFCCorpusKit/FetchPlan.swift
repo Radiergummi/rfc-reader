@@ -21,4 +21,14 @@ public enum FetchPlan {
     guard let limit else { return wanted }
     return Array(wanted.prefix(limit))
   }
+
+  /// The RFCs with XML whose text the RFC Editor also publishes, which xml2rfc
+  /// generated from that XML: the ground truth `score` measures the legacy parser
+  /// against (#42). `wanted(format: .text)` skips them on purpose, because they need
+  /// no conversion, so they are fetched into a directory of their own.
+  public static func pairedText(in index: RFCIndex, limit: Int?) -> [DocumentID] {
+    let wanted = index.rfcs.filter { $0.hasXMLSource && $0.formats.contains(.text) }.map(\.id)
+    guard let limit else { return wanted }
+    return Array(wanted.prefix(limit))
+  }
 }
