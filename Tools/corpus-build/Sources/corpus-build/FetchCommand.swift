@@ -15,33 +15,47 @@ struct FetchCommand: AsyncParsableCommand {
       "Download the RFC index, and every RFC it lists in one format that is not yet in --out."
   )
 
-  /// The two disjoint halves of the corpus, fetched the same way (`FetchPlan`).
+  /// The two disjoint halves of the corpus, fetched the same way (`FetchPlan`), and
+  /// the text xml2rfc generated for the XML half, which `score` measures the legacy
+  /// parser against (#42).
   enum Format: String, ExpressibleByArgument, CaseIterable {
     case text
     case xml
+    case modernText = "modern-text"
 
     var fileFormat: FileFormat {
       switch self {
-      case .text: .text
+      case .text, .modernText: .text
       case .xml: .xml
       }
     }
 
-    /// The directory inside `--out` this half of the corpus lands in.
+    /// The directory inside `--out` this set of documents lands in.
     var directoryName: String {
       switch self {
       case .text: "text.noindex"
       case .xml: "xml.noindex"
+      case .modernText: "modern-text.noindex"
+      }
+    }
+
+    func wanted(in index: RFCIndex, limit: Int?) -> [DocumentID] {
+      switch self {
+      case .text, .xml: FetchPlan.wanted(in: index, format: fileFormat, limit: limit)
+      case .modernText: FetchPlan.pairedText(in: index, limit: limit)
       }
     }
   }
 
   private static let logger = Logger(command: "fetch")
 
-  @Option(help: "The corpus directory. Documents land in text.noindex or xml.noindex inside it.")
+  @Option(
+    help:
+      "The corpus directory. Documents land in text.noindex, xml.noindex or modern-text.noindex inside it."
+  )
   var out: String
 
-  @Option(help: "Which half of the corpus to fetch.")
+  @Option(help: "Which documents to fetch: the legacy text, the XML, or the XML's own text.")
   var format: Format = .text
 
   @Option(help: "Read the RFC index from here instead of downloading it into --out.")
@@ -70,7 +84,7 @@ struct FetchCommand: AsyncParsableCommand {
       index = try RFCIndexParser.parse(data)
     }
 
-    let wanted = FetchPlan.wanted(in: index, format: fileFormat, limit: limit)
+    let wanted = format.wanted(in: index, limit: limit)
     let suffix = fileFormat.pathExtension
     let missing = wanted.filter {
       !FileManager.default.fileExists(
