@@ -92,6 +92,7 @@ struct CorpusBackedTitlePageTests {
 
     let management = leadInText(LegacyTextParser.parse(try CorpusText.text("rfc1441")))
     #expect(!management.contains { $0.localizedCaseInsensitiveContains("status of this memo") })
+    #expect(!management.contains { $0.contains("specifes") }, "nor the status paragraph")
     #expect(!management.contains { $0.contains("Table of Contents") || $0.contains("......") })
     #expect(management.contains { $0.hasPrefix("The purpose of") }, "the body after them stays")
   }
