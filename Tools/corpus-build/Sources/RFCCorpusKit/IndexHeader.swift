@@ -11,12 +11,11 @@ import RFCKit
 /// because parsing needs it to filter the lead-in; nothing here is used while parsing.
 public enum IndexHeader {
   /// Applies `entry` to `header`: its number, its authors with their order and roles,
-  /// its year and month, and what the document obsoletes and updates.
+  /// its date, and what the document obsoletes and updates.
   ///
-  /// The day is the index's where it has one, which is only for the April 1
-  /// documents. Otherwise the page's day is kept, but only where the page's year and
-  /// month are the index's: a day from another month belongs to a date the index has
-  /// already corrected.
+  /// The date is the index's as it stands. The page has no day to offer:
+  /// `LegacyTextParser` reads only a month and a year, and the index has a day only for
+  /// the April 1 documents.
   ///
   /// Returns notes for the report. A page that states no number, or another number
   /// than the index's, is worth knowing about even once the number is right.
@@ -29,14 +28,7 @@ public enum IndexHeader {
     header.id = entry.id
     header.authors = entry.authors
 
-    var date = PublicationDate(year: entry.date.year, month: entry.date.month)
-    if let day = entry.date.day {
-      date.day = day
-    } else if let page = header.date, page.year == date.year, page.month == date.month {
-      date.day = page.day
-    }
-    header.date = date
-
+    header.date = entry.date
     header.obsoletes = entry.obsoletes
     header.updates = entry.updates
     return notes

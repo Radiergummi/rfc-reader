@@ -38,29 +38,6 @@ struct IndexHeaderTests {
       header.authors == [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")])
   }
 
-  @Test func `the year and month come from the index, and a day from another month is dropped`() {
-    let page = DocumentHeader(
-      id: .rfc(1234), title: "A Title", date: PublicationDate(year: 1969, month: 6, day: 2))
-    let index = Self.entry(date: PublicationDate(year: 1970, month: 6))
-    #expect(Self.applied(index, to: page).header.date == PublicationDate(year: 1970, month: 6))
-  }
-
-  @Test func `the page's day is kept where its year and month are the index's`() {
-    let page = DocumentHeader(
-      id: .rfc(1234), title: "A Title", date: PublicationDate(year: 1980, month: 3, day: 17))
-    let index = Self.entry(date: PublicationDate(year: 1980, month: 3))
-    #expect(
-      Self.applied(index, to: page).header.date == PublicationDate(year: 1980, month: 3, day: 17))
-  }
-
-  @Test func `the index's day wins over the page's`() {
-    let page = DocumentHeader(
-      id: .rfc(1234), title: "A Title", date: PublicationDate(year: 1990, month: 4, day: 2))
-    let index = Self.entry(date: PublicationDate(year: 1990, month: 4, day: 1))
-    #expect(
-      Self.applied(index, to: page).header.date == PublicationDate(year: 1990, month: 4, day: 1))
-  }
-
   @Test func `a page with no date takes the index's`() {
     let page = DocumentHeader(id: .rfc(1234), title: "A Title")
     let index = Self.entry(date: PublicationDate(year: 1982, month: 8))
