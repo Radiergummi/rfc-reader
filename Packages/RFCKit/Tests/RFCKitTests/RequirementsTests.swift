@@ -47,6 +47,54 @@ struct RequirementsTests {
         == [#"It is called "done.""#, "Then it MUST stop (as below.)", "Next."])
   }
 
+  // MARK: - The declaration
+
+  /// However the key words are declared, the declaration is not a requirement.
+  @Test(arguments: [
+    #"The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14."#,
+    #"The key words "MUST", "SHOULD", and "MAY" are to be interpreted as defined in RFC 2119."#,
+    #"The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" are used as specified in [KEYWORDS]."#,
+  ])
+  func `the declaration of the key words is recognized however it is worded`(sentence: String) {
+    #expect(Requirements.declaresKeywords(sentence))
+  }
+
+  @Test func `a requirement citing RFC 2119 is still a requirement`() {
+    #expect(!Requirements.declaresKeywords("Implementations MUST follow RFC 2119 conventions."))
+  }
+
+  // MARK: - Where a requirement lands
+
+  /// A requirement lands on the nearest anchor around it: its paragraph's, else its
+  /// list item's or definition's, else its section's.
+  @Test func `a requirement lands on its list item or definition`() {
+    let item = ListItem(
+      blocks: [.paragraph(Paragraph(text: "A client MUST retry."))], anchor: "item-1")
+    let definition = DefinitionItem(
+      term: [.text("Retry")], definition: [.paragraph(Paragraph(text: "A server MAY refuse."))],
+      anchor: "term-retry", definitionAnchor: "def-retry")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "S",
+          blocks: [
+            .list(ListBlock(style: .bullet, items: [item])),
+            .definitionList([definition]),
+            .references(
+              ReferenceList(
+                title: "Normative References",
+                entries: [
+                  Reference(
+                    anchor: "RFC2119", title: "Key words",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "2119")])
+                ])),
+          ])
+      ],
+      source: .xml)
+    #expect(Requirements.extract(from: document).map(\.anchor) == ["item-1", "def-retry"])
+  }
+
   // MARK: - Through parse
 
   /// The author tagged every keyword with `<bcp14>`: the extractor, which reads

@@ -76,6 +76,13 @@ struct RequirementListTests {
     #expect(markdown.contains("([RFC 9110](rfc://9110))"))
   }
 
+  @Test func `an appendix is cited as an appendix`() {
+    let inAppendix = Self.requirement(
+      "It MUST be listed.", [.must], section: "appendix-A.1", number: "A.1", title: "Examples")
+    let markdown = RequirementList.markdownChecklist([inAppendix], document: .rfc(9110))
+    #expect(markdown.contains("[RFC 9110, Appendix A.1]"))
+  }
+
   /// A field holding a comma or a quote is quoted, its quotes doubled.
   @Test func `the checklist in CSV quotes every field`() {
     let csv = RequirementList.csvChecklist(

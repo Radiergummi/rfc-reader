@@ -603,7 +603,6 @@ struct DocumentView: View {
     do {
       let loaded = try await library.document(for: id)
       reader.groups = ReferenceGroup.groups(in: loaded)
-      reader.requirements = await Self.requirements(in: loaded)
       sectionNumbers = Dictionary(
         loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first }
@@ -619,6 +618,11 @@ struct DocumentView: View {
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
       trace("loaded")
+      // Last, so the first build does not wait for it; and not written into the
+      // window's reader once this view has been replaced by the next document's.
+      let requirements = await Self.requirements(in: loaded)
+      guard !Task.isCancelled else { return }
+      reader.requirements = requirements
     } catch {
       trace("failed: \(error)")
       loadError = error.localizedDescription

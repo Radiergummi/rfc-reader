@@ -73,32 +73,36 @@ public enum Requirements {
               sectionTitle: section.titleText, isHeuristic: isHeuristic))
         }
       }
-      visit(section.blocks, record)
+      visit(section.blocks, around: nil, record)
     }
     return found
   }
 
-  /// The prose blocks, in document order, each with the anchor it lands on.
-  private static func visit(_ blocks: [Block], _ record: (String, String?) -> Void) {
+  /// The prose blocks, in document order, each with the nearest anchor it lands on:
+  /// its own, else that of the list item, definition or table around it, else
+  /// `outer`, the anchor of what encloses these blocks.
+  private static func visit(
+    _ blocks: [Block], around outer: String?, _ record: (String, String?) -> Void
+  ) {
     for block in blocks {
       switch block {
       case .paragraph(let paragraph):
-        record(paragraph.plainText, paragraph.anchor)
+        record(paragraph.plainText, paragraph.anchor ?? outer)
       case .list(let list):
-        for item in list.items { visit(item.blocks, record) }
+        for item in list.items { visit(item.blocks, around: item.anchor ?? outer, record) }
       case .definitionList(let items):
         for item in items {
-          record(item.term.plainText, nil)
-          visit(item.definition, record)
+          record(item.term.plainText, item.anchor ?? outer)
+          visit(item.definition, around: item.definitionAnchor ?? item.anchor ?? outer, record)
         }
       case .aside(let inner):
-        visit(inner, record)
+        visit(inner, around: outer, record)
       case .table(let table):
         // A profile often states its requirements a row at a time: "CBOR MUST be
         // used." A row lands on its own anchor where it has one.
         for (index, row) in table.rows.enumerated() {
           let anchor = index < table.rowAnchors.count ? table.rowAnchors[index] : nil
-          for cell in row { record(cell.plainText, anchor ?? table.anchor) }
+          for cell in row { record(cell.plainText, anchor ?? table.anchor ?? outer) }
         }
       case .preformatted, .figure, .blockQuote, .references:
         break
@@ -106,11 +110,16 @@ public enum Requirements {
     }
   }
 
-  /// The boilerplate that declares the key words, which names every one of them
-  /// and requires nothing.
-  private static func declaresKeywords(_ sentence: String) -> Bool {
-    sentence.contains("BCP 14") && sentence.contains("interpreted as described")
-      || sentence.contains("RFC 2119") && sentence.contains("interpreted as described")
+  /// The boilerplate that declares the key words, which names them and requires
+  /// nothing. It is worded many ways ("as described in BCP 14", "as defined in RFC
+  /// 2119", "as specified in [KEYWORDS]"), but it always lists several key words at
+  /// once, which no requirement does; a shorter list is known by what it cites.
+  static func declaresKeywords(_ sentence: String) -> Bool {
+    if Set(keywords(in: sentence)).count >= 5 { return true }
+    let citesBCP14 = ["BCP 14", "BCP14", "2119", "8174", "KEYWORDS"].contains {
+      sentence.contains($0)
+    }
+    return citesBCP14 && sentence.contains("interpreted")
   }
 
   // MARK: - Key words

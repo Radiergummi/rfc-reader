@@ -29,7 +29,9 @@ struct RequirementsView: View {
         List {
           ForEach(RequirementList.sections(of: shown)) { section in
             Section(section.heading) {
-              ForEach(section.requirements, id: \.self) { requirement in
+              // By position: one section can state the same sentence twice, as
+              // field after field says "MUST be set to zero".
+              ForEach(Array(section.requirements.enumerated()), id: \.offset) { _, requirement in
                 row(requirement)
               }
             }
