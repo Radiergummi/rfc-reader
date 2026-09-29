@@ -141,9 +141,10 @@ final class LibraryModel {
         let index = cached.index
         let prepared = await Self.prepare(index)
         apply(prepared, updatedAt: cached.updatedAt)
-        // Refresh in the background if the cache is older than a day.
-        if cached.updatedAt.timeIntervalSinceNow < -86_400 {
-          Task(name: "Refresh index") { await refreshIndex() }
+        // Check in the background if the index was last checked over a day ago:
+        // only on a cheap network, since nobody is waiting for it (#314).
+        if IndexCheck.isDue(checkedAt: cached.updatedAt, now: .now) {
+          Task(name: "Refresh index") { await refreshIndex(onExpensiveNetworks: false) }
         }
       } else {
         await refreshIndex()
@@ -178,19 +179,32 @@ final class LibraryModel {
     }
   }
 
-  func refreshIndex() async {
+  /// Asks the RFC Editor for the index, sending what identifies the one kept so an
+  /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
+  /// false is the automatic daily check, which waits for a network that is neither
+  /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any.
+  func refreshIndex(onExpensiveNetworks: Bool = true) async {
     do {
+      // Only with an index in memory: without one, a `304` would leave nothing to
+      // show, so the whole index is asked for.
+      let validators = index == nil ? nil : await store.indexCheck()?.validators
       let interval = signposter.beginInterval("Fetch index")
-      let data: Data
+      let fetched: IndexFetch
       do {
         // Ended on a throw too, so an offline refresh does not leave it open.
         defer { signposter.endInterval("Fetch index", interval) }
-        data = try await client.fetchIndexData()
+        fetched = try await client.fetchIndexData(
+          unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
       }
-      // Off the main actor: the parse alone is about a second (#124).
-      let prepared = try await Self.parse(data)
-      try await store.storeIndex(data, parsed: prepared.index)
-      apply(prepared, updatedAt: .now)
+      switch fetched {
+      case .unchanged:
+        indexState = .ready(updatedAt: try await store.recordUnchangedIndex())
+      case .changed(let data, let validators):
+        // Off the main actor: the parse alone is about a second (#124).
+        let prepared = try await Self.parse(data)
+        try await store.storeIndex(data, parsed: prepared.index, validators: validators)
+        apply(prepared, updatedAt: .now)
+      }
     } catch {
       if index == nil { indexState = .failed(error.localizedDescription) }
     }

@@ -48,7 +48,8 @@ struct ClientFormatsTests {
   @Test func `client falls back to text`() async throws {
     struct FakeTransport: HTTPTransport {
       let text: Data
-      func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
+      func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let url = request.url!
         let status = url.pathExtension == "xml" ? 404 : 200
         let response = HTTPURLResponse(
           url: url, statusCode: status, httpVersion: nil, headerFields: nil)!

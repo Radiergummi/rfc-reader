@@ -42,6 +42,7 @@ actor DocumentStore {
 
   private var indexURL: URL { directory.appending(path: "rfc-index.xml") }
   private var snapshotURL: URL { directory.appending(path: "rfc-index.json") }
+  private var checkURL: URL { directory.appending(path: "rfc-index-check.json") }
 
   /// The index, from its snapshot when that is current, and otherwise parsed from
   /// the XML -- which then writes a snapshot, so the next launch reads that. See
@@ -51,7 +52,7 @@ actor DocumentStore {
     var updatedAt = Date.distantPast
     if FileManager.default.fileExists(atPath: indexURL.path) {
       url = indexURL
-      updatedAt = Self.modificationDate(of: url) ?? .distantPast
+      updatedAt = indexCheck()?.checkedAt ?? Self.modificationDate(of: url) ?? .distantPast
     } else if let bundled = Bundle.main.url(forResource: "rfc-index", withExtension: "xml") {
       // A snapshot shipped with the app makes first launch work offline.
       url = bundled
@@ -79,10 +80,32 @@ actor DocumentStore {
     return (index, updatedAt)
   }
 
-  /// Keeps a refreshed index, and its snapshot made from the same parse.
-  func storeIndex(_ data: Data, parsed index: RFCIndex) throws {
+  /// Keeps a refreshed index, its snapshot made from the same parse, and what
+  /// identifies it for the next check.
+  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) throws {
     try data.write(to: indexURL, options: .atomic)
     writeSnapshot(of: index)
+    try storeCheck(IndexCheck(checkedAt: .now, validators: validators))
+  }
+
+  /// The last check of the index kept on disk, or nil when there is no index on
+  /// disk to have checked: the validators describe that file, and nothing else.
+  func indexCheck() -> IndexCheck? {
+    guard FileManager.default.fileExists(atPath: indexURL.path),
+      let data = try? Data(contentsOf: checkURL)
+    else { return nil }
+    return try? JSONDecoder().decode(IndexCheck.self, from: data)
+  }
+
+  /// Records that a check found the index unchanged, and returns when.
+  func recordUnchangedIndex() throws -> Date {
+    let check = IndexCheck(checkedAt: .now, validators: indexCheck()?.validators)
+    try storeCheck(check)
+    return check.checkedAt
+  }
+
+  private func storeCheck(_ check: IndexCheck) throws {
+    try JSONEncoder().encode(check).write(to: checkURL, options: .atomic)
   }
 
   /// Off the actor and after the caller has its index: encoding the whole index
