@@ -453,7 +453,7 @@ public struct RFCXMLSerializer: Sendable {
       let target = Writer.escapeAttribute(anchor)
       return content.isEmpty
         ? "<xref target=\"\(target)\"/>" : "<xref target=\"\(target)\">\(content)</xref>"
-    case .document(let id, let section):
+    case .document(let id, let section, _):
       if let anchor = context.referenceAnchors[id] {
         var attributes = " target=\"\(Writer.escapeAttribute(anchor))\""
         // The source's own wording, not a fixed "of": it decides how the label

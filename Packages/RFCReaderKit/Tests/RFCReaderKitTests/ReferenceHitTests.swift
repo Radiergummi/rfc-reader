@@ -7,7 +7,6 @@ import Testing
 /// What the hover and long-press previews look up under the pointer: the reference,
 /// and the whole of its extent, which the macOS popover is anchored to.
 @Suite("Reference hit testing")
-@MainActor
 struct ReferenceHitTests {
   private let chipped = CrossReference(target: .document(.rfc(9110), section: "4.2"))
 

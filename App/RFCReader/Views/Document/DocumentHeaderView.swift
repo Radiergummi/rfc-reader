@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 /// Everything above the first line of prose: title, badges, authors, and the status
@@ -29,13 +30,21 @@ struct DocumentHeaderView: View {
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
+    /// The banner's drafts, as lines rather than the summary, which carries the time
+    /// it was made and so would never compare equal.
+    let revisionLines: [RevisionsSummary.Line]
+    let moreRevisions: String?
 
-    init(header: DocumentHeader, metadata: RFCMetadata?) {
-      title = header.title
-      date = (header.date ?? metadata?.date)?.formatted
-      workingGroup = header.workingGroup ?? metadata?.workingGroup
-      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
+    /// Merged by `HeaderSummary`, which a printed page's title block reads too.
+    init(header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil) {
+      let summary = HeaderSummary(header: header, metadata: metadata)
+      title = summary.title
+      date = summary.date
+      workingGroup = summary.workingGroup
+      authors = summary.authors
       self.metadata = metadata
+      revisionLines = revisions?.bannerLines ?? []
+      moreRevisions = revisions?.moreText
     }
   }
 
@@ -78,8 +87,11 @@ struct DocumentHeaderView: View {
           .font(.subheadline)
       }
       if let metadata = identity.metadata {
-        StatusBanner(library: library, navigation: navigation, metadata: metadata)
-          .padding(.top, 4)
+        StatusBanner(
+          library: library, navigation: navigation, metadata: metadata,
+          revisionLines: identity.revisionLines, moreRevisions: identity.moreRevisions
+        )
+        .padding(.top, 4)
       }
     }
     // The header is hosted, not placed by SwiftUI, and a hosting view lays its

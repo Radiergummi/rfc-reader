@@ -76,6 +76,12 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+    /// Whether a print is being prepared or its sheet is up; see `printDocument()`.
+    @State private var isPrinting = false
+    /// A finished export, while Save to Files is showing it (#376).
+    @State private var exported: ExportedFile?
+    /// Whether an export is being made or Save to Files is up; see `exportDocument(as:)`.
+    @State private var isExporting = false
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
@@ -201,6 +207,22 @@ struct DocumentView: View {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
           .presentationDetents([.medium, .large])
         }
+        .fileExporter(
+          isPresented: Binding(
+            get: { exported != nil },
+            set: {
+              if !$0 {
+                exported = nil
+                isExporting = false
+              }
+            }),
+          document: exported,
+          contentType: (exported?.format ?? .pdf).contentType,
+          defaultFilename: ExportFormat.fileStem(for: id)
+        ) { _ in
+          exported = nil
+          isExporting = false
+        }
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
@@ -226,6 +248,7 @@ struct DocumentView: View {
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -272,7 +295,9 @@ struct DocumentView: View {
       // the title back to hidden after this view may already have appeared.
       .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
-      let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
+      let headerIdentity = DocumentHeaderView.Identity(
+        header: document.header, metadata: metadata,
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -296,6 +321,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -446,8 +472,65 @@ struct DocumentView: View {
             Button("Preceding Draft") { systemOpenURL(draft) }
           }
         }
+
+        Section {
+          Menu("Export", systemImage: "square.and.arrow.down") {
+            ForEach(ExportFormat.allCases) { format in
+              Button(format.name) { exportDocument(as: format) }
+            }
+          }
+          Button("Print…", systemImage: "printer") { printDocument() }
+        }
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// Save to Files, with the document in `format` (#376). Laid out for the region's
+    /// paper, as a print is.
+    private func exportDocument(as format: ExportFormat) {
+      // A second tap while the file is made would make it again, and present Save to
+      // Files over the first.
+      guard !isExporting else { return }
+      isExporting = true
+      Task {
+        guard
+          let data = try? await DocumentExport.data(
+            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isExporting = false
+          return
+        }
+        exported = ExportedFile(data: data, format: format)
+      }
+    }
+
+    /// The system's print sheet, with the document laid out for paper (#375). Laid
+    /// out for the region's paper; the sheet scales it to whatever paper is chosen.
+    private func printDocument() {
+      // A second tap while the PDF is built would build it again and present the
+      // shared controller twice.
+      guard !isPrinting else { return }
+      isPrinting = true
+      let original = reader.showOriginal
+      Task {
+        guard
+          let data = try? await DocumentPDF.make(
+            for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isPrinting = false
+          return
+        }
+        let info = UIPrintInfo.printInfo()
+        info.jobName = PrintFurniture.documentTitle(
+          id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printingItem = data
+        controller.present(animated: true) { _, _, _ in isPrinting = false }
       }
     }
 
@@ -498,7 +581,9 @@ struct DocumentView: View {
   /// their chips open.
   private func deriveInfo() {
     reader.info = metadata.map {
-      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+      DocumentInfo(
+        $0, authors: document?.header.authors, in: library.index,
+        revisions: library.revisionsSummary(for: $0.id))
     }
   }
 
@@ -592,7 +677,12 @@ struct DocumentView: View {
   /// what discards a cancelled one. `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
+    let name = document.header.id?.displayName ?? "untitled"
+    return signposter.withIntervalSignpost(
+      "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
+    ) {
+      DocumentTextBuilder.build(document, style: style)
+    }
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.

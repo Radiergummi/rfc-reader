@@ -1,0 +1,228 @@
+import Foundation
+import Testing
+
+@testable import RFCKit
+
+/// Recognizing ABNF by parsing it (#45): RFC 5234, the RFC 7405 `%s`/`%i` extension and
+/// the `#` list of RFC 9110 and RFC 2616, as the 72-column text sets it.
+@Suite("ABNF")
+struct ABNFTests {
+  private static func text(_ lines: String...) -> String {
+    lines.joined(separator: "\n")
+  }
+
+  // MARK: Parsing
+
+  @Test func `a grammar parses into its rules, with what each refers to`() throws {
+    let rules = try #require(
+      ABNF.parse(
+        Self.text(
+          "greeting    = salutation SP name [ SP title ] CRLF",
+          "salutation  = %s\"Hello\" / %s\"Hi\"",
+          "name        = 1*ALPHA *( \"-\" 1*ALPHA )")))
+    #expect(rules.map(\.name) == ["greeting", "salutation", "name"])
+    #expect(rules[0].references == ["salutation", "SP", "name", "title", "CRLF"])
+    #expect(rules[1].references.isEmpty)
+    #expect(rules[2].references == ["ALPHA"])
+  }
+
+  /// Rule names are case-insensitive: a name mentioned in two spellings is one reference,
+  /// kept as first spelled.
+  @Test func `a reference is listed once whatever its case`() throws {
+    let rules = try #require(ABNF.parse("mixed = LETTER / letter / Letter"))
+    #expect(rules[0].references == ["LETTER"])
+  }
+
+  /// A rule continues on any line set deeper than the one it starts on, and a comment
+  /// runs from `;` to the end of its line, even inside a continued rule.
+  @Test func `continuation lines and comments belong to their rule`() throws {
+    let rules = try #require(
+      ABNF.parse(
+        Self.text(
+          "; the header of a record",
+          "record-line = field-name \":\" OWS    ; the name first",
+          "              field-value OWS",
+          "",
+          "field-name  = token")))
+    #expect(rules.map(\.name) == ["record-line", "field-name"])
+    #expect(rules[0].references == ["field-name", "OWS", "field-value"])
+  }
+
+  @Test(arguments: [
+    "digit-range  = %x30-39",
+    "line-end     = %d13.10",
+    "flag-bits    = %b0101",
+    "insensitive  = %i\"yes\"",
+    "prose        = <any octet the sender chooses>",
+    "item-list    = 1#item",
+    "some-items   = #( item / other-item )",
+    "bounded      = 2*4DIGIT",
+    "exact        = 3HEXDIG",
+    "choice       = \"a\" / \"b\" / ( \"c\" [ \"d\" ] )",
+  ])
+  func `each kind of element parses`(line: String) {
+    #expect(ABNF.parse(line) != nil, "\(line)")
+  }
+
+  /// RFCXML keeps a block's indentation inside `<sourcecode>`: the least indented line
+  /// is where rules start.
+  @Test func `a grammar indented as a whole parses`() throws {
+    let rules = try #require(
+      ABNF.parse(Self.text("   first  = second / third", "            fourth", "   second = ALPHA"))
+    )
+    #expect(rules.map(\.name) == ["first", "second"])
+  }
+
+  /// A comment heading a grammar may sit further left than its rules.
+  @Test func `a comment left of the rules does not set their column`() throws {
+    let rules = try #require(
+      ABNF.parse(Self.text("; the record grammar", "   record = 1*field", "   field  = ALPHA")))
+    #expect(rules.map(\.name) == ["record", "field"])
+  }
+
+  @Test func `an incremental alternative adds to its rule`() throws {
+    let rules = try #require(
+      ABNF.parse(Self.text("command = \"open\"", "command =/ \"close\"")))
+    #expect(rules.map(\.isIncremental) == [false, true])
+  }
+
+  /// A grammar defines each rule once and adds to it only with `=/`. Pseudocode and
+  /// listings of settings assign one name twice, which ABNF does not.
+  @Test func `a rule defined twice does not parse`() {
+    #expect(ABNF.parse(Self.text("limit = first-bound", "limit = second-bound")) == nil)
+  }
+
+  /// Rule names are case-insensitive, so two spellings of one name are one rule.
+  @Test func `a rule defined twice in two spellings does not parse`() {
+    #expect(ABNF.parse(Self.text("Limit = first-bound", "LIMIT = second-bound")) == nil)
+  }
+
+  /// A listing of settings quotes its values and a message layout marks what is
+  /// optional; neither makes a repeated definition a grammar's.
+  @Test(arguments: [
+    ["Region  = \"North\"", "Unit    = \"Records\"", "Unit    = \"Archive\""],
+    ["kind=OPEN   [id] name arguments", "kind=CLOSE  id   outcome results"],
+    ["limit = first-bound / other-bound", "limit = second-bound"],
+  ])
+  func `a rule defined twice with no repetition or numeric value fails`(lines: [String]) {
+    #expect(ABNF.parse(lines.joined(separator: "\n")) == nil, "\(lines)")
+  }
+
+  /// Grammars in the legacy series define a name twice where `=/` or another name was
+  /// meant. A repetition or a numeric value says the block is a grammar all the same.
+  @Test(arguments: [
+    ["stamp = \"at\" \"=\" day-part [ day-part ]", "day-part = 8DIGIT", "day-part = 6DIGIT"],
+    ["entry = LF 1*SP entry-id", "entry-id = 1*3DIGIT", "entry = name SP entry-id"],
+    ["marker = open-marker / close-marker", "marker = %x00-0F"],
+  ])
+  func `a rule defined twice beside a repetition or a numeric value parses`(lines: [String]) {
+    #expect(ABNF.parse(lines.joined(separator: "\n")) != nil, "\(lines)")
+  }
+
+  @Test(arguments: [
+    "x = y + 1;",
+    "result = compute(a, b)",
+    "value ::= first | second",
+    "+--------+--------+",
+    "Field    | Value",
+    "a = \"unclosed",
+    "   indented without a rule before it",
+    "rule = ( open",
+    "name = element\nThis line is prose at the rule's own column.",
+  ])
+  func `what is not ABNF does not parse`(text: String) {
+    #expect(ABNF.parse(text) == nil, "\(text)")
+  }
+
+  // MARK: Recognizing
+
+  /// `count = max;` is valid ABNF, a rule with one element and a comment. Code and
+  /// configuration look like that; a grammar has more than one rule, or syntax only a
+  /// grammar has.
+  @Test func `one plain assignment is not recognized as a grammar`() {
+    #expect(!ABNF.recognizes("count = max;"))
+    #expect(!ABNF.recognizes("key = value"))
+    #expect(!ABNF.recognizes("title = <the title>"))
+  }
+
+  @Test func `one rule with syntax only ABNF has is recognized`() {
+    #expect(ABNF.recognizes("token = 1*tchar"))
+    #expect(ABNF.recognizes("sign = \"+\" / \"-\""))
+    #expect(ABNF.recognizes("octet = %x00-FF"))
+    #expect(ABNF.recognizes("maybe = [ thing ]"))
+    #expect(ABNF.recognizes("list = 1#element"))
+  }
+
+  /// Test vectors are valid ABNF by the letter: `4c0ffee` reads as four of a rule
+  /// named `c0ffee`, and `0x7` as none of `x7`. A count before a name of hex digits, or
+  /// before `x`, is a hex number.
+  @Test func `hex data is not a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("key    = 4c0ffee1234abcd5678", "nonce  = 9aa0b1c2d3e4f5")))
+    #expect(!ABNF.recognizes("mask = 0x7"))
+    #expect(ABNF.recognizes("four-digits = 4DIGIT"), "a count before a real name is a repetition")
+  }
+
+  /// A rule name runs on past a hyphen: a first part made only of hex letters does not
+  /// make a counted name a hex number.
+  @Test func `a counted name with a hyphen after hex letters is a repetition`() {
+    #expect(ABNF.recognizes("quad = 4bead-part"))
+  }
+
+  /// Hex joined by hyphens is one number too: `7e0c-11ab` is not seven of a rule named
+  /// `e0c-11ab`. A part that is not hex makes it a name again.
+  @Test func `hex joined by hyphens is not a grammar`() {
+    #expect(!ABNF.recognizes("serial = 3c0ffee0-1b2c-4d5e-8f9a-0b1c2d3e4f5a"))
+    #expect(!ABNF.recognizes("tag = 7e0c-11ab"))
+  }
+
+  /// Only `x` followed by hex is a hex number: a count before a name that merely starts
+  /// with `x` is a repetition.
+  @Test func `a counted name starting with x is a repetition`() {
+    #expect(ABNF.recognizes("pair = 2xname"))
+    #expect(ABNF.recognizes("quad = 4x-part"))
+    #expect(!ABNF.recognizes("mask = 0x7f"))
+  }
+
+  /// A rule that refers only to itself refers to no other rule: `total = total` beside
+  /// another plain assignment is pseudocode.
+  @Test func `a rule referring only to itself does not make plain rules a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("total = total", "next = none")))
+  }
+
+  /// Assignments in pseudocode or a configuration parse as plain rules: without syntax
+  /// only a grammar has, the rules have to refer to one another.
+  @Test func `plain rules that refer to nothing among them are not a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("smallest = unbounded", "latest = unbounded")))
+    #expect(!ABNF.recognizes(Self.text("k=<first-setting>", "m=<second-setting>")))
+  }
+
+  @Test func `two plain rules are recognized`() {
+    #expect(ABNF.recognizes(Self.text("start = first-part", "first-part = ALPHA")))
+  }
+
+  // MARK: Through parse
+
+  /// RFC 5234 sets its own grammar and its core rules as ABNF: both come out as
+  /// source code typed `abnf`, as RFCXML writes it.
+  @Test func `RFC 5234's grammars are source code typed abnf`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let verbatim = document.blocks.compactMap { block -> Preformatted? in
+      guard case .preformatted(let preformatted) = block else { return nil }
+      return preformatted
+    }
+    let grammar = verbatim.filter { $0.text.contains("rulelist") }
+    let coreRules = verbatim.filter { $0.text.contains("%x41-5A") }
+    #expect(!grammar.isEmpty && !coreRules.isEmpty)
+    #expect((grammar + coreRules).allSatisfy { $0.kind == .sourceCode && $0.type == "abnf" })
+  }
+
+  /// A diagram stays artwork.
+  @Test func `RFC 793's diagrams stay artwork`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let typed = document.blocks.filter { block in
+      if case .preformatted(let preformatted) = block { return preformatted.type == "abnf" }
+      return false
+    }
+    #expect(typed.isEmpty)
+  }
+}
