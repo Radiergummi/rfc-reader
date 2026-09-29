@@ -74,11 +74,14 @@ extension DocumentTextBuilder {
   /// text rendering sets them: the verbatim style has no tab stops, and a default
   /// stop is a distance in points, not in the block's columns, so a tabbed figure
   /// sheared (#31). The box keeps the tabs; this is only what is drawn and measured.
+  ///
+  /// Unfolded before the tabs are expanded: a tab at the start of a continuation is
+  /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
+  /// column in the rejoined line, not in the folded one.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    let published = content.text.expandingTabs()
-    guard let unfolded = FoldedLines.unfold(published),
+    guard let unfolded = FoldedLines.unfold(content.text)?.expandingTabs(),
       monospaceScale(for: unfolded, indent: indent) == 1
-    else { return published }
+    else { return content.text.expandingTabs() }
     return unfolded
   }
 

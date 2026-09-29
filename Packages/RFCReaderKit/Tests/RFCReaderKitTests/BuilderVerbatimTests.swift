@@ -293,8 +293,18 @@ struct BuilderVerbatimTests {
         == "        |\n        |\nabcdefgh        |")
   }
 
-  /// Scaled by the columns it is drawn in, not by its characters: three tabs are
-  /// twenty-four columns.
+  /// Unfolded first: a tab that opens a continuation is the author's and stays, and
+  /// it is expanded at its column in the rejoined line. Expanded first, it became
+  /// eight spaces that unfolding stripped as the fold's indent.
+  @Test func `a folded block's tabs are expanded where the unfolded line puts them`() {
+    let text = Self.header + "\n\nabc\\\n\tx"
+    let content = Preformatted(kind: .artwork, text: text)
+    let builder = DocumentTextBuilder(style: style)
+    #expect(builder.displayedText(of: content, indent: 0) == "abc     x")
+  }
+
+  /// Scaled by the columns it is drawn in, not by its characters: fifteen tabs are
+  /// 120 columns.
   @Test func `a block with tabs scales by its expanded width`() {
     let builder = DocumentTextBuilder(style: style)
     let tabbed = Preformatted(kind: .artwork, text: String(repeating: "\t", count: 15) + "|")

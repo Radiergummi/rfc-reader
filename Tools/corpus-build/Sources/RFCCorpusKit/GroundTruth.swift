@@ -133,7 +133,9 @@ public enum GroundTruth {
   /// first, as the parser and xml2rfc both do.
   public static func normalize(verbatim text: String) -> String {
     var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-      .map { line in String(expandingTabs(line).reversed().drop(while: \.isWhitespace).reversed()) }
+      .map { line in
+        String(String(line).expandingTabs().reversed().drop(while: \.isWhitespace).reversed())
+      }
       .filter { !$0.isEmpty }
     if let first = lines.first, first.drop(while: \.isWhitespace).hasPrefix("<CODE BEGINS>") {
       lines.removeFirst()
@@ -143,18 +145,6 @@ public enum GroundTruth {
     }
     let margin = lines.map { $0.prefix(while: { $0 == " " }).count }.min() ?? 0
     return lines.map { String($0.dropFirst(margin)) }.joined(separator: "\n")
-  }
-
-  private static func expandingTabs(_ line: Substring) -> String {
-    var expanded = ""
-    for character in line {
-      if character == "\t" {
-        expanded += String(repeating: " ", count: 8 - expanded.count % 8)
-      } else {
-        expanded.append(character)
-      }
-    }
-    return expanded
   }
 
   /// A heading as it compares: its number without a trailing dot, which the
