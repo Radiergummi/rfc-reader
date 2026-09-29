@@ -45,12 +45,13 @@ extension URLSession {
 
   /// The session for a fetch nobody is waiting for, such as the daily index check:
   /// `rfcEditor`'s, except that it does not use a cellular, hotspot or Low Data
-  /// Mode path, and waits for one it may use rather than failing (#314).
+  /// Mode path, and waits for one it may use rather than failing (#314). On Linux,
+  /// whose `FoundationNetworking` has none of the three settings, it is `rfcEditor`'s.
   public static let rfcEditorOnCheapNetworks: URLSession = {
     let configuration = URLSessionConfiguration.default
     configuration.urlCache = nil
-    configuration.waitsForConnectivity = true
     #if !canImport(FoundationNetworking)
+      configuration.waitsForConnectivity = true
       configuration.allowsExpensiveNetworkAccess = false
       configuration.allowsConstrainedNetworkAccess = false
     #endif
