@@ -6,31 +6,97 @@ import Foundation
 
 /// Abstraction over `URLSession` so the client can be tested without a network.
 public protocol HTTPTransport: Sendable {
-  func data(for url: URL) async throws -> (Data, HTTPURLResponse)
+  func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-/// The transport the client uses unless handed another: a `URLSession`, asked for the
-/// formats the client reads.
+/// The transport the client uses unless handed another: a `URLSession`, by default
+/// `URLSession.rfcEditor`.
 ///
 /// A struct around the session rather than an extension of `URLSession`, which would
-/// add a public `data(for: URL)` to a system type, beside its own `data(from:)` and
-/// `data(for: URLRequest)` (#148).
+/// add a public `response(for:)` to a system type, beside its own `data(for:)` (#148).
 public struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
 
-  public init(session: URLSession = .shared) {
+  public init(session: URLSession = .rfcEditor) {
     self.session = session
   }
 
-  public func data(for url: URL) async throws -> (Data, HTTPURLResponse) {
-    var request = URLRequest(url: url)
-    request.setValue("application/xml, text/plain, application/json", forHTTPHeaderField: "Accept")
+  public func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
-      throw RFCEditorClient.ClientError.invalidResponse(url)
+      throw RFCEditorClient.ClientError.invalidResponse(request.url ?? RFCEditorEndpoints.base)
     }
     return (data, http)
   }
+}
+
+extension URLSession {
+  /// The session the client uses unless handed another: the default configuration,
+  /// without a `URLCache`. Every body the client fetches is kept by its caller --
+  /// documents by the app's store, the index beside its snapshot -- and RFCs never
+  /// change once published, so a second copy in the shared cache is only disk, and
+  /// its own revalidation would stand between the index refresh and the `304` it
+  /// asks for.
+  public static let rfcEditor: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.urlCache = nil
+    return URLSession(configuration: configuration)
+  }()
+
+  /// The session for a fetch nobody is waiting for, such as the daily index check:
+  /// `rfcEditor`'s, except that it does not use a cellular, hotspot or Low Data
+  /// Mode path, and waits for one it may use rather than failing (#314). On Linux,
+  /// whose `FoundationNetworking` has none of the three settings, it is `rfcEditor`'s.
+  public static let rfcEditorOnCheapNetworks: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.urlCache = nil
+    #if !canImport(FoundationNetworking)
+      configuration.waitsForConnectivity = true
+      configuration.allowsExpensiveNetworkAccess = false
+      configuration.allowsConstrainedNetworkAccess = false
+    #endif
+    return URLSession(configuration: configuration)
+  }()
+}
+
+/// What a server said identifies the version of a resource it sent, so a later
+/// request can ask for the resource only if it has changed since (RFC 9110,
+/// section 13.1).
+public struct CacheValidators: Codable, Sendable, Hashable {
+  public var entityTag: String?
+  public var lastModified: String?
+
+  public init(entityTag: String?, lastModified: String?) {
+    self.entityTag = entityTag
+    self.lastModified = lastModified
+  }
+
+  /// The response's `ETag` and `Last-Modified`, or nil when it sent neither.
+  public init?(response: HTTPURLResponse) {
+    let entityTag = response.value(forHTTPHeaderField: "ETag")
+    let lastModified = response.value(forHTTPHeaderField: "Last-Modified")
+    guard entityTag != nil || lastModified != nil else { return nil }
+    self.init(entityTag: entityTag, lastModified: lastModified)
+  }
+
+  /// Asks for the resource only if it no longer matches. Both are sent: a server
+  /// that honors `If-None-Match` ignores `If-Modified-Since` (RFC 9110, 13.1.3).
+  func condition(_ request: inout URLRequest) {
+    if let entityTag {
+      request.setValue(entityTag, forHTTPHeaderField: "If-None-Match")
+    }
+    if let lastModified {
+      request.setValue(lastModified, forHTTPHeaderField: "If-Modified-Since")
+    }
+  }
+}
+
+/// What asking for the index again found.
+public enum IndexFetch: Sendable, Hashable {
+  /// A new index, and what identifies it for the next time.
+  case changed(Data, CacheValidators?)
+  /// The server's `304`: the index kept is still the current one.
+  case unchanged
 }
 
 /// Fetches and parses documents from the RFC Editor.
@@ -122,9 +188,31 @@ public actor RFCEditorClient {
       xmlParseFailure: xmlParseFailure)
   }
 
-  /// The RFC index as bytes, so the caller can both parse and keep it.
-  public func fetchIndexData() async throws -> Data {
-    try await fetch(RFCEditorEndpoints.index)
+  /// The RFC index as bytes, so the caller can both parse and keep it, unless it
+  /// still matches `validators`.
+  ///
+  /// `onExpensiveNetworks` false is a fetch nobody is waiting for, such as the
+  /// daily refresh: it does not run on a cellular, hotspot or Low Data Mode path.
+  /// It fails there, unless the transport waits for a path it may use, as
+  /// `URLSession.rfcEditorOnCheapNetworks` does. A person's Retry passes true.
+  public func fetchIndexData(unlessMatching validators: CacheValidators?, onExpensiveNetworks: Bool)
+    async throws -> IndexFetch
+  {
+    var request = Self.request(RFCEditorEndpoints.index)
+    validators?.condition(&request)
+    #if !canImport(FoundationNetworking)
+      request.allowsExpensiveNetworkAccess = onExpensiveNetworks
+      request.allowsConstrainedNetworkAccess = onExpensiveNetworks
+    #endif
+    let (data, response) = try await transport.response(for: request)
+    switch response.statusCode {
+    case 304:
+      return .unchanged
+    case 200..<300:
+      return .changed(data, CacheValidators(response: response))
+    default:
+      throw ClientError.httpStatus(response.statusCode, RFCEditorEndpoints.index)
+    }
   }
 
   public func fetchMetadata(_ id: DocumentID) async throws -> RFCEditorMetadataRecord {
@@ -136,6 +224,14 @@ public actor RFCEditorClient {
     }
   }
 
+  /// `revisions.json`, decoded, and the bytes it came as, which the caller keeps. A
+  /// plain GET: every run writes a new `generatedAt`, so a conditional request would
+  /// never be answered 304.
+  public func fetchRevisions() async throws -> (revisions: RFCRevisions, data: Data) {
+    let data = try await fetch(RFCEditorEndpoints.revisions)
+    return (try RFCRevisions.decode(data), data)
+  }
+
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)
     return try RecentFeedParser.parse(data)
@@ -143,8 +239,14 @@ public actor RFCEditorClient {
 
   // MARK: - Private
 
+  private static func request(_ url: URL) -> URLRequest {
+    var request = URLRequest(url: url)
+    request.setValue("application/xml, text/plain, application/json", forHTTPHeaderField: "Accept")
+    return request
+  }
+
   private func fetch(_ url: URL, notFoundAs id: DocumentID? = nil) async throws -> Data {
-    let (data, response) = try await transport.data(for: url)
+    let (data, response) = try await transport.response(for: Self.request(url))
     switch response.statusCode {
     case 200..<300:
       return data

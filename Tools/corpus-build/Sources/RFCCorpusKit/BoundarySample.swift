@@ -33,6 +33,13 @@ public enum BoundarySample {
     public var margin: Double
   }
 
+  /// One document's boundary entries, and how many blocks on the boundary could not be
+  /// found in the source to point at.
+  public struct Sample: Sendable {
+    public var entries: [Entry]
+    public var unlocated: Int
+  }
+
   /// A criterion a diagnosis met, with its measurement and margin.
   public struct Criterion: Equatable, Sendable {
     public var name: String
@@ -75,12 +82,11 @@ public enum BoundarySample {
     }
   }
 
-  /// The boundary entries among one document's diagnosed blocks, and how many blocks
-  /// on the boundary could not be found in the source to point at. A block the list
+  /// The boundary sample of one document's diagnosed blocks. A block the list
   /// parser claimed is skipped: it was never put to the prose test, so its refusals
   /// describe a decision that was not taken.
   public static func entries(for blocks: [BlockDiagnostics], in text: String, document: String)
-    -> (entries: [Entry], unlocated: Int)
+    -> Sample
   {
     let lines = text.replacingOccurrences(of: "\r\n", with: "\n")
       .split(separator: "\n", omittingEmptySubsequences: false)
@@ -103,6 +109,6 @@ public enum BoundarySample {
           rejection: rejection.rawValue,
           measurement: criterion.measurement, margin: criterion.margin))
     }
-    return (entries, unlocated)
+    return Sample(entries: entries, unlocated: unlocated)
   }
 }

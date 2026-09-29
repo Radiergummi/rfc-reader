@@ -248,6 +248,7 @@ struct DocumentView: View {
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -294,7 +295,9 @@ struct DocumentView: View {
       // the title back to hidden after this view may already have appeared.
       .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
-      let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
+      let headerIdentity = DocumentHeaderView.Identity(
+        header: document.header, metadata: metadata,
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -318,6 +321,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -577,7 +581,9 @@ struct DocumentView: View {
   /// their chips open.
   private func deriveInfo() {
     reader.info = metadata.map {
-      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+      DocumentInfo(
+        $0, authors: document?.header.authors, in: library.index,
+        revisions: library.revisionsSummary(for: $0.id))
     }
   }
 
@@ -683,7 +689,12 @@ struct DocumentView: View {
   /// what discards a cancelled one. `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
+    let name = document.header.id?.displayName ?? "untitled"
+    return signposter.withIntervalSignpost(
+      "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
+    ) {
+      DocumentTextBuilder.build(document, style: style)
+    }
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
@@ -770,213 +781,5 @@ struct DocumentView: View {
     } else {
       modelContext.insert(ReadingPosition(document: id, place: place))
     }
-  }
-}
-
-// MARK: - Pieces
-
-/// Everything above the first line of prose: title, badges, authors, and the status
-/// banner. Hosted in the text view's top content inset, so it scrolls with the body
-/// without being part of it — the banner carries buttons, and nobody selects through
-/// it. The abstract is no longer here; it is the first prose in the storage, which is
-/// what puts the banner between the title and the abstract as `VISION.md` asks.
-struct DocumentHeaderView: View {
-  /// Passed down for the same reason `StatusBanner` takes them: this whole subtree
-  /// is hosted outside the SwiftUI hierarchy.
-  let library: LibraryModel
-  let navigation: NavigationModel
-
-  /// Exactly what the body below reads, and nothing else.
-  ///
-  /// The header is hosted in a `UIHostingController`/`NSHostingController` that
-  /// sits outside SwiftUI's diffing, so assigning `rootView` re-renders the whole
-  /// subtree — on every update pass, which includes every section crossing while
-  /// scrolling. Comparing this decides whether that assignment is needed at all.
-  /// It is also the view's input, so a field it does not carry is a field the
-  /// header cannot display, and the two cannot fall out of step.
-  struct Identity: Equatable {
-    let title: String
-    let date: String?
-    let workingGroup: String?
-    /// Whole, not pre-joined names: a chip needs the author's contact (#19).
-    let authors: [Author]
-    /// Everything else the header shows comes straight off the metadata, which
-    /// is `Hashable` — so it is compared whole rather than field by field.
-    let metadata: RFCMetadata?
-
-    /// Merged by `HeaderSummary`, which a printed page's title block reads too.
-    init(header: DocumentHeader, metadata: RFCMetadata?) {
-      let summary = HeaderSummary(header: header, metadata: metadata)
-      title = summary.title
-      date = summary.date
-      workingGroup = summary.workingGroup
-      authors = summary.authors
-      self.metadata = metadata
-    }
-  }
-
-  /// The view renders from the identity rather than beside it, so the two cannot
-  /// describe different headers.
-  let identity: Identity
-
-  /// Where the heading ends, for the toolbar's copy of the title to take over from
-  /// as it scrolls away; see `ToolbarTitleReveal`.
-  let heading: HeadingBox
-
-  nonisolated static let coordinateSpace = "documentHeader"
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(identity.title)
-        .font(.largeTitle.weight(.semibold))
-        .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self) {
-          $0.frame(in: .named(Self.coordinateSpace)).maxY
-        } action: { bottom in
-          heading.bottom = bottom
-        }
-      HStack(spacing: 8) {
-        if let metadata = identity.metadata {
-          StatusBadge(status: metadata.currentStatus)
-          Text(metadata.stream.displayName)
-        }
-        if let date = identity.date {
-          Text(date)
-        }
-        if let group = identity.workingGroup {
-          Text(group)
-        }
-      }
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
-      if !identity.authors.isEmpty {
-        AuthorChips(authors: identity.authors)
-          .font(.subheadline)
-      }
-      if let metadata = identity.metadata {
-        StatusBanner(library: library, navigation: navigation, metadata: metadata)
-          .padding(.top, 4)
-      }
-    }
-    // The header is hosted, not placed by SwiftUI, and a hosting view lays its
-    // root out at that root's own width rather than at the frame the coordinator
-    // gave it — so a `VStack` that hugs its content ends up somewhere other than
-    // the column's leading edge, and by a distance that changes with the title's
-    // length. Filling the column is the same instruction the body text gets.
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-}
-
-/// The single most important piece of context: is this still the current document?
-struct StatusBanner: View {
-  /// Handed over rather than read from the environment.
-  ///
-  /// This view is hosted in an `NSHostingController`/`UIHostingController` in the
-  /// text view's top inset — outside the SwiftUI tree that `ContentView` injects
-  /// into — so an `@Environment` lookup here is a runtime trap waiting to fire
-  /// rather than a compile-time requirement. The two models arrive as properties so
-  /// the compiler is the thing that notices when a call site forgets one.
-  let library: LibraryModel
-  let navigation: NavigationModel
-  let metadata: RFCMetadata
-
-  var body: some View {
-    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata {
-      VStack(alignment: .leading, spacing: 6) {
-        if metadata.isObsolete {
-          row(
-            "Obsoleted by", metadata.obsoletedBy, symbol: "exclamationmark.triangle.fill",
-            tint: .red)
-        }
-        if !metadata.updatedBy.isEmpty {
-          row(
-            "Updated by", metadata.updatedBy, symbol: "arrow.triangle.2.circlepath", tint: .orange)
-        }
-        if metadata.hasErrata, let url = metadata.errataURL {
-          Link(destination: url) {
-            Label("This RFC has errata", systemImage: "pencil.and.list.clipboard")
-          }
-          .font(.subheadline)
-        }
-      }
-      .padding(12)
-      .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-    }
-  }
-
-  private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Image(systemName: symbol).foregroundStyle(tint)
-      Text(title).fontWeight(.medium)
-      ForEach(ids, id: \.self) { id in
-        Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
-          .buttonStyle(.plain)
-          .foregroundStyle(.tint)
-      }
-    }
-    .font(.subheadline)
-  }
-}
-
-struct OriginalTextView: View {
-  let text: String?
-  let fontSize: Double
-
-  var body: some View {
-    if let text {
-      #if os(macOS)
-        OriginalTextBody(text: text, fontSize: fontSize)
-      #else
-        // Still a `Text` on iOS: a `UITextView` keeps its content as wide as its
-        // frame, so the unwrapped 72-column lines would be clipped with no way to
-        // scroll to them, where this scroll view pans both ways.
-        ScrollView([.vertical, .horizontal]) {
-          Text(text)
-            .font(.system(size: fontSize * 0.85, design: .monospaced))
-            .textSelection(.enabled)
-            .padding(24)
-        }
-      #endif
-    } else {
-      ProgressView()
-    }
-  }
-}
-
-struct TableOfContentsView: View {
-  /// Only the sections the storage holds; see `DocumentView.rebuild()`.
-  let sections: [RFCKit.Section]
-  let current: String?
-  let select: (String) -> Void
-
-  var body: some View {
-    List {
-      ForEach(sections) { section in
-        Button {
-          select(section.anchor)
-        } label: {
-          Text(section.displayTitle)
-            .lineLimit(2)
-            .padding(.leading, CGFloat(max(0, section.depth - 1)) * 12)
-            .fontWeight(section.anchor == current ? .semibold : .regular)
-        }
-        .buttonStyle(.plain)
-        // Weight alone marks the current section only for someone who can see it
-        // (#156).
-        .accessibilityAddTraits(section.anchor == current ? .isSelected : [])
-      }
-    }
-    .listStyle(.sidebar)
-  }
-}
-
-enum Clipboard {
-  static func copy(_ string: String) {
-    #if os(macOS)
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(string, forType: .string)
-    #else
-      UIPasteboard.general.string = string
-    #endif
   }
 }

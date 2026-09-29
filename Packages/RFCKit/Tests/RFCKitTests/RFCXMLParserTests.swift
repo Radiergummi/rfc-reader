@@ -28,7 +28,7 @@ struct RFCXMLParserTests {
     #expect(document.header.draftName == "draft-ietf-quic-invariants-13")
     #expect(document.header.abstract.count == 1)
     if case .paragraph(let paragraph) = document.header.abstract[0] {
-      #expect(paragraph.plainText.hasPrefix("This document defines the properties"))
+      #expect(paragraph.plainText.contains("QUIC transport protocol"))
       #expect(!paragraph.plainText.contains("\n"), "whitespace inside <t> is collapsed")
     } else {
       Issue.record("abstract should be a paragraph")
@@ -112,7 +112,7 @@ struct RFCXMLParserTests {
       return nil
     }
     let transport = try #require(xrefs.first)
-    #expect(transport.target == .document(.rfc(9000), section: nil))
+    #expect(transport.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT"))
     #expect(transport.text == "[QUIC-TRANSPORT]")
     #expect(document.referencedDocuments.contains(.rfc(9000)))
     #expect(document.referencedDocuments.contains(.rfc(2119)))
@@ -131,11 +131,13 @@ struct RFCXMLParserTests {
       }
     }
 
-    let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
+    let bcp14 = try #require(
+      xrefs.first { $0.target == .document(.rfc(2119), section: nil, entry: "RFC2119") })
     #expect(bcp14.text == nil, "the series' own spelling is a label to compose, not words to keep")
     #expect(bcp14.label == "[RFC\u{00A0}2119]")
 
-    let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
+    let transport = try #require(
+      xrefs.first { $0.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT") })
     #expect(transport.text == "[QUIC-TRANSPORT]", "an author's own reference tag is left alone")
   }
 
@@ -149,13 +151,15 @@ struct RFCXMLParserTests {
       }
     }
 
-    let bcp14 = try #require(xrefs.first { $0.target == .document(.rfc(2119), section: nil) })
+    let bcp14 = try #require(
+      xrefs.first { $0.target == .document(.rfc(2119), section: nil, entry: "RFC2119") })
     #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
     #expect(
       bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
     #expect(bcp14.display.chip != nil)
 
-    let transport = try #require(xrefs.first { $0.target == .document(.rfc(9000), section: nil) })
+    let transport = try #require(
+      xrefs.first { $0.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT") })
     #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
   }
 
@@ -249,7 +253,7 @@ struct RFCXMLParserTests {
     #expect(
       xrefs(section.blocks.first).map(\.target) == [
         .document(.rfc(7230), section: nil),
-        .document(.rfc(3986), section: nil),
+        .document(.rfc(3986), section: nil, entry: "RFC3986"),
       ], "a bare mention links beside an authored xref")
 
     // A mention already inside a link is not ours to link again, and preformatted

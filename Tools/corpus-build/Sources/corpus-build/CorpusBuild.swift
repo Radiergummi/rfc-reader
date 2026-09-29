@@ -12,6 +12,7 @@ import Logging
 //   corpus-build queries  --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
 //                         [--limit 4000] [--seed 11] [--min-words 8]
 //   corpus-build score    --xml corpus/xml.noindex --text corpus/modern-text.noindex --out corpus/score.json
+//   corpus-build revisions --out corpus/revisions [--scan corpus/revisions/revisions-scan.json] [--allow-shrink]
 //
 // `corpus-build help <command>` says what each option does. See docs/DATA_PIPELINE.md
 // for the why and the pack layout.
@@ -24,6 +25,7 @@ struct CorpusBuild: AsyncParsableCommand {
     subcommands: [
       FetchCommand.self, ConvertCommand.self, ManifestCommand.self, QueriesCommand.self,
       ScoreCommand.self,
+      RevisionsCommand.self,
     ]
   )
 }
