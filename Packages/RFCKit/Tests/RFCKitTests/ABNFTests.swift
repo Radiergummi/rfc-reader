@@ -3,7 +3,7 @@ import Testing
 
 @testable import RFCKit
 
-/// Recognising ABNF by parsing it (#45): RFC 5234, the RFC 7405 `%s`/`%i` extension and
+/// Recognizing ABNF by parsing it (#45): RFC 5234, the RFC 7405 `%s`/`%i` extension and
 /// the `#` list of RFC 9110 and RFC 2616, as the 72-column text sets it.
 @Suite("ABNF")
 struct ABNFTests {
@@ -134,18 +134,18 @@ struct ABNFTests {
     #expect(ABNF.parse(text) == nil, "\(text)")
   }
 
-  // MARK: Recognising
+  // MARK: Recognizing
 
   /// `count = max;` is valid ABNF, a rule with one element and a comment. Code and
   /// configuration look like that; a grammar has more than one rule, or syntax only a
   /// grammar has.
-  @Test func `one plain assignment is not recognised as a grammar`() {
+  @Test func `one plain assignment is not recognized as a grammar`() {
     #expect(!ABNF.recognizes("count = max;"))
     #expect(!ABNF.recognizes("key = value"))
     #expect(!ABNF.recognizes("title = <the title>"))
   }
 
-  @Test func `one rule with syntax only ABNF has is recognised`() {
+  @Test func `one rule with syntax only ABNF has is recognized`() {
     #expect(ABNF.recognizes("token = 1*tchar"))
     #expect(ABNF.recognizes("sign = \"+\" / \"-\""))
     #expect(ABNF.recognizes("octet = %x00-FF"))
@@ -168,6 +168,27 @@ struct ABNFTests {
     #expect(ABNF.recognizes("quad = 4bead-part"))
   }
 
+  /// Hex joined by hyphens is one number too: `7e0c-11ab` is not seven of a rule named
+  /// `e0c-11ab`. A part that is not hex makes it a name again.
+  @Test func `hex joined by hyphens is not a grammar`() {
+    #expect(!ABNF.recognizes("serial = 3c0ffee0-1b2c-4d5e-8f9a-0b1c2d3e4f5a"))
+    #expect(!ABNF.recognizes("tag = 7e0c-11ab"))
+  }
+
+  /// Only `x` followed by hex is a hex number: a count before a name that merely starts
+  /// with `x` is a repetition.
+  @Test func `a counted name starting with x is a repetition`() {
+    #expect(ABNF.recognizes("pair = 2xname"))
+    #expect(ABNF.recognizes("quad = 4x-part"))
+    #expect(!ABNF.recognizes("mask = 0x7f"))
+  }
+
+  /// A rule that refers only to itself refers to no other rule: `total = total` beside
+  /// another plain assignment is pseudocode.
+  @Test func `a rule referring only to itself does not make plain rules a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("total = total", "next = none")))
+  }
+
   /// Assignments in pseudocode or a configuration parse as plain rules: without syntax
   /// only a grammar has, the rules have to refer to one another.
   @Test func `plain rules that refer to nothing among them are not a grammar`() {
@@ -175,7 +196,7 @@ struct ABNFTests {
     #expect(!ABNF.recognizes(Self.text("k=<first-setting>", "m=<second-setting>")))
   }
 
-  @Test func `two plain rules are recognised`() {
+  @Test func `two plain rules are recognized`() {
     #expect(ABNF.recognizes(Self.text("start = first-part", "first-part = ALPHA")))
   }
 

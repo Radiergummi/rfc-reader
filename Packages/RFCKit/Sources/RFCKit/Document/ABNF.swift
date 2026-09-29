@@ -1,6 +1,6 @@
 import Foundation
 
-/// Recognises ABNF by parsing it (#45).
+/// Recognizes ABNF by parsing it (#45).
 ///
 /// ABNF is specified by RFC 5234, so whether a block of legacy artwork is a grammar
 /// has an exact answer: try to parse it. This is a strict parser of RFC 5234, with the
@@ -41,7 +41,12 @@ enum ABNF {
     if rules.contains(where: \.usesGrammarSyntax) { return true }
     let names = Set(rules.map { $0.name.lowercased() })
     return rules.count >= 2
-      && rules.contains { rule in rule.references.contains { names.contains($0.lowercased()) } }
+      && rules.contains { rule in
+        rule.references.contains { reference in
+          let reference = reference.lowercased()
+          return reference != rule.name.lowercased() && names.contains(reference)
+        }
+      }
   }
 
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
@@ -175,11 +180,16 @@ enum ABNF {
     private mutating func ruleName() -> String? {
       guard let first = next, first.isASCII, first.isLetter else { return nil }
       var name = ""
-      while let next, next.isASCII, next.isLetter || next.isNumber || next == "-" {
+      while let next, Self.isNameCharacter(next) {
         name.append(next)
         position += 1
       }
       return name
+    }
+
+    /// A character a rule name may continue with: `ALPHA / DIGIT / "-"`.
+    private static func isNameCharacter(_ character: Character) -> Bool {
+      character.isASCII && (character.isLetter || character.isNumber || character == "-")
     }
 
     /// `concatenation *(*c-wsp "/" *c-wsp concatenation)`.
@@ -219,8 +229,8 @@ enum ABNF {
 
     /// `[repeat] element`, where `repeat` is a count, `n*m`, or the list's `n#m`.
     ///
-    /// A count directly before `x`, or before a name made only of hex digits, is a hex
-    /// number, not a repetition: test vectors are valid ABNF by the letter, `4c0ffee`
+    /// A count directly before a name made only of hex digits, perhaps after an `x`, is a
+    /// hex number, not a repetition: test vectors are valid ABNF by the letter, `4c0ffee`
     /// reading as four of a rule named `c0ffee` and `0x7` as none of `x7`.
     private mutating func repetition() -> Bool {
       let counted = skipDigits(Self.isDecimalDigit)
@@ -236,14 +246,14 @@ enum ABNF {
       return element()
     }
 
-    /// Whether what follows a count reads as the rest of a hex number.
+    /// Whether what follows a count reads as the rest of a hex number: hex digits, perhaps
+    /// after an `x` and perhaps in parts joined by hyphens, as in `0x7f` or `7e0c-11ab`.
     private func startsHexNumber() -> Bool {
-      guard let next else { return false }
-      if next == "x" || next == "X" { return true }
-      let name = characters[position...].prefix { character in
-        character.isASCII && (character.isLetter || character.isNumber || character == "-")
+      var name = characters[position...].prefix(while: Self.isNameCharacter)
+      if name.first == "x" || name.first == "X" { name = name.dropFirst() }
+      return name.split(separator: "-", omittingEmptySubsequences: false).allSatisfy { part in
+        !part.isEmpty && part.allSatisfy(\.isHexDigit)
       }
-      return !name.isEmpty && name.allSatisfy(\.isHexDigit)
     }
 
     private mutating func element() -> Bool {
