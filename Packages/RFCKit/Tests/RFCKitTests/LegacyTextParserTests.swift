@@ -90,6 +90,18 @@ struct LegacyTextParserTests {
     #expect(!document.sections.contains { $0.titleText == "Table of Contents" })
   }
 
+  /// RFC 2049 sets its appendices off with dashes, `Appendix A -- Title`, which the
+  /// appendix pattern did not read: they were unnumbered sections titled with the whole
+  /// line. They are appendices, lettered, and anchored where a link to one lands (#201).
+  @Test func `appendices set off with dashes are appendices`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let appendix = try #require(document.section(anchor: "appendix-A"))
+    #expect(appendix.isAppendix)
+    #expect(appendix.number == "A")
+    #expect(!appendix.titleText.hasPrefix("Appendix"))
+    #expect(document.anchor(forPlace: "B") == "appendix-B")
+  }
+
   @Test func `prose versus artwork`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
     let terminals = try #require(document.section(number: "2.3"))
@@ -320,21 +332,15 @@ struct LegacyTextParserTests {
     #expect(!LegacyTextParser.refusesUnnumberedHeading("How to read this memo"))
   }
 
-  /// An appendix heading the appendix pattern missed falls through to the unnumbered
-  /// test, and has to keep passing it with a trailing period, a lower-case word or its
-  /// length: `Appendix A.`, `Annex B (informative): …`, a lettered `A.3.2.` subsection.
-  @Test func `an appendix heading is an unnumbered heading however it is written`() {
-    #expect(!LegacyTextParser.refusesUnnumberedHeading("Appendix A."))
-    #expect(!LegacyTextParser.refusesUnnumberedHeading("APPENDIX 2 - COMMAND SYNTAX."))
+  /// An appendix heading that names itself as one but has no number is an unnumbered
+  /// heading, and keeps passing the unnumbered test with a trailing period, a
+  /// lower-case word or its length: what it opens with says heading.
+  @Test func `an unnumbered appendix heading is a heading however it is written`() {
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("Appendix: Terms Used."))
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading(
-        "Appendix 1.  Session States and the Events That Change Them."))
-    #expect(
-      !LegacyTextParser.refusesUnnumberedHeading(
-        "Appendix B -- Differences from an earlier version of this text"))
-    #expect(
-      !LegacyTextParser.refusesUnnumberedHeading("Annex C (informative): Long term verification"))
-    #expect(!LegacyTextParser.refusesUnnumberedHeading("B.1.2.  successful-ok-with-notes (0x0001)"))
+        "Appendix - notes on the older versions of this protocol"))
+    #expect(!LegacyTextParser.refusesUnnumberedHeading("ANNEX: the registration template"))
   }
 
   /// The appendix exemption is for a heading's opening, not for any line that shares
@@ -1067,7 +1073,7 @@ struct LegacyTextCorpusFindingsTests {
   /// `Section 2.2.8` resolving to nothing (#71). RFC 2743 and 2130 are set the same way.
   @Test func `headings numbered with a colon are headings`() throws {
     let document = LegacyTextParser.parse(try Fixtures.string("rfc2078.txt"))
-    #expect(document.allSections.filter { $0.number != nil }.count == 76)
+    #expect(document.allSections.filter { $0.number != nil && !$0.isAppendix }.count == 76)
     #expect(document.section(number: "2.4.12")?.titleText == "GSS_Release_OID call")
     #expect(document.section(number: "2.2.8")?.anchor == "section-2.2.8")
     #expect(document.section(number: "2.4")?.subsections.count == 19)
@@ -1089,9 +1095,8 @@ struct LegacyTextCorpusFindingsTests {
 
   /// `Appendix A: Title` is how about 150 legacy RFCs head an appendix (#200). The
   /// `Appendix` has to be there: without it a letter and a colon at column 0 is as
-  /// often a question and its answer, and a title-less or lower-case line is not an
-  /// appendix heading: it stays the unnumbered heading it was. The shapes the parser
-  /// already knew keep reading as before.
+  /// often a question and its answer. The shapes the parser already knew keep reading
+  /// as before.
   @Test func `an appendix may be headed with a colon after its letter`() {
     let colon = LegacyTextParser.appendixHeading(in: "Appendix A: Protocol State Tables")
     #expect(colon?.number == "A")
@@ -1099,12 +1104,56 @@ struct LegacyTextCorpusFindingsTests {
     #expect(LegacyTextParser.appendixHeading(in: "Appendix E.1: Timer Details")?.number == "E.1")
 
     #expect(LegacyTextParser.appendixHeading(in: "A: Only when the sender asks.") == nil)
-    #expect(LegacyTextParser.appendixHeading(in: "Appendix A:") == nil)
-    #expect(LegacyTextParser.appendixHeading(in: "Appendix A: examples follow") == nil)
 
     #expect(LegacyTextParser.appendixHeading(in: "Appendix B. Examples")?.number == "B")
     #expect(LegacyTextParser.appendixHeading(in: "Appendix C Change Log")?.number == "C")
     #expect(LegacyTextParser.appendixHeading(in: "D.2. Second Example")?.number == "D.2")
+  }
+
+  /// However a legacy RFC names an appendix, it is one (#201): with `Appendix` or
+  /// `Annex` in any case, a letter, a Roman or an Arabic numeral, and a title set off by
+  /// a full stop, a colon, dashes or spaces, or no title at all. These were unnumbered
+  /// headings titled with the whole line, or refused as prose for their full stop.
+  @Test func `an appendix is numbered however it names itself`() {
+    func heading(_ line: String) -> [String]? {
+      LegacyTextParser.appendixHeading(in: line).map { [$0.number, $0.title] }
+    }
+    #expect(heading("Appendix A.") == ["A", ""])
+    #expect(heading("Appendix D:") == ["D", ""])
+    #expect(heading("APPENDIX F") == ["F", ""])
+    #expect(heading("APPENDIX 2 - COMMAND SYNTAX") == ["2", "COMMAND SYNTAX"])
+    #expect(
+      heading("Appendix 1.  Session States and the Events That Change Them.")
+        == ["1", "Session States and the Events That Change Them."])
+    #expect(heading("Appendix IV.  Worked Examples") == ["IV", "Worked Examples"])
+    #expect(heading("Appendix B--A Small Translator") == ["B", "A Small Translator"])
+    #expect(heading("Appendix E.2 -  Requests") == ["E.2", "Requests"])
+    #expect(
+      heading("Annex C (informative): Checking a Signature Later")
+        == ["C", "(informative): Checking a Signature Later"])
+    #expect(heading("Appendix A: examples follow") == ["A", "examples follow"])
+  }
+
+  /// A lettered subsection set off like a heading, `B.1.2.  ` or `C.4  `, is an
+  /// appendix's whatever its title starts with: a file, a field, an attribute's name.
+  @Test func `a lettered subsection is an appendix whatever its title starts with`() {
+    let subsection = LegacyTextParser.appendixHeading(
+      in: "B.1.2.  successful-ok-with-notes (0x0001)")
+    #expect(subsection?.number == "B.1.2")
+    #expect(subsection?.title == "successful-ok-with-notes (0x0001)")
+    #expect(LegacyTextParser.appendixHeading(in: "C.4  starting over")?.number == "C.4")
+  }
+
+  /// What only shares an appendix heading's first letters is not one: prose that names
+  /// an appendix, a word after `Appendix` that is not a number, a reference in prose.
+  @Test func `a mention of an appendix is not an appendix heading`() {
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A describes the exchange") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A.12).") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix IANA Considerations") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix: Terms Used") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendixes A and B") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "A.4 for the details of the exchange.") == nil)
+    #expect(LegacyTextParser.appendixHeading(in: "Appendix A.........35") == nil)
   }
 
   /// A catalogue entry is a number, a dash and the entry, with anything further hung

@@ -138,6 +138,21 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(document.section(anchor: "appendix-B") != nil)
     #expect(document.section(anchor: "appendix-C") != nil)
   }
+
+  /// RFC 8011 names its status codes as lettered subsections, `B.1.4.1.  ` and a code
+  /// in lower case. The appendix pattern wanted a capital after the number, and they
+  /// were unnumbered sections beside their parents, titled with the whole line. They
+  /// are appendices now, each under the one its number is under (#201).
+  @Test func `a lettered subsection nests under its appendix`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc8011"))
+    let appendix = try #require(document.section(anchor: "appendix-B"))
+    let values = try #require(appendix.subsections.first { $0.number == "B.1" })
+    let clientErrors = try #require(values.subsections.first { $0.number == "B.1.4" })
+    let code = try #require(clientErrors.subsections.first { $0.number == "B.1.4.1" })
+    #expect(code.isAppendix)
+    #expect(code.anchor == "appendix-B.1.4.1")
+    #expect(code.titleText.hasPrefix("client-error-"))
+  }
 }
 
 @Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
@@ -223,5 +238,20 @@ struct CorpusBackedUnnumberedHeadingTests {
   @Test func `a summary at column 0 is not swallowed into the front matter`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc783"))
     #expect(leadInText(document).contains { $0.contains("its name comes") })
+  }
+}
+
+@Suite("Corpus-backed: omitted boilerplate", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedOmittedBoilerplateTests {
+  /// An omitted section, such as `Status of this Memo`, runs to the next heading. A
+  /// column-0 line refused as a heading used to end it all the same, and when it was
+  /// refused as prose what follows went with the boilerplate: RFC 1198's list of the
+  /// X Consortium's standards, under a sentence at column 0 (#201). It ends there
+  /// still, and the list is the body's.
+  @Test func `a sentence refused as a heading still ends omitted boilerplate`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1198"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(text.contains { $0.contains("Bitmap Distribution Format") })
+    #expect(!document.allSections.contains { $0.titleText.hasPrefix("The following documents") })
   }
 }

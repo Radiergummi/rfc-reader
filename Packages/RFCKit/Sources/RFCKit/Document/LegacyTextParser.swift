@@ -379,28 +379,50 @@ public struct LegacyTextParser: Sendable {
   private struct RawSection {
     var heading: HeadingInfo?
     var blocks: [RawBlock] = []
+    /// The first block holding a line that took a heading's place but was refused as
+    /// an unnumbered one: where omitted boilerplate ends, as it did when that line
+    /// was a heading.
+    var refusedHeadingBlock: Int?
   }
 
   nonisolated(unsafe) private static let numberedHeadingPattern =
     #/^(?<number>\d+(?:\.\d+)*)(?<separator>[.:])?\s+(?<title>\S.*)$/#
-  nonisolated(unsafe) private static let appendixHeadingPattern =
-    #/^(?:Appendix\s+)?(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
-  /// `Appendix A: Title`, the way about 150 legacy RFCs head an appendix (#200). A
-  /// pattern of its own rather than a colon allowed in the one above, whose
-  /// `Appendix` is optional: there a colon would admit a bare `A: Title`, which at
-  /// column 0 is as often a question's answer.
-  nonisolated(unsafe) private static let colonAppendixHeadingPattern =
-    #/^Appendix\s+(?<number>[A-Z](?:\.\d+)*):\s+(?<title>[A-Z].*)$/#
+  /// An appendix heading that names itself one (#201): `Appendix` or `Annex` in any case
+  /// after its capital, then its number -- a letter, a Roman or an Arabic numeral, with
+  /// any subsections -- and the title, set off by a full stop, a colon, dashes, or by
+  /// spaces alone where it does not start in lower case, or no title at all:
+  /// `Appendix A. Title`, `APPENDIX 1 - TITLE`, `Annex B (informative): Title`,
+  /// `Appendix II.  Title`, `Appendix A--Title`, `Appendix A:`. A full stop or colon has
+  /// a space or the line's end after it, so `Appendix A.12).` and a contents entry's
+  /// `Appendix A.......35` are not one, and without a separator a lower-case word is
+  /// prose, `Appendix A describes`. `Appendix IANA` has no number, and `Appendix: Title`
+  /// none either: those stay unnumbered headings.
+  nonisolated(unsafe) private static let namedAppendixHeadingPattern =
+    #/^A(?i:ppendix|nnex)\s+(?<number>(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*)(?:\s*[.:](?=\s|$)|\s*-+|(?=\s+[^\s\p{Ll}])|$)\s*(?<title>.*)$/#
+  /// An appendix heading by its letter alone, `A.1. Title` or `B Title`, with a capital
+  /// to start its title.
+  nonisolated(unsafe) private static let letteredAppendixHeadingPattern =
+    #/^(?<number>[A-Z](?:\.\d+)*)\.?\s+(?<title>[A-Z].*)$/#
+  /// A lettered subsection set off like a heading, by a full stop and a space or by two
+  /// spaces, `B.1.2.  title` or `C.4  title`, whatever its title starts with: RFC 8011's
+  /// status codes and RFC 1094's XDR types are in lower case. Not a number and a
+  /// single space, which is a reference in prose (`A.2 for more`) or an ITU name
+  /// (`X.25 switch`).
+  nonisolated(unsafe) private static let appendixSubsectionHeadingPattern =
+    #/^(?<number>[A-Z](?:\.\d+)+)(?:\.\s+|\s{2,})(?<title>\S.*)$/#
 
   /// The number and title of an appendix heading, in any shape the parser reads one:
-  /// `Appendix A. Title`, `Appendix A Title`, `A.1. Title` and `Appendix A: Title`.
+  /// named (`namedAppendixHeadingPattern`), by its letter, or as a lettered subsection.
   /// Nil for anything else. Internal, so the shapes can be pinned on hand-written
   /// lines rather than through a whole document.
   static func appendixHeading(in line: String) -> (number: String, title: String)? {
-    if let match = line.firstMatch(of: appendixHeadingPattern) {
+    if let match = line.firstMatch(of: namedAppendixHeadingPattern) {
       return (String(match.number), String(match.title))
     }
-    if let match = line.firstMatch(of: colonAppendixHeadingPattern) {
+    if let match = line.firstMatch(of: letteredAppendixHeadingPattern) {
+      return (String(match.number), String(match.title))
+    }
+    if let match = line.firstMatch(of: appendixSubsectionHeadingPattern) {
       return (String(match.number), String(match.title))
     }
     return nil
@@ -660,8 +682,16 @@ public struct LegacyTextParser: Sendable {
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
           startsBlock: current.isEmpty)
         {
-          flushBlock()
-          sections.append(RawSection(heading: heading))
+          if heading.number == nil, refusesUnnumberedHeading(heading.title) {
+            if sections[sections.count - 1].refusedHeadingBlock == nil {
+              sections[sections.count - 1].refusedHeadingBlock =
+                sections[sections.count - 1].blocks.count
+            }
+            current.append(string)
+          } else {
+            flushBlock()
+            sections.append(RawSection(heading: heading))
+          }
         } else {
           current.append(string)
         }
@@ -733,9 +763,15 @@ public struct LegacyTextParser: Sendable {
       if heading.number == nil {
         let isAbstract = lowered == "abstract" && !abstractTaken
         if isAbstract || Self.isBoilerplateTitle(lowered) {
-          let extent = Self.boilerplateExtent(
+          var extent = Self.boilerplateExtent(
             of: raw.blocks, isContents: lowered.hasPrefix("table of contents"),
             proseIndent: proseIndent)
+          // Omitted boilerplate ends where a heading's place is taken, whether or not
+          // the line there is a heading: refused as prose, RFC 1198's sentence at column
+          // 0 took the list of standards under it into its `Status of this Memo`.
+          if !isAbstract, let refused = raw.refusedHeadingBlock {
+            extent = min(extent, refused)
+          }
           if isAbstract {
             header.abstract = Self.blocks(
               from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
@@ -1395,18 +1431,18 @@ public struct LegacyTextParser: Sendable {
   /// body starts there too — so that the indent says nothing — it also has to stand alone
   /// between blank lines. `heading(from:)` judges the text; this judges the position.
   ///
-  /// An unnumbered heading also has to pass `refusesUnnumberedHeading`, here rather than
-  /// in `heading(from:)`, whose other caller is the front matter's end: there the test is
-  /// kept lax on purpose. The stricter one moved the front matter's end in 41 documents,
-  /// most of them later, and what it ran on past was lost: RFC 783's summary.
+  /// An unnumbered heading also has to pass `refusesUnnumberedHeading`, which
+  /// `rawSections` asks rather than `heading(from:)`, whose other caller is the front
+  /// matter's end: there the test is kept lax on purpose. The stricter one moved the
+  /// front matter's end in 41 documents, most of them later, and what it ran on past was
+  /// lost: RFC 783's summary. Omitted boilerplate ends at a refused line too, for the
+  /// same reason.
   private static func heading(
     at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
   ) -> HeadingInfo? {
     guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
     guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
-    guard let heading = heading(from: string, colonNumbered: colonNumbered) else { return nil }
-    if heading.number == nil, refusesUnnumberedHeading(heading.title) { return nil }
-    return heading
+    return heading(from: string, colonNumbered: colonNumbered)
   }
 
   private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
@@ -1479,13 +1515,9 @@ public struct LegacyTextParser: Sendable {
       depth: 1)
   }
 
-  /// How an appendix heading the appendix pattern missed opens: the word `Appendix` or
-  /// `Annex`, capitalized or in capitals, or a lettered section number set off like one,
-  /// `A.3.2.  ` or `B.1  `. Not a lower-case `appendix`, which is wrapped prose, nor a
-  /// number and a single space, which is a reference in prose (`A.2 for more`) or an
-  /// ITU name (`X.25 switch`).
-  nonisolated(unsafe) private static let appendixOpening =
-    #/A(?i:ppendix|nnex)\b|[A-Z](?:\.\d+)+(?:\.\s|\s\s)/#
+  /// How an appendix heading with no number opens: the word `Appendix` or `Annex`,
+  /// capitalized or in capitals. Not a lower-case `appendix`, which is wrapped prose.
+  nonisolated(unsafe) private static let appendixOpening = #/A(?i:ppendix|nnex)\b/#
 
   /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
   /// definitions, braces, table rules and box drawing, arrows.
@@ -1521,10 +1553,10 @@ public struct LegacyTextParser: Sendable {
   /// lines, need the neighbouring lines to judge, which is a second pass.
   static func refusesUnnumberedHeading(_ title: String) -> Bool {
     guard let first = title.first else { return true }
-    // An appendix heading the appendix pattern missed lands here, and 90 of them were
-    // lost to these rules over the corpus: `Appendix A.`, `Appendix 1.  BGP FSM State
-    // Transitions and Actions.`, `Annex B (informative): …`, `A.3.2.  "subscription-
-    // resumed" …`. What they start with says heading, whatever follows it.
+    // A numbered appendix is an appendix heading and never reaches this test. One with
+    // no number lands here, and the rules would refuse four over the corpus for a full
+    // stop or their length: `Appendix: Title.`, `Appendix - a long title in sentence
+    // case`. What they start with says heading, whatever follows it.
     if title.prefixMatch(of: appendixOpening) != nil { return false }
     if first.isLowercase { return true }
     if codePunctuation.contains(where: { title.contains($0) }) { return true }
