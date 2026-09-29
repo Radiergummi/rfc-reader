@@ -12,7 +12,11 @@ nonisolated private let storeLog = Logger(
 /// view and re-parsing after a parser improvement both come for free.
 actor DocumentStore {
   private let directory: URL
-  private var parsed: [DocumentID: RFCDocument] = [:]
+  /// The documents parsed last, so reopening one, or going back to it, skips the
+  /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
+  /// (`make benchmark`). Bounded: it used to keep every document opened for as long
+  /// as the app ran.
+  private var parsed = RecentValues<DocumentID, RFCDocument>(capacity: 8)
 
   /// Which bodies are on disk, scanned once on first use and kept current by
   /// every write and removal below, so asking does not enumerate the directory.
@@ -164,7 +168,7 @@ actor DocumentStore {
   func remove(_ id: DocumentID) {
     downloads.removed(id)
     originalTexts.removed(id)
-    parsed[id] = nil
+    parsed.removeAll { $0 == id }
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
       for url in urls {
@@ -181,22 +185,15 @@ actor DocumentStore {
       "Load document", id: signpostID, "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Load document", interval) }
     markOpened(id)
-    if let cached = parsed[id] { return cached }
+    if let cached = parsed.value(for: id) { return cached }
 
-    let xmlURL = fileURL(id, format: .xml)
-    if let data = try? Data(contentsOf: xmlURL),
-      let document = try? signposter.withIntervalSignpost(
-        "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
-    {
-      parsed[id] = document
-      return document
-    }
-    let textURL = fileURL(id, format: .text)
-    if let data = try? Data(contentsOf: textURL) {
-      let document = signposter.withIntervalSignpost(
-        "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
-      parsed[id] = document
-      return document
+    let cached = await Self.parseCached(
+      xml: fileURL(id, format: .xml), text: fileURL(id, format: .text), signpostID: signpostID)
+    if let cached {
+      // Unless the body was removed while this parsed, which is shown but not
+      // kept, as a fetch's is not (#116).
+      if cachedDocuments.contains(id) { parsed.store(cached, for: id) }
+      return cached
     }
 
     let (fetched, isKept) = try await downloads.value(for: id) {
@@ -208,8 +205,27 @@ actor DocumentStore {
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
-    parsed[id] = fetched.document
+    parsed.store(fetched.document, for: id)
     return fetched.document
+  }
+
+  /// The body on disk, parsed: the XML if there is one, otherwise the text, or nil
+  /// when neither is there. Off the actor, like a fetch's parse, so the store
+  /// answers other calls meanwhile -- whether a document is available offline, the
+  /// next open -- instead of queueing them behind half a second of legacy text.
+  @concurrent
+  private static func parseCached(xml: URL, text: URL, signpostID: OSSignpostID) async
+    -> RFCDocument?
+  {
+    if let data = try? Data(contentsOf: xml),
+      let document = try? signposter.withIntervalSignpost(
+        "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
+    {
+      return document
+    }
+    guard let data = try? Data(contentsOf: text) else { return nil }
+    return signposter.withIntervalSignpost(
+      "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
   }
 
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
