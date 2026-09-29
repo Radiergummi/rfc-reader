@@ -295,6 +295,8 @@ struct ReferencesView: View {
           }
         }
         .listStyle(.sidebar)
+        // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+        .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
         // the list is new when the request arrives.
         .task(id: revealed) {
@@ -406,5 +408,9 @@ struct ReferenceRow: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    // One stop, whether or not the entry names an RFC: its tag, title and byline
+    // were three for an entry that is no button (#300).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.accessibilityLabel)
   }
 }
