@@ -63,7 +63,7 @@ struct XMLDriverTests {
   /// A code the driver does not name keeps its number, which is still something to
   /// go on in a bug report.
   @Test func `an error the driver does not name keeps its code`() {
-    let error = NSError(domain: XMLParser.errorDomain, code: 99_999)
+    let error = NSError(domain: "NSXMLParserErrorDomain", code: 99_999)
     #expect(XMLDriver.message(for: error) == "malformed XML (error 99999)")
   }
 
