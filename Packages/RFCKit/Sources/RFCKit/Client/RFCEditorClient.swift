@@ -120,12 +120,16 @@ public struct RFCEditorClient: Sendable {
     /// rather than turned into words.
     case decoding(context: String, underlying: any Error)
 
-    /// What was being read and what went wrong reading it, for a failure to decode
-    /// (#320). The other cases are the network's, and are left to their callers to word.
+    /// What went wrong, in words: the app shows `localizedDescription`, which for an
+    /// error that says nothing is its type's name and a number (#320).
     public var errorDescription: String? {
       switch self {
+      case .invalidResponse(let url):
+        "The response from \(url.host() ?? "the server") could not be read."
+      case .httpStatus(let status, let url):
+        "\(url.host() ?? "The server") answered with HTTP \(status)."
+      case .notFound(let id): "\(id.displayName) is not published at the RFC Editor."
       case .decoding(let context, let underlying): "\(context): \(underlying.localizedDescription)"
-      case .invalidResponse, .httpStatus, .notFound: nil
       }
     }
   }

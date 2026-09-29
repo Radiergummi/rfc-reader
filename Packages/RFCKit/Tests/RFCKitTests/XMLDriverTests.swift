@@ -41,15 +41,30 @@ struct XMLDriverTests {
     #expect(error.message == "empty document")
   }
 
-  /// libxml2's own words, not the Darwin error's domain and code, "The operation
-  /// couldn't be completed. (NSXMLParserErrorDomain error 76.)" (#320).
+  /// In words, the same on both platforms, rather than the error's domain and code,
+  /// "The operation couldn't be completed. (NSXMLParserErrorDomain error 76.)" (#320).
   @Test func `the message says what the parser found`() throws {
     let error = try #require(throws: XMLSyntaxError.self) {
       _ = try XMLTree.parse(Data("<a><b></a>".utf8))
     }
-    #expect(error.message.localizedCaseInsensitiveContains("mismatch"))
+    #expect(error.message == "an end tag that does not match the element it closes")
+  }
+
+  /// A plain-text error page served in place of a draft fails before any root, and
+  /// says why rather than "empty document".
+  @Test func `the root of a document that is not XML says why it is missing`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: Data("404 Not Found".utf8), named: "rfc")
+    }
+    #expect(error.message != "empty document")
     #expect(!error.message.contains("ErrorDomain"))
-    #expect(error.message == error.message.trimmingCharacters(in: .whitespacesAndNewlines))
+  }
+
+  /// A code the driver does not name keeps its number, which is still something to
+  /// go on in a bug report.
+  @Test func `an error the driver does not name keeps its code`() {
+    let error = NSError(domain: XMLParser.errorDomain, code: 99_999)
+    #expect(XMLDriver.message(for: error) == "malformed XML (error 99999)")
   }
 
   /// Every error that wraps the syntax error says what it says: the app shows

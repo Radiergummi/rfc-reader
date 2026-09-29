@@ -20,11 +20,11 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
     /// answer every lookup with nothing until it was next fetched.
     case missing(String)
 
-    /// The syntax error's own words, or which registry was not found (#320).
+    /// The syntax error's own words, or which registry has no records (#320).
     public var errorDescription: String? {
       switch self {
       case .malformed(let error): error.errorDescription
-      case .missing(let file): "No registry records in IANA's \(file)."
+      case .missing(let registry): "IANA's \(registry) holds no registry records."
       }
     }
   }
