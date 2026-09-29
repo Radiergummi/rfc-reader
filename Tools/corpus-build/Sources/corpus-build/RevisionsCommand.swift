@@ -31,6 +31,15 @@ struct RevisionsCommand: AsyncParsableCommand {
     let previous = try scan.map {
       try RevisionScan.decode(Data(contentsOf: URL(fileURLWithPath: $0)))
     }
+    // What this run builds on. `previous` itself still guards against a shrink.
+    let reusable = RevisionScan.reusable(previous)
+    if previous != nil, reusable == nil {
+      Self.logger.info(
+        "reader changed: reading every draft",
+        metadata: [
+          "previous": "\(previous?.reader ?? 0)", "current": "\(RevisionScan.readerVersion)",
+        ])
+    }
 
     let states = Datatracker.stateTable(
       try await Self.pages(from: Datatracker.statesFirstPage, as: Datatracker.StatePage.self))
@@ -44,7 +53,7 @@ struct RevisionsCommand: AsyncParsableCommand {
     var readings: [String: RevisionScan.Reading] = [:]
     var failures = 0
     for draft in adopted {
-      let old = previous?.drafts[draft.name]
+      let old = reusable?.drafts[draft.name]
       let work = RevisionScan.work(for: draft, previous: old)
       guard work != .none else { continue }
       do {
@@ -71,7 +80,7 @@ struct RevisionsCommand: AsyncParsableCommand {
       "read", metadata: ["read": "\(readings.count)", "failures": "\(failures)"])
 
     let next = RevisionScan.next(
-      adopted: adopted, states: states, previous: previous, readings: readings)
+      adopted: adopted, states: states, previous: reusable, readings: readings)
     let revisions = next.revisions(generatedAt: startedAt)
     let before = previous?.revisions(generatedAt: startedAt)
     guard RevisionScan.mayPublish(revisions, replacing: before, allowShrink: allowShrink) else {

@@ -60,6 +60,23 @@ struct RevisionScanTests {
         == .none)
   }
 
+  /// A fix to `DraftHeader` bumps the reader version, and has to reach the drafts read
+  /// before it, which have not changed on datatracker.
+  @Test func `a scan by another reader version reads every draft in full`() {
+    var previous = RevisionScan(drafts: ["draft-a": Self.entry()])
+    previous.reader = RevisionScan.readerVersion - 1
+    let reusable = RevisionScan.reusable(previous)
+    #expect(reusable == nil)
+    #expect(
+      RevisionScan.work(for: Self.listed("draft-a"), previous: reusable?.drafts["draft-a"])
+        == .full)
+  }
+
+  @Test func `a scan by this reader version is reused`() {
+    let previous = RevisionScan(drafts: ["draft-a": Self.entry()])
+    #expect(RevisionScan.reusable(previous) == previous)
+  }
+
   // MARK: Merge
 
   @Test func `a draft that left the listing is dropped`() {

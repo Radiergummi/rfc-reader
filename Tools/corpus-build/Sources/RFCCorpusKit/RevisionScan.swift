@@ -8,10 +8,24 @@ import RFCKit
 /// `revisions.json` is a pure function of it. The app never reads it
 /// (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md, "The scan record").
 public struct RevisionScan: Codable, Sendable, Equatable {
+  /// The version of the header reading this build does. Bump it with any change to how
+  /// `DraftHeader` reads a draft: a scan by another version is not reused, so the fix
+  /// reaches every draft, including those that have not changed on datatracker since.
+  public static let readerVersion = 1
+
+  /// The `readerVersion` that read `drafts`.
+  public var reader: Int
   public var drafts: [String: Entry]
 
   public init(drafts: [String: Entry]) {
+    self.reader = Self.readerVersion
     self.drafts = drafts
+  }
+
+  /// `previous`, when this build's reader made it; nil otherwise, which reads every
+  /// draft in full as a first run does.
+  public static func reusable(_ previous: RevisionScan?) -> RevisionScan? {
+    previous?.reader == readerVersion ? previous : nil
   }
 
   public struct Entry: Codable, Sendable, Equatable {

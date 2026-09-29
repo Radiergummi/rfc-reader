@@ -78,6 +78,12 @@ entry per adopted draft, keyed by name, **including drafts that revise nothing**
 `revisions.json` is a pure function of the scan record. Keeping the record separate keeps the
 app's file small and its format independent of how the scanner works.
 
+The record also names the version of the header reading that made it (`reader`). Any change to
+how `DraftHeader` reads a header bumps `RevisionScan.readerVersion`, and a run whose previous
+record has another version reuses none of it: every draft is read again, so the fix reaches
+drafts that have not changed on datatracker since. The shrink check still compares against the
+previous record.
+
 The design does not use datatracker's `time` field to find changes. `time` is not documented
 to move on every state change (an RFC Editor queue step, for one), and when a draft whose read
 failed has not changed since, a filter on `time` never selects it again.
