@@ -5,8 +5,9 @@ import Foundation
 /// A bare value (`425`, `0x3`, `Retry-After`) matches in every registry that has it,
 /// since `70` is a TLS alert and an HTTP status alike; a qualifier in front
 /// (`tls alert 70`, `http 425`) narrows it to one. A value or a name has to match
-/// exactly, ignoring case, and a number matches however it is written: `0x3` is
-/// `0x03`.
+/// exactly, ignoring case. A number matches however many digits it is written with,
+/// `0x3` is `0x03`, but only in its own base: QUIC's codes are hexadecimal, and
+/// `quic 10` is not `0x0a`. A code inside an assigned range matches the range.
 public enum RegistryLookup {
   /// The words that name a registry, longest first, so `http status` is read before
   /// `http`.
@@ -40,13 +41,36 @@ public enum RegistryLookup {
     return entries.filter { entry in
       guard registries.contains(entry.registry) else { return false }
       if entry.value.lowercased() == term || entry.name?.lowercased() == term { return true }
-      return number != nil && Self.number(entry.value.lowercased()) == number
+      guard let number, let codes = codes(entry.value.lowercased()) else { return false }
+      return number.isHexadecimal == codes.isHexadecimal && codes.range.contains(number.value)
     }
   }
 
+  private struct Number {
+    var value: Int
+    var isHexadecimal: Bool
+  }
+
   /// A decimal or `0x` hexadecimal number, or nil for anything else.
-  private static func number(_ text: String) -> Int? {
-    if text.hasPrefix("0x") { return Int(text.dropFirst(2), radix: 16) }
-    return text.allSatisfy(\.isNumber) ? Int(text) : nil
+  private static func number(_ text: String) -> Number? {
+    if text.hasPrefix("0x") {
+      return Int(text.dropFirst(2), radix: 16).map { Number(value: $0, isHexadecimal: true) }
+    }
+    guard !text.isEmpty, text.allSatisfy(\.isASCII), text.allSatisfy(\.isNumber) else {
+      return nil
+    }
+    return Int(text).map { Number(value: $0, isHexadecimal: false) }
+  }
+
+  /// The codes a value stands for: one number, or an assigned range such as
+  /// `0x0100-0x01ff`, both ends in one base.
+  private static func codes(_ value: String) -> (range: ClosedRange<Int>, isHexadecimal: Bool)? {
+    let ends = value.split(separator: "-").map { $0.trimmingCharacters(in: .whitespaces) }
+    guard (1...2).contains(ends.count) else { return nil }
+    let numbers = ends.compactMap(number)
+    guard numbers.count == ends.count, let low = numbers.first, let high = numbers.last,
+      low.isHexadecimal == high.isHexadecimal, low.value <= high.value
+    else { return nil }
+    return (low.value...high.value, low.isHexadecimal)
   }
 }

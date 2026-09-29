@@ -184,6 +184,55 @@ struct IANARegistryTests {
       try parse(xml, as: .mediaTypes).map(\.value) == ["application/dns-message", "text/markdown"])
   }
 
+  /// A well-formed file without the registry, such as an XHTML error page or a
+  /// registry renamed, is not an empty registry to keep for a week.
+  @Test func `a file without the registry is an error`() {
+    #expect(throws: IANARegistry.ParseError.missing("tls-parameters-6")) {
+      try parse(
+        "<registry id=\"tls-parameters\"><registry id=\"tls-parameters-5\"/></registry>",
+        as: .tlsAlerts)
+    }
+    #expect(throws: IANARegistry.ParseError.missing("media-types")) {
+      try parse("<html><body>Service unavailable</body></html>", as: .mediaTypes)
+    }
+  }
+
+  /// QUIC assigns a range to one error: `CRYPTO_ERROR` is every code the TLS alerts
+  /// map to.
+  @Test func `an assigned range is kept, and an unassigned or reserved one is not`() throws {
+    let xml = """
+      <registry id="quic">
+        <registry id="quic-transport-error-codes">
+          <record>
+            <value>0x0100-0x01ff</value>
+            <name>CRYPTO_ERROR</name>
+            <xref type="rfc" data="rfc9000" section="20"/>
+          </record>
+          <record><value>0x20-0x3f</value><description>Unassigned</description></record>
+          <record><value>0x40</value><description>Reserved for private use</description></record>
+        </registry>
+      </registry>
+      """
+    #expect(try parse(xml, as: .quicTransportErrors).map(\.value) == ["0x0100-0x01ff"])
+  }
+
+  /// IANA writes a type's standing after its name; the name alone is what is typed.
+  @Test func `a media type's annotation is not part of its name`() throws {
+    let xml = """
+      <registry id="media-types">
+        <registry id="application">
+          <title>application</title>
+          <record><name>ecmascript (OBSOLETED in favor of text/javascript)</name></record>
+          <record><name>font-woff - DEPRECATED in favor of font/woff</name></record>
+        </registry>
+      </registry>
+      """
+    #expect(
+      try parse(xml, as: .mediaTypes).map(\.value) == [
+        "application/ecmascript", "application/font-woff",
+      ])
+  }
+
   @Test func `malformed XML is an error, not an empty registry`() {
     #expect(throws: IANARegistry.ParseError.self) {
       try parse("<registry><record>", as: .httpStatusCodes)

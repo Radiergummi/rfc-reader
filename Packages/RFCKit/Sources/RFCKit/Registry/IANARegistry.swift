@@ -15,6 +15,10 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
 
   public enum ParseError: Error, Sendable, Equatable {
     case malformed(XMLSyntaxError)
+    /// Well-formed XML without the registry, or with no record in it: an XHTML
+    /// error page, or a registry IANA has renamed. Kept as a registry, it would
+    /// answer every lookup with nothing until it was next fetched.
+    case missing(String)
   }
 
   /// The file IANA publishes the registry in. One file can hold several registries:
@@ -56,8 +60,9 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
     }
   }
 
-  /// Every assigned value in `registry`, read from its file. Unassigned ranges are
-  /// left out; a value defined outside the RFCs is kept, with no reference.
+  /// Every assigned value in `registry`, read from its file. What is unassigned or
+  /// reserved is left out; an assigned range, such as QUIC's `CRYPTO_ERROR`, is one
+  /// entry; a value defined outside the RFCs is kept, with no reference.
   public static func parse(_ data: Data, as registry: IANARegistry) throws(ParseError)
     -> [RegistryEntry]
   {
@@ -68,27 +73,40 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
       throw .malformed(error)
     }
     guard let registryID = registry.registryID else {
-      // Media types: a record names the subtype, under its top-level type.
-      return root.all("registry").flatMap { type in
-        let typeName = type.first("title")?.normalizedText ?? type["id"] ?? ""
-        return type.all("record").compactMap { record in
-          record.first("name").map { name in
-            RegistryEntry(
-              registry: registry, value: "\(typeName)/\(name.normalizedText)", name: nil,
-              references: references(in: record))
-          }
-        }
+      let types = root.all("registry").flatMap { type in
+        mediaTypes(in: type, registry: registry)
       }
+      guard !types.isEmpty else { throw .missing(registry.file) }
+      return types
     }
-    guard let found = subregistry(registryID, in: root) else { return [] }
-    return found.all("record").compactMap { record in
-      guard let value = record.first("value")?.normalizedText, isAssigned(value, in: record)
-      else { return nil }
+    guard let found = subregistry(registryID, in: root) else { throw .missing(registryID) }
+    let entries = found.all("record").compactMap { record -> RegistryEntry? in
+      guard let value = record.first("value")?.normalizedText, isAssigned(record) else {
+        return nil
+      }
       // QUIC's records carry a code name beside a description, and the name is what
       // people write; the others' description is their name.
       let name = (record.first("name") ?? record.first("description"))?.normalizedText
       return RegistryEntry(
         registry: registry, value: value, name: name, references: references(in: record))
+    }
+    guard !entries.isEmpty else { throw .missing(registryID) }
+    return entries
+  }
+
+  /// A top-level type's records, each named in full. IANA writes a type's standing
+  /// after its name ("font-woff - DEPRECATED in favor of font/woff"), and a name has
+  /// no spaces, so the name is what comes before the first.
+  private static func mediaTypes(in type: XMLTree.Element, registry: IANARegistry)
+    -> [RegistryEntry]
+  {
+    let typeName = type.first("title")?.normalizedText ?? type["id"] ?? ""
+    return type.all("record").compactMap { record in
+      guard let subtype = record.first("name")?.normalizedText.split(separator: " ").first
+      else { return nil }
+      return RegistryEntry(
+        registry: registry, value: "\(typeName)/\(subtype)", name: nil,
+        references: references(in: record))
     }
   }
 
@@ -101,14 +119,11 @@ public enum IANARegistry: String, CaseIterable, Sendable, Hashable {
     return nil
   }
 
-  /// Not a range of codes (`105-199`, `0x40-0x7f`) and not marked unassigned. A
-  /// range is numbers on both sides of the hyphen, so a field name such as `A-IM`
-  /// is a value.
-  private static func isAssigned(_ value: String, in record: XMLTree.Element) -> Bool {
-    if record.first("description")?.normalizedText == "Unassigned" { return false }
-    let isDecimalRange = value.wholeMatch(of: /[0-9]+ *- *[0-9]+/) != nil
-    let isHexadecimalRange = value.wholeMatch(of: /0x[0-9A-Fa-f]+ *- *0x[0-9A-Fa-f]+/) != nil
-    return !isDecimalRange && !isHexadecimalRange
+  /// Neither unassigned nor reserved: those are what a registry says of the codes
+  /// no one may use, not codes someone looks up.
+  private static func isAssigned(_ record: XMLTree.Element) -> Bool {
+    let description = record.first("description")?.normalizedText ?? ""
+    return description != "Unassigned" && !description.hasPrefix("Reserved")
   }
 
   /// The RFCs a record cites, each at the section it names: an attribute where the

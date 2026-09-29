@@ -62,6 +62,21 @@ struct RegistryLookupTests {
     #expect(lookup("0x0003") == ["quicTransportErrors 0x03"])
   }
 
+  /// QUIC's codes are written in hexadecimal: `quic 10` is not `0x0a`.
+  @Test func `a decimal number does not match a hexadecimal code`() {
+    #expect(lookup("quic 3") == [])
+    #expect(lookup("3") == [])
+  }
+
+  @Test func `a code inside an assigned range matches the range`() {
+    let crypto = RegistryEntry(
+      registry: .quicTransportErrors, value: "0x0100-0x01ff", name: "CRYPTO_ERROR",
+      references: [RFCLink(id: .rfc(9000), section: "20")])
+    #expect(RegistryLookup.matches("quic 0x0128", in: [crypto]) == [crypto])
+    #expect(RegistryLookup.matches("crypto_error", in: [crypto]) == [crypto])
+    #expect(RegistryLookup.matches("0x0200", in: [crypto]) == [])
+  }
+
   @Test func `only exact matches count`() {
     #expect(lookup("42") == [])
     #expect(lookup("retry") == [])
