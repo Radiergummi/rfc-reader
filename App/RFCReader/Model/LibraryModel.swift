@@ -278,6 +278,38 @@ final class LibraryModel {
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
 
+  /// What force-click previews showed, kept for the next preview of the same
+  /// document in the same style (#374), which then shows its text at once rather
+  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  ///
+  /// The whole preview rather than the build alone, so a build is never paired with
+  /// another parse of its document. A document's previews go when it is removed or
+  /// evicted (`forgetPreviews`), as the store's parse of it does, so what is gone
+  /// from the disk is gone from memory too. Empty on iOS, which has no such preview.
+  ///
+  /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
+  /// drawn from it.
+  @ObservationIgnored private var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(
+    capacity: 4)
+
+  /// What the last preview of `key` showed, if it is still kept.
+  func keptPreview(for key: BuildKey) -> DocumentPreview.Loaded? {
+    previews.value(for: key)
+  }
+
+  /// Keeps `preview` for the next preview of `key`, unless its document was removed
+  /// or evicted while it was being fetched and built: its previews were forgotten
+  /// then, and this one would come back after them.
+  func keep(_ preview: DocumentPreview.Loaded, for key: BuildKey) async {
+    guard await store.isCached(key.document) else { return }
+    previews.store(preview, for: key)
+  }
+
+  private func forgetPreviews(of documents: some Sequence<DocumentID>) {
+    let documents = Set(documents)
+    previews.removeAll { documents.contains($0.document) }
+  }
+
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
   func list(for scene: NavigationModel) -> [RFCMetadata] {
@@ -568,7 +600,8 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    let evicted = await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    forgetPreviews(of: evicted)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
@@ -641,6 +674,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    forgetPreviews(of: [id])
     await refreshDownloadedNumbers()
   }
 }
