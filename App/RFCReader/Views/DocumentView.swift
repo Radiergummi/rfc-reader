@@ -76,6 +76,12 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+    /// Whether a print is being prepared or its sheet is up; see `printDocument()`.
+    @State private var isPrinting = false
+    /// A finished export, while Save to Files is showing it (#376).
+    @State private var exported: ExportedFile?
+    /// Whether an export is being made or Save to Files is up; see `exportDocument(as:)`.
+    @State private var isExporting = false
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
@@ -201,6 +207,22 @@ struct DocumentView: View {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
           .presentationDetents([.medium, .large])
         }
+        .fileExporter(
+          isPresented: Binding(
+            get: { exported != nil },
+            set: {
+              if !$0 {
+                exported = nil
+                isExporting = false
+              }
+            }),
+          document: exported,
+          contentType: (exported?.format ?? .pdf).contentType,
+          defaultFilename: ExportFormat.fileStem(for: id)
+        ) { _ in
+          exported = nil
+          isExporting = false
+        }
       #endif
       .onAppear {
         if work.load == nil { startLoad() }
@@ -226,6 +248,7 @@ struct DocumentView: View {
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         jump(toSection: request?.section, animated: true)
       }
@@ -272,7 +295,9 @@ struct DocumentView: View {
       // the title back to hidden after this view may already have appeared.
       .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document, let built {
-      let headerIdentity = DocumentHeaderView.Identity(header: document.header, metadata: metadata)
+      let headerIdentity = DocumentHeaderView.Identity(
+        header: document.header, metadata: metadata,
+        revisions: metadata.map { library.revisionsSummary(for: $0.id) })
       RFCTextView(
         built: built,
         bibliography: reader.groups,
@@ -296,6 +321,7 @@ struct DocumentView: View {
         },
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -446,8 +472,65 @@ struct DocumentView: View {
             Button("Preceding Draft") { systemOpenURL(draft) }
           }
         }
+
+        Section {
+          Menu("Export", systemImage: "square.and.arrow.down") {
+            ForEach(ExportFormat.allCases) { format in
+              Button(format.name) { exportDocument(as: format) }
+            }
+          }
+          Button("Print…", systemImage: "printer") { printDocument() }
+        }
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// Save to Files, with the document in `format` (#376). Laid out for the region's
+    /// paper, as a print is.
+    private func exportDocument(as format: ExportFormat) {
+      // A second tap while the file is made would make it again, and present Save to
+      // Files over the first.
+      guard !isExporting else { return }
+      isExporting = true
+      Task {
+        guard
+          let data = try? await DocumentExport.data(
+            for: id, as: format, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isExporting = false
+          return
+        }
+        exported = ExportedFile(data: data, format: format)
+      }
+    }
+
+    /// The system's print sheet, with the document laid out for paper (#375). Laid
+    /// out for the region's paper; the sheet scales it to whatever paper is chosen.
+    private func printDocument() {
+      // A second tap while the PDF is built would build it again and present the
+      // shared controller twice.
+      guard !isPrinting else { return }
+      isPrinting = true
+      let original = reader.showOriginal
+      Task {
+        guard
+          let data = try? await DocumentPDF.make(
+            for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
+            library: library)
+        else {
+          isPrinting = false
+          return
+        }
+        let info = UIPrintInfo.printInfo()
+        info.jobName = PrintFurniture.documentTitle(
+          id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printingItem = data
+        controller.present(animated: true) { _, _, _ in isPrinting = false }
       }
     }
 
@@ -498,7 +581,9 @@ struct DocumentView: View {
   /// their chips open.
   private func deriveInfo() {
     reader.info = metadata.map {
-      DocumentInfo($0, authors: document?.header.authors, in: library.index)
+      DocumentInfo(
+        $0, authors: document?.header.authors, in: library.index,
+        revisions: library.revisionsSummary(for: $0.id))
     }
   }
 
@@ -592,7 +677,12 @@ struct DocumentView: View {
   /// what discards a cancelled one. `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
-    DocumentTextBuilder.build(document, style: style)
+    let name = document.header.id?.displayName ?? "untitled"
+    return signposter.withIntervalSignpost(
+      "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
+    ) {
+      DocumentTextBuilder.build(document, style: style)
+    }
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
@@ -712,13 +802,21 @@ struct DocumentHeaderView: View {
     /// Everything else the header shows comes straight off the metadata, which
     /// is `Hashable` — so it is compared whole rather than field by field.
     let metadata: RFCMetadata?
+    /// The banner's drafts, as lines rather than the summary, which carries the time
+    /// it was made and so would never compare equal.
+    let revisionLines: [RevisionsSummary.Line]
+    let moreRevisions: String?
 
-    init(header: DocumentHeader, metadata: RFCMetadata?) {
-      title = header.title
-      date = (header.date ?? metadata?.date)?.formatted
-      workingGroup = header.workingGroup ?? metadata?.workingGroup
-      authors = header.authors.isEmpty ? (metadata?.authors ?? []) : header.authors
+    /// Merged by `HeaderSummary`, which a printed page's title block reads too.
+    init(header: DocumentHeader, metadata: RFCMetadata?, revisions: RevisionsSummary? = nil) {
+      let summary = HeaderSummary(header: header, metadata: metadata)
+      title = summary.title
+      date = summary.date
+      workingGroup = summary.workingGroup
+      authors = summary.authors
       self.metadata = metadata
+      revisionLines = revisions?.bannerLines ?? []
+      moreRevisions = revisions?.moreText
     }
   }
 
@@ -761,8 +859,11 @@ struct DocumentHeaderView: View {
           .font(.subheadline)
       }
       if let metadata = identity.metadata {
-        StatusBanner(library: library, navigation: navigation, metadata: metadata)
-          .padding(.top, 4)
+        StatusBanner(
+          library: library, navigation: navigation, metadata: metadata,
+          revisionLines: identity.revisionLines, moreRevisions: identity.moreRevisions
+        )
+        .padding(.top, 4)
       }
     }
     // The header is hosted, not placed by SwiftUI, and a hosting view lays its
@@ -786,9 +887,14 @@ struct StatusBanner: View {
   let library: LibraryModel
   let navigation: NavigationModel
   let metadata: RFCMetadata
+  /// From the header's identity, so a new `revisions.json` re-measures the header.
+  let revisionLines: [RevisionsSummary.Line]
+  let moreRevisions: String?
 
   var body: some View {
-    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata {
+    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata
+      || !revisionLines.isEmpty
+    {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
           row(
@@ -805,10 +911,36 @@ struct StatusBanner: View {
           }
           .font(.subheadline)
         }
+        if !revisionLines.isEmpty {
+          ForEach(revisionLines) { line in
+            revisionRow(line)
+          }
+          if let more = moreRevisions {
+            Text(more)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+        }
       }
       .padding(12)
       .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
+  }
+
+  /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
+  /// The whole row is the link to the draft's datatracker page. One `Text`, so a
+  /// narrow banner wraps it as a sentence rather than squeezing three columns.
+  private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
+    let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
+    let title = Text(line.title).foregroundStyle(.tint)
+    let detail = Text(line.detail).foregroundStyle(.secondary)
+    return DraftLink(line: line) {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
+        Text("\(relation) \(title) \(detail)")
+      }
+    }
+    .font(.subheadline)
   }
 
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
@@ -822,6 +954,21 @@ struct StatusBanner: View {
       }
     }
     .font(.subheadline)
+  }
+}
+
+/// A draft revising an RFC, opening its datatracker page in the browser, as the errata
+/// link does: drafts are not read in the app (VISION.md, Tier 2). The whole row is the
+/// link, and reads as the one sentence the summary wrote for it.
+struct DraftLink<Label: View>: View {
+  let line: RevisionsSummary.Line
+  @ViewBuilder let label: Label
+
+  var body: some View {
+    // On the link's own element, which keeps its trait and its action.
+    Link(destination: line.url) { label }
+      .buttonStyle(.plain)
+      .accessibilityLabel(line.accessibilityLabel)
   }
 }
 

@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: tables")
-@MainActor
 struct BuilderTableTests {
   private func cells(_ strings: [String]) -> [[Inline]] {
     strings.map { [Inline.text($0)] }

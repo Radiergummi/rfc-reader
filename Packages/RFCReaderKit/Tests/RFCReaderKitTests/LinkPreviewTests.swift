@@ -59,4 +59,16 @@ struct LinkPreviewTests {
   @Test func `a link to the web previews nothing`() {
     #expect(resolve("https://www.iana.org/assignments/") == nil)
   }
+
+  /// macOS's popover gets the whole preview; a phone's context menu gets what its
+  /// screen leaves beside the gutters, and room under it for the menu.
+  @Test func `the document preview is its full size where it fits`() {
+    let large = CGSize(width: 1_200, height: 1_200)
+    #expect(LinkPreview.documentSize(fitting: large) == LinkPreview.documentSize)
+  }
+
+  @Test func `on a phone the document preview keeps its gutters and leaves room for the menu`() {
+    let phone = CGSize(width: 393, height: 852)
+    #expect(LinkPreview.documentSize(fitting: phone) == CGSize(width: 361, height: 511))
+  }
 }

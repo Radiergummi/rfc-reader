@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: document structure")
-@MainActor
 struct BuilderStructureTests {
   private let style = ReadingStyle()
 
@@ -54,6 +53,19 @@ struct BuilderStructureTests {
     #expect(built.anchors.offset(of: "fig-long") != nil)
     #expect(built.anchors.heading(of: "fig-long") == nil)
     #expect(built.anchors.heading(of: "no-such-anchor") == nil)
+  }
+
+  /// What Copy as Quote cites a selection as, from the build alone (#186). A figure
+  /// has no number, and neither has an unnumbered section.
+  @Test func `a section anchor carries its number`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      let entry = try #require(built.anchors.entries.first { $0.anchor == section.anchor })
+      #expect(entry.number == section.number, "anchor \(section.anchor)")
+    }
+    let figure = try #require(built.anchors.entries.first { $0.anchor == "fig-long" })
+    #expect(figure.number == nil)
   }
 
   @Test func `the builder records anchors in document order`() throws {
@@ -246,15 +258,18 @@ struct BuilderStructureTests {
   /// The abstract introduces the document rather than being part of it, so it is
   /// set smaller and quieter than the body prose that follows.
   @Test func `the abstract is set as a standfirst`() throws {
-    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
-    let abstract = try #require(
-      try Fixtures.rfc8999().header.abstract.compactMap { block -> String? in
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    func firstParagraph(of blocks: [Block]) -> String? {
+      blocks.compactMap { block -> String? in
         guard case .paragraph(let paragraph) = block else { return nil }
         return paragraph.plainText
-      }.first)
+      }.first
+    }
+    let abstract = try #require(firstParagraph(of: document.header.abstract))
     let abstractOffset = try Fixtures.offset(of: abstract, in: built.text)
-    let bodyOffset = try Fixtures.offset(
-      of: "QUIC is a connection-oriented protocol", in: built.text)
+    let body = try #require(firstParagraph(of: document.section(number: "1")?.blocks ?? []))
+    let bodyOffset = try Fixtures.offset(of: body, in: built.text)
 
     let abstractFont = try #require(
       built.text.attribute(.font, at: abstractOffset, effectiveRange: nil) as? PlatformFont)
