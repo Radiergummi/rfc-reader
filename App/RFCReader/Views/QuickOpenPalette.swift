@@ -68,6 +68,8 @@
       }
       .frame(width: Self.width)
       .glassEffect(.regular, in: .rect(cornerRadius: 18))
+      // The check at launch alone goes stale in an app left open for weeks.
+      .onAppear { library.refreshRegistriesIfDue() }
       // A series typed before the index loaded is listed as its members once it has.
       .onChange(of: library.index != nil) { resolve(query) }
       .task(id: SearchKey(query: query, hasIndex: library.index != nil)) { await search(query) }
@@ -115,25 +117,45 @@
     /// keyboard chose. A click opens the row it lands on.
     private var rows: some View {
       VStack(spacing: 2) {
-        ForEach(results.rows, id: \.self) { link in
-          row(for: link)
+        ForEach(results.rows, id: \.self) { row in
+          self.row(for: row)
         }
       }
       .padding(6)
     }
 
-    private func row(for link: RFCLink) -> some View {
-      let isSelected = link == results.selected
+    private func row(for row: QuickOpenResults.Row) -> some View {
+      let link = row.link
+      let isSelected = row == results.selected
       return HStack(spacing: 12) {
-        Text(link.id.displayName)
-          .fontWeight(.semibold)
-          .monospacedDigit()
-          .frame(width: 84, alignment: .leading)
-        Text(library.metadata(link.id)?.title ?? "Not in the index")
-          .lineLimit(1)
-          .truncationMode(.tail)
-          .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-        Spacer(minLength: 0)
+        if let entry = row.entry {
+          // What was looked up, then where it is defined: "HTTP status 425 · Too
+          // Early", RFC 8470.
+          Text("\(entry.registry.displayName) \(entry.value)")
+            .fontWeight(.semibold)
+            .monospacedDigit()
+            .lineLimit(1)
+          if let name = entry.name {
+            Text(name)
+              .lineLimit(1)
+              .truncationMode(.tail)
+              .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+          }
+          Spacer(minLength: 0)
+          Text(link.id.displayName)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        } else {
+          Text(link.id.displayName)
+            .fontWeight(.semibold)
+            .monospacedDigit()
+            .frame(width: 84, alignment: .leading)
+          Text(library.metadata(link.id)?.title ?? "Not in the index")
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+          Spacer(minLength: 0)
+        }
         if let section = link.section {
           Text("§ \(section)")
             .foregroundStyle(.secondary)
@@ -170,7 +192,10 @@
     private func resolve(_ query: String) {
       let exact = DocumentReference.link(from: query)
       let members = exact.flatMap { library.index?.series($0.id)?.members } ?? []
-      results.show(query: query, exact: exact, members: members)
+      results.show(
+        query: query, exact: exact, members: members,
+        registry: library.registryMatches(for: query),
+        isObsolete: { library.metadata($0)?.isObsolete ?? false })
     }
 
     /// Runs per change of the query and is cancelled by the next, which is the debounce:

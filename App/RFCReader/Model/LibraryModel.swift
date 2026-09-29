@@ -199,6 +199,76 @@ final class LibraryModel {
       indexState = .failed(error.localizedDescription)
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
+    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
+    // fetch them for nothing.
+    #if os(macOS)
+      Task(name: "Load registries") { await refreshRegistries() }
+    #endif
+  }
+
+  // MARK: - Registries
+
+  /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
+  /// the palette asks on each keystroke, and nothing on screen lists them.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+
+  /// Registries change more often than RFCs, but not by the day.
+  private static let registryMaximumAge: TimeInterval = 7 * 86_400
+
+  /// When the registries were last checked, nil until launch first checks them.
+  @ObservationIgnored private var registriesCheckedAt: Date?
+
+  /// Checks the registries again if the last check is older than
+  /// `registryMaximumAge`: the palette asks as it opens, since the app may stay open
+  /// for weeks after the check at launch.
+  func refreshRegistriesIfDue() {
+    guard let checked = registriesCheckedAt,
+      checked.timeIntervalSinceNow < -Self.registryMaximumAge
+    else { return }
+    Task(name: "Refresh registries") { await refreshRegistries() }
+  }
+
+  /// Reads the cached registries, then fetches those that are due: a first fetch on
+  /// any network, a refresh only on a cheap one (`RegistryRefresh`). A registry that
+  /// cannot be fetched keeps its cached entries, and is logged rather than shown
+  /// (#125): the palette still finds RFCs without it.
+  private func refreshRegistries() async {
+    // Set before the first suspension, so a palette opened meanwhile does not start
+    // a second check.
+    registriesCheckedAt = .now
+    var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
+    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+    let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
+    for fetch in fetches {
+      let registry = fetch.registry
+      let fetched: (entries: [RegistryEntry], data: Data)
+      do {
+        fetched = try await (fetch.onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchRegistry(registry, onExpensiveNetworks: fetch.onExpensiveNetworks)
+      } catch {
+        libraryLog.error(
+          "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+        continue
+      }
+      // Listed as soon as it is read, not after the slowest of the others, and
+      // whether or not it can be kept for the next launch.
+      cached.entries[registry] = fetched.entries
+      registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+      do {
+        try await store.storeRegistry(fetched.data, for: registry)
+      } catch {
+        libraryLog.error(
+          "caching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+  }
+
+  /// The registry values `query` names exactly: `425`, `tls alert 70`,
+  /// `application/dns-message`.
+  func registryMatches(for query: String) -> [RegistryEntry] {
+    RegistryLookup.matches(query, in: registryEntries)
   }
 
   #if DEBUG
