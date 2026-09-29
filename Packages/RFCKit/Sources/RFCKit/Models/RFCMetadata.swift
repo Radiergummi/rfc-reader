@@ -382,9 +382,9 @@ public struct RFCIndex: Sendable {
 }
 
 /// Coded as what the RFC Editor's index says, and nothing derived from it: the
-/// lookup by number is rebuilt on decoding. The app keeps a decoded snapshot beside
-/// the index, because decoding it is about a third of the time the XML parse takes,
-/// and the parse ran at every launch.
+/// lookup by number is rebuilt on decoding. The app keeps a snapshot of the index
+/// in this form, because decoding it is about a third of the time the XML parse
+/// takes, and the parse ran at every launch.
 extension RFCIndex: Codable {
   private enum CodingKeys: String, CodingKey {
     case rfcs, series, notIssued

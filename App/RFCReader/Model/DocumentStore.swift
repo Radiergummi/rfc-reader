@@ -31,17 +31,29 @@ actor DocumentStore {
   /// has not grown is not enumerated again.
   private var hasGrown = true
 
+  /// Where the index snapshot lives: in Caches, because it is made again from one
+  /// parse, so it stays out of backups, and a write there does not change the date
+  /// of `directory`, which `cachedDocuments` would answer with a scan.
+  private let snapshotURL: URL
+
+  /// The last snapshot write, which the next one waits for, so a snapshot of an
+  /// older index never lands after a newer one.
+  private var snapshotWrite: Task<Void, Never>?
+
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
     directory = support.appending(path: "RFCReader", directoryHint: .isDirectory)
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appending(path: "RFCReader", directoryHint: .isDirectory)
+    try? FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
+    snapshotURL = caches.appending(path: "rfc-index.json")
   }
 
   // MARK: - Index
 
   private var indexURL: URL { directory.appending(path: "rfc-index.xml") }
-  private var snapshotURL: URL { directory.appending(path: "rfc-index.json") }
   private var checkURL: URL { directory.appending(path: "rfc-index-check.json") }
 
   /// The index, from its snapshot when that is current, and otherwise parsed from
@@ -67,11 +79,16 @@ actor DocumentStore {
       index: Self.modificationDate(of: url) ?? .distantFuture,
       app: Bundle.main.executableURL.flatMap(Self.modificationDate(of:)) ?? .distantFuture
     )
-    if isCurrent, let data = try? Data(contentsOf: snapshotURL),
-      let index = try? signposter.withIntervalSignpost(
-        "Decode index snapshot", around: { try IndexSnapshot.decode(data) })
-    {
-      return (index, updatedAt)
+    if isCurrent, let data = try? Data(contentsOf: snapshotURL) {
+      do {
+        let index = try signposter.withIntervalSignpost("Decode index snapshot") {
+          try IndexSnapshot.decode(data)
+        }
+        return (index, updatedAt)
+      } catch {
+        storeLog.error(
+          "decoding the index snapshot failed: \(String(describing: error), privacy: .public)")
+      }
     }
     let index = try signposter.withIntervalSignpost("Parse index XML") {
       try RFCIndexParser.parse(contentsOf: url)
@@ -82,7 +99,11 @@ actor DocumentStore {
 
   /// Keeps a refreshed index, its snapshot made from the same parse, and what
   /// identifies it for the next check.
-  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) throws {
+  ///
+  /// Waits for a snapshot write already running first: one of the index being
+  /// replaced that landed after the new XML would be newer than it, and so current.
+  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) async throws {
+    await snapshotWrite?.value
     try data.write(to: indexURL, options: .atomic)
     writeSnapshot(of: index)
     try storeCheck(IndexCheck(checkedAt: .now, validators: validators))
@@ -114,7 +135,8 @@ actor DocumentStore {
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   private func writeSnapshot(of index: RFCIndex) {
-    Task(name: "Write index snapshot") { [snapshotURL] in
+    snapshotWrite = Task(name: "Write index snapshot") { [snapshotURL, snapshotWrite] in
+      await snapshotWrite?.value
       await Self.write(index, to: snapshotURL)
     }
   }
