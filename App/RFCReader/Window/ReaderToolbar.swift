@@ -597,7 +597,6 @@
           showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
           precedingDraft: reader.precedingDraft)
       case collectionMenu:
-        guard let id else { return }
         sections = DocumentMenus.addToCollection(id, in: library.collections)
       default:
         return

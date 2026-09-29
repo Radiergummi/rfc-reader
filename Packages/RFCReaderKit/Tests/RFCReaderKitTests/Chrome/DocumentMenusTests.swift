@@ -47,6 +47,16 @@ struct DocumentMenusTests {
     #expect(titles(menu) == [["New Collection…"]])
   }
 
+  /// A window with no document still opens the bookmark item's menu, which AppKit
+  /// never validates: it offers a new collection rather than nothing.
+  @Test func `with no document, add to collection offers only a new one`() {
+    let snapshot = CollectionSnapshot(collections: [
+      .init(id: UUID(), name: "HTTP", color: .blue, members: [.rfc(9110)])
+    ])
+    let menu = DocumentMenus.addToCollection(nil, in: snapshot)
+    #expect(titles(menu) == [["New Collection…"]])
+  }
+
   @Test func `every collection is listed, checked where the document is in it`() {
     let http = UUID()
     let dns = UUID()

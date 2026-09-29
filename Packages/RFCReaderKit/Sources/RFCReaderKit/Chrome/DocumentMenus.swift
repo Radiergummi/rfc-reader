@@ -77,16 +77,18 @@ public enum DocumentMenus {
 
   /// Every collection, checked where `document` is already in it, and New
   /// Collection (#349) — after a separator only when there are collections above it.
+  /// With no document, New Collection alone: there is nothing to add or check.
   public static func addToCollection(
-    _ document: DocumentID, in snapshot: CollectionSnapshot
+    _ document: DocumentID?, in snapshot: CollectionSnapshot
   ) -> Sections {
+    let create = [Item("New Collection…", .newCollection)]
+    guard let document else { return [create] }
     let containing = snapshot.collections(containing: document)
     let collections = snapshot.collections.map {
       Item(
         $0.name, .toggleCollection($0.id), isOn: containing.contains($0.id),
         icon: Icon("folder", color: $0.color))
     }
-    let create = [Item("New Collection…", .newCollection)]
     return collections.isEmpty ? [create] : [collections, create]
   }
 }
