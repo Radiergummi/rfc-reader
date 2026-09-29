@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 # One run at a time, queued rather than canceled: a full run takes hours, and each
-# run's baseline is the report of the last one to succeed.
+# full run's baseline is the report of the last full one to succeed.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -59,26 +59,29 @@ jobs:
       - name: Install tools
         run: apt-get update -qq && apt-get install -y -qq make libxml2-utils gh >/dev/null
 
-      # The last successful run's report is this run's baseline: convert compares its
-      # schema results with the report it replaces and fails on any document that
-      # stopped validating. A failed run's report is never the baseline, so a
-      # regression keeps failing until it is fixed. Without one nothing is compared,
-      # which is said as a warning rather than passed over.
+      # The report of the last successful full run is this run's baseline: convert
+      # compares its schema results with the report it replaces and fails on any
+      # document that stopped validating. Only a full run uploads one, since a smoke
+      # run's twenty documents would compare nothing else, so the recent successful
+      # runs are looked through for the newest that has it. A failed run's report is
+      # never the baseline, so a regression keeps failing until it is fixed. Without
+      # one nothing is compared, which is said as a warning rather than passed over.
       - name: Restore the previous report
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          previous=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow corpus.yml \
-            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -z "$previous" ] || ! gh run download "$previous" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'corpus-*' --dir baseline; then
-            echo "::warning::No previous report; schema regressions are not checked in this run."
-            exit 0
-          fi
-          mkdir -p corpus
-          # The artifact keeps the paths it was uploaded with, under its own name.
-          cp baseline/corpus-*/corpus/report.json corpus/report.json
-          echo "Baseline: the report of run $previous"
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow corpus.yml \
+            --status success --limit 20 --json databaseId --jq '.[].databaseId')
+          for run in $runs; do
+            if gh run download "$run" --repo "$GITHUB_REPOSITORY" --name corpus-baseline \
+              --dir baseline 2>/dev/null; then
+              mkdir -p corpus
+              cp baseline/report.json corpus/report.json
+              echo "Baseline: the report of run $run"
+              exit 0
+            fi
+          done
+          echo "::warning::No previous full run's report; schema regressions are not checked in this run."
 
       # The same entry point as a local `make corpus`, so CI builds the corpus a
       # developer does: the modern RFCXML documents fetched beside the converted
@@ -135,6 +138,15 @@ jobs:
             corpus/prose.json
             corpus/manifest.json
             packs/
+
+      # The next run's baseline, on its own so that run downloads one small file:
+      # only a full run's, and only a successful one's.
+      - name: Upload the report as the next run's baseline
+        if: ${{ inputs.limit == '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: corpus-baseline
+          path: corpus/report.json
 
   # Apple Archive with LZFSE, which the app reads with Apple's own frameworks and so
   # gains no dependency for (#36). Nothing on Linux writes the Apple Archive
