@@ -5,7 +5,7 @@ import RFCReaderKit
 import SwiftData
 import os
 
-private let libraryLog = Logger(
+nonisolated private let libraryLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
 #if os(macOS)
@@ -125,6 +125,10 @@ final class LibraryModel {
   }
 
   private let client = RFCEditorClient()
+  /// For the automatic daily check, which waits for a network that is neither
+  /// metered nor in Low Data Mode instead of failing (#314).
+  private let clientOnCheapNetworks = RFCEditorClient(
+    transport: URLSessionTransport(session: .rfcEditorOnCheapNetworks))
   private let store = DocumentStore()
   private var search: IndexSearch?
 
@@ -133,29 +137,18 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    // Before anything is awaited, so that the parse is already running when this
+    // first suspends. On macOS, `AppDelegate` starts this with `Task.immediate` and
+    // makes the first window at that suspension: the window is about 255 ms of the
+    // main thread, and the parse, which needs nothing from it, runs beside it rather
+    // than after it (#367). Every `await` stays below this line.
+    async let cached = Self.loadCachedIndex(from: store)
     #if DEBUG
       installPackFromLaunchArgument()
     #endif
-    await refreshDownloadedNumbers()
-    do {
-      if let cached = try await store.cachedIndex() {
-        // The store parses the cached index on its own actor; the search and the
-        // working groups are built off the main actor as well.
-        let index = cached.index
-        let prepared = await Self.prepare(index)
-        apply(prepared, updatedAt: cached.updatedAt)
-        // Refresh in the background if the cache is older than a day.
-        if cached.updatedAt.timeIntervalSinceNow < -86_400 {
-          Task(name: "Refresh index") { await refreshIndex() }
-        }
-      } else {
-        await refreshIndex()
-      }
-    } catch {
-      indexState = .failed(error.localizedDescription)
-    }
-    // Just Published is decoration: a failure leaves it empty, and is logged
-    // rather than shown (#125).
+    // Just Published needs neither the index nor the downloads, so it starts beside
+    // them rather than after the index is applied. It is decoration: a failure leaves
+    // it empty, and is logged rather than shown (#125).
     Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
@@ -163,6 +156,21 @@ final class LibraryModel {
         libraryLog.error(
           "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
       }
+    }
+    await refreshDownloadedNumbers()
+    do {
+      if let (prepared, updatedAt) = try await cached {
+        apply(prepared, updatedAt: updatedAt)
+        // Check in the background if the index was last checked over a day ago:
+        // only on a cheap network, since nobody is waiting for it (#314).
+        if IndexCheck.isDue(checkedAt: updatedAt, now: .now) {
+          Task(name: "Refresh index") { await refreshIndex(onExpensiveNetworks: false) }
+        }
+      } else {
+        await refreshIndex()
+      }
+    } catch {
+      indexState = .failed(error.localizedDescription)
     }
   }
 
@@ -188,24 +196,71 @@ final class LibraryModel {
     }
   #endif
 
-  /// The search and the working groups, built off the main actor.
+  /// The cached index, parsed and prepared off the main actor and off the store's —
+  /// the search and the working groups with it. Nil when there is none.
   @concurrent
-  private static func prepare(_ index: RFCIndex) async -> PreparedIndex {
-    PreparedIndex(index: index)
+  private static func loadCachedIndex(from store: DocumentStore) async throws
+    -> (prepared: PreparedIndex, updatedAt: Date)?
+  {
+    guard let cached = store.cachedIndexLocation() else { return nil }
+    let interval = signposter.beginInterval("Read cached index")
+    defer { signposter.endInterval("Read cached index", interval) }
+    if let snapshot = cached.snapshot {
+      do {
+        let index = try signposter.withIntervalSignpost("Decode index snapshot") {
+          try IndexSnapshot.decode(Data(contentsOf: snapshot))
+        }
+        return (PreparedIndex(index: index), cached.updatedAt)
+      } catch {
+        libraryLog.error(
+          "decoding the index snapshot failed: \(String(describing: error), privacy: .public)")
+      }
+    }
+    let prepared = try signposter.withIntervalSignpost("Parse index XML") {
+      try PreparedIndex.parse(Data(contentsOf: cached.url))
+    }
+    // Parsed from the XML, so the next launch reads a snapshot of it instead.
+    await store.writeSnapshot(of: prepared.index)
+    return (prepared, cached.updatedAt)
   }
 
   @concurrent
   private static func parse(_ data: Data) async throws -> PreparedIndex {
-    try PreparedIndex.parse(data)
+    try signposter.withIntervalSignpost("Parse index") {
+      try PreparedIndex.parse(data)
+    }
   }
 
-  func refreshIndex() async {
+  /// Asks the RFC Editor for the index, sending what identifies the one kept so an
+  /// unchanged index is a `304` rather than 14 MB (#314). `onExpensiveNetworks`
+  /// false is the automatic daily check, which waits for a network that is neither
+  /// metered nor in Low Data Mode; a person's Retry or pull to refresh takes any,
+  /// and fails at once when there is none.
+  func refreshIndex(onExpensiveNetworks: Bool = true) async {
     do {
-      let data = try await client.fetchIndexData()
-      // Off the main actor: the parse alone is about a second (#124).
-      let prepared = try await Self.parse(data)
-      try await store.storeIndex(data)
-      apply(prepared, updatedAt: .now)
+      // Only with an index in memory: without one, a `304` would leave nothing to
+      // show, so the whole index is asked for.
+      let kept = index == nil ? nil : store.indexCheck()
+      let validators = kept?.validators(at: .now)
+      let interval = signposter.beginInterval("Fetch index")
+      let fetched: IndexFetch
+      do {
+        // Ended on a throw too, so an offline refresh does not leave it open.
+        defer { signposter.endInterval("Fetch index", interval) }
+        fetched = try await (onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchIndexData(unlessMatching: validators, onExpensiveNetworks: onExpensiveNetworks)
+      }
+      switch fetched {
+      case .unchanged:
+        // A `304` answers only a request that sent validators, which came from `kept`.
+        guard let kept else { break }
+        indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
+      case .changed(let data, let validators):
+        // Off the main actor: the parse alone is about a second (#124).
+        let prepared = try await Self.parse(data)
+        try await store.storeIndex(data, parsed: prepared.index, validators: validators)
+        apply(prepared, updatedAt: .now)
+      }
     } catch {
       if index == nil { indexState = .failed(error.localizedDescription) }
     }
@@ -219,6 +274,7 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+    signposter.emitEvent("Index ready")
   }
 
   // MARK: - Lists
@@ -277,6 +333,38 @@ final class LibraryModel {
   /// reads for itself.
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
+
+  /// What force-click previews showed, kept for the next preview of the same
+  /// document in the same style (#374), which then shows its text at once rather
+  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  ///
+  /// The whole preview rather than the build alone, so a build is never paired with
+  /// another parse of its document. A document's previews go when it is removed or
+  /// evicted (`forgetPreviews`), as the store's parse of it does, so what is gone
+  /// from the disk is gone from memory too. Empty on iOS, which has no such preview.
+  ///
+  /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
+  /// drawn from it.
+  @ObservationIgnored private var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(
+    capacity: 4)
+
+  /// What the last preview of `key` showed, if it is still kept.
+  func keptPreview(for key: BuildKey) -> DocumentPreview.Loaded? {
+    previews.value(for: key)
+  }
+
+  /// Keeps `preview` for the next preview of `key`, unless its document was removed
+  /// or evicted while it was being fetched and built: its previews were forgotten
+  /// then, and this one would come back after them.
+  func keep(_ preview: DocumentPreview.Loaded, for key: BuildKey) async {
+    guard await store.isCached(key.document) else { return }
+    previews.store(preview, for: key)
+  }
+
+  private func forgetPreviews(of documents: some Sequence<DocumentID>) {
+    let documents = Set(documents)
+    previews.removeAll { documents.contains($0.document) }
+  }
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
@@ -362,7 +450,11 @@ final class LibraryModel {
     // anyway, the list windows its rows itself (`ListWindow`), and the count over
     // the list says how many there are. A cap also cut before the filter below,
     // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = search.search(key.query, limit: .max)
+    let hits = signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+    ) {
+      search.search(key.query, limit: .max)
+    }
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter { return hits.map(\.rfc) }
     let allowed = Set(base.map(\.number))
@@ -382,7 +474,11 @@ final class LibraryModel {
   private static func suggestions(
     in search: IndexSearch, for query: String, limit: Int
   ) async -> [DocumentID] {
-    search.search(query, limit: limit).map(\.id)
+    signposter.withIntervalSignpost(
+      "Suggest", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
+    ) {
+      search.search(query, limit: limit).map(\.id)
+    }
   }
 
   // MARK: - Scene routing
@@ -568,7 +664,8 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    let evicted = await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    forgetPreviews(of: evicted)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
@@ -641,6 +738,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    forgetPreviews(of: [id])
     await refreshDownloadedNumbers()
   }
 }
