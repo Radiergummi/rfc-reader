@@ -94,19 +94,18 @@ failed has not changed since, a filter on `time` never selects it again.
 3. **Read the header.** Fetch `https://www.ietf.org/archive/id/<name>-<rev>.xml` and read
    `obsoletes` and `updates` from the `<rfc>` element, stopping the parse once that element
    starts. v2 drafts often declare external entities in a DOCTYPE, and nothing past the root is
-   needed. The attribute values go through `RFCXMLParser`'s `parseDocumentList`, which is a
-   `private` instance method today and becomes an internal `static` function, so the scanner and
-   a guard-level test can reach it. If the draft has no XML, fetch the `.txt` and read the front
-   page's `Obsoletes:` and `Updates:` lines, including numbers continued on the next line and the
-   `(if approved)` suffix.
+   needed. Both forms go through one reading of the list, which accepts a number with or
+   without an `RFC` prefix: the first live run found drafts writing `obsoletes="RFC8474"`,
+   which `RFCXMLParser`'s own list parsing, made for published RFCs, would drop. If the
+   draft has no XML, or its XML does not parse, fetch the `.txt` and read the front
+   page's `Obsoletes:` and `Updates:` lines, including numbers continued on the next line
+   and the `(if approved)` suffix.
 
-   Both readings are a public `DraftHeader` type in RFCKit, beside the parser whose list
-   parsing it reuses. An internal function is out of `RFCCorpusKit`'s reach, because
-   `RFCCorpusKit` is another module.
+   Both readings are a public `DraftHeader` type in RFCKit.
 
    A missing attribute or line means the draft revises nothing. It is not an error. An
-   attribute that is present but gives no number is logged, since `parseDocumentList` silently
-   drops entries such as `RFC6265` or a draft name, and a silent drop hides an entry.
+   attribute that is present but gives no number, such as a draft name, is logged, since a
+   silent drop hides an entry.
 4. **Read the state and metadata** from `doc.json`: stream, group, intended status, states, and
    the current revision's `published` date from `rev_history`.
 5. **Build the new scan record.** Drafts that are no longer listed are left out; they expired,

@@ -49,7 +49,7 @@ struct DatatrackerTests {
       Datatracker.DraftRecord.self, from: Data(json.utf8))
     #expect(record.published(rev: "04") == Date(timeIntervalSince1970: 1_397_482_769))
     #expect(record.published(rev: "05") == Date(timeIntervalSince1970: 1_764_613_661))
-    #expect(record.intendedStatus == "Informational")
+    #expect(record.intendedStdLevel == "Informational")
     #expect(record.groupAcronym == nil, "\"none\" is no group")
   }
 
@@ -60,7 +60,7 @@ struct DatatrackerTests {
     let record = try Datatracker.decoder().decode(
       Datatracker.DraftRecord.self, from: Data(json.utf8))
     #expect(record.groupAcronym == "example")
-    #expect(record.intendedStatus == nil)
+    #expect(record.intendedStdLevel == nil)
   }
 
   @Test func `a draft's header is fetched from the archive`() {

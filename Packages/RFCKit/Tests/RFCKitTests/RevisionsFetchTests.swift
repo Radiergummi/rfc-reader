@@ -7,8 +7,9 @@ import Testing
   import FoundationNetworking
 #endif
 
-@Suite("Revisions client")
-struct RevisionsClientTests {
+/// `revisions.json`, fetched through the client the rest of the app uses.
+@Suite("Revisions fetch")
+struct RevisionsFetchTests {
   /// One answer for every request.
   private struct Answer: HTTPTransport {
     let status: Int
@@ -24,7 +25,8 @@ struct RevisionsClientTests {
 
   @Test func `a published file is decoded, and its bytes come with it`() async throws {
     let data = try file.encoded()
-    let fetched = try await RevisionsClient(transport: Answer(status: 200, body: data)).fetch()
+    let fetched = try await RFCEditorClient(transport: Answer(status: 200, body: data))
+      .fetchRevisions()
     #expect(fetched.revisions == file)
     #expect(fetched.data == data)
   }
@@ -32,7 +34,7 @@ struct RevisionsClientTests {
   /// `--clobber` deletes the asset before it uploads the new one.
   @Test func `a missing file is an error, not an empty file`() async throws {
     await #expect(throws: RFCEditorClient.ClientError.self) {
-      try await RevisionsClient(transport: Answer(status: 404, body: Data())).fetch()
+      try await RFCEditorClient(transport: Answer(status: 404, body: Data())).fetchRevisions()
     }
   }
 
@@ -40,13 +42,14 @@ struct RevisionsClientTests {
     let json = String(decoding: try file.encoded(), as: UTF8.self)
       .replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 2")
     await #expect(throws: RFCRevisions.VersionError.unknown(2)) {
-      try await RevisionsClient(transport: Answer(status: 200, body: Data(json.utf8))).fetch()
+      try await RFCEditorClient(transport: Answer(status: 200, body: Data(json.utf8)))
+        .fetchRevisions()
     }
   }
 
   @Test func `the file is fetched from the revisions release`() {
     #expect(
-      RevisionsClient.url.absoluteString
+      RFCEditorEndpoints.revisions.absoluteString
         == "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/revisions.json")
   }
 }

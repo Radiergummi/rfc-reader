@@ -792,8 +792,9 @@ struct StatusBanner: View {
 
   var body: some View {
     let revisions = library.revisionsSummary(for: metadata.id)
-    let hasRevisions = revisions.map { !$0.isEmpty } ?? false
-    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata || hasRevisions {
+    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata
+      || !revisions.isEmpty
+    {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
           row(
@@ -810,7 +811,7 @@ struct StatusBanner: View {
           }
           .font(.subheadline)
         }
-        if let revisions, hasRevisions {
+        if !revisions.isEmpty {
           ForEach(revisions.bannerLines) { line in
             revisionRow(line)
           }
@@ -829,7 +830,7 @@ struct StatusBanner: View {
   /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
   /// The whole row is the link to the draft's datatracker page.
   private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
-    Link(destination: line.url) {
+    DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
         Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
@@ -837,11 +838,7 @@ struct StatusBanner: View {
         Text(line.detail).foregroundStyle(.secondary)
       }
     }
-    .buttonStyle(.plain)
     .font(.subheadline)
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(line.accessibilityLabel)
-    .accessibilityAddTraits(.isLink)
   }
 
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
@@ -855,6 +852,22 @@ struct StatusBanner: View {
       }
     }
     .font(.subheadline)
+  }
+}
+
+/// A draft revising an RFC, opening its datatracker page in the browser, as the errata
+/// link does: drafts are not read in the app (VISION.md, Tier 2). The whole row is the
+/// link, and reads as the one sentence the summary wrote for it.
+struct DraftLink<Label: View>: View {
+  let line: RevisionsSummary.Line
+  @ViewBuilder let label: Label
+
+  var body: some View {
+    Link(destination: line.url) { label }
+      .buttonStyle(.plain)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(line.accessibilityLabel)
+      .accessibilityAddTraits(.isLink)
   }
 }
 

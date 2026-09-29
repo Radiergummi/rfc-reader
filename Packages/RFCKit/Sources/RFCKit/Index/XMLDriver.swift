@@ -55,13 +55,11 @@ enum XMLDriver {
     )
   }
 
-  /// The root element's name and attributes, and nothing after them. A draft's header
+  /// The root element's attributes, and nothing after them. A draft's header
   /// is all `DraftHeader` reads, and a v2 draft's DOCTYPE often declares external
   /// entities its body uses. They are never resolved, and a full parse would stop on
   /// them.
-  static func rootElement(of data: Data) throws(XMLSyntaxError) -> (
-    name: String, attributes: [String: String]
-  ) {
+  static func rootAttributes(of data: Data) throws(XMLSyntaxError) -> [String: String] {
     let delegate = RootDelegate()
     let parser = XMLParser(data: data)
     parser.delegate = delegate
@@ -69,20 +67,20 @@ enum XMLDriver {
     parser.shouldResolveExternalEntities = false
     _ = parser.parse()
     // Stopping at the root is reported as an error; with the root read, it is not one.
-    if let root = delegate.root { return root }
+    if let attributes = delegate.attributes { return attributes }
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber,
       message: parser.parserError?.localizedDescription ?? "empty document")
   }
 
   private final class RootDelegate: NSObject, XMLParserDelegate {
-    private(set) var root: (name: String, attributes: [String: String])?
+    private(set) var attributes: [String: String]?
 
     func parser(
       _ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
       qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]
     ) {
-      root = (elementName, attributeDict)
+      attributes = attributeDict
       parser.abortParsing()
     }
   }

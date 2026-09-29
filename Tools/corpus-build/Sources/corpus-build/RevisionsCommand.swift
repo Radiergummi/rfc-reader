@@ -33,20 +33,16 @@ struct RevisionsCommand: AsyncParsableCommand {
     }
 
     let states = Datatracker.stateTable(
-      try await Self.pages(from: Datatracker.statesFirstPage, as: Datatracker.StatePage.self) {
-        $0.meta.next
-      })
+      try await Self.pages(from: Datatracker.statesFirstPage, as: Datatracker.StatePage.self))
     let listed = try await Self.pages(
       from: Datatracker.draftsFirstPage, as: Datatracker.DraftPage.self
-    ) {
-      $0.meta.next
-    }.flatMap(\.objects)
+    ).flatMap(\.objects)
     let adopted = listed.filter { DraftStates.isAdopted($0.states(in: states)) }
     Self.logger.info(
       "listed", metadata: ["active": "\(listed.count)", "adopted": "\(adopted.count)"])
 
     var readings: [String: RevisionScan.Reading] = [:]
-    var failures: Set<String> = []
+    var failures = 0
     for draft in adopted {
       let old = previous?.drafts[draft.name]
       let work = RevisionScan.work(for: draft, previous: old)
@@ -67,15 +63,15 @@ struct RevisionsCommand: AsyncParsableCommand {
             rev: draft.rev, header: header, record: record)
         }
       } catch {
-        failures.insert(draft.name)
+        failures += 1
         Self.logger.error("read failed", error: error, metadata: ["draft": "\(draft.name)"])
       }
     }
     Self.logger.info(
-      "read", metadata: ["read": "\(readings.count)", "failures": "\(failures.count)"])
+      "read", metadata: ["read": "\(readings.count)", "failures": "\(failures)"])
 
     let next = RevisionScan.next(
-      adopted: adopted, states: states, previous: previous, readings: readings, failures: failures)
+      adopted: adopted, states: states, previous: previous, readings: readings)
     let revisions = next.revisions(generatedAt: startedAt)
     let before = previous?.revisions(generatedAt: startedAt)
     guard RevisionScan.mayPublish(revisions, replacing: before, allowShrink: allowShrink) else {
@@ -95,28 +91,29 @@ struct RevisionsCommand: AsyncParsableCommand {
       "done", metadata: ["rfcs": "\(revisions.revisions.count)", "drafts": "\(next.drafts.count)"])
   }
 
-  /// The XML where the draft was submitted as XML, the text otherwise.
+  /// Which form is read is `DraftSource`'s; here, a 404 is the archive not having it.
   private static func header(_ draft: Datatracker.ListedDraft) async throws -> DraftHeader {
-    do {
-      return try DraftHeader.parse(
-        xml: try await fetch(Datatracker.draft(draft.name, rev: draft.rev, extension: "xml")))
-    } catch PipelineError.http(404, _) {
-      return DraftHeader.parse(
-        text: try await fetch(Datatracker.draft(draft.name, rev: draft.rev, extension: "txt")))
+    try await DraftSource.header { pathExtension in
+      do {
+        return try await fetch(
+          Datatracker.draft(draft.name, rev: draft.rev, extension: pathExtension))
+      } catch PipelineError.http(404, _) {
+        return nil
+      }
     }
   }
 
-  /// Every page, following `next` until there is none. A failure on any page fails the
-  /// run: a partial listing would drop every draft on the missing pages.
-  private static func pages<Page: Decodable>(
-    from first: URL, as type: Page.Type, next: (Page) -> String?
+  /// Every page, following `meta.next` until there is none. A failure on any page fails
+  /// the run: a partial listing would drop every draft on the missing pages.
+  private static func pages<Page: Datatracker.Page>(
+    from first: URL, as type: Page.Type
   ) async throws -> [Page] {
     var pages: [Page] = []
     var url: URL? = first
     while let current = url {
       let page = try Datatracker.decoder().decode(Page.self, from: try await fetch(current))
       pages.append(page)
-      url = Datatracker.next(next(page))
+      url = Datatracker.next(page.meta.next)
     }
     return pages
   }

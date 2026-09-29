@@ -21,12 +21,28 @@ struct DraftHeaderTests {
     #expect(try DraftHeader.parse(xml: xml("")) == DraftHeader())
   }
 
-  /// `parseDocumentList` drops what is not a number; a present attribute that
-  /// yields none is kept aside so the scanner can log the lost entry.
+  /// Drafts write the number with its prefix as often as without, which a published
+  /// RFC's own header never does.
+  @Test func `an RFC prefix in an attribute is read past`() throws {
+    let header = try DraftHeader.parse(
+      xml: xml(#"obsoletes="RFC9990" updates="RFC9991, RFC 9992""#))
+    #expect(header == DraftHeader(obsoletes: [9990], updates: [9991, 9992]))
+  }
+
+  /// Seen in the live scan: a lowercase prefix, a number in brackets, and a draft name
+  /// among RFCs, which is dropped while the numbers are kept.
+  @Test func `an attribute in the spellings drafts use is read`() throws {
+    let header = try DraftHeader.parse(
+      xml: xml(#"obsoletes="[9990]" updates="draft-example-older, rfc9991, RFC 9992""#))
+    #expect(header == DraftHeader(obsoletes: [9990], updates: [9991, 9992]))
+  }
+
+  /// A present attribute that yields no number is kept aside so the scanner can log
+  /// the lost entry.
   @Test func `an attribute that names no number is unreadable`() throws {
-    let header = try DraftHeader.parse(xml: xml(#"obsoletes="RFC9990""#))
+    let header = try DraftHeader.parse(xml: xml(#"obsoletes="draft-example-older""#))
     #expect(header.obsoletes.isEmpty)
-    #expect(header.unreadable == ["RFC9990"])
+    #expect(header.unreadable == ["draft-example-older"])
   }
 
   /// A v2 draft declares external entities its body uses. Parsing stops at the

@@ -19,11 +19,12 @@ public struct DraftHeader: Equatable, Sendable {
   }
 
   public static func parse(xml data: Data) throws(XMLSyntaxError) -> DraftHeader {
-    let attributes = try XMLDriver.rootElement(of: data).attributes
+    let attributes = try XMLDriver.rootAttributes(of: data)
     var unreadable: [String] = []
     let obsoletes = numbers(
-      in: attributes["obsoletes"], reading: xmlNumbers, unreadable: &unreadable)
-    let updates = numbers(in: attributes["updates"], reading: xmlNumbers, unreadable: &unreadable)
+      in: attributes["obsoletes"], reading: listedNumbers, unreadable: &unreadable)
+    let updates = numbers(
+      in: attributes["updates"], reading: listedNumbers, unreadable: &unreadable)
     return DraftHeader(obsoletes: obsoletes, updates: updates, unreadable: unreadable)
   }
 
@@ -44,7 +45,7 @@ public struct DraftHeader: Equatable, Sendable {
       case updates
     }
 
-    let block = lines.drop(while: isBlank).prefix(while: { !isBlank($0) })
+    let block = lines.drop(while: \.isBlank).prefix(while: { !$0.isBlank })
     var obsoletes: [Int] = []
     var updates: [Int] = []
     var unreadable: [String] = []
@@ -52,7 +53,7 @@ public struct DraftHeader: Equatable, Sendable {
     var collected = ""
 
     func flush() {
-      let found = numbers(in: collected, reading: textNumbers, unreadable: &unreadable)
+      let found = numbers(in: collected, reading: listedNumbers, unreadable: &unreadable)
       switch label {
       case .obsoletes: obsoletes += found
       case .updates: updates += found
@@ -95,24 +96,20 @@ public struct DraftHeader: Equatable, Sendable {
     return numbers
   }
 
-  /// "2616, 7230", read as the RFC parser reads its own header.
-  private static func xmlNumbers(_ value: String) -> [Int] {
-    RFCXMLParser.parseDocumentList(value).map(\.number)
-  }
-
-  /// "9990, RFC 9991, RFC9992 (if approved)": the numbers, past an "RFC" before any.
-  private static func textNumbers(_ value: String) -> [Int] {
+  /// "9990, RFC 9991, rfc9992, [9993] (if approved)": the numbers, past an "RFC" or the
+  /// brackets around any. One
+  /// reading for the XML attribute and the text line alike: drafts write the prefix in
+  /// both, where a published RFC's own header never does.
+  private static func listedNumbers(_ value: String) -> [Int] {
     value.replacingOccurrences(of: "(if approved)", with: "", options: .caseInsensitive)
       .split(whereSeparator: { $0 == "," || $0.isWhitespace })
       .compactMap { token -> Int? in
-        var token = Substring(token)
+        // "[6265]" as a citation would write it.
+        var token = token.trimmingPrefix("[")
+        if token.hasSuffix("]") { token = token.dropLast() }
         if token.uppercased().hasPrefix("RFC") { token = token.dropFirst(3) }
         return Int(token)
       }
-  }
-
-  private static func isBlank(_ line: String) -> Bool {
-    line.allSatisfy(\.isWhitespace)
   }
 
   /// The line's text up to its first run of two spaces, past its indent: the author

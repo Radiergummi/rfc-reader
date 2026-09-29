@@ -2,8 +2,9 @@ import Foundation
 import RFCKit
 
 /// `revisions-scan.json`: what the revisions scanner has read, one entry per adopted
-/// draft, including drafts that revise nothing, so a daily run reads only what
-/// changed. `revisions.json` is a pure function of it. The app never reads it
+/// draft read successfully, including drafts that revise nothing, so a daily run reads
+/// only what changed. A draft whose read failed keeps its previous entry, or has none:
+/// either way the listing no longer matches it, and the next run reads it again. `revisions.json` is a pure function of it. The app never reads it
 /// (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md, "The scan record").
 public struct RevisionScan: Codable, Sendable, Equatable {
   public var drafts: [String: Entry]
@@ -13,26 +14,19 @@ public struct RevisionScan: Codable, Sendable, Equatable {
   }
 
   public struct Entry: Codable, Sendable, Equatable {
-    /// The revision the listing had when this entry was written.
-    public var rev: String
+    /// The states the listing had when `reading` was read. Kept as they were when a
+    /// later read fails, so the next run sees them change and reads the record again.
     public var stateIDs: [Int]
+    /// From today's listing, whether or not the draft was read.
     public var stage: RevisionStage
     public var stream: String
-    /// Nil until a read has succeeded.
-    public var reading: Reading?
-    /// The last read failed; the next run reads the draft again in full.
-    public var failed: Bool
+    public var reading: Reading
 
-    public init(
-      rev: String, stateIDs: [Int], stage: RevisionStage, stream: String, reading: Reading?,
-      failed: Bool
-    ) {
-      self.rev = rev
+    public init(stateIDs: [Int], stage: RevisionStage, stream: String, reading: Reading) {
       self.stateIDs = stateIDs
       self.stage = stage
       self.stream = stream
       self.reading = reading
-      self.failed = failed
     }
   }
 
@@ -68,7 +62,7 @@ public struct RevisionScan: Codable, Sendable, Equatable {
       }
       self.init(
         rev: rev, obsoletes: header.obsoletes, updates: header.updates, published: published,
-        group: record.groupAcronym, intendedStatus: record.intendedStatus)
+        group: record.groupAcronym, intendedStatus: record.intendedStdLevel)
     }
 
     /// The same header, with what a newer record says about the group and status.
@@ -83,44 +77,33 @@ public struct RevisionScan: Codable, Sendable, Equatable {
     case none
     /// The states changed: read `doc.json` again.
     case record
-    /// New, a new revision, or the last read failed: read the header and `doc.json`.
+    /// New, or a new revision: read the header and `doc.json`.
     case full
   }
 
   public static func work(for draft: Datatracker.ListedDraft, previous: Entry?) -> Work {
-    guard let previous, previous.reading != nil, !previous.failed, previous.rev == draft.rev
-    else { return .full }
+    guard let previous, previous.reading.rev == draft.rev else { return .full }
     return previous.stateIDs == draft.stateIDs ? .none : .record
   }
 
   /// The next record, from this run's adopted drafts and what it read. A draft in
-  /// `readings` was read; one in `failures` failed; any other was not due and keeps its
-  /// entry. A draft no longer listed is left out: it expired, was replaced, or was
-  /// published.
+  /// `readings` was read; any other keeps its entry, whether it was not due or its
+  /// read failed, with its stage taken from today's listing. A draft no longer listed
+  /// is left out: it expired, was replaced, or was published.
   public static func next(
     adopted: [Datatracker.ListedDraft], states: [Int: DraftState], previous: RevisionScan?,
-    readings: [String: Reading], failures: Set<String>
+    readings: [String: Reading]
   ) -> RevisionScan {
     var drafts: [String: Entry] = [:]
     for draft in adopted {
       let stage = DraftStates.stage(draft.states(in: states))
       let stream = draft.streamSlug ?? "ietf"
-      let old = previous?.drafts[draft.name]
       if let reading = readings[draft.name] {
         drafts[draft.name] = Entry(
-          rev: draft.rev, stateIDs: draft.stateIDs, stage: stage, stream: stream,
-          reading: reading, failed: false)
-      } else if failures.contains(draft.name) {
-        var kept =
-          old
-          ?? Entry(
-            rev: draft.rev, stateIDs: draft.stateIDs, stage: stage, stream: stream,
-            reading: nil, failed: true)
-        kept.failed = true
-        drafts[draft.name] = kept
-      } else if var kept = old {
-        kept.stateIDs = draft.stateIDs
+          stateIDs: draft.stateIDs, stage: stage, stream: stream, reading: reading)
+      } else if var kept = previous?.drafts[draft.name] {
         kept.stage = stage
+        kept.stream = stream
         drafts[draft.name] = kept
       }
     }
@@ -132,7 +115,8 @@ public struct RevisionScan: Codable, Sendable, Equatable {
   public func revisions(generatedAt: Date) -> RFCRevisions {
     var byRFC: [Int: [RFCRevisions.Revision]] = [:]
     for name in drafts.keys.sorted() {
-      guard let entry = drafts[name], let reading = entry.reading else { continue }
+      guard let entry = drafts[name] else { continue }
+      let reading = entry.reading
       let relations: [(RevisionRelation, [Int])] = [
         (.obsoletes, reading.obsoletes), (.updates, reading.updates),
       ]
@@ -158,16 +142,12 @@ public struct RevisionScan: Codable, Sendable, Equatable {
     return next.revisions.count * 2 >= previous.revisions.count
   }
 
+  /// In the coders of `revisions.json`, which it sits beside on the release.
   public static func decode(_ data: Data) throws -> RevisionScan {
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    return try decoder.decode(RevisionScan.self, from: data)
+    try RFCRevisions.decoder().decode(RevisionScan.self, from: data)
   }
 
   public func encoded() throws -> Data {
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return try encoder.encode(self)
+    try RFCRevisions.encoder().encode(self)
   }
 }

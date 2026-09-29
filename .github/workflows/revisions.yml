@@ -38,11 +38,14 @@ jobs:
       - name: Build corpus-build
         run: make corpus-tool
 
-      # Nothing to download on the first run: the release does not exist yet.
+      # Nothing to download on the first run. The test is for the scan itself, not the
+      # release: a release whose first upload failed has none, and is a first run too,
+      # rather than a download that fails every day until someone repairs it.
       - name: Download the previous scan
         run: |
           mkdir -p out
-          if gh release view revisions >/dev/null 2>&1; then
+          if gh release view revisions --json assets --jq '.assets[].name' 2>/dev/null |
+            grep -qx revisions-scan.json; then
             gh release download revisions --pattern revisions-scan.json --dir previous
             echo "SCAN=--scan previous/revisions-scan.json" >> "$GITHUB_ENV"
           fi

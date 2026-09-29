@@ -67,16 +67,11 @@ actor DocumentStore {
 
   private var revisionsURL: URL { directory.appending(path: "revisions.json") }
 
-  /// The last good `revisions.json` and when it was fetched. Nil when there is none,
-  /// or it no longer decodes (a newer version, after a downgrade).
-  func cachedRevisions() -> (revisions: RFCRevisions, fetchedAt: Date)? {
-    guard let data = try? Data(contentsOf: revisionsURL),
-      let revisions = try? RFCRevisions.decode(data)
-    else { return nil }
-    let fetchedAt =
-      (try? revisionsURL.resourceValues(forKeys: [.contentModificationDateKey])
-        .contentModificationDate) ?? .distantPast
-    return (revisions, fetchedAt)
+  /// The last good `revisions.json`. Nil when there is none, or it no longer decodes
+  /// (a newer version, after a downgrade).
+  func cachedRevisions() -> RFCRevisions? {
+    guard let data = try? Data(contentsOf: revisionsURL) else { return nil }
+    return try? RFCRevisions.decode(data)
   }
 
   func storeRevisions(_ data: Data) throws {

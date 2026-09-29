@@ -32,12 +32,9 @@ struct RevisionScanTests {
   }
 
   private static func entry(
-    rev: String = "03", stateIDs: [Int] = [1, 38],
-    reading: RevisionScan.Reading? = RevisionScanTests.reading(), failed: Bool = false
+    stateIDs: [Int] = [1, 38], reading: RevisionScan.Reading = RevisionScanTests.reading()
   ) -> RevisionScan.Entry {
-    RevisionScan.Entry(
-      rev: rev, stateIDs: stateIDs, stage: .inGroup, stream: "ietf", reading: reading,
-      failed: failed)
+    RevisionScan.Entry(stateIDs: stateIDs, stage: .inGroup, stream: "ietf", reading: reading)
   }
 
   // MARK: What to read
@@ -49,11 +46,6 @@ struct RevisionScanTests {
   @Test func `a new revision is read in full`() {
     #expect(
       RevisionScan.work(for: Self.listed("draft-a", rev: "04"), previous: Self.entry()) == .full)
-  }
-
-  @Test func `a draft whose last read failed is read in full`() {
-    #expect(
-      RevisionScan.work(for: Self.listed("draft-a"), previous: Self.entry(failed: true)) == .full)
   }
 
   @Test func `a changed state alone reads only the record`() {
@@ -73,7 +65,7 @@ struct RevisionScanTests {
   @Test func `a draft that left the listing is dropped`() {
     let previous = RevisionScan(drafts: ["draft-gone": Self.entry()])
     let next = RevisionScan.next(
-      adopted: [], states: Self.states, previous: previous, readings: [:], failures: [])
+      adopted: [], states: Self.states, previous: previous, readings: [:])
     #expect(next.drafts.isEmpty)
   }
 
@@ -81,32 +73,42 @@ struct RevisionScanTests {
     let previous = RevisionScan(drafts: ["draft-a": Self.entry()])
     let next = RevisionScan.next(
       adopted: [Self.listed("draft-a", rev: "04", states: [1, 17])], states: Self.states,
-      previous: previous, readings: ["draft-a": Self.reading(rev: "04", obsoletes: [9991])],
-      failures: [])
+      previous: previous, readings: ["draft-a": Self.reading(rev: "04", obsoletes: [9991])])
     let entry = next.drafts["draft-a"]
-    #expect(entry?.rev == "04")
-    #expect(entry?.reading?.obsoletes == [9991])
+    #expect(entry?.reading.rev == "04")
+    #expect(entry?.reading.obsoletes == [9991])
     #expect(entry?.stage == .rfcEditorQueue)
-    #expect(entry?.failed == false)
   }
 
-  @Test func `a failed read keeps the previous entry and is marked for another try`() {
-    let previous = RevisionScan(drafts: ["draft-a": Self.entry()])
+  /// A new revision whose read failed keeps the old reading, whose revision no longer
+  /// matches the listing, so the next run reads the draft again in full.
+  @Test func `a failed read of a new revision keeps the old reading and is read again`() {
+    let listed = Self.listed("draft-a", rev: "04")
     let next = RevisionScan.next(
-      adopted: [Self.listed("draft-a", rev: "04")], states: Self.states, previous: previous,
-      readings: [:], failures: ["draft-a"])
+      adopted: [listed], states: Self.states,
+      previous: RevisionScan(drafts: ["draft-a": Self.entry()]), readings: [:])
     #expect(next.drafts["draft-a"]?.reading == Self.reading())
-    #expect(next.drafts["draft-a"]?.rev == "03")
-    #expect(next.drafts["draft-a"]?.failed == true)
+    #expect(RevisionScan.work(for: listed, previous: next.drafts["draft-a"]) == .full)
+  }
+
+  /// A failed record read keeps the old state IDs, which no longer match the listing,
+  /// while the stage already follows today's states.
+  @Test func `a failed record read keeps its old states and is read again`() {
+    let listed = Self.listed("draft-a", states: [1, 17])
+    let next = RevisionScan.next(
+      adopted: [listed], states: Self.states,
+      previous: RevisionScan(drafts: ["draft-a": Self.entry()]), readings: [:])
+    #expect(next.drafts["draft-a"]?.stateIDs == [1, 38])
+    #expect(next.drafts["draft-a"]?.stage == .rfcEditorQueue)
+    #expect(RevisionScan.work(for: listed, previous: next.drafts["draft-a"]) == .record)
   }
 
   /// The case a filter on datatracker's `time` would lose: nothing about the draft
   /// changes, so nothing would select it again.
   @Test func `a draft that failed on its first read is read again`() {
     let first = RevisionScan.next(
-      adopted: [Self.listed("draft-a")], states: Self.states, previous: nil, readings: [:],
-      failures: ["draft-a"])
-    #expect(first.drafts["draft-a"]?.reading == nil)
+      adopted: [Self.listed("draft-a")], states: Self.states, previous: nil, readings: [:])
+    #expect(first.drafts["draft-a"] == nil)
     #expect(
       RevisionScan.work(for: Self.listed("draft-a"), previous: first.drafts["draft-a"]) == .full)
   }
@@ -114,8 +116,7 @@ struct RevisionScanTests {
   @Test func `an unchanged draft is kept, with its stage from today's states`() {
     let previous = RevisionScan(drafts: ["draft-a": Self.entry()])
     let next = RevisionScan.next(
-      adopted: [Self.listed("draft-a")], states: Self.states, previous: previous, readings: [:],
-      failures: [])
+      adopted: [Self.listed("draft-a")], states: Self.states, previous: previous, readings: [:])
     #expect(next.drafts["draft-a"]?.reading == Self.reading())
     #expect(next.drafts["draft-a"]?.stage == .inGroup)
   }
@@ -124,11 +125,6 @@ struct RevisionScanTests {
 
   @Test func `a draft that revises nothing stays in the record and out of the file`() {
     let scan = RevisionScan(drafts: ["draft-a": Self.entry(reading: Self.reading(obsoletes: []))])
-    #expect(scan.revisions(generatedAt: .now).revisions.isEmpty)
-  }
-
-  @Test func `a draft that never read successfully is not in the file`() {
-    let scan = RevisionScan(drafts: ["draft-a": Self.entry(reading: nil, failed: true)])
     #expect(scan.revisions(generatedAt: .now).revisions.isEmpty)
   }
 
@@ -184,7 +180,7 @@ struct RevisionScanTests {
 
   @Test func `a scan record round-trips`() throws {
     let scan = RevisionScan(drafts: [
-      "draft-a": Self.entry(), "draft-b": Self.entry(reading: nil, failed: true),
+      "draft-a": Self.entry(), "draft-b": Self.entry(reading: Self.reading(obsoletes: [])),
     ])
     #expect(try RevisionScan.decode(scan.encoded()) == scan)
   }

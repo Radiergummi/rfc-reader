@@ -41,10 +41,10 @@ final class LibraryModel {
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
   /// until the cached copy or a fetch has arrived.
   private(set) var revisions: RFCRevisions?
-  @ObservationIgnored private var revisionsFetchedAt = Date.distantPast
+  /// When this launch last fetched it; nil until it has.
+  @ObservationIgnored private var revisionsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingRevisions = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
-  private let revisionsClient = RevisionsClient()
 
   /// Every bookmarked document, fetched again on every save of the store: one set
   /// for the toolbars and scripts alike, which ask about the document on screen, so
@@ -89,7 +89,7 @@ final class LibraryModel {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         guard let self else { return }
-        Task(name: "Refresh revisions") { await self.refreshRevisions(ifOlderThan: 86_400) }
+        Task(name: "Refresh revisions") { await self.refreshRevisions() }
       }
     }
   }
@@ -178,7 +178,7 @@ final class LibraryModel {
     }
     // Just Published is decoration: a failure leaves it empty, and is logged
     // rather than shown (#125).
-    Task(name: "Refresh revisions") { await refreshRevisions(ifOlderThan: 0) }
+    Task(name: "Refresh revisions") { await refreshRevisions() }
     Task(name: "Fetch recent RFCs") {
       do {
         recent = try await client.fetchRecent()
@@ -224,20 +224,22 @@ final class LibraryModel {
 
   // MARK: - Revisions
 
-  /// Loads the cached file first, so the banner is right offline. Then fetches when
-  /// the last successful fetch is older than `interval`: every launch passes 0, an
-  /// activation a day. A failure keeps the cached copy and is logged, not shown (#125).
-  func refreshRevisions(ifOlderThan interval: TimeInterval) async {
+  /// Loads the cached file first, so the banner is right offline. Then fetches, once a
+  /// launch and again when the last fetch is a day old: launch and every activation
+  /// call this, and the first to get here does the fetch. A failure keeps the cached
+  /// copy, leaves the next call to try again, and is logged, not shown (#125).
+  func refreshRevisions() async {
     guard !isRefreshingRevisions else { return }
     isRefreshingRevisions = true
     defer { isRefreshingRevisions = false }
     if revisions == nil, let cached = await store.cachedRevisions() {
-      revisions = cached.revisions
-      revisionsFetchedAt = cached.fetchedAt
+      revisions = cached
     }
-    guard Date.now.timeIntervalSince(revisionsFetchedAt) >= interval else { return }
+    if let fetchedAt = revisionsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
+      return
+    }
     do {
-      let fetched = try await revisionsClient.fetch()
+      let fetched = try await client.fetchRevisions()
       try await store.storeRevisions(fetched.data)
       revisionsFetchedAt = .now
       if fetched.revisions != revisions { revisions = fetched.revisions }
@@ -249,9 +251,8 @@ final class LibraryModel {
 
   /// The drafts revising `id`, for an RFC. Other series have no revisions: BCP 14 is
   /// not RFC 14.
-  func revisionsSummary(for id: DocumentID) -> RevisionsSummary? {
-    guard id.series == .rfc else { return nil }
-    return RevisionsSummary(revisions, rfc: id.number, now: .now)
+  func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
+    RevisionsSummary(id.series == .rfc ? revisions : nil, rfc: id.number, now: .now)
   }
 
   // MARK: - Lists

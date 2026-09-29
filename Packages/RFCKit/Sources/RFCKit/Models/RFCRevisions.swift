@@ -75,17 +75,26 @@ public struct RFCRevisions: Codable, Sendable, Equatable {
   }
 
   public static func decode(_ data: Data) throws -> RFCRevisions {
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    return try decoder.decode(RFCRevisions.self, from: data)
+    try decoder().decode(RFCRevisions.self, from: data)
   }
 
-  /// Sorted keys, so two runs over the same drafts write the same bytes.
   public func encoded() throws -> Data {
+    try Self.encoder().encode(self)
+  }
+
+  /// The coders of the revisions files, this one and the scanner's own record: ISO 8601
+  /// dates, and sorted keys, so two runs over the same drafts write the same bytes.
+  public static func encoder() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return try encoder.encode(self)
+    return encoder
+  }
+
+  public static func decoder() -> JSONDecoder {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return decoder
   }
 }
 

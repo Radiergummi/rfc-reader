@@ -55,16 +55,6 @@ public struct RFCXMLParser: Sendable {
     return document
   }
 
-  /// The RFC numbers in an `obsoletes` or `updates` attribute, "2616, 7230". Anything
-  /// that is not a number is dropped. Shared with `DraftHeader`, which reads a draft's
-  /// root the same way.
-  static func parseDocumentList(_ value: String?) -> [DocumentID] {
-    guard let value else { return [] }
-    return value.split(whereSeparator: { $0 == "," || $0 == " " })
-      .compactMap { Int($0) }
-      .map { DocumentID.rfc($0) }
-  }
-
   /// Whether a `<link rel>` names `token`. RFCXML takes `rel` from HTML, where it is a
   /// set of space-separated keywords compared without regard to ASCII case, so
   /// `rel="Prev"` and `rel="prev alternate"` both name the preceding draft. The prep
@@ -155,8 +145,8 @@ public struct RFCXMLParser: Sendable {
       if let abstract = front?.first("abstract") {
         header.abstract = parseBlocks(in: abstract)
       }
-      header.obsoletes = RFCXMLParser.parseDocumentList(rfc["obsoletes"])
-      header.updates = RFCXMLParser.parseDocumentList(rfc["updates"])
+      header.obsoletes = parseDocumentList(rfc["obsoletes"])
+      header.updates = parseDocumentList(rfc["updates"])
       header.category = rfc["category"].flatMap(categoryName)
       header.draftName = rfc["docName"]
       header.precedingDraft =
@@ -174,6 +164,13 @@ public struct RFCXMLParser: Sendable {
       case "historic": "Historic"
       default: category
       }
+    }
+
+    private func parseDocumentList(_ value: String?) -> [DocumentID] {
+      guard let value else { return [] }
+      return value.split(whereSeparator: { $0 == "," || $0 == " " })
+        .compactMap { Int($0) }
+        .map { DocumentID.rfc($0) }
     }
 
     private static func parseAuthor(_ element: XMLTree.Element) -> Author? {

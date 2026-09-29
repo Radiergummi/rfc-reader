@@ -70,6 +70,14 @@ struct RevisionsSummaryTests {
     #expect(stale.bannerLines.first?.accessibilityLabel.hasSuffix(", as of 17 September") == true)
   }
 
+  /// A device offline since last year would otherwise read last year's date as
+  /// this year's.
+  @Test func `a file from an earlier year says the year`() {
+    let lastYear = Self.summary(
+      [Self.revision("draft-a", stage: .rfcEditorQueue)], generated: Self.now - 400 * Self.day)
+    #expect(lastYear.bannerLines.first?.detail == "In the RFC Editor queue, as of 17 August 2025")
+  }
+
   /// An active draft can sit in one state for years.
   @Test func `a revision over a year old carries its date`() {
     let old = Self.revision(

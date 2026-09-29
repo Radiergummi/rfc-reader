@@ -7,9 +7,9 @@ import RFCKit
 public struct RevisionsSummary: Equatable, Sendable {
   /// Furthest stage first, then obsoletes before updates, then by name.
   public let revisions: [RFCRevisions.Revision]
-  /// The file is more than three days old, so every stage says "as of".
-  public let isStale: Bool
-  private let generatedAt: Date?
+  /// "17 September", the file's date, when it is more than three days old and every
+  /// stage says "as of" it; with the year when that is not this one.
+  private let asOf: String?
   private let now: Date
   private let locale: Locale
   private let timeZone: TimeZone
@@ -40,8 +40,17 @@ public struct RevisionsSummary: Equatable, Sendable {
       if lhs.relation != rhs.relation { return lhs.relation == .obsoletes }
       return lhs.draft < rhs.draft
     }
-    generatedAt = file?.generatedAt
-    isStale = file.map { now.timeIntervalSince($0.generatedAt) > Self.staleAfter } ?? false
+    if let file, now.timeIntervalSince(file.generatedAt) > Self.staleAfter {
+      // The year only when it is not this one: "17 September", "17 August 2025".
+      var calendar = Calendar(identifier: .gregorian)
+      calendar.timeZone = timeZone
+      let style: Date.FormatStyle =
+        calendar.component(.year, from: file.generatedAt) == calendar.component(.year, from: now)
+        ? .dateTime.day().month(.wide) : .dateTime.day().month(.wide).year()
+      asOf = Self.format(file.generatedAt, style, locale: locale, timeZone: timeZone)
+    } else {
+      asOf = nil
+    }
     self.now = now
     self.locale = locale
     self.timeZone = timeZone
@@ -49,8 +58,11 @@ public struct RevisionsSummary: Equatable, Sendable {
 
   public var isEmpty: Bool { revisions.isEmpty }
 
+  /// The file is more than three days old.
+  public var isStale: Bool { asOf != nil }
+
   public var bannerLines: [Line] {
-    revisions.prefix(Self.bannerLimit).map(bannerLine)
+    revisions.prefix(Self.bannerLimit).map { line($0, inFull: false) }
   }
 
   /// "and 2 more", past the banner's two rows; the inspector lists them all.
@@ -60,13 +72,7 @@ public struct RevisionsSummary: Equatable, Sendable {
 
   /// Every draft of one relation, in full, for the inspector.
   public func inspectorLines(_ relation: RevisionRelation) -> [Line] {
-    revisions.filter { $0.relation == relation }.map { revision in
-      var parts = [format(revision.published, .dateTime.day().month(.wide).year())]
-      if let group = revision.group { parts.append(group.uppercased()) }
-      if let status = revision.intendedStatus { parts.append("intended \(status)") }
-      parts.append(stageWithAsOf(revision))
-      return line(revision, detail: parts.joined(separator: " · "))
-    }
+    revisions.filter { $0.relation == relation }.map { line($0, inFull: true) }
   }
 
   public static func relationLabel(_ relation: RevisionRelation) -> String {
@@ -89,36 +95,33 @@ public struct RevisionsSummary: Equatable, Sendable {
     }
   }
 
-  private func bannerLine(_ revision: RFCRevisions.Revision) -> Line {
-    var detail = Self.stageName(revision.stage, stream: revision.stream)
-    if let month = dormantMonth(revision) { detail += ", revision of \(month)" }
-    if let asOf { detail += ", as of \(asOf)" }
-    return line(revision, detail: detail)
-  }
-
-  private func line(_ revision: RFCRevisions.Revision, detail: String) -> Line {
+  /// A draft's line. Its detail is the stage for the banner, where a dormant draft
+  /// also dates its revision, and everything known for the inspector (`inFull`).
+  private func line(_ revision: RFCRevisions.Revision, inFull: Bool) -> Line {
     let relation = Self.relationLabel(revision.relation)
+    let stage = Self.stageName(revision.stage, stream: revision.stream)
+    let dormant = dormantMonth(revision)
+    let asOfSuffix = asOf.map { ", as of \($0)" } ?? ""
+
+    let detail: String
+    if inFull {
+      var parts = [format(revision.published, .dateTime.day().month(.wide).year())]
+      if let group = revision.group { parts.append(group.uppercased()) }
+      if let status = revision.intendedStatus { parts.append("intended \(status)") }
+      parts.append(stage + asOfSuffix)
+      detail = parts.joined(separator: " · ")
+    } else {
+      detail = stage + (dormant.map { ", revision of \($0)" } ?? "") + asOfSuffix
+    }
+
     let number = Int(revision.revision).map(String.init) ?? revision.revision
     var sentence = "\(relation) \(revision.draft), revision \(number)"
-    if let month = dormantMonth(revision) { sentence += " from \(month)" }
-    sentence +=
-      ", " + Self.lowercasingFirst(Self.stageName(revision.stage, stream: revision.stream))
-    if let asOf { sentence += ", as of \(asOf)" }
+    if let dormant { sentence += " from \(dormant)" }
+    sentence += ", " + Self.lowercasingFirst(stage) + asOfSuffix
     return Line(
       relation: relation, title: "\(revision.draft)-\(revision.revision)",
-      url: RFCEditorEndpoints.datatrackerBase.appending(path: "doc/\(revision.draft)/"),
-      detail: detail, accessibilityLabel: sentence)
-  }
-
-  private func stageWithAsOf(_ revision: RFCRevisions.Revision) -> String {
-    let stage = Self.stageName(revision.stage, stream: revision.stream)
-    return asOf.map { "\(stage), as of \($0)" } ?? stage
-  }
-
-  /// "17 September", when the file is stale.
-  private var asOf: String? {
-    guard isStale, let generatedAt else { return nil }
-    return format(generatedAt, .dateTime.day().month(.wide))
+      url: RFCEditorEndpoints.datatrackerDraft(revision.draft), detail: detail,
+      accessibilityLabel: sentence)
   }
 
   /// "May 2014", when the revision is more than a year old.
@@ -128,6 +131,12 @@ public struct RevisionsSummary: Equatable, Sendable {
   }
 
   private func format(_ date: Date, _ style: Date.FormatStyle) -> String {
+    Self.format(date, style, locale: locale, timeZone: timeZone)
+  }
+
+  private static func format(
+    _ date: Date, _ style: Date.FormatStyle, locale: Locale, timeZone: TimeZone
+  ) -> String {
     var style = style
     style.locale = locale
     style.timeZone = timeZone

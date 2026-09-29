@@ -122,6 +122,14 @@ public actor RFCEditorClient {
     }
   }
 
+  /// `revisions.json`, decoded, and the bytes it came as, which the caller keeps. A
+  /// plain GET: every run writes a new `generatedAt`, so a conditional request would
+  /// never be answered 304.
+  public func fetchRevisions() async throws -> (revisions: RFCRevisions, data: Data) {
+    let data = try await fetch(RFCEditorEndpoints.revisions)
+    return (try RFCRevisions.decode(data), data)
+  }
+
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)
     return try RecentFeedParser.parse(data)

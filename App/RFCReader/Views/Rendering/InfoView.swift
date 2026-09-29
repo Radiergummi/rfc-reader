@@ -188,9 +188,7 @@ private struct SectionRows: View {
       VStack(alignment: .leading, spacing: 4) {
         caption(row.label)
         ForEach(lines) { line in
-          // A draft opens its datatracker page, as the errata link does: drafts are
-          // not read in the app (VISION.md, Tier 2).
-          Link(destination: line.url) {
+          DraftLink(line: line) {
             VStack(alignment: .leading, spacing: 1) {
               Text(line.title).foregroundStyle(.tint)
               Text(line.detail)
@@ -199,10 +197,6 @@ private struct SectionRows: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
           }
-          .buttonStyle(.plain)
-          .accessibilityElement(children: .ignore)
-          .accessibilityLabel(line.accessibilityLabel)
-          .accessibilityAddTraits(.isLink)
         }
       }
     case .authors(let authors):

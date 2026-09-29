@@ -1,18 +1,28 @@
 import Foundation
+import RFCKit
 
 /// The pieces of datatracker's API the revisions scanner reads, and where. Measured
 /// against the live API on 29 September 2026; none needs authentication.
 public enum Datatracker {
-  static let base = URL(string: "https://datatracker.ietf.org")!
+  private static let base = RFCEditorEndpoints.datatrackerBase
 
   /// Every active draft in a stream, a hundred at a time. The rest follow `meta.next`.
-  public static let draftsFirstPage = URL(
-    string: "https://datatracker.ietf.org/api/v1/doc/document/?format=json&limit=100"
-      + "&type=draft&states__type=draft&states__slug=active&stream__isnull=false")!
+  public static let draftsFirstPage = base.appending(path: "api/v1/doc/document/")
+    .appending(queryItems: [
+      URLQueryItem(name: "format", value: "json"),
+      URLQueryItem(name: "limit", value: "100"),
+      URLQueryItem(name: "type", value: "draft"),
+      URLQueryItem(name: "states__type", value: "draft"),
+      URLQueryItem(name: "states__slug", value: "active"),
+      URLQueryItem(name: "stream__isnull", value: "false"),
+    ])
 
   /// Every document state, about 180 of them: one or two pages.
-  public static let statesFirstPage = URL(
-    string: "https://datatracker.ietf.org/api/v1/doc/state/?format=json&limit=500")!
+  public static let statesFirstPage = base.appending(path: "api/v1/doc/state/")
+    .appending(queryItems: [
+      URLQueryItem(name: "format", value: "json"),
+      URLQueryItem(name: "limit", value: "500"),
+    ])
 
   /// The page after this one, from `meta.next`, which is a path and query.
   public static func next(_ next: String?) -> URL? {
@@ -21,7 +31,7 @@ public enum Datatracker {
 
   /// A draft's record: group, intended status, and when each revision was posted.
   public static func record(_ name: String) -> URL {
-    base.appending(path: "doc/\(name)/doc.json")
+    RFCEditorEndpoints.datatrackerDraft(name).appending(path: "doc.json")
   }
 
   /// A revision in the archive: `xml` where the draft was submitted as XML, `txt`
@@ -55,7 +65,12 @@ public enum Datatracker {
     public var next: String?
   }
 
-  public struct DraftPage: Decodable, Sendable {
+  /// A page of a listing, which says where the next one is.
+  public protocol Page: Decodable, Sendable {
+    var meta: Meta { get }
+  }
+
+  public struct DraftPage: Page {
     public var meta: Meta
     public var objects: [ListedDraft]
   }
@@ -93,7 +108,7 @@ public enum Datatracker {
     }
   }
 
-  public struct StatePage: Decodable, Sendable {
+  public struct StatePage: Page {
     public var meta: Meta
     public var objects: [State]
   }
@@ -119,8 +134,6 @@ public enum Datatracker {
     /// `intended_std_level`, "Proposed Standard".
     public var intendedStdLevel: String?
     public var revHistory: [Posted]
-
-    public var intendedStatus: String? { intendedStdLevel }
 
     /// Nil for a draft in no group, which datatracker calls "none".
     public var groupAcronym: String? {
