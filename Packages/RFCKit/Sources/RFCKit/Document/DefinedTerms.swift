@@ -26,35 +26,39 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// HTTP core documents). A definition list is a definition only in a section that says
 /// it defines terms (`namesTerms`): most lists describe fields or notation, and
 /// `Type: 8 bits` defines no term. A list nested in a definition is not read either: it
-/// describes that term's parts. Free prose ("a connection record called
-/// a Transmission Control Block") is not read: that is a heuristic nothing has measured.
+/// describes that term's parts. A term introduced in running prose, where a sentence
+/// names a thing and then calls it something, is not read: that is a heuristic nothing
+/// has measured.
 /// The first definition of a term wins, except that a definition list entry replaces an
 /// index entry with no definition text, one placed directly in a section.
 enum DefinedTerms {
   /// Whether a section titled `title` defines terms: a Terminology or Glossary section,
-  /// one titled `Conventions and …`, or one whose Definitions open the title or follow
-  /// `Terms and` or `Conventions and`. A bare `Conventions` or `Notational Conventions`
-  /// describes notation, not terms, and `Field Definitions` or `Option Definitions` the
-  /// parts of a format.
+  /// one titled `Conventions and …`, one opening with Definitions or titled `Definition
+  /// of Terms`, or one whose title lists Definitions as an item of its own, as in
+  /// `Terms and Definitions` or `Symbols, Abbreviations, and Definitions`. A bare
+  /// `Conventions` or `Notational Conventions` describes notation, not terms. Definitions
+  /// qualified by a word before it (`Field`, `Option`, and `General` or `Technical` as
+  /// readily) are a format's parts as often as a document's terms, and are left out.
   static func namesTerms(_ title: String) -> Bool {
     let lowered = title.lowercased()
     let words = lowered.split(whereSeparator: { !$0.isLetter }).map(String.init)
     if words.contains("terminology") || words.contains("glossary")
-      || lowered.hasPrefix("conventions and ")
+      || lowered.hasPrefix("conventions and ") || words.first == "definitions"
     {
       return true
     }
-    for (position, word) in words.enumerated() where word == "definitions" {
-      if position == 0 {
-        return true
-      }
-      if position >= 2, words[position - 1] == "and",
-        ["terms", "conventions"].contains(words[position - 2])
-      {
-        return true
-      }
+    for (position, word) in words.enumerated()
+    where ["definition", "definitions"].contains(word)
+      && words.dropFirst(position + 1).starts(with: ["of", "terms"])
+    {
+      return true
     }
-    return false
+    // The title as a list: `Symbols, Abbreviations, and Definitions` has three items.
+    let items = lowered.split(separator: ",").flatMap { $0.components(separatedBy: " and ") }
+    return items.contains { item in
+      let itemWords = item.split(whereSeparator: { !$0.isLetter })
+      return itemWords == ["definitions"] || itemWords == ["and", "definitions"]
+    }
   }
 
   /// Every term the document defines: `indexed` first, from primary index entries, then

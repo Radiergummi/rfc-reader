@@ -13,19 +13,23 @@ struct DefinedTermsTests {
     "Terminology", "Terminology Used in This Document", "Definitions", "Glossary",
     "Conventions and Definitions", "Conventions and Terminology", "TERMINOLOGY",
     "Definitions of Protocol State", "Terms and Definitions",
-    "Notational Conventions and Definitions",
+    "Notational Conventions and Definitions", "Symbols, Abbreviations, and Definitions",
+    "Conventions, Definitions, and Acronyms", "Notation and Definitions", "Definition of Terms",
+    "Definitions of Terms Used Here",
   ])
   func `a section titled for its terms defines them`(title: String) {
     #expect(DefinedTerms.namesTerms(title), "\(title)")
   }
 
   /// Most definition lists describe fields or notation, not terms: only a section that
-  /// says it defines terms is read. Definitions anywhere but first, or after `Terms and`
-  /// or `Conventions and`, are of a format's parts, and one definition is not a list.
+  /// says it defines terms is read. Definitions qualified by an adjective are a format's
+  /// parts as often as terms, and one definition is not a list.
   @Test(arguments: [
     "Notational Conventions", "Conventions", "Message Format", "Security Considerations",
     "Protocol Overview", "Field Definitions", "Header Option Definitions",
-    "Definition of the Header", "Message Definition",
+    "Definition of the Header", "Message Definition", "Technical Definitions",
+    "Additional Definitions", "Key Definitions", "General Definitions",
+    "Message and Option Definitions", "Symbols and Option Definitions",
   ])
   func `any other section does not`(title: String) {
     #expect(!DefinedTerms.namesTerms(title), "\(title)")
