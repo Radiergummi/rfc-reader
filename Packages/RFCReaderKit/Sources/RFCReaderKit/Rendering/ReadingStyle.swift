@@ -7,9 +7,9 @@ import SwiftUI
   import AppKit
 #endif
 
-/// Everything the builder needs to know about presentation — and nothing about colour.
+/// Everything the builder needs to know about presentation — and nothing about color.
 ///
-/// Colours are dynamic `PlatformColor` values stored straight into the attributed
+/// Colors are dynamic `PlatformColor` values stored straight into the attributed
 /// string, so switching to dark mode or changing the accent redraws rather than
 /// rebuilding. Only a change here costs a rebuild, and a rebuild loses the reader's
 /// place until the anchor index puts it back.
@@ -28,7 +28,7 @@ public struct ReadingStyle: Sendable, Equatable {
   /// width, `ReaderLayout.idealMeasure` unless given.
   public var measure: CGFloat
   public var lineHeightMultiple: CGFloat
-  /// Off by default: colour marks a link, and a chip's tint marks a reference.
+  /// Off by default: color marks a link, and a chip's tint marks a reference.
   /// An underline is the reader's to ask for, and then it goes under every link,
   /// chips included.
   public var underlinesLinks: Bool

@@ -1,8 +1,8 @@
 import Foundation
 
-/// A colour as its sRGB components, each in 0...1, for the arithmetic a platform
-/// colour does not expose: a system colour resolves differently by appearance,
-/// platform and OS release, so a colour whose contrast is checked has to be one the
+/// A color as its sRGB components, each in 0...1, for the arithmetic a platform
+/// color does not expose: a system color resolves differently by appearance,
+/// platform and OS release, so a color whose contrast is checked has to be one the
 /// code states itself.
 public struct SRGBColor: Hashable, Sendable {
   public var red: Double
@@ -34,7 +34,7 @@ public struct SRGBColor: Hashable, Sendable {
   }
 
   /// WCAG 2.x contrast ratio, (L1 + 0.05) / (L2 + 0.05) with L1 the lighter: from
-  /// 1:1 for a colour against itself to 21:1 for white against black. Symmetric.
+  /// 1:1 for a color against itself to 21:1 for white against black. Symmetric.
   public func contrast(with other: SRGBColor) -> Double {
     let lighter = max(relativeLuminance, other.relativeLuminance)
     let darker = min(relativeLuminance, other.relativeLuminance)

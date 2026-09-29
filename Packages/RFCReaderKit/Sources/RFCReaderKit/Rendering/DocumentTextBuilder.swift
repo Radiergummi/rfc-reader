@@ -27,9 +27,9 @@ public final class DocumentTextBuilder {
   public static let referenceScheme = "rfc-reference"
 
   /// The style the *current* region is emitted in. A `var` because a region can be
-  /// set quieter than the body around it — see `emitting(in:colour:)`.
+  /// set quieter than the body around it — see `emitting(in:color:)`.
   private(set) var style: ReadingStyle
-  /// The colour ordinary prose is emitted in, for the same reason.
+  /// The color ordinary prose is emitted in, for the same reason.
   private(set) var bodyColor: PlatformColor = RFCColors.label
   let output = NSMutableAttributedString()
   var entries: [AnchorIndex.Entry] = []
@@ -132,7 +132,7 @@ extension DocumentTextBuilder {
     mark(Self.abstractAnchor)
     append("Abstract\n", headingAttributes(depth: 1, anchor: Self.abstractAnchor))
     // Emitted quiet, rather than emitted and then quietened. A post-pass has to
-    // guess which runs "count" — matching against a dynamic colour to find the
+    // guess which runs "count" — matching against a dynamic color to find the
     // ones to step back — and anything the builder *measures* against the style
     // (artwork's `monospaceScale`, a table's column widths) would be measured at
     // full size and shrunk afterwards, which is a different answer.
@@ -168,10 +168,10 @@ extension DocumentTextBuilder {
   }
 
   /// The abstract introduces the document rather than being part of it, so it is
-  /// set a little smaller and in the secondary colour.
+  /// set a little smaller and in the secondary color.
   static let abstractScale: CGFloat = 0.94
 
-  /// Emits `body` in a different style and colour, restoring both afterwards.
+  /// Emits `body` in a different style and color, restoring both afterwards.
   private func emitting(in style: ReadingStyle, color: PlatformColor, _ body: () -> Void) {
     let outerStyle = self.style
     let outerColor = bodyColor
@@ -281,14 +281,14 @@ extension DocumentTextBuilder {
     bodyAttributes(paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing))
   }
 
-  /// Body text, in the body font and the colour of the text being emitted, set in
+  /// Body text, in the body font and the color of the text being emitted, set in
   /// `paragraphStyle`.
   func bodyAttributes(_ paragraphStyle: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
     [.font: style.bodyFont, .foregroundColor: bodyColor, .paragraphStyle: paragraphStyle]
   }
 
   /// Secondary text that names a block -- a figure's or table's caption, a source
-  /// code block's language -- in the caption font and the secondary colour.
+  /// code block's language -- in the caption font and the secondary color.
   func captionAttributes(_ paragraphStyle: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
     [
       .font: style.captionFont,

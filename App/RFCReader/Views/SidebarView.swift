@@ -171,7 +171,7 @@ struct SidebarView: View {
           HStack {
             Text(title)
               .font(.title2.weight(.semibold))
-              // The label colour itself: `.primary` resolves against the
+              // The label color itself: `.primary` resolves against the
               // header's own style, which is grey.
               .foregroundStyle(Color(uiColor: .label))
             Spacer()
@@ -426,7 +426,7 @@ private struct SidebarLabelStyle: LabelStyle {
         icon
           .frame(width: column)
           #if !os(macOS)
-            // In the accent colour, as Notes draws its folders (#343). Not on
+            // In the accent color, as Notes draws its folders (#343). Not on
             // macOS, whose sidebar tints its icons already and turns them white
             // on a selected row, which an explicit style would override.
             .foregroundStyle(.tint)

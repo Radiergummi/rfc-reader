@@ -8,7 +8,7 @@
 #   platform label affects both.
 # - area: which part of the project it touches. An issue may carry more than one.
 #
-# Colours are quoted: unquoted, one like 5319e7 is read as a number in exponent notation.
+# Colors are quoted: unquoted, one like 5319e7 is read as a number in exponent notation.
 #
 # The agent-* labels are the queue the work-issue skill reads (.claude/skills/work-issue).
 

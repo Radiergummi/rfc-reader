@@ -59,7 +59,7 @@ struct BuilderChipTests {
   }
 
   /// Links are not underlined unless the reader asks for it: the tint marks a
-  /// chip, the colour marks any other link, and an underline under a chip ran
+  /// chip, the color marks any other link, and an underline under a chip ran
   /// under its symbol too.
   @Test func `no link is underlined by default`() {
     let chip = run(CrossReference(target: .document(.rfc(9110), section: "4.2")))

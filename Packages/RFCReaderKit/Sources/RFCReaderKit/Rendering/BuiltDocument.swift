@@ -7,7 +7,7 @@ import Foundation
 ///
 /// - `text` is the builder's own working buffer, and the builder is local to
 ///   `DocumentTextBuilder.build`, so nothing that could write it outlives the call.
-/// - Every attribute value in it is either immutable — fonts, colours, paragraph
+/// - Every attribute value in it is either immutable — fonts, colors, paragraph
 ///   styles — or made by that build and held by nothing else: the chips'
 ///   attachments. Paragraph styles have to be immutable rather than merely
 ///   unshared, because Foundation uniques equal attribute dictionaries across

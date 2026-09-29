@@ -15,19 +15,19 @@ public enum AuthorMonogram {
   /// the lighter tints, so every chip looks like every other.
   public static let initialsColor = SRGBColor.white
 
-  /// The system colours' hues — red, orange, yellow, green, mint, teal, blue and
+  /// The system colors' hues — red, orange, yellow, green, mint, teal, blue and
   /// indigo, as iOS draws them in light appearance — each darkened until white
   /// initials clear ``minimumContrast``, by scaling its linear-light channels
-  /// equally, which keeps the hue. The system colours themselves cannot be used:
+  /// equally, which keeps the hue. The system colors themselves cannot be used:
   /// white on them measures 1.5:1 (yellow) to 4.0:1 (blue), only indigo passing,
   /// and they resolve to different values by appearance and platform, so no one
   /// measurement would hold. These are fixed, and the circle is opaque, so the
   /// contrast is the same in light and dark appearance. Indigo passed as it was.
   ///
   /// The order is the one ``tint(for:among:)`` indexes into: reordering it, or
-  /// changing its length, recolours every author.
+  /// changing its length, recolors every author.
   public static let palette: [SRGBColor] = [
-    SRGBColor(hex: 0xDD_3228),  // red, 4.60:1 (the system colour's 3.55:1)
+    SRGBColor(hex: 0xDD_3228),  // red, 4.60:1 (the system color's 3.55:1)
     SRGBColor(hex: 0xAD_6300),  // orange, 4.60:1 (2.20:1)
     SRGBColor(hex: 0x8F_7200),  // yellow, 4.59:1 (1.51:1)
     SRGBColor(hex: 0x20_873A),  // green, 4.58:1 (2.22:1)
@@ -63,11 +63,11 @@ public enum AuthorMonogram {
     return ["jr", "sr", "ii", "iii", "iv"].contains(bare)
   }
 
-  /// Which of `count` colours the name gets. FNV-1a over the name's UTF-8, not
+  /// Which of `count` colors the name gets. FNV-1a over the name's UTF-8, not
   /// `hashValue`, which Swift seeds afresh every launch: the same name has to be
-  /// the same colour in every document and every session. It is the name as
+  /// the same color in every document and every session. It is the name as
   /// written, so a person spelled differently ("R. Fielding", "Roy T. Fielding")
-  /// can wear two colours.
+  /// can wear two colors.
   public static func tint(for name: String, among count: Int) -> Int {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for byte in name.utf8 {

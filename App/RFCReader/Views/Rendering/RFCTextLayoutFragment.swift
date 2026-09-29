@@ -130,7 +130,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
-    // change of appearance or accent colour is picked up. The geometry is not
+    // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
     let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
     for chip in chips {

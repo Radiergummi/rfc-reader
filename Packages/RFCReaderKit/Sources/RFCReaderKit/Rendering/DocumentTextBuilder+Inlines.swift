@@ -8,7 +8,7 @@ import RFCKit
 #endif
 
 extension DocumentTextBuilder {
-  /// Renders a run of inlines. `base` carries the font and colour of the context
+  /// Renders a run of inlines. `base` carries the font and color of the context
   /// the run sits in — body prose, a heading, a table cell — and each inline
   /// layers its own attributes on top.
   func inlineRuns(_ inlines: [Inline], base: [NSAttributedString.Key: Any]) -> NSAttributedString {

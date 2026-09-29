@@ -41,14 +41,14 @@ struct AuthorCardTests {
   }
 
   /// Stable across launches, unlike `hashValue`, so the same name is the same
-  /// colour in every document and every session.
+  /// color in every document and every session.
   @Test func `the tint is fixed for a name and within the palette`() {
     let count = AuthorMonogram.palette.count
     let tint = AuthorMonogram.tint(for: "Mark Nottingham", among: count)
     #expect(tint == AuthorMonogram.tint(for: "Mark Nottingham", among: count))
     #expect(AuthorMonogram.palette.indices.contains(tint))
     // Pinned, so a change to the hash or the palette's length — either of which
-    // would recolour everyone — is a deliberate one. FNV-1a 64 of the name, modulo 8.
+    // would recolor everyone — is a deliberate one. FNV-1a 64 of the name, modulo 8.
     #expect(count == 8)
     #expect(tint == 1)
     #expect(AuthorMonogram.tintColor(for: "Mark Nottingham") == AuthorMonogram.palette[1])
@@ -56,7 +56,7 @@ struct AuthorCardTests {
 
   /// The initials are small bold text, so they are held to the HIG's 4.5:1 for text
   /// at standard sizes rather than the 3:1 it allows large text. The circle is
-  /// opaque and its tints are fixed sRGB values rather than system colours, so this
+  /// opaque and its tints are fixed sRGB values rather than system colors, so this
   /// is the contrast in light and dark appearance alike.
   @Test func `every tint's initials clear 4.5 to 1`() {
     for tint in AuthorMonogram.palette {

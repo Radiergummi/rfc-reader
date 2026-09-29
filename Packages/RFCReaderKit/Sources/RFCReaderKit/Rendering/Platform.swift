@@ -22,7 +22,7 @@
   }
 #endif
 
-/// Dynamic colours, stored in the attributed string unresolved so that a change of
+/// Dynamic colors, stored in the attributed string unresolved so that a change of
 /// appearance or accent costs a redraw rather than a rebuild of the whole document.
 public enum RFCColors {
   public static var label: PlatformColor {
@@ -60,7 +60,7 @@ public enum RFCColors {
   public static var asideFill: PlatformColor { pageTint(light: 0.045, dark: 0.12) }
 
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
-  /// so it tints whatever the page is rather than assuming its colour.
+  /// so it tints whatever the page is rather than assuming its color.
   private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
     #if canImport(UIKit)
       UIColor { traits in
@@ -78,7 +78,7 @@ public enum RFCColors {
   /// The rule beside a quote or aside: a line, not a fill. macOS's
   /// `quaternarySystemFill` is about a quarter as opaque as the `quaternaryLabelColor`
   /// the rule used to draw in, which left a rule this thin close to invisible;
-  /// `separatorColor` is the line colour, at about the old opacity. iOS's
+  /// `separatorColor` is the line color, at about the old opacity. iOS's
   /// `quaternarySystemFill` is darker, and the rule keeps it.
   public static var rule: PlatformColor {
     #if canImport(UIKit)

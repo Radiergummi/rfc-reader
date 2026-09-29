@@ -169,8 +169,8 @@ struct SearchQueryTests {
   /// qualifier means nothing, so a typo is not silently a word.
   @Test func `an unknown qualifier is marked as unknown`() throws {
     let suggestions = SearchQuery.suggestions(
-      for: "cache colour:red", in: try Fixtures.sampleIndex())
+      for: "cache color:red", in: try Fixtures.sampleIndex())
     #expect(suggestions.map(\.isUnknown) == [true])
-    #expect(suggestions.first?.completion == "cache colour:red")
+    #expect(suggestions.first?.completion == "cache color:red")
   }
 }

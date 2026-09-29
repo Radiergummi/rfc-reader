@@ -135,7 +135,7 @@ struct BuilderStructureTests {
   }
 
   /// The abstract's heading is a first-level heading like any section's: the same
-  /// font, colour and spacing after, differing only in having nothing above it.
+  /// font, color and spacing after, differing only in having nothing above it.
   @Test func `the abstract heading is set as a first level heading`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
