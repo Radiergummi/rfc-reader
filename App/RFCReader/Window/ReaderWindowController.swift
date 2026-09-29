@@ -297,6 +297,7 @@
       window?.title = title.title
       window?.subtitle = title.subtitle
       toolbar?.showDocumentTitle(title.documentTitle, subtitle: title.documentSubtitle)
+      toolbar?.showBookmarked(title.isBookmarked)
       window?.toolbar?.validateVisibleItems()
     }
 
@@ -450,10 +451,8 @@
     /// Whether the document on screen is bookmarked, for the toolbar's glyph.
     ///
     /// From the library's one set of bookmarked numbers, which every tab reads, so
-    /// a bookmark toggled in another tab shows here too (#141). A set lookup is
-    /// cheap enough for `NSToolbar`, which autovalidates every visible item once per
-    /// event cycle — asking SwiftData there put a store round trip under every mouse
-    /// move.
+    /// a bookmark toggled in another tab shows here too (#141). Read by the title's
+    /// observation, which re-runs when the selection or the set changes.
     var isBookmarked: Bool {
       navigation.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
     }

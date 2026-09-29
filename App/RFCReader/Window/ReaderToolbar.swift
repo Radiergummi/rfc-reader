@@ -360,6 +360,24 @@
       documentTitleView.show(title, subtitle: subtitle)
     }
 
+    /// The bookmark item, for its glyph.
+    private weak var bookmarkItem: NSToolbarItem?
+
+    /// What the bookmark item's glyph is currently showing.
+    private var bookmarkSymbol = "bookmark"
+
+    /// Fills the bookmark glyph or empties it. Set from the window's observation of
+    /// the selection and the bookmarks, not in `validateToolbarItem`: the item is an
+    /// `NSMenuToolbarItem`, which AppKit never validates, so a glyph kept there stayed
+    /// empty however the document was bookmarked. An image is made only when the
+    /// glyph actually changes.
+    func showBookmarked(_ isBookmarked: Bool) {
+      let symbol = isBookmarked ? "bookmark.fill" : "bookmark"
+      guard symbol != bookmarkSymbol else { return }
+      bookmarkSymbol = symbol
+      bookmarkItem?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
+    }
+
     func updateDocumentTitle(_ state: ToolbarTitleState) {
       documentTitleView.update(state)
     }
@@ -485,6 +503,7 @@
         item.target = self
         item.action = #selector(toggleBookmark)
         item.menu = collectionMenu
+        bookmarkItem = item
         return item
 
       case .rfcCite:
@@ -575,23 +594,10 @@
 
     // MARK: - Validation
 
-    /// What the bookmark item's glyph is currently showing.
-    private var bookmarkSymbol = "bookmark"
-
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
       switch item.itemIdentifier.rawValue {
       case "rfc.back": return navigation.canGoBack
       case "rfc.forward": return navigation.canGoForward
-      case NSToolbarItem.Identifier.rfcBookmark.rawValue:
-        // The filled glyph is the state, and validation is the one call AppKit
-        // makes often enough to keep it honest — which is also why it allocates
-        // an image only when the glyph actually changed.
-        let symbol = controller.isBookmarked ? "bookmark.fill" : "bookmark"
-        if symbol != bookmarkSymbol {
-          bookmarkSymbol = symbol
-          item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
-        }
-        return id != nil
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
