@@ -111,4 +111,13 @@ public struct LoadFailure {
   }
 
   public var message: String { error.localizedDescription }
+
+  public enum Kind: Sendable, Hashable {
+    case offline, notFound, server, unreadable, other
+
+    public var symbol: String { "" }
+    public var recoverySuggestion: String { "" }
+  }
+
+  public var kind: Kind { .other }
 }
