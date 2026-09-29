@@ -20,7 +20,6 @@ import Testing
 /// These call `FragmentGeometry` directly, which is the code the reader draws and hit
 /// tests with. Reinstating either bug fails them.
 @Suite("Chip geometry: element-relative line indexing")
-@MainActor
 struct ChipLineGeometryTests {
   /// A laid-out paragraph wide enough to wrap, with chips scattered through it.
   private struct Fixture {
@@ -189,6 +188,20 @@ struct ChipLineGeometryTests {
     #expect(below >= FragmentGeometry.chipVerticalPadding - 0.01)
   }
 
+  /// The fragment draws an informative citation's chip lighter (#184), and learns
+  /// which it is from the rect, as it learns everything else about a chip.
+  @Test func `a chip says whether it is informative`() throws {
+    let inlines: [Inline] = [
+      .text("see "), .crossReference(CrossReference(target: .document(.rfc(8402), section: nil))),
+    ]
+    let marked = try chipParagraph(inlines, informative: true)
+    defer { withExtendedLifetime(marked.storage) {} }
+    #expect(try #require(marked.chips.first).isInformative)
+    let plain = try chipParagraph(inlines)
+    defer { withExtendedLifetime(plain.storage) {} }
+    #expect(try !#require(plain.chips.first).isInformative)
+  }
+
   /// `BCP 14 [RFC2119] [RFC8174]` is in nearly every RFC. A chip's tint reaches
   /// past its glyphs, and a space is narrower than two paddings, so adjacent chips
   /// overlapped, and a chip's tint covered the space before it. The padding takes
@@ -229,10 +242,22 @@ struct ChipLineGeometryTests {
     let chips: [FragmentGeometry.ChipRect]
   }
 
-  private func chipParagraph(_ inlines: [Inline]) throws -> ChipParagraph {
-    let text = DocumentTextBuilder.build(
+  /// `informative` marks every chip as the builder marks an informative citation's,
+  /// which a document without a bibliography never has.
+  private func chipParagraph(_ inlines: [Inline], informative: Bool = false) throws
+    -> ChipParagraph
+  {
+    var text = DocumentTextBuilder.build(
       Fixtures.document(.paragraph(Paragraph(inlines))), style: ReadingStyle()
     ).text
+    if informative {
+      let marked = NSMutableAttributedString(attributedString: text)
+      marked.enumerateAttribute(.rfcChip, in: NSRange(location: 0, length: marked.length)) {
+        value, range, _ in
+        if value != nil { marked.addAttribute(.rfcInformative, value: "informative", range: range) }
+      }
+      text = marked
+    }
     let (storage, layout) = layOut(text, width: 2000)
     var found: (fragment: NSTextLayoutFragment, range: NSRange)?
     layout.enumerateTextLayoutFragments(

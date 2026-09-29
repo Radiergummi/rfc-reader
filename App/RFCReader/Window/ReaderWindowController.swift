@@ -353,9 +353,41 @@
     // MARK: - The sidebar
 
     /// Through the split view controller rather than down the responder chain, so
-    /// the menu toggles this window's sidebar whatever holds focus in it.
+    /// the menu and the toolbar's toggle act on this window's sidebar whatever holds
+    /// focus in it.
     func toggleSidebar() {
       splitController.toggleSidebar(nil)
+    }
+
+    /// Slides a collapsed sidebar open and runs `then` once it is: straight away when
+    /// it already was, after the slide when it was not. A sheet has to wait for it,
+    /// because the two cannot move together. AppKit opens a sheet in a run loop of
+    /// its own (`NSSheetMoveHelper openSheet` → `NSMoveHelper _doAnimation`, sampled),
+    /// in a private mode that the split view's animation is not scheduled in, so a
+    /// slide begun beside a sheet held still for the sheet's 300 ms and only then set
+    /// out (measured: the list's leading edge at 0 pt until 0.317 s, at 200 pt by
+    /// 0.548 s).
+    func revealSidebar(then: @escaping @MainActor @Sendable () -> Void) {
+      guard sidebarItem.isCollapsed else {
+        then()
+        return
+      }
+      NSAnimationContext.runAnimationGroup { _ in
+        sidebarItem.animator().isCollapsed = false
+      } completionHandler: {
+        // AppKit calls it on the main thread; the SDK only does not say so.
+        MainActor.assumeIsolated { then() }
+      }
+    }
+
+    /// An empty collection, from the toolbar's New Collection and File > New
+    /// Collection… alike; only the Bookmark menu's adds the open document. It opens
+    /// a collapsed sidebar first, so the collection is in view once made, and the
+    /// sheet comes in once the sidebar has slid open.
+    func newCollection() {
+      revealSidebar { [navigation] in
+        navigation.collectionEditor = .create(adding: nil)
+      }
     }
 
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
@@ -450,6 +482,15 @@
         return
       }
       window.makeFirstResponder(text)
+    }
+
+    /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
+    /// responder chain, which reaches no text view with the sidebar, the contents
+    /// panel or the find bar focused: the find bar is the scroll view's, a parent of
+    /// the text view, not a child.
+    func copyAsQuote() {
+      let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      (text as? ReaderTextView)?.copyAsQuote(nil)
     }
 
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two

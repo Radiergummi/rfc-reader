@@ -1,6 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
+import os
 
 #if canImport(UIKit)
   import UIKit
@@ -67,8 +68,9 @@ final class RFCTextViewCoordinator: NSObject {
   var headerIdentity: DocumentHeaderView.Identity?
 
   /// Retained for the same reason as `headerHost`: the iOS long-press preview's
-  /// hosting controller must outlive the `UITargetedPreview` that wraps its view.
-  var referencePreviewHost: PlatformHostingController<ReferencePreview>?
+  /// hosting controller — a card's or a document's — must outlive the
+  /// `UITargetedPreview` that wraps its view.
+  var referencePreviewHost: PlatformHostingController<AnyView>?
 
   /// Injected explicitly: a hosting controller the coordinator builds — the
   /// reference preview, on both platforms — sits outside SwiftUI's environment
@@ -83,6 +85,32 @@ final class RFCTextViewCoordinator: NSObject {
   var bibliography: [ReferenceGroup] = []
   /// The document on screen; see `RFCTextView.documentID`.
   var documentID: DocumentID?
+  /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
+  /// or nil when nothing is selected (#186); see `QuoteCitation`.
+  func quote(of range: NSRange) -> QuoteCitation.Quote? {
+    guard let documentID, let built else { return nil }
+    return QuoteCitation.quote(of: range, in: built, document: documentID)
+  }
+  /// See `RFCTextView.onSelectionChange`.
+  var onSelectionChange: (Bool) -> Void = { _ in }
+  /// What `onSelectionChange` was last told, so a selection dragged across the text
+  /// reports once rather than on every character.
+  private var reportedSelection: Bool?
+
+  /// Tells the view whether anything is selected: whenever the selection changes, and
+  /// after an install, which may clear it without saying so. Deferred for the reason
+  /// `onVisibleAnchorChange` is: installing reports from inside SwiftUI's update.
+  /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
+  /// selection's own edit menu (#186).
+  func reportSelection() {
+    #if !canImport(UIKit)
+      guard let textView else { return }
+      let hasSelection = textView.selectedRange().length > 0
+      guard hasSelection != reportedSelection else { return }
+      reportedSelection = hasSelection
+      Task { self.onSelectionChange(hasSelection) }
+    #endif
+  }
   /// See `RFCTextView.commitsOnClick`.
   var commitsOnClick: (() -> Void)?
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
@@ -133,6 +161,8 @@ final class RFCTextViewCoordinator: NSObject {
   /// laid out. Cancelled by the next `install` — and by a change of column, which
   /// invalidates every frame it has computed.
   private var layoutTask: Task<Void, Never>?
+  /// The signpost interval of the layout `layoutTask` is doing; see `Signposts`.
+  private var layoutInterval: OSSignpostIntervalState?
   /// Characters per slice: about 8 ms of layout on this machine, so a slice fits
   /// inside a frame.
   private static let layoutSlice = 20_000
@@ -217,7 +247,10 @@ final class RFCTextViewCoordinator: NSObject {
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
     // `StorageInstallTests` pins it.
-    storage.install(built.text)
+    signposter.withIntervalSignpost("Install document") {
+      storage.install(built.text)
+    }
+    reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
@@ -264,6 +297,12 @@ final class RFCTextViewCoordinator: NSObject {
   /// state `scrollContainerTopTo` already treats as "do not clamp".
   private func beginLayout() {
     layoutTask?.cancel()
+    endLayoutInterval()
+    // An ID of its own, because several text views lay out at once: every
+    // window and tab, and a force-click preview.
+    layoutInterval = signposter.beginInterval(
+      "Lay out document", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     laidOutEnd = nil
     laidOutThrough = 0
     ensureLayout(through: Self.layoutSlice)
@@ -280,7 +319,10 @@ final class RFCTextViewCoordinator: NSObject {
         // out — an empty document, or a text view that has gone away. Either
         // way the end stays unknown, which is the safe state, and looping on
         // it would spin.
-        guard self.laidOutThrough > before else { return }
+        guard self.laidOutThrough > before else {
+          self.endLayoutInterval()
+          return
+        }
       }
     }
   }
@@ -304,6 +346,23 @@ final class RFCTextViewCoordinator: NSObject {
     // this value — that it keeps moving as the viewport does, which is why the
     // reader lays all of it out — applies to viewport layout, not here.
     laidOutEnd = layout.usageBoundsForTextContainer.maxY
+    endLayoutInterval()
+  }
+
+  /// Ends the layout interval `beginLayout()` began: when the last slice lands,
+  /// when a newer layout replaces it before then, or when a slice finds nothing
+  /// left to lay out, so a trace shows a layout that stopped ending where it
+  /// stopped rather than never ending. `deinit` covers the last way it stops.
+  private func endLayoutInterval() {
+    guard let layoutInterval else { return }
+    signposter.endInterval("Lay out document", layoutInterval)
+    self.layoutInterval = nil
+  }
+
+  /// A tab or preview closed mid-layout takes the coordinator with it, and the
+  /// layout task's `[weak self]` loop then ends without a word.
+  deinit {
+    if let layoutInterval { signposter.endInterval("Lay out document", layoutInterval) }
   }
 
   // MARK: - Geometry
@@ -385,6 +444,7 @@ final class RFCTextViewCoordinator: NSObject {
         restorePlace()
       } else {
         layoutTask?.cancel()
+        endLayoutInterval()
         laidOutEnd = nil
         laidOutThrough = 0
       }
@@ -543,6 +603,20 @@ final class RFCTextViewCoordinator: NSObject {
     textView?.textLayoutManager?.attributedText?.reference(at: offset)
   }
 
+  /// The link a reference's runs carry. Read from the storage rather than from
+  /// what the platform says was pressed: a chip's leading glyph is an attachment,
+  /// which UIKit reports as one, not as the link it is part of.
+  private func link(at offset: Int) -> URL? {
+    let value = textView?.textLayoutManager?.attributedText?.attribute(
+      .link, at: offset, effectiveRange: nil)
+    return value.flatMap(Self.url(fromLink:))
+  }
+
+  /// A link attribute's value as a URL: AppKit may hand it over as its string.
+  private static func url(fromLink link: Any) -> URL? {
+    link as? URL ?? (link as? String).flatMap(URL.init(string:))
+  }
+
   /// The card for a reference, on either platform, or nil when it would say no
   /// more than the reference already does. Another document has its title and
   /// abstract; a place in this one has only its section's heading; a bibliography
@@ -552,13 +626,16 @@ final class RFCTextViewCoordinator: NSObject {
     guard let library else { return nil }
     switch reference.target {
     case .document:
-      return ReferencePreview(reference: reference, library: library)
+      return ReferencePreview(
+        reference: reference, library: library, kind: bibliography.kind(of: reference.target))
     case .anchor(let anchor):
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
       return bibliography.entry(anchor: anchor).map {
-        ReferencePreview(reference: reference, library: library, entry: $0)
+        ReferencePreview(
+          reference: reference, library: library, entry: $0,
+          kind: bibliography.kind(of: reference.target))
       }
     }
   }
@@ -569,37 +646,93 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction
     ) -> UIAction? {
-      guard case .link(let url) = textItem.content else { return defaultAction }
-      // A tap carries no modifiers. Opening a reference elsewhere is the long-press
+      // A link the reader does not own, a web page, is UIKit's to open. Read from
+      // the storage, as the preview's is: a press on a chip's leading glyph is an
+      // attachment item, whose own default action follows nothing.
+      guard let url = link(at: textItem.range.location), let documentID,
+        LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
+      else { return defaultAction }
+      // An action, not the link followed here and nil returned: UIKit asks for the
+      // primary action as a long press begins too, so following it here navigated
+      // before the preview could open (#29). Performed, it is the tap — on the
+      // link, or on the long press's preview, which is the preview's commit. A tap
+      // carries no modifiers. Opening a reference elsewhere is the long-press
       // menu's job on this platform, not a chord's.
-      return onLink(url, .here) ? nil : defaultAction
+      return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+        _ = self?.onLink(url, .here)
+      }
     }
 
-    /// The long-press preview. `defaultMenu` (copy, etc.) still shows; only a run
-    /// carrying `.rfcReference` gets the extra preview card above it.
+    /// The long-press preview: Safari's link preview, for documents (#29). A
+    /// reference to an RFC, or to a place in this one, previews that document at
+    /// that place; a bibliography entry that names no RFC gets its card. The
+    /// `defaultMenu` (Open, Copy, etc.) still shows beside it, and a tap on the
+    /// preview performs the item's primary action, which follows the reference.
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
-      guard let box = reference(at: textItem), let preview = preview(for: box.reference) else {
-        return .init(menu: defaultMenu)
-      }
-      let host = UIHostingController(rootView: preview)
-      // Sized here, the way the header host is in `layOut`: the preview is shown
-      // at its view's own size, and a hosting controller's view is not sized to
-      // its content until something lays it out.
-      host.view.frame.size = host.sizeThatFits(
-        in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
-      // Opaque, as a context-menu preview's view is expected to be: the card has no
-      // background of its own, because on macOS the popover supplies one.
-      host.view.backgroundColor = .systemBackground
-      referencePreviewHost = host
-      return UITextItem.MenuConfiguration(preview: .view(host.view), menu: defaultMenu)
-    }
-
-    private func reference(at textItem: UITextItem) -> ReferenceBox? {
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
-      reference(at: textItem.range.location)?.box
+      guard let library, let documentID,
+        let (box, range) = reference(at: textItem.range.location),
+        let url = link(at: range.location),
+        let target = LinkPreview.resolve(url, from: documentID, in: library.index)
+      else { return .init(menu: defaultMenu) }
+      let host: UIHostingController<AnyView>
+      switch target {
+      case .card:
+        guard let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
+        host = UIHostingController(rootView: AnyView(preview))
+        // Sized here, the way the header host is in `layOut`: the preview is shown
+        // at its view's own size, and a hosting controller's view is not sized to
+        // its content until something lays it out.
+        host.view.frame.size = host.sizeThatFits(
+          in: CGSize(width: ReferencePreview.width, height: CGFloat.greatestFiniteMagnitude))
+      case .document(let id, let place):
+        // Measured against the window, not the text view: the preview is shown
+        // over the whole window, whatever the reader's own width.
+        guard let window = textView.window else { return .init(menu: defaultMenu) }
+        let size = LinkPreview.documentSize(fitting: window.bounds.size)
+        // The commit is the tap, performed as the primary action; nothing in a
+        // context menu's preview is clicked.
+        let preview = DocumentPreview(library: library, id: id, place: place, size: size) {}
+        // The preview's reader asks the environment for the library, and a hosting
+        // controller is outside every environment chain.
+        host = UIHostingController(rootView: AnyView(preview.environment(library)))
+        host.view.frame.size = size
+      }
+      // Opaque, as a context-menu preview's view is expected to be: neither preview
+      // has a background of its own, because on macOS the popover supplies one.
+      host.view.backgroundColor = .systemBackground
+      referencePreviewHost = host
+      // UIKit makes the preview view the view of a controller of its own, which
+      // raises for a view that is already a controller's: the host's is. So the
+      // host's view goes inside a plain one, the way the header host's goes inside
+      // the text view.
+      let container = UIView(frame: host.view.frame)
+      host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      container.addSubview(host.view)
+      let menu = referenceMenu(
+        defaultMenu,
+        sharing: LinkCopy.forLink(
+          url, from: documentID, in: library.index, bibliography: bibliography),
+        from: textView, at: range)
+      return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
+    }
+
+    /// A document preview holds a whole second build, so it goes with its menu
+    /// rather than waiting for the next long press to replace it.
+    func textView(
+      _ textView: UITextView, textItemMenuWillEndFor textItem: UITextItem,
+      animator: any UIContextMenuInteractionAnimating
+    ) {
+      // Only the host this menu showed: a long press begun while the last menu was
+      // still fading out has installed its own by the time this completion runs.
+      let shown = referencePreviewHost
+      animator.addCompletion { [weak self] in
+        guard let self, self.referencePreviewHost === shown else { return }
+        self.referencePreviewHost = nil
+      }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -630,6 +763,10 @@ final class RFCTextViewCoordinator: NSObject {
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+      reportSelection()
     }
 
     /// A menu's tracking loop holds the run loop outside `.default` mode, so a dwell
@@ -712,6 +849,38 @@ final class RFCTextViewCoordinator: NSObject {
       cancelHover()
       if let trackingArea { textView?.removeTrackingArea(trackingArea) }
       trackingArea = nil
+    }
+
+    /// Detaches the text view from its text container, so what AppKit keeps of the
+    /// view after it is gone no longer holds the document (#356). Called from
+    /// `dismantleNSView`.
+    ///
+    /// A TextKit 2 text view's private subviews outlive it on macOS 27: the content
+    /// view that draws the text, and the viewport element view of every fragment on
+    /// screen. Measured with `heap` after ten opens: one text view, but eleven content
+    /// views, layout managers and storages, and 27,803 layout fragments, 35 MB a
+    /// document, never freed, and every build from the eighth open on 5 to 10 times
+    /// slower. A plain `NSTextView` in a small program leaks the same way, so it is
+    /// AppKit's, not this reader's: the subviews stay registered with the notification
+    /// center, by blocks that capture them.
+    ///
+    /// The subviews cannot be released from here, but what they reach can. Without
+    /// its container the content view no longer reaches the layout manager, which
+    /// takes the storage, the fragments and every attribute they drew with. Measured
+    /// in the same program: storages and content views all freed, and a dozen
+    /// fragments left per view, the ones on screen when it went. Emptying the storage
+    /// instead left the layout manager and storage behind.
+    ///
+    /// Detached through the container, the way AppKit documents it: `NSTextView`'s own
+    /// `textContainer` setter is not to be called directly, and measured in the same
+    /// program both free the same. The scroll observer goes too, so a viewport left
+    /// without a layout manager reports nothing to the window's toolbar title, which
+    /// the next reader already owns.
+    func releaseDocument() {
+      layoutTask?.cancel()
+      NotificationCenter.default.removeObserver(
+        self, name: NSView.boundsDidChangeNotification, object: nil)
+      textView?.textContainer?.textView = nil
     }
 
     /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
@@ -806,18 +975,6 @@ final class RFCTextViewCoordinator: NSObject {
       return (url, range.location)
     }
 
-    /// The link a reference's runs carry.
-    private func link(at offset: Int) -> URL? {
-      let value = textView?.textLayoutManager?.attributedText?.attribute(
-        .link, at: offset, effectiveRange: nil)
-      return value.flatMap(Self.url(fromLink:))
-    }
-
-    /// A link attribute's value as a URL: AppKit may hand it over as its string.
-    private static func url(fromLink link: Any) -> URL? {
-      link as? URL ?? (link as? String).flatMap(URL.init(string:))
-    }
-
     /// The preview is a reader of its own — its own text view and storage, built by
     /// `DocumentTextBuilder` — in a popover beside the reference. A click in it does
     /// what a click on the reference would have, with the modifiers held for it,
@@ -846,7 +1003,7 @@ final class RFCTextViewCoordinator: NSObject {
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: preview.environment(library))
-      present(host, size: DocumentPreview.size, at: rect)
+      present(host, size: preview.size, at: rect)
       isShowingDocumentPreview = true
     }
 
