@@ -73,6 +73,8 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        # Export's save panel and the debug Install Data Pack… open panel.
+        com.apple.security.files.user-selected.read-write: true
         # Option-clicking a format in the Info pane saves it to Downloads (#25).
         com.apple.security.files.downloads.read-write: true
         # File > Print… (#375). Without it the sandbox refuses the print panel with
