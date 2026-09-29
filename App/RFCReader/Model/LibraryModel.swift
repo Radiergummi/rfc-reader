@@ -128,7 +128,7 @@ final class LibraryModel {
   /// For the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode instead of failing (#314).
   private let clientOnCheapNetworks = RFCEditorClient(
-    transport: URLSession.rfcEditorOnCheapNetworks)
+    transport: URLSessionTransport(session: .rfcEditorOnCheapNetworks))
   private let store = DocumentStore()
   private var search: IndexSearch?
 
@@ -137,6 +137,9 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    #if DEBUG
+      installPackFromLaunchArgument()
+    #endif
     await refreshDownloadedNumbers()
     do {
       if let cached = try await store.cachedIndex() {
@@ -167,6 +170,28 @@ final class LibraryModel {
       }
     }
   }
+
+  #if DEBUG
+    /// `-installPack <url>`, a developer's way to install a pack from a URL or a
+    /// path (#36). Logged, not shown: nothing on screen asked for it.
+    private func installPackFromLaunchArgument() {
+      guard let argument = UserDefaults.standard.string(forKey: "installPack") else { return }
+      // Installed on every launch the argument is set for, which is what a
+      // developer setting it in a scheme wants while iterating on a pack.
+      let source = PackInstaller.source(fromArgument: argument)
+      Task(name: "Install data pack") {
+        do {
+          let pack = try await installLegacyPack(from: source)
+          libraryLog.info(
+            "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
+          )
+        } catch {
+          libraryLog.error(
+            "installing a data pack failed: \(String(describing: error), privacy: .public)")
+        }
+      }
+    }
+  #endif
 
   /// The search and the working groups, built off the main actor.
   @concurrent
@@ -285,6 +310,38 @@ final class LibraryModel {
   /// reads for itself.
   @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
   private static let listCacheLimit = 8
+
+  /// What force-click previews showed, kept for the next preview of the same
+  /// document in the same style (#374), which then shows its text at once rather
+  /// than a spinner. Four, at 4.5 to 8 MB a build.
+  ///
+  /// The whole preview rather than the build alone, so a build is never paired with
+  /// another parse of its document. A document's previews go when it is removed or
+  /// evicted (`forgetPreviews`), as the store's parse of it does, so what is gone
+  /// from the disk is gone from memory too. Empty on iOS, which has no such preview.
+  ///
+  /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
+  /// drawn from it.
+  @ObservationIgnored private var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(
+    capacity: 4)
+
+  /// What the last preview of `key` showed, if it is still kept.
+  func keptPreview(for key: BuildKey) -> DocumentPreview.Loaded? {
+    previews.value(for: key)
+  }
+
+  /// Keeps `preview` for the next preview of `key`, unless its document was removed
+  /// or evicted while it was being fetched and built: its previews were forgotten
+  /// then, and this one would come back after them.
+  func keep(_ preview: DocumentPreview.Loaded, for key: BuildKey) async {
+    guard await store.isCached(key.document) else { return }
+    previews.store(preview, for: key)
+  }
+
+  private func forgetPreviews(of documents: some Sequence<DocumentID>) {
+    let documents = Set(documents)
+    previews.removeAll { documents.contains($0.document) }
+  }
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
@@ -567,6 +624,12 @@ final class LibraryModel {
     return document
   }
 
+  /// Installs the legacy XML pack from an `.aar`, a folder or a URL; see
+  /// `DocumentStore.installLegacyPack(from:)`. A developer's path for now (#36).
+  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    try await store.installLegacyPack(from: source)
+  }
+
   func originalText(for id: DocumentID) async throws -> String {
     let text = try await store.originalText(id, client: client)
     await evictIfGrown()
@@ -578,7 +641,8 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    let evicted = await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    forgetPreviews(of: evicted)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
@@ -651,6 +715,7 @@ final class LibraryModel {
 
   func removeDownload(_ id: DocumentID) async {
     await store.remove(id)
+    forgetPreviews(of: [id])
     await refreshDownloadedNumbers()
   }
 }
