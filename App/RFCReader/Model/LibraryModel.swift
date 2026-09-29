@@ -97,7 +97,15 @@ final class LibraryModel {
   }
 
   private func refreshRecentlyReadCount() {
-    let count = recentlyReadNumbers().count
+    let count: Int
+    do {
+      count = try ReadingPositionStore.recentlyReadRFCCount(in: AppData.container.mainContext)
+    } catch {
+      // The last count read stands until a fetch succeeds.
+      libraryLog.error(
+        "counting the recently read failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     guard count != recentlyReadCount else { return }
     recentlyReadCount = count
   }
