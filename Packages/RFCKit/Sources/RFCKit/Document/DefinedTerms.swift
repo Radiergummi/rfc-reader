@@ -55,7 +55,8 @@ enum DefinedTerms {
       return true
     }
     if words.starts(with: ["conventions", "and"]), words.count > 2,
-      ["definitions", "terminology", "terms", "acronyms"].contains(words[2])
+      // Terminology and Terms are already taken above, wherever they stand.
+      ["definitions", "acronyms"].contains(words[2])
     {
       return true
     }
@@ -102,7 +103,7 @@ enum DefinedTerms {
               let defined = DefinedTerm(
                 term: term(item.term.plainText), anchor: item.anchor ?? section.anchor,
                 definition: item.definition)
-              if undefined.remove(defined.term) != nil {
+              if !defined.definition.isEmpty, undefined.remove(defined.term) != nil {
                 found[defined.term] = defined
               } else {
                 record(defined)

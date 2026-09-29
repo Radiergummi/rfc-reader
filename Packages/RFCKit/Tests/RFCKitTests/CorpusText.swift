@@ -1,6 +1,7 @@
 import Foundation
 
-/// Legacy RFC texts read from a fetched corpus rather than from the fixtures.
+/// RFCs read from a fetched corpus rather than from the fixtures: legacy texts, and
+/// the RFCs authored in RFCXML.
 ///
 /// A fixture is RFC text committed to the repository, and the repository takes no
 /// more of it. A finding that needs a whole document, because it is about what the

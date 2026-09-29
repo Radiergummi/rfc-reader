@@ -476,13 +476,13 @@ public enum RFCXMLParser {
     }
 
     /// The anchor the model gives the block `element` becomes, where it gives one:
-    /// the author's, else the part number, but only the author's for a figure or a
-    /// table, and none for a quotation, an aside or a list as a whole.
+    /// the author's, else the part number, but only the author's for a figure, a
+    /// table or a table row, and none for a quotation, an aside or a list as a whole.
     private static func modelAnchor(of element: XMLTree.Element) -> String? {
       switch element.name {
       case "section", "t", "li", "dt", "dd", "artwork", "sourcecode":
         element["anchor"] ?? element["pn"]
-      case "figure", "table":
+      case "figure", "table", "tr":
         element["anchor"]
       default:
         nil

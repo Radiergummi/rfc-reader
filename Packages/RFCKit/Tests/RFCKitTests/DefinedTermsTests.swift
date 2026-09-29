@@ -39,6 +39,14 @@ struct DefinedTermsTests {
 
   // MARK: Which lists define terms
 
+  /// A one-item definition list for `term`, as a terminology list sets it.
+  private static func list(_ term: String) -> Block {
+    .definitionList([
+      DefinitionItem(
+        term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
+    ])
+  }
+
   /// A definition list nested in a definition describes a part of that term, not a term
   /// of the document's own. Over a hand-written model: `defined(in:)` is a pure function
   /// of it, and no committed fixture nests a list in a terminology section.
@@ -65,12 +73,6 @@ struct DefinedTermsTests {
   /// what they hold rather than for terms; a subsection of any other section is still
   /// read only when its own title names terms.
   @Test func `a subsection of a section titled for its terms defines terms`() {
-    func list(_ term: String) -> Block {
-      .definitionList([
-        DefinitionItem(
-          term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
-      ])
-    }
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [
@@ -78,14 +80,14 @@ struct DefinedTermsTests {
           anchor: "terms", title: "Terminology", blocks: [],
           subsections: [
             Section(
-              anchor: "core", title: "Core Concepts", blocks: [list("Widget")],
+              anchor: "core", title: "Core Concepts", blocks: [Self.list("Widget")],
               subsections: [
-                Section(anchor: "deeper", title: "Details", blocks: [list("Gadget")])
+                Section(anchor: "deeper", title: "Details", blocks: [Self.list("Gadget")])
               ])
           ]),
         Section(
           anchor: "format", title: "Message Format", blocks: [],
-          subsections: [Section(anchor: "header", title: "Header", blocks: [list("Flags")])]),
+          subsections: [Section(anchor: "header", title: "Header", blocks: [Self.list("Flags")])]),
       ],
       source: .xml)
     #expect(Set(DefinedTerms.defined(in: document).keys) == ["Widget", "Gadget"])
@@ -95,24 +97,19 @@ struct DefinedTermsTests {
   /// subsections the protocol's variables or commands: its own lists define terms, and
   /// its subsections' only when their own titles name terms.
   @Test func `a section that only opens with Definitions passes nothing to its subsections`() {
-    func list(_ term: String) -> Block {
-      .definitionList([
-        DefinitionItem(
-          term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
-      ])
-    }
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [
         Section(
-          anchor: "definitions", title: "Definitions", blocks: [list("Widget")],
+          anchor: "definitions", title: "Definitions", blocks: [Self.list("Widget")],
           subsections: [
-            Section(anchor: "variables", title: "Per-Widget Variables", blocks: [list("Count")]),
-            Section(anchor: "terms", title: "Other Terms", blocks: [list("Gadget")]),
+            Section(
+              anchor: "variables", title: "Per-Widget Variables", blocks: [Self.list("Count")]),
+            Section(anchor: "terms", title: "Other Terms", blocks: [Self.list("Gadget")]),
           ]),
         Section(
           anchor: "conventions", title: "Conventions and Definitions", blocks: [],
-          subsections: [Section(anchor: "roles", title: "Roles", blocks: [list("Sender")])]),
+          subsections: [Section(anchor: "roles", title: "Roles", blocks: [Self.list("Sender")])]),
       ],
       source: .xml)
     #expect(Set(DefinedTerms.defined(in: document).keys) == ["Widget", "Gadget", "Sender"])
@@ -142,6 +139,30 @@ struct DefinedTermsTests {
       header: DocumentHeader(title: "Widgets"),
       sections: [
         Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([listed])])
+      ],
+      source: .xml)
+    let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
+    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    #expect(term.anchor == "widget")
+    #expect(term.definition == listed.definition)
+  }
+
+  /// A term with no description gives no definition either, so an index entry without
+  /// one keeps waiting for an entry that has one.
+  @Test func `a definition list entry without a definition does not replace an index entry`()
+    throws
+  {
+    let bare = DefinitionItem(term: [.text("widget")], definition: [], anchor: "widget-bare")
+    let listed = DefinitionItem(
+      term: [.text("widget")],
+      definition: [.paragraph(Paragraph(text: "The unit a sender emits."))],
+      anchor: "widget")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(
+          anchor: "terms", title: "Terminology",
+          blocks: [.definitionList([bare]), .definitionList([listed])])
       ],
       source: .xml)
     let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
@@ -306,5 +327,21 @@ struct DefinedTermsTests {
     let root = try XMLTree.parse(Data(xml.utf8))
     let terms = RFCXMLParser.primaryIndexTerms(in: root)
     #expect(terms.map(\.anchor) == ["section-4"])
+  }
+
+  /// The model keeps a table row's author anchor, so an entry in that row lands on it.
+  @Test func `a primary index entry in an anchored table row lands on the row`() throws {
+    let xml = """
+      <rfc><middle>
+        <section pn="section-4"><name>Codes</name>
+          <table pn="table-1">
+            <tbody><tr anchor="code.418"><td><iref primary="true" item="teapot"/>A teapot.</td></tr></tbody>
+          </table>
+        </section>
+      </middle></rfc>
+      """
+    let root = try XMLTree.parse(Data(xml.utf8))
+    let terms = RFCXMLParser.primaryIndexTerms(in: root)
+    #expect(terms.map(\.anchor) == ["code.418"])
   }
 }
