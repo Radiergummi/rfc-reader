@@ -54,7 +54,10 @@ public enum RegistryLookup {
   /// A decimal or `0x` hexadecimal number, or nil for anything else.
   private static func number(_ text: String) -> Number? {
     if text.hasPrefix("0x") {
-      return Int(text.dropFirst(2), radix: 16).map { Number(value: $0, isHexadecimal: true) }
+      // `Int(_:radix:)` takes a sign as well, and a code has none.
+      let digits = text.dropFirst(2)
+      guard digits.allSatisfy(\.isHexDigit) else { return nil }
+      return Int(digits, radix: 16).map { Number(value: $0, isHexadecimal: true) }
     }
     guard !text.isEmpty, text.allSatisfy(\.isASCII), text.allSatisfy(\.isNumber) else {
       return nil

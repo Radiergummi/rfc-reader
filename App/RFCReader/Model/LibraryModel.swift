@@ -164,7 +164,11 @@ final class LibraryModel {
           "fetching recent RFCs failed: \(String(describing: error), privacy: .public)")
       }
     }
-    Task(name: "Load registries") { await refreshRegistries() }
+    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
+    // fetch them for nothing.
+    #if os(macOS)
+      Task(name: "Load registries") { await refreshRegistries() }
+    #endif
   }
 
   // MARK: - Registries
@@ -182,19 +186,28 @@ final class LibraryModel {
   private func refreshRegistries() async {
     var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
-    guard !cached.stale.isEmpty else { return }
     for registry in cached.stale {
+      let fetched: (entries: [RegistryEntry], data: Data)
       do {
-        let fetched = try await client.fetchRegistry(registry)
-        try await store.storeRegistry(fetched.data, for: registry)
-        cached.entries[registry] = fetched.entries
+        fetched = try await client.fetchRegistry(registry)
       } catch {
         libraryLog.error(
           "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
         )
+        continue
+      }
+      // Listed as soon as it is read, not after the slowest of the others, and
+      // whether or not it can be kept for the next launch.
+      cached.entries[registry] = fetched.entries
+      registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+      do {
+        try await store.storeRegistry(fetched.data, for: registry)
+      } catch {
+        libraryLog.error(
+          "caching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
       }
     }
-    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,

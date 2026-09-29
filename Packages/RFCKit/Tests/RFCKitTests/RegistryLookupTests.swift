@@ -62,6 +62,13 @@ struct RegistryLookupTests {
     #expect(lookup("0x0003") == ["quicTransportErrors 0x03"])
   }
 
+  /// A code has no sign, in either base: `0x+3` is not `0x03`.
+  @Test func `a signed number matches nothing`() {
+    #expect(lookup("0x+3") == [])
+    #expect(lookup("0x-3") == [])
+    #expect(lookup("+425") == [])
+  }
+
   /// QUIC's codes are written in hexadecimal: `quic 10` is not `0x0a`.
   @Test func `a decimal number does not match a hexadecimal code`() {
     #expect(lookup("quic 3") == [])
