@@ -4,8 +4,15 @@ import Foundation
 public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<Stream> = []
-  public var workingGroup: String?
-  public var author: String?
+  /// Lowercased when set, and nil when set empty, as the prepared fields it is
+  /// matched against are lowercased and an empty value is no filter.
+  public var workingGroup: String? {
+    didSet { workingGroup = Self.normalized(workingGroup) }
+  }
+  /// Lowercased when set, and nil when set empty, as `workingGroup` is.
+  public var author: String? {
+    didSet { author = Self.normalized(author) }
+  }
   public var yearRange: ClosedRange<Int>?
   public var excludeObsolete = false
   public var requiresXML = false
@@ -15,6 +22,11 @@ public struct SearchFilters: Sendable, Hashable {
   public var isEmpty: Bool {
     statuses.isEmpty && streams.isEmpty && workingGroup == nil && author == nil
       && yearRange == nil && !excludeObsolete && !requiresXML
+  }
+
+  private static func normalized(_ value: String?) -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    return value.lowercased()
   }
 }
 
@@ -70,7 +82,7 @@ public struct IndexSearch: Sendable {
   /// A value with spaces is quoted, `author:"Roy Fielding"`, and loses its quotes. A
   /// quoted phrase of free text keeps them, so `search(text:filters:)` reads it as one
   /// term (#177).
-  public static func parseQuery(_ query: String) -> (text: String, filters: SearchFilters) {
+  public static func parseQuery(_ query: String) -> SearchQuery.Parsed {
     var filters = SearchFilters()
     var words: [String] = []
     for token in SearchQuery.words(in: query) {
@@ -87,9 +99,9 @@ public struct IndexSearch: Sendable {
       }
       switch key {
       case "wg", "group":
-        filters.workingGroup = value.lowercased()
+        filters.workingGroup = value
       case "author", "by":
-        filters.author = value.lowercased()
+        filters.author = value
       case "stream":
         if let stream = Stream.allCases.first(where: {
           $0.rawValue.lowercased() == value.lowercased()
@@ -120,12 +132,12 @@ public struct IndexSearch: Sendable {
         words.append(token)
       }
     }
-    return (words.joined(separator: " "), filters)
+    return SearchQuery.Parsed(text: words.joined(separator: " "), filters: filters)
   }
 
   public func search(_ query: String, limit: Int = 100) -> [SearchHit] {
-    let (text, filters) = Self.parseQuery(query)
-    return search(text: text, filters: filters, limit: limit)
+    let parsed = Self.parseQuery(query)
+    return search(text: parsed.text, filters: parsed.filters, limit: limit)
   }
 
   public func search(text: String, filters: SearchFilters, limit: Int = 100) -> [SearchHit] {
@@ -146,11 +158,11 @@ public struct IndexSearch: Sendable {
     let needles = terms.map(SearchText.init)
     // The query as the title bonus compares it, without the quotes of its phrases.
     let lowered = SearchText(terms.joined(separator: " "))
-    let author = filters.author.map(AuthorQuery.init)
+    let filter = PreparedFilters(filters)
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]
-      guard matches(rfc, entry: entry, filters: filters, author: author) else { continue }
+      guard filter.matches(entry, rfc: rfc) else { continue }
       if terms.isEmpty {
         hits.append(SearchHit(rfc: rfc, score: rfc.number))
         continue
@@ -166,18 +178,32 @@ public struct IndexSearch: Sendable {
     return Array(hits.prefix(limit))
   }
 
-  /// `author` is `filters.author` prepared once for the whole scan.
-  private func matches(
-    _ rfc: RFCMetadata, entry: Entry, filters: SearchFilters, author: AuthorQuery?
-  ) -> Bool {
-    if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
-    if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
-    if let group = filters.workingGroup, rfc.workingGroup?.lowercased() != group { return false }
-    if let author, !entry.authorNames.contains(where: { $0.matches(author) }) { return false }
-    if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
-    if filters.excludeObsolete, rfc.isObsolete { return false }
-    if filters.requiresXML, !rfc.hasXMLSource { return false }
-    return true
+  /// The filters with their text made into needles once per query, matched against
+  /// an entry's prepared fields (#151). Lowercasing every author and working group
+  /// on every query was the whole cost of an `author:` search: 6.6 ms in release
+  /// over the full index, twice a free-text query's.
+  private struct PreparedFilters {
+    let filters: SearchFilters
+    let group: SearchText?
+    let author: AuthorQuery?
+
+    init(_ filters: SearchFilters) {
+      self.filters = filters
+      group = filters.workingGroup.map(SearchText.init)
+      author = filters.author.map(AuthorQuery.init)
+    }
+
+    func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
+      if !filters.statuses.isEmpty, !filters.statuses.contains(rfc.currentStatus) { return false }
+      if !filters.streams.isEmpty, !filters.streams.contains(rfc.stream) { return false }
+      if let years = filters.yearRange, !years.contains(rfc.date.year) { return false }
+      if filters.excludeObsolete, rfc.isObsolete { return false }
+      if filters.requiresXML, !rfc.hasXMLSource { return false }
+      // The text filters come last, so the cheap checks above spare them their scan.
+      if let group, entry.group != group { return false }
+      if let author, !entry.authorNames.contains(where: { $0.matches(author) }) { return false }
+      return true
+    }
   }
 
   /// Every term must match somewhere; where it matches decides the weight.

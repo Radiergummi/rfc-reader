@@ -34,10 +34,7 @@ struct SearchQueryTests {
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
-    let formatted = SearchQuery.format(text: parsed.text, filters: parsed.filters)
-    let reparsed = IndexSearch.parseQuery(formatted)
-    #expect(reparsed.text == parsed.text)
-    #expect(reparsed.filters == parsed.filters)
+    #expect(IndexSearch.parseQuery(SearchQuery.format(parsed)) == parsed)
   }
 
   /// The canonical form: long spellings, lowercased values, one qualifier per
@@ -46,8 +43,7 @@ struct SearchQueryTests {
     let parsed = IndexSearch.parseQuery(
       "cache by:Fielding is:standard group:HTTPBIS year:2022-2020")
     #expect(
-      SearchQuery.format(text: parsed.text, filters: parsed.filters)
-        == "wg:httpbis status:std author:fielding year:2020-2022 cache")
+      SearchQuery.format(parsed) == "wg:httpbis status:std author:fielding year:2020-2022 cache")
   }
 
   /// A value with a space in it is written back in quotes, or it would read back as a
