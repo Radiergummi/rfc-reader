@@ -26,10 +26,10 @@ public enum CitationStyle: String, CaseIterable, Sendable, Identifiable {
   }
 }
 
-public struct CitationFormatter: Sendable {
-  public init() {}
-
-  public func cite(_ rfc: RFCMetadata, section: String? = nil, style: CitationStyle) -> String {
+public enum CitationFormatter {
+  public static func cite(_ rfc: RFCMetadata, section: String? = nil, style: CitationStyle)
+    -> String
+  {
     switch style {
     case .short:
       return sectionSuffix(section).map { "\(rfc.id.displayName), \($0)" } ?? rfc.id.displayName
@@ -52,12 +52,12 @@ public struct CitationFormatter: Sendable {
       RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), section: section)
   }
 
-  private func sectionSuffix(_ section: String?) -> String? {
+  private static func sectionSuffix(_ section: String?) -> String? {
     guard let section, !section.isEmpty else { return nil }
     return section.first?.isLetter == true ? "Appendix \(section)" : "Section \(section)"
   }
 
-  private func fullCitation(_ rfc: RFCMetadata, section: String?) -> String {
+  private static func fullCitation(_ rfc: RFCMetadata, section: String?) -> String {
     // Matches the format shown on every rfc-editor.org info page:
     // Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., "HTTP Semantics", STD 97, RFC 9110, DOI 10.17487/RFC9110, June 2022, <https://www.rfc-editor.org/info/rfc9110>.
     var parts: [String] = []
@@ -82,9 +82,8 @@ public struct CitationFormatter: Sendable {
     func inverted(_ author: Author) -> String {
       let name = author.name
       guard let lastSpace = name.lastIndex(of: " ") else { return name + roleSuffix(author) }
-      let surname = String(name[name.index(after: lastSpace)...])
       let initials = String(name[..<lastSpace])
-      return "\(surname), \(initials)\(roleSuffix(author))"
+      return "\(author.surname), \(initials)\(roleSuffix(author))"
     }
     func roleSuffix(_ author: Author) -> String {
       author.isEditor ? ", Ed." : ""
@@ -100,7 +99,7 @@ public struct CitationFormatter: Sendable {
     }
   }
 
-  private func bibtex(_ rfc: RFCMetadata) -> String {
+  private static func bibtex(_ rfc: RFCMetadata) -> String {
     let key = rfc.id.fileStem
     let authors = rfc.authors.map(\.name).joined(separator: " and ")
     var fields: [(String, String)] = [
