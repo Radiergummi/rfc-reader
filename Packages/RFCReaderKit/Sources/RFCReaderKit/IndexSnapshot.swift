@@ -1,7 +1,7 @@
 import Foundation
 import RFCKit
 
-/// A decoded copy of the RFC index, kept beside the index so a launch reads it
+/// A decoded copy of the RFC index, kept in the app's caches so a launch reads it
 /// instead of parsing 14 MB of XML.
 ///
 /// JSON, because it was measured fastest of what Foundation offers: decoding the
