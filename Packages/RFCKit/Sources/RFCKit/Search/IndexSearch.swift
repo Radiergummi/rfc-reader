@@ -4,8 +4,15 @@ import Foundation
 public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
   public var streams: Set<Stream> = []
-  public var workingGroup: String?
-  public var author: String?
+  /// Lowercased when set, and nil when set empty, as the prepared fields it is
+  /// matched against are lowercased and an empty value is no filter.
+  public var workingGroup: String? {
+    didSet { workingGroup = Self.normalized(workingGroup) }
+  }
+  /// Lowercased when set, and nil when set empty, as `workingGroup` is.
+  public var author: String? {
+    didSet { author = Self.normalized(author) }
+  }
   public var yearRange: ClosedRange<Int>?
   public var excludeObsolete = false
   public var requiresXML = false
@@ -15,6 +22,11 @@ public struct SearchFilters: Sendable, Hashable {
   public var isEmpty: Bool {
     statuses.isEmpty && streams.isEmpty && workingGroup == nil && author == nil
       && yearRange == nil && !excludeObsolete && !requiresXML
+  }
+
+  private static func normalized(_ value: String?) -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    return value.lowercased()
   }
 }
 
@@ -77,9 +89,9 @@ public struct IndexSearch: Sendable {
       let value = String(parts[1])
       switch key {
       case "wg", "group":
-        filters.workingGroup = value.lowercased()
+        filters.workingGroup = value
       case "author", "by":
-        filters.author = value.lowercased()
+        filters.author = value
       case "stream":
         if let stream = Stream.allCases.first(where: {
           $0.rawValue.lowercased() == value.lowercased()
@@ -164,10 +176,8 @@ public struct IndexSearch: Sendable {
 
     init(_ filters: SearchFilters) {
       self.filters = filters
-      // `parseQuery` lowercases both already; a caller building filters by hand
-      // may not have.
-      group = filters.workingGroup.map { SearchText($0.lowercased()) }
-      author = filters.author.map { SearchText($0.lowercased()) }
+      group = filters.workingGroup.map(SearchText.init)
+      author = filters.author.map(SearchText.init)
     }
 
     func matches(_ entry: Entry, rfc: RFCMetadata) -> Bool {
@@ -177,13 +187,8 @@ public struct IndexSearch: Sendable {
       if filters.excludeObsolete, rfc.isObsolete { return false }
       if filters.requiresXML, !rfc.hasXMLSource { return false }
       // The text filters come last, so the cheap checks above spare them their scan.
-      // An empty value matches nothing, as it did when the filters went through
-      // Foundation: a document with no working group has an empty prepared group,
-      // and an empty needle is contained in every name.
-      if let group, group.isEmpty || entry.group != group { return false }
-      if let author, author.isEmpty || !entry.authors.contains(where: { $0.contains(author) }) {
-        return false
-      }
+      if let group, entry.group != group { return false }
+      if let author, !entry.authors.contains(where: { $0.contains(author) }) { return false }
       return true
     }
   }
@@ -246,8 +251,6 @@ struct SearchText: Hashable, Sendable {
   init(_ string: String) {
     bytes = Array(string.utf8)
   }
-
-  var isEmpty: Bool { bytes.isEmpty }
 
   func hasPrefix(_ other: SearchText) -> Bool {
     guard other.bytes.count <= bytes.count else { return false }

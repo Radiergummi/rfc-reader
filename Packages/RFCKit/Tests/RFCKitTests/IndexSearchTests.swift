@@ -42,20 +42,14 @@ struct IndexSearchTests {
     #expect(xmlOnly.allSatisfy { $0.rfc.hasXMLSource })
   }
 
-  /// Filters built by hand, not by `parseQuery`, which lowercases what it reads:
-  /// the prepared fields are lowercased, so the needles have to be as well (#151).
-  @Test func `a filter value built in capitals matches`() throws {
-    let search = IndexSearch(index: try Fixtures.sampleIndex())
-    func numbers(group: String? = nil, author: String? = nil) -> [Int] {
-      var filters = SearchFilters()
-      filters.workingGroup = group
-      filters.author = author
-      return search.search(text: "", filters: filters, limit: .max).map(\.rfc.number)
-    }
-    #expect(!numbers(group: "httpbis").isEmpty)
-    #expect(numbers(group: "HTTPBIS") == numbers(group: "httpbis"))
-    #expect(!numbers(author: "fielding").isEmpty)
-    #expect(numbers(author: "FIELDING") == numbers(author: "fielding"))
+  /// The filters normalise their own text, so a hand-built filter matches like a
+  /// parsed one: the prepared fields it is matched against are lowercased.
+  @Test func `a text filter value is stored lowercased`() {
+    var filters = SearchFilters()
+    filters.workingGroup = "HTTPBIS"
+    filters.author = "Fielding"
+    #expect(filters.workingGroup == "httpbis")
+    #expect(filters.author == "fielding")
   }
 
   /// A working group matches as a whole name, and an author as part of one, as they
@@ -68,14 +62,17 @@ struct IndexSearchTests {
     #expect(whole.isSubset(of: search.search("author:field", limit: .max).map(\.rfc.number)))
   }
 
-  /// An empty value filters out everything, as it did through Foundation, rather
-  /// than matching every document with no working group, or with any author.
-  @Test func `an empty filter value matches nothing`() throws {
+  /// An empty value is no filter: it is stored as nil, and matches every document.
+  @Test func `an empty filter value matches like no filter`() throws {
     let search = IndexSearch(index: try Fixtures.sampleIndex())
+    let everything = search.search(text: "", filters: SearchFilters(), limit: .max)
     for keyPath in [\SearchFilters.workingGroup, \SearchFilters.author] {
       var filters = SearchFilters()
       filters[keyPath: keyPath] = ""
-      #expect(search.search(text: "", filters: filters, limit: .max).isEmpty)
+      #expect(filters[keyPath: keyPath] == nil)
+      #expect(filters.isEmpty)
+      let hits = search.search(text: "", filters: filters, limit: .max)
+      #expect(hits.map(\.rfc.number) == everything.map(\.rfc.number))
     }
   }
 
