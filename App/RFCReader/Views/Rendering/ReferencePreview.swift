@@ -56,7 +56,6 @@ struct ReferencePreview: View {
         Text(heading).font(.headline)
       } else if let entry {
         entryDescription(entry)
-        kindLine
       }
     }
     .padding(12)
@@ -77,8 +76,8 @@ struct ReferencePreview: View {
 
   /// What the References panel shows for the entry, without its button: the tag
   /// the document cites it by, the title — or, for a legacy entry that could not be
-  /// structured, its own words — the authors and where it was published, and the
-  /// host it links to.
+  /// structured, its own words — whether it is normative or informative, the
+  /// authors and where it was published, and the host it links to.
   @ViewBuilder
   private func entryDescription(_ entry: Reference) -> some View {
     Text(entry.displayAnchor).font(.subheadline.weight(.semibold))
@@ -86,8 +85,10 @@ struct ReferencePreview: View {
       if let raw = entry.rawText {
         Text(raw).font(.callout).foregroundStyle(.secondary).lineLimit(6)
       }
+      kindLine
     } else {
       Text(entry.title).font(.headline).lineLimit(3)
+      kindLine
       let byline = entry.authors.joined(separator: ", ")
       let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
       if !detail.isEmpty {

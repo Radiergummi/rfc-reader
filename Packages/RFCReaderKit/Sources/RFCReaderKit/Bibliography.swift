@@ -45,10 +45,11 @@ public struct ReferenceKinds: Sendable {
 
   public init(_ groups: [ReferenceGroup]) {
     for group in groups {
+      let kind = group.kind
       for entry in group.entries {
-        byAnchor[entry.anchor] = Self.stronger(byAnchor[entry.anchor], group.kind)
+        byAnchor[entry.anchor] = Self.stronger(byAnchor[entry.anchor], kind)
         if let id = entry.documentID {
-          byDocument[id] = Self.stronger(byDocument[id], group.kind)
+          byDocument[id] = Self.stronger(byDocument[id], kind)
         }
       }
     }
