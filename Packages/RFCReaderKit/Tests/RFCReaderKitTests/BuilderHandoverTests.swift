@@ -14,8 +14,7 @@ import Testing
 /// off the main actor, and nothing in what it returns can be written by anyone once
 /// it reaches the main actor.
 ///
-/// Not `@MainActor`, unlike the other builder suites: the point is that the build
-/// does not need it.
+/// Not `@MainActor`: the point is that the build does not need it.
 @Suite("Builder: handover")
 struct BuilderHandoverTests {
   /// The app's own shape: `DocumentView` builds off the main actor, in an

@@ -31,6 +31,7 @@ struct AdjacentCardTests {
     storage.textStorage?.setAttributedString(text)
     let layout = NSTextLayoutManager()
     storage.addTextLayoutManager(layout)
+    defer { withExtendedLifetime(storage) {} }
     let container = NSTextContainer(size: CGSize(width: style.measure, height: 0))
     container.lineFragmentPadding = 0
     layout.textContainer = container
