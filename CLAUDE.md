@@ -19,7 +19,7 @@ Everything goes through the `Makefile`:
 | `make run` | build and launch the macOS app (quits a running copy first) |
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
 | `make install` | build Release and copy it into `/Applications` |
-| `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,464 |
+| `make corpus` | fetch → convert → manifest, 20 documents; `CORPUS_LIMIT=` for all 8,457 |
 
 The app builds are signed with the team in `project.yml` (`TH593VRB6W`, bundle ID `me.mazetti.rfc-reader`) and may create provisioning profiles as they go. CI has no certificates and passes `CODE_SIGNING_ALLOWED=NO`, which does the same locally.
 
@@ -51,7 +51,7 @@ Standing constraints those documents establish, which are easy to violate by acc
 
 ## Working on the legacy text heuristics
 
-`LegacyTextParser` recovers structure from plain text by indentation and shape, so every change risks a regression across 8,464 documents. The workflow:
+`LegacyTextParser` recovers structure from plain text by indentation and shape, so every change risks a regression across 8,457 documents. The workflow:
 
 1. Write the test first, as the first of these that can show the problem:
    1. a guard-level test over hand-written lines (below);

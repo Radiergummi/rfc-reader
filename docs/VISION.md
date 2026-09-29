@@ -122,7 +122,7 @@ Ideas from the first brainstorm session and where each one lands.
 | Errata | `https://www.rfc-editor.org/errata.json` | ~12 MB, every erratum with section and original/corrected text |
 | Datatracker record | `https://datatracker.ietf.org/api/v1/doc/document/?name=rfcNNNN&format=json` | Working group, history, related drafts |
 
-The 8,464 legacy text-only RFCs are a closed set; they are converted to RFCXML once, offline, and shipped as optional packs together with search indexes and the citation graph. `DATA_PIPELINE.md` has sizes and the delivery design.
+The 8,464 legacy RFCs are a closed set; the 8,457 of them published as text are converted to RFCXML once, offline, and shipped as optional packs together with search indexes and the citation graph. `DATA_PIPELINE.md` has sizes and the delivery design.
 
 RFC numbers passed 10000 in 2026 (RFC 10050 was published on 19 September 2026). Nothing may assume four digits.
 

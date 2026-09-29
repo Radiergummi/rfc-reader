@@ -184,7 +184,8 @@ corpus-tool:
 	swift build -c release --package-path $(CORPUS_BUILD)
 
 # Twenty documents by default, enough to exercise the pipeline in a minute. The
-# full set is 8,464 legacy RFCs, roughly 450 MB and twenty minutes:
+# full set is the 8,457 legacy RFCs with a text file, roughly 450 MB and twenty
+# minutes:
 #
 #   make corpus CORPUS_LIMIT= CORPUS_VERSION=2026.09
 #
