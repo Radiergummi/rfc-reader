@@ -46,6 +46,9 @@
     /// Whether a print is being prepared or its panel is up, so a second ⌘P
     /// neither builds the PDF again nor asks for a second sheet.
     private var isPrinting = false
+    /// Whether an export's save panel is up or its file is being made, so a second
+    /// ⌘⇧E neither asks for a second panel nor makes the file again.
+    private var isExporting = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -511,14 +514,20 @@
     /// picks (#376), as a sheet on this window. A paged format is laid out for the
     /// paper Page Setup has chosen, as a print is.
     func exportDocument() {
-      guard let id = navigation.selection, reader.hasDocument, let window else { return }
+      guard !isExporting, let id = navigation.selection, reader.hasDocument, let window else {
+        return
+      }
       let panel = NSSavePanel()
       let chooser = ExportFormatChooser(panel: panel, document: id)
       panel.accessoryView = chooser.view
       panel.isExtensionHidden = false
       panel.canCreateDirectories = true
+      isExporting = true
       panel.beginSheetModal(for: window) { [library] response in
-        guard response == .OK, let url = panel.url else { return }
+        guard response == .OK, let url = panel.url else {
+          self.isExporting = false
+          return
+        }
         // Read here, not captured earlier: the chooser is what the panel's pop-up
         // changed, and holding it in this closure is what keeps it alive.
         let format = chooser.format
@@ -527,7 +536,9 @@
             let data = try await DocumentExport.data(
               for: id, as: format, paperSize: NSPrintInfo.shared.paperSize, library: library)
             try data.write(to: url, options: .atomic)
+            self.isExporting = false
           } catch {
+            self.isExporting = false
             _ = window.presentError(error)
           }
         }
