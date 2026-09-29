@@ -49,7 +49,9 @@ nonisolated enum DocumentPDF {
     return await render(content, furniture: furniture, paperSize: paperSize)
   }
 
-  /// Builds, lays out and draws, off the main actor.
+  /// Builds, lays out and draws, off the main actor, all of it in the light
+  /// appearance: whether a dynamic colour resolves when a line is laid out or when
+  /// it is drawn is TextKit's to decide, and either way it has to be paper's.
   @concurrent
   static func render(_ content: Content, furniture: PrintFurniture, paperSize: CGSize) async
     -> Data
@@ -57,79 +59,102 @@ nonisolated enum DocumentPDF {
     let layout = PrintLayout(paperSize: paperSize)
     switch content {
     case .document(let document):
+      return buildAndLayOut(document, furniture: furniture, layout: layout) { _, laidOut in
+        pdf(laidOut, layout: layout, furniture: furniture)
+      }
+    case .original(let source):
+      return inLightAppearance {
+        let text = NSAttributedString(
+          string: source,
+          attributes: [
+            .font: PlatformFont.monospacedSystemFont(
+              ofSize: PrintLayout.originalTextSize, weight: .regular),
+            .foregroundColor: RFCColors.label,
+          ])
+        return layOut(text, keepingWithNext: [], layout: layout) { laidOut in
+          pdf(laidOut, layout: layout, furniture: furniture)
+        }
+      }
+    }
+  }
+
+  /// `document` built for `layout`'s paper and laid out, handed to `body` with what
+  /// the build knows about it. All of it in the light appearance, what `body` draws
+  /// included, for the reason `render` gives. A print and an export both go
+  /// through here, so a PDF exported in Dark Mode is as white as a print (#376).
+  static func buildAndLayOut<Result>(
+    _ document: RFCDocument, furniture: PrintFurniture, layout: PrintLayout,
+    _ body: (BuiltDocument, LaidOut) -> Result
+  ) -> Result {
+    inLightAppearance {
       let built = DocumentTextBuilder.build(
         document, style: layout.style, title: furniture.titleBlock)
-      let laidOut = LaidOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout)
-      return pdf(laidOut, layout: layout, furniture: furniture)
-    case .original(let source):
-      let text = NSAttributedString(
-        string: source,
-        attributes: [
-          .font: PlatformFont.monospacedSystemFont(
-            ofSize: PrintLayout.originalTextSize, weight: .regular),
-          .foregroundColor: RFCColors.label,
-        ])
-      let laidOut = LaidOut(text, keepingWithNext: [], layout: layout)
-      return pdf(laidOut, layout: layout, furniture: furniture)
+      return layOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout) {
+        laidOut in
+        body(built, laidOut)
+      }
     }
   }
 
   // MARK: - Layout
 
-  /// Text laid out at a page's column, and broken into pages.
-  ///
-  /// A class that holds the storage, the layout manager and the fragment factory
-  /// for as long as it lives: a fragment reaches its text through its layout
-  /// manager, weakly, and draws its decorations from what it finds there. An export
-  /// measures it again after drawing, to place its links and destinations.
-  nonisolated final class LaidOut {
-    let storage: NSTextContentStorage
+  /// Text laid out at a page's column, and broken into pages: what `layOut` hands
+  /// its body, and only good while that body runs.
+  nonisolated struct LaidOut {
     let manager: NSTextLayoutManager
-    private let factory: FragmentFactory
     /// In document order, top-down.
     let fragments: [NSTextLayoutFragment]
     /// Each fragment's extent, for `PrintPagination.spans(_:on:)`.
     let spans: [PrintPagination.Span]
     let pages: [PrintPagination.Page]
+  }
 
-    init(_ text: NSAttributedString, keepingWithNext: Set<Int>, layout: PrintLayout) {
-      let storage = NSTextContentStorage()
-      let manager = NSTextLayoutManager()
-      let factory = FragmentFactory()
-      manager.delegate = factory
-      storage.addTextLayoutManager(manager)
-      let container = NSTextContainer(
-        size: CGSize(width: layout.contentRect.width, height: CGFloat.greatestFiniteMagnitude))
-      container.lineFragmentPadding = 0
-      manager.textContainer = container
-      storage.install(text)
+  /// Lays `text` out at the page's column, breaks it into pages and hands the
+  /// result to `body`, which draws it and, for an export, measures it again to
+  /// place its links and destinations.
+  ///
+  /// The storage, layout manager and fragment factory are held until `body`
+  /// returns, explicitly: a layout manager holds its delegate and its storage
+  /// weakly, and a fragment its layout manager, and a local's lifetime ends at its
+  /// last use, not at the end of its scope. Released early, the layout falls back
+  /// to plain fragments or finds no text, and the fragments draw no decorations.
+  private static func layOut<Result>(
+    _ text: NSAttributedString, keepingWithNext: Set<Int>, layout: PrintLayout,
+    _ body: (LaidOut) -> Result
+  ) -> Result {
+    let storage = NSTextContentStorage()
+    let manager = NSTextLayoutManager()
+    let factory = FragmentFactory()
+    defer { withExtendedLifetime((storage, manager, factory)) {} }
+    manager.delegate = factory
+    storage.addTextLayoutManager(manager)
+    let container = NSTextContainer(
+      size: CGSize(width: layout.contentRect.width, height: CGFloat.greatestFiniteMagnitude))
+    container.lineFragmentPadding = 0
+    manager.textContainer = container
+    storage.install(text)
 
-      var fragments: [NSTextLayoutFragment] = []
-      var spans: [PrintPagination.Span] = []
-      var lines: [PrintPagination.Line] = []
-      _ = manager.enumerateTextLayoutFragments(
-        from: manager.documentRange.location, options: [.ensuresLayout]
-      ) { fragment in
-        let frame = fragment.layoutFragmentFrame
-        let keeps = keepingWithNext.contains(manager.offset(of: fragment.rangeInElement.location))
-        for line in fragment.textLineFragments {
-          let bounds = line.typographicBounds
-          lines.append(
-            PrintPagination.Line(
-              minY: frame.minY + bounds.minY, maxY: frame.minY + bounds.maxY, keepsWithNext: keeps
-            ))
-        }
-        fragments.append(fragment)
-        spans.append(PrintPagination.Span(minY: frame.minY, maxY: frame.maxY))
-        return true
+    var fragments: [NSTextLayoutFragment] = []
+    var spans: [PrintPagination.Span] = []
+    var lines: [PrintPagination.Line] = []
+    _ = manager.enumerateTextLayoutFragments(
+      from: manager.documentRange.location, options: [.ensuresLayout]
+    ) { fragment in
+      let frame = fragment.layoutFragmentFrame
+      let keeps = keepingWithNext.contains(manager.offset(of: fragment.rangeInElement.location))
+      for line in fragment.textLineFragments {
+        let bounds = line.typographicBounds
+        lines.append(
+          PrintPagination.Line(
+            minY: frame.minY + bounds.minY, maxY: frame.minY + bounds.maxY, keepsWithNext: keeps
+          ))
       }
-      self.storage = storage
-      self.manager = manager
-      self.factory = factory
-      self.fragments = fragments
-      self.spans = spans
-      pages = PrintPagination.pages(of: lines, pageHeight: layout.contentRect.height)
+      fragments.append(fragment)
+      spans.append(PrintPagination.Span(minY: frame.minY, maxY: frame.maxY))
+      return true
     }
+    let pages = PrintPagination.pages(of: lines, pageHeight: layout.contentRect.height)
+    return body(LaidOut(manager: manager, fragments: fragments, spans: spans, pages: pages))
   }
 
   /// The reader's own fragment class, so a print has the cards, rules and chips the
@@ -153,28 +178,23 @@ nonisolated enum DocumentPDF {
     guard let consumer = CGDataConsumer(data: data as CFMutableData),
       let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
     else { return Data() }
-    let column = layout.contentRect
-    inLightAppearance {
-      withCurrentContext(context) {
-        // Inside the light appearance, which the furniture's colour resolves in.
-        let running = RunningLines(furniture, layout: layout)
-        for (index, page) in laidOut.pages.enumerated() {
-          context.beginPDFPage(nil)
-          context.saveGState()
-          // Top-down, as the text view the fragments were written for draws.
-          context.translateBy(x: 0, y: layout.paperSize.height)
-          context.scaleBy(x: 1, y: -1)
-          running.draw(page: index + 1, in: context)
-          context.clip(
-            to: CGRect(x: column.minX, y: column.minY, width: column.width, height: page.height))
-          for fragment in laidOut.fragments[PrintPagination.spans(laidOut.spans, on: page)] {
-            let origin = layout.onPaper(fragment.layoutFragmentFrame, page: page).origin
-            fragment.draw(at: origin, in: context)
-            drawAttachments(of: fragment, at: origin)
-          }
-          context.restoreGState()
-          context.endPDFPage()
+    withCurrentContext(context) {
+      let running = RunningLines(furniture, layout: layout)
+      for (index, page) in laidOut.pages.enumerated() {
+        context.beginPDFPage(nil)
+        context.saveGState()
+        // Top-down, as the text view the fragments were written for draws.
+        context.translateBy(x: 0, y: layout.paperSize.height)
+        context.scaleBy(x: 1, y: -1)
+        running.draw(page: index + 1, in: context)
+        context.clip(to: layout.clipRect(for: page))
+        for fragment in laidOut.fragments[PrintPagination.spans(laidOut.spans, on: page)] {
+          let origin = layout.onPaper(fragment.layoutFragmentFrame, page: page).origin
+          fragment.draw(at: origin, in: context)
+          drawAttachments(of: fragment, at: origin)
         }
+        context.restoreGState()
+        context.endPDFPage()
       }
     }
     context.closePDF()
@@ -203,16 +223,16 @@ nonisolated enum DocumentPDF {
 
   /// The reader's colours are dynamic; paper is white, so they resolve as they do
   /// in the light appearance.
-  private static func inLightAppearance(_ body: () -> Void) {
+  private static func inLightAppearance<Result>(_ body: () -> Result) -> Result {
+    // Both platforms run `body` before they return, so `result` is always set.
+    var result: Result?
     #if canImport(UIKit)
-      UITraitCollection(userInterfaceStyle: .light).performAsCurrent(body)
+      UITraitCollection(userInterfaceStyle: .light).performAsCurrent { result = body() }
     #else
-      if let light = NSAppearance(named: .aqua) {
-        light.performAsCurrentDrawingAppearance(body)
-      } else {
-        body()
-      }
+      guard let light = NSAppearance(named: .aqua) else { return body() }
+      light.performAsCurrentDrawingAppearance { result = body() }
     #endif
+    return result!
   }
 
   /// `context` as the platform's current graphics context, which the attachments'

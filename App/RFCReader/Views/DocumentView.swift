@@ -76,6 +76,8 @@ struct DocumentView: View {
   }
   #if !os(macOS)
     @State private var showsInspector = false
+    /// Whether a print is being prepared or its sheet is up; see `printDocument()`.
+    @State private var isPrinting = false
     /// A finished export, while Save to Files is showing it (#376).
     @State private var exported: ExportedFile?
 
@@ -486,20 +488,27 @@ struct DocumentView: View {
     /// The system's print sheet, with the document laid out for paper (#375). Laid
     /// out for the region's paper; the sheet scales it to whatever paper is chosen.
     private func printDocument() {
+      // A second tap while the PDF is built would build it again and present the
+      // shared controller twice.
+      guard !isPrinting else { return }
+      isPrinting = true
       let original = reader.showOriginal
       Task {
         guard
           let data = try? await DocumentPDF.make(
             for: id, original: original, paperSize: PrintLayout.paperSize(for: .current),
             library: library)
-        else { return }
+        else {
+          isPrinting = false
+          return
+        }
         let info = UIPrintInfo.printInfo()
         info.jobName = id.displayName
         info.outputType = .general
         let controller = UIPrintInteractionController.shared
         controller.printInfo = info
         controller.printingItem = data
-        controller.present(animated: true)
+        controller.present(animated: true) { _, _, _ in isPrinting = false }
       }
     }
 

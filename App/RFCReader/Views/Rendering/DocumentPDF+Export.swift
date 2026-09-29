@@ -34,17 +34,16 @@ nonisolated extension DocumentPDF {
   {
     let layout = PrintLayout(paperSize: paperSize)
     let furniture = PrintFurniture(header: document.header, metadata: metadata)
-    let built = DocumentTextBuilder.build(
-      document, style: layout.style, title: furniture.titleBlock)
-    let laidOut = LaidOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout)
-    let pages = pdf(laidOut, layout: layout, furniture: furniture)
-    let outline = PDFExport.outline(of: document, built: built)
-    let marks = PDFMarks(
-      laidOut, text: built.text, anchors: built.anchors, outline: outline,
-      references: PDFExport.references(in: document), layout: layout)
-    return annotate(
-      pages, marks: marks, outline: outline,
-      info: PDFExport.Info(header: document.header, metadata: metadata))
+    return buildAndLayOut(document, furniture: furniture, layout: layout) { built, laidOut in
+      let pages = pdf(laidOut, layout: layout, furniture: furniture)
+      let outline = PDFExport.outline(of: document, built: built)
+      let marks = PDFMarks(
+        laidOut, text: built.text, anchors: built.anchors, outline: outline,
+        references: PDFExport.references(in: document), layout: layout)
+      return annotate(
+        pages, marks: marks, outline: outline,
+        info: PDFExport.Info(header: document.header, metadata: metadata))
+    }
   }
 
   /// The rendered pages with their links, outline and info added, through PDFKit.

@@ -42,11 +42,19 @@ public struct PrintLayout: Sendable, Equatable {
   /// ISO A4, in points.
   static let isoA4 = CGSize(width: 595, height: 842)
 
+  /// The regions that print on Letter. Not the ones that measure in US customary
+  /// units: Canada, Mexico and the Philippines are metric and use Letter too. This
+  /// is CLDR's paper-size data, which Foundation does not expose.
+  static let letterRegions: Set<String> = [
+    "BZ", "CA", "CL", "CO", "CR", "GT", "MX", "NI", "PA", "PH", "PR", "SV", "US", "VE",
+  ]
+
   /// The paper a region prints on when nothing has said otherwise: Letter where
-  /// measurements are US customary, A4 everywhere else. For iOS, whose print sheet
-  /// picks the paper only after the document is laid out; the Mac asks Page Setup.
+  /// the region uses it, A4 everywhere else. For iOS, whose print sheet picks the
+  /// paper only after the document is laid out; the Mac asks Page Setup.
   public static func paperSize(for locale: Locale) -> CGSize {
-    locale.measurementSystem == .us ? letter : isoA4
+    guard let region = locale.region?.identifier else { return isoA4 }
+    return letterRegions.contains(region) ? letter : isoA4
   }
 
   /// Where the document's text goes on every page.
@@ -71,6 +79,15 @@ public struct PrintLayout: Sendable, Equatable {
     CGRect(
       x: contentRect.minX, y: paperSize.height - Self.furnitureInset - Self.furnitureHeight,
       width: contentRect.width, height: Self.furnitureHeight)
+  }
+
+  /// What a page's text is clipped to: the lines `page` holds, top to bottom, and
+  /// the paper's whole width across. Not the column's: a card's padding and a block
+  /// quote's rule hang outside the text they decorate, and clipped to the column
+  /// every card would lose its sides and a quote at the margin its rule. Nothing
+  /// else is drawn beside the lines, so the side margins are theirs.
+  public func clipRect(for page: PrintPagination.Page) -> CGRect {
+    CGRect(x: 0, y: contentRect.minY, width: paperSize.width, height: page.height)
   }
 
   /// `rect`, in the laid-out document's coordinates, where `page` puts it on
