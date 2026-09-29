@@ -78,16 +78,19 @@ public final class InFlightDownloads<Value: Sendable>: Sendable {
       running[id] = entry
       return (entry.task, waiter)
     }
-    await withTaskCancellationHandler {
+    // The check is inside the handler's scope: a cancellation that lands after it
+    // left would throw without `leave`, and leave the finished fetch behind for the
+    // next open to join.
+    try await withTaskCancellationHandler {
       await withCheckedContinuation { continuation in
         if !attach(continuation, as: waiter, to: id, task) {
           continuation.resume()
         }
       }
+      try Task.checkCancellation()
     } onCancel: {
       leave(id, task, waiter)
     }
-    try Task.checkCancellation()
 
     let value: Value
     do {
