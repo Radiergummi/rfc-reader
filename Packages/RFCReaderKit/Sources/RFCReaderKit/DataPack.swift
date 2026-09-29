@@ -17,11 +17,14 @@ public enum PackVerification {
     case missing(String)
     case wrongSize(String, expected: Int, found: Int)
     case wrongDigest(String)
+    /// Listed, and a symbolic link rather than a file.
+    case notAFile(String)
     case unlisted(String)
 
     public var description: String {
       switch self {
       case .missing(let path): "\(path) is missing"
+      case .notAFile(let path): "\(path) is a link, not a file"
       case .wrongSize(let path, let expected, let found):
         "\(path) is \(found) bytes, not \(expected)"
       case .wrongDigest(let path): "\(path) does not match its SHA-256"
@@ -39,6 +42,12 @@ public enum PackVerification {
     var failures: [Failure] = []
     for entry in manifest.files {
       let url = directory.appending(path: entry.path)
+      // A symbolic link would be read through, and verify against whatever it
+      // points at, outside the pack.
+      if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+        failures.append(.notAFile(entry.path))
+        continue
+      }
       guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
         failures.append(.missing(entry.path))
         continue
@@ -55,18 +64,19 @@ public enum PackVerification {
     return failures
   }
 
-  /// The regular files under `directory`, by their paths relative to it.
+  /// Everything under `directory` but its folders, by paths relative to it:
+  /// regular files, and symbolic links, which a pack has none of.
   private static func files(in directory: URL) -> [String] {
     let root = directory.standardizedFileURL.path(percentEncoded: false)
     let prefix = root.hasSuffix("/") ? root : root + "/"
     guard
       let enumerator = FileManager.default.enumerator(
-        at: directory, includingPropertiesForKeys: [.isRegularFileKey],
+        at: directory, includingPropertiesForKeys: [.isDirectoryKey],
         options: [.skipsHiddenFiles])
     else { return [] }
     return enumerator.compactMap { item in
       guard let url = item as? URL,
-        (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == false
       else { return nil }
       let path = url.standardizedFileURL.path(percentEncoded: false)
       return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
@@ -131,8 +141,16 @@ public enum PackArchive {
         extractingTo: FilePath(directory.path(percentEncoded: false)),
         flags: [.ignoreOperationNotPermitted])
     else { throw Unreadable(archive: archive) }
-    defer { try? extractor.close() }
-    _ = try ArchiveStream.process(readingFrom: decoder, writingTo: extractor)
+    do {
+      _ = try ArchiveStream.process(readingFrom: decoder, writingTo: extractor)
+    } catch {
+      try? extractor.close()
+      throw error
+    }
+    // Closed here, not deferred: closing is where the last writes finish, and a
+    // failure there — a full disk — is the error to report, not the files it left
+    // short.
+    try extractor.close()
   }
 }
 
@@ -176,6 +194,6 @@ public enum PackInstaller {
     } else {
       try files.moveItem(at: staging, to: destination)
     }
-    return try InstalledPack(contentsOf: destination)
+    return InstalledPack(directory: destination, manifest: staged.manifest)
   }
 }

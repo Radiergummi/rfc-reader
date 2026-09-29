@@ -31,8 +31,10 @@ actor DocumentStore {
   /// has not grown is not enumerated again.
   private var hasGrown = true
 
-  /// The installed data packs (#36), beside the cache rather than in it: a pack is
-  /// installed and replaced whole, never evicted a document at a time.
+  /// The installed data packs (#36), in a folder of the cache's directory but not
+  /// part of the cache: a pack is installed and replaced whole, never evicted a
+  /// document at a time. The cache's index and eviction read only the bodies the
+  /// store names itself, at the directory's top level, so a folder is never one.
   private var packsDirectory: URL {
     directory.appending(path: "Packs", directoryHint: .isDirectory)
   }
@@ -42,6 +44,19 @@ actor DocumentStore {
   private lazy var legacyPack: InstalledPack? = try? InstalledPack(
     contentsOf: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
+  /// One install at a time: two would unpack into one destination and race to
+  /// swap it in.
+  private var isInstallingPack = false
+
+  struct AlreadyInstalling: Error, CustomStringConvertible {
+    var description: String { "A data pack is already being installed." }
+  }
+
+  struct DownloadFailed: Error, CustomStringConvertible {
+    let url: URL
+    let status: Int
+    var description: String { "\(url.absoluteString) answered HTTP \(status)" }
+  }
 
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
@@ -176,9 +191,17 @@ actor DocumentStore {
   /// verified. Documents already parsed are parsed again on their next open, so
   /// they come from the pack.
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    // Checked and set without a suspension between them, so a second install
+    // arriving while the first is off the actor is refused rather than raced.
+    guard !isInstallingPack else { throw AlreadyInstalling() }
+    isInstallingPack = true
+    defer { isInstallingPack = false }
     let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
     legacyPack = pack
-    parsed.removeAll()
+    // Parsed again on their next open, from the pack; nothing else it could serve.
+    for id in parsed.keys where pack.file(for: id) != nil {
+      parsed[id] = nil
+    }
     return pack
   }
 
@@ -187,10 +210,26 @@ actor DocumentStore {
   private static func install(_ source: URL, as name: String, in packs: URL) async throws
     -> InstalledPack
   {
-    guard !source.isFileURL else { return try PackInstaller.install(source, as: name, in: packs) }
-    let (downloaded, _) = try await URLSession.shared.download(from: source)
-    defer { try? FileManager.default.removeItem(at: downloaded) }
-    return try PackInstaller.install(downloaded, as: name, in: packs)
+    let pack: InstalledPack
+    if source.isFileURL {
+      pack = try PackInstaller.install(source, as: name, in: packs)
+    } else {
+      let (downloaded, response) = try await URLSession.shared.download(from: source)
+      defer { try? FileManager.default.removeItem(at: downloaded) }
+      // An error page is not an archive, and would be reported as one that failed
+      // to unpack.
+      if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+        throw DownloadFailed(url: source, status: status)
+      }
+      pack = try PackInstaller.install(downloaded, as: name, in: packs)
+    }
+    // Downloaded again rather than restored: half a gigabyte an iCloud backup has
+    // no business holding.
+    var packsFolder = packs
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? packsFolder.setResourceValues(values)
+    return pack
   }
 
   // MARK: - Eviction (#39)

@@ -55,7 +55,9 @@ struct DataPackTests {
       Manifest.self, from: Data(contentsOf: directory.appending(path: Manifest.fileName)))
   }
 
-  /// `aa archive -a lzfse -d <directory> -o <archive>`, as corpus.yml builds a pack.
+  /// `aa archive -a lzfse -d <directory> -o <archive>`, as corpus.yml builds a pack:
+  /// the same fields as `aa`, owner and flags included, so extraction meets what a
+  /// pack built on the runner carries.
   private func archive(_ directory: URL, to archive: URL) throws {
     let file = try #require(
       ArchiveByteStream.fileStream(
@@ -64,7 +66,8 @@ struct DataPackTests {
     let compressed = try #require(
       ArchiveByteStream.compressionStream(using: .lzfse, writingTo: file))
     let encoder = try #require(ArchiveStream.encodeStream(writingTo: compressed))
-    let keys = try #require(ArchiveHeader.FieldKeySet("TYP,PAT,DAT,MOD"))
+    let keys = try #require(
+      ArchiveHeader.FieldKeySet("TYP,PAT,LNK,DEV,DAT,UID,GID,MOD,FLG,MTM,BTM,CTM"))
     try encoder.writeDirectoryContents(archiveFrom: FilePath(directory.path), keySet: keys)
     try encoder.close()
     try compressed.close()
@@ -111,6 +114,33 @@ struct DataPackTests {
     let scratch = try Scratch()
     let pack = try makePack(in: scratch.url)
     try Data("<rfc>three</rfc>".utf8).write(to: pack.appending(path: "rfc3.xml"))
+    #expect(
+      PackVerification.failures(in: pack, against: try manifest(of: pack)) == [
+        .unlisted("rfc3.xml")
+      ]
+    )
+  }
+
+  /// Followed, a link would verify against whatever it points at, outside the pack.
+  @Test func `a listed file that is a symbolic link is not a file of the pack`() throws {
+    let scratch = try Scratch()
+    let pack = try makePack(in: scratch.url)
+    let outside = scratch.url.appending(path: "outside.xml")
+    try FileManager.default.moveItem(at: pack.appending(path: "rfc1.xml"), to: outside)
+    try FileManager.default.createSymbolicLink(
+      at: pack.appending(path: "rfc1.xml"), withDestinationURL: outside)
+    #expect(
+      PackVerification.failures(in: pack, against: try manifest(of: pack)) == [
+        .notAFile("rfc1.xml")
+      ]
+    )
+  }
+
+  @Test func `an unlisted symbolic link is unlisted`() throws {
+    let scratch = try Scratch()
+    let pack = try makePack(in: scratch.url)
+    try FileManager.default.createSymbolicLink(
+      at: pack.appending(path: "rfc3.xml"), withDestinationURL: pack.appending(path: "rfc1.xml"))
     #expect(
       PackVerification.failures(in: pack, against: try manifest(of: pack)) == [
         .unlisted("rfc3.xml")
