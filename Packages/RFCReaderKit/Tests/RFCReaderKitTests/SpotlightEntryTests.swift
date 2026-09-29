@@ -45,6 +45,39 @@ struct SpotlightEntryTests {
     #expect(SpotlightEntry(bare).description == "")
   }
 
+  // MARK: - When to index again
+
+  private static let day: TimeInterval = 86_400
+  private static let indexDate = Date(timeIntervalSince1970: 1_700_000_000)
+
+  /// Nothing to do at a launch whose index is the one already indexed.
+  @Test func `the same index in the same week is not indexed again`() {
+    let weekStart = Date(timeIntervalSince1970: 1_700_096_400)
+    #expect(
+      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: weekStart)
+        == SpotlightEntry.clientState(
+          indexUpdatedAt: Self.indexDate, now: weekStart.addingTimeInterval(2 * Self.day)))
+  }
+
+  @Test func `a new index is indexed again`() {
+    let now = Date(timeIntervalSince1970: 1_700_006_400)
+    #expect(
+      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: now)
+        != SpotlightEntry.clientState(
+          indexUpdatedAt: Self.indexDate.addingTimeInterval(Self.day), now: now))
+  }
+
+  /// Items expire, so an index that never changes, as on a Mac that stays offline,
+  /// is still renewed before they do.
+  @Test func `the same index is indexed again a week on, before its items expire`() {
+    let now = Date(timeIntervalSince1970: 1_700_006_400)
+    #expect(
+      SpotlightEntry.clientState(indexUpdatedAt: Self.indexDate, now: now)
+        != SpotlightEntry.clientState(
+          indexUpdatedAt: Self.indexDate, now: now.addingTimeInterval(7 * Self.day)))
+    #expect(SpotlightEntry.lifetime > 14 * Self.day)
+  }
+
   /// A result arrives back as its identifier, and opens the RFC it names.
   @Test func `the identifier names the document it came from`() {
     let entry = SpotlightEntry(Self.semantics)

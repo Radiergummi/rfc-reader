@@ -1,3 +1,4 @@
+import CoreSpotlight
 import RFCKit
 import RFCReaderKit
 import SwiftData
@@ -52,6 +53,12 @@ struct RFCReaderApp: App {
             // be made here: `LibraryModel` holds the registry and picks
             // exactly one scene to act on it.
             if let link = RFCLink(url: url) {
+              library.route(link)
+            }
+          }
+          // An RFC chosen in Spotlight (#178), routed the same way.
+          .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let link = SpotlightIndexer.link(from: activity) {
               library.route(link)
             }
           }

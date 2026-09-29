@@ -219,6 +219,10 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+    let rfcs = prepared.index.rfcs
+    Task(name: "Index for Spotlight") {
+      await SpotlightIndexer.update(rfcs, indexUpdatedAt: updatedAt)
+    }
   }
 
   // MARK: - Lists
