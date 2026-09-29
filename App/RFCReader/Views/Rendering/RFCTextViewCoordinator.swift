@@ -84,6 +84,32 @@ final class RFCTextViewCoordinator: NSObject {
   var bibliography: [ReferenceGroup] = []
   /// The document on screen; see `RFCTextView.documentID`.
   var documentID: DocumentID?
+  /// The quote Copy as Quote puts on the pasteboard for `range` of the reader's text,
+  /// or nil when nothing is selected (#186); see `QuoteCitation`.
+  func quote(of range: NSRange) -> QuoteCitation.Quote? {
+    guard let documentID, let built else { return nil }
+    return QuoteCitation.quote(of: range, in: built, document: documentID)
+  }
+  /// See `RFCTextView.onSelectionChange`.
+  var onSelectionChange: (Bool) -> Void = { _ in }
+  /// What `onSelectionChange` was last told, so a selection dragged across the text
+  /// reports once rather than on every character.
+  private var reportedSelection: Bool?
+
+  /// Tells the view whether anything is selected: whenever the selection changes, and
+  /// after an install, which may clear it without saying so. Deferred for the reason
+  /// `onVisibleAnchorChange` is: installing reports from inside SwiftUI's update.
+  /// macOS only, where Edit ▸ Copy as Quote observes it; on iOS the item is in the
+  /// selection's own edit menu (#186).
+  func reportSelection() {
+    #if !canImport(UIKit)
+      guard let textView else { return }
+      let hasSelection = textView.selectedRange().length > 0
+      guard hasSelection != reportedSelection else { return }
+      reportedSelection = hasSelection
+      Task { self.onSelectionChange(hasSelection) }
+    #endif
+  }
   /// See `RFCTextView.commitsOnClick`.
   var commitsOnClick: (() -> Void)?
   /// What the toolbar's title shows; see `ToolbarTitleState`. Called
@@ -223,6 +249,7 @@ final class RFCTextViewCoordinator: NSObject {
     signposter.withIntervalSignpost("Install document") {
       storage.install(built.text)
     }
+    reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
   }
@@ -664,6 +691,10 @@ final class RFCTextViewCoordinator: NSObject {
       return onLink(url, .current)
     }
 
+    func textViewDidChangeSelection(_ notification: Notification) {
+      reportSelection()
+    }
+
     /// A menu's tracking loop holds the run loop outside `.default` mode, so a dwell
     /// timer left running would fire the moment the menu closes.
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int)
@@ -744,6 +775,38 @@ final class RFCTextViewCoordinator: NSObject {
       cancelHover()
       if let trackingArea { textView?.removeTrackingArea(trackingArea) }
       trackingArea = nil
+    }
+
+    /// Detaches the text view from its text container, so what AppKit keeps of the
+    /// view after it is gone no longer holds the document (#356). Called from
+    /// `dismantleNSView`.
+    ///
+    /// A TextKit 2 text view's private subviews outlive it on macOS 27: the content
+    /// view that draws the text, and the viewport element view of every fragment on
+    /// screen. Measured with `heap` after ten opens: one text view, but eleven content
+    /// views, layout managers and storages, and 27,803 layout fragments, 35 MB a
+    /// document, never freed, and every build from the eighth open on 5 to 10 times
+    /// slower. A plain `NSTextView` in a small program leaks the same way, so it is
+    /// AppKit's, not this reader's: the subviews stay registered with the notification
+    /// center, by blocks that capture them.
+    ///
+    /// The subviews cannot be released from here, but what they reach can. Without
+    /// its container the content view no longer reaches the layout manager, which
+    /// takes the storage, the fragments and every attribute they drew with. Measured
+    /// in the same program: storages and content views all freed, and a dozen
+    /// fragments left per view, the ones on screen when it went. Emptying the storage
+    /// instead left the layout manager and storage behind.
+    ///
+    /// Detached through the container, the way AppKit documents it: `NSTextView`'s own
+    /// `textContainer` setter is not to be called directly, and measured in the same
+    /// program both free the same. The scroll observer goes too, so a viewport left
+    /// without a layout manager reports nothing to the window's toolbar title, which
+    /// the next reader already owns.
+    func releaseDocument() {
+      layoutTask?.cancel()
+      NotificationCenter.default.removeObserver(
+        self, name: NSView.boundsDidChangeNotification, object: nil)
+      textView?.textContainer?.textView = nil
     }
 
     /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
