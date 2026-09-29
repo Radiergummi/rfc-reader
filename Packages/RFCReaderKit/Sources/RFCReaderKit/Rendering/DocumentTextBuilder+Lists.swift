@@ -41,11 +41,8 @@ extension DocumentTextBuilder {
       }
       output.append(firstLine)
       if case .paragraph(let paragraph) = first {
-        // Set on the marker's line rather than through `appendParagraph`, so its
-        // anchor is marked here, where its text starts.
-        mark(paragraph.anchor)
-        output.append(inlineRuns(paragraph.inlines, base: attributes))
-        append("\n", attributes)
+        // On the marker's line, in the list's attributes rather than its own indent.
+        appendParagraph(paragraph, attributes: attributes)
         appendBlocks(Array(item.blocks.dropFirst()), indent: markerColumn)
       } else {
         append("\n", attributes)

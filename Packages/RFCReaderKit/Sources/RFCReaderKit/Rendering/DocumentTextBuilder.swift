@@ -270,9 +270,16 @@ extension DocumentTextBuilder {
   }
 
   func appendParagraph(_ paragraph: Paragraph, indent: CGFloat) {
-    mark(paragraph.anchor)
     let authoredSteps = CGFloat(Self.authoredIndentSteps(forCharacters: paragraph.indent))
-    let attributes = bodyAttributes(indent: indent + authoredSteps * style.indentStep)
+    appendParagraph(
+      paragraph, attributes: bodyAttributes(indent: indent + authoredSteps * style.indentStep))
+  }
+
+  /// A paragraph set in `attributes`: its anchor where its text starts, its text,
+  /// and the newline that ends it. A list item's first paragraph comes here
+  /// directly, set on the marker's line in the list's attributes.
+  func appendParagraph(_ paragraph: Paragraph, attributes: [NSAttributedString.Key: Any]) {
+    mark(paragraph.anchor)
     output.append(inlineRuns(paragraph.inlines, base: attributes))
     append("\n", attributes)
   }
