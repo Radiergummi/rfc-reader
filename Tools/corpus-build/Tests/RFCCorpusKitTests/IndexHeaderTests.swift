@@ -95,15 +95,19 @@ struct IndexHeaderTests {
     #expect(header.updates == [.rfc(901), .rfc(902)])
   }
 
-  /// Through the converter, on RFC 1149, whose index entry carries an April 1 day.
+  /// Through the converter, on RFC 1149, whose index entry carries an April 1 day. Its
+  /// title page already names the index's author, so the entry's authors are replaced
+  /// with ones the page doesn't have, to show they come from the entry.
   @Test func `a conversion takes the header from the index entry`() throws {
     let text = DocumentConverter.text(decoding: try Data(contentsOf: Fixtures.url("rfc1149.txt")))
     let index = try RFCIndexParser.parse(contentsOf: Fixtures.url("rfc-index-sample.xml"))
-    let entry = try #require(index[1149])
+    var entry = try #require(index[1149])
+    entry.authors = [Author(name: "B. Second", role: "Editor"), Author(name: "A. First")]
     let conversion = DocumentConverter().convert(text: text, stem: "rfc1149", metadata: entry)
     let header = try RFCXMLParser.parse(conversion.xml).header
     #expect(header.id == .rfc(1149))
-    #expect(header.authors.map(\.name) == entry.authors.map(\.name))
+    #expect(header.authors.map(\.name) == ["B. Second", "A. First"])
+    #expect(header.authors.map(\.role) == ["Editor", nil])
     #expect(header.date == PublicationDate(year: 1990, month: 4, day: 1))
     #expect(!conversion.report.warnings.contains { $0.contains("RFC number") })
   }
