@@ -338,7 +338,15 @@ extension LegacyTextParser {
   nonisolated(unsafe) static let monthYearPattern =
     #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
   nonisolated(unsafe) private static let authorPattern =
-    #/^(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+(?:,\s*Ed(?:itor)?\.?)?$/#
+    #/^(?<name>(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+)(?<editor>,\s*Ed(?:itor)?\.?)?$/#
+
+  /// The author a title page's right-hand column names, if it names one: initials and
+  /// a surname, and an editor's suffix in any spelling the pattern accepts -- `, Ed.`,
+  /// `, Ed`, `, Editor`, `,Ed.` -- which is taken off the name and becomes the role.
+  static func author(in column: String) -> Author? {
+    guard let match = column.firstMatch(of: authorPattern) else { return nil }
+    return Author(name: String(match.name), role: match.editor == nil ? nil : "Editor")
+  }
 
   /// The line that states the document's number, in any of the spellings the series has
   /// used (#51): `Request for Comments: 793`, `RFC # 64`, `NWG/RFC# 276`, `NWG RFC 103`, `RFC-811`,
@@ -397,11 +405,8 @@ extension LegacyTextParser {
         if let match = candidate.firstMatch(of: monthYearPattern) {
           header.date = PublicationDate(
             year: Int(match.2) ?? 0, month: PublicationDate.month(from: String(match.1)))
-        } else if candidate == right, candidate.contains(authorPattern) {
-          header.authors.append(
-            Author(
-              name: candidate.replacingOccurrences(of: ", Ed.", with: ""),
-              role: candidate.contains(", Ed") ? "Editor" : nil))
+        } else if candidate == right, let author = author(in: candidate) {
+          header.authors.append(author)
         }
       }
     }
