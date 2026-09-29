@@ -29,8 +29,8 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// describes that term's parts. A term introduced in running prose, where a sentence
 /// names a thing and then calls it something, is not read: that is a heuristic nothing
 /// has measured.
-/// The first definition of a term wins, except that a definition list entry replaces an
-/// index entry with no definition text, one placed directly in a section.
+/// The first definition of a term wins, except that an index entry with no definition
+/// text, one placed directly in a section, gives way to any entry that has one.
 enum DefinedTerms {
   /// Whether a section titled `title` defines terms: a Terminology or Glossary section,
   /// one titled `Conventions and …`, one opening with Definitions or titled `Definition
@@ -71,9 +71,11 @@ enum DefinedTerms {
       guard !term.term.isEmpty, found[term.term] == nil else { return }
       found[term.term] = term
     }
-    indexed.forEach(record)
-    // An index entry placed directly in a section has no definition text, which a
-    // definition list entry for the same term supplies.
+    // An index entry placed directly in a section has no definition text, which
+    // another entry for the same term supplies: a later index entry that has one, or
+    // a definition list entry.
+    indexed.filter { !$0.definition.isEmpty }.forEach(record)
+    indexed.filter(\.definition.isEmpty).forEach(record)
     var undefined = Set(found.values.filter(\.definition.isEmpty).map(\.term))
     for section in document.allSections where namesTerms(section.title.plainText) {
       for items in definitionLists(in: section.blocks) {

@@ -91,6 +91,20 @@ struct DefinedTermsTests {
     #expect(term.definition == listed.definition)
   }
 
+  /// A primary index entry placed directly in a section gives way to a later one that
+  /// sits in the paragraph defining the term.
+  @Test func `a later index entry with a definition replaces one without`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"), sections: [], source: .xml)
+    let placed = DefinedTerm(term: "widget", anchor: "section-2", definition: [])
+    let defining = DefinedTerm(
+      term: "widget", anchor: "section-2-3",
+      definition: [.paragraph(Paragraph(text: "A widget is what a sender emits."))])
+    let term = try #require(
+      DefinedTerms.defined(in: document, indexed: [placed, defining])["widget"])
+    #expect(term == defining)
+  }
+
   /// An index entry with a definition of its own is the author's mark, and stays first.
   @Test func `an index entry with a definition keeps it over a definition list entry`() throws {
     let listed = DefinitionItem(
@@ -187,5 +201,51 @@ struct DefinedTermsTests {
     let terms = RFCXMLParser.primaryIndexTerms(in: root)
     #expect(terms.map(\.term) == ["relay", "tunnel"])
     #expect(terms.map(\.anchor) == ["section-3-2", "section-3.1"])
+  }
+
+  /// An entry is the block's it sits in, even inside emphasis, and one in a `<dt>` is
+  /// defined by the `<dd>` after it, at the term's anchor.
+  @Test func `a primary index entry in an inline element or a term is its block's`() throws {
+    let xml = """
+      <rfc><middle>
+        <section pn="section-2"><name>Terms</name>
+          <t pn="section-2-1">A <em><iref primary="true" item="widget"/>widget</em> is the
+          unit a sender emits.</t>
+          <dl pn="section-2-2">
+            <dt pn="section-2-2.1"><iref primary="true" item="gadget"/>Gadget:</dt>
+            <dd pn="section-2-2.2">A gadget holds widgets.</dd>
+          </dl>
+        </section>
+      </middle></rfc>
+      """
+    let root = try XMLTree.parse(Data(xml.utf8))
+    let terms = RFCXMLParser.primaryIndexTerms(in: root)
+    #expect(terms.map(\.term) == ["widget", "gadget"])
+    #expect(terms.map(\.anchor) == ["section-2-1", "section-2-2.1"])
+    let definitions = terms.map { term in
+      term.definition.map { block -> String in
+        guard case .paragraph(let paragraph) = block else { return "" }
+        return paragraph.plainText
+      }
+    }
+    #expect(definitions.first?.first?.hasPrefix("A widget is the") == true)
+    #expect(definitions.last == ["A gadget holds widgets."])
+  }
+
+  /// The model anchors a table only by its author's anchor, so a part number there
+  /// would be an anchor no block holds: the entry lands on the section instead.
+  @Test func `a primary index entry takes only an anchor the model holds`() throws {
+    let xml = """
+      <rfc><middle>
+        <section pn="section-4"><name>Codes</name>
+          <table pn="table-1">
+            <tbody><tr><td><iref primary="true" item="teapot"/>A teapot.</td></tr></tbody>
+          </table>
+        </section>
+      </middle></rfc>
+      """
+    let root = try XMLTree.parse(Data(xml.utf8))
+    let terms = RFCXMLParser.primaryIndexTerms(in: root)
+    #expect(terms.map(\.anchor) == ["section-4"])
   }
 }

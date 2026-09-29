@@ -428,30 +428,68 @@ public struct RFCXMLParser: Sendable {
     }
 
     /// The terms primary index entries define (#176): `<iref primary="true">` without a
-    /// subitem, each defined by the element it sits in, at that element's anchor or its
+    /// subitem, each defined by the block it sits in, at that block's anchor or its
     /// section's. With a subitem an entry files a name under a group (`Grammar` /
     /// `ALPHA`, `Fields` / `Content-Type`), an index heading rather than a term. An
     /// entry directly in a section marks the section, and has no one block to show as
-    /// its definition.
+    /// its definition. One in an inline element is the block's around it, and one in a
+    /// `<dt>` is defined by the `<dd>` after it.
     func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
       var terms: [DefinedTerm] = []
+      func record(entriesIn element: XMLTree.Element, anchor: String?, definition: () -> [Block]) {
+        let items = Self.indexEntries(in: element).compactMap { entry -> String? in
+          guard entry["primary"] == "true", entry["subitem"] == nil else { return nil }
+          return entry["item"]
+        }
+        guard !items.isEmpty else { return }
+        // Built once, however many entries the block holds.
+        let definition = definition()
+        terms += items.map { DefinedTerm(term: $0, anchor: anchor, definition: definition) }
+      }
       func visit(_ element: XMLTree.Element, anchor: String?) {
-        // As a paragraph or a section is anchored: the author's, else the part number.
-        let anchor = element["anchor"] ?? element["pn"] ?? anchor
-        // Built once, for the first entry, however many the element holds.
-        lazy var definition: [Block] = parseBlock(element).map { [$0] } ?? []
-        for child in element.elements {
-          guard child.name == "iref" else {
+        let anchor = Self.modelAnchor(of: element) ?? anchor
+        record(entriesIn: element, anchor: anchor) {
+          element.name == "li" || element.name == "dd"
+            ? parseBlocks(in: element) : parseBlock(element).map { [$0] } ?? []
+        }
+        let children = element.elements.filter { !Self.inlineElements.contains($0.name) }
+        for (position, child) in children.enumerated() {
+          guard child.name == "dt" else {
             visit(child, anchor: anchor)
             continue
           }
-          guard child["primary"] == "true", child["subitem"] == nil, let item = child["item"]
-          else { continue }
-          terms.append(DefinedTerm(term: item, anchor: anchor, definition: definition))
+          let next = children.dropFirst(position + 1).first
+          let description = next?.name == "dd" ? next : nil
+          record(entriesIn: child, anchor: Self.modelAnchor(of: child) ?? anchor) {
+            description.map(parseBlocks(in:)) ?? []
+          }
         }
       }
       visit(root, anchor: nil)
       return terms
+    }
+
+    /// The index entries an element holds itself, directly or in its inline elements,
+    /// not in the blocks nested in it.
+    private static func indexEntries(in element: XMLTree.Element) -> [XMLTree.Element] {
+      element.elements.flatMap { child -> [XMLTree.Element] in
+        if child.name == "iref" { return [child] }
+        return inlineElements.contains(child.name) ? indexEntries(in: child) : []
+      }
+    }
+
+    /// The anchor the model gives the block `element` becomes, where it gives one:
+    /// the author's, else the part number, but only the author's for a figure or a
+    /// table, and none for a quotation, an aside or a list as a whole.
+    private static func modelAnchor(of element: XMLTree.Element) -> String? {
+      switch element.name {
+      case "section", "t", "li", "dt", "dd", "artwork", "sourcecode":
+        element["anchor"] ?? element["pn"]
+      case "figure", "table":
+        element["anchor"]
+      default:
+        nil
+      }
     }
 
     /// Converts the children of a container element into blocks. Runs of loose text
@@ -488,7 +526,7 @@ public struct RFCXMLParser: Sendable {
       return blocks
     }
 
-    func parseBlock(_ element: XMLTree.Element) -> Block? {
+    private func parseBlock(_ element: XMLTree.Element) -> Block? {
       switch element.name {
       case "t":
         let inlines = normalize(parseInlines(element.children))
