@@ -25,8 +25,7 @@ public struct LegacyTextParser: Sendable {
     case pageBreak
   }
 
-  private static let footerPattern = Pattern(
-    #/\[Page \d+\]\s*$/#)
+  private static let footerPattern = Pattern(#/\[Page \d+\]\s*$/#)
   private static let runningHeaderPattern = Pattern(
     #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
@@ -1124,8 +1123,7 @@ public struct LegacyTextParser: Sendable {
     return entries > 0 && entries * 2 >= lines.count
   }
 
-  private static let romanPageNumberPattern = Pattern(
-    #/x{0,3}(?:ix|iv|v?i{0,3})/#)
+  private static let romanPageNumberPattern = Pattern(#/x{0,3}(?:ix|iv|v?i{0,3})/#)
 
   /// A lower-case roman numeral up to `xxxix`, further than any front section's pages
   /// run. Spelt out rather than taken as any run of the letters, because `ill` and
@@ -1522,16 +1520,13 @@ public struct LegacyTextParser: Sendable {
   /// description, the spaces aligning the descriptions (RFC 5412, 5416, 8231).
   /// `internalGapPattern` counted four spaces after a colon and not three, so RFC
   /// 8231 came out as one row a list among rows kept as artwork.
-  private static let catalogueGapPattern = Pattern(
-    #/[^.?!:\s]\s{3,}\S/#)
+  private static let catalogueGapPattern = Pattern(#/[^.?!:\s]\s{3,}\S/#)
   /// Arithmetic in an entry's text: a formula set on a line of its own opens with a
   /// number and a minus as well (RFC 5879's `1 - (1 - x / y) ^ 4 == ...`).
-  private static let formulaPattern = Pattern(
-    #/==|\s\^\s/#)
+  private static let formulaPattern = Pattern(#/==|\s\^\s/#)
   /// A second entry on the entry's line (RFC 3423's `1 - TCP, 2 - SCTP`), which is
   /// not the first one's text.
-  private static let secondEntryPattern = Pattern(
-    #/,\s*\d+[a-z]? +- +\S/#)
+  private static let secondEntryPattern = Pattern(#/,\s*\d+[a-z]? +- +\S/#)
   /// How far past an entry's text column a continuation may stand: a column or two
   /// either way is how a description under an entry is set, and a caption centred
   /// under a legend stands well past it (RFC 793's at 26 against 12).
@@ -1544,8 +1539,7 @@ public struct LegacyTextParser: Sendable {
     #/\+-|-\+|\|\s|\s\||[\/\\]_|_[\/\\]|\.\.\.\.|={3,}|-{3,}|<-|->|\d\s{2,}\d/#)
   /// A run of three or more spaces between two non-space characters, not following
   /// sentence punctuation: a column gap rather than the gap after a full stop.
-  static let internalGapPattern = Pattern(
-    #/[^.?!:]\s{3,}\S/#)
+  static let internalGapPattern = Pattern(#/[^.?!:]\s{3,}\S/#)
 
   /// `artworkPattern` and `internalGapPattern` as existence tests, asked of every line
   /// of every block the prose test sees. Swift's regex engine tries each alternative
@@ -2266,8 +2260,7 @@ public struct LegacyTextParser: Sendable {
   /// one bracket of an anchor's shape that never names a reference. Four documents,
   /// and without this each gains a `<reference anchor="Page 52">` whose title is
   /// whatever the footer's author column said.
-  private static let pageFooterAnchorPattern = Pattern(
-    #/Page\s+\d+/#)
+  private static let pageFooterAnchorPattern = Pattern(#/Page\s+\d+/#)
 
   private static func parseReferences(_ rawBlocks: [RawBlock]) -> [Reference] {
     var references: [Reference] = []
@@ -2433,8 +2426,7 @@ struct InlineLinker: Sendable {
   /// they stand and the sentence is left to read as it was set.
   static let rfcListPattern = Gated(
     regex: #/\bRFCs\s+\d{1,5}(?:\s*,\s*(?:and\s+)?\d{1,5}|\s+and\s+\d{1,5})*/#, gate: \.rfcs)
-  private static let listNumberPattern = Pattern(
-    #/\d{1,5}/#)
+  private static let listNumberPattern = Pattern(#/\d{1,5}/#)
   static let sectionPattern = Gated(
     regex: #/\bSections?\s+(?<section>\d+(?:\.\d+)*)\b/#, gate: \.section)
   static let urlPattern = Gated(regex: #/https?:\/\/[^\s<>"]+/#, gate: \.http)
@@ -2613,11 +2605,6 @@ extension UnsafeBufferPointer<UInt8> {
   }
 }
 
-/// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
-/// every heading and contents line: file-level, as a literal in the function was a new
-/// `Regex` per line (#146).
-private let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
-
 extension String {
   var isBlank: Bool { allSatisfy(\.isWhitespace) }
 
@@ -2663,10 +2650,15 @@ extension String {
     return result
   }
 
+  /// A table-of-contents leader, `Title ....... 7`, which `trimmingTrailingDots` cuts off
+  /// every heading and contents line: a static pattern, as a literal in the function was
+  /// a new `Regex` per line (#146).
+  private static let contentsLeaderPattern = Pattern(#/\s*\.{3,}\s*\d*$/#)
+
   func trimmingTrailingDots() -> String {
     var result = trimmingTrailingWhitespace()
     // Table-of-contents style "Title ....... 7" leaders.
-    if let match = result.firstMatch(of: contentsLeaderPattern) {
+    if let match = result.firstMatch(of: Self.contentsLeaderPattern) {
       result.removeSubrange(match.range)
     }
     return result

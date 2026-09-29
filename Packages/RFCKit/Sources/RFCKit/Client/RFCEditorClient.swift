@@ -210,8 +210,7 @@ public enum RecentFeedParser {
     case malformed(XMLSyntaxError)
   }
 
-  private static let titlePattern = Pattern(
-    #/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)
+  private static let titlePattern = Pattern(#/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)
 
   public static func parse(_ data: Data) throws(ParseError) -> [RecentRFC] {
     let root: XMLTree.Element
