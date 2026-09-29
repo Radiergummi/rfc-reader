@@ -29,6 +29,8 @@ struct SearchQueryTests {
     "wg:httpbis status:std author:fielding year:2020-2022 has:xml status:current HTTP caching",
     #"author:"Roy Fielding" semantics"#,
     #""key words" status:bcp"#,
+    #"wg:"NON WORKING GROUP" cache"#,
+    #"author:"" cache"#,
   ])
   func `a formatted query parses back to the same filters`(query: String) {
     let parsed = IndexSearch.parseQuery(query)
@@ -94,10 +96,10 @@ struct SearchQueryTests {
     #expect(try completions("group:HT") == ["wg:httpbis"])
   }
 
-  /// "NON WORKING GROUP" names documents in the index, but a value ends at a space,
-  /// so no query can say it; offering it would complete to a filter that matches
-  /// nothing.
-  @Test func `a working group the query cannot spell is not offered`() throws {
+  /// "NON WORKING GROUP" names documents in the index, but only a quoted value can
+  /// spell it, and completion does not write one; offering it would complete to a
+  /// filter that matches nothing.
+  @Test func `a working group with a space in its name is not offered`() throws {
     #expect(try !completions("wg:").contains { $0.contains("non") })
   }
 
@@ -120,6 +122,14 @@ struct SearchQueryTests {
     #expect(try completions(#"cache by:"Roy s"#) == [])
     #expect(try completions(#"cache by:"Roy "#) == [], "a space inside the quote is the value's")
     #expect(try completions(#"cache wg:"http"#) == ["cache wg:httpbis"])
+  }
+
+  /// A colon inside a quoted phrase is the phrase's, as `parseQuery` reads it, so the
+  /// phrase is not an unknown qualifier.
+  @Test(arguments: [#"cache "note: see"#, #""urn:ietf""#])
+  func `a quoted phrase with a colon is not marked as unknown`(query: String) throws {
+    let suggestions = SearchQuery.suggestions(for: query, in: try Fixtures.sampleIndex())
+    #expect(!suggestions.contains { $0.isUnknown })
   }
 
   @Test func `a free-form value is offered nothing`() throws {

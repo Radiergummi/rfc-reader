@@ -40,6 +40,26 @@ struct IndexSearchTests {
     #expect(parsed.text == "cache")
   }
 
+  /// Smart Punctuation picks a quote's direction from the character before it, so
+  /// after a colon it types a closing one; a German keyboard types „ and “.
+  @Test(arguments: [
+    "author:\u{201D}Roy Fielding\u{201D} cache",
+    "author:\u{201E}Roy Fielding\u{201C} cache",
+  ])
+  func `any typographic quote opens a value`(query: String) {
+    let parsed = IndexSearch.parseQuery(query)
+    #expect(parsed.filters.author == "roy fielding")
+    #expect(parsed.text == "cache")
+  }
+
+  /// `wg:"` is a value still being typed, and filtering on an empty group would
+  /// empty the list; it is free text, as `wg:` is.
+  @Test func `an empty quoted value is not a filter`() {
+    let parsed = IndexSearch.parseQuery(#"cache wg:""#)
+    #expect(parsed.filters.workingGroup == nil)
+    #expect(parsed.text == #"cache wg:""#)
+  }
+
   /// The query is being typed: the closing quote has not arrived yet.
   @Test func `an unclosed quote runs to the end of the query`() {
     let parsed = IndexSearch.parseQuery(#"cache author:"Roy Fiel"#)
@@ -59,6 +79,15 @@ struct IndexSearchTests {
     let phrase = search.search(#""key words""#).map(\.rfc.number)
     #expect(phrase.contains(2119))
     #expect(phrase.contains(8174))
+  }
+
+  /// The title bonus compares the title with the query as written, less its quotes;
+  /// the same terms in another order do not earn it.
+  @Test func `a quoted phrase still earns the bonus for a title that reads as the query`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    let inOrder = try #require(search.search(#""key words" for"#).first { $0.rfc.number == 2119 })
+    let reversed = try #require(search.search(#"for "key words""#).first { $0.rfc.number == 2119 })
+    #expect(inOrder.score == reversed.score + 50)
   }
 
   @Test func `filters apply`() throws {

@@ -72,14 +72,17 @@ public struct IndexSearch: Sendable {
     var filters = SearchFilters()
     var words: [String] = []
     for token in SearchQuery.words(in: query) {
-      let parts = token.split(separator: ":", maxSplits: 1)
-      // A colon inside a quoted phrase is the phrase's, not a qualifier's.
-      guard parts.count == 2, !parts[0].contains(where: SearchQuery.quotes.contains) else {
+      guard let qualifier = SearchQuery.qualifier(in: token) else {
         words.append(token)
         continue
       }
-      let key = parts[0].lowercased()
-      let value = SearchQuery.unquoted(parts[1])
+      let key = qualifier.key.lowercased()
+      let value = SearchQuery.unquoted(qualifier.value)
+      // `wg:"` is still being typed; like `wg:`, it is free text until it has a value.
+      guard !value.isEmpty else {
+        words.append(token)
+        continue
+      }
       switch key {
       case "wg", "group":
         filters.workingGroup = value.lowercased()
@@ -139,7 +142,8 @@ public struct IndexSearch: Sendable {
     // Converted here rather than inside the loop: a needle allocated per entry
     // would cost 9,842 allocations per term and undo the point of the exercise.
     let needles = terms.map(SearchText.init)
-    let lowered = SearchText(trimmed.lowercased())
+    // The query as the title bonus compares it, without the quotes of its phrases.
+    let lowered = SearchText(terms.joined(separator: " "))
     var hits: [SearchHit] = []
     for entry in entries {
       let rfc = index.rfcs[entry.offset]

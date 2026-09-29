@@ -15,7 +15,7 @@ public enum SearchQuery {
   /// filters and text.
   public static func format(text: String, filters: SearchFilters) -> String {
     var words: [String] = []
-    if let group = filters.workingGroup { words.append("wg:\(group)") }
+    if let group = filters.workingGroup { words.append("wg:\(written(group))") }
     words += statusWords(filters.statuses).map { "status:\($0)" }
     if filters.excludeObsolete { words.append("status:current") }
     if let author = filters.author { words.append("author:\(written(author))") }
@@ -55,8 +55,9 @@ public enum SearchQuery {
   // MARK: - Words
 
   /// The characters that open or close a quoted run: the straight quote, and the
-  /// typographic pair iOS types for it with Smart Punctuation on, which is the default.
-  static let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}"]
+  /// typographic ones Smart Punctuation, on by default on iOS, types for it: “ and ”,
+  /// or „ and “ on a German keyboard.
+  static let quotes: Set<Character> = ["\"", "\u{201C}", "\u{201D}", "\u{201E}"]
 
   /// The words of `query`, split at spaces outside quotes, each as typed. A quoted run
   /// is one word with its quotes (`author:"Roy Fielding"`, `"key words"`), and an
@@ -71,18 +72,26 @@ public enum SearchQuery {
         word = ""
         continue
       }
+      // Every quote toggles, whatever its direction: Smart Punctuation picks the
+      // direction from the character before it, so after a colon it types ”, and
+      // “ closes a quote on a German keyboard.
       if quotes.contains(character) {
-        // The typographic pair says which end it is; the straight quote toggles.
-        switch character {
-        case "\u{201C}": quoted = true
-        case "\u{201D}": quoted = false
-        default: quoted.toggle()
-        }
+        quoted.toggle()
       }
       word.append(character)
     }
     if !word.isEmpty { words.append(word) }
     return words
+  }
+
+  /// `word` read as a qualifier: the key before its first colon and the value after
+  /// it, or nil when it has no colon, or its colon is inside a quoted phrase and so
+  /// the phrase's.
+  static func qualifier(in word: String) -> (key: Substring, value: Substring)? {
+    guard let colon = word.firstIndex(of: ":") else { return nil }
+    let key = word[..<colon]
+    guard !key.contains(where: quotes.contains) else { return nil }
+    return (key, word[word.index(after: colon)...])
   }
 
   /// `word` without its quotes: a quoted value's text, or a phrase's.
@@ -133,15 +142,15 @@ public enum SearchQuery {
       words.map { Suggestion(completion: head + $0, isUnknown: false) }
     }
 
-    guard let colon = word.firstIndex(of: ":") else {
+    guard let parts = qualifier(in: word) else {
       let typed = word.lowercased()
       let begun = qualifiers.filter { qualifier in
         ([qualifier.name] + qualifier.aliases).contains { $0.hasPrefix(typed) }
       }
       return offer(begun.map { $0.name == "has" ? "has:xml" : "\($0.name):" })
     }
-    let key = word[..<colon].lowercased()
-    let typed = unquoted(word[word.index(after: colon)...]).lowercased()
+    let key = parts.key.lowercased()
+    let typed = unquoted(parts.value).lowercased()
     guard let qualifier = qualifiers.first(where: { $0.name == key || $0.aliases.contains(key) })
     else {
       return [Suggestion(completion: query, isUnknown: true)]
@@ -179,7 +188,7 @@ public enum SearchQuery {
 
   /// Every working group the index names, lowercased as `parseQuery` matches them,
   /// most documents first. Not one with a space in its name ("NON WORKING GROUP"):
-  /// a value ends at a space, so no query can spell it.
+  /// only a quoted value can spell it, and completion does not write one.
   private static func workingGroups(in index: RFCIndex) -> [String] {
     var counts: [String: Int] = [:]
     for rfc in index.rfcs {
