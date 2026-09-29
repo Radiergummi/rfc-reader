@@ -72,12 +72,13 @@ struct SidebarView: View {
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
       .searchable(text: Bindable(navigation).searchText, prompt: "Search")
+      .onSubmit(of: .search) { navigation.applySearchNow() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
-          library.librarySearch(navigation.searchText).isEmpty
+          library.librarySearch(navigation.appliedQuery).isEmpty
         {
-          ContentUnavailableView.search(text: navigation.searchText)
+          ContentUnavailableView.search(text: navigation.appliedQuery)
         }
       }
       // Coming back from a list is leaving the search that list was narrowed by,
@@ -201,14 +202,14 @@ struct SidebarView: View {
     /// could see.
     private var isSearchingInPlace: Bool {
       horizontalSizeClass == .compact
-        && !navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        && !navigation.appliedQuery.isEmpty
     }
 
     /// The first results, and the way to all of them in All RFCs, which keeps the
     /// query: the list is windowed (`ListWindow`) and this is not.
     @ViewBuilder
     private var searchResults: some View {
-      let results = library.librarySearch(navigation.searchText)
+      let results = library.librarySearch(navigation.appliedQuery)
       let bookmarked = library.bookmarkedNumbers
       Section {
         ForEach(results.prefix(Self.searchResultLimit)) { rfc in
@@ -389,6 +390,16 @@ struct SidebarView: View {
       func controlTextDidChange(_ notification: Notification) {
         guard let field = notification.object as? NSSearchField else { return }
         navigation.searchText = field.stringValue
+      }
+
+      /// Return applies the search without waiting for a pause in typing.
+      func control(
+        _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
+      ) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+          navigation.applySearchNow()
+        }
+        return false
       }
     }
   }

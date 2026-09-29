@@ -44,7 +44,15 @@ final class NavigationModel: Identifiable {
       if filterChoice.enters(since: oldValue) { takeListInputs() }
     }
   }
-  var searchText = ""
+  /// What is typed into search. The list follows `appliedQuery`, not this.
+  var searchText = "" {
+    didSet { followSearchText() }
+  }
+  /// The query the list, its count and the sidebar's results are computed for: the
+  /// search text, trimmed, once typing pauses and its hits are ready (#124). Until
+  /// then the list keeps the results it has, as Mail and Finder do.
+  private(set) var appliedQuery = ""
+  @ObservationIgnored private var pendingSearch: Task<Void, Never>?
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -168,6 +176,58 @@ final class NavigationModel: Identifiable {
   func search(_ text: String) {
     sidebarSelection = .all
     searchText = text
+    applySearchNow()
+  }
+
+  // MARK: - Search
+
+  /// Applies the search text when `AppliedSearch` says to: after a pause in typing,
+  /// or at once when it is cleared.
+  private func followSearchText() {
+    guard let delay = AppliedSearch.delay(applying: searchText, over: appliedQuery) else {
+      // Typed back to the query on show: nothing is left to apply.
+      pendingSearch?.cancel()
+      pendingSearch = nil
+      return
+    }
+    apply(AppliedSearch.query(for: searchText), after: delay)
+  }
+
+  /// Applies the search text without waiting for a pause: Return in the field, or a
+  /// search asked for with a click.
+  func applySearchNow() {
+    let query = AppliedSearch.query(for: searchText)
+    guard query != appliedQuery else { return }
+    apply(query, after: .zero)
+  }
+
+  /// Applies the search text before returning, searching on the main actor: for a
+  /// script, which reads the list straight after setting the text.
+  func applySearchImmediately() {
+    pendingSearch?.cancel()
+    pendingSearch = nil
+    appliedQuery = AppliedSearch.query(for: searchText)
+  }
+
+  private func apply(_ query: String, after delay: Duration) {
+    pendingSearch?.cancel()
+    guard !query.isEmpty else {
+      pendingSearch = nil
+      appliedQuery = ""
+      return
+    }
+    pendingSearch = Task(name: "Apply search") { [library] in
+      if delay > .zero {
+        do {
+          try await Task.sleep(for: delay)
+        } catch {
+          return
+        }
+      }
+      await library.prepareSearch(query)
+      guard !Task.isCancelled else { return }
+      appliedQuery = query
+    }
   }
 
   /// A row picked in the document list.
