@@ -206,14 +206,19 @@ struct IndexSearchTests {
     #expect(xmlOnly.allSatisfy { $0.rfc.hasXMLSource })
   }
 
-  /// The filters normalise their own text, so a hand-built filter matches like a
+  /// The filters normalize their own text, so a hand-built filter matches like a
   /// parsed one: the prepared fields it is matched against are lowercased.
-  @Test func `a text filter value is stored lowercased`() {
+  @Test func `a text filter value is stored lowercased`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
     var filters = SearchFilters()
     filters.workingGroup = "HTTPBIS"
     filters.author = "Fielding"
     #expect(filters.workingGroup == "httpbis")
     #expect(filters.author == "fielding")
+    let handBuilt = search.search(text: "", filters: filters, limit: .max)
+    #expect(!handBuilt.isEmpty)
+    let parsed = search.search("wg:httpbis author:fielding", limit: .max)
+    #expect(handBuilt.map(\.rfc.number) == parsed.map(\.rfc.number))
   }
 
   /// A working group matches as a whole name, and an author as part of one, as they
