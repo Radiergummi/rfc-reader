@@ -347,4 +347,35 @@ struct ProseDiagnosticsTests {
           == content.contains(LegacyTextParser.internalGapPattern), "\(line.debugDescription)")
     }
   }
+
+  // MARK: Where a block is (#43)
+
+  /// A block's line range in the source, so a sample of blocks can name them without
+  /// copying their text. Through the page furniture and the lead-in: every block's
+  /// first line is the source line it points at.
+  @Test(arguments: ["rfc2119.txt", "rfc793.txt", "rfc757.txt", "rfc1245.txt"])
+  func `every diagnosed block points at its own lines in the source`(fixture: String) throws {
+    let text = try Fixtures.string(fixture)
+    let source = text.replacingOccurrences(of: "\r\n", with: "\n")
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map { String($0).replacingOccurrences(of: "\u{0C}", with: "").expandingTabs() }
+    let blocks = LegacyTextParser.proseDiagnostics(for: text)
+    #expect(!blocks.isEmpty)
+    var previous = 0
+    for block in blocks {
+      #expect(block.startLine > previous, "blocks come in source order: \(block.firstLine)")
+      #expect(block.endLine >= block.startLine + block.lineCount - 1)
+      let line = source[block.startLine - 1].trimmingCharacters(in: .whitespaces)
+      #expect(String(line.prefix(80)) == block.firstLine)
+      previous = block.startLine
+    }
+  }
+
+  /// The margin of an indent refusal is taken against the document's own limit.
+  @Test func `a diagnosis records the indent limit it was judged against`() {
+    let lines = ["         Set nine deep, past a limit of seven for this document."]
+    let diagnosis = LegacyTextParser.diagnose(lines, maxIndent: 7)
+    #expect(diagnosis.indentLimit == 7)
+    #expect(diagnosis.rejections == [.indentTooDeep])
+  }
 }
