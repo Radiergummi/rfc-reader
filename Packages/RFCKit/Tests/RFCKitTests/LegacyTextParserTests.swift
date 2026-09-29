@@ -58,7 +58,7 @@ struct LegacyTextParserTests {
       Issue.record("abstract missing")
       return
     }
-    #expect(paragraph.plainText.hasPrefix("In many"))
+    #expect(paragraph.plainText.hasPrefix("In many standards track"))
   }
 
   @Test func `paragraphs split across pages are rejoined`() throws {
@@ -545,7 +545,7 @@ struct LegacyTextCorpusFindingsTests {
       Issue.record("abstract missing")
       return
     }
-    #expect(abstract.plainText.hasPrefix("This is"))
+    #expect(abstract.plainText.hasPrefix("This is the first"))
     #expect(abstract.plainText.hasSuffix("Interior Gateway Protocol)."))
   }
 
@@ -592,7 +592,7 @@ struct LegacyTextCorpusFindingsTests {
     // across it is one paragraph again.
     let paragraphs = document.paragraphs.map(\.plainText)
     #expect(
-      paragraphs.contains { $0.contains("\"urgent mode\"") && $0.contains("\"normal mode\"") },
+      paragraphs.contains { $0.contains("(RCV.NXT)") && $0.contains("\"normal mode\"") },
       "the terms on either side of the page break are in one paragraph")
   }
 
@@ -1546,14 +1546,14 @@ struct LegacyTextCorpusFindingsTests {
             have extended the servers on those hosts with commands that
             create and remove directories.
 
-            We have added four commands to our server.
+            Four commands are new in this version.
       """
     let document = LegacyTextParser.parse(text)
     #expect(document.header.title == "A DOCUMENT WITH NO COLUMN ZERO")
     let paragraphs = document.paragraphs.map(\.plainText)
     #expect(paragraphs.count == 2)
     #expect(paragraphs[0].hasPrefix("As part of an effort to look after hosts at remote sites"))
-    #expect(paragraphs[1] == "We have added four commands to our server.")
+    #expect(paragraphs[1] == "Four commands are new in this version.")
   }
 
   /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
@@ -1625,9 +1625,9 @@ struct LegacyTextCorpusFindingsTests {
 
            The protocol is not the only thing that matters here.  In fact,
 
-      this document will argue that modularity is one of the chief villains
+      this document will argue that how a program is split up costs it
 
-      in attempting to obtain good performance.
+      more speed than any choice the protocol makes.
 
 
       2.  Efficiency Considerations

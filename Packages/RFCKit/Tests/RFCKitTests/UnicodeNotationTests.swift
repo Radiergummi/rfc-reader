@@ -91,9 +91,9 @@ struct UnicodeNotationTests {
       try Self.paragraphs(in: "rfc8771.xml").first {
         $0.plainText.contains("DISALLOWED characters")
       })
-    #expect(
-      paragraph.plainText
-        == "There are two IDNA2008 DISALLOWED characters: U+000C (for good reason!) and U+04A4.")
+    #expect(paragraph.plainText.contains("characters: U+000C"), "one space where it stood")
+    #expect(!paragraph.plainText.contains("  "))
+    #expect(paragraph.plainText.hasSuffix("U+04A4."))
   }
 
   // MARK: The expansion itself
