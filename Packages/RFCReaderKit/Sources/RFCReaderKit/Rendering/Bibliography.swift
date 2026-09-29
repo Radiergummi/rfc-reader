@@ -103,6 +103,24 @@ extension [ReferenceGroup] {
 }
 
 extension Reference {
+  /// What VoiceOver says for the entry's row, as one stop (#300): the document's
+  /// name, or for an entry in no series the tag it is cited by, then its title, its
+  /// authors, any other series it names, and its date, with commas between. Not the
+  /// anchor, which `RFC0001` spells out letter by letter, and not the row's middle
+  /// dots, which can be read aloud.
+  public var accessibilityLabel: String {
+    let name = documentID?.displayName ?? displayAnchor
+    let title = title.isEmpty ? rawText ?? "" : title
+    let authors = authors.map(\.displayName).joined(separator: ", ")
+    let series =
+      seriesInfo
+      .filter { $0.name != "DOI" }
+      .map { "\($0.name) \($0.value)" }
+      .filter { $0 != name }
+    let parts = [name, title, authors] + series + [date?.formatted ?? ""]
+    return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+  }
+
   /// The entry's `<annotation>`, for the panel to show under its provenance line,
   /// or nil when it has none. External links stay links, since the usual annotation
   /// is the commit a living standard was cited at and a snapshot nobody can open is

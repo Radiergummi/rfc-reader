@@ -14,6 +14,28 @@ struct BibliographyTests {
     #expect(entry.authors.map(\.displayName) == ["Jana Iyengar, Ed.", "Martin Thomson, Ed."])
   }
 
+  // MARK: What VoiceOver says for an entry (#300)
+
+  /// The document's own name, not its anchor spelled out letter by letter
+  /// ("RFC0001"), and commas rather than the row's middle dots.
+  @Test func `an entry is spoken by its document's name, its title, authors and date`() {
+    let entry = Reference(
+      anchor: "RFC0001", title: "Host Software", authors: [Author(name: "S. Crocker")],
+      date: PublicationDate(year: 1969, month: 4), seriesInfo: [SeriesInfo(.rfc(1))])
+    #expect(entry.accessibilityLabel == "RFC 1, Host Software, S. Crocker, April 1969")
+  }
+
+  /// An entry in no series is spoken by the tag the document cites it with, and
+  /// keeps whatever series it does name.
+  @Test func `an entry outside the series is spoken by its tag`() {
+    let entry = Reference(
+      anchor: "I-D.ietf-quic-tls", displayAnchor: "QUIC-TLS", title: "Using TLS to Secure QUIC",
+      seriesInfo: [SeriesInfo(name: "Internet-Draft", value: "draft-ietf-quic-tls-34")])
+    #expect(
+      entry.accessibilityLabel
+        == "QUIC-TLS, Using TLS to Secure QUIC, Internet-Draft draft-ietf-quic-tls-34")
+  }
+
   @Test func `an anchor no bibliography holds finds nothing`() throws {
     let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
     #expect(groups.entry(anchor: "section-2") == nil)
