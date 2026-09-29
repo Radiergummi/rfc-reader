@@ -152,14 +152,13 @@ public struct RFCEditorClient: Sendable {
     public let xmlParseFailure: (any Error)?
   }
 
-  /// Whether the index says the plain text is all there is: it lists the formats,
-  /// and XML is not among them. Where it lists none, the XML is tried first.
+  /// Whether the plain text is all there is: formats are given, and XML is not among
+  /// them. With none given, the XML is tried first.
   ///
   /// Then Original Text and the document are the same `.txt`, which the app fetches
   /// once for both (#324).
   public static func textIsTheDocument(availableFormats: [FileFormat]?) -> Bool {
-    guard let availableFormats, !availableFormats.isEmpty else { return false }
-    return !availableFormats.contains(.xml)
+    !(availableFormats?.contains(.xml) ?? true)
   }
 
   /// The XML where the index lists it, the plain text otherwise (#125).

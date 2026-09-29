@@ -898,7 +898,8 @@ final class LibraryModel {
   }
 
   func originalText(for id: DocumentID) async throws -> String {
-    let text = try await store.originalText(id, client: client)
+    let text = try await store.originalText(
+      id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()
     await refreshDownloadedNumbers()
     return text

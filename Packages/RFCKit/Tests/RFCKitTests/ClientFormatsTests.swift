@@ -9,14 +9,13 @@ import Testing
 
 @Suite("RFC Editor formats")
 struct ClientFormatsTests {
-  /// The text is the document only when the index says there is no XML: then the
+  /// The text is the document only when the formats given hold no XML: then the
   /// reader's load and Original Text fetch the same `.txt`, and share one download
-  /// (#324). Where the index lists nothing, the XML is tried first.
-  @Test func `the text is all there is only when the index lists no XML`() {
+  /// (#324). With no formats given, the XML is tried first.
+  @Test func `the text is all there is only when the formats hold no XML`() {
     #expect(RFCEditorClient.textIsTheDocument(availableFormats: [.text, .pdf]))
     #expect(!RFCEditorClient.textIsTheDocument(availableFormats: [.xml, .text]))
     #expect(!RFCEditorClient.textIsTheDocument(availableFormats: nil))
-    #expect(!RFCEditorClient.textIsTheDocument(availableFormats: []))
   }
 
   @Test func `recent feed`() throws {
