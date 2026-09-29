@@ -4,6 +4,10 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// The revisions scanner (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md):
 /// lists every active, adopted draft on datatracker, reads the header of each one that
 /// changed, and writes `revisions.json` for the app and `revisions-scan.json` for its
