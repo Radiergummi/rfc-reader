@@ -28,6 +28,9 @@ enum SpotlightIndexer {
       if try await index.fetchLastClientState() == state { return }
       let expiration = Date.now.addingTimeInterval(SpotlightEntry.lifetime)
       for start in stride(from: 0, to: rfcs.count, by: batchSize) {
+        // A newer index has replaced this one: it indexes everything itself, and
+        // the client state is left for it to write.
+        guard !Task.isCancelled else { return }
         let end = min(start + batchSize, rfcs.count)
         let items = rfcs[start..<end].map { item(SpotlightEntry($0), expiring: expiration) }
         index.beginBatch()

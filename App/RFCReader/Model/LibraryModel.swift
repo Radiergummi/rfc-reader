@@ -219,11 +219,17 @@ final class LibraryModel {
     self.indexCounts = prepared.counts
     listCache.removeAll()
     indexState = .ready(updatedAt: updatedAt)
+    // A launch with a day-old cache applies it, then the refreshed index: the first
+    // indexing gives way, so the older index cannot finish last and win.
+    spotlightIndexing?.cancel()
     let rfcs = prepared.index.rfcs
-    Task(name: "Index for Spotlight") {
+    spotlightIndexing = Task(name: "Index for Spotlight") {
       await SpotlightIndexer.update(rfcs, indexUpdatedAt: updatedAt)
     }
   }
+
+  /// The Spotlight indexing under way (#178), cancelled when a newer index arrives.
+  @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
 
   // MARK: - Lists
 
