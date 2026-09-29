@@ -115,6 +115,13 @@ public struct Author: Hashable, Sendable, Codable {
   public var displayName: String {
     isEditor ? "\(name), Ed." : name
   }
+
+  /// The last word of the name, which is what a citation inverts and a page footer
+  /// names: "R. Fielding" is "Fielding". The whole name when it is one word.
+  public var surname: String {
+    guard let lastSpace = name.lastIndex(of: " ") else { return name }
+    return String(name[name.index(after: lastSpace)...])
+  }
 }
 
 /// An author's affiliation and address, as RFCXML's `<author>` states them.
@@ -382,9 +389,9 @@ public struct RFCIndex: Sendable {
 }
 
 /// Coded as what the RFC Editor's index says, and nothing derived from it: the
-/// lookup by number is rebuilt on decoding. The app keeps a decoded snapshot beside
-/// the index, because decoding it is about a third of the time the XML parse takes,
-/// and the parse ran at every launch.
+/// lookup by number is rebuilt on decoding. The app keeps a snapshot of the index
+/// in this form, because decoding it is about a third of the time the XML parse
+/// takes, and the parse ran at every launch.
 extension RFCIndex: Codable {
   private enum CodingKeys: String, CodingKey {
     case rfcs, series, notIssued

@@ -38,17 +38,56 @@ actor DocumentStore {
   /// has not grown is not enumerated again.
   private var hasGrown = true
 
+  /// Where the index snapshot lives: in Caches, because it is made again from one
+  /// parse, so it stays out of backups, and a write there does not change the date
+  /// of `directory`, which `cachedDocuments` would answer with a scan.
+  private let snapshotURL: URL
+
+  /// The last snapshot write, which the next one waits for, so a snapshot of an
+  /// older index never lands after a newer one.
+  private var snapshotWrite: Task<Void, Never>?
+
+  /// The installed data packs (#36), in a folder of the cache's directory but not
+  /// part of the cache: a pack is installed and replaced whole, never evicted a
+  /// document at a time. The cache's index and eviction read only the bodies the
+  /// store names itself, at the directory's top level, so a folder is never one.
+  private var packsDirectory: URL {
+    directory.appending(path: "Packs", directoryHint: .isDirectory)
+  }
+
+  /// The converted legacy RFCs, the one pack the app reads so far. Nil until one
+  /// is installed.
+  private lazy var legacyPack: InstalledPack? = Self.installedPack(
+    in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
+  private static let legacyPackName = "legacy-xml"
+  /// One install at a time: two would unpack into one destination and race to
+  /// swap it in.
+  private var isInstallingPack = false
+
+  struct AlreadyInstalling: Error, CustomStringConvertible {
+    var description: String { "A data pack is already being installed." }
+  }
+
+  struct DownloadFailed: Error, CustomStringConvertible {
+    let url: URL
+    let status: Int
+    var description: String { "\(url.absoluteString) answered HTTP \(status)" }
+  }
+
   init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
     directory = support.appending(path: "RFCReader", directoryHint: .isDirectory)
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appending(path: "RFCReader", directoryHint: .isDirectory)
+    try? FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
+    snapshotURL = caches.appending(path: "rfc-index.json")
   }
 
   // MARK: - Index
 
   private var indexURL: URL { directory.appending(path: "rfc-index.xml") }
-  private var snapshotURL: URL { directory.appending(path: "rfc-index.json") }
   private var checkURL: URL { directory.appending(path: "rfc-index-check.json") }
 
   /// The index, from its snapshot when that is current, and otherwise parsed from
@@ -74,11 +113,16 @@ actor DocumentStore {
       index: Self.modificationDate(of: url) ?? .distantFuture,
       app: Bundle.main.executableURL.flatMap(Self.modificationDate(of:)) ?? .distantFuture
     )
-    if isCurrent, let data = try? Data(contentsOf: snapshotURL),
-      let index = try? signposter.withIntervalSignpost(
-        "Decode index snapshot", around: { try IndexSnapshot.decode(data) })
-    {
-      return (index, updatedAt)
+    if isCurrent, let data = try? Data(contentsOf: snapshotURL) {
+      do {
+        let index = try signposter.withIntervalSignpost("Decode index snapshot") {
+          try IndexSnapshot.decode(data)
+        }
+        return (index, updatedAt)
+      } catch {
+        storeLog.error(
+          "decoding the index snapshot failed: \(String(describing: error), privacy: .public)")
+      }
     }
     let index = try signposter.withIntervalSignpost("Parse index XML") {
       try RFCIndexParser.parse(contentsOf: url)
@@ -89,10 +133,14 @@ actor DocumentStore {
 
   /// Keeps a refreshed index, its snapshot made from the same parse, and what
   /// identifies it for the next check.
-  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) throws {
+  ///
+  /// Waits for a snapshot write already running first: one of the index being
+  /// replaced that landed after the new XML would be newer than it, and so current.
+  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) async throws {
+    await snapshotWrite?.value
     try data.write(to: indexURL, options: .atomic)
     writeSnapshot(of: index)
-    try storeCheck(IndexCheck(checkedAt: .now, validators: validators))
+    try storeCheck(IndexCheck(checkedAt: .now, fetchedAt: .now, validators: validators))
   }
 
   /// The last check of the index kept on disk, or nil when there is no index on
@@ -104,9 +152,11 @@ actor DocumentStore {
     return try? JSONDecoder().decode(IndexCheck.self, from: data)
   }
 
-  /// Records that a check found the index unchanged, and returns when.
-  func recordUnchangedIndex() throws -> Date {
-    let check = IndexCheck(checkedAt: .now, validators: indexCheck()?.validators)
+  /// Records that a check sent with `kept`'s validators found the index unchanged,
+  /// and returns when.
+  func recordUnchangedIndex(_ kept: IndexCheck) throws -> Date {
+    var check = kept
+    check.checkedAt = .now
     try storeCheck(check)
     return check.checkedAt
   }
@@ -120,7 +170,8 @@ actor DocumentStore {
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
   private func writeSnapshot(of index: RFCIndex) {
-    Task(name: "Write index snapshot") { [snapshotURL] in
+    snapshotWrite = Task(name: "Write index snapshot") { [snapshotURL, snapshotWrite] in
+      await snapshotWrite?.value
       await Self.write(index, to: snapshotURL)
     }
   }
@@ -193,8 +244,12 @@ actor DocumentStore {
 
     let xmlURL = fileURL(id, format: .xml)
     let textURL = fileURL(id, format: .text)
+    let packURL = legacyPack?.file(for: id)
     let (cached, isCachedKept) = try await parses.value(for: id) {
-      Task { await Self.parseCached(xml: xmlURL, text: textURL, signpostID: signpostID) }
+      Task {
+        await Self.parseCached(
+          id, xml: xmlURL, pack: packURL, text: textURL, signpostID: signpostID)
+      }
     }
     if let cached {
       // A body removed while it parsed is shown but not kept, like a fetch (#116).
@@ -211,23 +266,38 @@ actor DocumentStore {
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
-    parsed.store(fetched.document, for: id)
+    // A pack installed while this was in flight serves the document from now on.
+    if legacyPack?.file(for: id) == nil {
+      parsed.store(fetched.document, for: id)
+    }
     return fetched.document
   }
 
-  /// The body on disk, parsed: the XML if there is one, otherwise the text, or nil
-  /// when neither is there. Off the actor, like a fetch's parse, so the store
-  /// answers other calls meanwhile -- whether a document is available offline, the
-  /// next open -- instead of queueing them behind half a second of legacy text.
+  /// The body on disk, parsed: the cached XML if there is one, then the installed
+  /// pack's, otherwise the cached text, or nil when none is there. Off the actor,
+  /// like a fetch's parse, so the store answers other calls meanwhile -- whether a
+  /// document is available offline, the next open -- instead of queueing them
+  /// behind half a second of legacy text.
   @concurrent
-  private static func parseCached(xml: URL, text: URL, signpostID: OSSignpostID) async
-    -> RFCDocument?
-  {
+  private static func parseCached(
+    _ id: DocumentID, xml: URL, pack: URL?, text: URL, signpostID: OSSignpostID
+  ) async -> RFCDocument? {
     if let data = try? Data(contentsOf: xml),
       let document = try? signposter.withIntervalSignpost(
         "Parse document", id: signpostID, "XML", around: { try RFCXMLParser.parse(data) })
     {
       return document
+    }
+    // Before a cached `.txt`: the pack is the single XML path it exists for, and a
+    // `.txt` cached before it arrived still serves Original Text.
+    if let pack {
+      do {
+        return try RFCXMLParser.parse(Data(contentsOf: pack))
+      } catch {
+        storeLog.error(
+          "\(id.displayName, privacy: .public): not read from the data pack: \(String(describing: error), privacy: .public)"
+        )
+      }
     }
     guard let data = try? Data(contentsOf: text) else { return nil }
     return signposter.withIntervalSignpost(
@@ -240,9 +310,8 @@ actor DocumentStore {
   private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
     async throws -> RFCEditorClient.FetchedDocument
   {
-    let signpostID = signposter.makeSignpostID()
     let interval = signposter.beginInterval(
-      "Fetch document", id: signpostID, "\(id.displayName, privacy: .public)")
+      "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Fetch document", interval) }
     let fetched = try await client.fetchPreferredDocument(
       id, availableFormats: formats.isEmpty ? nil : formats)
@@ -252,6 +321,59 @@ actor DocumentStore {
       )
     }
     return fetched
+  }
+
+  // MARK: - Data packs (#36)
+
+  /// The pack in `directory`, or nil when none is installed there or its manifest
+  /// does not read. That is logged, because the store would otherwise fall back to
+  /// the network with no sign of why.
+  private static func installedPack(in directory: URL) -> InstalledPack? {
+    guard FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) else {
+      return nil
+    }
+    do {
+      return try InstalledPack(contentsOf: directory)
+    } catch {
+      storeLog.error(
+        "the installed data pack is unreadable: \(String(describing: error), privacy: .public)")
+      return nil
+    }
+  }
+
+  /// Installs the legacy XML pack from an `.aar`, an unpacked folder, or a URL to
+  /// download one from, replacing the installed one only once the new one has
+  /// verified. Documents already parsed are parsed again on their next open, so
+  /// they come from the pack.
+  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    // Checked and set without a suspension between them, so a second install
+    // arriving while the first is off the actor is refused rather than raced.
+    guard !isInstallingPack else { throw AlreadyInstalling() }
+    isInstallingPack = true
+    defer { isInstallingPack = false }
+    let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
+    legacyPack = pack
+    // Parsed again on their next open, from the pack; nothing else it could serve.
+    parsed.removeAll { pack.file(for: $0) != nil }
+    return pack
+  }
+
+  /// Off the actor: a whole pack is unpacked and every file hashed.
+  @concurrent
+  private static func install(_ source: URL, as name: String, in packs: URL) async throws
+    -> InstalledPack
+  {
+    guard !source.isFileURL else {
+      return try PackInstaller.install(source, as: name, in: packs)
+    }
+    let (downloaded, response) = try await URLSession.shared.download(from: source)
+    defer { try? FileManager.default.removeItem(at: downloaded) }
+    // An error page is not an archive, and would be reported as one that failed
+    // to unpack.
+    if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+      throw DownloadFailed(url: source, status: status)
+    }
+    return try PackInstaller.install(downloaded, as: name, in: packs)
   }
 
   // MARK: - Eviction (#39)

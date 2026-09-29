@@ -1,4 +1,6 @@
 import Foundation
+import RFCKit
+import SwiftUI
 import Testing
 
 @testable import RFCReaderKit
@@ -51,5 +53,32 @@ struct RecentValuesTests {
     recent.removeAll { $0 == "b" }
     #expect(recent.keys == ["a", "c"])
     #expect(recent.value(for: "b") == nil)
+  }
+
+  /// A build is for one style: the same document at another size, width, line
+  /// height, text size or link style is another build.
+  @Test func `a build key differs by document and by every part of the style`() {
+    let style = ReadingStyle()
+    let document = DocumentID(series: .rfc, number: 9110)
+    let key = BuildKey(document: document, style: style)
+    #expect(key == BuildKey(document: document, style: style))
+    #expect(key != BuildKey(document: DocumentID(series: .rfc, number: 9111), style: style))
+    var wider = style
+    wider.measure += 1
+    #expect(key != BuildKey(document: document, style: wider))
+    var looser = style
+    looser.lineHeightMultiple += 0.1
+    #expect(key != BuildKey(document: document, style: looser))
+    var underlined = style
+    underlined.underlinesLinks.toggle()
+    #expect(key != BuildKey(document: document, style: underlined))
+    #expect(key != BuildKey(document: document, style: style.scaled(by: 1.1)))
+    // The body scales with the text size, so it is set back to the default's to
+    // tell the keys apart by the text size alone.
+    let larger = ReadingStyle(textSize: .xxxLarge)
+    let largerText = larger.scaled(by: style.bodySize / larger.bodySize)
+    #expect(largerText.bodySize == style.bodySize)
+    #expect(largerText.textSize != style.textSize)
+    #expect(key != BuildKey(document: document, style: largerText))
   }
 }

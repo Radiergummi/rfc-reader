@@ -89,8 +89,8 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
-  // The reader's column, as #357 measured the builds.
-  let style = ReadingStyle(measure: 712)
+  // The reader's column, 712 pt, as #357 measured the builds.
+  let style = ReadingStyle(measure: ReaderLayout.idealMeasure)
   for number in [9110, 9000] {
     Benchmark("Build: RFC \(number)") { benchmark, document in
       for _ in benchmark.scaledIterations {
@@ -109,22 +109,18 @@ let benchmarks: @Sendable () -> Void = {
   }
 }
 
-/// The directory the inputs are read from.
+/// The directory the inputs are read from, looked up only when a benchmark's
+/// `setup` reads one, so `benchmark list` and the baseline commands run without it.
 struct Corpus {
-  let directory: URL
-
-  init() {
+  func data(_ name: String) -> Data {
     guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS"] else {
       fatalError("RFC_CORPUS is not set: run the benchmarks through `make benchmark`")
     }
-    directory = URL(filePath: path, directoryHint: .isDirectory)
-  }
-
-  func data(_ name: String) -> Data {
-    let url = directory.appending(path: name)
-    guard let data = try? Data(contentsOf: url) else {
-      fatalError("\(url.path) is missing: `make benchmark` fetches it")
+    let url = URL(filePath: path, directoryHint: .isDirectory).appending(path: name)
+    do {
+      return try Data(contentsOf: url)
+    } catch {
+      fatalError("\(url.path) cannot be read (`make benchmark` fetches it): \(error)")
     }
-    return data
   }
 }

@@ -94,6 +94,18 @@ struct ConditionalIndexFetchTests {
       #expect(!request.allowsConstrainedNetworkAccess)
     }
 
+    @Test func `the session for a fetch nobody asked for waits for a cheap network`() {
+      let configuration = URLSession.rfcEditorOnCheapNetworks.configuration
+      #expect(configuration.waitsForConnectivity)
+      #expect(!configuration.allowsExpensiveNetworkAccess)
+      #expect(!configuration.allowsConstrainedNetworkAccess)
+      #expect(configuration.urlCache == nil)
+    }
+
+    @Test func `the session for a fetch someone asked for fails fast`() {
+      #expect(!URLSession.rfcEditor.configuration.waitsForConnectivity)
+    }
+
     @Test func `a fetch someone asked for takes any network`() async throws {
       let transport = Transport(status: 304)
       _ = try await RFCEditorClient(transport: transport)

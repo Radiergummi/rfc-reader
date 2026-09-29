@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries
+.PHONY: lint fmt build test check test-app test-corpus xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score
 
 # The two Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -7,6 +7,7 @@
 RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
+BENCHMARKS   := Tools/benchmarks
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
 # The corpus working directory (see the corpus targets below). Set here rather
@@ -94,8 +95,8 @@ BENCHMARK_CORPUS := $(CORPUS)/benchmarks
 BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc5661.txt rfc793.txt
 BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
-	cd Tools/benchmarks && RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
-	  swift package --disable-sandbox benchmark $(BENCHMARK_ARGS)
+	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
+	  swift package --package-path $(BENCHMARKS) --disable-sandbox benchmark $(BENCHMARK_ARGS)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
@@ -212,6 +213,11 @@ install: build-app
 # it); name another with TRACE_SCENARIO. The trace is kept in traces/ for
 # Instruments, where the same intervals sit in the Points of Interest lane.
 #
+# The app runs against its real sandbox container, so Recently Read, reading
+# positions and window restoration are the real ones, and the session can
+# change them. It ends the copy it launched with SIGTERM, as `make run` ends a
+# running one, but leaves any other running copy alone.
+#
 #   make trace
 #   make trace TRACE_SCENARIO='wait 6; open 9110; wait 5'
 #
@@ -297,6 +303,20 @@ corpus-overrides-check: corpus-tool
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
 	done; exit $$status
+
+## Score the legacy parser against the RFCs xml2rfc generated from XML
+# From RFC 8650 on, an RFC's text is generated from its XML, so the XML says what
+# the text's headings, artwork and source code are (#42). This fetches both, parses
+# the text with LegacyTextParser, and writes per-kind precision and recall, with
+# the worst documents first, to corpus/score.json -- beside report.json, so a diff
+# of either between runs is about one thing. A regression floor on uniform xml2rfc
+# output, not a measure of the legacy corpus. Not part of `check`: it needs the
+# network the first time.
+corpus-score: corpus-fetch-xml
+	$(CORPUS_BIN) fetch --out $(CORPUS) --format modern-text --index $(CORPUS)/rfc-index.xml \
+	  $(if $(CORPUS_LIMIT),--limit $(CORPUS_LIMIT))
+	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
+	  --out $(CORPUS)/score.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

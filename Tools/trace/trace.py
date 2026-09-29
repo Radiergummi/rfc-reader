@@ -54,16 +54,19 @@ DEFAULT_SCENARIO = [
 
 def main():
     arguments = parse_arguments()
-    executable = arguments.app / "Contents" / "MacOS" / arguments.app.stem
+    info_path = arguments.app / "Contents" / "Info.plist"
+    if not info_path.is_file():
+        sys.exit(f"no Info.plist at {info_path} -- did the build fail?")
+    with open(info_path, "rb") as file:
+        info = plistlib.load(file)
+    executable = arguments.app / "Contents" / "MacOS" / info["CFBundleExecutable"]
     if not executable.is_file():
         sys.exit(f"no executable at {executable} -- did the build fail?")
+    # The signposts' subsystem is the bundle identifier (`Signposts.swift`).
+    subsystem = info["CFBundleIdentifier"]
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     if arguments.output.exists():
         sys.exit(f"{arguments.output} exists already; name another trace")
-
-    # The signposts' subsystem is the bundle identifier (`Signposts.swift`).
-    with open(arguments.app / "Contents" / "Info.plist", "rb") as info:
-        subsystem = plistlib.load(info)["CFBundleIdentifier"]
 
     process_id = record(executable, arguments.output, parse_scenario(arguments.scenario))
     print(f"trace: {arguments.output}\n")
