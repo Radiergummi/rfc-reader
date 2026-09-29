@@ -75,7 +75,7 @@ struct CorpusBackedTitlePageTests {
   /// Since the front matter ends at the first paragraph (#74), whatever the title page
   /// leaves between it and the body reaches the lead-in, and is taken out of it by what
   /// it is (#76): RFC 674's header block, under its journal stamp, and the page number
-  /// after its title; RFC 1441's centred `Status of this Memo` and its paragraph, and
+  /// after its title; RFC 1441's centered `Status of this Memo` and its paragraph, and
   /// its contents. The body after them stays.
   @Test func `the title pages leftovers are not the lead in`() throws {
     let procedureCall = leadInText(LegacyTextParser.parse(try CorpusText.text("rfc674")))
@@ -92,7 +92,7 @@ struct CorpusBackedTitlePageTests {
   }
 
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
-  /// report does not diagnose it either: RFC 1441's centred status paragraph and its
+  /// report does not diagnose it either: RFC 1441's centered status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
   @Test func `the title pages leftovers are not diagnosed`() throws {
     let leadIn = LegacyTextParser.proseDiagnostics(for: try CorpusText.text("rfc1441"))
@@ -153,6 +153,19 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(code.anchor == "appendix-B.1.4.1")
     #expect(code.titleText.hasPrefix("client-error-"))
   }
+
+  /// RFC 1043 numbers its appendices `APPENDIX 1` and `APPENDIX 2`, and has no section
+  /// 2 heading of its own. Its prose cites `Section 2`, which named no section and must
+  /// not link to one: an appendix's number is not a section's.
+  @Test func `a section citation does not link to an appendix's number`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1043"))
+    #expect(document.section(anchor: "appendix-2") != nil)
+    let targets = document.everyCrossReference.compactMap { reference -> String? in
+      if case .anchor(let anchor) = reference.target { return anchor }
+      return nil
+    }
+    #expect(!targets.contains("section-2"))
+  }
 }
 
 @Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
@@ -201,7 +214,7 @@ struct CorpusBackedCatalogueTests {
   /// RFC 793 sets a legend under each sequence-space diagram, one line to an entry,
   /// and centres the figure's captions under it. A caption is not the last entry's
   /// second paragraph.
-  @Test func `a caption centred under a legend stays out of it`() throws {
+  @Test func `a caption centered under a legend stays out of it`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
     let entries = catalogues(in: document).flatMap { $0 }
     #expect(!entries.isEmpty)
@@ -233,7 +246,7 @@ struct CorpusBackedCatalogueTests {
 struct CorpusBackedUnnumberedHeadingTests {
   /// The front matter ends at the first line that could be a heading, and that test is
   /// kept lax: refusing prose there as the body does ran RFC 783's front matter on past
-  /// its summary, set at column 0 under a centred `Summary`, and lost it (#201). The
+  /// its summary, set at column 0 under a centered `Summary`, and lost it (#201). The
   /// summary stays in the lead-in.
   @Test func `a summary at column 0 is not swallowed into the front matter`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc783"))
@@ -253,5 +266,16 @@ struct CorpusBackedOmittedBoilerplateTests {
     let text = document.paragraphs.map(\.plainText) + document.artworkText
     #expect(text.contains { $0.contains("Bitmap Distribution Format") })
     #expect(!document.allSections.contains { $0.titleText.hasPrefix("The following documents") })
+  }
+
+  /// A refused line can continue a block rather than start one: RFC 7231's contents
+  /// has an entry wrapped to column 0 in the middle of a block. The omitted contents end
+  /// at that line, as they did when it was a heading, and the lines of its block
+  /// before it are the contents' still.
+  @Test func `a refused line inside a block ends the boilerplate at that line`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc7231"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(!text.contains { $0.contains("Payment Required ....") })
+    #expect(text.contains { $0.contains("Origination Date ....") })
   }
 }

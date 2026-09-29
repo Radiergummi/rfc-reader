@@ -111,5 +111,5 @@ public struct RFCLink: Hashable, Sendable {
     return nil
   }
 
-  private static let appendixPrefix = "appendix-"
+  static let appendixPrefix = "appendix-"
 }

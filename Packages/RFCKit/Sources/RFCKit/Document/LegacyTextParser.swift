@@ -379,10 +379,10 @@ public struct LegacyTextParser: Sendable {
   private struct RawSection {
     var heading: HeadingInfo?
     var blocks: [RawBlock] = []
-    /// The first block holding a line that took a heading's place but was refused as
-    /// an unnumbered one: where omitted boilerplate ends, as it did when that line
-    /// was a heading.
-    var refusedHeadingBlock: Int?
+    /// The first line that took a heading's place but was refused as an unnumbered one,
+    /// by its block and its place in that block: where omitted boilerplate ends, as it
+    /// did when that line was a heading.
+    var refusedHeadingLine: (block: Int, line: Int)?
   }
 
   nonisolated(unsafe) private static let numberedHeadingPattern =
@@ -683,10 +683,9 @@ public struct LegacyTextParser: Sendable {
           startsBlock: current.isEmpty)
         {
           if heading.number == nil, refusesUnnumberedHeading(heading.title) {
-            if sections[sections.count - 1].refusedHeadingBlock == nil {
-              sections[sections.count - 1].refusedHeadingBlock =
-                sections[sections.count - 1].blocks.count
-            }
+            let last = sections.count - 1
+            sections[last].refusedHeadingLine =
+              sections[last].refusedHeadingLine ?? (sections[last].blocks.count, current.count)
             current.append(string)
           } else {
             flushBlock()
@@ -719,7 +718,9 @@ public struct LegacyTextParser: Sendable {
     var header = prepared.header
 
     // Collect known section numbers and reference anchors for link resolution.
-    let sectionNumbers = Set(sections.compactMap { $0.heading?.number })
+    // An appendix numbered like a section, `Appendix 2`, is not what `Section 2` cites.
+    let sectionNumbers = Set(
+      sections.compactMap { $0.heading.flatMap { $0.isAppendix ? nil : $0.number } })
     let bibliographies = Self.settlingEntryAnchors(
       sections.indices.reduce(into: [Int: [Reference]]()) { lists, index in
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
@@ -768,18 +769,21 @@ public struct LegacyTextParser: Sendable {
             proseIndent: proseIndent)
           // Omitted boilerplate ends where a heading's place is taken, whether or not
           // the line there is a heading: refused as prose, RFC 1198's sentence at column
-          // 0 took the list of standards under it into its `Status of this Memo`.
-          if !isAbstract, let refused = raw.refusedHeadingBlock {
-            extent = min(extent, refused)
+          // 0 took the list of standards under it into its `Status of this Memo`. Where
+          // the line continues a block, the lines before it are the boilerplate's.
+          var blocks = raw.blocks
+          if !isAbstract, let refused = raw.refusedHeadingLine, refused.block < extent {
+            blocks[refused.block].lines.removeFirst(refused.line)
+            extent = refused.block
           }
           if isAbstract {
             header.abstract = Self.blocks(
               from: Array(raw.blocks.prefix(extent)), proseIndent: proseIndent, linker: linker)
             abstractTaken = true
           }
-          if extent < raw.blocks.count {
+          if extent < blocks.count {
             let body = Self.blocks(
-              from: Array(raw.blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
+              from: Array(blocks.dropFirst(extent)), proseIndent: proseIndent, linker: linker)
             if !body.isEmpty {
               flat.append(Section(anchor: "after-\(heading.anchor)", title: "", blocks: body))
             }
@@ -1516,8 +1520,11 @@ public struct LegacyTextParser: Sendable {
   }
 
   /// How an appendix heading with no number opens: the word `Appendix` or `Annex`,
-  /// capitalized or in capitals. Not a lower-case `appendix`, which is wrapped prose.
-  nonisolated(unsafe) private static let appendixOpening = #/A(?i:ppendix|nnex)\b/#
+  /// capitalized or in capitals. Not a lower-case `appendix`, which is wrapped prose,
+  /// and not followed by a number: a numbered appendix heading is read as one before
+  /// this, so what is left is prose that names one, `Appendix B holds the drawings`.
+  nonisolated(unsafe) private static let appendixOpening =
+    #/A(?i:ppendix|nnex)\b(?!\s+(?:[A-Z]|[IVX]+|\d+)\b)/#
 
   /// Punctuation that a heading does not have and code and drawings do: ASN.1 and ABNF
   /// definitions, braces, table rules and box drawing, arrows.
@@ -1550,7 +1557,7 @@ public struct LegacyTextParser: Sendable {
   ///
   /// Title case, all capitals and short sentence case (`How to read this memo`) are
   /// where the real headings are. Their false positives, table rows and header-field
-  /// lines, need the neighbouring lines to judge, which is a second pass.
+  /// lines, need the neighboring lines to judge, which is a second pass.
   static func refusesUnnumberedHeading(_ title: String) -> Bool {
     guard let first = title.first else { return true }
     // A numbered appendix is an appendix heading and never reaches this test. One with

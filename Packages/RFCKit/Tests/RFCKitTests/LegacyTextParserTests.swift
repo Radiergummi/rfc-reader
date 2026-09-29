@@ -328,7 +328,7 @@ struct LegacyTextParserTests {
         "TRANSMISSION OF DATAGRAMS OVER NETWORKS WITH LONG HEADERS"))
     #expect(
       !LegacyTextParser.refusesUnnumberedHeading(
-        "Coexistence of the Relay Agents between Two Neighbouring Networks"))
+        "Coexistence of the Relay Agents between Two Neighboring Networks"))
     #expect(!LegacyTextParser.refusesUnnumberedHeading("How to read this memo"))
   }
 
@@ -353,6 +353,10 @@ struct LegacyTextParserTests {
     #expect(LegacyTextParser.refusesUnnumberedHeading("A.4 for the details of the exchange."))
     #expect(
       LegacyTextParser.refusesUnnumberedHeading("X.400 gateways, which the next section covers,"))
+    #expect(
+      LegacyTextParser.refusesUnnumberedHeading(
+        "Appendix B holds the drawings of every transition between the states"))
+    #expect(LegacyTextParser.refusesUnnumberedHeading("Appendix C for the list of the codes)."))
   }
 
   /// Through `parse`: a MIB set at column 0 opens no sections.
