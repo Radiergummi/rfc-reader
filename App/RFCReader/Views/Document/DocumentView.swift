@@ -12,8 +12,17 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
+    // Read here, above the reader's own `openURL`, which follows links in the app:
+    // the toolbar sits inside it, and reading it there opened rfc-editor.org's own
+    // page as the RFC it names.
+    @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    // Only the iOS toolbar reads these. On macOS the bookmark button is the
+    // window's, and a `@Query` left outside this guard ran a live fetch of every
+    // bookmark per open document that nothing read. Here rather than in the
+    // toolbar, which is `ToolbarContent`, not a view.
+    @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
@@ -110,7 +119,8 @@ struct DocumentView: View {
         .toolbar {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
-            reader: reader, showsInspector: $showsInspector)
+            reader: reader, isBookmarked: bookmarks.contains { $0.documentKey == id.fileStem },
+            openURL: systemOpenURL, showsInspector: $showsInspector)
         }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
@@ -150,7 +160,10 @@ struct DocumentView: View {
         #endif
       }
       .onChange(of: buildInputs, initial: true) {
-        session.requestBuild(for: buildInputs, built: listSections)
+        // Captures the reader, not the view; see `DocumentSession.startLoad`.
+        session.requestBuild(for: buildInputs) { [reader] built, document in
+          Self.listSections(of: document, in: built, into: reader)
+        }
       }
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
@@ -317,9 +330,12 @@ struct DocumentView: View {
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
-    session.startLoad(from: library) { loaded in
+    // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
+    session.startLoad(from: library) { [reader, library, modelContext, id] loaded in
       reader.groups = ReferenceGroup.groups(in: loaded)
-      deriveInfo()
+      reader.info = library.metadata(id).map {
+        DocumentInfo($0, authors: loaded.header.authors, in: library.index)
+      }
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
@@ -349,8 +365,9 @@ struct DocumentView: View {
   /// No place to restore here: the coordinator carries the line at the top of the
   /// viewport into the new storage itself, which a section anchor — all this view is
   /// told — could only approximate to the section's heading.
-  private func listSections(in built: BuiltDocument) {
-    guard let document = session.state.document else { return }
+  private static func listSections(
+    of document: RFCDocument, in built: BuiltDocument, into reader: ReaderState
+  ) {
     // Taken once: `AnchorIndex.sections` filters, sorts and re-indexes every
     // anchor in the document, so asking inside the filter would rebuild the whole
     // index once per section.
@@ -404,9 +421,12 @@ struct DocumentView: View {
   }
 
   private func saveReadingPosition() {
+    // Nothing to save for a document that never showed its text — one that failed
+    // to load, or was left before it did — and saving no place would erase the one
+    // stored, and list a document that never opened as read.
+    guard let anchor = lastVisibleAnchor.anchor else { return }
     // The anchor alone for now: the reader reports the section on screen, not the
     // offset within it, so a place is saved at the anchor itself (#152).
-    let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
-    ReadingPositionStore.save(place, for: id, in: modelContext)
+    ReadingPositionStore.save(ReadingPlace(anchor: anchor, offset: 0), for: id, in: modelContext)
   }
 }

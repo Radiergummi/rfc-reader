@@ -2,8 +2,9 @@ import Foundation
 import RFCKit
 import SwiftData
 
-/// The one place a `ReadingPosition` is read or written (#135), as `BookmarkStore`
-/// is for bookmarks.
+/// One document's `ReadingPosition`, as the reader reads and writes it (#135). The
+/// lists over every position — Recently Read, the pinned documents — fetch them in
+/// `LibraryModel`.
 ///
 /// The store has no unique constraint on the document (#152), so each write looks
 /// its row up first and updates it rather than inserting a second.

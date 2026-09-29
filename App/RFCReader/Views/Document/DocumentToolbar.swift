@@ -1,6 +1,5 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import SwiftUI
 
 #if !os(macOS)
@@ -12,21 +11,14 @@ import SwiftUI
     let library: LibraryModel
     let navigation: NavigationModel
     let reader: ReaderState
+    let isBookmarked: Bool
+    /// The system's, handed over by the reader: inside it, `openURL` is the reader's
+    /// own, which follows links in the app.
+    let openURL: OpenURLAction
     @Binding var showsInspector: Bool
 
-    // Here rather than on the reader, and on iOS only: on macOS the bookmark
-    // button and the external links are the window's, and a `@Query` in the
-    // reader ran a live fetch of every bookmark per open document that nothing
-    // read.
-    @Environment(\.openURL) private var systemOpenURL
     @Environment(\.undoManager) private var undoManager
     @Environment(\.modelContext) private var modelContext
-    @Query private var bookmarks: [Bookmark]
-
-    private var isBookmarked: Bool {
-      let key = id.fileStem
-      return bookmarks.contains { $0.documentKey == key }
-    }
 
     /// Share and More at the top; Contents and Cite leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -73,7 +65,6 @@ import SwiftUI
     }
 
     private var bookmarkButton: some View {
-      // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
       // A tap bookmarks, as before; a long press adds to a collection (#349).
       return Menu {
@@ -120,13 +111,13 @@ import SwiftUI
         }
 
         Section {
-          Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
+          Button("Open on rfc-editor.org") { openURL(RFCEditorEndpoints.infoPage(id)) }
           if let url = metadata?.errataURL {
-            Button("Errata") { systemOpenURL(url) }
+            Button("Errata") { openURL(url) }
           }
-          Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
+          Button("Datatracker") { openURL(RFCEditorEndpoints.datatracker(id)) }
           if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { systemOpenURL(draft) }
+            Button("Preceding Draft") { openURL(draft) }
           }
         }
       } label: {

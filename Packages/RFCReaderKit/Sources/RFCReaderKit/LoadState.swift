@@ -79,6 +79,28 @@ public struct LoadState {
   }
 }
 
+/// Whether a change to what a document is built from builds it again (#135).
+///
+/// The inputs are whatever the build depends on — size, measure, the column — and
+/// generic so the rule is tested here, away from the SwiftUI types the reader's
+/// own inputs carry.
+public enum BuildRequest: Equatable {
+  /// Build for the new inputs, cancelling any build under way.
+  case start
+  /// Leave things as they are: the build under way, or on screen, is for these.
+  case keep
+  /// Cancel the build under way: the screen already shows these inputs.
+  case cancel
+
+  public static func decide<Inputs: Equatable>(
+    _ inputs: Inputs, built: Inputs?, building: Inputs?
+  ) -> BuildRequest {
+    if inputs == building { return .keep }
+    if inputs == built { return building == nil ? .keep : .cancel }
+    return .start
+  }
+}
+
 /// Why a document did not load: the error itself rather than its description, so
 /// what the reader says about it can depend on what it was (#125).
 public struct LoadFailure {

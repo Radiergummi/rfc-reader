@@ -76,13 +76,20 @@ final class DocumentSession {
   ///
   /// Once per session, plus Try Again after a failure: the view is made per document
   /// (`.id(selection)`), and appearing again keeps what it loaded.
+  ///
+  /// The task holds the session weakly, and `loaded` must not capture the view: a
+  /// view's state holds this session, so either would keep it alive for as long as
+  /// the fetch runs, and `deinit` could not cancel a fetch nobody waits for any more.
+  /// A fetch that outlives its session is dropped, rather than writing an old
+  /// document's details over the window's reader state.
   func startLoad(from library: LibraryModel, loaded: @escaping (RFCDocument) -> Void) {
     load?.cancel()
     state.begin()
-    load = Task(name: "Load document") {
-      trace("loading")
+    trace("loading")
+    load = Task(name: "Load document") { [weak self, id] in
       do {
         let document = try await library.document(for: id)
+        guard let self, !Task.isCancelled, state.isLoading else { return }
         sectionNumbers = Dictionary(
           document.allSections.compactMap { section in
             section.number.map { (section.anchor, $0) }
@@ -93,28 +100,37 @@ final class DocumentSession {
         loaded(document)
         trace("loaded")
       } catch {
+        guard let self, !Task.isCancelled else { return }
         trace("failed: \(error)")
         state.fail(error)
       }
     }
   }
 
-  /// Builds for `inputs`, unless the document on screen or the build under way is
-  /// already for them, and hands the build to `built` once it is the state's.
-  func requestBuild(for inputs: BuildInputs, built: @escaping (BuiltDocument) -> Void) {
-    // Appearing again asks with nothing changed. A build already made, or under
-    // way, for these inputs is left to stand rather than cancelled and paid for
-    // twice.
-    guard inputs != builtInputs, inputs != buildingFor else {
+  /// Builds for `inputs`, as `BuildRequest` decides, and hands the build and its
+  /// document to `built` once it is the state's. `built` must not capture the view,
+  /// for the reason `startLoad` gives.
+  func requestBuild(
+    for inputs: BuildInputs, built: @escaping (BuiltDocument, RFCDocument) -> Void
+  ) {
+    switch BuildRequest.decide(inputs, built: builtInputs, building: buildingFor) {
+    case .keep:
       trace("build skipped, inputs unchanged")
       return
+    case .cancel:
+      trace("build cancelled, back to the inputs on screen")
+      build?.cancel()
+      buildingFor = nil
+      return
+    case .start:
+      break
     }
     build?.cancel()
     buildingFor = inputs
-    build = Task(name: "Build document") {
-      guard let document = state.document, let style = inputs.style else { return }
-      trace("building")
-      let delay = state.buildDelay
+    guard let document = state.document, let style = inputs.style else { return }
+    let delay = state.buildDelay
+    trace("building")
+    build = Task(name: "Build document") { [weak self] in
       if delay > .zero {
         try? await Task.sleep(for: delay)
       }
@@ -123,14 +139,12 @@ final class DocumentSession {
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
       let rebuilt = await DocumentView.build(document, style: style)
-      guard !Task.isCancelled else {
-        trace("build cancelled, discarded")
-        return
-      }
+      guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs
+      buildingFor = nil
       trace("built")
-      built(rebuilt)
+      built(rebuilt, document)
     }
   }
 

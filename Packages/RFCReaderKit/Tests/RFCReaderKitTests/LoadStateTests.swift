@@ -95,4 +95,32 @@ struct LoadStateTests {
     state.install(built())
     #expect(state.buildDelay == .milliseconds(650))
   }
+
+  // MARK: - Whether a build runs
+
+  @Test func `inputs nothing was built for start a build`() {
+    #expect(BuildRequest.decide(17, built: nil, building: nil) == .start)
+    #expect(BuildRequest.decide(18, built: 17, building: nil) == .start)
+  }
+
+  /// The pending build is for inputs that no longer hold, so it goes.
+  @Test func `new inputs replace the build under way`() {
+    #expect(BuildRequest.decide(19, built: 17, building: 18) == .start)
+  }
+
+  /// Appearing again asks with nothing changed: the build under way stands rather
+  /// than being cancelled and paid for twice.
+  @Test func `the inputs of the build under way leave it to finish`() {
+    #expect(BuildRequest.decide(18, built: 17, building: 18) == .keep)
+  }
+
+  @Test func `the inputs on screen with nothing under way build nothing`() {
+    #expect(BuildRequest.decide(17, built: 17, building: nil) == .keep)
+  }
+
+  /// A slider dragged to 18 and back to 17 before the 18 build lands: the screen
+  /// already shows 17, and the 18 build would put the wrong size over it.
+  @Test func `coming back to the inputs on screen cancels the build under way`() {
+    #expect(BuildRequest.decide(17, built: 17, building: 18) == .cancel)
+  }
 }
