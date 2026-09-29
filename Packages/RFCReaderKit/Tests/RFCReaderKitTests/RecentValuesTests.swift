@@ -1,6 +1,4 @@
 import Foundation
-import RFCKit
-import SwiftUI
 import Testing
 
 @testable import RFCReaderKit

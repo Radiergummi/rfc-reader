@@ -30,6 +30,9 @@ actor DocumentStore {
   /// own.
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()
+  /// The parses of cached bodies running, for the same three reasons: a parse
+  /// suspends the open, so the actor lets a second open or a removal in meanwhile.
+  private let parses = InFlightDownloads<RFCDocument?>()
 
   /// Whether a body has been written since eviction last looked, so a cache that
   /// has not grown is not enumerated again.
@@ -168,6 +171,7 @@ actor DocumentStore {
   func remove(_ id: DocumentID) {
     downloads.removed(id)
     originalTexts.removed(id)
+    parses.removed(id)
     parsed.removeAll { $0 == id }
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
@@ -187,12 +191,14 @@ actor DocumentStore {
     markOpened(id)
     if let cached = parsed.value(for: id) { return cached }
 
-    let cached = await Self.parseCached(
-      xml: fileURL(id, format: .xml), text: fileURL(id, format: .text), signpostID: signpostID)
+    let xmlURL = fileURL(id, format: .xml)
+    let textURL = fileURL(id, format: .text)
+    let (cached, isCachedKept) = try await parses.value(for: id) {
+      Task { await Self.parseCached(xml: xmlURL, text: textURL, signpostID: signpostID) }
+    }
     if let cached {
-      // Unless the body was removed while this parsed, which is shown but not
-      // kept, as a fetch's is not (#116).
-      if cachedDocuments.contains(id) { parsed.store(cached, for: id) }
+      // A body removed while it parsed is shown but not kept, like a fetch (#116).
+      if isCachedKept { parsed.store(cached, for: id) }
       return cached
     }
 
