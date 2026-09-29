@@ -68,6 +68,8 @@ public struct ReferenceHover {
     case forceClickDocument(HoverTarget)
     /// The card the last `showCard` asked for is on screen.
     case cardShown
+    /// The document preview the last `showDocumentPreview` asked for is on screen.
+    case documentPreviewShown
     /// The popover closed by itself: Esc, a click elsewhere, the app going inactive.
     case popoverClosedItself
     /// A click in a document preview, which follows the reference; `pointer` is
@@ -203,15 +205,20 @@ public struct ReferenceHover {
       // `quickLook(with:)` can both arrive for one force click.
       if forceClicked === target.box, presentation == .documentPreview { return [] }
       // Over a hover card too: this is the bigger answer to the same question.
+      // Presenting only once it is on screen, as a card is: one that never appears
+      // must not leave the pointer's moves and exits suppressed for it.
       var effects = cancel()
       hovered = target.box
       forceClicked = target.box
-      presentation = .documentPreview
       effects.append(.showDocumentPreview(target))
       return effects
 
     case .cardShown:
       presentation = .card
+      return []
+
+    case .documentPreviewShown:
+      presentation = .documentPreview
       return []
 
     case .popoverClosedItself:

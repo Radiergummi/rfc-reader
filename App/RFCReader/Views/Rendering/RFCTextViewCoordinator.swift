@@ -659,8 +659,10 @@ final class RFCTextViewCoordinator: NSObject {
         guard let self, let preview = self.preview(for: target.box.reference),
           let rect = self.referenceRect(for: target.range)
         else { return nil }
-        return (NSHostingController(rootView: preview), rect)
+        return ReferenceHoverController.Popover(
+          content: NSHostingController(rootView: preview), anchor: rect)
       }
+      hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
     }
 
     /// Called from `dismantleNSView`.
@@ -698,11 +700,9 @@ final class RFCTextViewCoordinator: NSObject {
       case .card:
         guard preview(for: target.box.reference) != nil else { return false }
         hover.send(.forceClickCard(target))
-      case .document(let id, let place):
-        guard let library, let rect = referenceRect(for: target.range) else { return false }
-        if hover.send(.forceClickDocument(target)).contains(.showDocumentPreview(target)) {
-          showDocumentPreview(of: id, at: place, following: url, at: rect, library: library)
-        }
+      case .document:
+        guard library != nil, referenceRect(for: target.range) != nil else { return false }
+        hover.send(.forceClickDocument(target))
       }
       return true
     }
@@ -734,11 +734,13 @@ final class RFCTextViewCoordinator: NSObject {
     /// The preview is a reader of its own — its own text view and storage, built by
     /// `DocumentTextBuilder` — in a popover beside the reference. A click in it does
     /// what a click on the reference would have, with the modifiers held for it,
-    /// and closes it.
-    private func showDocumentPreview(
-      of id: DocumentID, at place: String?, following url: URL, at rect: CGRect,
-      library: LibraryModel
-    ) {
+    /// and closes it. Nil for a reference that names no document of ours.
+    private func documentPreview(for target: HoverTarget) -> ReferenceHoverController.Popover? {
+      guard let documentID, let library, let url = link(at: target.range.location),
+        case .document(let id, let place)? = LinkPreview.resolve(
+          url, from: documentID, in: library.index),
+        let rect = referenceRect(for: target.range)
+      else { return nil }
       let preview = DocumentPreview(library: library, id: id, place: place) { [weak self] in
         guard let self else { return }
         let sameDocument = id == self.documentID
@@ -758,7 +760,8 @@ final class RFCTextViewCoordinator: NSObject {
       // The preview's reader asks the environment for the library, and a hosting
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: preview.environment(library))
-      hover.present(host, size: DocumentPreview.size, at: rect)
+      return ReferenceHoverController.Popover(
+        content: host, size: DocumentPreview.size, anchor: rect)
     }
 
     /// The reference under a point in window coordinates. `textContainerOrigin` is

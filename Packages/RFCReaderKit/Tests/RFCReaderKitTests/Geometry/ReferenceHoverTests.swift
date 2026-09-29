@@ -143,6 +143,7 @@ struct ReferenceHoverTests {
 
     var previewing = ReferenceHover()
     _ = previewing.handle(.forceClickDocument(first))
+    _ = previewing.handle(.documentPreviewShown)
     #expect(!previewing.wantsTarget(at: elsewhere))
 
     #expect(!ReferenceHover(isPreviewReader: true).wantsTarget(at: here))
@@ -187,18 +188,31 @@ struct ReferenceHoverTests {
     var hover = showingCard(first)
     #expect(
       hover.handle(.forceClickDocument(first)) == [.closePopover, .showDocumentPreview(first)])
+    #expect(hover.presentation == nil)
+    _ = hover.handle(.documentPreviewShown)
     #expect(hover.presentation == .documentPreview)
   }
 
   @Test func `the second report of one force click does not open the preview again`() {
     var hover = ReferenceHover()
     _ = hover.handle(.forceClickDocument(first))
+    _ = hover.handle(.documentPreviewShown)
     #expect(hover.handle(.forceClickDocument(first)).isEmpty)
+  }
+
+  @Test func `a document preview that never appeared suppresses nothing`() {
+    var hover = ReferenceHover()
+    _ = hover.handle(.forceClickDocument(first))
+    #expect(
+      hover.handle(.pointerMoved(location: elsewhere, target: second)) == [
+        .startDwell(.card(second))
+      ])
   }
 
   @Test func `the pointer traveling into a document preview does not close it`() {
     var hover = ReferenceHover()
     _ = hover.handle(.forceClickDocument(first))
+    _ = hover.handle(.documentPreviewShown)
     #expect(hover.handle(.pointerMoved(location: elsewhere, target: nil)).isEmpty)
     #expect(hover.handle(.pointerExited).isEmpty)
     #expect(hover.presentation == .documentPreview)
@@ -207,6 +221,7 @@ struct ReferenceHoverTests {
   @Test func `committing a document preview closes it, and previews nothing the jump lands on`() {
     var hover = ReferenceHover()
     _ = hover.handle(.forceClickDocument(first))
+    _ = hover.handle(.documentPreviewShown)
     #expect(hover.handle(.previewCommitted(pointer: here)) == [.closePopover])
     #expect(hover.handle(.scrolled).isEmpty)
   }

@@ -32,9 +32,18 @@
     /// The reference the pointer rests on after a scroll: in the visible text, in
     /// the active app, with no button held. Nil otherwise.
     var restingTarget: () -> HoverTarget? = { nil }
-    /// A reference's card and the rect it is anchored to, in text-container
-    /// coordinates, or nil when it has none.
-    var card: (HoverTarget) -> (content: NSViewController, anchor: CGRect)? = { _ in nil }
+    /// What a popover shows, how big it is when its content does not say, and the
+    /// rect it is anchored to, in text-container coordinates.
+    struct Popover {
+      let content: NSViewController
+      var size: CGSize?
+      let anchor: CGRect
+    }
+
+    /// A reference's card, or nil when it has none.
+    var card: (HoverTarget) -> Popover? = { _ in nil }
+    /// The document a reference names, previewed (#29), or nil when it has none.
+    var documentPreview: (HoverTarget) -> Popover? = { _ in nil }
 
     // MARK: - Setup
 
@@ -68,7 +77,7 @@
 
     /// Hands `event` to the rules and does what they ask of the window layer. The
     /// effects that are the caller's to act on — following a link, committing a
-    /// preview, swallowing a click, showing a document preview — are returned.
+    /// preview, swallowing a click — are returned.
     @discardableResult
     func send(_ event: ReferenceHover.Event) -> [ReferenceHover.Effect] {
       let effects = state.handle(event)
@@ -88,7 +97,9 @@
           if closing?.isShown == true { closing?.performClose(nil) }
         case .showCard(let target):
           showCard(target)
-        case .showDocumentPreview, .commitPreview, .swallowClick, .followLink:
+        case .showDocumentPreview(let target):
+          showDocumentPreview(target)
+        case .commitPreview, .swallowClick, .followLink:
           break
         }
       }
@@ -129,25 +140,33 @@
 
     // MARK: - Popover
 
+    /// Each popover is shown here and the rules told once it is on screen, so the
+    /// two cannot disagree about whether one is up.
     private func showCard(_ target: HoverTarget) {
-      guard let (content, anchor) = card(target) else { return }
-      present(content, size: nil, at: anchor)
+      guard let card = card(target), present(card) else { return }
       send(.cardShown)
     }
 
+    private func showDocumentPreview(_ target: HoverTarget) {
+      guard let preview = documentPreview(target), present(preview) else { return }
+      send(.documentPreviewShown)
+    }
+
     /// Shared by the card and the document preview, so the two popovers are
-    /// anchored and dismissed the same way.
-    func present(_ controller: NSViewController, size: CGSize?, at rect: CGRect) {
-      guard let textView else { return }
+    /// anchored and dismissed the same way. False when there is no text view to
+    /// anchor to.
+    private func present(_ content: Popover) -> Bool {
+      guard let textView else { return false }
       let shown = NSPopover()
       shown.behavior = .transient
       shown.delegate = self
-      shown.contentViewController = controller
-      if let size { shown.contentSize = size }
-      let anchor = rect.offsetBy(
+      shown.contentViewController = content.content
+      if let size = content.size { shown.contentSize = size }
+      let anchor = content.anchor.offsetBy(
         dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
       shown.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
       popover = shown
+      return true
     }
 
     /// A transient popover also closes on its own — Esc, a click elsewhere, the app
