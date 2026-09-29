@@ -131,4 +131,17 @@ struct BoundarySampleTests {
       ).entries.first)
     #expect(other.sha256 != entry.sha256, "the hash is of the block's own lines")
   }
+
+  /// `report.json` is what a corpus run is compared against, so sampling the boundary
+  /// leaves it as it is; the sample goes to its own file and the log.
+  @Test func `sampling the boundary leaves the report unchanged`() throws {
+    let text = DocumentConverter.text(decoding: try Data(contentsOf: Fixtures.url("rfc1245.txt")))
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    let plain = DocumentConverter().convert(text: text, stem: "rfc1245", metadata: nil)
+    let sampled = DocumentConverter(samplesBoundary: true)
+      .convert(text: text, stem: "rfc1245", metadata: nil)
+    #expect(sampled.boundary != nil)
+    #expect(try encoder.encode(sampled.report) == encoder.encode(plain.report))
+  }
 }

@@ -33,7 +33,7 @@ public struct DocumentConverter: Sendable {
     /// Nil unless `samplesBoundary`. `unlocated` counts the blocks on the boundary that
     /// could not be found in the source; it goes to the run's log, not the report, so the
     /// report reads the same with or without the sample.
-    public var boundary: (entries: [BoundarySample.Entry], unlocated: Int)?
+    public var boundary: BoundarySample.Sample?
   }
 
   /// Converts the text of the document `stem` (`rfc2119`, from `rfc2119.txt`).

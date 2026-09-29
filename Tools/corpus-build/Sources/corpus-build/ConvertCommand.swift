@@ -76,7 +76,7 @@ struct ConvertCommand: AsyncParsableCommand {
     var offset: Int
     var report: DocumentReport
     var prose: ProseReport?
-    var boundary: (entries: [BoundarySample.Entry], unlocated: Int)?
+    var boundary: BoundarySample.Sample?
   }
 
   func run() async throws {
@@ -165,10 +165,13 @@ struct ConvertCommand: AsyncParsableCommand {
         Self.logger.info(
           "on the boundary", metadata: ["criterion": "\(criterion)", "blocks": "\(count)"])
       }
-      let unlocated = results.reduce(0) { $0 + ($1.boundary?.unlocated ?? 0) }
-      if unlocated > 0 {
+      let unlocated = results.filter { ($0.boundary?.unlocated ?? 0) > 0 }
+      if !unlocated.isEmpty {
+        let blocks = unlocated.reduce(0) { $0 + ($1.boundary?.unlocated ?? 0) }
+        let documents = unlocated.map(\.report.id).joined(separator: ", ")
         Self.logger.warning(
-          "on the boundary but not found in the source", metadata: ["blocks": "\(unlocated)"])
+          "on the boundary but not found in the source",
+          metadata: ["blocks": "\(blocks)", "documents": "\(documents)"])
       }
     }
     if job.schema != nil { Self.logSchema(reports, previouslyValid: previouslyValid) }
