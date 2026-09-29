@@ -12,7 +12,7 @@ import Testing
 /// Installing a document must keep the content storage's `NSTextStorage`, because
 /// selection, copy and link clicks all still go through it on AppKit, while TextKit 2
 /// draws from `attributedString` alone — so losing it renders perfectly and breaks
-/// everything else (see ARCHITECTURE.md, "Three TextKit 2 traps").
+/// everything else (see ARCHITECTURE.md, "TextKit 2 traps").
 @Suite("Storage install")
 struct StorageInstallTests {
   private let text = NSAttributedString(string: "Section 1\nThe first paragraph.\n")

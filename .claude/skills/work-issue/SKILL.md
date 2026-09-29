@@ -33,6 +33,13 @@ If you were given a number, take that issue, whatever its labels. Otherwise go d
 2. **An `agent-blocked` issue that has been answered.** It counts as answered when the newest comment has no marker, or when your newest marked comment has a 👍 reaction (`gh api repos/{owner}/{repo}/issues/comments/ID/reactions`). Remove `agent-blocked` and pick up where you asked.
 3. **The oldest `agent-ready` issue** with neither `agent-blocked` nor `agent-pr`.
 
+**Skip any issue that is blocked by an open issue**, in 2 and 3 alike: GitHub's blocked-by relationship, not the prose. It becomes pickable when its last blocker closes, with no label change. This lists the `agent-ready` issues that are still blocked:
+
+```sh
+gh api graphql -F owner='{owner}' -F name='{repo}' -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issues(states:OPEN,labels:["agent-ready"],first:100){nodes{number blockedBy(first:20){nodes{number state}}}}}}' \
+  --jq '.data.repository.issues.nodes[] | select(any(.blockedBy.nodes[]; .state=="OPEN")) | .number'
+```
+
 If nothing matches, say that the queue is empty and stop. Under `/loop`, end the loop too.
 
 ## 2. Understand it before touching code
@@ -44,6 +51,8 @@ Read the issue with its comments, and any issue or pull request it links. Read t
 1. Post a marked comment. Say what you found, then ask numbered questions, each with the option you would choose and why.
 2. Add `agent-blocked`. If you already have a draft pull request, leave it as a draft, with your work pushed.
 3. Stop working on this issue. Under `/loop`, go on to the next one.
+
+When the answer is that the issue waits for another one, record it as a relationship, not only in the comment: `addBlockedBy` (with `issueId` and `blockingIssueId`, the issues' node IDs) through `gh api graphql`. Then the pick above skips the issue until the blocker closes.
 
 **An `enhancement` always gets a design comment first**, even when it seems clear. The comment covers: the scope (and what is out of scope), the approach, the modules and files it touches, how it will be tested, and any open questions. Then add `agent-blocked` and stop. A 👍 reaction on that comment, or a reply, is the go-ahead. Build what was agreed.
 

@@ -2,26 +2,30 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-/// The document a reference names, as a force click previews it on macOS: Safari's
-/// link preview, for RFCs (#29). iOS's long press still shows the card.
+/// The document a reference names, as a force click (macOS) or a long press (iOS)
+/// previews it: Safari's link preview, for RFCs (#29).
 ///
 /// A reader of its own, not a picture of one — its own `RFCTextView`, its own text
 /// storage built by `DocumentTextBuilder` at the preview's width — so it reads and
 /// scrolls like the reader does, opened at the place the reference names. Links
 /// inside it are not followed: a click anywhere in it is the commit, which `commit`
-/// turns into opening that place in the reader underneath. The reader's own body
-/// stays one text storage; this lives in a popover beside it.
+/// turns into opening that place in the reader underneath. On iOS a context menu's
+/// preview takes no touches, and UIKit's tap on it is the commit instead. The
+/// reader's own body stays one text storage; this lives beside it, in a popover on
+/// macOS and a context menu on iOS.
 struct DocumentPreview: View {
   let library: LibraryModel
   let id: DocumentID
   /// A section number or an anchor, or nil for the top.
   let place: String?
+  /// Fixed while the preview is up: the document is built at its column.
+  var size = LinkPreview.documentSize
   let commit: () -> Void
-
-  static let size = CGSize(width: 560, height: 620)
 
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("underlineLinks") private var underlineLinks = false
+  /// The reader follows Dynamic Type (#331), so the preview of it does too.
+  @Environment(\.dynamicTypeSize) private var textSize
   /// The reader's own preference, so the preview's build and its text view agree
   /// on the column, as `DocumentView` and the reader's do (#32).
   @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
@@ -31,7 +35,9 @@ struct DocumentPreview: View {
   @State private var lastVisibleAnchor = VisibleAnchorBox()
   @State private var heading = HeadingBox()
 
-  private struct Loaded {
+  /// Everything a preview shows, kept whole by `LibraryModel.previews` so the
+  /// build is never paired with another parse of its document.
+  struct Loaded {
     let document: RFCDocument
     let built: BuiltDocument
     /// What a citation of a bibliography entry in the preview previews (#198).
@@ -45,7 +51,7 @@ struct DocumentPreview: View {
       content
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(width: Self.size.width, height: Self.size.height)
+    .frame(width: size.width, height: size.height)
     .task { await load() }
   }
 
@@ -97,22 +103,36 @@ struct DocumentPreview: View {
     }
   }
 
-  /// Fetched if it is not cached, the way the reader fetches it, and built at the
+  /// What a preview of the same document in the same style kept (#374), or else
+  /// fetched if it is not cached, the way the reader fetches it, and built at the
   /// preview's own column.
   private func load() async {
+    let column = ReaderLayout.column(forWidth: size.width, measure: measure)
+    let style = ReadingStyle(
+      bodySize: fontSize, measure: column, underlinesLinks: underlineLinks, textSize: textSize)
+    let key = BuildKey(document: id, style: style)
     do {
-      let document = try await library.document(for: id)
-      let column = ReaderLayout.column(forWidth: Self.size.width, measure: measure)
-      let built = await DocumentView.build(
-        document,
-        style: ReadingStyle(bodySize: fontSize, measure: column, underlinesLinks: underlineLinks))
-      loaded = Loaded(
-        document: document, built: built, bibliography: ReferenceGroup.groups(in: document))
+      let kept = library.keptPreview(for: key)
+      let shown: Loaded
+      if let kept {
+        shown = kept
+      } else {
+        let document = try await library.document(for: id)
+        shown = Loaded(
+          document: document, built: await DocumentView.build(document, style: style),
+          bibliography: ReferenceGroup.groups(in: document))
+      }
+      loaded = shown
       // Resolved the way the reader resolves a jump, so the preview opens where a
       // click on the reference goes.
       if let place {
         scrollTarget = ReaderScrollTarget(
-          anchor: document.anchor(forPlace: place), animated: false)
+          anchor: shown.document.anchor(forPlace: place), animated: false)
+      }
+      // After the text is shown: asking whether the document is still downloaded
+      // waits for the store, which may be parsing another document.
+      if kept == nil {
+        await library.keep(shown, for: key)
       }
     } catch {
       failure = error.localizedDescription

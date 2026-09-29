@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: document structure")
-@MainActor
 struct BuilderStructureTests {
   private let style = ReadingStyle()
 
@@ -54,6 +53,19 @@ struct BuilderStructureTests {
     #expect(built.anchors.offset(of: "fig-long") != nil)
     #expect(built.anchors.heading(of: "fig-long") == nil)
     #expect(built.anchors.heading(of: "no-such-anchor") == nil)
+  }
+
+  /// What Copy as Quote cites a selection as, from the build alone (#186). A figure
+  /// has no number, and neither has an unnumbered section.
+  @Test func `a section anchor carries its number`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      let entry = try #require(built.anchors.entries.first { $0.anchor == section.anchor })
+      #expect(entry.number == section.number, "anchor \(section.anchor)")
+    }
+    let figure = try #require(built.anchors.entries.first { $0.anchor == "fig-long" })
+    #expect(figure.number == nil)
   }
 
   @Test func `the builder records anchors in document order`() throws {

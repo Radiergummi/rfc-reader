@@ -1,5 +1,6 @@
 #if os(macOS)
   import AppKit
+  import PDFKit
   import RFCKit
   import RFCReaderKit
   import SwiftData
@@ -42,6 +43,12 @@
     private var hasPlacedInitialFocus = false
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
+    /// Whether a print is being prepared or its panel is up, so a second ⌘P
+    /// neither builds the PDF again nor asks for a second sheet.
+    private var isPrinting = false
+    /// Whether an export's save panel is up or its file is being made, so a second
+    /// ⌘⇧E neither asks for a second panel nor makes the file again.
+    private var isExporting = false
     /// `NSToolbar.delegate` is weak; an unheld delegate gives an empty toolbar.
     private var toolbar: ReaderToolbar?
 
@@ -346,9 +353,41 @@
     // MARK: - The sidebar
 
     /// Through the split view controller rather than down the responder chain, so
-    /// the menu toggles this window's sidebar whatever holds focus in it.
+    /// the menu and the toolbar's toggle act on this window's sidebar whatever holds
+    /// focus in it.
     func toggleSidebar() {
       splitController.toggleSidebar(nil)
+    }
+
+    /// Slides a collapsed sidebar open and runs `then` once it is: straight away when
+    /// it already was, after the slide when it was not. A sheet has to wait for it,
+    /// because the two cannot move together. AppKit opens a sheet in a run loop of
+    /// its own (`NSSheetMoveHelper openSheet` → `NSMoveHelper _doAnimation`, sampled),
+    /// in a private mode that the split view's animation is not scheduled in, so a
+    /// slide begun beside a sheet held still for the sheet's 300 ms and only then set
+    /// out (measured: the list's leading edge at 0 pt until 0.317 s, at 200 pt by
+    /// 0.548 s).
+    func revealSidebar(then: @escaping @MainActor @Sendable () -> Void) {
+      guard sidebarItem.isCollapsed else {
+        then()
+        return
+      }
+      NSAnimationContext.runAnimationGroup { _ in
+        sidebarItem.animator().isCollapsed = false
+      } completionHandler: {
+        // AppKit calls it on the main thread; the SDK only does not say so.
+        MainActor.assumeIsolated { then() }
+      }
+    }
+
+    /// An empty collection, from the toolbar's New Collection and File > New
+    /// Collection… alike; only the Bookmark menu's adds the open document. It opens
+    /// a collapsed sidebar first, so the collection is in view once made, and the
+    /// sheet comes in once the sidebar has slid open.
+    func newCollection() {
+      revealSidebar { [navigation] in
+        navigation.collectionEditor = .create(adding: nil)
+      }
     }
 
     /// ⌥⌘F. Opens the sidebar first if it is collapsed: the field is in it.
@@ -445,6 +484,15 @@
       window.makeFirstResponder(text)
     }
 
+    /// Edit ▸ Copy as Quote, handed to the reader's text itself (#186). Not through the
+    /// responder chain, which reaches no text view with the sidebar, the contents
+    /// panel or the find bar focused: the find bar is the scroll view's, a parent of
+    /// the text view, not a child.
+    func copyAsQuote() {
+      let text = FirstResponderSearch.searchableText(in: readerItem.viewController.view)
+      (text as? ReaderTextView)?.copyAsQuote(nil)
+    }
+
     /// Shared by the toolbar's bookmark button and the ⌘D menu item, so the two
     /// cannot disagree about what bookmarking means.
     func toggleBookmark() {
@@ -455,6 +503,104 @@
         id: id
       )
       BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+    }
+
+    // MARK: - Print
+
+    /// File > Print…: the document laid out for paper, handed to the system's print
+    /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
+    /// chosen; a different paper picked in the panel itself is scaled to fit.
+    func printDocument() {
+      guard !isPrinting, let id = navigation.selection, reader.hasDocument, let window else {
+        return
+      }
+      // The PDF's pages carry their own margins; AppKit's, left in, would shrink
+      // every page to fit inside a second set.
+      guard let printInfo = NSPrintInfo.shared.copy() as? NSPrintInfo else { return }
+      printInfo.leftMargin = 0
+      printInfo.rightMargin = 0
+      printInfo.topMargin = 0
+      printInfo.bottomMargin = 0
+      let original = reader.showOriginal
+      isPrinting = true
+      Task {
+        do {
+          let data = try await DocumentPDF.make(
+            for: id, original: original, paperSize: printInfo.paperSize, library: library)
+          guard let pdf = PDFDocument(data: data),
+            let operation = pdf.printOperation(
+              for: printInfo, scalingMode: .pageScaleToFit, autoRotate: false)
+          else {
+            isPrinting = false
+            return
+          }
+          // The one field of the Save as PDF sheet a print can fill: its Author,
+          // Subject and Keywords have no public setting (#375).
+          operation.jobTitle = PrintFurniture.documentTitle(
+            id: id, title: reader.documentTitle ?? library.metadata(id)?.title)
+          operation.runModal(
+            for: window, delegate: self,
+            didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
+        } catch {
+          isPrinting = false
+          _ = window.presentError(error)
+        }
+      }
+    }
+
+    @objc private func printOperationDidRun(
+      _ operation: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?
+    ) {
+      isPrinting = false
+    }
+
+    /// File > Export…: the document saved in the format the save panel's pop-up
+    /// picks (#376), as a sheet on this window. A paged format is laid out for the
+    /// paper Page Setup has chosen, as a print is.
+    func exportDocument() {
+      guard !isExporting, let id = navigation.selection, reader.hasDocument, let window else {
+        return
+      }
+      let panel = NSSavePanel()
+      let chooser = ExportFormatChooser(panel: panel, document: id)
+      panel.accessoryView = chooser.view
+      panel.isExtensionHidden = false
+      panel.canCreateDirectories = true
+      panel.tagNames = ExportFormat.tagNames(for: library.metadata(id))
+      isExporting = true
+      panel.beginSheetModal(for: window) { [library] response in
+        guard response == .OK, let url = panel.url else {
+          self.isExporting = false
+          return
+        }
+        // Read here, not captured earlier: the chooser is what the panel's pop-up
+        // changed, and holding it in this closure is what keeps it alive.
+        let format = chooser.format
+        let tags = panel.tagNames ?? []
+        Task {
+          do {
+            let data = try await DocumentExport.data(
+              for: id, as: format, paperSize: NSPrintInfo.shared.paperSize, library: library)
+            try data.write(to: url, options: .atomic)
+            // The panel only collects the tags; the file is written after it, and
+            // an atomic write replaces it, so they are set on what was written.
+            if !tags.isEmpty {
+              try (url as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
+            }
+            self.isExporting = false
+          } catch {
+            self.isExporting = false
+            _ = window.presentError(error)
+          }
+        }
+      }
+    }
+
+    /// File > Page Setup…, which sets the paper `printDocument()` lays out for.
+    func runPageSetup() {
+      guard let window else { return }
+      NSPageLayout().beginSheet(
+        with: NSPrintInfo.shared, modalFor: window, delegate: nil, didEnd: nil, contextInfo: nil)
     }
 
     // MARK: - Go to RFC
