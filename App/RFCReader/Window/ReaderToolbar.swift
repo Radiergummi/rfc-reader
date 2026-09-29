@@ -512,7 +512,9 @@
         // A click bookmarks; the indicator opens Add to Collection (#349).
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
         item.label = "Bookmark"
-        item.image = NSImage(systemSymbolName: "bookmark", accessibilityDescription: "Bookmark")
+        // What `showBookmarked` last chose, which may have come before the item did.
+        item.image = NSImage(
+          systemSymbolName: bookmarkSymbol, accessibilityDescription: "Bookmark")
         item.showsIndicator = true
         item.target = self
         item.action = #selector(toggleBookmark)
