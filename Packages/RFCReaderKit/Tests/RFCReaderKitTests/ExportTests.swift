@@ -132,8 +132,12 @@ struct ExportLinkTests {
     let screen = DocumentTextBuilder.build(document, style: ReadingStyle())
     let paper = DocumentTextBuilder.build(
       document, style: PrintLayout(paperSize: PrintLayout.letter).style)
-    // As sets: the paper's narrower column may lay a table out differently.
-    #expect(Set(urls(.link, in: screen.text)) == Set(urls(.rfcLinkTarget, in: paper.text)))
+    // As sets: the paper's narrower column may lay a table out differently. A
+    // heading's backlink chip goes nowhere, and paper has none (#183).
+    let destinations = urls(.link, in: screen.text).filter {
+      $0.scheme != DocumentTextBuilder.backlinksScheme
+    }
+    #expect(Set(destinations) == Set(urls(.rfcLinkTarget, in: paper.text)))
     #expect(!urls(.link, in: screen.text).isEmpty)
     #expect(urls(.link, in: paper.text).isEmpty)
   }

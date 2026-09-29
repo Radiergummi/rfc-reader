@@ -204,8 +204,7 @@ extension DocumentTextBuilder {
     var attributes = base
     attributes[.rfcBacklinks] = anchor
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
-    let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
-    if let url = URL(string: "\(Self.backlinksScheme):\(encoded)") {
+    if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
     result.append(chipRun(String(count), symbol: "arrow.turn.up.left", attributes: attributes))
@@ -276,10 +275,16 @@ extension DocumentTextBuilder {
     case .document(let id, let section, _):
       return RFCLink(id: id, section: section).appURL
     case .anchor(let anchor):
-      let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
       let scheme = referenceAnchors.contains(anchor) ? Self.referenceScheme : Self.anchorScheme
-      return URL(string: "\(scheme):\(encoded)")
+      return Self.url(anchor, scheme: scheme)
     }
+  }
+
+  /// The encoding half of `decoded(_:scheme:)`: `anchor` as a link of one of our
+  /// schemes, which `anchor(from:)` and its siblings read back.
+  public static func url(_ anchor: String, scheme: String) -> URL? {
+    let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
+    return URL(string: "\(scheme):\(encoded)")
   }
 
   /// The font a run's context carries, or the body's where it carries none.

@@ -649,7 +649,13 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
-      guard let url = link(at: textItem.range.location), let documentID,
+      let offset = textItem.range.location
+      if let url = link(at: offset), let anchor = DocumentTextBuilder.backlinks(from: url) {
+        return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+          self?.showBacklinks(of: anchor, at: offset)
+        }
+      }
+      guard let url = link(at: offset), let documentID,
         LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
       else { return defaultAction }
       // An action, not the link followed here and nil returned: UIKit asks for the
@@ -760,6 +766,10 @@ final class RFCTextViewCoordinator: NSObject {
       cancelHover()
       linkClickPointer = NSEvent.mouseLocation
       guard let url = Self.url(fromLink: link) else { return false }
+      if let anchor = DocumentTextBuilder.backlinks(from: url) {
+        showBacklinks(of: anchor, at: charIndex)
+        return true
+      }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)
@@ -1009,7 +1019,7 @@ final class RFCTextViewCoordinator: NSObject {
 
     /// Shared by the card and the document preview, so the two popovers are
     /// anchored and dismissed the same way.
-    private func present(_ controller: NSViewController, size: CGSize?, at rect: CGRect) {
+    func present(_ controller: NSViewController, size: CGSize?, at rect: CGRect) {
       guard let textView else { return }
       let shown = NSPopover()
       shown.behavior = .transient
@@ -1095,7 +1105,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// popover's anchor. `enumerateTextSegments` folds a run that wraps across
     /// lines into the right set of rects on its own, the same as it does for
     /// selection rendering.
-    private func referenceRect(for range: NSRange) -> CGRect? {
+    func referenceRect(for range: NSRange) -> CGRect? {
       guard let layout = textView?.textLayoutManager,
         let textRange = layout.textRange(for: range)
       else { return nil }
