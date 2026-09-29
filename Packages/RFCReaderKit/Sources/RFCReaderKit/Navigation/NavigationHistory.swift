@@ -1,22 +1,6 @@
 import Foundation
 import RFCKit
 
-/// Somewhere the reader can be: a document, and optionally a spot inside it.
-///
-/// The spot is an anchor or a section number — whatever `DocumentView` can hand to
-/// `scroll(to:)`. It serves two purposes at once: on the way in it is the deep link's
-/// target section, and on the way out it is where the reader had scrolled to, so
-/// coming back does not dump them at the top of a 200-page RFC.
-public struct HistoryEntry: Hashable, Sendable {
-  public let id: DocumentID
-  public var section: String?
-
-  public init(id: DocumentID, section: String? = nil) {
-    self.id = id
-    self.section = section
-  }
-}
-
 /// One tab's back/forward stack.
 ///
 /// A plain value type, which is the point. The reader used to keep its selection on a
