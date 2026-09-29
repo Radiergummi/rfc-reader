@@ -234,7 +234,7 @@ struct AbbreviationsTests {
 
   @Test func `a glossary phrase ends at a colon or a dash`() {
     #expect(
-      glossary("SR-DB", "Segment Routing Database: the collection of SRGBs")
+      glossary("SR-DB", "Segment Routing Database: where a node keeps its labels")
         == "Segment Routing Database")
     #expect(
       glossary("ASBR", "Autonomous System Border Router -- a router used to connect ASes")
@@ -258,7 +258,7 @@ struct AbbreviationsTests {
   /// word past the cap here and far past it in the second.
   @Test func `a sentence is not a glossary expansion`() {
     let sentence =
-      "The legacy Route definition lacks the option to cater for packet-dependent routing"
+      "The early Route definition has no option for choosing a per-packet path"
     #expect(Abbreviations.longForm(of: "Type-P", in: sentence) == sentence)
     #expect(glossary("Type-P", sentence) == nil)
     let long =

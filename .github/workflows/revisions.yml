@@ -1,0 +1,78 @@
+name: Revisions
+
+# Scans datatracker daily for adopted drafts that intend to obsolete or update an RFC,
+# and publishes revisions.json on the `revisions` release, where the app fetches it
+# (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md). The scan record beside
+# it lets the next run read only what changed.
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      allow-shrink:
+        description: Publish even when more than half the RFCs are gone since the last run
+        type: boolean
+        default: false
+
+# One run at a time: two would upload over each other's assets.
+concurrency:
+  group: revisions
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
+    # write only for uploading to the `revisions` release.
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ALLOW_SHRINK: ${{ inputs.allow-shrink && '--allow-shrink' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # make for the Makefile, gh for the release. The image carries neither.
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq make gh >/dev/null
+
+      - name: Build corpus-build
+        run: make corpus-tool
+
+      # Nothing to download on the first run. The test is for the scan itself, not the
+      # release: a release whose first upload failed has none, and is a first run too,
+      # rather than a download that fails every day until someone repairs it. Only a
+      # missing release means that: any other failure to ask fails the run, which would
+      # otherwise rescan with no previous scan and so no shrink guard.
+      - name: Download the previous scan
+        run: |
+          mkdir -p out
+          if ! assets=$(gh release view revisions --json assets --jq '.assets[].name' 2>view.err); then
+            grep -q "release not found" view.err || { cat view.err >&2; exit 1; }
+            assets=""
+          fi
+          if printf '%s\n' "$assets" | grep -qx revisions-scan.json; then
+            gh release download revisions --pattern revisions-scan.json --dir previous
+            echo "SCAN=--scan previous/revisions-scan.json" >> "$GITHUB_ENV"
+          fi
+
+      # Unquoted on purpose: a flag that is empty must vanish, not become "".
+      - name: Scan
+        run: |
+          # shellcheck disable=SC2086
+          Tools/corpus-build/.build/release/corpus-build revisions --out out $SCAN $ALLOW_SHRINK
+
+      # A prerelease, so it never becomes the repository's "Latest release".
+      # --clobber deletes before it uploads: the app treats the moment between as a
+      # failed fetch and keeps its copy.
+      - name: Publish
+        run: |
+          if ! gh release view revisions >/dev/null 2>&1; then
+            gh release create revisions --prerelease --title "Revisions" \
+              --notes "Adopted drafts revising an RFC, refreshed daily by the revisions workflow."
+          fi
+          gh release upload revisions out/revisions.json out/revisions-scan.json --clobber

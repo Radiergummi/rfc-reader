@@ -39,6 +39,17 @@ public enum RFCEditorEndpoints {
     RFCLink.url(datatrackerBase.appending(path: "doc/html/\(id.fileStem)"), section: section)
   }
 
+  /// An Internet-Draft's page on datatracker, `/doc/draft-ietf-httpbis-rfc6265bis/`,
+  /// named without its revision.
+  public static func datatrackerDraft(_ name: String) -> URL {
+    datatrackerBase.appending(path: "doc/\(name)/")
+  }
+
+  /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC, which
+  /// the revisions workflow publishes daily on the repository's `revisions` release.
+  public static let revisions = URL(
+    string: "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/revisions.json")!
+
   /// Datatracker's document record, including working group and history.
   public static func datatrackerDocument(_ id: DocumentID) -> URL {
     datatrackerBase.appending(path: "api/v1/doc/document/")
