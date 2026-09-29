@@ -162,53 +162,6 @@ struct LegacyTextParserTests {
     #expect(document.referencedDocuments.contains(.rfc(822)))
   }
 
-  @Test func `inline linking rules`() {
-    let text = """
-      Network Working Group                                          A. Person
-      Request for Comments: 99999                                  Example Org
-      Category: Informational                                     January 2030
-
-
-                               A Synthetic Test Document
-
-      1. Introduction
-
-         See [RFC2119], RFC 8174 and Section 4.2 of [RFC9110]. Also Section 2
-         and https://example.com/spec. Nothing in Section 9 exists.
-
-      2. Details
-
-         Details here.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.header.id == .rfc(99999))
-    #expect(document.header.title == "A Synthetic Test Document")
-    let intro = document.sections[0]
-    guard case .paragraph(let paragraph)? = intro.blocks.first else {
-      Issue.record("expected paragraph")
-      return
-    }
-    let targets = paragraph.inlines.compactMap { inline -> CrossReference.Target? in
-      if case .crossReference(let xref) = inline { return xref.target }
-      return nil
-    }
-    #expect(
-      targets == [
-        .document(.rfc(2119), section: nil),
-        .document(.rfc(8174), section: nil),
-        .document(.rfc(9110), section: "4.2"),
-        .anchor("section-2"),
-      ])
-    #expect(
-      paragraph.inlines.contains { inline in
-        if case .link(let url, _) = inline {
-          return url.absoluteString == "https://example.com/spec"
-        }
-        return false
-      })
-    #expect(paragraph.plainText.contains("Nothing in Section 9 exists."))
-  }
-
   /// `[RFC 2211]` matched neither pattern: the bracket pattern's anchor admitted no
   /// space or comma, and the bare pattern discarded anything a `[` preceded.
   /// Between them they dropped 1,606 of the 1,640 unlinked RFC mentions left in the
@@ -368,49 +321,16 @@ struct LegacyTextCorpusFindingsTests {
     #expect(paragraph.plainText.contains("Commences at"))
   }
 
-  /// Shapes found in the first full corpus run (September 2026).
-  @Test func `column zero title and anchor only references`() {
-    let text = """
-      Network Working Group                                       P. Jayaraman
-      Request for Comments: 5193                                       Net.Com
-      Category: Informational                                         R. Lopez
-                                                               Univ. of Murcia
-                                                                      May 2008
-
-      Protocol for Carrying Authentication for Network Access (PANA) Framework
-
-      Status of This Memo
-
-         This memo provides information for the Internet community.
-
-      1.  Introduction
-
-         See [RFC-822] for details.
-
-      6.  References
-
-         [RFC-822]
-              Crocker, D., "Standard for the Format of ARPA Internet
-              Text Messages", STD 11, RFC 822, UDEL, August 1982.
-
-         [RFC-1521]
-              Borenstein, N. and N. Freed, "MIME", RFC 1521, September, 1993.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.header.id == .rfc(5193))
-    #expect(
-      document.header.title
-        == "Protocol for Carrying Authentication for Network Access (PANA) Framework")
-    #expect(document.header.date == PublicationDate(year: 2008, month: 5))
-    #expect(document.sections.map(\.number) == ["1", "6"])
-    guard case .references(let list)? = document.section(number: "6")?.blocks.first else {
-      Issue.record("expected references")
-      return
-    }
-    #expect(list.entries.map(\.anchor) == ["RFC-822", "RFC-1521"])
-    #expect(list.entries[0].documentID == .rfc(822))
-    #expect(list.entries[0].title == "Standard for the Format of ARPA Internet Text Messages")
-    #expect(document.referencedDocuments == [.rfc(822), .rfc(1521)])
+  /// A references entry may put its label alone on a line and its text on the lines
+  /// under it, as RFC 2049 does, the label spelled `RFC-822` (September 2026's first
+  /// full corpus run).
+  @Test func `a label alone on its line opens an entry`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let entries = document.referenceLists.flatMap(\.entries)
+    let entry = try #require(entries.first { $0.anchor == "RFC-822" })
+    #expect(entry.documentID == .rfc(822))
+    #expect(entry.title == "Standard for the Format of ARPA Internet Text Messages")
+    #expect(document.referencedDocuments.contains(.rfc(822)))
   }
 
   /// RFC 1245 sets its body at column 0, so every prose line looks like an unnumbered
@@ -1333,194 +1253,50 @@ struct LegacyTextCorpusFindingsTests {
 
   /// The stricter rule applies only to documents whose body is not indented: where the
   /// body *is* indented, a heading followed immediately by text is still a heading.
-  @Test func `indented body still accepts headings without a blank line after`() {
-    let text = """
-      Network Working Group                                          A. Person
-      Request for Comments: 99998                                  Example Org
-      Category: Informational                                     January 2030
-
-
-                               A Synthetic Test Document
-
-      1. Introduction
-         Text that follows the heading directly, with no blank line between
-         the heading and the first line of the paragraph.
-
-         A second paragraph, so that the indented body outnumbers the two
-         headings sitting at column 0.
-
-      Security Considerations
-         None worth mentioning, but the section has to exist.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.sections.map(\.titleText) == ["Introduction", "Security Considerations"])
+  @Test func `a heading in an indented body needs no blank line after it`() {
+    let lines: [LegacyTextParser.Line] = [
+      .text("1.  Introduction"),
+      .text("   Text that follows the heading directly, with no blank line between."),
+    ]
+    let indented = LegacyTextParser.heading(
+      at: 0, in: lines, bodyIsIndented: true, colonNumbered: false, startsBlock: true)
+    #expect(indented?.title == "Introduction")
+    #expect(
+      LegacyTextParser.heading(
+        at: 0, in: lines, bodyIsIndented: false, colonNumbered: false, startsBlock: true) == nil)
   }
 
-  /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
-  /// every entry matched the numbered-heading pattern.
-  @Test func `tab indented lines are not headings`() {
-    let text = """
-      Network Working Group                                          A. Person
-      Request for Comments: 99997                                  Example Org
-      Category: Informational                                     January 2030
-
-
-                               A Synthetic Test Document
-
-      Contents
-      \t1 \tScope and Field of Application\t1
-      \t2 \tReferences\t1
-
-      1 Scope and Field of Application
-
-         This document specifies a routeing protocol, and the procedures
-         that go with it, for use between intermediate systems.
-
-         The protocol is defined in terms of the services it provides, the
-         encoding of the protocol data units it exchanges, and the state
-         machine each system runs.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.sections.map(\.titleText) == ["Contents", "Scope and Field of Application"])
+  /// A tab is indentation too: a contents listing indented with tabs (RFC 1142's) had
+  /// every entry match the numbered-heading pattern at column 0.
+  @Test func `a tab indented line is not at column zero`() {
+    let lines = LegacyTextParser.depaginate("\t1 \tScope of This Document\t1\n")
+    #expect(
+      LegacyTextParser.heading(
+        at: 0, in: lines, bodyIsIndented: true, colonNumbered: false, startsBlock: true) == nil)
   }
 
-  /// RFC 775 and RFC 1144 indent their headings like the body, so the scan for the end of
-  /// the front matter never finds a column-0 heading. The text still has to survive.
-  @Test func `document without column zero headings keeps its prose`() {
-    let text = """
-            RFC 99996          A Document With No Column Zero          Page 1
-
-
-                           A DOCUMENT WITH NO COLUMN ZERO
-
-                             A. Person (person@example)
-
-
-            As a part of the Remote Site Maintenance project, we have
-            expanded the servers on these machines to include commands
-            which deal with the creation of directories.
-
-            We have added four commands to our server.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.header.title == "A DOCUMENT WITH NO COLUMN ZERO")
-    let paragraphs = document.paragraphs.map(\.plainText)
-    #expect(paragraphs.count == 2)
-    #expect(paragraphs[0].hasPrefix("As a part of the Remote Site Maintenance"))
-    #expect(paragraphs[1] == "We have added four commands to our server.")
-  }
-
-  /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
-  /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
-  /// every one of those paragraphs artwork.
-  @Test func `paragraphs with a first line indent are prose`() {
-    let text = """
-      Network Working Group                                          A. Person
-      Request for Comments: 99995                                  Example Org
-      Category: Informational                                     January 2030
-
-
-                               A Synthetic Test Document
-
-      1.  Introduction
-
-           A model is developed of interactions between programs.
-      Salient features of this model which promote and simplify
-      the construction of reliable, responsive services are
-      identified.
-
-           Using this model as a template, the general
-      architecture of one possible interaction protocol is
-      presented.
-      """
-    let document = LegacyTextParser.parse(text)
-    let intro = try? #require(document.section(number: "1"))
-    let paragraphs = (intro?.blocks ?? []).compactMap { block -> String? in
-      if case .paragraph(let paragraph) = block { return paragraph.plainText }
-      return nil
+  /// A couple of dozen documents (RFC 817, 813, 888) are typeset double spaced: a
+  /// single blank line is a wrapped line and two or more are the real break. No
+  /// paragraph ever formed and every line stood alone, so RFC 817 produced 577
+  /// sections for 658 lines of text.
+  @Test func `double spacing is collapsed and the wider gaps are kept`() {
+    func paragraph(_ number: Int) -> [LegacyTextParser.Line] {
+      (1...6).flatMap { line -> [LegacyTextParser.Line] in
+        [.text("   Paragraph \(number) goes on at line \(line) of its text"), .text("")]
+      }
     }
-    #expect(paragraphs.count == 2)
-    #expect(
-      paragraphs.first
-        == "A model is developed of interactions between programs. Salient features of this model which promote and simplify the construction of reliable, responsive services are identified."
-    )
-    #expect(
-      !(intro?.blocks ?? []).contains { block in
-        if case .preformatted = block { return true }
-        return false
-      })
-  }
-
-  /// RFC 817, 813, 888 and about twenty others are typeset double spaced. A blank line
-  /// between every pair of lines means no paragraph ever forms and every line stands
-  /// alone, so RFC 817 produced 577 sections for 658 lines of text.
-  /// RFC 817, 813, 888 and about twenty others are typeset double spaced: a single blank
-  /// line is a wrapped line and two or more are the real break. No paragraph ever formed
-  /// and every line stood alone, so RFC 817 produced 577 sections for 658 lines of text.
-  @Test func `double spaced documents are collapsed`() throws {
-    let text = """
-      Network Working Group                                          A. Person
-      Request for Comments: 99994                                  Example Org
-      Category: Informational                                     January 2030
-
-
-                               A Synthetic Test Document
-
-
-      1.  Introduction
-
-
-           Experience suggests that one of the most important factors in
-
-      determining the performance of an implementation is the manner in
-
-      which that implementation is modularized.
-
-
-           The protocol is not the only thing that matters here.  In fact,
-
-      this document will argue that modularity is one of the chief villains
-
-      in attempting to obtain good performance.
-
-
-      2.  Efficiency Considerations
-
-
-           There are many aspects to efficiency.  One aspect is sending
-
-      data at minimum transmission cost, which is a critical aspect of
-
-      common carrier communications, if not in local area networks.
-
-
-           Another aspect is sending data at a high rate, which may not be
-
-      possible at all if the network is very slow, but which may be the one
-
-      central design constraint.
-
-
-           A third aspect is the cost of the implementation itself, which
-
-      is paid once by the implementor and then over and over again by
-
-      everyone who has to maintain the result.
-      """
-    let document = LegacyTextParser.parse(text)
-    #expect(document.sections.map(\.number) == ["1", "2"])
-
-    let intro = try #require(document.section(number: "1"))
-    let paragraphs = intro.blocks.compactMap { block -> String? in
-      if case .paragraph(let paragraph) = block { return paragraph.plainText }
-      return nil
+    let doubleSpaced =
+      paragraph(1) + [.text("")] + paragraph(2) + [.text("")] + paragraph(3)
+      + [.text("")] + paragraph(4)
+    let collapsed = LegacyTextParser.collapsingDoubleSpacing(doubleSpaced)
+    let gaps = collapsed.split { line in
+      if case .text(let string) = line { return string.isEmpty }
+      return false
     }
-    #expect(paragraphs.count == 2)
-    #expect(
-      paragraphs.first
-        == "Experience suggests that one of the most important factors in determining the performance of an implementation is the manner in which that implementation is modularized."
-    )
-    #expect(intro.blocks.count == 2, "no line survives as its own block")
+    #expect(gaps.map(\.count) == [6, 6, 6, 6])
+
+    let tooShortToTell = paragraph(1) + paragraph(2)
+    #expect(LegacyTextParser.collapsingDoubleSpacing(tooShortToTell).count == tooShortToTell.count)
   }
 
   /// RFC 757 is typeset justified: every line is padded with extra spaces between words

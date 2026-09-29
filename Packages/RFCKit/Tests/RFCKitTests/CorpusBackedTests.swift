@@ -260,3 +260,65 @@ struct CorpusBackedReferencesSectionTests {
       })
   }
 }
+
+@Suite("Corpus-backed: body layouts", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedBodyLayoutTests {
+  /// RFC 5193 sets its title at column 0 under a header block whose right-hand
+  /// column runs on past the left one. Shapes found in the first full corpus run
+  /// (September 2026).
+  @Test func `a title at column zero is the title`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5193"))
+    #expect(document.header.id == .rfc(5193))
+    #expect(
+      document.header.title
+        == "Protocol for Carrying Authentication for Network Access (PANA) Framework")
+    #expect(document.header.date == PublicationDate(year: 2008, month: 5))
+  }
+
+  /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
+  /// every entry matched the numbered-heading pattern.
+  @Test func `tab indented contents entries are not headings`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1142"))
+    let scope = document.allSections.filter { $0.titleText == "Scope and Field of Application" }
+    #expect(scope.map(\.number) == ["1"])
+  }
+
+  /// RFC 775 indents its headings like its body, so the scan for the end of the front
+  /// matter never finds a column-0 heading. The text still has to survive.
+  @Test func `a document without column zero headings keeps its prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc775"))
+    #expect(document.header.title == "DIRECTORY ORIENTED FTP COMMANDS")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(
+      paragraphs.contains { $0.hasPrefix("As a part of the Remote Site Maintenance (RSM) project") }
+    )
+    #expect(paragraphs.contains("We have added four commands to our server:"))
+  }
+
+  /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+  /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
+  /// every one of those paragraphs artwork.
+  @Test func `paragraphs with a first line indent are prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc722"))
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(
+      paragraphs.contains {
+        $0.hasPrefix("A model is developed of interactions between programs. Salient features")
+      })
+    #expect(!document.artworkText.contains { $0.contains("Using this model as a template") })
+  }
+
+  /// RFC 817 is typeset double spaced: a single blank line is a wrapped line and two
+  /// or more are the real break. No paragraph ever formed and every line stood alone,
+  /// so it produced 577 sections for 658 lines of text.
+  @Test func `a double spaced document is collapsed`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc817"))
+    #expect(document.allSections.count < 20, "\(document.allSections.count) sections")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    let experience = try #require(
+      paragraphs.first {
+        $0.hasPrefix("Experience suggests that one of the most important factors")
+      })
+    #expect(experience.hasSuffix("not the protocol but the operating system."))
+  }
+}
