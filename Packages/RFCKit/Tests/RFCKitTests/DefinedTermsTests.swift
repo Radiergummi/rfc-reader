@@ -12,20 +12,98 @@ struct DefinedTermsTests {
   @Test(arguments: [
     "Terminology", "Terminology Used in This Document", "Definitions", "Glossary",
     "Conventions and Definitions", "Conventions and Terminology", "TERMINOLOGY",
-    "Definitions of Protocol State",
+    "Definitions of Protocol State", "Terms and Definitions",
+    "Notational Conventions and Definitions",
   ])
   func `a section titled for its terms defines them`(title: String) {
     #expect(DefinedTerms.namesTerms(title), "\(title)")
   }
 
   /// Most definition lists describe fields or notation, not terms: only a section that
-  /// says it defines terms is read.
+  /// says it defines terms is read. Definitions anywhere but first, or after `Terms and`
+  /// or `Conventions and`, are of a format's parts, and one definition is not a list.
   @Test(arguments: [
     "Notational Conventions", "Conventions", "Message Format", "Security Considerations",
-    "Protocol Overview",
+    "Protocol Overview", "Field Definitions", "Header Option Definitions",
+    "Definition of the Header", "Message Definition",
   ])
   func `any other section does not`(title: String) {
     #expect(!DefinedTerms.namesTerms(title), "\(title)")
+  }
+
+  // MARK: Which lists define terms
+
+  /// A definition list nested in a definition describes a part of that term, not a term
+  /// of the document's own. Over a hand-written model: `defined(in:)` is a pure function
+  /// of it, and no committed fixture nests a list in a terminology section.
+  @Test func `only a section's top-level definition lists define terms`() {
+    let nested = DefinitionItem(
+      term: [.text("Flags:")], definition: [.paragraph(Paragraph(text: "One bit each."))],
+      anchor: "flags")
+    let outer = DefinitionItem(
+      term: [.text("Widget:")],
+      definition: [
+        .paragraph(Paragraph(text: "The unit a sender emits.")), .definitionList([nested]),
+      ],
+      anchor: "widget")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([outer])])
+      ],
+      source: .xml)
+    #expect(Array(DefinedTerms.defined(in: document).keys) == ["Widget"])
+  }
+
+  /// A document can indent its terminology by setting the list in a list item.
+  @Test func `a definition list set in a list item still defines terms`() {
+    let item = DefinitionItem(
+      term: [.text("Widget:")],
+      definition: [.paragraph(Paragraph(text: "The unit a sender emits."))])
+    let indented = ListBlock(style: .bare, items: [ListItem(blocks: [.definitionList([item])])])
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [Section(anchor: "terms", title: "Terminology", blocks: [.list(indented)])],
+      source: .xml)
+    #expect(Array(DefinedTerms.defined(in: document).keys) == ["Widget"])
+  }
+
+  /// A primary index entry placed directly in a section has no definition text; the
+  /// section's definition list holds the definition, and the term lands on its item.
+  @Test func `a definition list entry replaces an index entry without a definition`() throws {
+    let listed = DefinitionItem(
+      term: [.text("widget")],
+      definition: [.paragraph(Paragraph(text: "The unit a sender emits."))],
+      anchor: "widget")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([listed])])
+      ],
+      source: .xml)
+    let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
+    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    #expect(term.anchor == "widget")
+    #expect(term.definition == listed.definition)
+  }
+
+  /// An index entry with a definition of its own is the author's mark, and stays first.
+  @Test func `an index entry with a definition keeps it over a definition list entry`() throws {
+    let listed = DefinitionItem(
+      term: [.text("widget")],
+      definition: [.paragraph(Paragraph(text: "The unit a sender emits."))],
+      anchor: "widget")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([listed])])
+      ],
+      source: .xml)
+    let indexed = DefinedTerm(
+      term: "widget", anchor: "widget-def",
+      definition: [.paragraph(Paragraph(text: "A widget is what a sender emits."))])
+    let term = try #require(DefinedTerms.defined(in: document, indexed: [indexed])["widget"])
+    #expect(term == indexed)
   }
 
   // MARK: Through parse
