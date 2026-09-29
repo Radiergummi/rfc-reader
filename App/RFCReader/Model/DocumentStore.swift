@@ -41,15 +41,17 @@ actor DocumentStore {
   // MARK: - Index
 
   private var indexURL: URL { directory.appending(path: "rfc-index.xml") }
+  private var snapshotURL: URL { directory.appending(path: "rfc-index.json") }
 
+  /// The index, from its snapshot when that is current, and otherwise parsed from
+  /// the XML -- which then writes a snapshot, so the next launch reads that. See
+  /// `IndexSnapshot`.
   func cachedIndex() throws -> (index: RFCIndex, updatedAt: Date)? {
     let url: URL
     var updatedAt = Date.distantPast
     if FileManager.default.fileExists(atPath: indexURL.path) {
       url = indexURL
-      updatedAt =
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
-        ?? .distantPast
+      updatedAt = Self.modificationDate(of: url) ?? .distantPast
     } else if let bundled = Bundle.main.url(forResource: "rfc-index", withExtension: "xml") {
       // A snapshot shipped with the app makes first launch work offline.
       url = bundled
@@ -58,11 +60,53 @@ actor DocumentStore {
     }
     let interval = signposter.beginInterval("Read cached index")
     defer { signposter.endInterval("Read cached index", interval) }
-    return (try RFCIndexParser.parse(contentsOf: url), updatedAt)
+
+    let isCurrent = IndexSnapshot.isCurrent(
+      written: Self.modificationDate(of: snapshotURL),
+      index: Self.modificationDate(of: url) ?? .distantFuture,
+      app: Bundle.main.executableURL.flatMap(Self.modificationDate(of:)) ?? .distantFuture
+    )
+    if isCurrent, let data = try? Data(contentsOf: snapshotURL),
+      let index = try? signposter.withIntervalSignpost(
+        "Decode index snapshot", around: { try IndexSnapshot.decode(data) })
+    {
+      return (index, updatedAt)
+    }
+    let index = try signposter.withIntervalSignpost("Parse index XML") {
+      try RFCIndexParser.parse(contentsOf: url)
+    }
+    writeSnapshot(of: index)
+    return (index, updatedAt)
   }
 
-  func storeIndex(_ data: Data) throws {
+  /// Keeps a refreshed index, and its snapshot made from the same parse.
+  func storeIndex(_ data: Data, parsed index: RFCIndex) throws {
     try data.write(to: indexURL, options: .atomic)
+    writeSnapshot(of: index)
+  }
+
+  /// Off the actor and after the caller has its index: encoding the whole index
+  /// is about 100 ms, which a launch should not wait for, and a document opened
+  /// meanwhile should not queue behind. A snapshot that fails to write costs the
+  /// next launch a parse, nothing else.
+  private func writeSnapshot(of index: RFCIndex) {
+    Task(name: "Write index snapshot") { [snapshotURL] in
+      await Self.write(index, to: snapshotURL)
+    }
+  }
+
+  @concurrent
+  private static func write(_ index: RFCIndex, to url: URL) async {
+    do {
+      try IndexSnapshot.encode(index).write(to: url, options: .atomic)
+    } catch {
+      storeLog.error(
+        "writing the index snapshot failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  private static func modificationDate(of url: URL) -> Date? {
+    try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
   }
 
   // MARK: - Documents

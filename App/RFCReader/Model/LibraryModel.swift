@@ -189,7 +189,7 @@ final class LibraryModel {
       }
       // Off the main actor: the parse alone is about a second (#124).
       let prepared = try await Self.parse(data)
-      try await store.storeIndex(data)
+      try await store.storeIndex(data, parsed: prepared.index)
       apply(prepared, updatedAt: .now)
     } catch {
       if index == nil { indexState = .failed(error.localizedDescription) }
