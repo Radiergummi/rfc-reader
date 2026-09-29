@@ -133,6 +133,9 @@ final class LibraryModel {
   func bootstrap() async {
     guard indexState == .idle else { return }
     indexState = .loading
+    #if DEBUG
+      installPackFromLaunchArgument()
+    #endif
     await refreshDownloadedNumbers()
     do {
       if let cached = try await store.cachedIndex() {
@@ -162,6 +165,28 @@ final class LibraryModel {
       }
     }
   }
+
+  #if DEBUG
+    /// `-installPack <url>`, a developer's way to install a pack from a URL or a
+    /// path (#36). Logged, not shown: nothing on screen asked for it.
+    private func installPackFromLaunchArgument() {
+      guard let argument = UserDefaults.standard.string(forKey: "installPack") else { return }
+      // Installed on every launch the argument is set for, which is what a
+      // developer setting it in a scheme wants while iterating on a pack.
+      let source = PackInstaller.source(fromArgument: argument)
+      Task(name: "Install data pack") {
+        do {
+          let pack = try await installLegacyPack(from: source)
+          libraryLog.info(
+            "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
+          )
+        } catch {
+          libraryLog.error(
+            "installing a data pack failed: \(String(describing: error), privacy: .public)")
+        }
+      }
+    }
+  #endif
 
   /// The search and the working groups, built off the main actor.
   @concurrent
@@ -524,6 +549,12 @@ final class LibraryModel {
     await evictIfGrown()
     await refreshDownloadedNumbers()
     return document
+  }
+
+  /// Installs the legacy XML pack from an `.aar`, a folder or a URL; see
+  /// `DocumentStore.installLegacyPack(from:)`. A developer's path for now (#36).
+  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+    try await store.installLegacyPack(from: source)
   }
 
   func originalText(for id: DocumentID) async throws -> String {
