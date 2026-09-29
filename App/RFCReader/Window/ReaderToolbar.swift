@@ -391,7 +391,7 @@
         //
         // The toggle is ours, not AppKit's `.toggleSidebar`. With the sidebar
         // collapsed its section shrinks to the two buttons, which then touch, and
-        // Liquid Glass joins the system item to its neighbour with a neck: two
+        // Liquid Glass joins the system item to its neighbor with a neck: two
         // circles half fused. Two items of our own touching become one capsule,
         // as Cite, Share and More do, and apart they are two circles exactly like
         // the system's (compared in screenshots of both states). Spacing them
@@ -642,7 +642,7 @@
         return reader.hasDocument
       case NSToolbarItem.Identifier.rfcNewCollection.rawValue,
         NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
-        // Act on the library, not the document, so a window without one has them too.
+        // Neither needs a document, so a window without one has both.
         return true
       default:
         return id != nil
@@ -673,9 +673,9 @@
     /// The toolbar's New Collection button, which makes an empty collection as
     /// File > New Collection… does; only the Bookmark menu's adds the open document.
     /// It opens a collapsed sidebar first, so the collection is in view once made,
-    /// and the sheet comes in once the sidebar has slid open (`showSidebar`).
+    /// and the sheet comes in once the sidebar has slid open (`revealSidebar`).
     @objc private func newEmptyCollection() {
-      controller.showSidebar(animated: true) { [navigation] in
+      controller.revealSidebar { [navigation] in
         navigation.collectionEditor = .create(adding: nil)
       }
     }
