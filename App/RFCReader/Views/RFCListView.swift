@@ -475,7 +475,7 @@ struct RFCRow: View {
             subject: Text("\(rfc.id.displayName): \(rfc.title)"))
           if library.opensNewWindows {
             Button {
-              library.openInNewWindow(rfc.id)
+              library.openWindow(for: rfc.id)
             } label: {
               Label("Open in New Window", systemImage: "macwindow.badge.plus")
             }

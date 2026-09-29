@@ -497,7 +497,9 @@ final class LibraryModel {
       activity.userInfo = SceneRequest.userInfo(for: link)
       UIApplication.shared.activateSceneSession(
         for: UISceneSessionActivationRequest(role: .windowApplication, userActivity: activity)
-      ) { error in
+      ) { @Sendable error in
+        // Sendable: UIKit does not promise to call this on the main thread, and a
+        // main-actor closure called off it traps.
         libraryLog.error(
           "opening a window failed: \(String(describing: error), privacy: .public)")
       }
@@ -510,7 +512,7 @@ final class LibraryModel {
     var opensNewWindows: Bool { UIApplication.shared.supportsMultipleScenes }
 
     /// Opens `id` in a window of its own, from a menu that offers it.
-    func openInNewWindow(_ id: DocumentID) {
+    func openWindow(for id: DocumentID) {
       openInNewScene(RFCLink(id: id), inBackground: false)
     }
   #endif

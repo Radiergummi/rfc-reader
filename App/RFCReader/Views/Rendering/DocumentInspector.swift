@@ -102,7 +102,7 @@ struct DocumentInspector: View {
     #if os(macOS)
       nil
     #else
-      library.opensNewWindows ? { library.openInNewWindow($0) } : nil
+      library.opensNewWindows ? { library.openWindow(for: $0) } : nil
     #endif
   }
 }
@@ -302,7 +302,7 @@ struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
   /// Nil where a reference cannot open in a window of its own.
-  var openInNewWindow: ((DocumentID) -> Void)?
+  let openInNewWindow: ((DocumentID) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
