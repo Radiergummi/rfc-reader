@@ -280,6 +280,10 @@ It was first a third tab beside Contents and References, and moved out because t
 
 The panel itself still waits for the body: it shows only once `ReaderState.hasDocument` is set, so a failed open has no Info pane yet (#325). The one part that is the store's rather than the index's, the offline copy's size and Remove Offline Copy, is read by the view itself when the pane shows and whenever the library's downloads change, which a removal does. Removing the copy leaves the document on screen, since it is already in memory, and says so, because otherwise the button looks as if it did nothing. AppleScript's `inspector pane` enumeration names the pane `information`, since Standard Additions already owns `info`.
 
+## Decision: datatracker data reaches the app as a published file
+
+*Decided September 2026.* Which drafts are revising an RFC cannot be asked of datatracker one document at a time: it records the relation only once a draft is published, so the answer means reading the header of every adopted draft. One scheduled GitHub Action (`revisions.yml`) does that for every user and publishes one small JSON file, `revisions.json`, on the `revisions` release. The app fetches it at launch and on activation, caches it beside the index, and works offline from the cached copy, saying "as of" once it is more than three days old. A snapshot shipped in a pack would be as stale as the pack, and drafts change weekly. Later datatracker features that need refreshed data reuse this path. The design is `docs/superpowers/specs/2026-09-29-rfc-revisions-design.md`.
+
 ## Planned engines
 
 - **Search.** SQLite FTS5 (via GRDB) with BM25 ranking, one row per section, over all abstracts plus every downloaded document; snippets from `snippet()`. Later, a hybrid reranker with `NLContextualEmbedding` vectors: per abstract for the whole index (precomputed pack, ~20 MB), per section for downloaded documents. Metadata search moves into the same database.
