@@ -64,6 +64,16 @@ struct GroundTruthTests {
     #expect(blocks == [GroundTruth.Block(kind: .heading, content: "1 Art")])
   }
 
+  /// xml2rfc prints a superscript as `^(8)`, which is the text the parser reads.
+  @Test func `a heading's superscript is written as xml2rfc prints it`() {
+    let section = Section(
+      anchor: "s4", number: "4",
+      title: [.text("A Scheme over GF(2"), .superscript("8"), .text(")")])
+    #expect(
+      GroundTruth.blocks(of: document([section]))
+        == [GroundTruth.Block(kind: .heading, content: "4 A Scheme over GF(2^(8))")])
+  }
+
   @Test func `an unnumbered heading is its title alone`() {
     let blocks = GroundTruth.blocks(
       of: document([Section(anchor: "ack", title: "Acknowledgements")]))
@@ -78,6 +88,12 @@ struct GroundTruthTests {
     #expect(
       GroundTruth.normalize(verbatim: "      +---+   \n\n      | A |\n      +---+\n")
         == "+---+\n| A |\n+---+")
+  }
+
+  /// The parser expands tabs to eight columns before it reads a line, and xml2rfc
+  /// prints them expanded, so a tab in the XML is the spaces it stands for.
+  @Test func `verbatim text has its tabs expanded to eight columns`() {
+    #expect(GroundTruth.normalize(verbatim: "   \t+--+\n  a\tb") == "      +--+\na     b")
   }
 
   /// Only the common indentation goes: the shape of a diagram is its content.
@@ -97,6 +113,14 @@ struct GroundTruthTests {
   @Test func `a heading's number loses its trailing dot and its spacing collapses`() {
     #expect(
       GroundTruth.normalize(number: "3.2.", title: "Message   Format ") == "3.2 Message Format")
+  }
+
+  /// xml2rfc prints a non-breaking hyphen as a hyphen and drops the invisible
+  /// joiners, so a title holding them compares with the text it printed.
+  @Test func `a heading's non-breaking hyphens are hyphens and its joiners go`() {
+    #expect(
+      GroundTruth.normalize(number: "2", title: "DNS\u{2011}SD over\u{2060} TLS\u{200B}")
+        == "2 DNS-SD over TLS")
   }
 
   // MARK: - Scoring
@@ -222,14 +246,5 @@ struct GroundTruthTests {
       )
     ])
     #expect(report.documents.map(\.errors) == [1])
-  }
-
-  // MARK: - Fetching the pairs
-
-  /// The text of the RFCs that have XML: the half the ordinary text fetch skips,
-  /// because xml2rfc generated it.
-  @Test func `the paired text is the text of every RFC with XML`() throws {
-    let index = try RFCIndexParser.parse(contentsOf: Fixtures.url("rfc-index-sample.xml"))
-    #expect(FetchPlan.pairedText(in: index, limit: nil).map(\.number) == [8999, 9000, 9110])
   }
 }

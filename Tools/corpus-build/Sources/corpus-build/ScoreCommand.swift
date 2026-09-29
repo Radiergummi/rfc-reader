@@ -57,7 +57,7 @@ struct ScoreCommand: AsyncParsableCommand {
     // Each pair is independent, and both parses are pure functions of their files.
     var scored: [(DocumentID, [GroundTruth.Kind: GroundTruth.Counts])] = []
     var failures = 0
-    try await withThrowingTaskGroup(
+    await withTaskGroup(
       of: (DocumentID, Result<[GroundTruth.Kind: GroundTruth.Counts], any Error>).self
     ) { group in
       var pending = pairs.makeIterator()
@@ -66,7 +66,7 @@ struct ScoreCommand: AsyncParsableCommand {
         group.addTask { (pair.id, Result { try Self.score(pair) }) }
       }
       for _ in 0..<ProcessInfo.processInfo.activeProcessorCount { startNext() }
-      for try await (id, result) in group {
+      for await (id, result) in group {
         switch result {
         case .success(let counts): scored.append((id, counts))
         case .failure(let error):

@@ -97,7 +97,8 @@ public enum GroundTruth {
   /// the text can never hold it.
   public static func blocks(of document: RFCDocument) -> [Block] {
     let headings = document.allSections.map { section in
-      Block(kind: .heading, content: normalize(number: section.number, title: section.titleText))
+      Block(
+        kind: .heading, content: normalize(number: section.number, title: printed(section.title)))
     }
     let verbatim = document.blocks.compactMap { block -> Block? in
       guard case .preformatted(let content) = block, content.type != "svg" else { return nil }
@@ -113,6 +114,14 @@ public enum GroundTruth {
     return headings + verbatim
   }
 
+  /// A title as xml2rfc prints it: its plain text, except that a superscript is
+  /// written `^(8)`.
+  private static func printed(_ title: [Inline]) -> String {
+    title.map { inline in
+      if case .superscript(let text) = inline { "^(\(text))" } else { [inline].plainText }
+    }.joined()
+  }
+
   // MARK: - Normalization
 
   /// Verbatim text as it compares: blank lines and trailing spaces dropped, and the
@@ -120,10 +129,11 @@ public enum GroundTruth {
   /// author's own margin compare equal while a diagram keeps its shape. A page
   /// break inside a figure leaves blank lines, which is why those go too. So do the
   /// `<CODE BEGINS>` and `<CODE ENDS>` lines xml2rfc writes around marked source
-  /// code, which the element does not hold.
+  /// code, which the element does not hold. Tabs are expanded to eight columns
+  /// first, as the parser and xml2rfc both do.
   public static func normalize(verbatim text: String) -> String {
     var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-      .map { line in String(line.reversed().drop(while: \.isWhitespace).reversed()) }
+      .map { line in String(expandingTabs(line).reversed().drop(while: \.isWhitespace).reversed()) }
       .filter { !$0.isEmpty }
     if let first = lines.first, first.drop(while: \.isWhitespace).hasPrefix("<CODE BEGINS>") {
       lines.removeFirst()
@@ -135,15 +145,31 @@ public enum GroundTruth {
     return lines.map { String($0.dropFirst(margin)) }.joined(separator: "\n")
   }
 
+  private static func expandingTabs(_ line: Substring) -> String {
+    var expanded = ""
+    for character in line {
+      if character == "\t" {
+        expanded += String(repeating: " ", count: 8 - expanded.count % 8)
+      } else {
+        expanded.append(character)
+      }
+    }
+    return expanded
+  }
+
   /// A heading as it compares: its number without a trailing dot, which the
   /// legacy text writes and the XML does not, then its title, with every run of
-  /// white space one space.
+  /// white space one space. A non-breaking hyphen is a hyphen and the invisible
+  /// joiners go, as xml2rfc prints them.
   public static func normalize(number: String?, title: String) -> String {
     var parts: [String] = []
     if let number, !number.isEmpty {
       parts.append(number.hasSuffix(".") ? String(number.dropLast()) : number)
     }
-    parts.append(title)
+    parts.append(
+      title.replacingOccurrences(of: "\u{2011}", with: "-")
+        .replacingOccurrences(of: "\u{2060}", with: "")
+        .replacingOccurrences(of: "\u{200B}", with: ""))
     return parts.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(
       separator: " ")
   }
