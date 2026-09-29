@@ -400,6 +400,27 @@ struct RFCXMLParserTests {
     #expect(table.label == "Table 7")
   }
 
+  /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
+  /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
+  /// `derivedContent` would put a second tag where the section belongs; wording the
+  /// section is #473's.
+  @Test(arguments: [
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si"), ("rfc9290.xml", "IANA.cbor-tags"),
+  ])
+  func `a citation of a section of an entry outside the series is not bracketed`(
+    fixture: String, target: String
+  ) throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let xrefs = document.proseInlines.compactMap { inline -> CrossReference? in
+      guard case .crossReference(let xref) = inline, xref.target == .anchor(target) else {
+        return nil
+      }
+      return xref
+    }
+    #expect(xrefs.contains { $0.label.hasPrefix("[") })
+    #expect(xrefs.contains { !$0.label.hasPrefix("[") })
+  }
+
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
   /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
   /// Reading only the first kept the six counters and dropped the rest.

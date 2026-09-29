@@ -133,9 +133,11 @@ public enum RFCXMLParser {
             }
           case "referencegroup":
             let anchor = child["anchor"]
-            if let anchor { anchors.insert(anchor) }
-            if let anchor, let id = DocumentID(label: anchor) {
-              targets[anchor] = CitedEntry(id: id, entry: anchor)
+            if let anchor {
+              anchors.insert(anchor)
+              if let id = DocumentID(label: anchor) {
+                targets[anchor] = CitedEntry(id: id, entry: anchor)
+              }
             }
             walk(child, group: anchor)
           case "middle", "back", "section", "references":
@@ -835,7 +837,11 @@ public enum RFCXMLParser {
         return CrossReference(target: target, sectionFormat: sectionFormat)
       }
 
-      if innerText.isEmpty, format == "default", referenceAnchors.contains(targetAnchor) {
+      // Only a citation of the whole entry: with a section, `derivedContent` is the
+      // entry's tag standing in for "Section 2.3.3 of [RATS-AR4SI]" (#473).
+      if innerText.isEmpty, format == "default", section == nil,
+        referenceAnchors.contains(targetAnchor)
+      {
         return CrossReference(target: .anchor(targetAnchor), text: "[\(derived ?? targetAnchor)]")
       }
       let text = innerText.isEmpty ? derived : innerText
