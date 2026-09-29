@@ -15,6 +15,66 @@ struct RFCTextView: View {
   // itself, which sits outside SwiftUI's environment chain — so it needs the
   // library handed to it explicitly, the same way it is here.
   @Environment(LibraryModel.self) private var library
+  /// Everything else, gathered once here; see `ReaderInputs` for each.
+  let inputs: ReaderInputs
+
+  init(
+    built: BuiltDocument,
+    bibliography: [ReferenceGroup],
+    measure: MeasurePreference,
+    documentID: DocumentID,
+    commitsOnClick: (() -> Void)? = nil,
+    lastVisibleAnchor: VisibleAnchorBox,
+    scrollTarget: ReaderScrollTarget?,
+    onScrollHandled: @escaping () -> Void,
+    onVisibleAnchorChange: @escaping (String) -> Void,
+    onLink: @escaping (URL, LinkActivation) -> Bool,
+    onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
+    heading: HeadingBox,
+    headerIdentity: DocumentHeaderView.Identity,
+    @ViewBuilder header: () -> some View
+  ) {
+    inputs = ReaderInputs(
+      built: built,
+      bibliography: bibliography,
+      measure: measure,
+      documentID: documentID,
+      commitsOnClick: commitsOnClick,
+      lastVisibleAnchor: lastVisibleAnchor,
+      scrollTarget: scrollTarget,
+      onScrollHandled: onScrollHandled,
+      onVisibleAnchorChange: onVisibleAnchorChange,
+      onLink: onLink,
+      onToolbarTitle: onToolbarTitle,
+      heading: heading,
+      header: AnyView(header()),
+      headerIdentity: headerIdentity
+    )
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      Representable(inputs: inputs, library: library, width: geometry.size.width)
+    }
+  }
+}
+
+/// Where the reader is asked to scroll, and whether it should get there smoothly.
+///
+/// Smoothly only within a document already on screen — a link, a contents row, Back
+/// within it — where the motion says which way the jump went. Arriving at a
+/// document, or at a restored reading position, is not a movement the reader made.
+struct ReaderScrollTarget: Equatable {
+  let anchor: String
+  let animated: Bool
+}
+
+/// Everything the reader is given, and the one place it is handed to the shared
+/// coordinator. `RFCTextView` holds one of these rather than a copy of each field,
+/// and the two representables pass it on, so an input is declared here and named
+/// again only in `RFCTextView.init`'s labels. The library is not in it: it is the
+/// environment's, which `RFCTextView` reads, and passed beside it.
+struct ReaderInputs {
   let built: BuiltDocument
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
@@ -44,97 +104,9 @@ struct RFCTextView: View {
   /// the freshly erased `AnyView` it gets handed on every update pass.
   let headerIdentity: DocumentHeaderView.Identity
 
-  init(
-    built: BuiltDocument,
-    bibliography: [ReferenceGroup],
-    measure: MeasurePreference,
-    documentID: DocumentID,
-    commitsOnClick: (() -> Void)? = nil,
-    lastVisibleAnchor: VisibleAnchorBox,
-    scrollTarget: ReaderScrollTarget?,
-    onScrollHandled: @escaping () -> Void,
-    onVisibleAnchorChange: @escaping (String) -> Void,
-    onLink: @escaping (URL, LinkActivation) -> Bool,
-    onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
-    heading: HeadingBox,
-    headerIdentity: DocumentHeaderView.Identity,
-    @ViewBuilder header: () -> some View
-  ) {
-    self.built = built
-    self.bibliography = bibliography
-    self.measure = measure
-    self.documentID = documentID
-    self.commitsOnClick = commitsOnClick
-    self.lastVisibleAnchor = lastVisibleAnchor
-    self.scrollTarget = scrollTarget
-    self.onScrollHandled = onScrollHandled
-    self.onVisibleAnchorChange = onVisibleAnchorChange
-    self.onLink = onLink
-    self.onToolbarTitle = onToolbarTitle
-    self.heading = heading
-    self.headerIdentity = headerIdentity
-    self.header = AnyView(header())
-  }
-
-  var body: some View {
-    GeometryReader { geometry in
-      Representable(
-        inputs: ReaderInputs(
-          built: built,
-          bibliography: bibliography,
-          measure: measure,
-          documentID: documentID,
-          commitsOnClick: commitsOnClick,
-          lastVisibleAnchor: lastVisibleAnchor,
-          scrollTarget: scrollTarget,
-          onScrollHandled: onScrollHandled,
-          onVisibleAnchorChange: onVisibleAnchorChange,
-          onLink: onLink,
-          onToolbarTitle: onToolbarTitle,
-          heading: heading,
-          library: library,
-          header: header,
-          headerIdentity: headerIdentity
-        ),
-        width: geometry.size.width
-      )
-    }
-  }
-}
-
-/// Where the reader is asked to scroll, and whether it should get there smoothly.
-///
-/// Smoothly only within a document already on screen — a link, a contents row, Back
-/// within it — where the motion says which way the jump went. Arriving at a
-/// document, or at a restored reading position, is not a movement the reader made.
-struct ReaderScrollTarget: Equatable {
-  let anchor: String
-  let animated: Bool
-}
-
-/// Everything the two representables hand their shared coordinator, and the one
-/// place that handing-over is written. Declared outside the `#if` so a new callback
-/// is added once instead of in both platform structs and both update bodies.
-struct ReaderInputs {
-  let built: BuiltDocument
-  let bibliography: [ReferenceGroup]
-  let measure: MeasurePreference
-  let documentID: DocumentID
-  let commitsOnClick: (() -> Void)?
-  let lastVisibleAnchor: VisibleAnchorBox
-  let scrollTarget: ReaderScrollTarget?
-  let onScrollHandled: () -> Void
-  let onVisibleAnchorChange: (String) -> Void
-  let onLink: (URL, LinkActivation) -> Bool
-  let onToolbarTitle: (ToolbarTitleState) -> Void
-  let heading: HeadingBox
-  let library: LibraryModel
-  let header: AnyView
-  let headerIdentity: DocumentHeaderView.Identity
-
   /// Called on every SwiftUI update pass, so it does the cheap assignments first
   /// and only installs when the document itself changed.
-  func apply(to coordinator: RFCTextViewCoordinator, width: CGFloat) {
+  func apply(to coordinator: RFCTextViewCoordinator, library: LibraryModel, width: CGFloat) {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
@@ -189,6 +161,7 @@ struct ReaderInputs {
 #if canImport(UIKit)
   private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
+    let library: LibraryModel
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -223,12 +196,13 @@ struct ReaderInputs {
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-      inputs.apply(to: context.coordinator, width: width)
+      inputs.apply(to: context.coordinator, library: library, width: width)
     }
   }
 #else
   private struct Representable: NSViewRepresentable {
     let inputs: ReaderInputs
+    let library: LibraryModel
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -300,7 +274,7 @@ struct ReaderInputs {
     }
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
-      inputs.apply(to: context.coordinator, width: width)
+      inputs.apply(to: context.coordinator, library: library, width: width)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

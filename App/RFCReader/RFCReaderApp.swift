@@ -124,12 +124,13 @@ struct DocumentCommands: Commands {
       // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
       CommandGroup(after: .pasteboard) {
         Section {
-          // Static title: whether this RFC is bookmarked is a SwiftData fetch,
-          // not something the menu observes, so a "Remove Bookmark" label would
-          // go stale. The toolbar's filled glyph carries the state.
-          Button("Bookmark") { active.controller?.toggleBookmark() }
-            .keyboardShortcut("d", modifiers: .command)
-            .disabled(navigation?.selection == nil)
+          // Says what it will do, as the toolbar's glyph does: both read the
+          // library's set of bookmarked documents, which the menu observes.
+          Button(active.controller?.isBookmarked == true ? "Remove Bookmark" : "Bookmark") {
+            active.controller?.toggleBookmark()
+          }
+          .keyboardShortcut("d", modifiers: .command)
+          .disabled(navigation?.selection == nil)
           // The key window's undo manager, so Edit > Undo puts back a document
           // removed from here, as it does for a removal in the list (#349).
           if let navigation, let document = navigation.selection {
@@ -147,7 +148,9 @@ struct DocumentCommands: Commands {
       // list's view options before.
       CommandGroup(after: .toolbar) {
         if let navigation {
-          ListViewOptions(navigation: navigation)
+          Section {
+            ListViewOptions(navigation: navigation)
+          }
         }
       }
     #endif
@@ -226,27 +229,6 @@ struct DocumentCommands: Commands {
 }
 
 #if os(macOS)
-  /// View > Sort By and View > Show Obsolete, for the key window's list (#349).
-  private struct ListViewOptions: View {
-    @Bindable var navigation: NavigationModel
-
-    var body: some View {
-      Section {
-        if case .collection = navigation.filter {
-          Picker("Sort By", selection: $navigation.listOptions.collectionSort) {
-            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
-          }
-        } else {
-          Picker("Sort By", selection: $navigation.listOptions.order) {
-            ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
-          }
-          .disabled(!ListOptions.canReorder(navigation.filter, query: navigation.searchText))
-        }
-        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
-      }
-    }
-  }
-
   /// One find-bar action, sent to the first responder that can perform it.
   ///
   /// `performTextFinderAction(_:)` decides *which* action it is by reading `tag` off
@@ -315,9 +297,11 @@ struct SettingsView: View {
 }
 
 private struct ReadingSettings: View {
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
-  @AppStorage("underlineLinks") private var underlineLinks = false
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
 
   /// A toggle over the preference rather than a picker: there are two choices,
   /// and one of them is the default the reader opts out of.
@@ -344,7 +328,8 @@ private struct ReadingSettings: View {
 }
 
 private struct GeneralSettings: View {
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
+  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
+    ReaderPreferences.defaultPreferOriginalText
 
   var body: some View {
     Form {

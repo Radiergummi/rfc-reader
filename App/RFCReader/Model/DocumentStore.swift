@@ -12,7 +12,10 @@ nonisolated private let storeLog = Logger(
 /// view and re-parsing after a parser improvement both come for free.
 actor DocumentStore {
   private let directory: URL
-  private var parsed: [DocumentID: RFCDocument] = [:]
+  /// The documents parsed most recently, so going back to one skips the parse. A
+  /// handful rather than all: a parsed document is several times its file, and a
+  /// session can open hundreds.
+  private var parsed = RecentlyUsed<DocumentID, RFCDocument>(capacity: 8)
 
   /// Which bodies are on disk, scanned once on first use and kept current by
   /// every write and removal below, so asking does not enumerate the directory.
@@ -93,7 +96,7 @@ actor DocumentStore {
   func remove(_ id: DocumentID) {
     downloads.removed(id)
     originalTexts.removed(id)
-    parsed[id] = nil
+    parsed.remove(id)
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
     cachedDocuments.update(id) {
       for url in urls {
@@ -106,17 +109,14 @@ actor DocumentStore {
     -> RFCDocument
   {
     markOpened(id)
-    if let cached = parsed[id] { return cached }
+    if let cached = parsed.value(for: id) { return cached }
 
-    let xmlURL = fileURL(id, format: .xml)
-    if let data = try? Data(contentsOf: xmlURL), let document = try? RFCXMLParser.parse(data) {
-      parsed[id] = document
-      return document
-    }
-    let textURL = fileURL(id, format: .text)
-    if let data = try? Data(contentsOf: textURL) {
-      let document = LegacyTextParser.parse(data)
-      parsed[id] = document
+    if let document = await Self.parseCached(
+      id, xml: fileURL(id, format: .xml), text: fileURL(id, format: .text))
+    {
+      // A removal while the parse ran took the body off the disk, and the memo
+      // does not bring it back.
+      if cachedDocuments.contains(id) { parsed.insert(document, for: id) }
       return document
     }
 
@@ -129,8 +129,29 @@ actor DocumentStore {
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
-    parsed[id] = fetched.document
+    parsed.insert(fetched.document, for: id)
     return fetched.document
+  }
+
+  /// The cached body parsed, the XML when there is one that parses, otherwise the
+  /// text; nil when neither is on disk. Off the actor, as a parse of a long
+  /// document takes long enough that `cachedNumbers()` and the other calls would
+  /// otherwise wait for it.
+  @concurrent
+  private static func parseCached(_ id: DocumentID, xml: URL, text: URL) async -> RFCDocument? {
+    if let data = try? Data(contentsOf: xml) {
+      do {
+        return try RFCXMLParser.parse(data)
+      } catch {
+        // On to the text, if one is kept, else to the network; but a cached body
+        // that no longer parses is worth knowing about.
+        storeLog.error(
+          "\(id.displayName, privacy: .public): cached XML did not parse: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+    guard let data = try? Data(contentsOf: text) else { return nil }
+    return LegacyTextParser.parse(data)
   }
 
   /// Not cached: the XML when the index says it exists, otherwise the text, and the

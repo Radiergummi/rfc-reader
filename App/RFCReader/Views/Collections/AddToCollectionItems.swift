@@ -19,26 +19,24 @@ struct AddToCollectionItems: View {
   var onNewCollection: (() -> Void)?
 
   var body: some View {
-    let containing = library.collections.collections(containing: document)
-    ForEach(library.collections.collections) { entry in
-      Toggle(
-        entry.name,
-        isOn: Binding(
-          get: { containing.contains(entry.id) },
-          set: { _ in
-            library.editCollections {
-              try CollectionStore.toggle(
-                document, in: entry.id, undoManager: undoManager, in: $0)
-            }
-          }))
-    }
-    if !library.collections.collections.isEmpty { Divider() }
-    Button("New Collection…") {
+    MenuSections(
+      sections: DocumentMenus.addToCollection(document, in: library.collections), perform: perform)
+  }
+
+  private func perform(_ action: DocumentMenus.Action) {
+    switch action {
+    case .toggleCollection(let collection):
+      library.editCollections {
+        try CollectionStore.toggle(document, in: collection, undoManager: undoManager, in: $0)
+      }
+    case .newCollection:
       if let onNewCollection {
         onNewCollection()
       } else {
         navigation.collectionEditor = .create(adding: document)
       }
+    default:
+      break
     }
   }
 }

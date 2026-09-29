@@ -19,18 +19,19 @@ struct DocumentView: View {
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
     // Only the iOS toolbar reads these. On macOS the bookmark button and the
-    // external links are the window's, and a `@Query` left outside this guard ran a
-    // live fetch of every bookmark per open document that nothing read.
+    // external links are the window's.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Query private var bookmarks: [Bookmark]
   #endif
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
-  @AppStorage("underlineLinks") private var underlineLinks = false
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
+    ReaderPreferences.defaultPreferOriginalText
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -46,6 +47,7 @@ struct DocumentView: View {
   /// `rebuild()` — never in `body`, which would rebuild on every redraw.
   @State private var built: BuiltDocument?
   @State private var originalText: String?
+  @State private var originalTextError: String?
   @State private var loadError: String?
   /// The fetch, and the build it triggers. Owned by the view rather than by
   /// `.task`, which ties them to appearance: in a collapsed split view, a reader
@@ -68,10 +70,15 @@ struct DocumentView: View {
     var load: Task<Void, Never>?
     var build: Task<Void, Never>?
     var buildingFor: BuildInputs?
+    /// The original text's fetch, for the same reason as `load`: a `.task` on the
+    /// original text view was cancelled by the spurious disappearance, and its
+    /// failure left the view spinning with nothing to try again.
+    var originalText: Task<Void, Never>?
 
     deinit {
       load?.cancel()
       build?.cancel()
+      originalText?.cancel()
     }
   }
   #if !os(macOS)
@@ -116,10 +123,9 @@ struct DocumentView: View {
 
   private var metadata: RFCMetadata? { library.metadata(id) }
   #if !os(macOS)
-    private var isBookmarked: Bool {
-      let key = id.fileStem
-      return bookmarks.contains { $0.documentKey == key }
-    }
+    /// From the library's one set, as the Mac's toolbar and every list row read it,
+    /// rather than a live query of every bookmark per open document.
+    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(id) }
   #endif
 
   /// Everything a build depends on. One trigger, so the document is built in one
@@ -137,8 +143,8 @@ struct DocumentView: View {
 
     var style: ReadingStyle? {
       column.map {
-        ReadingStyle(
-          bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
+        ReaderPreferences.style(
+          fontSize: fontSize, underlineLinks: underlineLinks, column: $0, textSize: textSize)
       }
     }
   }
@@ -264,9 +270,13 @@ struct DocumentView: View {
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
         text: originalText,
-        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize
+        error: originalTextError,
+        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
+        tryAgain: startOriginalTextLoad
       )
-      .task { originalText = try? await library.originalText(for: id) }
+      .onAppear {
+        if work.originalText == nil { startOriginalTextLoad() }
+      }
       // No header to show the title here, so the toolbar shows it throughout.
       // On `hasDocument` rather than on appearing: loading a document clears
       // the title back to hidden after this view may already have appeared.
@@ -390,7 +400,6 @@ struct DocumentView: View {
     }
 
     private var bookmarkButton: some View {
-      // Read once: a linear scan of the bookmarks, and the label wants it twice.
       let bookmarked = isBookmarked
       // A tap bookmarks, as before; a long press adds to a collection (#349).
       return Menu {
@@ -408,13 +417,7 @@ struct DocumentView: View {
 
     private var citeMenu: some View {
       Menu {
-        ForEach(CitationStyle.allCases) { style in
-          Button(style.displayName) { copyCitation(style) }
-        }
-        Divider()
-        Button("Copy Link to Current Section") {
-          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-        }
+        MenuSections(sections: DocumentMenus.cite(), perform: perform)
       } label: {
         Label("Cite", systemImage: "quote.opening")
       }
@@ -432,22 +435,28 @@ struct DocumentView: View {
     /// What is used least: the original text, and the document's pages elsewhere.
     private var moreMenu: some View {
       Menu {
-        Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
-        }
-
-        Section {
-          Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
-          if let url = metadata?.errataURL {
-            Button("Errata") { systemOpenURL(url) }
-          }
-          Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
-          if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { systemOpenURL(draft) }
-          }
-        }
+        MenuSections(
+          sections: DocumentMenus.more(
+            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            precedingDraft: reader.precedingDraft),
+          perform: perform)
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// What an item of Cite or More does. Add to Collection's are
+    /// `AddToCollectionItems`' own.
+    private func perform(_ action: DocumentMenus.Action) {
+      switch action {
+      case .copyCitation(let style): copyCitation(style)
+      case .copySectionLink:
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+      case .toggleOriginalText: reader.showOriginal.toggle()
+      case .openInfoPage: systemOpenURL(RFCEditorEndpoints.infoPage(id))
+      case .openErrata(let url), .openPrecedingDraft(let url): systemOpenURL(url)
+      case .openDatatracker: systemOpenURL(RFCEditorEndpoints.datatracker(id))
+      case .toggleCollection, .newCollection: break
       }
     }
 
@@ -490,6 +499,24 @@ struct DocumentView: View {
   private func startLoad() {
     work.load?.cancel()
     work.load = Task(name: "Load document") { await load() }
+  }
+
+  /// Fetches the original text: once per view, the first time it is shown, plus
+  /// Try Again after a failure.
+  private func startOriginalTextLoad() {
+    work.originalText?.cancel()
+    originalTextError = nil
+    work.originalText = Task(name: "Load original text") {
+      do {
+        originalText = try await library.originalText(for: id)
+      } catch {
+        // Cancelled only when the view goes, or when Try Again replaces this
+        // fetch, and neither wants an error on screen.
+        guard !Task.isCancelled else { return }
+        trace("original text failed: \(error)")
+        originalTextError = error.localizedDescription
+      }
+    }
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document
@@ -635,7 +662,7 @@ struct DocumentView: View {
     private func toggleBookmark() {
       let title = DocumentActions.bookmarkTitle(
         metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      BookmarkStore.toggle(id, title: title, in: modelContext)
+      library.toggleBookmark(id, title: title)
     }
 
     private func copyCitation(_ style: CitationStyle) {
@@ -645,11 +672,15 @@ struct DocumentView: View {
     }
   #endif
 
+  /// Nil when the fetch fails, which is logged: the reader opens at the top, as it
+  /// does for a document never read.
   private func storedPosition() -> ReadingPosition? {
-    let key = id.fileStem
-    let descriptor = FetchDescriptor<ReadingPosition>(
-      predicate: #Predicate { $0.documentKey == key })
-    return try? modelContext.fetch(descriptor).first
+    do {
+      return try ReadingPositionStore.position(for: id, in: modelContext)
+    } catch {
+      trace("reading the position failed: \(error)")
+      return nil
+    }
   }
 
   /// Dates the entry as this document is opened, not only as it is left.
@@ -662,10 +693,10 @@ struct DocumentView: View {
   /// the place being restored a moment later in the reader's `onAppear`, so only
   /// the date is written.
   private func markAsRead() {
-    if let existing = storedPosition() {
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: nil))
+    do {
+      try ReadingPositionStore.markOpened(id, in: modelContext)
+    } catch {
+      trace("marking as read failed: \(error)")
     }
   }
 
@@ -673,11 +704,10 @@ struct DocumentView: View {
     // The anchor alone for now: the reader reports the section on screen, not the
     // offset within it, so a place is saved at the anchor itself (#152).
     let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
-    if let existing = storedPosition() {
-      existing.place = place
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: place))
+    do {
+      try ReadingPositionStore.save(place, for: id, in: modelContext)
+    } catch {
+      trace("saving the position failed: \(error)")
     }
   }
 }
@@ -827,7 +857,9 @@ struct StatusBanner: View {
 
 struct OriginalTextView: View {
   let text: String?
+  let error: String?
   let fontSize: Double
+  let tryAgain: () -> Void
 
   var body: some View {
     if let text {
@@ -844,6 +876,14 @@ struct OriginalTextView: View {
             .padding(24)
         }
       #endif
+    } else if let error {
+      ContentUnavailableView {
+        Label("Couldn't load the original text", systemImage: "wifi.exclamationmark")
+      } description: {
+        Text(error)
+      } actions: {
+        Button("Try Again", action: tryAgain)
+      }
     } else {
       ProgressView()
     }

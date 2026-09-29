@@ -83,6 +83,10 @@ targets:
         # defaults, as `DocumentTextBuilder` requires, and so would any other target.
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: "YES"
+        # The two upcoming features the packages enable too, so the app's code is
+        # held to the same rules as the code it calls.
+        SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: "YES"
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: "YES"
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         # Icon Composer 27 saves refractivity, which Xcode 26's actool crashes on

@@ -35,7 +35,7 @@
       set {
         guard newValue != isBookmarked else { return }
         let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: nil, id: id)
-        BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+        LibraryModel.shared.toggleBookmark(id, title: title)
       }
     }
 

@@ -199,7 +199,7 @@ struct SidebarView: View {
     /// could see.
     private var isSearchingInPlace: Bool {
       horizontalSizeClass == .compact
-        && !navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        && !navigation.searchText.isUnsearchedQuery
     }
 
     /// The first results, and the way to all of them in All RFCs, which keeps the
