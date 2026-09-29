@@ -408,6 +408,7 @@ extension LegacyTextParser {
     -> ProseDiagnostics
   {
     var diagnosis = ProseDiagnostics()
+    diagnosis.indentLimit = maxIndent
     guard let first = lines.first else {
       diagnosis.rejections = [.noLines]
       return diagnosis
@@ -424,11 +425,16 @@ extension LegacyTextParser {
     // a MIB module's text, whose `DESCRIPTION` clauses and comments are sentences: a
     // block with an assignment in it, or an ASN.1 comment, is the module's (RFC 8096's
     // `... obsoleted by IP-MIB::ipv6IpForwarding." ::= { ipv6MIBObjects 1 }`).
+    //
+    // A thorough diagnosis asks it of a block too deep as well: whether a looser limit
+    // would take the block, or refuse it as code instead, is what makes a near miss (#43).
+    if indent > classicProseIndent, indent <= maxIndent || thorough {
+      diagnosis.readsAsDeepProse =
+        readsLikeSentences(lines, share: (of: 1, in: 2)) && !readsAsModuleText(lines)
+    }
     if indent > maxIndent {
       diagnosis.rejections.append(.indentTooDeep)
-    } else if indent > classicProseIndent,
-      !readsLikeSentences(lines, share: (of: 1, in: 2)) || readsAsModuleText(lines)
-    {
+    } else if indent > classicProseIndent, !diagnosis.readsAsDeepProse {
       diagnosis.rejections.append(.deepIndentNotSentences)
     }
     if !(0...8).contains(diagnosis.firstLineIndent) {

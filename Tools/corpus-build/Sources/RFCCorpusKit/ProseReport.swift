@@ -43,10 +43,10 @@ public struct ProseReport: Codable, Sendable {
 
   public init() {}
 
-  /// Diagnoses every block of one document.
-  public init(diagnosing text: String, id: String, title: String?) {
+  /// The report of one document, from its diagnosed blocks.
+  public init(diagnosed: [BlockDiagnostics], id: String) {
     documents += 1
-    for block in LegacyTextParser.proseDiagnostics(for: text, title: title) {
+    for block in diagnosed {
       let diagnosis = block.diagnosis
       blocks += 1
       if block.claimedByList {

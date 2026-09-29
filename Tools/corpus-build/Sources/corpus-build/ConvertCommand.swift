@@ -34,6 +34,12 @@ struct ConvertCommand: AsyncParsableCommand {
   @Option(help: "Where to write what the prose test decided. Roughly doubles the run.")
   var diagnostics: String?
 
+  @Option(
+    help:
+      "Where to write the blocks the prose test refused narrowly, by line range. Costs what --diagnostics does."
+  )
+  var boundary: String?
+
   @Option(help: "Validate every written file against this RELAX NG schema with xmllint.")
   var schema: String?
 
@@ -70,6 +76,7 @@ struct ConvertCommand: AsyncParsableCommand {
     var offset: Int
     var report: DocumentReport
     var prose: ProseReport?
+    var boundary: [BoundarySample.Entry]?
   }
 
   func run() async throws {
@@ -80,7 +87,8 @@ struct ConvertCommand: AsyncParsableCommand {
       // Diagnosing re-segments every document, which roughly doubles the run. Only pay
       // it when the report is actually asked for.
       converter: DocumentConverter(
-        diagnosesProse: diagnostics != nil, countsFurniture: report != nil),
+        diagnosesProse: diagnostics != nil, countsFurniture: report != nil,
+        samplesBoundary: boundary != nil),
       schema: schema.map { URL(fileURLWithPath: $0) },
       index: try index.map {
         try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: $0))
@@ -148,6 +156,16 @@ struct ConvertCommand: AsyncParsableCommand {
           "refused by one guard only", metadata: ["guard": "\(guardName)", "blocks": "\(count)"])
       }
     }
+    if let boundary {
+      let entries = results.flatMap { $0.boundary ?? [] }
+      try writeJSON(entries, to: boundary)
+      for (criterion, count) in Dictionary(grouping: entries, by: \.criterion)
+        .mapValues(\.count).sorted(by: { $0.value > $1.value })
+      {
+        Self.logger.info(
+          "on the boundary", metadata: ["criterion": "\(criterion)", "blocks": "\(count)"])
+      }
+    }
     var comparison: SchemaComparison?
     if job.schema != nil { comparison = Self.logSchema(reports, previouslyValid: previouslyValid) }
     let flagged = reports.filter { !$0.warnings.isEmpty }
@@ -201,7 +219,8 @@ struct ConvertCommand: AsyncParsableCommand {
     try conversion.xml.write(to: outputURL, options: .atomic)
     var entry = conversion.report
     try await checkSchema(outputURL, job: job, into: &entry)
-    return Converted(offset: offset, report: entry, prose: conversion.prose)
+    return Converted(
+      offset: offset, report: entry, prose: conversion.prose, boundary: conversion.boundary)
   }
 
   static func checkSchema(_ file: URL, job: Job, into entry: inout DocumentReport) async throws {
