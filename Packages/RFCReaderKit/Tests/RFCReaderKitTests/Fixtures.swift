@@ -51,7 +51,7 @@ enum Fixtures {
   static func metadata(
     _ number: Int, title: String = "Title", year: Int = 2020, month: Int? = nil,
     obsoletedBy: [DocumentID] = [], currentStatus: PublicationStatus = .unknown,
-    stream: RFCKit.Stream = .legacy, workingGroup: String? = nil
+    stream: PublicationStream = .legacy, workingGroup: String? = nil
   ) -> RFCMetadata {
     RFCMetadata(
       id: .rfc(number), title: title, date: PublicationDate(year: year, month: month),

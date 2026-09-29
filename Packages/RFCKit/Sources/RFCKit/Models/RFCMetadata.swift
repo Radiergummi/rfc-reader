@@ -49,7 +49,7 @@ public enum PublicationStatus: String, Sendable, Codable, CaseIterable, Hashable
 }
 
 /// The publication stream an RFC came through.
-public enum Stream: String, Sendable, Codable, CaseIterable, Hashable {
+public enum PublicationStream: String, Sendable, Codable, CaseIterable, Hashable {
   case ietf = "IETF"
   case irtf = "IRTF"
   case iab = "IAB"
@@ -276,7 +276,7 @@ public struct RFCMetadata: Hashable, Sendable, Codable, Identifiable {
   public var updatedBy: [DocumentID]
   public var currentStatus: PublicationStatus
   public var publicationStatus: PublicationStatus
-  public var stream: Stream
+  public var stream: PublicationStream
   public var area: String?
   public var workingGroup: String?
   public var errataURL: URL?
@@ -299,7 +299,7 @@ public struct RFCMetadata: Hashable, Sendable, Codable, Identifiable {
     updatedBy: [DocumentID] = [],
     currentStatus: PublicationStatus = .unknown,
     publicationStatus: PublicationStatus = .unknown,
-    stream: Stream = .legacy,
+    stream: PublicationStream = .legacy,
     area: String? = nil,
     workingGroup: String? = nil,
     errataURL: URL? = nil,

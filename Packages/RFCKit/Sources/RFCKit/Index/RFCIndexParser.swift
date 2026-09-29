@@ -58,7 +58,7 @@ private final class Reader: XMLEvents {
     var updatedBy: [DocumentID] = []
     var currentStatus: PublicationStatus = .unknown
     var publicationStatus: PublicationStatus = .unknown
-    var stream: Stream = .legacy
+    var stream: PublicationStream = .legacy
     var area: String?
     var workingGroup: String?
     var errataURL: URL?
@@ -165,7 +165,7 @@ private final class Reader: XMLEvents {
     case "current-status": entry.currentStatus = PublicationStatus(rawValue: value) ?? .unknown
     case "publication-status":
       entry.publicationStatus = PublicationStatus(rawValue: value) ?? .unknown
-    case "stream": entry.stream = Stream(rawValue: value) ?? .legacy
+    case "stream": entry.stream = PublicationStream(rawValue: value) ?? .legacy
     case "area": entry.area = value.isEmpty ? nil : value
     case "wg_acronym": entry.workingGroup = value.isEmpty ? nil : value
     case "errata-url": entry.errataURL = URL(string: value)

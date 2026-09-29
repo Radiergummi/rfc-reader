@@ -9,7 +9,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
   case downloaded
   case standards
   case bestCurrentPractice
-  case stream(RFCKit.Stream)
+  case stream(PublicationStream)
   case workingGroup(String)
   case series(DocumentID)
   /// A collection the reader made (#349). Its name is the collection's and not the
@@ -102,7 +102,7 @@ public enum LibraryFilter: Hashable, Identifiable, Sendable {
     let fixed: [LibraryFilter] = [
       .all, .recent, .bookmarks, .downloaded, .standards, .bestCurrentPractice,
     ]
-    let streams = RFCKit.Stream.allCases.map(LibraryFilter.stream)
+    let streams = PublicationStream.allCases.map(LibraryFilter.stream)
     if let match = (fixed + streams).first(where: {
       $0.title(in: .empty).caseInsensitiveCompare(name) == .orderedSame
     }) {

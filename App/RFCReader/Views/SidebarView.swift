@@ -131,7 +131,7 @@ struct SidebarView: View {
       row(.all)
       row(.standards)
       row(.bestCurrentPractice)
-      ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
+      ForEach([PublicationStream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
         row(.stream(stream))
       }
     }

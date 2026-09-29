@@ -102,14 +102,14 @@ public enum SearchQuery {
   }
 
   /// The `stream:` spelling of a stream.
-  static func spelling(of stream: Stream) -> String {
+  static func spelling(of stream: PublicationStream) -> String {
     stream.rawValue.lowercased()
   }
 
   /// The stream a `stream:` value names.
-  static func stream(spelled spelling: some StringProtocol) -> Stream? {
+  static func stream(spelled spelling: some StringProtocol) -> PublicationStream? {
     let spelling = spelling.lowercased()
-    return Stream.allCases.first { Self.spelling(of: $0) == spelling }
+    return PublicationStream.allCases.first { Self.spelling(of: $0) == spelling }
   }
 
   /// The one value `has:` takes.
@@ -129,7 +129,7 @@ public enum SearchQuery {
       words.append(word(.status, current.name))
     }
     if let author = filters.author { words.append(word(.author, author)) }
-    words += Stream.allCases.filter(filters.streams.contains).map {
+    words += PublicationStream.allCases.filter(filters.streams.contains).map {
       word(.stream, spelling(of: $0))
     }
     if let years = filters.yearRange {
@@ -199,7 +199,7 @@ public enum SearchQuery {
       // A long spelling completes to the short value it means.
       case .status:
         StatusValue.all.filter { $0.spellings.contains { $0.hasPrefix(typed) } }.map(\.name)
-      case .stream: Stream.allCases.map(spelling(of:)).filter { $0.hasPrefix(typed) }
+      case .stream: PublicationStream.allCases.map(spelling(of:)).filter { $0.hasPrefix(typed) }
       case .has: [xmlValue].filter { $0.hasPrefix(typed) }
       case .author, .year: []
       }

@@ -3,7 +3,7 @@ import Foundation
 /// Filters that can be combined with a free-text query.
 public struct SearchFilters: Sendable, Hashable {
   public var statuses: Set<PublicationStatus> = []
-  public var streams: Set<Stream> = []
+  public var streams: Set<PublicationStream> = []
   public var workingGroup: String?
   public var author: String?
   public var yearRange: ClosedRange<Int>?
