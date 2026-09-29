@@ -206,7 +206,7 @@ struct IndexSearchTests {
     #expect(xmlOnly.allSatisfy { $0.rfc.hasXMLSource })
   }
 
-  /// The filters normalise their own text, so a hand-built filter matches like a
+  /// The filters normalize their own text, so a hand-built filter matches like a
   /// parsed one: the prepared fields it is matched against are lowercased.
   @Test func `a text filter value is stored lowercased`() {
     var filters = SearchFilters()
@@ -214,6 +214,22 @@ struct IndexSearchTests {
     filters.author = "Fielding"
     #expect(filters.workingGroup == "httpbis")
     #expect(filters.author == "fielding")
+  }
+
+  /// A hand-built filter in mixed case narrows the search as the typed one does.
+  /// Only the working group depends on the setter's lowercasing here: the author
+  /// query folds its own value when it is prepared.
+  @Test func `a hand-built mixed-case filter finds what a typed one does`() throws {
+    let search = IndexSearch(index: try Fixtures.sampleIndex())
+    var filters = SearchFilters()
+    filters.workingGroup = "HTTPBIS"
+    filters.author = "Fielding"
+    let handBuilt = search.search(text: "", filters: filters, limit: .max)
+    #expect(!handBuilt.isEmpty)
+    #expect(handBuilt.allSatisfy { $0.rfc.workingGroup?.lowercased() == "httpbis" })
+    #expect(handBuilt.allSatisfy { $0.rfc.authors.contains { $0.name.contains("Fielding") } })
+    let typed = search.search("wg:httpbis author:fielding", limit: .max)
+    #expect(handBuilt.map(\.rfc.number) == typed.map(\.rfc.number))
   }
 
   /// A working group matches as a whole name, and an author as part of one, as they
