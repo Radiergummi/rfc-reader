@@ -417,19 +417,61 @@ public struct LegacyTextParser: Sendable {
     -> [BlockDiagnostics]
   {
     let prepared = prepared(text, title: title)
+    var locator = SourceLocator(text)
     return prepared.sections.flatMap { section in
       let anchor = section.heading?.anchor ?? ""
       return section.blocks.map { block in
-        BlockDiagnostics(
+        let lines = locator.locate(block.lines)
+        return BlockDiagnostics(
           section: anchor,
           firstLine: String(block.firstLine.trimmingCharacters(in: .whitespaces).prefix(80)),
           lineCount: block.lines.count,
           // A catalogue is a list too, offered the block before the prose test.
           claimedByList: listItems(block.lines, marker: listMarker(of: block.lines)) != nil
             || catalogueEntries(block.lines) != nil,
-          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent)
+          diagnosis: diagnose(block.lines, maxIndent: prepared.proseIndent),
+          startLine: lines.lowerBound, endLine: lines.upperBound
         )
       }
+    }
+  }
+
+  /// Finds blocks in the source they came from, in document order.
+  ///
+  /// A block's lines are source lines, depaginated but otherwise as given: control
+  /// characters removed, tabs expanded, trailing space trimmed, which is how the source
+  /// is read here too. Each block starts at the next source line equal to its first,
+  /// and its other lines follow in order, past at most a page's furniture between two
+  /// of them. Found once per diagnosis, rather than carried through depagination and
+  /// segmentation, which are the parser's hot path.
+  private struct SourceLocator {
+    private let lines: [String]
+    private var cursor = 0
+
+    init(_ text: String) {
+      lines = removingControlCharacters(text).replacingOccurrences(of: "\r\n", with: "\n")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map {
+          String($0).replacingOccurrences(of: "\u{0C}", with: "").expandingTabs()
+            .trimmingTrailingWhitespace()
+        }
+    }
+
+    /// The 1-based source lines of `block`, or `0...0` for one not found.
+    mutating func locate(_ block: [String]) -> ClosedRange<Int> {
+      guard let first = block.first,
+        let start = lines[cursor...].firstIndex(of: first)
+      else { return 0...0 }
+      var end = start
+      for line in block.dropFirst() {
+        // Page furniture between two lines of a block: a footer, a form feed, a
+        // running header and the blanks around them.
+        let window = lines[(end + 1)..<min(end + 12, lines.count)]
+        guard let next = window.firstIndex(of: line) else { break }
+        end = next
+      }
+      cursor = end + 1
+      return (start + 1)...(end + 1)
     }
   }
 
@@ -1904,6 +1946,7 @@ public struct LegacyTextParser: Sendable {
     -> ProseDiagnostics
   {
     var diagnosis = ProseDiagnostics()
+    diagnosis.indentLimit = maxIndent
     guard let first = lines.first else {
       diagnosis.rejections = [.noLines]
       return diagnosis

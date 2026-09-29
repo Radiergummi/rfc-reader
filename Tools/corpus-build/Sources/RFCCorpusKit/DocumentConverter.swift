@@ -11,10 +11,16 @@ public struct DocumentConverter: Sendable {
   public var diagnosesProse: Bool
   /// Whether to count the lines dropped as page furniture into the report.
   public var countsFurniture: Bool
+  /// Whether to collect the blocks on the prose test's decision boundary. Diagnosing
+  /// costs what `diagnosesProse` does.
+  public var samplesBoundary: Bool
 
-  public init(diagnosesProse: Bool = false, countsFurniture: Bool = false) {
+  public init(
+    diagnosesProse: Bool = false, countsFurniture: Bool = false, samplesBoundary: Bool = false
+  ) {
     self.diagnosesProse = diagnosesProse
     self.countsFurniture = countsFurniture
+    self.samplesBoundary = samplesBoundary
   }
 
   /// One converted document.
@@ -24,6 +30,8 @@ public struct DocumentConverter: Sendable {
     public var report: DocumentReport
     /// Nil unless `diagnosesProse`.
     public var prose: ProseReport?
+    /// Nil unless `samplesBoundary`.
+    public var boundary: [BoundarySample.Entry]?
   }
 
   /// Converts the text of the document `stem` (`rfc2119`, from `rfc2119.txt`).
@@ -40,6 +48,11 @@ public struct DocumentConverter: Sendable {
     }
     let prose =
       diagnosesProse ? ProseReport(diagnosing: text, id: stem, title: metadata?.title) : nil
+    let boundary =
+      samplesBoundary
+      ? BoundarySample.entries(
+        for: LegacyTextParser.proseDiagnostics(for: text, title: metadata?.title), in: text,
+        document: stem) : nil
     let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
     let serializer = RFCXMLSerializer(
       options: .init(
@@ -62,7 +75,7 @@ public struct DocumentConverter: Sendable {
     } catch {
       report.warnings.append("generated XML does not parse: \(error)")
     }
-    return Conversion(xml: xml, report: report, prose: prose)
+    return Conversion(xml: xml, report: report, prose: prose, boundary: boundary)
   }
 
   /// The text of a legacy RFC file. 34 pre-2000 RFCs are Latin-1 / Windows-1252 rather

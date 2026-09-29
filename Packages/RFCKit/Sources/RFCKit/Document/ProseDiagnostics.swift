@@ -38,6 +38,10 @@ public struct ProseDiagnostics: Sendable {
   /// pre-1990 RFCs indent a paragraph's first line and set the rest at the margin.
   public var indent: Int = 0
 
+  /// The deepest a paragraph may start in this document, which `indent` was judged
+  /// against: the margin of an `indentTooDeep` refusal is taken from it (#43).
+  public var indentLimit: Int = 0
+
   /// How far the first line is offset from `indent`. May be negative.
   public var firstLineIndent: Int = 0
 
@@ -120,15 +124,22 @@ public struct BlockDiagnostics: Sendable {
   public var claimedByList: Bool
   /// The verdict and its reasons.
   public var diagnosis: ProseDiagnostics
+  /// The source lines the block came from, 1-based and inclusive, counted in the text
+  /// as given: where a sample of blocks points, without copying them (#43). A block
+  /// broken by page furniture spans the furniture too.
+  public var startLine: Int
+  public var endLine: Int
 
   public init(
     section: String, firstLine: String, lineCount: Int, claimedByList: Bool,
-    diagnosis: ProseDiagnostics
+    diagnosis: ProseDiagnostics, startLine: Int, endLine: Int
   ) {
     self.section = section
     self.firstLine = firstLine
     self.lineCount = lineCount
     self.claimedByList = claimedByList
     self.diagnosis = diagnosis
+    self.startLine = startLine
+    self.endLine = endLine
   }
 }
