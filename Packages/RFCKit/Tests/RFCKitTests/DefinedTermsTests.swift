@@ -91,6 +91,33 @@ struct DefinedTermsTests {
     #expect(Set(DefinedTerms.defined(in: document).keys) == ["Widget", "Gadget"])
   }
 
+  /// A section titled only `Definitions` can cover a specification's body, its
+  /// subsections the protocol's variables or commands: its own lists define terms, and
+  /// its subsections' only when their own titles name terms.
+  @Test func `a section that only opens with Definitions passes nothing to its subsections`() {
+    func list(_ term: String) -> Block {
+      .definitionList([
+        DefinitionItem(
+          term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
+      ])
+    }
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Widgets"),
+      sections: [
+        Section(
+          anchor: "definitions", title: "Definitions", blocks: [list("Widget")],
+          subsections: [
+            Section(anchor: "variables", title: "Per-Widget Variables", blocks: [list("Count")]),
+            Section(anchor: "terms", title: "Other Terms", blocks: [list("Gadget")]),
+          ]),
+        Section(
+          anchor: "conventions", title: "Conventions and Definitions", blocks: [],
+          subsections: [Section(anchor: "roles", title: "Roles", blocks: [list("Sender")])]),
+      ],
+      source: .xml)
+    #expect(Set(DefinedTerms.defined(in: document).keys) == ["Widget", "Gadget", "Sender"])
+  }
+
   /// A document can indent its terminology by setting the list in a list item.
   @Test func `a definition list set in a list item still defines terms`() {
     let item = DefinitionItem(

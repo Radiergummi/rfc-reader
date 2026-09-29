@@ -32,21 +32,26 @@ public struct DefinedTerm: Sendable, Hashable, Codable {
 /// The first definition of a term wins, except that an index entry with no definition
 /// text, one placed directly in a section, gives way to any entry that has one.
 enum DefinedTerms {
-  /// Whether a section titled `title` defines terms: one whose title holds Terminology,
-  /// Glossary or the noun Terms (`New Terms`, `Terms Used in This Document`), one titled
-  /// `Conventions and` Definitions, Terminology, Terms or Acronyms, one opening with
-  /// Definitions or titled `Definition of Terms`, or one whose title lists Definitions as
-  /// an item of its own, as in `Symbols, Abbreviations, and Definitions`. A bare
-  /// `Conventions`, `Notational Conventions` or `Conventions and Notation` describes
-  /// notation, not terms. Definitions qualified by a word before it (`Field`, `Option`,
-  /// and `General` or `Technical` as readily) are a format's parts as often as a
-  /// document's terms, and are left out.
+  /// Whether a section titled `title` defines terms: one opening with Definitions, or
+  /// one whose title names terms for its subsections as well (`passesTermsOn`).
   static func namesTerms(_ title: String) -> Bool {
-    let lowered = title.lowercased()
-    let words = lowered.split(whereSeparator: { !$0.isLetter }).map(String.init)
-    if words.contains("terminology") || words.contains("glossary") || words.contains("terms")
-      || words.first == "definitions"
-    {
+    words(of: title).first == "definitions" || passesTermsOn(title)
+  }
+
+  /// Whether a section titled `title` defines terms, and its subsections with it: one
+  /// whose title holds Terminology, Glossary or the noun Terms (`New Terms`, `Definition
+  /// of Terms`), one titled `Conventions and` Definitions, Terminology, Terms or
+  /// Acronyms, or one whose title lists Definitions as an item of its own, as in
+  /// `Symbols, Abbreviations, and Definitions`. A title that only opens with Definitions
+  /// names terms for its own lists but passes nothing on, because it can head a
+  /// specification's body, its subsections the protocol's variables (RFC 8985) or
+  /// commands (RFC 9208). A bare `Conventions`, `Notational Conventions` or
+  /// `Conventions and Notation` describes notation, not terms. Definitions qualified by a
+  /// word before it (`Field`, `Option`, and `General` or `Technical` as readily) are a
+  /// format's parts as often as a document's terms, and are left out.
+  static func passesTermsOn(_ title: String) -> Bool {
+    let words = words(of: title)
+    if words.contains("terminology") || words.contains("glossary") || words.contains("terms") {
       return true
     }
     if words.starts(with: ["conventions", "and"]), words.count > 2,
@@ -54,18 +59,19 @@ enum DefinedTerms {
     {
       return true
     }
-    for (position, word) in words.enumerated()
-    where ["definition", "definitions"].contains(word)
-      && words.dropFirst(position + 1).starts(with: ["of", "terms"])
-    {
-      return true
-    }
     // The title as a list: `Symbols, Abbreviations, and Definitions` has three items.
-    let items = lowered.split(separator: ",").flatMap { $0.components(separatedBy: " and ") }
-    return items.contains { item in
-      let itemWords = item.split(whereSeparator: { !$0.isLetter })
-      return itemWords == ["definitions"] || itemWords == ["and", "definitions"]
+    let items = title.lowercased().split(separator: ",").flatMap {
+      $0.components(separatedBy: " and ")
     }
+    return items.count > 1
+      && items.contains { item in
+        let itemWords = item.split(whereSeparator: { !$0.isLetter })
+        return itemWords == ["definitions"] || itemWords == ["and", "definitions"]
+      }
+  }
+
+  private static func words(of title: String) -> [String] {
+    title.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init)
   }
 
   /// Every term the document defines: `indexed` first, from primary index entries, then
@@ -85,11 +91,12 @@ enum DefinedTerms {
     indexed.filter(\.definition.isEmpty).forEach(record)
     var undefined = Set(found.values.filter(\.definition.isEmpty).map(\.term))
     // A subsection of a section titled for its terms is one of its parts (`Core Terms`
-    // under Terminology), whatever its own title says.
+    // under Terminology), whatever its own title says, unless that title only opens
+    // with Definitions.
     func read(_ sections: [Section], inherited: Bool) {
       for section in sections {
-        let namesTerms = inherited || namesTerms(section.title.plainText)
-        if namesTerms {
+        let title = section.title.plainText
+        if inherited || namesTerms(title) {
           for items in definitionLists(in: section.blocks) {
             for item in items {
               let defined = DefinedTerm(
@@ -103,7 +110,7 @@ enum DefinedTerms {
             }
           }
         }
-        read(section.subsections, inherited: namesTerms)
+        read(section.subsections, inherited: inherited || passesTermsOn(title))
       }
     }
     read(document.sections, inherited: false)
