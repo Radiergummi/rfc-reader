@@ -47,20 +47,26 @@ public struct NavigationHistory: Sendable {
     arrivedByGoing = false
   }
 
-  /// Go to `place`, recording `position` as the spot being left behind.
+  /// Go to `place`, recording `position` as the spot being left behind, and return
+  /// the place to arrive at: nil when there is nowhere to move.
   ///
   /// Re-opening the document and section already on screen is not a navigation:
   /// clicking the same link twice must not stack two identical entries to walk back
-  /// through. Striking out in a new direction drops whatever was ahead, as a browser
+  /// through. It is still a place to arrive at when it names a section, because the
+  /// entry records where the tab was sent, not where the reader has scrolled since
+  /// (#287). Striking out in a new direction drops whatever was ahead, as a browser
   /// does.
-  public mutating func go(to place: HistoryEntry, leaving position: String? = nil) {
+  @discardableResult
+  public mutating func go(to place: HistoryEntry, leaving position: String? = nil)
+    -> HistoryEntry?
+  {
     defer { isHidden = false }
-    guard place != current else { return }
+    guard place != current else { return place.section == nil ? nil : place }
     // Reopening the hidden document from its row, which names no section: back
     // where it was, and not a jump to offer a way back from.
     if isHidden, place.section == nil, place.id == current?.id {
       arrivedByGoing = false
-      return
+      return nil
     }
     if var previous = current {
       previous.section = position ?? previous.section
@@ -69,6 +75,7 @@ public struct NavigationHistory: Sendable {
     forward.removeAll()
     current = place
     arrivedByGoing = true
+    return place
   }
 
   /// Step back, recording `position` as the spot being left behind so that going
