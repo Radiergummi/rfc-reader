@@ -36,6 +36,20 @@ struct BibliographyTests {
     #expect(groups.kind(of: .anchor("section-2")) == .unknown)
   }
 
+  /// A citation of a `<referencegroup>`'s member names the document the member is,
+  /// which no entry's own series names; the entry the parser resolved it to is the
+  /// group's, and so is the kind.
+  @Test func `a citation has the kind of the entry it resolved to`() {
+    let group = Reference(
+      anchor: "BCP26", title: "BCP 26 consists of RFC 8126",
+      seriesInfo: [
+        SeriesInfo(name: "BCP", value: "26")
+      ])
+    let groups = [ReferenceGroup(title: "Normative References", entries: [group])]
+    #expect(groups.kind(of: .document(.rfc(8126), section: nil, entry: "BCP26")) == .normative)
+    #expect(groups.kind(of: .document(.rfc(8126), section: nil)) == .unknown)
+  }
+
   /// A document that lists an entry in both counts it as part of the specification.
   @Test func `an entry in both lists is normative`() {
     let entry = Reference(

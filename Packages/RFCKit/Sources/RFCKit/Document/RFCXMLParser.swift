@@ -67,11 +67,21 @@ public struct RFCXMLParser: Sendable {
     }
   }
 
+  /// A citable reference anchor's document, and the anchor of the bibliography
+  /// entry a citation of it resolves to.
+  private struct CitedEntry {
+    let id: DocumentID
+    /// The anchor itself, except for a `<referencegroup>`'s member, whose entry in
+    /// the list is the group's (#184).
+    let entry: String
+  }
+
   // MARK: - Builder
 
   private struct Builder {
-    /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes.
-    let referenceTargets: [String: DocumentID]
+    /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes and the entry
+    /// a citation of it resolves to.
+    let referenceTargets: [String: CitedEntry]
 
     /// Authored XML marks most of its citations with `<xref>`, but prose still
     /// says "RFC 3986" in the middle of a sentence, and nothing in the schema
@@ -84,38 +94,41 @@ public struct RFCXMLParser: Sendable {
     /// inventing links the source declined to make.
     let linker: InlineLinker
 
-    init(referenceTargets: [String: DocumentID]) {
+    init(referenceTargets: [String: CitedEntry]) {
       self.referenceTargets = referenceTargets
       self.linker = InlineLinker(
         sectionNumbers: [],
-        referenceTargets: referenceTargets.mapValues { .document($0, section: nil) }
+        referenceTargets: referenceTargets.mapValues {
+          .document($0.id, section: nil, entry: $0.entry)
+        }
       )
     }
 
     /// Every reference anchor below `element`, which has to be read before the
     /// body so a cross reference in it resolves to a document.
-    static func referenceTargets(in element: XMLTree.Element) -> [String: DocumentID] {
-      var targets: [String: DocumentID] = [:]
-      func walk(_ element: XMLTree.Element) {
+    static func referenceTargets(in element: XMLTree.Element) -> [String: CitedEntry] {
+      var targets: [String: CitedEntry] = [:]
+      func walk(_ element: XMLTree.Element, group: String?) {
         for child in element.elements {
           switch child.name {
           case "reference":
             if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
-              targets[anchor] = id
+              targets[anchor] = CitedEntry(id: id, entry: group ?? anchor)
             }
           case "referencegroup":
-            if let anchor = child["anchor"], let id = DocumentID(label: anchor) {
-              targets[anchor] = id
+            let anchor = child["anchor"]
+            if let anchor, let id = DocumentID(label: anchor) {
+              targets[anchor] = CitedEntry(id: id, entry: anchor)
             }
-            walk(child)
+            walk(child, group: anchor)
           case "middle", "back", "section", "references":
-            walk(child)
+            walk(child, group: group)
           default:
             break
           }
         }
       }
-      walk(element)
+      walk(element, group: nil)
       return targets
     }
 
@@ -715,8 +728,9 @@ public struct RFCXMLParser: Sendable {
       let sectionFormat =
         CrossReference.SectionFormat(rawValue: element["sectionFormat"] ?? "") ?? .of
 
-      if let id = referenceTargets[targetAnchor] {
-        let target = CrossReference.Target.document(id, section: section)
+      if let cited = referenceTargets[targetAnchor] {
+        let id = cited.id
+        let target = CrossReference.Target.document(id, section: section, entry: cited.entry)
         // Words the source put inside the link stand in for the label -- unless
         // they are the series spelling its own name, which is the label we
         // would have composed anyway.

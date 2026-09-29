@@ -54,12 +54,15 @@ public struct ReferenceKinds: Sendable {
     }
   }
 
-  /// The kind of the list holding the entry `target` names, found by anchor or by
-  /// the document the entry names; unknown where no list holds it or no list says.
+  /// The kind of the list holding the entry `target` names: found by anchor, by
+  /// the entry the parser resolved a document citation to, or else by the document
+  /// an entry names; unknown where no list holds it or no list says.
   public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
     switch target {
-    case .anchor(let anchor): byAnchor[anchor] ?? .unknown
-    case .document(let id, _): byDocument[id] ?? .unknown
+    case .anchor(let anchor):
+      byAnchor[anchor] ?? .unknown
+    case .document(let id, _, let entry):
+      entry.flatMap { byAnchor[$0] } ?? byDocument[id] ?? .unknown
     }
   }
 

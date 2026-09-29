@@ -28,7 +28,7 @@ struct ReferencePreview: View {
   static let width: CGFloat = 280
 
   private var documentID: DocumentID? {
-    guard case .document(let id, _) = reference.target else { return nil }
+    guard case .document(let id, _, _) = reference.target else { return nil }
     return id
   }
 

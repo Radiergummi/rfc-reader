@@ -65,7 +65,7 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
     for inline in proseInlines {
-      if case .crossReference(let xref) = inline, case .document(let id, _) = xref.target {
+      if case .crossReference(let xref) = inline, case .document(let id, _, _) = xref.target {
         seen.insert(id)
       }
     }
@@ -409,14 +409,22 @@ public struct ReferenceList: Sendable, Hashable, Codable {
     /// before about RFC 2200, and anything else a document calls its bibliography.
     case unknown
 
-    /// The kind a list's title names. The whole title is matched, numbering and a
-    /// trailing colon aside, because a title that merely contains the word says
-    /// nothing: the corpus has sections whose title ends in "and Normative
-    /// References" that are about the rule for citing them and list nothing.
+    /// The kind a list's title names. The whole title is matched, numbering, a
+    /// trailing colon and a trailing parenthetical aside, because a title that
+    /// merely contains the word says nothing: the corpus has sections whose title
+    /// ends in "and Normative References" that are about the rule for citing them
+    /// and list nothing. The parenthetical is how a list says how it is ordered,
+    /// as RFC 3543's two lists do, and leaves its kind what it was.
     public init(title: String) {
-      let words = title.lowercased()
+      let punctuation = CharacterSet(charactersIn: ":.").union(.whitespaces)
+      var trimmed = title.lowercased()
         .drop { $0.isNumber || $0 == "." || $0.isWhitespace }
-        .trimmingCharacters(in: CharacterSet(charactersIn: ":.").union(.whitespaces))
+        .trimmingCharacters(in: punctuation)
+      if trimmed.hasSuffix(")"), let opening = trimmed.lastIndex(of: "(") {
+        trimmed = String(trimmed[..<opening]).trimmingCharacters(in: punctuation)
+      }
+      let words =
+        trimmed
         .split(whereSeparator: \.isWhitespace)
         .joined(separator: " ")
       switch words {
@@ -501,7 +509,14 @@ public struct CrossReference: Sendable, Hashable, Codable {
     /// Another place in the same document, by anchor.
     case anchor(String)
     /// Another RFC, optionally a specific section within it.
-    case document(DocumentID, section: String?)
+    ///
+    /// `entry` is the anchor of the bibliography entry the citation resolved to, when
+    /// it resolved to one: what a citation's kind is read from (#184). It is not
+    /// always the anchor the source cites: a `<referencegroup>` is one entry in its
+    /// list, so a citation of RFC 8126 inside the group for BCP 26 names the group's
+    /// entry. Nil for a mention nothing in the bibliography matched, such as a bare
+    /// "RFC 3986" in prose.
+    case document(DocumentID, section: String?, entry: String? = nil)
   }
 
   /// How the source asked a section reference to be worded.
@@ -557,7 +572,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
     switch target {
     case .anchor(let anchor):
       return anchor
-    case .document(let id, let section):
+    case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
       let sectionLabel = Self.nonBreakingLabel("Section \(section)")
@@ -587,7 +602,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
   public var display: Display {
     // Words from the source, or a reference within this document: neither is ours
     // to restyle.
-    guard text == nil, case .document(let id, let section) = target else {
+    guard text == nil, case .document(let id, let section, _) = target else {
       return Display(text: label, chip: nil)
     }
     // `bare` is the source asking for the section number alone. Drawing "RFC 9110

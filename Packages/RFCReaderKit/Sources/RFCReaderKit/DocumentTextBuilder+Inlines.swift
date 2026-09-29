@@ -228,7 +228,7 @@ extension DocumentTextBuilder {
 
   func url(for xref: CrossReference) -> URL? {
     switch xref.target {
-    case .document(let id, let section):
+    case .document(let id, let section, _):
       return RFCLink(id: id, section: section).appURL
     case .anchor(let anchor):
       let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor

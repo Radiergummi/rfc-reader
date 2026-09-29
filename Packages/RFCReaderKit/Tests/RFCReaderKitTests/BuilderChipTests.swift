@@ -176,7 +176,7 @@ struct BuilderChipTests {
       guard value != nil,
         let box = built.text.attribute(.rfcReference, at: range.location, effectiveRange: nil)
           as? ReferenceBox,
-        case .document(let id, _) = box.reference.target
+        case .document(let id, _, _) = box.reference.target
       else { return }
       marks[id] =
         built.text.attribute(.rfcInformative, at: range.location, effectiveRange: nil) != nil
