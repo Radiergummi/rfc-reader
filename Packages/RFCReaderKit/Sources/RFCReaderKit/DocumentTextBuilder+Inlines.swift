@@ -77,6 +77,10 @@ extension DocumentTextBuilder {
       // model's to say — `CrossReference.display`, which `plainText` answers
       // from too, so the screen and a copied selection cannot disagree.
       let display = xref.display
+      if style.references == .plainText {
+        attributes[.font] = style.referenceFont(matching: font(in: base))
+        return NSAttributedString(string: display.text, attributes: attributes)
+      }
       guard let chip = display.chip else {
         return NSAttributedString(string: display.text, attributes: attributes)
       }

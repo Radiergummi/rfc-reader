@@ -126,8 +126,9 @@ nonisolated enum DocumentPDF {
       pages: pages, fragments: fragments, spans: spans, layout: layout, furniture: furniture)
   }
 
-  /// The reader's own fragment class, so a print has the cards, rules and chips the
-  /// screen has.
+  /// The reader's own fragment class, so a print has the cards and rules the screen
+  /// has. It has no chips: a paper build sets a reference as ordinary text
+  /// (`ReferenceStyle.plainText`).
   nonisolated private final class FragmentFactory: NSObject, NSTextLayoutManagerDelegate {
     func textLayoutManager(
       _ textLayoutManager: NSTextLayoutManager,
@@ -162,7 +163,6 @@ nonisolated enum DocumentPDF {
         for fragment in fragments[PrintPagination.spans(spans, on: page)] {
           let origin = layout.origin(of: fragment.layoutFragmentFrame.origin, on: page)
           fragment.draw(at: origin, in: context)
-          drawAttachments(of: fragment, at: origin)
         }
         context.restoreGState()
         context.endPDFPage()
@@ -170,24 +170,6 @@ nonisolated enum DocumentPDF {
     }
     context.closePDF()
     return data as Data
-  }
-
-  /// The chips' symbols. In a text view an attachment is a view of its own, which
-  /// the fragment leaves for the view to draw; there is no view here, so each one a
-  /// fragment would have handed to a view is drawn where that view would have been.
-  private static func drawAttachments(of fragment: NSTextLayoutFragment, at origin: CGPoint) {
-    for provider in fragment.textAttachmentViewProviders {
-      guard let image = provider.textAttachment?.image else { continue }
-      let frame = fragment.frameForTextAttachment(at: provider.location)
-        .offsetBy(dx: origin.x, dy: origin.y)
-      #if canImport(UIKit)
-        image.draw(in: frame)
-      #else
-        image.draw(
-          in: frame, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true,
-          hints: nil)
-      #endif
-    }
   }
 
   // MARK: - Drawing environment
@@ -206,8 +188,8 @@ nonisolated enum DocumentPDF {
     #endif
   }
 
-  /// `context` as the platform's current graphics context, which the attachments'
-  /// images draw into.
+  /// `context` as the platform's current graphics context, for drawing that reaches
+  /// for the current context rather than the one it is handed.
   private static func withCurrentContext(_ context: CGContext, _ body: () -> Void) {
     #if canImport(UIKit)
       UIGraphicsPushContext(context)

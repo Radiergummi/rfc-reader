@@ -101,12 +101,13 @@ public struct PrintLayout: Sendable, Equatable {
   }
 
   /// The style a document is built in for this paper: the print body size, set to
-  /// the page's column, with no links, since paper cannot follow one. The system's
+  /// the page's column, with no links, since paper cannot follow one, and its
+  /// references as ordinary text rather than chips. The system's
   /// text size is left at its default: it is a setting for the screen, and paper
   /// has one size.
   public var style: ReadingStyle {
     ReadingStyle(
       bodySize: Self.bodySize, measure: contentRect.width, lineHeightMultiple: 1.2,
-      emitsLinks: false)
+      emitsLinks: false, references: .plainText)
   }
 }
