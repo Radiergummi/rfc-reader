@@ -113,7 +113,7 @@ extension LegacyTextParser {
       let title = matched.trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
         number: number, title: title, isAppendix: true,
-        anchor: SectionAnchor.anchor(forSectionNumber: number))
+        anchor: SectionAnchor.anchor(forAppendixNumber: number))
     }
     // Unnumbered heading: "Abstract", "Security Considerations", "Author's Address".
     let firstWord = trimmed.split(separator: " ").first.map { String($0).lowercased() } ?? ""

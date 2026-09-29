@@ -138,6 +138,19 @@ struct LegacyTextParserHeadingsTests {
         })
   }
 
+  /// An appendix numbered like a section, `APPENDIX 3`, is named `appendix-3`, not
+  /// `section-3`: a document may have a section 3 as well, and `Section 3` in its
+  /// prose cites that one, never the appendix.
+  @Test func `an appendix numbered like a section is anchored as an appendix`() throws {
+    let heading = try #require(
+      LegacyTextParser.heading(from: "APPENDIX 3  Worked Examples", colonNumbered: false))
+    #expect(heading.isAppendix)
+    #expect(heading.anchor == "appendix-3")
+    let lettered = try #require(
+      LegacyTextParser.heading(from: "Appendix B. Examples", colonNumbered: false))
+    #expect(lettered.anchor == "appendix-B")
+  }
+
   /// `Appendix A: Title` is how about 150 legacy RFCs head an appendix (#200). The
   /// `Appendix` has to be there: without it a letter and a colon at column 0 is as
   /// often a question and its answer. The shapes the parser already knew keep reading

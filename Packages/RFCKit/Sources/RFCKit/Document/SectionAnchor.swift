@@ -16,6 +16,13 @@ enum SectionAnchor {
       ? "\(appendixPrefix)\(number)" : "\(sectionPrefix)\(number)"
   }
 
+  /// An appendix heading's anchor, whatever its number: `appendix-A.1`, and
+  /// `appendix-2` for `APPENDIX 2`, which `anchor(forSectionNumber:)` would give a
+  /// section's name.
+  static func anchor(forAppendixNumber number: String) -> String {
+    "\(appendixPrefix)\(number)"
+  }
+
   /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
   /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
   /// read as `1`, it named section 1.
