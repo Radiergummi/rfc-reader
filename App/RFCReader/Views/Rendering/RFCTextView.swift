@@ -31,6 +31,8 @@ struct RFCTextView: View {
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
+    hidesChrome: Bool = false,
+    onChromeHidden: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -48,6 +50,8 @@ struct RFCTextView: View {
       onLink: onLink,
       onToolbarTitle: onToolbarTitle,
       onSelectionChange: onSelectionChange,
+      hidesChrome: hidesChrome,
+      onChromeHidden: onChromeHidden,
       heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
@@ -100,6 +104,10 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
+  /// Whether reading on may hide the bars, and what to tell when it does or they
+  /// come back; iOS only, see `ReaderChrome`.
+  let hidesChrome: Bool
+  let onChromeHidden: (Bool) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -121,6 +129,10 @@ struct ReaderInputs {
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
     coordinator.onSelectionChange = onSelectionChange
+    #if canImport(UIKit)
+      coordinator.onChromeHidden = onChromeHidden
+      coordinator.setChromeEnabled(hidesChrome)
+    #endif
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
@@ -203,6 +215,13 @@ struct ReaderInputs {
       let host = UIHostingController(rootView: inputs.header)
       host.view.backgroundColor = .clear
       textView.addSubview(host.view)
+
+      // Shows and hides the bars; see `RFCTextViewCoordinator.tappedText(_:)`.
+      let tap = UITapGestureRecognizer(
+        target: context.coordinator, action: #selector(RFCTextViewCoordinator.tappedText(_:)))
+      tap.delegate = context.coordinator
+      textView.addGestureRecognizer(tap)
+      context.coordinator.chromeTap = tap
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host

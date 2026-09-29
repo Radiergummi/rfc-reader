@@ -26,6 +26,43 @@ import RFCReaderKit
       verticalScrollIndicatorInsets.bottom = safeAreaInsets.bottom
     }
 
+    /// Where the view's top edge is on screen, or nil outside a window. Measured
+    /// against the root view rather than the window: a sheet scales the view behind
+    /// it down, which moves its edge in the window without moving the text.
+    var topEdge: CGFloat? {
+      guard let window else { return nil }
+      return convert(bounds.origin, to: window.rootViewController?.view ?? window).y
+    }
+
+    /// The top edge and the width at the last layout; see `keepTextInPlace()`.
+    private var placed: (top: CGFloat, width: CGFloat)?
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      keepTextInPlace()
+    }
+
+    /// When the reader's bars go on iPhone (`ReaderChrome`), SwiftUI grows the
+    /// reader up into the top bar's place, and the text would move up with the
+    /// view's edge; when they come back, down again. The scroll offset moves by as
+    /// much instead, so the text stays where it is and only the strip the bar left
+    /// is new. Not when the width changed as well — a rotation — which re-wraps and
+    /// restores the place its own way (`RFCTextViewCoordinator.layOut`).
+    private func keepTextInPlace() {
+      guard let top = topEdge else {
+        placed = nil
+        return
+      }
+      let previous = placed
+      placed = (top, bounds.width)
+      guard let previous, previous.width == bounds.width, previous.top != top else { return }
+      let lowest = -adjustedContentInset.top
+      let highest = max(lowest, contentSize.height + adjustedContentInset.bottom - bounds.height)
+      let y = min(highest, max(lowest, contentOffset.y + top - previous.top))
+      guard y != contentOffset.y else { return }
+      contentOffset.y = y
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 

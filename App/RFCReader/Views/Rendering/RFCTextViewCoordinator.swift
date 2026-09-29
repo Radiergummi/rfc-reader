@@ -128,6 +128,22 @@ final class RFCTextViewCoordinator: NSObject {
   var heading: HeadingBox?
   private var lastToolbarTitle: ToolbarTitleState?
 
+  #if canImport(UIKit)
+    /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by
+    /// the text view's scrolls and taps, and reported through `onChromeHidden`.
+    var chrome = ReaderChrome()
+    /// Told when `chrome` hides or shows the bars. Deferred, as
+    /// `onVisibleAnchorChange` is: a jump reports from inside SwiftUI's update.
+    var onChromeHidden: (Bool) -> Void = { _ in }
+    private var reportedChromeHidden = false
+    /// The tap that shows and hides the bars, told apart from the text view's own
+    /// recognizers in the gesture delegate.
+    weak var chromeTap: UITapGestureRecognizer?
+    /// Whether the text had a selection when the tap began: that tap clears it, and
+    /// is not one for the bars.
+    private var tapClearsSelection = false
+  #endif
+
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
   /// main-actor hop, which `onDisappear` cannot afford to wait for.
@@ -450,6 +466,10 @@ final class RFCTextViewCoordinator: NSObject {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
     guard let offset = built?.anchors.offset(of: anchor) else { return }
+    #if canImport(UIKit)
+      chrome.jumped()
+      reportChrome()
+    #endif
     // Set here as well as by tracking, which does not run while a resize waits
     // for its rebuild: a jump in that window is where the rebuild must land.
     tracker.jumped(to: ReadingPlace(anchor: anchor, offset: 0))
@@ -724,6 +744,94 @@ final class RFCTextViewCoordinator: NSObject {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
+      followChrome(scrollView)
+    }
+  }
+
+  // MARK: - The bars on iPhone
+
+  extension RFCTextViewCoordinator: UIGestureRecognizerDelegate {
+    /// Whether the bars may go at all; see `ReaderChrome.isEnabled`.
+    func setChromeEnabled(_ enabled: Bool) {
+      guard chrome.isEnabled != enabled else { return }
+      chrome.isEnabled = enabled
+      reportChrome()
+    }
+
+    /// The scroll as `ReaderChrome` wants it. The position is the offset less the
+    /// view's top edge, which stays put while `ReaderTextView.keepTextInPlace()`
+    /// moves both for a bar coming or going.
+    private func followChrome(_ scrollView: UIScrollView) {
+      guard let top = (scrollView as? ReaderTextView)?.topEdge else { return }
+      let offset = scrollView.contentOffset.y
+      let insets = scrollView.adjustedContentInset
+      chrome.scrolled(
+        ReaderChrome.Scroll(
+          position: offset - top,
+          distanceFromTop: offset + insets.top,
+          distanceToEnd: scrollView.contentSize.height + insets.bottom
+            - scrollView.bounds.height - offset,
+          isUserDriven: scrollView.isTracking || scrollView.isDragging
+            || scrollView.isDecelerating))
+      reportChrome()
+    }
+
+    func reportChrome() {
+      let hidden = chrome.isHidden
+      guard hidden != reportedChromeHidden else { return }
+      reportedChromeHidden = hidden
+      Task { self.onChromeHidden(hidden) }
+    }
+
+    /// A tap on the text brings the bars back, or puts them away. Not a tap on a
+    /// link or a chip, which follows it; not one on the header, whose author chips
+    /// and banner links are buttons; and not one that clears a selection.
+    @objc func tappedText(_ tap: UITapGestureRecognizer) {
+      guard tap.state == .ended, !tapClearsSelection, let textView else { return }
+      let point = tap.location(in: textView)
+      guard point.y >= textView.textContainerInset.top else { return }
+      if let position = textView.closestPosition(to: point) {
+        let offset = textView.offset(from: textView.beginningOfDocument, to: position)
+        let length = textView.textLayoutManager?.attributedText?.length ?? 0
+        // Either side of the insertion point nearest the tap: a tap on a link's
+        // last character lands after it.
+        let onLink = [offset - 1, offset].contains {
+          (0..<length).contains($0) && link(at: $0) != nil
+        }
+        guard !onLink else { return }
+      }
+      chrome.tapped()
+      reportChrome()
+    }
+
+    /// Beside the text view's own recognizers, so a tap on a link still follows it
+    /// and a long press still previews it.
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      gestureRecognizer === chromeTap
+    }
+
+    /// After a double tap has failed: the first tap of one that selects a word is
+    /// not a tap for the bars.
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      guard gestureRecognizer === chromeTap,
+        let tap = otherGestureRecognizer as? UITapGestureRecognizer
+      else { return false }
+      return tap.numberOfTapsRequired > 1
+    }
+
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
+    ) -> Bool {
+      if gestureRecognizer === chromeTap {
+        tapClearsSelection = (textView?.selectedRange.length ?? 0) > 0
+      }
+      return true
     }
   }
 #else

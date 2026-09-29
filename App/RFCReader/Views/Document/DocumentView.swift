@@ -56,7 +56,20 @@ struct DocumentView: View {
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
+    /// Whether reading on has put the bars away; see `ReaderChrome`.
+    @State private var barsHidden = false
   #endif
+
+  /// Whether reading on may hide the bars: on iPhone, where they cost the most of
+  /// the screen, and not under VoiceOver, where a control that leaves may be gone
+  /// before it is reached. Beside other columns the bars are a small part of it.
+  private var hidesChrome: Bool {
+    #if os(macOS)
+      false
+    #else
+      isCompact && !voiceOverEnabled
+    #endif
+  }
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
   /// a main-actor hop. Anything that cannot afford that lag — persisting the
@@ -127,6 +140,11 @@ struct DocumentView: View {
             openURL: systemOpenURL, showsInspector: $showsInspector,
             exportDocument: exportDocument(as:), printDocument: printDocument)
         }
+        // Both bars, which leaves the status bar and the text between them.
+        .toolbarVisibility(barsHidden ? .hidden : .automatic, for: .navigationBar, .bottomBar)
+        // The original text has no reader to bring them back with a tap, and the
+        // reader made afresh on the way back starts with them showing.
+        .onChange(of: reader.showOriginal) { barsHidden = false }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
         // view's frame.
@@ -271,6 +289,8 @@ struct DocumentView: View {
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
         onSelectionChange: { reader.hasSelection = $0 },
+        hidesChrome: hidesChrome,
+        onChromeHidden: setBarsHidden,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -314,6 +334,13 @@ struct DocumentView: View {
       ProgressView("Loading \(id.displayName)…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+
+  /// On iOS only; the Mac's toolbar is the window's, and stays.
+  private func setBarsHidden(_ hidden: Bool) {
+    #if !os(macOS)
+      withAnimation(.snappy) { barsHidden = hidden }
+    #endif
   }
 
   #if !os(macOS)

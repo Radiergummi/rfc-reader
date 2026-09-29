@@ -355,6 +355,12 @@ What it cost was an unpinned install: CI ran `brew install xcodegen` and took wh
 
 `ENABLE_PREVIEWS` is off until the first `#Preview` exists. `DEVELOPMENT_TEAM` stays committed: it is only the maintainer's team ID, it is what lets `make run` sign out of the box, and everyone else builds with `CODE_SIGNING_ALLOWED=NO`, as CI does.
 
+## Decision: on iPhone, reading on hides the bars
+
+*Decided September 2026.* In a single column the top and bottom bars cover a fifth of the screen. Reading on puts both away, as Books and Safari do; a tap on the text, a scroll back, either end of the document and a jump to a place bring them back. When to do which is `ReaderChrome` in RFCReaderKit, a value fed by the text view's scrolls and taps; the view only applies it, with `.toolbarVisibility`. UIKit's `hidesBarsOnSwipe` and `hidesBarsOnTap` were not used: the navigation controller is SwiftUI's, and a tap on the text is usually a tap on a link. Only a scroll a finger makes hides or shows by its direction. A jump, a restored place, or the offset moving to keep the text still (below) moves where the next run is measured from and nothing else. Not beside other columns, and not under VoiceOver.
+
+The reader's top edge follows the top bar, because SwiftUI lays it out below it, so the bar going grows the view upward and would move the text with it. `ReaderTextView.keepTextInPlace()` moves the scroll offset by as much instead, so only the strip the bar left is new. `ReaderChrome` measures scrolls by the offset less that edge, which the correction does not change, so the correction is never taken for a scroll back. The bars go no nearer the top than `ReaderChrome.hideFloor`, which is more than the top bar is tall, so the correction never takes the offset past the top. Letting the reader run under the top bar, as it runs under the bottom one, was the alternative: it leaves the view still, but moves `contentOffset`'s origin away from the top of the content, which is what the anchor arithmetic is expressed in.
+
 ## Planned engines
 
 - **Search.** As decided above, served from SQLite FTS5 (via GRDB), with snippets from `snippet()`. Metadata search moves into the same database.
