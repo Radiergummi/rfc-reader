@@ -102,18 +102,9 @@ import SwiftUI
       } message: {
         Text(AppData.storeWarning.message)
       }
-      // Any navigation in this tab makes it the one an untargeted deep link lands in.
-      .onChange(of: navigation.selection) {
-        library.activate(navigation)
-        // Nothing on screen: the panel must not go on describing the document
-        // that was.
-        if navigation.selection == nil { reader.clear() }
-      }
+      .readerScene(library: library, navigation: navigation, reader: reader)
       .sheet(isPresented: $navigation.isShowingGoToSheet) {
         GoToDocumentSheet()
-      }
-      .sheet(item: $navigation.collectionEditor) { mode in
-        CollectionEditorSheet(mode: mode)
       }
       .focusedSceneValue(\.openDocumentAction) {
         navigation.isShowingGoToSheet = true
