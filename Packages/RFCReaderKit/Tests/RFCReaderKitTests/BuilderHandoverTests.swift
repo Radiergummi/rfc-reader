@@ -13,8 +13,6 @@ import Testing
 /// The contract `BuiltDocument`'s `@unchecked Sendable` rests on (#128): a build runs
 /// off the main actor, and nothing in what it returns can be written by anyone once
 /// it reaches the main actor.
-///
-/// Not `@MainActor`: the point is that the build does not need it.
 @Suite("Builder: handover")
 struct BuilderHandoverTests {
   /// The app's own shape: `DocumentView` builds off the main actor, in an
