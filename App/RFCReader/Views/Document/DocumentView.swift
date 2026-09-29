@@ -2,12 +2,6 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
-import os
-
-/// The reader's load and build decisions, at debug level: what a device's
-/// Console shows when a document fails to load or never finishes (#252, #253).
-private let readerLog = Logger(
-  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "reader")
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -18,14 +12,12 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
-    // Only the iOS toolbar reads these. On macOS the bookmark button and the
-    // external links are the window's, and a `@Query` left outside this guard ran a
-    // live fetch of every bookmark per open document that nothing read.
+    // Read here, above the reader's own `openURL`, which follows links in the app:
+    // the toolbar sits inside it, and reading it there opened rfc-editor.org's own
+    // page as the RFC it names.
     @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Query private var bookmarks: [Bookmark]
   #endif
   @AppStorage("readingFontSize") private var fontSize = 17.0
   @AppStorage("preferOriginalText") private var preferOriginalText = false
@@ -41,38 +33,14 @@ struct DocumentView: View {
 
   let id: DocumentID
 
-  @State private var document: RFCDocument?
-  /// The document as one attributed string plus its anchor index. Built only in
-  /// `rebuild()` — never in `body`, which would rebuild on every redraw.
-  @State private var built: BuiltDocument?
+  /// The fetch, the build, and the state they leave the reader in. The document is
+  /// built only there — never in `body`, which would rebuild on every redraw.
+  @State private var session: DocumentSession
   @State private var originalText: String?
-  @State private var loadError: String?
-  /// The fetch, and the build it triggers. Owned by the view rather than by
-  /// `.task`, which ties them to appearance: in a collapsed split view, a reader
-  /// pushed over one that was popped is told it disappeared the moment it appears,
-  /// and is never told it appeared again. `.task` cancelled the fetch on that
-  /// notice and nothing started it again, so the reader spun forever while on
-  /// screen (#252 was the same cancellation, shown as an error).
-  @State private var work = Work()
-  /// What the document on screen was built from, so a change that comes back to
-  /// where it started does not build it again.
-  @State private var builtInputs: BuildInputs?
 
-  /// The fetch and the build, and the inputs the build under way is for.
-  ///
-  /// A reference, so that it goes when the view's state does, which is when the
-  /// view is replaced by the next document's (`.id(selection)`): the old reader's
-  /// fetch and 650 ms build are cancelled then, rather than running on for a
-  /// document nobody will see. Disappearing is not going (#252).
-  private final class Work {
-    var load: Task<Void, Never>?
-    var build: Task<Void, Never>?
-    var buildingFor: BuildInputs?
-
-    deinit {
-      load?.cancel()
-      build?.cancel()
-    }
+  init(id: DocumentID) {
+    self.id = id
+    _session = State(initialValue: DocumentSession(id: id))
   }
   #if !os(macOS)
     @State private var showsInspector = false
@@ -93,9 +61,6 @@ struct DocumentView: View {
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
   @State private var heading = HeadingBox()
-  /// Anchor to section number, built once with the document. See
-  /// `onVisibleAnchorChange` for why it is not asked of the document each time.
-  @State private var sectionNumbers: [String: String] = [:]
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
   ///
@@ -121,37 +86,11 @@ struct DocumentView: View {
   }
 
   private var metadata: RFCMetadata? { library.metadata(id) }
-  #if !os(macOS)
-    private var isBookmarked: Bool {
-      let key = id.fileStem
-      return bookmarks.contains { $0.documentKey == key }
-    }
-  #endif
-
-  /// Everything a build depends on. One trigger, so the document is built in one
-  /// place whatever changed — a new RFC, a reading setting, or a window resize.
-  private struct BuildInputs: Equatable {
-    /// Distinguishes "not fetched yet" from "fetched", so finishing a fetch
-    /// triggers the build. `load()` only ever fetches into a view with no
-    /// document, so every load arrives as a false → true transition.
-    let hasDocument: Bool
-    let fontSize: Double
-    let underlineLinks: Bool
-    let textSize: DynamicTypeSize
-    let legibilityWeight: LegibilityWeight?
-    let column: CGFloat?
-
-    var style: ReadingStyle? {
-      column.map {
-        ReadingStyle(
-          bodySize: fontSize, measure: $0, underlinesLinks: underlineLinks, textSize: textSize)
-      }
-    }
-  }
 
   private var buildInputs: BuildInputs {
     BuildInputs(
-      hasDocument: document != nil, fontSize: fontSize, underlineLinks: underlineLinks,
+      hasDocument: session.state.document != nil, fontSize: fontSize,
+      underlineLinks: underlineLinks,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column)
   }
 
@@ -178,7 +117,13 @@ struct DocumentView: View {
           DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
         )
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .toolbar {
+          DocumentToolbar(
+            id: id, metadata: metadata, library: library, navigation: navigation,
+            reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
+            openURL: systemOpenURL, showsInspector: $showsInspector,
+            exportDocument: exportDocument(as:), printDocument: printDocument)
+        }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
         // view's frame.
@@ -225,7 +170,7 @@ struct DocumentView: View {
         }
       #endif
       .onAppear {
-        if work.load == nil { startLoad() }
+        if !session.hasStartedLoading { startLoad() }
         #if !os(macOS)
           reader.openPanel = { [isPresented = $showsInspector] in
             withAnimation(.snappy) { isPresented.wrappedValue = true }
@@ -233,16 +178,13 @@ struct DocumentView: View {
         #endif
       }
       .onChange(of: buildInputs, initial: true) {
-        // Appearing again fires this with nothing changed. A build already made,
-        // or under way, for these inputs is left to stand rather than cancelled
-        // and paid for twice.
-        guard buildInputs != builtInputs, buildInputs != work.buildingFor else {
-          trace("build skipped, inputs unchanged")
-          return
+        // Captures the reader, not the view; see `DocumentSession.startLoad`.
+        session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
+          // A replaced reader lives on through its fade (`ReaderHost`), and its
+          // rebuild must not list its sections under the next document.
+          guard navigation.selection == id else { return }
+          Self.listSections(of: document, in: built, into: reader)
         }
-        work.build?.cancel()
-        work.buildingFor = buildInputs
-        work.build = Task(name: "Build document") { await rebuild() }
       }
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
@@ -294,7 +236,7 @@ struct DocumentView: View {
       // On `hasDocument` rather than on appearing: loading a document clears
       // the title back to hidden after this view may already have appeared.
       .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
-    } else if let document, let built {
+    } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
         revisions: metadata.map { library.revisionsSummary(for: $0.id) })
@@ -314,7 +256,7 @@ struct DocumentView: View {
           // `document.section(anchor:)`, which searches the section tree
           // depth first — 305 sections on RFC 9110 — and this runs on every
           // section crossing while scrolling.
-          reader.currentSection = sectionNumbers[$0]
+          reader.currentSection = session.sectionNumbers[$0]
           // Recorded on the history entry when navigating away, so coming
           // back returns here rather than to the top of the document.
           navigation.visiblePosition = $0
@@ -348,17 +290,17 @@ struct DocumentView: View {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
-        } else if let saved = storedPosition()?.anchor,
+        } else if let saved = ReadingPositionStore.stored(for: id, in: modelContext)?.anchor,
           document.section(anchor: saved) != nil
         {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
-    } else if let loadError {
+    } else if let failure = session.state.failure {
       ContentUnavailableView {
         Label("Couldn't load \(id.displayName)", systemImage: "wifi.exclamationmark")
       } description: {
-        Text(loadError)
+        Text(failure.message)
       } actions: {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
@@ -370,122 +312,6 @@ struct DocumentView: View {
   }
 
   #if !os(macOS)
-    /// Share and More at the top; Contents and Cite leading the bottom bar, and
-    /// Bookmark trailing it as the view's primary action, the way Notes puts
-    /// Compose there (#342).
-    ///
-    /// The inline title has the lowest priority in the top bar, which is why only
-    /// two actions stay up there: five beside the back button left an iPhone's bar
-    /// no room for it, and it collapsed to "…" (#245).
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-      if let metadata {
-        ToolbarItem(placement: .primaryAction) {
-          shareLink(metadata)
-        }
-      }
-
-      ToolbarItem(placement: .primaryAction) {
-        moreMenu
-      }
-
-      ToolbarItemGroup(placement: .bottomBar) {
-        Button {
-          press(.navigation)
-        } label: {
-          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
-        }
-        // The same chord as the Mac's (#157).
-        .keyboardShortcut("i", modifiers: [.command, .option])
-
-        Button {
-          press(.info)
-        } label: {
-          Label("Info", systemImage: "info.circle")
-        }
-        .keyboardShortcut("i", modifiers: .command)
-
-        citeMenu
-      }
-
-      ToolbarSpacer(.flexible, placement: .bottomBar)
-
-      ToolbarItem(placement: .bottomBar) {
-        bookmarkButton
-      }
-    }
-
-    private var bookmarkButton: some View {
-      // Read once: a linear scan of the bookmarks, and the label wants it twice.
-      let bookmarked = isBookmarked
-      // A tap bookmarks, as before; a long press adds to a collection (#349).
-      return Menu {
-        AddToCollectionItems(
-          document: id, library: library, navigation: navigation, undoManager: undoManager)
-      } label: {
-        Label(
-          bookmarked ? "Remove Bookmark" : "Bookmark",
-          systemImage: bookmarked ? "bookmark.fill" : "bookmark")
-      } primaryAction: {
-        toggleBookmark()
-      }
-      .keyboardShortcut("d", modifiers: .command)
-    }
-
-    private var citeMenu: some View {
-      Menu {
-        ForEach(CitationStyle.allCases) { style in
-          Button(style.displayName) { copyCitation(style) }
-        }
-        Divider()
-        Button("Copy Link to Current Section") {
-          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-        }
-      } label: {
-        Label("Cite", systemImage: "quote.opening")
-      }
-    }
-
-    /// A pane's button: opens the inspector on that pane, swaps an open one to it,
-    /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
-    private func press(_ pane: InspectorPane) {
-      let result = InspectorPane.pressing(
-        pane, isOpen: showsInspector, showing: reader.pane)
-      reader.pane = result.pane
-      withAnimation(.snappy) { showsInspector = result.isOpen }
-    }
-
-    /// What is used least: the original text, and the document's pages elsewhere.
-    private var moreMenu: some View {
-      Menu {
-        Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
-        }
-
-        Section {
-          Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
-          if let url = metadata?.errataURL {
-            Button("Errata") { systemOpenURL(url) }
-          }
-          Button("Datatracker") { systemOpenURL(RFCEditorEndpoints.datatracker(id)) }
-          if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { systemOpenURL(draft) }
-          }
-        }
-
-        Section {
-          Menu("Export", systemImage: "square.and.arrow.down") {
-            ForEach(ExportFormat.allCases) { format in
-              Button(format.name) { exportDocument(as: format) }
-            }
-          }
-          Button("Print…", systemImage: "printer") { printDocument() }
-        }
-      } label: {
-        Label("More", systemImage: "ellipsis")
-      }
-    }
-
     /// Save to Files, with the document in `format` (#376). Laid out for the region's
     /// paper, as a print is.
     private func exportDocument(as format: ExportFormat) {
@@ -552,7 +378,7 @@ struct DocumentView: View {
           navigation.goBack()
         } label: {
           Label(
-            ReturnOffer.title(for: offer, sectionNumbers: sectionNumbers),
+            ReturnOffer.title(for: offer, sectionNumbers: session.sectionNumbers),
             systemImage: "arrow.uturn.backward")
         }
         .buttonStyle(.glass)
@@ -561,44 +387,15 @@ struct DocumentView: View {
       }
     }
 
-    private func shareLink(_ metadata: RFCMetadata) -> some View {
-      ShareLink(
-        item: RFCEditorEndpoints.infoPage(id),
-        subject: Text("\(id.displayName): \(metadata.title)"))
-    }
   #endif
 
   // MARK: - Actions
 
-  private func startLoad() {
-    work.load?.cancel()
-    work.load = Task(name: "Load document") { await load() }
-  }
-
-  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
-  /// opened before the index finished loading has none to show until it does. And
-  /// again once the document is here, whose own authors carry the contact details
-  /// their chips open.
-  private func deriveInfo() {
-    reader.info = metadata.map {
-      DocumentInfo(
-        $0, authors: document?.header.authors, in: library.index,
-        revisions: library.revisionsSummary(for: $0.id))
-    }
-  }
-
-  private func trace(_ event: String) {
-    readerLog.debug("\(id.displayName, privacy: .public): \(event, privacy: .public)")
-  }
-
-  /// Fetches. Building is `rebuild()`'s job, which this triggers by setting
-  /// `document`.
+  /// Fetches the document, with the reader's panel made ready for it first.
   ///
   /// Once per view, plus Try Again after a failure: the view is made per document
   /// (`.id(selection)`), and appearing again keeps what it loaded.
-  private func load() async {
-    trace("loading")
-    loadError = nil
+  private func startLoad() {
     // The scene's `ReaderState` must not carry the previous document's place into
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
@@ -606,75 +403,66 @@ struct DocumentView: View {
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
-    do {
-      let loaded = try await library.document(for: id)
+    // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
+    session.startLoad(from: library) { [reader, library, navigation, modelContext, id] loaded in
+      // Not over the next document's reader state; see `requestBuild`'s caller.
+      guard navigation.selection == id else { return }
       reader.groups = ReferenceGroup.groups(in: loaded)
-      sectionNumbers = Dictionary(
-        loaded.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
-        uniquingKeysWith: { first, _ in first }
-      )
-      document = loaded
-      deriveInfo()
+      reader.info = Self.info(for: id, authors: loaded.header.authors, in: library)
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
       // document is here, so one that failed to open is not listed as read.
-      markAsRead()
+      ReadingPositionStore.markAsRead(id, in: modelContext)
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
-      trace("loaded")
-    } catch {
-      trace("failed: \(error)")
-      loadError = error.localizedDescription
     }
   }
 
-  /// The one place the document is built.
+  /// What the Info pane shows. Again whenever the index loads or refreshes: a document
+  /// opened before the index finished loading has none to show until it does. And
+  /// again once the document is here, whose own authors carry the contact details
+  /// their chips open.
+  private func deriveInfo() {
+    reader.info = Self.info(
+      for: id, authors: session.state.document?.header.authors, in: library)
+  }
+
+  /// Static, so the load's callback can derive it without capturing the view.
+  private static func info(
+    for id: DocumentID, authors: [Author]?, in library: LibraryModel
+  ) -> DocumentInfo? {
+    library.metadata(id).map {
+      DocumentInfo(
+        $0, authors: authors, in: library.index,
+        revisions: library.revisionsSummary(for: $0.id))
+    }
+  }
+
+  /// The sections the storage actually holds, straight from the index the builder
+  /// just emitted — rather than re-deriving "is this a bibliography?" from the model
+  /// and hoping the two rules stay in step. A contents row that has no anchor is a
+  /// destination `scroll(to:)` cannot reach.
   ///
-  /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
-  /// the largest documents in the library — so a change to an *existing* document's
-  /// style waits that long to settle, and the next change cancels the pending
-  /// rebuild — every further tick of the font-size slider or the window's edge.
-  /// The first build of a document does not wait: there is nothing on screen to
-  /// disturb, and the column is already known, so it is built once and built right.
-  private func rebuild() async {
-    let inputs = buildInputs
-    guard let document, let style = inputs.style else { return }
-    trace("building")
-    if built != nil {
-      try? await Task.sleep(for: .milliseconds(650))
-    }
-    // Before the build, which cannot be interrupted once it starts.
-    guard !Task.isCancelled else { return }
-    // Off the main actor: this is string assembly and text measurement, and
-    // blocking the main thread for it is what made the font-size slider stutter.
-    let rebuilt = await Self.build(document, style: style)
-    guard !Task.isCancelled else {
-      trace("build cancelled, discarded")
-      return
-    }
-    built = rebuilt
-    builtInputs = inputs
-    trace("built")
-    // The sections the storage actually holds, straight from the index the
-    // builder just emitted — rather than re-deriving "is this a bibliography?"
-    // from the model and hoping the two rules stay in step. A contents row that
-    // has no anchor is a destination `scroll(to:)` cannot reach.
+  /// No place to restore here: the coordinator carries the line at the top of the
+  /// viewport into the new storage itself, which a section anchor — all this view is
+  /// told — could only approximate to the section's heading.
+  private static func listSections(
+    of document: RFCDocument, in built: BuiltDocument, into reader: ReaderState
+  ) {
     // Taken once: `AnchorIndex.sections` filters, sorts and re-indexes every
-    // anchor in the document, so asking inside the filter would rebuild the
-    // whole index once per section.
-    let sections = rebuilt.anchors.sections
+    // anchor in the document, so asking inside the filter would rebuild the whole
+    // index once per section.
+    let sections = built.anchors.sections
     reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
-    // No place to restore here: the coordinator carries the line at the top of
-    // the viewport into the new storage itself, which a section anchor — all
-    // this view is told — could only approximate to the section's heading.
   }
 
   /// Off the main actor, and structured: unlike a detached task, it inherits the
   /// caller's priority and its cancellation (#129). The builder never checks for
-  /// cancellation, so a build that has started runs to the end; `rebuild()` is
-  /// what discards a cancelled one. `DocumentPreview` builds through it too.
+  /// cancellation, so a build that has started runs to the end;
+  /// `DocumentSession.requestBuild` is what discards a canceled one.
+  /// `DocumentPreview` builds through it too.
   @concurrent
   static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
@@ -687,7 +475,7 @@ struct DocumentView: View {
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
   private func jump(toSection section: String?, animated: Bool) {
-    guard let section, let document else { return }
+    guard let section, let document = session.state.document else { return }
     scrollTarget = ReaderScrollTarget(
       anchor: document.anchor(forPlace: section), animated: animated)
   }
@@ -721,53 +509,13 @@ struct DocumentView: View {
     return true
   }
 
-  #if !os(macOS)
-    private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(
-        metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      BookmarkStore.toggle(id, title: title, in: modelContext)
-    }
-
-    private func copyCitation(_ style: CitationStyle) {
-      guard let metadata else { return }
-      Clipboard.copy(
-        DocumentActions.citation(metadata, section: reader.currentSection, style: style))
-    }
-  #endif
-
-  private func storedPosition() -> ReadingPosition? {
-    let key = id.fileStem
-    let descriptor = FetchDescriptor<ReadingPosition>(
-      predicate: #Predicate { $0.documentKey == key })
-    return try? modelContext.fetch(descriptor).first
-  }
-
-  /// Dates the entry as this document is opened, not only as it is left.
-  ///
-  /// `saveReadingPosition` runs from `onDisappear`, which is the one moment the
-  /// scroll anchor is known — but it left the document currently on screen carrying
-  /// the date it was last *closed*. Switching the sidebar away from Recently read
-  /// and back then sorted on that stale date and listed what you are reading now
-  /// below things you finished with earlier. Touching the anchor here would undo
-  /// the place being restored a moment later in the reader's `onAppear`, so only
-  /// the date is written.
-  private func markAsRead() {
-    if let existing = storedPosition() {
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: nil))
-    }
-  }
-
   private func saveReadingPosition() {
+    // Nothing to save for a document that never showed its text — one that failed
+    // to load, or was left before it did — and saving no place would erase the one
+    // stored, and list a document that never opened as read.
+    guard let anchor = lastVisibleAnchor.anchor else { return }
     // The anchor alone for now: the reader reports the section on screen, not the
     // offset within it, so a place is saved at the anchor itself (#152).
-    let place = lastVisibleAnchor.anchor.map { ReadingPlace(anchor: $0, offset: 0) }
-    if let existing = storedPosition() {
-      existing.place = place
-      existing.updatedAt = .now
-    } else {
-      modelContext.insert(ReadingPosition(document: id, place: place))
-    }
+    ReadingPositionStore.save(ReadingPlace(anchor: anchor, offset: 0), for: id, in: modelContext)
   }
 }
