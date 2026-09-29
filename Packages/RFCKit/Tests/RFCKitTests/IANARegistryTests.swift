@@ -3,6 +3,10 @@ import Testing
 
 @testable import RFCKit
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// IANA's registries, read into entries that name the RFC and section defining them
 /// (#175). The files here are hand-written in the shape IANA publishes, not copied
 /// from it.
