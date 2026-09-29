@@ -206,14 +206,23 @@ public enum SearchQuery {
   ]
 
   /// Every working group the index names, lowercased as `parseQuery` matches them,
-  /// most documents first. One with a space in its name ("NON WORKING GROUP") is
-  /// offered in quotes, as `written` writes it.
+  /// most documents first. One with a space in its name is offered in quotes, as
+  /// `written` writes it.
+  ///
+  /// "NON WORKING GROUP" comes last, whatever its count: it is where the index files
+  /// individual submissions, not a group, and it has more documents than any group.
   private static func workingGroups(in index: RFCIndex) -> [String] {
     var counts: [String: Int] = [:]
     for rfc in index.rfcs {
       guard let group = rfc.workingGroup?.lowercased() else { continue }
       counts[group, default: 0] += 1
     }
-    return counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
+    let groups = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+      .map(\.key)
+    return groups.filter { $0 != individualSubmissions }
+      + groups.filter { $0 == individualSubmissions }
   }
+
+  /// The working group the index files individual submissions under.
+  private static let individualSubmissions = "non working group"
 }
