@@ -81,6 +81,45 @@ struct BuilderBacklinkTests {
     #expect(SelectionText.plainText(of: selection) == "2. Two\n")
   }
 
+  /// Pressed on any of its characters, the chip answers with all of it: what its
+  /// list points at.
+  @Test func `the chip is found whole from any of its characters`() throws {
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let chip = try #require(chips(in: built.text).first)
+    for offset in chip.range.location..<NSMaxRange(chip.range) {
+      let found = try #require(built.text.backlinkChip(at: offset))
+      #expect(found.anchor == "two" && found.range == chip.range)
+    }
+    #expect(built.text.backlinkChip(at: chip.range.location - 1) == nil)
+  }
+
+  /// The headings rotor reads a heading's `.rfcAnchor` run as its label.
+  @Test func `the chip is not part of the heading`() throws {
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let chip = try #require(chips(in: built.text).first)
+    var run = NSRange(location: 0, length: 0)
+    let heading = built.text.attribute(
+      .rfcAnchor, at: chip.range.location - 1, longestEffectiveRange: &run,
+      in: NSRange(location: 0, length: built.text.length))
+    #expect(heading as? String == "two")
+    #expect(NSMaxRange(run) == chip.range.location)
+    #if canImport(UIKit)
+      #expect(
+        built.text.attribute(
+          .accessibilityTextHeadingLevel, at: chip.range.location, effectiveRange: nil) == nil)
+    #endif
+  }
+
+  /// A rich paste gets the heading's own words too, not the chip's arrow and link.
+  @Test func `a rich copy leaves the chip out`() throws {
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let heading = try Fixtures.offset(of: "2. Two", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: heading, length: "2. Two \u{FFFC}\u{2060}3\n".utf16.count))
+    let copied = SelectionText.withoutBacklinkChips(of: selection)
+    #expect(copied.string == "2. Two\n")
+  }
+
   /// What the chip's popover lists: each citing section by its heading, in document
   /// order, and the abstract by name.
   @Test func `the chip lists the citing sections by heading`() {

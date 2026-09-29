@@ -102,4 +102,18 @@ extension NSAttributedString {
     else { return nil }
     return (box, range)
   }
+
+  /// The heading's backlink chip at this character offset (#183): the section it
+  /// lists the backlinks of, and its whole extent, the space before it included —
+  /// what its list is anchored to. The attribute's run, as for a reference.
+  public func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+    guard offset >= 0, offset < length else { return nil }
+    var range = NSRange(location: 0, length: 0)
+    guard
+      let anchor = attribute(
+        .rfcBacklinks, at: offset, longestEffectiveRange: &range,
+        in: NSRange(location: 0, length: length)) as? String
+    else { return nil }
+    return (anchor, range)
+  }
 }

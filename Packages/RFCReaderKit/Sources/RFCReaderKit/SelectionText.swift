@@ -28,7 +28,7 @@ public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
   public static func plainText(of selection: NSAttributedString) -> String {
-    let attributed = withoutBacklinkChips(selection)
+    let attributed = withoutBacklinkChips(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -46,8 +46,9 @@ public enum SelectionText {
   }
 
   /// A heading's backlink chip counts what refers to the section (#183): the
-  /// reader's, not the document's words, so a copied heading is the heading alone.
-  private static func withoutBacklinkChips(_ selection: NSAttributedString) -> NSAttributedString {
+  /// reader's, not the document's words, so a copied heading is the heading alone,
+  /// in the rich flavors as in the plain one.
+  public static func withoutBacklinkChips(of selection: NSAttributedString) -> NSAttributedString {
     var chips: [NSRange] = []
     selection.enumerateAttribute(
       .rfcBacklinks, in: NSRange(location: 0, length: selection.length)

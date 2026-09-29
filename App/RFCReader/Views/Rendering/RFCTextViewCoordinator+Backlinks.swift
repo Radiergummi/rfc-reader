@@ -9,20 +9,13 @@ import SwiftUI
 
 // A heading's backlink chip (#183): a click or a tap lists the sections that refer
 // to the section, beside the chip, and a row goes there. What the list holds is
-// `BuiltDocument.backlinks(of:)`; this is only where it is shown.
+// `BuiltDocument.backlinks(of:)`, and where the chip is `backlinkChip(at:)`; this is
+// only where it is shown.
 
 extension RFCTextViewCoordinator {
-  /// The chip's extent around `offset`, space included: the attribute's run, not
-  /// the storage run, which is a third of the chip.
-  func backlinkChipRange(at offset: Int) -> NSRange? {
-    guard let text = textView?.textLayoutManager?.attributedText,
-      offset >= 0, offset < text.length
-    else { return nil }
-    var range = NSRange(location: 0, length: 0)
-    let value = text.attribute(
-      .rfcBacklinks, at: offset, longestEffectiveRange: &range,
-      in: NSRange(location: 0, length: text.length))
-    return value == nil ? nil : range
+  /// The chip at `offset` in the reader's text.
+  func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+    textView?.textLayoutManager?.attributedText?.backlinkChip(at: offset)
   }
 
   /// The list for the section at `anchor`, whose rows call `follow` with where
@@ -44,9 +37,9 @@ extension RFCTextViewCoordinator {
   extension RFCTextViewCoordinator: UIPopoverPresentationControllerDelegate {
     /// A popover pointing at the chip, on iPad as on iPhone, where it would
     /// otherwise become a sheet for a list of a few rows.
-    func showBacklinks(of anchor: String, at offset: Int) {
+    func showBacklinks(at offset: Int) {
       guard let textView, var presenter = textView.window?.rootViewController,
-        let range = backlinkChipRange(at: offset),
+        let (anchor, range) = backlinkChip(at: offset),
         let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
         let end = textView.position(from: start, offset: range.length),
         let textRange = textView.textRange(from: start, to: end)
@@ -79,18 +72,25 @@ extension RFCTextViewCoordinator {
   }
 #else
   extension RFCTextViewCoordinator {
-    /// In the popover a reference card uses, but opened by the click: its rows are
-    /// buttons, which a hover card closes before the pointer can reach.
-    func showBacklinks(of anchor: String, at offset: Int) {
-      guard let range = backlinkChipRange(at: offset), let rect = referenceRect(for: range),
+    /// In the popover a reference card uses, but opened by the click, and kept open
+    /// as the pointer leaves the chip for it, as a document preview is: its rows are
+    /// buttons.
+    func showBacklinks(at offset: Int) {
+      guard let (anchor, range) = backlinkChip(at: offset),
+        let rect = referenceRect(for: range),
         let list = backlinksList(
           of: anchor,
           follow: { [weak self] section in
-            self?.cancelHover()
-            self?.followBacklink(to: section)
+            guard let self else { return }
+            self.cancelHover()
+            // A click, as far as the reader is concerned: the scroll it causes must
+            // not preview whatever lands under the pointer.
+            self.linkClickPointer = NSEvent.mouseLocation
+            self.followBacklink(to: section)
           })
       else { return }
       present(NSHostingController(rootView: list), size: nil, at: rect)
+      isShowingDocumentPreview = true
     }
   }
 #endif

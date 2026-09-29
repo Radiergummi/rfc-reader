@@ -9,8 +9,8 @@ struct BacklinksList: View {
   let entries: [BacklinkEntry]
   let onSelect: (String) -> Void
 
-  /// The list's fixed width, as the reference card has one.
-  static let width: CGFloat = 280
+  /// The list's fixed width: the reference card's.
+  static let width = ReferencePreview.width
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {

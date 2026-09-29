@@ -187,9 +187,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// references to the same target are still two hovers.
     private var hoveredBox: ReferenceBox?
     private var popover: NSPopover?
-    /// The popover up is a document preview (#29), which the pointer is meant to
-    /// travel into — unlike a card, which leaving the reference closes.
-    private var isShowingDocumentPreview = false
+    /// The popover up is one the pointer is meant to travel into — a document
+    /// preview (#29), or a heading's backlinks (#183) — unlike a card, which leaving
+    /// the reference closes.
+    var isShowingDocumentPreview = false
     /// The reference a force click just previewed, whose own mouse-up must not
     /// follow it: see `clickedOnLink`. The next mouse-down starts a click of its
     /// own, and forgets it.
@@ -197,7 +198,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// Where the pointer was, in screen coordinates, when it followed a link. Until
     /// it moves from there, a scroll does not look for a reference under it: the
     /// jump the click caused is not the reader resting on whatever it landed on.
-    private var linkClickPointer: NSPoint?
+    var linkClickPointer: NSPoint?
     /// Short, so following a preview to another document feels immediate: the old
     /// reader and the new one cross-fade rather than cut.
     static let documentCrossFade = Animation.easeInOut(duration: 0.1)
@@ -650,9 +651,10 @@ final class RFCTextViewCoordinator: NSObject {
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
       let offset = textItem.range.location
-      if let url = link(at: offset), let anchor = DocumentTextBuilder.backlinks(from: url) {
+      // A backlink chip goes nowhere: it lists what refers to its section.
+      if backlinkChip(at: offset) != nil {
         return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
-          self?.showBacklinks(of: anchor, at: offset)
+          self?.showBacklinks(at: offset)
         }
       }
       guard let url = link(at: offset), let documentID,
@@ -677,6 +679,9 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
+      // A backlink chip's link is ours alone, and nothing in the default menu —
+      // Copy Link, Share — means anything for it.
+      if backlinkChip(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let library, let documentID,
@@ -765,11 +770,12 @@ final class RFCTextViewCoordinator: NSObject {
       // otherwise open over the document the click is leaving.
       cancelHover()
       linkClickPointer = NSEvent.mouseLocation
-      guard let url = Self.url(fromLink: link) else { return false }
-      if let anchor = DocumentTextBuilder.backlinks(from: url) {
-        showBacklinks(of: anchor, at: charIndex)
+      // A backlink chip goes nowhere: it lists what refers to its section.
+      if backlinkChip(at: charIndex) != nil {
+        showBacklinks(at: charIndex)
         return true
       }
+      guard let url = Self.url(fromLink: link) else { return false }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
       return onLink(url, .current)
@@ -785,6 +791,9 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       cancelHover()
+      // A backlink chip's link is ours alone, and Copy Link would copy a URL
+      // nothing else can open.
+      if backlinkChip(at: charIndex) != nil { return nil }
       return menu
     }
 

@@ -197,11 +197,16 @@ extension DocumentTextBuilder {
   /// A heading's backlink chip (#183): an arrow back and how many sections refer to
   /// the section, after a space. It goes nowhere itself: its link names the section,
   /// and the reader lists the sections that refer there. The space and the chip are
-  /// both `.rfcBacklinks`, so a copied heading leaves them out.
+  /// both `.rfcBacklinks`, so a copied heading leaves them out. They are set like the
+  /// heading but are not part of it: the headings rotor would read them in its label.
   func backlinkChip(
     _ anchor: String, count: Int, base: [NSAttributedString.Key: Any]
   ) -> NSAttributedString {
     var attributes = base
+    attributes[.rfcAnchor] = nil
+    for key in Self.headingLevel(depth: 1).keys {
+      attributes[key] = nil
+    }
     attributes[.rfcBacklinks] = anchor
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
     if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
@@ -233,8 +238,8 @@ extension DocumentTextBuilder {
     return run
   }
 
-  /// Rendering the symbol is the expensive part and depends only on the point size,
-  /// of which a build sees one or two — but there is a chip per cross reference, and
+  /// Rendering the symbol is the expensive part and depends only on which symbol and
+  /// the point size, of which a build sees a few — but there is a chip per cross reference, and
   /// RFCs are full of them. The attachment itself stays per run.
   private func chipSymbol(_ name: String, pointSize: CGFloat) -> PlatformImage? {
     let key = ChipSymbolKey(name: name, pointSize: pointSize)

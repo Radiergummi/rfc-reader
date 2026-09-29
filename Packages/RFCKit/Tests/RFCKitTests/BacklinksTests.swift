@@ -93,6 +93,30 @@ struct BacklinksTests {
     #expect(backlinks["figure-1"] == nil, "keyed by the section, not the anchor referred to")
   }
 
+  /// A section with prose beside its bibliography is drawn in the body, so it is
+  /// referred to and refers like any other; the rows of its bibliography are not
+  /// places. A section that is only a bibliography cites nothing.
+  @Test func `only a bibliography's rows and a bibliography alone are left out`() {
+    let entries = Block.references(
+      ReferenceList(
+        title: "R",
+        entries: [Reference(anchor: "REF", title: "W", annotation: [refer(to: "one")])]))
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        section("one", [.paragraph(Paragraph([refer(to: "mixed"), refer(to: "REF")]))]),
+        section("mixed", [.paragraph(Paragraph([refer(to: "one")])), entries]),
+        section("bibliography", [entries]),
+      ],
+      source: .text)
+    let backlinks = Backlinks.within(document)
+    #expect(backlinks["mixed"] == [Backlink(section: "one", count: 1)])
+    #expect(
+      backlinks["one"] == [Backlink(section: "mixed", count: 2)],
+      "the mixed section's prose and its annotation; not the bibliography's")
+    #expect(backlinks["REF"] == nil && backlinks["bibliography"] == nil)
+  }
+
   /// A reference to an anchor nothing in the document carries lands nowhere.
   @Test func `a reference to no anchor in the document is no backlink`() {
     let document = RFCDocument(

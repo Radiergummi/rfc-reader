@@ -201,15 +201,33 @@ import RFCReaderKit
     /// rewritten -- that is the one a terminal, a mail body or a code editor reads,
     /// and the one the chip's characters are wrong for. The rich flavours stay
     /// AppKit's, because a rich target receives the attachment as an image, which is
-    /// the chip's symbol and is what it looks like on screen.
+    /// the chip's symbol and is what it looks like on screen. A heading's backlink
+    /// chip is the exception (#183): it is the reader's, not the document's, so a
+    /// selection holding one writes its RTF and RTFD without it.
     override func writeSelection(
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
     ) -> Bool {
-      guard type == .string else { return super.writeSelection(to: pboard, type: type) }
       let selection = attributedString().attributedSubstring(from: selectedRange())
-      pboard.setString(SelectionText.plainText(of: selection), forType: .string)
-      return true
+      switch type {
+      case .string:
+        pboard.setString(SelectionText.plainText(of: selection), forType: .string)
+        return true
+      case .rtf, .rtfd:
+        let copied = SelectionText.withoutBacklinkChips(of: selection)
+        guard copied.length != selection.length else {
+          return super.writeSelection(to: pboard, type: type)
+        }
+        let whole = NSRange(location: 0, length: copied.length)
+        let data =
+          type == .rtf
+          ? copied.rtf(from: whole, documentAttributes: [:])
+          : copied.rtfd(from: whole, documentAttributes: [:])
+        guard let data else { return false }
+        return pboard.setData(data, forType: type)
+      default:
+        return super.writeSelection(to: pboard, type: type)
+      }
     }
 
     /// "Copy Figure" for the figure under the click, or else the one the selection

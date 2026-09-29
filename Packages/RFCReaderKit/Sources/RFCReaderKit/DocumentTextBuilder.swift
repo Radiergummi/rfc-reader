@@ -59,8 +59,8 @@ public final class DocumentTextBuilder {
   /// See the chip case in `run(_:base:)`.
   var nextChipID = 0
 
-  /// Rendering an SF Symbol is the expensive part and depends only on the point
-  /// size, of which a build sees one or two — but there is a chip per cross
+  /// Rendering an SF Symbol is the expensive part and depends only on which symbol
+  /// and the point size, of which a build sees a few — but there is a chip per cross
   /// reference, and RFCs are full of them.
   var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
 
