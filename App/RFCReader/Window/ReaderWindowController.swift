@@ -346,7 +346,8 @@
     // MARK: - The sidebar
 
     /// Through the split view controller rather than down the responder chain, so
-    /// the menu toggles this window's sidebar whatever holds focus in it.
+    /// the menu and the toolbar's toggle act on this window's sidebar whatever holds
+    /// focus in it.
     func toggleSidebar() {
       splitController.toggleSidebar(nil)
     }

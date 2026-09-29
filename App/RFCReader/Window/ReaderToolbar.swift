@@ -5,6 +5,7 @@
 
   extension NSToolbarItem.Identifier {
     static let rfcNewCollection = NSToolbarItem.Identifier("rfc.newCollection")
+    static let rfcSidebarToggle = NSToolbarItem.Identifier("rfc.sidebarToggle")
     static let rfcSidebarSeparator = NSToolbarItem.Identifier("rfc.sidebarSeparator")
     static let rfcListSeparator = NSToolbarItem.Identifier("rfc.listSeparator")
     static let rfcNavigation = NSToolbarItem.Identifier("rfc.navigation")
@@ -387,7 +388,16 @@
         // trailing edge, against the sidebar's divider, as Notes keeps New Note
         // and Mail keeps Compose: the sidebar's one action, over the sidebar it
         // adds to (#349).
-        .toggleSidebar, .flexibleSpace, .rfcNewCollection, .rfcSidebarSeparator,
+        //
+        // The toggle is ours, not AppKit's `.toggleSidebar`. With the sidebar
+        // collapsed its section shrinks to the two buttons, which then touch, and
+        // Liquid Glass joins the system item to its neighbour with a neck: two
+        // circles half fused. Two items of our own touching become one capsule,
+        // as Cite, Share and More do, and apart they are two circles exactly like
+        // the system's (compared in screenshots of both states). Spacing them
+        // does not help: a `.space` gets no width while collapsed, and a spacer
+        // view pushed New Collection into the overflow menu.
+        .rfcSidebarToggle, .flexibleSpace, .rfcNewCollection, .rfcSidebarSeparator,
         // The list's section: what is on screen there is what the title names.
         .rfcTitle, .rfcListSeparator,
         // The reader's own section, so Back and Forward stand at the leading edge
@@ -512,6 +522,9 @@
         item.menu = moreMenu
         return item
 
+      case .rfcSidebarToggle:
+        return button(identifier, "Sidebar", "sidebar.left", #selector(toggleSidebar))
+
       case .rfcNewCollection:
         return button(
           identifier, "New Collection", "folder.badge.plus", #selector(newEmptyCollection))
@@ -627,8 +640,9 @@
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
-      case NSToolbarItem.Identifier.rfcNewCollection.rawValue:
-        // Acts on the library, not the document, so a window without one has it too.
+      case NSToolbarItem.Identifier.rfcNewCollection.rawValue,
+        NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
+        // Act on the library, not the document, so a window without one has them too.
         return true
       default:
         return id != nil
@@ -642,6 +656,7 @@
     @objc private func togglePanel() { controller.press(.navigation) }
     @objc private func toggleInfo() { controller.press(.info) }
     @objc private func toggleBookmark() { controller.toggleBookmark() }
+    @objc private func toggleSidebar() { controller.toggleSidebar() }
 
     @objc private func toggleCollection(_ sender: NSMenuItem) {
       guard let document = id, let collection = sender.representedObject as? UUID else { return }
