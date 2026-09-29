@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 /// The single most important piece of context: is this still the current document?
@@ -13,9 +14,14 @@ struct StatusBanner: View {
   let library: LibraryModel
   let navigation: NavigationModel
   let metadata: RFCMetadata
+  /// From the header's identity, so a new `revisions.json` re-measures the header.
+  let revisionLines: [RevisionsSummary.Line]
+  let moreRevisions: String?
 
   var body: some View {
-    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata {
+    if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata
+      || !revisionLines.isEmpty
+    {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
           row(
@@ -32,10 +38,36 @@ struct StatusBanner: View {
           }
           .font(.subheadline)
         }
+        if !revisionLines.isEmpty {
+          ForEach(revisionLines) { line in
+            revisionRow(line)
+          }
+          if let more = moreRevisions {
+            Text(more)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+        }
       }
       .padding(12)
       .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
+  }
+
+  /// News, not a warning: a secondary symbol, unlike the red and orange rows above.
+  /// The whole row is the link to the draft's datatracker page. One `Text`, so a
+  /// narrow banner wraps it as a sentence rather than squeezing three columns.
+  private func revisionRow(_ line: RevisionsSummary.Line) -> some View {
+    let relation = Text(line.relation).fontWeight(.medium).foregroundStyle(.primary)
+    let title = Text(line.title).foregroundStyle(.tint)
+    let detail = Text(line.detail).foregroundStyle(.secondary)
+    return DraftLink(line: line) {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
+        Text("\(relation) \(title) \(detail)")
+      }
+    }
+    .font(.subheadline)
   }
 
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {

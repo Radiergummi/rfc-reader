@@ -5,7 +5,6 @@ import Testing
 @testable import RFCReaderKit
 
 @Suite("Copy Figure")
-@MainActor
 struct FigureCopyTests {
   private let style = ReadingStyle()
 

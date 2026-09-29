@@ -16,6 +16,10 @@ import SwiftUI
     /// own, which follows links in the app.
     let openURL: OpenURLAction
     @Binding var showsInspector: Bool
+    /// Save to Files and the print sheet, which are the reader's: their state and
+    /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
+    let exportDocument: (ExportFormat) -> Void
+    let printDocument: () -> Void
 
     @Environment(\.undoManager) private var undoManager
     @Environment(\.modelContext) private var modelContext
@@ -118,6 +122,15 @@ import SwiftUI
           if let draft = reader.precedingDraft {
             Button("Preceding Draft") { openURL(draft) }
           }
+        }
+
+        Section {
+          Menu("Export", systemImage: "square.and.arrow.down") {
+            ForEach(ExportFormat.allCases) { format in
+              Button(format.name) { exportDocument(format) }
+            }
+          }
+          Button("Print…", systemImage: "printer") { printDocument() }
         }
       } label: {
         Label("More", systemImage: "ellipsis")
