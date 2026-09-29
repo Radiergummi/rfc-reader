@@ -172,7 +172,12 @@ extension LegacyTextParser {
       {
         continue
       }
-      for parsed in classify(block, marker: marker, proseIndent: proseIndent, linker: linker) {
+      // Probed once as well: `classify` builds a catalogue from them, and the catalogue
+      // left open after it is this block's only if it had them.
+      let entries = catalogueEntries(block.lines)
+      for parsed in classify(
+        block, marker: marker, catalogueEntries: entries, proseIndent: proseIndent, linker: linker)
+      {
         // Merge adjacent list blocks of the same style into one list, and adjacent
         // catalogue blocks into one catalogue: RFC 1012 sets a blank line between
         // every entry, so each arrives as a block of its own.
@@ -197,7 +202,7 @@ extension LegacyTextParser {
       }
       openListIndent = if case .list? = result.last { marker?.indent } else { nil }
       openCatalogue =
-        if case .definitionList? = result.last, catalogueEntries(block.lines) != nil,
+        if case .definitionList? = result.last, entries != nil,
           let indent = block.lines.first?.leadingSpaceCount,
           let textColumn = block.lines.last(where: { catalogueTextColumn(of: $0) != nil })
             .flatMap(catalogueTextColumn(of:))
@@ -581,7 +586,8 @@ extension LegacyTextParser {
   }
 
   private static func classify(
-    _ block: RawBlock, marker: ListMarker?, proseIndent: Int, linker: InlineLinker
+    _ block: RawBlock, marker: ListMarker?, catalogueEntries: [(term: String, text: String)]?,
+    proseIndent: Int, linker: InlineLinker
   ) -> [Block] {
     let lines = block.lines
     guard !lines.isEmpty else { return [] }
@@ -594,7 +600,7 @@ extension LegacyTextParser {
     // Catalogues: every entry a number and a dash at one indent, anything else hung
     // past it. Before the prose test, which takes a one-line entry for a paragraph
     // and the rest of the block for artwork.
-    if let entries = catalogueEntries(lines) {
+    if let entries = catalogueEntries {
       return [
         .definitionList(
           entries.map { entry in
