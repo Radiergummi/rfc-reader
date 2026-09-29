@@ -224,7 +224,7 @@ public enum RecentFeedParser {
     case malformed(XMLSyntaxError)
   }
 
-  nonisolated(unsafe) private static let titlePattern = #/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#
+  private static let titlePattern = Pattern(#/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)
 
   /// An RFC 822 date, `Sat, 19 Sep 2026 00:00:00 GMT`: a `Sendable` value made once,
   /// where a `DateFormatter` was built for every parse (#148). The time zone field is
