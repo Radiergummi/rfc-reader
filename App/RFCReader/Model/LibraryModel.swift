@@ -5,7 +5,7 @@ import RFCReaderKit
 import SwiftData
 import os
 
-private let libraryLog = Logger(
+nonisolated private let libraryLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "library")
 
 #if os(macOS)
@@ -198,9 +198,24 @@ final class LibraryModel {
     -> (prepared: PreparedIndex, updatedAt: Date)?
   {
     guard let cached = store.cachedIndexLocation() else { return nil }
-    let prepared = try signposter.withIntervalSignpost("Read cached index") {
+    let interval = signposter.beginInterval("Read cached index")
+    defer { signposter.endInterval("Read cached index", interval) }
+    if let snapshot = cached.snapshot {
+      do {
+        let index = try signposter.withIntervalSignpost("Decode index snapshot") {
+          try IndexSnapshot.decode(Data(contentsOf: snapshot))
+        }
+        return (PreparedIndex(index: index), cached.updatedAt)
+      } catch {
+        libraryLog.error(
+          "decoding the index snapshot failed: \(String(describing: error), privacy: .public)")
+      }
+    }
+    let prepared = try signposter.withIntervalSignpost("Parse index XML") {
       try PreparedIndex.parse(Data(contentsOf: cached.url))
     }
+    // Parsed from the XML, so the next launch reads a snapshot of it instead.
+    await store.writeSnapshot(of: prepared.index)
     return (prepared, cached.updatedAt)
   }
 
@@ -222,7 +237,7 @@ final class LibraryModel {
       }
       // Off the main actor: the parse alone is about a second (#124).
       let prepared = try await Self.parse(data)
-      try await store.storeIndex(data)
+      try await store.storeIndex(data, parsed: prepared.index)
       apply(prepared, updatedAt: .now)
     } catch {
       if index == nil { indexState = .failed(error.localizedDescription) }

@@ -35,6 +35,22 @@ let benchmarks: @Sendable () -> Void = {
     corpus.data("rfc-index.xml")
   }
 
+  Benchmark("Index: decode snapshot") { benchmark, snapshot in
+    for _ in benchmark.scaledIterations {
+      blackHole(try IndexSnapshot.decode(snapshot))
+    }
+  } setup: {
+    try IndexSnapshot.encode(RFCIndexParser.parse(corpus.data("rfc-index.xml")))
+  }
+
+  Benchmark("Index: encode snapshot") { benchmark, index in
+    for _ in benchmark.scaledIterations {
+      blackHole(try IndexSnapshot.encode(index))
+    }
+  } setup: {
+    try RFCIndexParser.parse(corpus.data("rfc-index.xml"))
+  }
+
   Benchmark("Index: prepare") { benchmark, index in
     for _ in benchmark.scaledIterations {
       blackHole(PreparedIndex(index: index))
