@@ -311,14 +311,16 @@ corpus-convert: corpus-tool
 ## Check the schema check: three RFCs as the RFC Editor published them must validate
 # If one fails, the schema or the validator is wrong, and no count the convert step
 # reports means anything until it is fixed; so `corpus` runs this before converting.
-# The three are fetched here when a limited `corpus-fetch-xml` left them out.
-SCHEMA_CONTROL_DOCUMENTS := $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+# The three are fetched into a directory of their own, not the XML directory: a
+# limited run leaves them out of it, and one fetched there would join the manifest
+# and the packs of a run that never asked for it.
+SCHEMA_CONTROL_DOCUMENTS := $(addprefix $(CORPUS)/schema-control.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
 
 corpus-schema-control: $(SCHEMA_CONTROL_DOCUMENTS)
 	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(SCHEMA_CONTROL_DOCUMENTS)
 
-# One RFC as published in RFCXML, fetched where `corpus-fetch-xml` would have put it.
-$(CORPUS)/xml.noindex/%.xml:
+# One RFC as published in RFCXML, for the schema control.
+$(CORPUS)/schema-control.noindex/%.xml:
 	@mkdir -p $(@D)
 	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
