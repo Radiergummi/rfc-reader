@@ -27,6 +27,10 @@ public final class DocumentTextBuilder {
   /// scroll to, and goes to its entry there.
   public static let referenceScheme = "rfc-reference"
 
+  /// The scheme of a heading's backlink chip (#183), naming the section: a click
+  /// lists the sections that refer to it rather than going anywhere.
+  public static let backlinksScheme = "rfc-backlinks"
+
   /// The style the *current* region is emitted in. A `var` because a region can be
   /// set quieter than the body around it — see `emitting(in:colour:)`.
   private(set) var style: ReadingStyle
@@ -58,7 +62,13 @@ public final class DocumentTextBuilder {
   /// Rendering an SF Symbol is the expensive part and depends only on the point
   /// size, of which a build sees one or two — but there is a chip per cross
   /// reference, and RFCs are full of them.
-  var chipSymbols: [CGFloat: PlatformImage] = [:]
+  var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
+
+  /// A chip's symbol is one of two: a reference's, or a backlink chip's.
+  struct ChipSymbolKey: Hashable {
+    let name: String
+    let pointSize: CGFloat
+  }
 
   /// The anchors of the document's bibliography entries, which `url(for:)` links
   /// with `referenceScheme`. Collected before anything is emitted.
@@ -68,6 +78,11 @@ public final class DocumentTextBuilder {
   /// chip is informative. Collected before anything is emitted, as
   /// `referenceAnchors` is.
   var referenceKinds = ReferenceKinds([])
+
+  /// Which sections refer to each section, for the headings' chips. Collected before
+  /// anything is emitted, and left empty in a build with no live links: on paper
+  /// there is nothing to press.
+  var backlinks: [String: [Backlink]] = [:]
 
   init(style: ReadingStyle) {
     self.style = style
@@ -89,7 +104,7 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -166,6 +181,9 @@ extension DocumentTextBuilder {
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
+    if style.emitsLinks {
+      backlinks = Backlinks.within(document)
+    }
     appendAbstract(document.header.abstract)
     for section in document.sections {
       appendSection(section, depth: 1)
@@ -252,6 +270,9 @@ extension DocumentTextBuilder {
         spacingBefore: style.paragraphSpacing * 1.6, spacingAfter: style.paragraphSpacing * 0.6),
     ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
     output.append(inlineRuns(section.displayTitleInlines, base: headingAttributes))
+    if let citing = backlinks[section.anchor] {
+      output.append(backlinkChip(section.anchor, count: citing.count, base: headingAttributes))
+    }
     append("\n", headingAttributes)
     appendBlocks(section.blocks, indent: 0)
     for subsection in section.subsections {

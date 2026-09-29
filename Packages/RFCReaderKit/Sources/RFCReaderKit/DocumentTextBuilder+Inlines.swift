@@ -138,14 +138,14 @@ extension DocumentTextBuilder {
   /// runs whose attribute values compare equal, and two adjacent chips
   /// (`[RFC9110][RFC9111]`) sharing one effective range would draw as a single
   /// rounded rect. Each chip therefore carries a value no other chip has.
-  private func chipRun(_ text: String, attributes: [NSAttributedString.Key: Any])
-    -> NSAttributedString
-  {
+  private func chipRun(
+    _ text: String, symbol: String = "doc.text", attributes: [NSAttributedString.Key: Any]
+  ) -> NSAttributedString {
     var chip = attributes
     nextChipID += 1
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
-    if let symbol = chipSymbolRun(attributes: chip) {
+    if let symbol = chipSymbolRun(symbol, attributes: chip) {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
       // offers a line-break opportunity on either side, so in a narrow column
@@ -194,14 +194,34 @@ extension DocumentTextBuilder {
     output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
   }
 
-  /// The leading `doc.text` glyph that rides inside the chip's own run, so it
-  /// falls inside both the drawn background and the hit region. `NSTextAttachment
-  /// (image:)` sits the image's bottom edge on the text baseline by default,
-  /// which reads low against the words around it, so the symbol is drawn at the
-  /// run's own font size and its bounds are centred on that font's cap height.
-  private func chipSymbolRun(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+  /// A heading's backlink chip (#183): an arrow back and how many sections refer to
+  /// the section, after a space. It goes nowhere itself: its link names the section,
+  /// and the reader lists the sections that refer there. The space and the chip are
+  /// both `.rfcBacklinks`, so a copied heading leaves them out.
+  func backlinkChip(
+    _ anchor: String, count: Int, base: [NSAttributedString.Key: Any]
+  ) -> NSAttributedString {
+    var attributes = base
+    attributes[.rfcBacklinks] = anchor
+    let result = NSMutableAttributedString(string: " ", attributes: attributes)
+    let encoded = anchor.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? anchor
+    if let url = URL(string: "\(Self.backlinksScheme):\(encoded)") {
+      attributes.merge(linkAttributes(url)) { _, link in link }
+    }
+    result.append(chipRun(String(count), symbol: "arrow.turn.up.left", attributes: attributes))
+    return result
+  }
+
+  /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's
+  /// own run, so it falls inside both the drawn background and the hit region.
+  /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
+  /// default, which reads low against the words around it, so the symbol is drawn at
+  /// the run's own font size and its bounds are centred on that font's cap height.
+  private func chipSymbolRun(
+    _ name: String, attributes: [NSAttributedString.Key: Any]
+  ) -> NSAttributedString? {
     let font = font(in: attributes)
-    guard let symbol = chipSymbol(pointSize: font.pointSize) else { return nil }
+    guard let symbol = chipSymbol(name, pointSize: font.pointSize) else { return nil }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
     // after the default initializer instead, which UIKit also accepts.
     let attachment = NSTextAttachment()
@@ -217,12 +237,13 @@ extension DocumentTextBuilder {
   /// Rendering the symbol is the expensive part and depends only on the point size,
   /// of which a build sees one or two — but there is a chip per cross reference, and
   /// RFCs are full of them. The attachment itself stays per run.
-  private func chipSymbol(pointSize: CGFloat) -> PlatformImage? {
-    if let cached = chipSymbols[pointSize] { return cached }
-    guard let symbol = PlatformImage.symbol(named: "doc.text", pointSize: pointSize) else {
+  private func chipSymbol(_ name: String, pointSize: CGFloat) -> PlatformImage? {
+    let key = ChipSymbolKey(name: name, pointSize: pointSize)
+    if let cached = chipSymbols[key] { return cached }
+    guard let symbol = PlatformImage.symbol(named: name, pointSize: pointSize) else {
       return nil
     }
-    chipSymbols[pointSize] = symbol
+    chipSymbols[key] = symbol
     return symbol
   }
 
@@ -237,6 +258,11 @@ extension DocumentTextBuilder {
   /// The same for `referenceScheme`: the bibliography entry a citation names.
   public static func reference(from url: URL) -> String? {
     decoded(url, scheme: referenceScheme)
+  }
+
+  /// The same for `backlinksScheme`: the section whose backlinks a chip lists.
+  public static func backlinks(from url: URL) -> String? {
+    decoded(url, scheme: backlinksScheme)
   }
 
   private static func decoded(_ url: URL, scheme: String) -> String? {

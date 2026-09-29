@@ -27,7 +27,8 @@ import RFCKit
 public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
-  public static func plainText(of attributed: NSAttributedString) -> String {
+  public static func plainText(of selection: NSAttributedString) -> String {
+    let attributed = withoutBacklinkChips(selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -40,6 +41,23 @@ public enum SelectionText {
       // is also the only way a run that begins after the symbol still yields a
       // label rather than a fragment of one.
       result += pasteboardLabel(for: box.reference)
+    }
+    return result
+  }
+
+  /// A heading's backlink chip counts what refers to the section (#183): the
+  /// reader's, not the document's words, so a copied heading is the heading alone.
+  private static func withoutBacklinkChips(_ selection: NSAttributedString) -> NSAttributedString {
+    var chips: [NSRange] = []
+    selection.enumerateAttribute(
+      .rfcBacklinks, in: NSRange(location: 0, length: selection.length)
+    ) { value, range, _ in
+      if value != nil { chips.append(range) }
+    }
+    guard !chips.isEmpty else { return selection }
+    let result = NSMutableAttributedString(attributedString: selection)
+    for chip in chips.reversed() {
+      result.deleteCharacters(in: chip)
     }
     return result
   }

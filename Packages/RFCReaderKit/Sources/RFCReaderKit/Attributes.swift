@@ -20,6 +20,11 @@ extension NSAttributedString.Key {
   /// drawn with a lighter tint than a normative one (#184). A `String`, so adjacent
   /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
+  /// Set on a heading's backlink chip and the space before it (#183): the anchor of
+  /// the section the chip lists the backlinks of. A `String`, so the runs merge. A
+  /// copied selection leaves these runs out (`SelectionText`): they are the reader's,
+  /// not the document's words.
+  public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
   /// (`AccessibleReading.rotorLabel`). Never read aloud with the diagram, because
