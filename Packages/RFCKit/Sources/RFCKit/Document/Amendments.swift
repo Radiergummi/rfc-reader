@@ -38,15 +38,22 @@ public struct Amendment: Sendable, Hashable, Codable {
 /// introduction. Only documents the header says it updates count, so an ordinary
 /// citation of another document's section is never read as an amendment; and a
 /// citation of a whole document names no section, which the document-level status
-/// already covers. A document that does not state its own number amends nothing,
-/// since a row that cannot say which document amends answers nothing.
+/// already covers. A section that holds a bibliography amends nothing either: a
+/// citation in a reference's annotation describes that entry. A document that does
+/// not state its own number amends nothing, since a row that cannot say which
+/// document amends answers nothing.
 public enum Amendments {
   public static func links(in document: RFCDocument) -> [Amendment] {
     let updated = Set(document.header.updates)
     guard let amending = document.header.id, !updated.isEmpty else { return [] }
+    let bibliographies: Set<String?> = Set(
+      document.allSections.filter { section in
+        section.blocks.contains { if case .references = $0 { true } else { false } }
+      }.map(\.anchor))
     var seen: Set<Amendment> = []
     var links: [Amendment] = []
-    for place in document.proseInlinesBySection {
+    for place in document.proseInlinesBySection
+    where !bibliographies.contains(place.sectionAnchor) {
       for inline in place.inlines {
         guard case .crossReference(let xref) = inline,
           case .document(let id, let section?) = xref.target,

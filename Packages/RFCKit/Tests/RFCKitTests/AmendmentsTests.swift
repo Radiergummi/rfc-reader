@@ -76,6 +76,27 @@ struct AmendmentsTests {
     #expect(Set(links).count == links.count)
   }
 
+  /// A bibliography entry's note describes the entry, and amends nothing: a section
+  /// of an updated document cited in one is no link. RFC 9283's references carry no
+  /// note, so the test gives one of them a citation of RFC 2850's Section 3, a
+  /// section the document cites nowhere else.
+  @Test func `a section citation in a reference annotation is not an amendment`() throws {
+    var document = try Self.document("rfc9283.xml")
+    let citation = Inline.crossReference(
+      CrossReference(target: .document(.rfc(2850), section: "3")))
+    let index = try #require(
+      document.sections.firstIndex { section in
+        section.blocks.contains { if case .references = $0 { true } else { false } }
+      })
+    document.sections[index].blocks = document.sections[index].blocks.map { block in
+      guard case .references(var list) = block else { return block }
+      list.entries[0].annotation = [.text("See "), citation]
+      return .references(list)
+    }
+    #expect(document.proseInlines.contains(citation))
+    #expect(!Amendments.links(in: document).contains { $0.section == "3" })
+  }
+
   /// A row that cannot say which document amends is no use to a reader asking which
   /// later documents amend the open one.
   @Test func `a document without a number amends nothing`() throws {
