@@ -11,7 +11,6 @@ import Testing
 #endif
 
 @Suite("Builder: completeness")
-@MainActor
 struct BuilderCompletenessTests {
   private let style = ReadingStyle()
 
