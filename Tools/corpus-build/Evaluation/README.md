@@ -2,7 +2,8 @@
 
 Two judgement sets for measuring RFC search quality (issue #37). They exist because
 ranking changes cannot be assessed by looking at a few results — the first day of
-work on this drew five conclusions that turned out to be inside the noise.
+work on this drew five conclusions that turned out to be inside the noise. Only the
+hand set is committed; the cross-reference set is generated from the corpus.
 
 **They measure different things, and neither is sufficient alone.**
 
@@ -52,7 +53,13 @@ target in prose without naming it — a relevance judgement an RFC author alread
 
 Filtered from 20,840 recovered sentences: dropped under 8 content words, near
 duplicates, self-citations, and targets absent from the index; 12,248 survive, of
-which 4,000 are sampled here.
+which 4,000 are sampled.
+
+**It is not committed.** Every query is a sentence of an RFC, and no RFC text goes into
+the repository (the licensing question in `docs/DATA_PIPELINE.md`). What is committed is
+what reproduces it: the extraction and filtering in `QuerySet`, and the sampling
+parameters, which are the `queries` subcommand's defaults — `--limit 4000 --seed 11
+--min-words 8`.
 
 **Two biases to respect:**
 
@@ -64,23 +71,25 @@ which 4,000 are sampled here.
    exist. Any measurement of a currency-ranking change must be split on whether the
    target is current, or it will show the change failing when it is working.
 
-## Regenerating
+## Generating
+
+After `make corpus CORPUS_LIMIT=` has converted the whole corpus:
 
 ```
 make corpus-queries
 ```
 
-or directly:
+which writes `corpus/queries-xref.json`, or directly:
 
 ```
-corpus-build queries --in corpus/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json \
+corpus-build queries --in corpus/xml.noindex --out corpus/queries-xref.json \
                      [--limit 4000] [--seed 11] [--min-words 8]
 ```
 
-The extraction *and* the filtering live in the subcommand, because a committed
-judgement set that cannot be reproduced is not evidence of anything. The sample is
-drawn with a seeded generator rather than `shuffled()`, so `--seed` gives the same
-4,000 queries on any platform — CI runs this on Linux.
+The extraction *and* the filtering live in the subcommand, because a judgement set
+that cannot be reproduced is not evidence of anything. The sample is drawn with a
+seeded generator rather than `shuffled()`, so the same corpus and `--seed` give the
+same 4,000 queries on any platform. Nothing in CI generates or reads the set.
 
 `queries-hand.json` is **not** generated. It is written and maintained by hand; that
 is the whole of its value.

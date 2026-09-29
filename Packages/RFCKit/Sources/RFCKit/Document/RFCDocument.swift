@@ -663,14 +663,45 @@ public enum Inline: Sendable, Hashable, Codable {
 
 extension Array where Element == Inline {
   /// Flattened plain text, with derived text for cross references.
-  public var plainText: String {
-    map { inline -> String in
+  public var plainText: String { locatedPlainText.text }
+
+  /// `plainText`, and where in it each cross reference's label landed. One walk makes
+  /// both, so an offset taken from here cannot drift from the text.
+  public var locatedPlainText: LocatedPlainText {
+    var located = LocatedPlainText()
+    located.append(self)
+    return located
+  }
+}
+
+/// Plain text made from inlines, with the range each cross reference occupies in it
+/// (`[Inline].locatedPlainText`).
+public struct LocatedPlainText: Sendable, Hashable {
+  /// One cross reference, and the range of `text` its label occupies.
+  public struct LocatedCrossReference: Sendable, Hashable {
+    public var reference: CrossReference
+    public var range: Range<String.Index>
+  }
+
+  public var text = ""
+  /// Every cross reference, however deeply nested, in text order.
+  public var crossReferences: [LocatedCrossReference] = []
+
+  mutating func append(_ inlines: [Inline]) {
+    for inline in inlines {
       switch inline {
-      case .text(let text), .code(let text), .superscript(let text), .subscript(let text): text
-      case .emphasis(let inner), .strong(let inner), .link(_, let inner): inner.plainText
-      case .crossReference(let xref): xref.displayLabel
-      case .lineBreak: "\n"
+      case .text(let value), .code(let value), .superscript(let value), .subscript(let value):
+        text += value
+      case .emphasis(let inner), .strong(let inner), .link(_, let inner):
+        append(inner)
+      case .crossReference(let reference):
+        let start = text.endIndex
+        text += reference.displayLabel
+        crossReferences.append(
+          LocatedCrossReference(reference: reference, range: start..<text.endIndex))
+      case .lineBreak:
+        text += "\n"
       }
-    }.joined()
+    }
   }
 }

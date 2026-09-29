@@ -3,6 +3,9 @@ import Foundation
 
 /// `manifest.json`: every file of a data pack, with its size and SHA-256, so the app
 /// can verify what it downloaded.
+///
+/// No date: the same files and version give the same manifest, which is what lets a
+/// rebuild be compared with the release it would replace.
 public struct Manifest: Codable, Sendable {
   public struct Entry: Codable, Sendable {
     public var path: String
@@ -21,12 +24,10 @@ public struct Manifest: Codable, Sendable {
   }
 
   public var version: String
-  public var generatedAt: String
   public var files: [Entry]
 
-  public init(version: String, generatedAt: String, files: [Entry]) {
+  public init(version: String, files: [Entry]) {
     self.version = version
-    self.generatedAt = generatedAt
     self.files = files
   }
 }

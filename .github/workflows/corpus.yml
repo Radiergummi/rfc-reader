@@ -17,15 +17,27 @@ on:
         type: boolean
         default: false
 
+# Only the publish job writes, and it builds nothing.
+permissions:
+  contents: read
+
+# One run at a time, queued rather than cancelled: a full run takes hours, and each
+# run's baseline is the report of the last one to succeed.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     # A full run fetches and converts all 8,464 legacy RFCs; this only stops a hung one.
     timeout-minutes: 180
     container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
-    # write only for the optional `gh release create` in the last step.
+    # Read-only: this job compiles and runs third-party packages. actions: read to
+    # download the previous run's report.
     permissions:
-      contents: write
+      contents: read
+      actions: read
     # Inputs reach the scripts as environment variables, never spliced into their text.
     env:
       VERSION: ${{ inputs.version }}
@@ -36,22 +48,53 @@ jobs:
           persist-credentials: false
 
       - name: Restore fetched text
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: corpus/text.noindex
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
-      # make for the Makefile, xmllint for the schema check, zstd for the pack. The
-      # image carries none of them.
+      # make for the Makefile, xmllint for the schema check, zstd for the pack, gh for
+      # the previous report. The image carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils zstd >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils zstd gh >/dev/null
+
+      # The last successful run's report is this run's baseline: convert compares its
+      # schema results with the report it replaces and fails on any document that
+      # stopped validating. A failed run's report is never the baseline, so a
+      # regression keeps failing until it is fixed. Without one nothing is compared,
+      # which is said as a warning rather than passed over.
+      - name: Restore the previous report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow corpus.yml \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$previous" ] || ! gh run download "$previous" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'corpus-*' --dir baseline; then
+            echo "::warning::No previous report; schema regressions are not checked in this run."
+            exit 0
+          fi
+          mkdir -p corpus
+          cp baseline/corpus-*/report.json corpus/report.json
+          echo "Baseline: the report of run $previous"
 
       # The same entry point as a local `make corpus`, so CI builds the corpus a
       # developer does: the modern RFCXML documents fetched beside the converted
       # ones, and the prose diagnostics written. An empty LIMIT is the full set.
       - name: Fetch, convert, manifest
         run: make corpus CORPUS_LIMIT="$LIMIT" CORPUS_VERSION="$VERSION"
+
+      # About 450 MB, so saved by full runs only: a smoke run's twenty documents
+      # would otherwise become the newest entry, and CI's cache pruning keeps only
+      # the newest of each kind. Saved even when convert failed, since the fetch did
+      # not.
+      - name: Save fetched text
+        if: ${{ !cancelled() && inputs.limit == '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: corpus/text.noindex
+          key: corpus-text-${{ github.run_id }}
 
       # Two packs from the one directory, split at RFC 8650: the converted legacy
       # documents wait on the IETF Trust's answer about redistribution, and the
@@ -66,14 +109,19 @@ jobs:
             awk -F'[c.]' '{ print > (($2 + 0 >= 8650) ? "../modern.list" : "../legacy.list") }'
           touch ../legacy.list ../modern.list
           # convert writes xml.noindex (kept out of Spotlight); a pack's directory is xml.
+          # Nothing of the run goes into the archive, not the files' dates, owners or
+          # modes, so the same documents make the same pack.
           for pack in legacy modern; do
             tar --zstd -cf "$GITHUB_WORKSPACE/$pack-xml-$VERSION.tar.zst" \
+              --format=gnu --mtime=@0 --owner=0 --group=0 --numeric-owner --mode='a=r,u+w' \
               --transform 's,^,xml/,' -T "../$pack.list"
             echo "$pack: $(wc -l < "../$pack.list") documents"
           done
           ls -la "$GITHUB_WORKSPACE"/*.tar.zst
 
+      # Also when convert failed on a regression: the report names the documents.
       - name: Upload report and packs as workflow artifacts
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: corpus-${{ inputs.version }}
@@ -84,12 +132,26 @@ jobs:
             legacy-xml-*.tar.zst
             modern-xml-*.tar.zst
 
+  # The only job that can write to the repository: it checks nothing out and runs
+  # no code of ours or anyone's, only gh over the artifact the build uploaded.
+  publish:
+    if: ${{ inputs.publish }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # For `gh release create`; actions: read to download this run's artifact.
+      contents: write
+      actions: read
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
       - name: Publish release
-        if: ${{ inputs.publish }}
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get install -y -qq gh >/dev/null
-          gh release create "corpus-$VERSION" legacy-xml-*.tar.zst modern-xml-*.tar.zst corpus/manifest.json \
+          gh run download "$GITHUB_RUN_ID" --name "corpus-$VERSION" --dir packs
+          gh release create "corpus-$VERSION" packs/legacy-xml-*.tar.zst packs/modern-xml-*.tar.zst \
+            packs/corpus/manifest.json \
             --title "Corpus packs $VERSION" \
             --notes "Data packs built by the corpus workflow. See docs/DATA_PIPELINE.md."

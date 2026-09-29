@@ -21,16 +21,6 @@ struct CorpusBuild: AsyncParsableCommand {
 
 // MARK: - Support
 
-enum PipelineError: Error, CustomStringConvertible {
-  case http(Int, URL)
-
-  var description: String {
-    switch self {
-    case .http(let status, let url): "HTTP \(status) for \(url)"
-    }
-  }
-}
-
 /// `.sortedKeys` is what makes these files diffable between corpus runs, so the encoder
 /// is configured in one place rather than at each call site. Slashes are left unescaped:
 /// they are in paths, URLs and quoted prose, which is read by people as often as tools.
