@@ -57,6 +57,22 @@ struct ABNFTests {
     #expect(ABNF.parse(line) != nil, "\(line)")
   }
 
+  /// RFCXML keeps a block's indentation inside `<sourcecode>`: the least indented line
+  /// is where rules start.
+  @Test func `a grammar indented as a whole parses`() throws {
+    let rules = try #require(
+      ABNF.parse(Self.text("   first  = second / third", "            fourth", "   second = ALPHA"))
+    )
+    #expect(rules.map(\.name) == ["first", "second"])
+  }
+
+  /// A comment heading a grammar may sit further left than its rules.
+  @Test func `a comment left of the rules does not set their column`() throws {
+    let rules = try #require(
+      ABNF.parse(Self.text("; the record grammar", "   record = 1*field", "   field  = ALPHA")))
+    #expect(rules.map(\.name) == ["record", "field"])
+  }
+
   @Test func `an incremental alternative adds to its rule`() throws {
     let rules = try #require(
       ABNF.parse(Self.text("command = \"open\"", "command =/ \"close\"")))
@@ -95,6 +111,22 @@ struct ABNFTests {
     #expect(ABNF.recognizes("octet = %x00-FF"))
     #expect(ABNF.recognizes("maybe = [ thing ]"))
     #expect(ABNF.recognizes("list = 1#element"))
+  }
+
+  /// Test vectors are valid ABNF by the letter: `4c0ffee` reads as four of a rule
+  /// named `c0ffee`, and `0x7` as none of `x7`. A count before a name of hex digits, or
+  /// before `x`, is a hex number.
+  @Test func `hex data is not a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("key    = 4c0ffee1234abcd5678", "nonce  = 9aa0b1c2d3e4f5")))
+    #expect(!ABNF.recognizes("mask = 0x7"))
+    #expect(ABNF.recognizes("four-digits = 4DIGIT"), "a count before a real name is a repetition")
+  }
+
+  /// Assignments in pseudocode or a configuration parse as plain rules: without syntax
+  /// only a grammar has, the rules have to refer to one another.
+  @Test func `plain rules that refer to nothing among them are not a grammar`() {
+    #expect(!ABNF.recognizes(Self.text("lowest = infinity", "current = infinity")))
+    #expect(!ABNF.recognizes(Self.text("e=<email-address>", "p=<phone-number>")))
   }
 
   @Test func `two plain rules are recognised`() {
