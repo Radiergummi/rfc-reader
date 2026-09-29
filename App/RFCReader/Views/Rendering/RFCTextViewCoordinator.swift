@@ -733,9 +733,17 @@ final class RFCTextViewCoordinator: NSObject {
     /// in the same program: storages and content views all freed, and a dozen
     /// fragments left per view, the ones on screen when it went. Emptying the storage
     /// instead left the layout manager and storage behind.
+    ///
+    /// Detached through the container, the way AppKit documents it: `NSTextView`'s own
+    /// `textContainer` setter is not to be called directly, and measured in the same
+    /// program both free the same. The scroll observer goes too, so a viewport left
+    /// without a layout manager reports nothing to the window's toolbar title, which
+    /// the next reader already owns.
     func releaseDocument() {
       layoutTask?.cancel()
-      textView?.textContainer = nil
+      NotificationCenter.default.removeObserver(
+        self, name: NSView.boundsDidChangeNotification, object: nil)
+      textView?.textContainer?.textView = nil
     }
 
     /// Named explicitly, and so is `mouseExited` below: a tracking area sends its
