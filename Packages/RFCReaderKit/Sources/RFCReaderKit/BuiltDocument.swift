@@ -19,9 +19,15 @@ import Foundation
 public struct BuiltDocument: @unchecked Sendable {
   public let text: NSAttributedString
   public let anchors: AnchorIndex
+  /// Where every paragraph starts that belongs with the one after it — the title,
+  /// the headings, the abstract's — as UTF-16 offsets into `text`. A page never
+  /// ends on one (`PrintPagination`). Recorded by the builder as it emits them,
+  /// so a new kind of heading is kept with its text where it is written.
+  public let keepsWithNext: Set<Int>
 
-  public init(text: NSAttributedString, anchors: AnchorIndex) {
+  public init(text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = []) {
     self.text = text
     self.anchors = anchors
+    self.keepsWithNext = keepsWithNext
   }
 }

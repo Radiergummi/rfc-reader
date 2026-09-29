@@ -55,7 +55,7 @@ Note that route 2 preserves almost everything route 1 gives: one-time offline he
 
 ## Pipeline stages
 
-All stages are subcommands of `Tools/corpus-build`, a Swift package that depends on RFCKit and runs on macOS and Linux. Its `RFCCorpusKit` library holds what is a pure function of its inputs: converting one document (`DocumentConverter`), the report and manifest types, query generation, the schema check's causes and fetch planning. The `corpus-build` executable is the command line around it: arguments, file IO, concurrency, logging and xmllint. Its three third-party dependencies are Apple's: [swift-argument-parser](https://github.com/apple/swift-argument-parser) for the commands, [swift-log](https://github.com/apple/swift-log) for their logs, and [swift-crypto](https://github.com/apple/swift-crypto) for the manifest's SHA-256 (CryptoKit on Apple platforms, BoringSSL on Linux). The logs go to standard error, one line per event, with a fixed message and the values as metadata (`documents=8457 [corpus_build] converting`), so a run's log can be grepped by message and compared field by field. An unknown or misspelt flag is an error, and `corpus-build help <command>` lists each command's options.
+All stages are subcommands of `Tools/corpus-build`, a Swift package that depends on RFCKit and runs on macOS and Linux. Its `RFCCorpusKit` library holds what is a pure function of its inputs: converting one document (`DocumentConverter`), the report types and the manifest's hashing, query generation, the schema check's causes and fetch planning. The `corpus-build` executable is the command line around it: arguments, file IO, concurrency, logging and xmllint. Its three third-party dependencies are Apple's: [swift-argument-parser](https://github.com/apple/swift-argument-parser) for the commands, [swift-log](https://github.com/apple/swift-log) for their logs, and [swift-crypto](https://github.com/apple/swift-crypto) for the manifest's SHA-256 (CryptoKit on Apple platforms, BoringSSL on Linux). The logs go to standard error, one line per event, with a fixed message and the values as metadata (`documents=8457 [corpus_build] converting`), so a run's log can be grepped by message and compared field by field. An unknown or misspelt flag is an error, and `corpus-build help <command>` lists each command's options.
 
 ```
 rfc-index.xml ──▶ fetch ──▶ corpus/text.noindex/rfcNNNN.txt      (8,457 files, one-time, resumable)
@@ -73,9 +73,12 @@ rfc-index.xml ──▶ fetch --format xml ─┘                          (1,37
                             manifest ──▶ manifest.json  (sha256 + size per file, pack version)
                               │
                               ▼
-                     tar --zstd ──▶ legacy-xml-<version>.tar.zst  (RFCs before 8650) ──┐
-                                ──▶ modern-xml-<version>.tar.zst  (RFC 8650 onwards)  ─┼──▶ GitHub Release / R2
-                                    manifest.json, beside them ────────────────────────┘
+              split at 8650, a manifest.json of its own at each pack's root
+                              │
+                              ▼  (macOS job)
+              aa archive -a lzfse ──▶ legacy-xml-<version>.aar  (RFCs before 8650) ──┐
+                                  ──▶ modern-xml-<version>.aar  (RFC 8650 onwards)  ─┼──▶ GitHub Release / R2
+                                      manifest.json of both, beside them ────────────┘
 ```
 
 The packs split at RFC 8650 so that the RFC Editor's own RFCXML, already licensed for redistribution, never waits on the licensing question the converted legacy documents are held by.
@@ -83,20 +86,33 @@ The packs split at RFC 8650 so that the RFC Editor's own RFCXML, already license
 - **fetch** reads the index, picks every RFC without an XML format, and downloads the `.txt` with bounded concurrency (default 6, be polite to the RFC Editor). Existing files are skipped, so re-runs only fetch what is new or missing. `--limit N` for smoke tests.
 - **convert** parses each text file, serializes to RFCXML, re-parses the output as a self-check, and writes a per-document report: section, paragraph, list, artwork and reference counts plus warnings ("no RFC number in front matter", "more artwork than prose", "round trip changed section count"). `--only 5 822` converts just those documents from `--in`, and fails if one has no text there; it refuses `--report`, which would replace the corpus report with one that holds only those documents. An override file replaces the generated output entirely, after being checked to parse. Overrides are the correction mechanism: fix the heuristic in RFCKit when a class of documents is wrong, and correct a single document with an override. No new override is committed until #197 makes one a patch on the converter's output rather than a whole converted document, which is RFC text. An override corrected mechanically rather than by hand carries the script that makes it beside it (`corpus/overrides/rfc1142.py`), and is regenerated with it when the converter's output changes: `make corpus-overrides-check` reruns every such script against the current converter and fails on any difference. It needs the source text, so it is not part of `make check`; what is, is corpus-build's `Corpus overrides` suite, which parses every committed override and pins what RFC 1142's script recovers.
   With `--schema`, every written file is also validated against xml2rfc's RFCXML v3 schema (`Tools/corpus-build/Schema/`, `xmllint --relaxng`), and the report's `schema` field says why a document fails: `[]` validates, otherwise a list of causes (`front-without-author`, `anchor-equals-pn`, …). The causes are found in the document rather than read from libxml2's messages, which cascade — one refused attribute on `<section>` was 203,612 lines over the corpus. A failure none of them explains is `unexplained`, with libxml2's first message as a warning: that bucket is where a new kind of failure shows up — in a document with no known cause. One that already has a known cause can hide a new kind behind it, so the causes say what a document contains rather than everything xmllint refused, and the bucket watches more of the corpus as known causes are fixed. Our parser round-tripping its own output never proved it was RFCXML, since it tolerates what it writes; the schema check is what does. From here on a regression is a document that stops validating.
-- **manifest** hashes every file so the app can verify downloads and fetch individual documents by path.
+- **manifest** hashes every file so the app can verify downloads and fetch individual documents by path. The type is RFCKit's `Manifest`, which the app reads, so the two sides cannot drift; the hashing is corpus-build's (swift-crypto) and the app's (CryptoKit), because RFCKit has no cryptography of its own. A pack carries a manifest of its own at its root, listing exactly its files by bare name (`rfc1.xml`), and the app verifies an installed pack against that one.
 
 Regression review is a diff of two `report.json` files: a heuristic change that moves counts on hundreds of documents gets looked at before it ships. The reports for the 1969 RFCs already show what to expect: RFC 2 flags "more artwork than prose" (its hand-typed layout is indistinguishable from diagrams) and RFC 3 has no recognisable front matter. Those become overrides or targeted heuristics; the 1990s and 2000s RFCs, which are the bulk, follow the strict format the parser is built for.
+
+A report diff compares a change with the heuristics before it, never with a right answer. The one right answer there is (#42) is the RFCs from 8650 on, whose text xml2rfc generated from their XML: `fetch --format modern-text` fetches that text into `corpus/modern-text.noindex/`, and `score` parses it with `LegacyTextParser`, parses the XML with `RFCXMLParser`, and compares the headings, artwork and source code of the two documents (`make corpus-score`). Blocks are matched by content, as multisets per kind, because the parser keeps no source lines to match by position. The content is normalized so that xml2rfc's rendering and the element compare equal: tabs are expanded to eight columns, a heading's superscript is written `^(8)` and its non-breaking hyphens are hyphens, and common indentation, trailing space, blank lines and the `<CODE BEGINS>`/`<CODE ENDS>` markers go, and SVG-only artwork, which the text only names, is not expected. Besides artwork, source code and headings, `verbatim` matches artwork and source code whatever they were called: plain text cannot say what is code, so a grammar the parser kept whole as artwork is a block it found, and a document's errors are counted from headings and `verbatim`. The labels are derived on every run and never committed. `corpus/score.json` holds the counts, precision and recall per kind and every document worst first, beside `report.json` rather than in it, so a diff of either is about one thing. It is a regression floor, not a measure of the legacy corpus: xml2rfc's output is uniform, and the documents that break the parser have no analogue in it.
+
+The first run, over all 1,378:
+
+| Kind | Precision | Recall |
+|---|---|---|
+| heading | 97.2 % | 97.7 % |
+| verbatim | 13.7 % | 53.5 % |
+| artwork | 7.6 % | 67.1 % |
+| source code | – | 0 % |
+
+The false verbatim blocks are the parser reading a hanging-indent definition list (#436), a caption (#361) or an ASCII table (#438) as artwork, and cutting one block into pieces where its indentation drops (#437).
 
 ## What we precompute, and what we never do
 
 Rendering is never precomputed. Fonts, widths, Dynamic Type and dark mode differ per device; the app renders the model at runtime. Everything below is a model, an index or a graph.
 
-| Pack | Contents | Raw | Shipped (zstd) | Delivery |
+| Pack | Contents | Raw | Shipped (LZFSE) | Delivery |
 |---|---|---|---|---|
 | `index` | Compact form of the RFC Editor index: metadata for all documents, series groupings | 14 MB XML | ~1 MB | **In the app bundle**, refreshed at runtime from the RSS feed and the live index |
 | `graph` | Citation graph (who cites whom, from every References section), obsoletes/updates edges | a few MB | <1 MB | In the bundle or first optional pack |
 | `errata` | Normalized errata: RFC, section, status, original and corrected text | 12 MB JSON | <1 MB | Bundle or fetched on first use |
-| `legacy-xml` | RFCXML for the 8,457 legacy RFCs with a text file | ~480 MB | ~100 MB | Optional download, "Read everything offline" |
+| `legacy-xml` | RFCXML for the 8,457 legacy RFCs with a text file | 460 MB | 104 MB, measured | Optional download, "Read everything offline" |
 | `modern-xml` | Mirror of the RFC Editor's XML for RFCs ≥ 8650 | ~60 MB | ~15 MB | Optional; otherwise fetched per document |
 | `fts` | SQLite FTS5 database, one row per section, BM25 ranking, over the whole corpus | 150–250 MB | ~80 MB | Optional, requires the XML packs |
 | `embeddings-abstracts` | One vector per RFC abstract | ~10 MB | ~10 MB | Optional, enables semantic search over the whole series |
@@ -121,7 +137,7 @@ The app bundle target is under about 30 MB: code plus the compressed index. Ever
 
 ## Automation
 
-`.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest`, compresses the packs and attaches them to a release. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack simply reproduces byte-for-byte unless the code changed.
+`.github/workflows/corpus.yml` runs `fetch`, `convert` and `manifest` on Linux, splits the output into one folder per pack with its own manifest, and hands the folders to a macOS job that archives them with `aa` and attaches them to a release. A pack is an Apple Archive compressed with LZFSE (#36), because the app reads that with Apple's own frameworks and gains no dependency for it. The archive is made on macOS because nothing on Linux writes the Apple Archive container: an LZFSE library would compress, but corpus-build would have to reimplement the container, and the app would be the only test of that. It is `workflow_dispatch` only for now: the first full run should be watched, its `report.json` reviewed, and a handful of overrides written before anything is published. Once the output is trusted, a monthly schedule picks up newly published RFCs for the index, graph and errata packs, and the legacy pack's documents simply reproduce byte-for-byte unless the code changed, though the archive does not: its manifest and file times record the run that made it.
 
 The full text fetch is about 450 MB and 8,457 requests; at six concurrent connections it takes on the order of twenty minutes. Cache `corpus/text.noindex` between runs (an Actions cache keyed on the index version) so the RFC Editor is fetched once, not monthly.
 
@@ -144,7 +160,7 @@ Overrides are the only part that must be under version control; everything else 
 ## How the app consumes packs
 
 1. On launch, load the bundled `index` pack; refresh from the RSS feed and live index in the background.
-2. Opening a document: if a pack containing it is installed, read the XML from the pack; otherwise fetch the RFC Editor's XML (≥ 8650) or, for a legacy RFC without the pack, fall back to fetching the `.txt` and parsing on device with `LegacyTextParser`. Either way the reader sees an `RFCDocument`.
+2. Opening a document: if a pack containing it is installed, read the XML from the pack; otherwise fetch the RFC Editor's XML (≥ 8650) or, for a legacy RFC without the pack, fall back to fetching the `.txt` and parsing on device with `LegacyTextParser`. Either way the reader sees an `RFCDocument`. Built for `legacy-xml` (#36): `DocumentStore` looks in the parsed cache, the cached XML, the installed pack, the cached `.txt` and then the network, so the pack wins over a `.txt` cached before it arrived, and that `.txt` still serves Original Text. A pack is installed from an `.aar`, a folder or a URL into `Application Support/RFCReader/Packs/<name>/`: unpacked into a staging folder beside it, verified file by file against its manifest, and only then swapped in, so a pack that fails leaves the installed one untouched. It is unpacked because an Apple Archive has no random access. So far the only way to install one is a developer's: Developer ▸ Install Data Pack… in a Debug build on macOS, or the launch argument `-installPack <url or path>`.
 3. Search: metadata search always works from the index. Full-text and semantic search light up when the `fts` and embedding packs are installed; the search UI says so rather than silently returning less.
 4. Settings ▸ Offline: a list of packs with sizes, install and remove, and the disk they use.
 
