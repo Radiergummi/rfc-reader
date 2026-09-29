@@ -83,7 +83,7 @@ The inputs most likely to bite a person, each pinned by a test in the task named
 - Test: `Packages/RFCKit/Tests/RFCKitTests/RFCRevisionsTests.swift`
 
 **Interfaces:**
-- Produces: `RFCRevisions` (`version`, `generatedAt`, `revisions: [Int: [Revision]]`, `init(generatedAt:revisions:)`, `static func decode(_: Data) throws -> RFCRevisions`, `func encoded() throws -> Data`, `static let currentVersion = 1`, `enum VersionError: Error, Equatable { case unknown(Int) }`), `RFCRevisions.Revision` (memberwise `init(relation:draft:revision:published:stream:group:intendedStatus:stage:)`), `RFCRevisions.Revision.Relation` (`.obsoletes`, `.updates`), `RevisionStage` (`inGroup, lastCall, submitted, ietfLastCall, iesgReview, approved, rfcEditorQueue`, `Comparable` in that order).
+- Produces: `RFCRevisions` (`version`, `generatedAt`, `revisions: [Int: [Revision]]`, `init(generatedAt:revisions:)`, `static func decode(_: Data) throws -> RFCRevisions`, `func encoded() throws -> Data`, `static let currentVersion = 1`, `enum VersionError: Error, Equatable { case unknown(Int) }`), `RFCRevisions.Revision` (memberwise `init(relation:draft:revision:published:stream:group:intendedStatus:stage:)`), `RevisionRelation` (`.obsoletes`, `.updates`), `RevisionStage` (`inGroup, lastCall, submitted, ietfLastCall, iesgReview, approved, rfcEditorQueue`, `Comparable` in that order).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1581,7 +1581,7 @@ public struct RevisionScan: Codable, Sendable, Equatable {
     var byRFC: [Int: [RFCRevisions.Revision]] = [:]
     for name in drafts.keys.sorted() {
       guard let entry = drafts[name], let reading = entry.reading else { continue }
-      let relations: [(RFCRevisions.Revision.Relation, [Int])] = [
+      let relations: [(RevisionRelation, [Int])] = [
         (.obsoletes, reading.obsoletes), (.updates, reading.updates),
       ]
       for (relation, numbers) in relations {
@@ -1960,7 +1960,7 @@ The first `workflow_dispatch` run and its review happen after merge (Task 12). A
 
 **Interfaces:**
 - Consumes: `RFCRevisions`, `RevisionStage` (Task 1); `RFCEditorEndpoints.datatrackerBase` (existing).
-- Produces: `public struct RevisionsSummary: Equatable, Sendable` with `init(_ file: RFCRevisions?, rfc: Int, now: Date, locale: Locale = .current, timeZone: TimeZone = .current)`, `revisions: [RFCRevisions.Revision]` (ordered), `isStale: Bool`, `isEmpty: Bool`, `bannerLines: [Line]`, `moreText: String?`, `inspectorLines(_ relation: RFCRevisions.Revision.Relation) -> [Line]`, `static func stageName(_: RevisionStage, stream: String) -> String`, `static func relationLabel(_: RFCRevisions.Revision.Relation) -> String`; `RevisionsSummary.Line: Equatable, Sendable, Identifiable` with `relation: String`, `title: String`, `url: URL`, `detail: String`, `accessibilityLabel: String`, `id: String`.
+- Produces: `public struct RevisionsSummary: Equatable, Sendable` with `init(_ file: RFCRevisions?, rfc: Int, now: Date, locale: Locale = .current, timeZone: TimeZone = .current)`, `revisions: [RFCRevisions.Revision]` (ordered), `isStale: Bool`, `isEmpty: Bool`, `bannerLines: [Line]`, `moreText: String?`, `inspectorLines(_ relation: RevisionRelation) -> [Line]`, `static func stageName(_: RevisionStage, stream: String) -> String`, `static func relationLabel(_: RevisionRelation) -> String`; `RevisionsSummary.Line: Equatable, Sendable, Identifiable` with `relation: String`, `title: String`, `url: URL`, `detail: String`, `accessibilityLabel: String`, `id: String`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1981,7 +1981,7 @@ struct RevisionsSummaryTests {
   private static let utc = TimeZone(identifier: "UTC")!
 
   private static func revision(
-    _ draft: String, _ relation: RFCRevisions.Revision.Relation = .obsoletes,
+    _ draft: String, _ relation: RevisionRelation = .obsoletes,
     stage: RevisionStage = .inGroup, stream: String = "ietf", revision: String = "22",
     published: Date = now - 30 * day
   ) -> RFCRevisions.Revision {
@@ -2169,7 +2169,7 @@ public struct RevisionsSummary: Equatable, Sendable {
   }
 
   /// Every draft of one relation, in full, for the inspector.
-  public func inspectorLines(_ relation: RFCRevisions.Revision.Relation) -> [Line] {
+  public func inspectorLines(_ relation: RevisionRelation) -> [Line] {
     revisions.filter { $0.relation == relation }.map { revision in
       var parts = [format(revision.published, .dateTime.day().month(.wide).year())]
       if let group = revision.group { parts.append(group.uppercased()) }
@@ -2179,7 +2179,7 @@ public struct RevisionsSummary: Equatable, Sendable {
     }
   }
 
-  public static func relationLabel(_ relation: RFCRevisions.Revision.Relation) -> String {
+  public static func relationLabel(_ relation: RevisionRelation) -> String {
     switch relation {
     case .obsoletes: "Being replaced by"
     case .updates: "Being updated by"
@@ -2281,7 +2281,7 @@ Add to `DocumentInfoTests`:
 
 ```swift
   private func revisions(for metadata: RFCMetadata) -> RevisionsSummary {
-    let revision = { (draft: String, relation: RFCRevisions.Revision.Relation) in
+    let revision = { (draft: String, relation: RevisionRelation) in
       RFCRevisions.Revision(
         relation: relation, draft: draft, revision: "03", published: .now, stream: "ietf",
         group: "httpbis", intendedStatus: "Proposed Standard", stage: .inGroup)
@@ -2354,7 +2354,7 @@ Change the initializer's signature and its Relationships line:
 In `relationships`, change the signature to `(_ metadata: RFCMetadata, index: RFCIndex?, revisions: RevisionsSummary?)` and insert this after the loop over the four published relations, before the loop over `metadata.isAlso`:
 
 ```swift
-    for relation in [RFCRevisions.Revision.Relation.obsoletes, .updates] {
+    for relation in [RevisionRelation.obsoletes, .updates] {
       let lines = revisions?.inspectorLines(relation) ?? []
       if !lines.isEmpty {
         rows.append(Row(label: RevisionsSummary.relationLabel(relation), value: .drafts(lines)))
