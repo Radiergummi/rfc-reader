@@ -182,7 +182,7 @@ struct InlineLinker: Sendable {
             range: match.range,
             inline: .crossReference(
               CrossReference(
-                target: .anchor("section-\(match.section)"),
+                target: .anchor(SectionAnchor.anchor(forSectionNumber: String(match.section))),
                 text: CrossReference.nonBreakingLabel(String(text[match.range])))
             )))
       }

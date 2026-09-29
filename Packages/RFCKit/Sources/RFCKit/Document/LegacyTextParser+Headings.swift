@@ -99,12 +99,14 @@ extension LegacyTextParser {
       let number = String(match.number)
       let title = String(match.title).trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
-        number: number, title: title, isAppendix: false, anchor: "section-\(number)")
+        number: number, title: title, isAppendix: false,
+        anchor: SectionAnchor.anchor(forSectionNumber: number))
     }
     if let (number, matched) = appendixHeading(in: trimmed) {
       let title = matched.trimmingTrailingDots().collapsingWhitespace()
       return HeadingInfo(
-        number: number, title: title, isAppendix: true, anchor: "appendix-\(number)")
+        number: number, title: title, isAppendix: true,
+        anchor: SectionAnchor.anchor(forSectionNumber: number))
     }
     // Unnumbered heading: "Abstract", "Security Considerations", "Author's Address".
     let firstWord = trimmed.split(separator: " ").first.map { String($0).lowercased() } ?? ""

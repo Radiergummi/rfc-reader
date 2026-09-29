@@ -381,6 +381,11 @@ public struct SeriesInfo: Hashable, Codable, Sendable {
     self.name = name
     self.value = value
   }
+
+  /// The entry naming `id`: `RFC 9110`, `BCP 14`.
+  public init(_ id: DocumentID) {
+    self.init(name: id.series.rawValue, value: String(id.number))
+  }
 }
 
 public struct ReferenceList: Sendable, Hashable, Codable {

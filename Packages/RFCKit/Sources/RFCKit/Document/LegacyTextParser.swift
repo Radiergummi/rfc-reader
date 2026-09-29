@@ -187,11 +187,7 @@ public struct LegacyTextParser: Sendable {
   /// prose test runs before the body's start is known. The front matter is a few
   /// dozen lines against the hundreds the indent is taken from.
   static func proseIndent(_ lines: [Line]) -> Int {
-    proseIndent(
-      lines.compactMap { line in
-        guard case .text(let string) = line else { return nil }
-        return string
-      })
+    proseIndent(lines.compactMap(\.string))
   }
 
   static func proseIndent(_ lines: [String]) -> Int {
@@ -248,11 +244,7 @@ public struct LegacyTextParser: Sendable {
   /// `10` for `11`) or one it is under (`2.4`) must be a heading number too, however it
   /// is set. Only `0` and `1` open a numbering on their own.
   private static func numbersHeadingsWithAColon(_ lines: [Line]) -> Bool {
-    numbersHeadingsWithAColon(
-      lines.compactMap { line in
-        guard case .text(let string) = line else { return nil }
-        return string
-      })
+    numbersHeadingsWithAColon(lines.compactMap(\.string))
   }
 
   static func numbersHeadingsWithAColon(_ lines: [String]) -> Bool {

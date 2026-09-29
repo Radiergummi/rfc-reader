@@ -4,6 +4,11 @@ extension LegacyTextParser {
   enum Line: Sendable {
     case text(String)
     case pageBreak
+
+    /// The line's text, or nil for a page break.
+    var string: String? {
+      if case .text(let string) = self { string } else { nil }
+    }
   }
 
   nonisolated(unsafe) private static let footerPattern = #/\[Page \d+\]\s*$/#
@@ -42,10 +47,7 @@ extension LegacyTextParser {
   /// without this a rule that deletes the body's own lines looks like a clean run.
   public static func recurringFurniture(in text: String) -> [String] {
     let lines = paginated(text)
-    return recurringFurniture(lines).sorted().compactMap {
-      if case .text(let string) = lines[$0] { return string }
-      return nil
-    }
+    return recurringFurniture(lines).sorted().compactMap { lines[$0].string }
   }
 
   static func depaginate(_ text: String) -> [Line] {

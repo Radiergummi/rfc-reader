@@ -230,8 +230,10 @@ public struct RFCXMLSerializer: Sendable {
     // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,
     // which is an ID. The second is written unnumbered, its number in its name, so it
     // reads the same and names nothing twice (#65).
-    let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
-      .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = section.number.map {
+      PartNumber(sectionNumber: $0, isAppendix: section.isAppendix).attribute
+    }
+    .flatMap { context.claim($0) ? $0 : nil }
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
@@ -254,8 +256,10 @@ public struct RFCXMLSerializer: Sendable {
   }
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
-    let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
-      .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = section.number.map {
+      PartNumber(sectionNumber: $0, isAppendix: section.isAppendix).attribute
+    }
+    .flatMap { context.claim($0) ? $0 : nil }
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
@@ -381,7 +385,9 @@ public struct RFCXMLSerializer: Sendable {
     case .figure(let figure):
       var attributes: [(String, String)] = []
       if let anchor = figure.anchor { attributes.append(("anchor", anchor)) }
-      if let number = figure.number { attributes.append(("pn", "figure-\(number)")) }
+      if let number = figure.number {
+        attributes.append(("pn", PartNumber.figure(number).attribute))
+      }
       writer.open("figure", attributes)
       if let title = figure.title { writer.element("name", text: title) }
       for inner in figure.blocks { writeBlock(inner, writer: &writer, context: &context) }
@@ -389,7 +395,7 @@ public struct RFCXMLSerializer: Sendable {
     case .table(let table):
       var attributes: [(String, String)] = []
       if let anchor = table.anchor { attributes.append(("anchor", anchor)) }
-      if let number = table.number { attributes.append(("pn", "table-\(number)")) }
+      if let number = table.number { attributes.append(("pn", PartNumber.table(number).attribute)) }
       writer.open("table", attributes)
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
@@ -532,14 +538,6 @@ public struct RFCXMLSerializer: Sendable {
   /// series always does, and the parser reads the anchor back from it.
   private static func anchorAttribute(_ anchor: String, partNumber: String?) -> [(String, String)] {
     anchor == partNumber ? [] : [("anchor", anchor)]
-  }
-
-  /// `4.2` → `section-4.2`; appendix `A.1` → `section-appendix.a.1`.
-  static func partNumber(_ number: String, isAppendix: Bool) -> String {
-    guard isAppendix else { return "section-\(number)" }
-    var parts = number.split(separator: ".").map(String.init)
-    if let first = parts.first { parts[0] = first.lowercased() }
-    return "section-appendix.\(parts.joined(separator: "."))"
   }
 
   static func categoryCode(_ category: String) -> String? {

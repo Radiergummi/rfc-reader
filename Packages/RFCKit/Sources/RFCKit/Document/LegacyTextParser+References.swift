@@ -97,7 +97,7 @@ extension LegacyTextParser {
     {
       seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
-      seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
+      seriesInfo.append(SeriesInfo(id))
     }
     if let match = text.firstMatch(of: #/\bBCP\s?(\d+)/#) {
       seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))

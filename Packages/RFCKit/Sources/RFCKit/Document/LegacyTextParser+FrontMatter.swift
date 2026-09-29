@@ -1,4 +1,5 @@
 import Foundation
+import RegexBuilder
 
 extension LegacyTextParser {
   /// The lead-in with the title page's leftovers taken out of its start (#76).
@@ -172,12 +173,43 @@ extension LegacyTextParser {
     return previousRow[second.count]
   }
 
-  nonisolated(unsafe) private static let dateLinePattern =
-    #/(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+(?:\d{1,2},?\s+)?\d{4}/#
+  /// A month's full name, as a title page and a references entry spell it: the one
+  /// list both month patterns are built on. `PublicationDate.month(from:)` numbers
+  /// every one of them, which a test holds it to.
+  nonisolated(unsafe) private static let monthName = ChoiceOf {
+    "January"
+    "February"
+    "March"
+    "April"
+    "May"
+    "June"
+    "July"
+    "August"
+    "September"
+    "October"
+    "November"
+    "December"
+  }
+
+  /// `August 13, 1982`, `13 August 1982`, `July 1984`.
+  nonisolated(unsafe) private static let dateLinePattern = Regex {
+    Optionally {
+      Repeat(.digit, 1...2)
+      OneOrMore(.whitespace)
+    }
+    monthName
+    OneOrMore(.whitespace)
+    Optionally {
+      Repeat(.digit, 1...2)
+      Optionally(",")
+      OneOrMore(.whitespace)
+    }
+    Repeat(.digit, count: 4)
+  }
 
   /// A line that is a date and nothing else, as a title page sets its publication date:
   /// RFC 822's `August 13, 1982`, RFC 907's `July 1984`.
-  private static func isDateLine(_ lines: [String]) -> Bool {
+  static func isDateLine(_ lines: [String]) -> Bool {
     lines.count == 1
       && lines[0].trimmingCharacters(in: .whitespaces).wholeMatch(of: dateLinePattern) != nil
   }
@@ -335,8 +367,12 @@ extension LegacyTextParser {
     return nil
   }
 
-  nonisolated(unsafe) static let monthYearPattern =
-    #/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/#
+  /// A month and a year, `May 2008`, each captured.
+  nonisolated(unsafe) static let monthYearPattern = Regex {
+    Capture { monthName }
+    OneOrMore(.whitespace)
+    Capture { Repeat(.digit, count: 4) }
+  }
   nonisolated(unsafe) private static let authorPattern =
     #/^(?<name>(?:[A-Z]\.\s?)+\s*[A-Z][\w'\-]+)(?<editor>,\s*Ed(?:itor)?\.?)?$/#
 

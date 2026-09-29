@@ -302,16 +302,11 @@ public struct RFCXMLParser: Sendable {
     private func sectionNumber(fromPartNumber partNumber: String?) -> (
       number: String?, isAppendix: Bool
     ) {
-      guard var value = partNumber, value.hasPrefix("section-") else { return (nil, false) }
-      value.removeFirst("section-".count)
-      if value.hasPrefix("appendix.") {
-        value.removeFirst("appendix.".count)
-        var parts = value.split(separator: ".").map(String.init)
-        if let first = parts.first { parts[0] = first.uppercased() }
-        return (parts.joined(separator: "."), true)
+      switch partNumber.flatMap(PartNumber.init) {
+      case .section(let number): (number, false)
+      case .appendix(let number): (number, true)
+      case .figure, .table, nil: (nil, false)
       }
-      if value.first?.isNumber == true { return (value, false) }
-      return (nil, false)
     }
 
     /// `position` names an anchorless list, as it does a section in `parseSection`.
@@ -395,7 +390,7 @@ public struct RFCXMLParser: Sendable {
       let memberNames = members.compactMap { $0.documentID?.displayName }
       var seriesInfo: [SeriesInfo] = []
       if let id = DocumentID(label: anchor) {
-        seriesInfo.append(SeriesInfo(name: id.series.rawValue, value: String(id.number)))
+        seriesInfo.append(SeriesInfo(id))
       }
       return Reference(
         anchor: anchor,
@@ -512,10 +507,10 @@ public struct RFCXMLParser: Sendable {
         let chosen = alternatives.first { $0["type"] == "ascii-art" } ?? alternatives.first
         return chosen.map { .preformatted(parseArtwork($0, kind: .artwork)) }
       case "figure":
-        let number = element["pn"].flatMap { partNumber -> Int? in
-          guard partNumber.hasPrefix("figure-") else { return nil }
-          return Int(partNumber.dropFirst("figure-".count))
-        }
+        let number: Int? =
+          if case .figure(let number)? = element["pn"].flatMap(PartNumber.init) { number } else {
+            nil
+          }
         var inner = element
         inner.children.removeAll {
           if case .element(let child) = $0 {
@@ -636,10 +631,8 @@ public struct RFCXMLParser: Sendable {
       let bodyRows = element.elements
         .filter { $0.name == "tbody" || $0.name == "tfoot" }
         .flatMap { $0.all("tr") }
-      let number = element["pn"].flatMap { partNumber -> Int? in
-        guard partNumber.hasPrefix("table-") else { return nil }
-        return Int(partNumber.dropFirst("table-".count))
-      }
+      let number: Int? =
+        if case .table(let number)? = element["pn"].flatMap(PartNumber.init) { number } else { nil }
       return Table(
         title: element.first("name")?.normalizedText,
         number: number,
