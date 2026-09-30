@@ -195,7 +195,7 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section, animated: true)
+        jump(toSection: request?.section, animated: true, revealingReferences: true)
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -499,10 +499,20 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?, animated: Bool) {
+  ///
+  /// An anchor the body does not hold scrolls nowhere: a document already open stays
+  /// where the reader is, and one just opened stays at its top (#276). In a document
+  /// already open, a place naming a bibliography entry, as `#RFC9110` does in the
+  /// RFC Editor's HTML, shows that entry, as a click on its citation would; the
+  /// body leaves the entries out.
+  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
     guard let section, let document = session.state.document else { return }
-    scrollTarget = ReaderScrollTarget(
-      anchor: document.anchor(forPlace: section), animated: animated)
+    let anchor = document.anchor(forPlace: section)
+    if revealingReferences, reader.groups.entry(anchor: anchor) != nil {
+      reader.reveal(reference: anchor)
+      return
+    }
+    scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.

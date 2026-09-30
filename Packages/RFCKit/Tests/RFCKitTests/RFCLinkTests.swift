@@ -112,7 +112,8 @@ struct RFCLinkTests {
   }
 
   @Test func `a page fragment is kept, so the document opens at the top`() throws {
-    let link = try #require(RFCLink(url: URL(string: "https://www.rfc-editor.org/rfc/rfc9110#page-12")!))
+    let link = try #require(
+      RFCLink(url: URL(string: "https://www.rfc-editor.org/rfc/rfc9110#page-12")!))
     #expect(link.section == "page-12")
   }
 

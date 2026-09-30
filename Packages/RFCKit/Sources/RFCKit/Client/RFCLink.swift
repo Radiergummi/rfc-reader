@@ -27,7 +27,7 @@ public struct RFCLink: Hashable, Sendable {
     var components = URLComponents()
     components.scheme = Self.scheme
     components.host = id.series == .rfc ? String(id.number) : id.fileStem
-    components.fragment = section.map(SectionAnchor.anchor(forSectionNumber:))
+    components.fragment = section.map(SectionAnchor.fragment(forPlace:))
     // Unwrapped because nothing here can fail: the host is a document ID's own
     // letters and digits, and the one caller-supplied part, the section, goes in
     // as a fragment, which `URLComponents` percent-encodes (#150).
@@ -44,7 +44,7 @@ public struct RFCLink: Hashable, Sendable {
     guard let section,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
-    components.fragment = SectionAnchor.anchor(forSectionNumber: section)
+    components.fragment = SectionAnchor.fragment(forPlace: section)
     return components.url ?? url
   }
 
@@ -56,9 +56,13 @@ public struct RFCLink: Hashable, Sendable {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
-    // and `section-4.2%20draft` has to come back as the section it was.
-    let fragmentSection = url.fragment(percentEncoded: false).flatMap(
-      SectionAnchor.sectionNumber(fromAnchor:))
+    // and `section-4.2%20draft` has to come back as the section it was. A fragment
+    // that names no section is an anchor, and is the place as it is: the reader
+    // resolves one the document defines, and opens at the top for one it doesn't,
+    // rather than at the reading position (#276).
+    let fragmentSection = url.fragment(percentEncoded: false).flatMap { fragment in
+      fragment.isEmpty ? nil : SectionAnchor.sectionNumber(fromAnchor: fragment) ?? fragment
+    }
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
