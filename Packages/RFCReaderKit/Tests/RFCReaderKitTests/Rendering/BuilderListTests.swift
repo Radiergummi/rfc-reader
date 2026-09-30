@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import SwiftUI
 import Testing
 
 @testable import RFCReaderKit
@@ -136,10 +137,17 @@ struct BuilderListTests {
 
   /// A marker wider than one step ran past its tab stop, so the tab fell through to
   /// the next default stop and the first line started right of the wrapped ones
-  /// (#359). "10000." is wider than a step at any text size.
-  @Test func `a marker wider than one step still ends before the item's text`() throws {
+  /// (#359). "10000." is wider than a step at any text size; "1." is wider than the
+  /// step the column caps (#331) on an iPhone at the largest accessibility size.
+  @Test(arguments: [
+    (ReadingStyle(), 10_000, "10000."),
+    (ReadingStyle(bodySize: 17, measure: 345, textSize: .accessibility5), 1, "1."),
+  ])
+  func `a marker wider than one step still ends before the item's text`(
+    style: ReadingStyle, start: Int, firstMarker: String
+  ) throws {
     let list = ListBlock(
-      style: .numbered(ListNumbering(type: "1", start: 10_000)),
+      style: .numbered(ListNumbering(type: "1", start: start)),
       items: [ListItem(text: "first"), ListItem(text: "second")])
     let built = DocumentTextBuilder.build(Fixtures.document(.list(list)), style: style)
     let offset = try Fixtures.offset(of: "first", in: built.text)
@@ -148,8 +156,9 @@ struct BuilderListTests {
     // As the builder measures it, not with `NSAttributedString.size()`, which has
     // thrown under load.
     let marker = CTLineCreateWithAttributedString(
-      NSAttributedString(string: "10000.", attributes: [.font: style.bodyFont]))
+      NSAttributedString(string: firstMarker, attributes: [.font: style.bodyFont]))
     let markerWidth = CGFloat(CTLineGetTypographicBounds(marker, nil, nil, nil))
+    #expect(style.indentStep < markerWidth)
     #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > markerWidth)
     #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
   }
