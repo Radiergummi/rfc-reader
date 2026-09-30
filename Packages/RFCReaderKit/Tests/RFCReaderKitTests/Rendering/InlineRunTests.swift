@@ -76,8 +76,12 @@ struct InlineRunTests {
       let offset = try Fixtures.offset(of: script, in: strong)
       let font = try #require(
         strong.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
-      #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(script) lost bold")
-      #expect(font.pointSize == style.bodySize * 0.75)
+      // The font itself in the messages: this failed under concurrent runs with a
+      // 9 pt font, three quarters of 12 pt rather than of the body (#326).
+      #expect(
+        font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold),
+        "\(script) lost bold: \(describe(font))")
+      #expect(font.pointSize == style.bodySize * 0.75, "\(script): \(describe(font))")
     }
   }
 
