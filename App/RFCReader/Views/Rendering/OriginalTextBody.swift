@@ -144,9 +144,9 @@
   /// A `UITextView` whose content is as wide as its laid-out text, so unwrapped lines
   /// scroll sideways rather than being clipped at the frame.
   ///
-  /// UIKit sets the content size's width to the frame's on every layout pass;
-  /// this replaces that width on its way in, and asks again after each pass, since
-  /// incremental layout widens what has been laid out as the text scrolls.
+  /// UIKit keeps the content size's width at the frame's; this replaces that width
+  /// on its way in, and asks again after each layout pass, since incremental layout
+  /// widens what has been laid out as the text scrolls.
   final class SidewaysTextView: UITextView {
     override var contentSize: CGSize {
       get { super.contentSize }
@@ -155,8 +155,24 @@
 
     override func layoutSubviews() {
       super.layoutSubviews()
+      // UIKit narrows the container to the frame although it does not track the
+      // view's width: on an iPhone the lines wrapped at 345 pt until this put the
+      // unbounded width back (#240).
+      if textContainer.size.width != Self.unbounded {
+        textContainer.size = CGSize(width: Self.unbounded, height: 0)
+      }
       if contentSize.width != laidOutWidth { contentSize = super.contentSize }
     }
+
+    /// Plain text, so Copy puts only the string on the pasteboard, as on macOS: as
+    /// rich text it carries `label` resolved for the current appearance, and text
+    /// copied in dark mode pastes near-white into a light document.
+    override func copy(_ sender: Any?) {
+      guard let range = selectedTextRange, let selected = text(in: range) else { return }
+      UIPasteboard.general.string = selected
+    }
+
+    private static let unbounded = CGFloat.greatestFiniteMagnitude
 
     private var laidOutWidth: CGFloat {
       OriginalTextLayout.contentWidth(
