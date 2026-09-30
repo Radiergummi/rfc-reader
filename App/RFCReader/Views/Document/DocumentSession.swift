@@ -171,7 +171,7 @@ final class DocumentSession {
       return
     }
     buildingFor = inputs
-    let delay = state.buildDelay
+    let delay = state.buildDelay(changingColumn: inputs.column != builtInputs?.column)
     trace("building")
     build = Task(name: "Build document") { [weak self] in
       if delay > .zero {

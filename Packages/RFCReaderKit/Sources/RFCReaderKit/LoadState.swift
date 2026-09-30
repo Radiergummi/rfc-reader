@@ -69,13 +69,19 @@ public struct LoadState {
   /// How long a build waits before it starts.
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
-  /// the largest documents in the library — so a change to a document already on
-  /// screen waits that long to settle, and the next change cancels it: every further
-  /// tick of the font-size slider or the window's edge. The first build does not
-  /// wait: there is nothing on screen to disturb, and the column is already known,
-  /// so it is built once and built right.
-  public var buildDelay: Duration {
-    built == nil ? .zero : .milliseconds(650)
+  /// the largest documents in the library — so a new column for a document already
+  /// on screen waits that long to settle, and the next change cancels it: the
+  /// window's edge being dragged is a new column on every frame.
+  ///
+  /// Nothing else waits. The first build has nothing on screen to disturb, and the
+  /// column is already known, so it is built once and built right. A restyle — the
+  /// text size, links underlined — comes a step at a time: View ▸ Bigger and
+  /// Smaller (#153) waited out the whole delay before starting a build of about
+  /// 120 ms, measured on RFC 9110, so each step took most of a second to show. The
+  /// Settings slider builds on each tick now too, off the main actor, and a tick
+  /// that comes before the build under way is done replaces it.
+  public func buildDelay(changingColumn: Bool) -> Duration {
+    built != nil && changingColumn ? .milliseconds(650) : .zero
   }
 }
 

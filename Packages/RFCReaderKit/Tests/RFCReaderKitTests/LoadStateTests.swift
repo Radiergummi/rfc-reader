@@ -84,16 +84,26 @@ struct LoadStateTests {
   @Test func `the first build of a document runs at once`() {
     var state = LoadState()
     state.finish(document)
-    #expect(state.buildDelay == .zero)
+    #expect(state.buildDelay(changingColumn: true) == .zero)
+    #expect(state.buildDelay(changingColumn: false) == .zero)
   }
 
-  /// A rebuild costs the whole document again, so a font-size slider or a window
-  /// edge being dragged waits for the change to settle.
-  @Test func `a rebuild of a document on screen waits for the change to settle`() {
+  /// A rebuild costs the whole document again, so a window edge being dragged
+  /// waits for the column to settle.
+  @Test func `a new column for a document on screen waits for the change to settle`() {
     var state = LoadState()
     state.finish(document)
     state.install(built())
-    #expect(state.buildDelay == .milliseconds(650))
+    #expect(state.buildDelay(changingColumn: true) == .milliseconds(650))
+  }
+
+  /// View ▸ Bigger and Smaller (#153) are a step at a time, and a step that
+  /// waited 650 ms before it even started building read as a slow app.
+  @Test func `a restyle of a document on screen runs at once`() {
+    var state = LoadState()
+    state.finish(document)
+    state.install(built())
+    #expect(state.buildDelay(changingColumn: false) == .zero)
   }
 
   // MARK: - Whether a build runs
