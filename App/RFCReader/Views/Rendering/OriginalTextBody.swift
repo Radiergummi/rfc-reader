@@ -1,41 +1,43 @@
+import RFCReaderKit
+import SwiftUI
+
+/// The RFC as published, in a TextKit 2 text view rather than a SwiftUI `Text`: an
+/// `NSTextView` on macOS, a `UITextView` on iOS (#240).
+///
+/// One `Text` held the whole depaginated source: one layout pass over it on the main
+/// thread before anything drew, and no find in the document (#159) -- the reasons the
+/// reader body is TextKit 2 as well (ARCHITECTURE.md, "Decision: TextKit 2 for the
+/// reader body"). A plain text view gets incremental layout, Find and selection from
+/// the platform. It is not `RFCTextView`: none of that view's decorations, chips or
+/// anchors apply to text shown exactly as it was published.
+///
+/// Lines never wrap, as they did not in the scroll view this replaces: the source is
+/// set in 72 columns, and its artwork only reads at its own width.
+struct OriginalTextBody {
+  let text: String
+  let fontSize: Double
+
+  /// The monospaced face the text is set in, a little smaller than the reader's
+  /// body so a 72-column page fits beside it.
+  fileprivate var font: PlatformFont {
+    .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
+  }
+
+  fileprivate var attributed: NSAttributedString {
+    NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: RFCColors.label])
+  }
+
+  /// What the storage last received, so an update pass that changes neither does
+  /// not rewrite a whole RFC's text.
+  final class Coordinator {
+    var shown: (text: String, fontSize: Double)?
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+}
+
 #if os(macOS)
   import AppKit
-  import SwiftUI
-
-  /// The RFC as published on macOS, in an `NSTextView` rather than a SwiftUI `Text`.
-  ///
-  /// One `Text` held the whole depaginated source: one layout pass over it on the main
-  /// thread before anything drew, and no find in the document (#159) -- the reasons the
-  /// reader body is TextKit 2 as well (ARCHITECTURE.md, "Decision: TextKit 2 for the
-  /// reader body"). A plain text view gets incremental layout, Find and selection from
-  /// the platform. It is not `RFCTextView`: none of that view's decorations, chips or
-  /// anchors apply to text shown exactly as it was published.
-  ///
-  /// Lines never wrap, as they did not in the scroll view this replaces: the source is
-  /// set in 72 columns, and its artwork only reads at its own width.
-  struct OriginalTextBody {
-    let text: String
-    let fontSize: Double
-
-    /// The monospaced face the text is set in, a little smaller than the reader's
-    /// body so a 72-column page fits beside it.
-    fileprivate var font: NSFont {
-      .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
-    }
-
-    fileprivate var attributed: NSAttributedString {
-      NSAttributedString(
-        string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
-    }
-
-    /// What the storage last received, so an update pass that changes neither does
-    /// not rewrite a whole RFC's text.
-    final class Coordinator {
-      var shown: (text: String, fontSize: Double)?
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-  }
 
   extension OriginalTextBody: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
@@ -82,45 +84,18 @@
 #endif
 
 #if os(iOS)
-  import RFCReaderKit
-  import SwiftUI
   import UIKit
 
-  /// The RFC as published on iOS, in a `UITextView` rather than a SwiftUI `Text`, for
-  /// the reasons the macOS one is an `NSTextView`: incremental layout and Find
-  /// (#159, #240).
-  ///
-  /// Lines never wrap, so the view has to scroll sideways, which a `UITextView` does
-  /// not: it keeps its content as wide as its frame, whatever its container. The
-  /// text view below widens its content to what has been laid out.
-  struct OriginalTextBody {
-    let text: String
-    let fontSize: Double
-
-    /// The monospaced face the text is set in, as on macOS.
-    fileprivate var font: UIFont {
-      .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
-    }
-
-    fileprivate var attributed: NSAttributedString {
-      NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
-    }
-
-    /// What the storage last received, so an update pass that changes neither does
-    /// not rewrite a whole RFC's text.
-    final class Coordinator {
-      var shown: (text: String, fontSize: Double)?
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-  }
-
+  /// On iOS the view has to scroll sideways, which a `UITextView` does not: it keeps
+  /// its content as wide as its frame, whatever its container. `SidewaysTextView`
+  /// widens its content to what has been laid out.
   extension OriginalTextBody: UIViewRepresentable {
     func makeUIView(context: Context) -> SidewaysTextView {
       let textView = SidewaysTextView(usingTextLayoutManager: true)
       textView.isEditable = false
       textView.isSelectable = true
       textView.isFindInteractionEnabled = true
+      textView.textDragDelegate = textView
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
       textView.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
@@ -168,8 +143,11 @@
     /// rich text it carries `label` resolved for the current appearance, and text
     /// copied in dark mode pastes near-white into a light document.
     override func copy(_ sender: Any?) {
-      guard let range = selectedTextRange, let selected = text(in: range) else { return }
-      UIPasteboard.general.string = selected
+      guard let range = selectedTextRange, !range.isEmpty, let selected = text(in: range) else {
+        super.copy(sender)
+        return
+      }
+      Clipboard.copy(selected)
     }
 
     private static let unbounded = CGFloat.greatestFiniteMagnitude
@@ -179,6 +157,17 @@
         usedWidth: textLayoutManager?.usageBoundsForTextContainer.maxX ?? 0,
         horizontalInsets: textContainerInset.left + textContainerInset.right,
         viewWidth: bounds.width)
+    }
+  }
+
+  /// A drag carries plain text too, for the reason Copy does.
+  extension SidewaysTextView: UITextDragDelegate {
+    func textDraggableView(
+      _ textDraggableView: any UIView & UITextDraggable,
+      itemsForDrag dragRequest: any UITextDragRequest
+    ) -> [UIDragItem] {
+      guard let dragged = text(in: dragRequest.dragRange), !dragged.isEmpty else { return [] }
+      return [UIDragItem(itemProvider: NSItemProvider(object: dragged as NSString))]
     }
   }
 #endif
