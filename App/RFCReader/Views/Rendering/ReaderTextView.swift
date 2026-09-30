@@ -71,6 +71,15 @@ import RFCReaderKit
       super.contentSize = held
     }
 
+    /// A find match or a VoiceOver rotor stop far from the viewport lands on an
+    /// estimate under viewport layout; the engine puts it there exactly instead.
+    var revealRange: ((NSRange) -> Bool)?
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+      if revealRange?(range) == true { return }
+      super.scrollRangeToVisible(range)
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
@@ -128,6 +137,15 @@ import RFCReaderKit
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
     var willTrackMouseDown: () -> Bool = { false }
+
+    /// A find match or a VoiceOver rotor stop far from the viewport lands on an
+    /// estimate under viewport layout; the engine puts it there exactly instead.
+    var revealRange: ((NSRange) -> Bool)?
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+      if revealRange?(range) == true { return }
+      super.scrollRangeToVisible(range)
+    }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 

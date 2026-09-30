@@ -254,6 +254,12 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
+      textView.revealRange = { [weak coordinator = context.coordinator] range in
+        guard ReaderLayoutEngine.isEnabled, let coordinator else { return false }
+        let revealed = coordinator.engine.reveal(range)
+        if revealed { coordinator.reportVisibleAnchor() }
+        return revealed
+      }
 
       let host = UIHostingController(rootView: context.coordinator.hostedHeader(inputs.header))
       host.view.backgroundColor = .clear
@@ -334,6 +340,12 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.revealRange = { [weak coordinator = context.coordinator] range in
+        guard ReaderLayoutEngine.isEnabled, let coordinator else { return false }
+        let revealed = coordinator.engine.reveal(range)
+        if revealed { coordinator.reportVisibleAnchor() }
+        return revealed
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false

@@ -102,6 +102,35 @@ final class ReaderLayoutEngine: PinSurface {
     return anchor.characterOffset
   }
 
+  // MARK: - Find and VoiceOver
+
+  /// Puts `range` a third of the way down the viewport when it is outside what is
+  /// laid out around it; answers false when it is near enough for the text view's own
+  /// scroll, whose geometry there is laid out.
+  func reveal(_ range: NSRange) -> Bool {
+    guard let textView, let layout = textView.textLayoutManager,
+      let viewport = layout.textViewportLayoutController.viewportRange,
+      let near = layout.range(of: viewport)
+    else { return false }
+    if NSLocationInRange(range.location, near) { return false }
+    jump(toOffset: range.location)
+    keeper.beginEngineMove()
+    scroll(toContainerY: containerTop - textView.viewportHeight / 3)
+    layOutViewport()
+    keeper.endEngineMove(top: containerTop)
+    userScrolledAfterReveal()
+    return true
+  }
+
+  /// A reveal is the reader's move: record where it left the top.
+  private func userScrolledAfterReveal() {
+    guard let layout = textView?.textLayoutManager,
+      let start = layout.textViewportLayoutController.viewportRange?.location,
+      let found = PinRecipe.anchor(atContainerTop: max(0, containerTop), in: layout, from: start)
+    else { return }
+    keeper.jumped(to: found.anchor)
+  }
+
   // MARK: - The scroller
 
   /// The knob's position and size (`HeightModel.knob`): where the line at the top
