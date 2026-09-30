@@ -61,8 +61,8 @@ struct RFCListView: View {
     // long.
     let bookmarked = library.bookmarkedNumbers
     // Once, and shared by everything below: `rfcs` was read twice per body pass —
-    // here and in the overlay — which is half of why the memoised list was worth
-    // memoising.
+    // here and in the overlay — which is half of why the memoized list was worth
+    // memoizing.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
@@ -158,7 +158,7 @@ struct RFCListView: View {
       if rows.isEmpty, library.indexState.isReady {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        let isUnsearched = navigation.appliedQuery.isEmpty
+        let isUnsearched = navigation.appliedQuery.isUnsearchedQuery
         if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
@@ -264,22 +264,8 @@ struct RFCListView: View {
   #if !os(macOS)
     /// How the list is shown, for this tab (#348).
     private var optionsMenu: some View {
-      @Bindable var navigation = navigation
-      return Menu {
-        if case .collection = navigation.filter {
-          Picker("Sort", selection: $navigation.listOptions.collectionSort) {
-            ForEach(ListOptions.CollectionSort.allCases, id: \.self) { sort in
-              Text(sort.title)
-            }
-          }
-        } else if ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery) {
-          Picker("Sort", selection: $navigation.listOptions.order) {
-            ForEach(ListOptions.Order.allCases, id: \.self) { order in
-              Text(order.title)
-            }
-          }
-        }
-        Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+      Menu {
+        ListViewOptions(navigation: navigation)
       } label: {
         Label("View Options", systemImage: "ellipsis")
       }
@@ -293,6 +279,48 @@ struct RFCListView: View {
   private func selectedRow() -> Int? {
     guard let selection = navigation.selection else { return nil }
     return rfcs.firstIndex { $0.id == selection }
+  }
+}
+
+/// How a tab's list is shown (#348, #349): its order, or a collection's, and
+/// whether obsolete documents are in it. The iOS list's View Options menu and the
+/// Mac's View menu.
+///
+/// The one difference is each platform's convention for an order the list cannot
+/// take — a search, or a list not in order of publication: the Mac's menu bar keeps
+/// the item and disables it, where iOS leaves it out of the menu.
+struct ListViewOptions: View {
+  @Bindable var navigation: NavigationModel
+
+  #if os(macOS)
+    private let sortTitle = "Sort By"
+  #else
+    private let sortTitle = "Sort"
+  #endif
+
+  private var canReorder: Bool {
+    ListOptions.canReorder(navigation.filter, query: navigation.appliedQuery)
+  }
+
+  var body: some View {
+    if case .collection = navigation.filter {
+      Picker(sortTitle, selection: $navigation.listOptions.collectionSort) {
+        ForEach(ListOptions.CollectionSort.allCases, id: \.self) { Text($0.title) }
+      }
+    } else {
+      #if os(macOS)
+        orderPicker.disabled(!canReorder)
+      #else
+        if canReorder { orderPicker }
+      #endif
+    }
+    Toggle("Show Obsolete", isOn: $navigation.listOptions.showsObsolete)
+  }
+
+  private var orderPicker: some View {
+    Picker(sortTitle, selection: $navigation.listOptions.order) {
+      ForEach(ListOptions.Order.allCases, id: \.self) { Text($0.title) }
+    }
   }
 }
 
@@ -428,7 +456,6 @@ struct RFCRow: View {
   private struct RowActions: ViewModifier {
     let rfc: RFCMetadata
     let isBookmarked: Bool
-    @Environment(\.modelContext) private var modelContext
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     @Environment(\.undoManager) private var undoManager
@@ -505,8 +532,7 @@ struct RFCRow: View {
     }
 
     private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(metadata: rfc, documentTitle: nil, id: rfc.id)
-      BookmarkStore.toggle(rfc.id, title: title, in: modelContext)
+      library.toggleBookmark(rfc.id)
     }
   }
 #endif
@@ -528,6 +554,13 @@ private struct PickerTarget: Identifiable {
 
     func body(content: Content) -> some View {
       content.contextMenu {
+        Button(action: toggleBookmark) {
+          Label(
+            isBookmarked ? "Remove Bookmark" : "Bookmark",
+            systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+        }
+        // macOS 27 hides a menu item's icon unless the label asks to keep it.
+        .labelStyle(.titleAndIcon)
         Menu("Add to Collection") {
           AddToCollectionItems(
             document: rfc.id, library: library, navigation: navigation,
@@ -537,6 +570,12 @@ private struct PickerTarget: Identifiable {
           Button("Remove from Collection") { remove(rfc.id) }
         }
       }
+    }
+
+    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(rfc.id) }
+
+    private func toggleBookmark() {
+      library.toggleBookmark(rfc.id)
     }
   }
 #endif

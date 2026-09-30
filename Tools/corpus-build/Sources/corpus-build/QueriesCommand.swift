@@ -4,7 +4,7 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
-/// Writes the cross-reference judgement set used to measure search ranking (#37). What
+/// Writes the cross-reference judgment set used to measure search ranking (#37). What
 /// makes a citing sentence a query is `QuerySet`.
 struct QueriesCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
@@ -23,7 +23,7 @@ struct QueriesCommand: ParsableCommand {
   @Option(help: "How many queries to sample.")
   var limit = 4000
 
-  @Option(help: "The seed of the sample, so a committed set can be reproduced.")
+  @Option(help: "The seed of the sample, so the set can be reproduced.")
   var seed: UInt64 = 11
 
   @Option(help: "The fewest content words a query may have.")
@@ -62,11 +62,8 @@ struct QueriesCommand: ParsableCommand {
     }
     Self.logger.info("usable", metadata: ["candidates": "\(selection.usable)"])
 
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    let output = URL(fileURLWithPath: out)
-    try encoder.encode(selection.rows).write(to: output, options: .atomic)
+    try writeJSON(selection.rows, to: out)
     Self.logger.info(
-      "wrote queries", metadata: ["queries": "\(selection.rows.count)", "path": "\(output.path)"])
+      "wrote queries", metadata: ["queries": "\(selection.rows.count)", "path": "\(out)"])
   }
 }

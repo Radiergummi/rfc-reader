@@ -244,11 +244,11 @@ private struct DocumentChip: View {
       Text(id.displayName)
         .lineLimit(1)
         .foregroundStyle(.tint)
-        // `FragmentGeometry.chipPadding` and the radius `RFCTextLayoutFragment`
-        // draws the reader's chips with.
+        // The padding and radius the reader's chips are drawn with.
         .padding(.horizontal, FragmentGeometry.chipPadding)
         .padding(.vertical, FragmentGeometry.chipVerticalPadding)
-        .background(Color.accentColor.opacity(0.15), in: .rect(cornerRadius: 6))
+        .background(
+          Color.accentColor.opacity(0.15), in: .rect(cornerRadius: FragmentGeometry.chipRadius))
     }
     .buttonStyle(.plain)
     // The system's focus ring drew round the first chip as soon as the pane showed.
@@ -429,6 +429,8 @@ private struct OfflineSection: View {
   @State private var size: Int?
   @State private var isHovering = false
   @State private var isWorking = false
+  /// A warning for a moment after a download that failed, as `LinkRow` shows one.
+  @State private var downloadFailed = false
 
   private var isKept: Bool {
     document.series == .rfc && library.downloadedNumbers.contains(document.number)
@@ -450,7 +452,7 @@ private struct OfflineSection: View {
         .help(help)
         .accessibilityLabel(isKept ? "Remove Offline Copy" : "Keep Offline")
         .accessibilityHint(help)
-        Text(isKept ? "Kept offline" : "Not kept offline")
+        Text(downloadFailed ? "Couldn't download" : isKept ? "Kept offline" : "Not kept offline")
           .foregroundStyle(isKept ? .primary : .secondary)
         Spacer()
         if isKept, let size {
@@ -463,9 +465,15 @@ private struct OfflineSection: View {
     .task(id: isKept) {
       size = isKept ? await library.downloadedSize(document) : nil
     }
+    .task(id: downloadFailed) {
+      guard downloadFailed else { return }
+      try? await Task.sleep(for: .seconds(1.5))
+      downloadFailed = false
+    }
   }
 
   private var symbol: String {
+    if downloadFailed { return "exclamationmark.triangle" }
     if isKept { return isHovering ? "xmark.circle.fill" : "arrow.down.circle.fill" }
     return "arrow.down.circle"
   }
@@ -482,7 +490,11 @@ private struct OfflineSection: View {
       if isKept {
         await library.removeDownload(document)
       } else {
-        try? await library.download(document)
+        do {
+          try await library.download(document)
+        } catch {
+          downloadFailed = true
+        }
       }
       isWorking = false
     }

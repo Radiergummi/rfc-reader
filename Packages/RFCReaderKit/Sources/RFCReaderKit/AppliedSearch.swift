@@ -23,9 +23,9 @@ public enum AppliedSearch {
     case search(query: String, after: Duration)
   }
 
-  /// The query `text` asks for.
+  /// The query `text` asks for, normalized as every list reads one (`normalizedQuery`).
   public static func query(for text: String) -> String {
-    text.trimmingCharacters(in: .whitespaces)
+    text.normalizedQuery
   }
 
   /// How to apply `text` over the query `applied`: nil when it asks for the query

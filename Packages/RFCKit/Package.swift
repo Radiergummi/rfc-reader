@@ -11,8 +11,9 @@ let swiftSettings: [SwiftSetting] = [
 
 let package = Package(
   name: "RFCKit",
-  // The app's floors: nothing else consumes this package (#129). No visionOS until
-  // there is a visionOS target.
+  // The app's floors (#129), which its other consumers share: RFCReaderKit declares the
+  // same, and corpus-build runs on macOS 26 and Linux. No visionOS until there is a
+  // visionOS target.
   platforms: [
     .iOS(.v26),
     .macOS(.v26),

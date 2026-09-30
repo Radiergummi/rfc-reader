@@ -14,7 +14,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Swift is analysed by codeql-swift.yml, which needs a macOS build and so runs
+# Swift is analyzed by codeql-swift.yml, which needs a macOS build and so runs
 # only on main; the workflows need neither and are checked on every pull request.
 jobs:
   analyze:

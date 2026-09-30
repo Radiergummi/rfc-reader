@@ -2,6 +2,7 @@ import RFCKit
 import RFCReaderKit
 import SwiftData
 import SwiftUI
+import os
 
 /// The reader. Renders an `RFCDocument` natively and handles every in-document link.
 struct DocumentView: View {
@@ -19,10 +20,13 @@ struct DocumentView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
   #endif
-  @AppStorage("readingFontSize") private var fontSize = 17.0
-  @AppStorage("preferOriginalText") private var preferOriginalText = false
-  @AppStorage("underlineLinks") private var underlineLinks = false
-  @AppStorage("readerMeasure") private var measure = MeasurePreference.recommended
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+  @AppStorage(ReaderPreferences.preferOriginalTextKey) private var preferOriginalText =
+    ReaderPreferences.defaultPreferOriginalText
+  @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
+    ReaderPreferences.defaultUnderlineLinks
+  @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -36,7 +40,6 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
-  @State private var originalText: String?
 
   init(id: DocumentID) {
     self.id = id
@@ -228,10 +231,14 @@ struct DocumentView: View {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
-        text: originalText,
-        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize
+        text: session.originalText,
+        error: session.originalTextError,
+        fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
+        tryAgain: { session.startOriginalTextLoad(from: library) }
       )
-      .task { originalText = try? await library.originalText(for: id) }
+      .onAppear {
+        if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
+      }
       // No header to show the title here, so the toolbar shows it throughout.
       // On `hasDocument` rather than on appearing: loading a document clears
       // the title back to hidden after this view may already have appeared.
@@ -290,9 +297,7 @@ struct DocumentView: View {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
-        } else if let saved = ReadingPositionStore.stored(for: id, in: modelContext)?.anchor,
-          document.section(anchor: saved) != nil
-        {
+        } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
@@ -364,7 +369,7 @@ struct DocumentView: View {
     ///
     /// In a single column only: beside other columns, the back/forward pair is in
     /// the bar.
-    private var visibleReturn: Place? {
+    private var visibleReturn: HistoryEntry? {
       horizontalSizeClass == .compact ? navigation.returnOffer : nil
     }
 
@@ -378,7 +383,7 @@ struct DocumentView: View {
           navigation.goBack()
         } label: {
           Label(
-            ReturnOffer.title(for: offer, sectionNumbers: session.sectionNumbers),
+            ReturnOffer.title(for: offer, in: session.state.document),
             systemImage: "arrow.uturn.backward")
         }
         .buttonStyle(.glass)
@@ -413,7 +418,13 @@ struct DocumentView: View {
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
       // document is here, so one that failed to open is not listed as read.
-      ReadingPositionStore.markAsRead(id, in: modelContext)
+      do {
+        try ReadingPositionStore.markOpened(id, in: modelContext)
+      } catch {
+        readerLog.error(
+          "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
+        )
+      }
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
@@ -530,6 +541,24 @@ struct DocumentView: View {
     guard let anchor = lastVisibleAnchor.anchor else { return }
     // The anchor alone for now: the reader reports the section on screen, not the
     // offset within it, so a place is saved at the anchor itself (#152).
-    ReadingPositionStore.save(ReadingPlace(anchor: anchor, offset: 0), for: id, in: modelContext)
+    do {
+      try ReadingPositionStore.save(
+        ReadingPlace(anchor: anchor, offset: 0), for: id, in: modelContext)
+    } catch {
+      readerLog.error(
+        "saving the position failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// Nil when the fetch fails, which is logged: the reader opens at the top, as it
+  /// does for a document never read.
+  private func storedPosition() -> ReadingPosition? {
+    do {
+      return try ReadingPositionStore.position(for: id, in: modelContext)
+    } catch {
+      readerLog.error(
+        "reading the position failed: \(String(describing: error), privacy: .public)")
+      return nil
+    }
   }
 }

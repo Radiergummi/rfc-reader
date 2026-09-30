@@ -1,0 +1,451 @@
+import Foundation
+import RFCKit
+import Testing
+
+@testable import RFCReaderKit
+
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
+@Suite("Builder: document structure")
+struct BuilderStructureTests {
+  private let style = ReadingStyle()
+
+  /// The bibliography lives in a panel, not in the reading flow, so its sections
+  /// are deliberately absent from the storage. Everything else must be there.
+  private func bodySections(of document: RFCDocument) -> [Section] {
+    document.allSections.filter { !DocumentTextBuilder.holdsOnlyReferences($0) }
+  }
+
+  @Test func `every section anchor is indexed`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      #expect(built.anchors.offset(of: section.anchor) != nil, "missing anchor \(section.anchor)")
+    }
+  }
+
+  @Test func `each section anchor points at its heading`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let text = built.text.string as NSString
+    for section in bodySections(of: document) {
+      let offset = try #require(built.anchors.offset(of: section.anchor))
+      let length = min((section.displayTitle as NSString).length, text.length - offset)
+      let slice = text.substring(with: NSRange(location: offset, length: length))
+      #expect(
+        slice == section.displayTitle, "anchor \(section.anchor) does not point at its heading")
+    }
+  }
+
+  /// What an in-document reference's preview names: the heading of the section
+  /// it points at, as the reader draws it. "Section 4.2" says where, not what. A
+  /// figure is anchored too, but has no heading to name.
+  @Test func `a section anchor names its heading`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      #expect(built.anchors.heading(of: section.anchor) == section.displayTitle)
+    }
+    #expect(built.anchors.offset(of: "fig-long") != nil)
+    #expect(built.anchors.heading(of: "fig-long") == nil)
+    #expect(built.anchors.heading(of: "no-such-anchor") == nil)
+  }
+
+  /// What Copy as Quote cites a selection as, from the build alone (#186). A figure
+  /// has no number, and neither has an unnumbered section.
+  @Test func `a section anchor carries its number`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      let entry = try #require(built.anchors.entries.first { $0.anchor == section.anchor })
+      #expect(entry.number == section.number, "anchor \(section.anchor)")
+    }
+    let figure = try #require(built.anchors.entries.first { $0.anchor == "fig-long" })
+    #expect(figure.number == nil)
+  }
+
+  @Test func `the builder records anchors in document order`() throws {
+    let builder = DocumentTextBuilder(style: style)
+    builder.appendDocument(try Fixtures.rfc8999())
+    let offsets = builder.entries.map(\.offset)
+    #expect(
+      offsets == offsets.sorted(),
+      "mark() must be called in document order, before the run it names")
+  }
+
+  @Test func `anchor offsets are inside the string`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+    for entry in built.anchors.entries {
+      #expect(entry.offset >= 0 && entry.offset <= built.text.length)
+    }
+  }
+
+  @Test func `headings carry their anchor for the voice over rotor`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let first = try #require(document.sections.first)
+    let offset = try #require(built.anchors.offset(of: first.anchor))
+    #expect(
+      built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String == first.anchor)
+  }
+
+  @Test func `the abstract comes before the first section`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let abstract = document.header.abstract.compactMap { block -> String? in
+      guard case .paragraph(let paragraph) = block else { return nil }
+      return paragraph.plainText
+    }.first
+    let abstractText = try #require(abstract)
+    let abstractRange = built.text.string.range(of: abstractText)
+    #expect(abstractRange != nil, "the abstract is in the storage, not in the header view")
+
+    let firstSection = try #require(document.sections.first)
+    let sectionOffset = try #require(built.anchors.offset(of: firstSection.anchor))
+    let abstractOffset = try Fixtures.offset(of: abstractText, in: built.text)
+    #expect(abstractOffset < sectionOffset)
+  }
+
+  /// Neither parser keeps "Abstract" as a block, and the reader's header view no
+  /// longer draws it, so the builder is the only thing left that can.
+  @Test func `the abstract is labeled`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let text = built.text.string
+    let label = try #require(text.range(of: "Abstract"), "the abstract has no heading")
+    #expect(
+      try Fixtures.offset(of: "Abstract", in: built.text) == 0,
+      "the heading is the first thing in the storage")
+
+    let firstParagraph = try #require(
+      document.header.abstract.compactMap { block -> String? in
+        guard case .paragraph(let paragraph) = block else { return nil }
+        return paragraph.plainText
+      }.first)
+    let prose = try #require(text.range(of: firstParagraph))
+    #expect(
+      label.upperBound <= prose.lowerBound,
+      "the heading must precede the abstract's first paragraph")
+
+    let offset = try Fixtures.offset(of: "Abstract", in: built.text)
+    #expect(
+      built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
+        == style.headingFont(depth: 1))
+    // Anchored like every other heading, so the rotor and `rfc-anchor:` reach it
+    // by the general rule — but not a section, so tracking will not report it.
+    #expect(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor) == offset)
+    #expect(
+      built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String
+        == DocumentTextBuilder.abstractAnchor)
+    #expect(
+      built.anchors.sections.offset(of: DocumentTextBuilder.abstractAnchor) == nil,
+      "the abstract is not a section")
+  }
+
+  /// The abstract's heading is a first-level heading like any section's: the same
+  /// font, color and spacing after, differing only in having nothing above it.
+  @Test func `the abstract heading is set as a first level heading`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let section = try #require(document.sections.first)
+    let abstract = try Fixtures.offset(of: "Abstract", in: built.text)
+    let heading = try #require(built.anchors.offset(of: section.anchor))
+    func attribute<Value>(_ key: NSAttributedString.Key, at offset: Int) -> Value? {
+      built.text.attribute(key, at: offset, effectiveRange: nil) as? Value
+    }
+    let abstractFont: PlatformFont? = attribute(.font, at: abstract)
+    let headingFont: PlatformFont? = attribute(.font, at: heading)
+    #expect(abstractFont == headingFont)
+    let abstractColor: PlatformColor? = attribute(.foregroundColor, at: abstract)
+    let headingColor: PlatformColor? = attribute(.foregroundColor, at: heading)
+    #expect(abstractColor == headingColor)
+    let abstractParagraph = try #require(
+      attribute(.paragraphStyle, at: abstract) as NSParagraphStyle?)
+    let headingParagraph = try #require(
+      attribute(.paragraphStyle, at: heading) as NSParagraphStyle?)
+    #expect(abstractParagraph.paragraphSpacing == headingParagraph.paragraphSpacing)
+    #expect(abstractParagraph.paragraphSpacingBefore == 0)
+    #expect(headingParagraph.paragraphSpacingBefore == style.paragraphSpacing * 1.6)
+  }
+
+  @Test func `a document with no abstract gets no heading`() throws {
+    var document = try Fixtures.rfc8999()
+    document.header.abstract = []
+    let built = DocumentTextBuilder.build(document, style: style)
+    #expect(!built.text.string.hasPrefix("Abstract"))
+  }
+
+  @Test func `heading text is the section display title`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in bodySections(of: document) {
+      // Through `renderedLabel` for the same reason paragraphs are: a heading
+      // that cites a document has a chip in it, and a chip is a symbol and a
+      // word joiner ahead of its label. The prefix comes from
+      // `displayTitleInlines` rather than being composed here, or the appendix
+      // branch goes untested -- rfc8999 has one.
+      let projection = Self.renderedLabel(section.displayTitleInlines)
+      #expect(built.text.string.contains(projection), "missing heading \(section.displayTitle)")
+    }
+  }
+
+  /// A heading names a document as readily as a paragraph does. Now that
+  /// `Section.title` carries inlines, the heading has to be built through the same
+  /// inline path as prose, or the reference is drawn as words again.
+  @Test func `headings draw their cross references`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [
+        Section(
+          anchor: "section-8",
+          number: "8",
+          title: [
+            .text("Changes from "),
+            .crossReference(CrossReference(target: .document(.rfc(3066), section: nil))),
+          ],
+          blocks: [.paragraph(Paragraph(text: "Body."))]
+        )
+      ],
+      source: .xml
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+    let offset = try Fixtures.offset(of: "3066", in: built.text)
+
+    #expect(
+      built.text.attribute(.link, at: offset, effectiveRange: nil) != nil,
+      "the heading's reference is a link")
+    #expect(
+      built.text.attribute(.rfcChip, at: offset, effectiveRange: nil) != nil,
+      "and it is drawn as a chip")
+    // The number still comes from `number`, and the heading still reads as one.
+    #expect(built.text.string.contains("8. Changes from " + Self.chipPrefix + "RFC\u{00A0}3066"))
+    #expect(
+      built.text.attribute(.rfcAnchor, at: offset, effectiveRange: nil) as? String == "section-8")
+    let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
+    #expect(
+      font?.pointSize == style.headingFont(depth: 1).pointSize,
+      "a chip in a heading is set at heading size")
+  }
+
+  @Test func `no paragraph text is lost`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    for section in document.allSections {
+      for case .paragraph(let paragraph) in section.blocks where !paragraph.plainText.isEmpty {
+        let projection = Self.renderedLabel(paragraph.inlines)
+        #expect(
+          built.text.string.contains(projection),
+          "missing paragraph: \(paragraph.plainText.prefix(60))")
+      }
+    }
+  }
+
+  /// The symbol attachment plus the word joiner that stops it wrapping away from
+  /// the label it belongs to.
+  private static let chipPrefix = "\u{FFFC}\u{2060}"
+
+  /// What the builder should have written for a run of inlines.
+  ///
+  /// This used to restate the label rules — which brackets come off, how a section
+  /// reference is phrased — and had already drifted from them in one place. Those
+  /// rules now live on `CrossReference.display`, which `plainText` answers from
+  /// too, so the only thing left for the builder to get right is *rendering* them:
+  /// the chip's symbol goes in front of a reference the model marks as a chip, and
+  /// nothing else moves.
+  private static func renderedLabel(_ inlines: [Inline]) -> String {
+    inlines.map { inline -> String in
+      switch inline {
+      case .text(let text), .code(let text), .superscript(let text), .subscript(let text):
+        return text
+      case .emphasis(let inner), .strong(let inner), .link(_, let inner):
+        return renderedLabel(inner)
+      case .crossReference(let xref):
+        let display = xref.display
+        return display.isChip ? chipPrefix + display.text : display.text
+      case .lineBreak:
+        return "\n"
+      }
+    }.joined()
+  }
+
+  @Test func `the legacy path builds too`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc2119(), style: style)
+    #expect(built.text.length > 0)
+    #expect(!built.anchors.entries.isEmpty)
+  }
+
+  /// The abstract introduces the document rather than being part of it, so it is
+  /// set smaller and quieter than the body prose that follows.
+  @Test func `the abstract is set as a standfirst`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    func firstParagraph(of blocks: [Block]) -> String? {
+      blocks.compactMap { block -> String? in
+        guard case .paragraph(let paragraph) = block else { return nil }
+        return paragraph.plainText
+      }.first
+    }
+    let abstract = try #require(firstParagraph(of: document.header.abstract))
+    let abstractOffset = try Fixtures.offset(of: abstract, in: built.text)
+    let body = try #require(firstParagraph(of: document.section(number: "1")?.blocks ?? []))
+    let bodyOffset = try Fixtures.offset(of: body, in: built.text)
+
+    let abstractFont = try #require(
+      built.text.attribute(.font, at: abstractOffset, effectiveRange: nil) as? PlatformFont)
+    let bodyFont = try #require(
+      built.text.attribute(.font, at: bodyOffset, effectiveRange: nil) as? PlatformFont)
+    #expect(abstractFont.pointSize < bodyFont.pointSize)
+
+    let abstractColor =
+      built.text.attribute(.foregroundColor, at: abstractOffset, effectiveRange: nil)
+      as? PlatformColor
+    #expect(abstractColor == RFCColors.secondaryLabel)
+    #expect(
+      built.text.attribute(.foregroundColor, at: bodyOffset, effectiveRange: nil) as? PlatformColor
+        == RFCColors.label)
+  }
+
+  /// The heading stays a heading: full size, anchored, and in the rotor.
+  @Test func `the abstract heading is not dimmed`() throws {
+    let built = DocumentTextBuilder.build(try Fixtures.rfc8999(), style: style)
+    let offset = try Fixtures.offset(of: "Abstract", in: built.text)
+    #expect(
+      built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
+        == style.headingFont(depth: 1))
+    #expect(
+      built.text.attribute(.foregroundColor, at: offset, effectiveRange: nil) as? PlatformColor
+        == RFCColors.label)
+  }
+
+  /// The bibliography leaves the body entirely — heading and all, so no empty
+  /// "9. References" is left behind where the rows used to be.
+  @Test func `the bibliography is not in the body`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: style)
+    let skipped = document.allSections.filter { DocumentTextBuilder.holdsOnlyReferences($0) }
+    #expect(!skipped.isEmpty, "RFC 8999 has a references section to skip")
+    for section in skipped {
+      #expect(
+        !built.text.string.contains(section.displayTitle),
+        "\(section.displayTitle) belongs in the panel")
+      #expect(built.anchors.offset(of: section.anchor) == nil)
+    }
+  }
+
+  /// A section that merely *contains* references alongside prose is still prose.
+  @Test func `only a pure bibliography section is skipped`() {
+    let entry = Reference(anchor: "RFC2119", title: "Key words")
+    let pure = Section(
+      anchor: "s1", title: "References",
+      blocks: [.references(ReferenceList(title: "References", entries: [entry]))])
+    let mixed = Section(
+      anchor: "s2",
+      title: "Notes",
+      blocks: [
+        .paragraph(Paragraph(text: "prose")),
+        .references(ReferenceList(title: "Notes", entries: [entry])),
+      ]
+    )
+    let parent = Section(anchor: "s3", title: "References", subsections: [pure])
+    let empty = Section(anchor: "s4", title: "Placeholder")
+
+    #expect(DocumentTextBuilder.holdsOnlyReferences(pure))
+    #expect(!DocumentTextBuilder.holdsOnlyReferences(mixed))
+    #expect(
+      DocumentTextBuilder.holdsOnlyReferences(parent),
+      "a parent of bibliography subsections goes too")
+    #expect(
+      !DocumentTextBuilder.holdsOnlyReferences(empty), "an empty section is not a bibliography")
+  }
+
+  private func paragraphStyle(of needle: String, in built: BuiltDocument) throws
+    -> NSParagraphStyle
+  {
+    let offset = try Fixtures.offset(of: needle, in: built.text)
+    return try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+  }
+
+  /// `<t indent="3">` is three characters of the 72-column rendering, which is the
+  /// width RFCXML hangs a list item's text at -- so it is one of our indent steps,
+  /// and a note under a list lines up with the items' text the way it does on paper.
+  /// The whole paragraph moves in, not only its first line.
+  @Test func `an indented paragraph is set in by whole steps`() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "flush")),
+      .paragraph(Paragraph(text: "one step", indent: 3)),
+      .paragraph(Paragraph(text: "two steps", indent: 6))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let flush = try paragraphStyle(of: "flush", in: built)
+    #expect(flush.headIndent == 0)
+
+    let oneStep = try paragraphStyle(of: "one step", in: built)
+    #expect(oneStep.headIndent == style.indentStep)
+    #expect(oneStep.firstLineHeadIndent == style.indentStep)
+
+    let twoSteps = try paragraphStyle(of: "two steps", in: built)
+    #expect(twoSteps.headIndent == style.indentStep * 2)
+    #expect(twoSteps.firstLineHeadIndent == style.indentStep * 2)
+  }
+
+  /// An indent that is not a multiple of three still lands on a whole step: the
+  /// nearest one, and never none. RFC 8907's `indent="4"` is one step, not a third
+  /// past it.
+  @Test func `an indent off the step rounds to the nearest whole step`() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "one character", indent: 1)),
+      .paragraph(Paragraph(text: "four characters", indent: 4)),
+      .paragraph(Paragraph(text: "five characters", indent: 5))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let one = try paragraphStyle(of: "one character", in: built)
+    #expect(one.headIndent == style.indentStep)
+    #expect(one.firstLineHeadIndent == style.indentStep)
+
+    let four = try paragraphStyle(of: "four characters", in: built)
+    #expect(four.headIndent == style.indentStep)
+    #expect(four.firstLineHeadIndent == style.indentStep)
+
+    let five = try paragraphStyle(of: "five characters", in: built)
+    #expect(five.headIndent == style.indentStep * 2)
+    #expect(five.firstLineHeadIndent == style.indentStep * 2)
+  }
+
+  /// Every step comes off the column, so an author's indent stops at three of them.
+  @Test func `an indent is capped so the column keeps its width`() throws {
+    let document = Fixtures.document(
+      .paragraph(Paragraph(text: "nine characters", indent: 9)),
+      .paragraph(Paragraph(text: "twenty-four characters", indent: 24))
+    )
+    let built = DocumentTextBuilder.build(document, style: style)
+    let deepest = style.indentStep * CGFloat(DocumentTextBuilder.maximumAuthoredIndentSteps)
+
+    let nine = try paragraphStyle(of: "nine characters", in: built)
+    #expect(nine.headIndent == deepest)
+
+    let twentyFour = try paragraphStyle(of: "twenty-four characters", in: built)
+    #expect(twentyFour.headIndent == deepest)
+    #expect(twentyFour.firstLineHeadIndent == deepest)
+  }
+
+  /// The author's indent is relative to wherever the paragraph already sits.
+  @Test func `an indented paragraph in a list is set in from the items text`() throws {
+    let item = ListItem(blocks: [
+      .paragraph(Paragraph(text: "item")),
+      .paragraph(Paragraph(text: "note", indent: 3)),
+    ])
+    let document = Fixtures.document(.list(ListBlock(style: .bullet, items: [item])))
+    let built = DocumentTextBuilder.build(document, style: style)
+
+    let itemText = try paragraphStyle(of: "item", in: built)
+    let note = try paragraphStyle(of: "note", in: built)
+    #expect(note.headIndent == itemText.headIndent + style.indentStep)
+  }
+}

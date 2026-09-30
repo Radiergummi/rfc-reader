@@ -22,7 +22,6 @@ import SwiftUI
     let printDocument: () -> Void
 
     @Environment(\.undoManager) private var undoManager
-    @Environment(\.modelContext) private var modelContext
 
     /// Share and More at the top; Contents and Cite leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -85,13 +84,7 @@ import SwiftUI
 
     private var citeMenu: some View {
       Menu {
-        ForEach(CitationStyle.allCases) { style in
-          Button(style.displayName) { copyCitation(style) }
-        }
-        Divider()
-        Button("Copy Link to Current Section") {
-          Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-        }
+        MenuSections(sections: DocumentMenus.cite(), perform: perform)
       } label: {
         Label("Cite", systemImage: "quote.opening")
       }
@@ -106,34 +99,39 @@ import SwiftUI
       withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
-    /// What is used least: the original text, and the document's pages elsewhere.
+    /// What is used least: the original text, the document's pages elsewhere, and
+    /// Export and Print, which are iOS's own: the formats listed, and the print sheet.
     private var moreMenu: some View {
       Menu {
-        Section {
-          Toggle("Original Text", isOn: Bindable(reader).showOriginal)
-        }
-
-        Section {
-          Button("Open on rfc-editor.org") { openURL(RFCEditorEndpoints.infoPage(id)) }
-          if let url = metadata?.errataURL {
-            Button("Errata") { openURL(url) }
-          }
-          Button("Datatracker") { openURL(RFCEditorEndpoints.datatracker(id)) }
-          if let draft = reader.precedingDraft {
-            Button("Preceding Draft") { openURL(draft) }
+        MenuSections(
+          sections: DocumentMenus.more(
+            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            precedingDraft: reader.precedingDraft),
+          perform: perform)
+        Divider()
+        Menu("Export", systemImage: "square.and.arrow.down") {
+          ForEach(ExportFormat.allCases) { format in
+            Button(format.name) { exportDocument(format) }
           }
         }
-
-        Section {
-          Menu("Export", systemImage: "square.and.arrow.down") {
-            ForEach(ExportFormat.allCases) { format in
-              Button(format.name) { exportDocument(format) }
-            }
-          }
-          Button("Print…", systemImage: "printer") { printDocument() }
-        }
+        Button("Print…", systemImage: "printer") { printDocument() }
       } label: {
         Label("More", systemImage: "ellipsis")
+      }
+    }
+
+    /// What an item of Cite or More does. Add to Collection's are
+    /// `AddToCollectionItems`' own.
+    private func perform(_ action: DocumentMenus.Action) {
+      switch action {
+      case .copyCitation(let style): copyCitation(style)
+      case .copySectionLink:
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+      case .toggleOriginalText: reader.showOriginal.toggle()
+      case .openInfoPage: openURL(RFCEditorEndpoints.infoPage(id))
+      case .openErrata(let url), .openPrecedingDraft(let url): openURL(url)
+      case .openDatatracker: openURL(RFCEditorEndpoints.datatracker(id))
+      case .toggleCollection, .newCollection: break
       }
     }
 
@@ -144,9 +142,7 @@ import SwiftUI
     }
 
     private func toggleBookmark() {
-      let title = DocumentActions.bookmarkTitle(
-        metadata: metadata, documentTitle: reader.documentTitle, id: id)
-      BookmarkStore.toggle(id, title: title, in: modelContext)
+      library.toggleBookmark(id, documentTitle: reader.documentTitle)
     }
 
     private func copyCitation(_ style: CitationStyle) {

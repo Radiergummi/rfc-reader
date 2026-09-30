@@ -16,12 +16,18 @@ public protocol HTTPTransport: Sendable {
 /// add a public `response(for:)` to a system type, beside its own `data(for:)` (#148).
 public struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
+  private let userAgent: String?
 
-  public init(session: URLSession = .rfcEditor) {
+  /// `userAgent` names a client that fetches in bulk, so the server's operators can
+  /// tell who it is; nil keeps the session's own.
+  public init(session: URLSession = .rfcEditor, userAgent: String? = nil) {
     self.session = session
+    self.userAgent = userAgent
   }
 
   public func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    var request = request
+    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
       throw RFCEditorClient.ClientError.invalidResponse(request.url ?? RFCEditorEndpoints.base)
@@ -102,8 +108,10 @@ public enum IndexFetch: Sendable, Hashable {
 /// Fetches and parses documents from the RFC Editor.
 ///
 /// Callers decide about caching; this type only knows how to get bytes and turn them
-/// into models. Keeping it an actor makes it trivially safe to share across the app.
-public actor RFCEditorClient {
+/// into models. It holds nothing but its transport, so it is a value any task can
+/// share, and a method that parses is `@concurrent`: a large document is parsed off
+/// the caller's actor, and two fetches parse side by side rather than in turn.
+public struct RFCEditorClient: Sendable {
   public enum ClientError: Error, Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
@@ -119,6 +127,7 @@ public actor RFCEditorClient {
     self.transport = transport
   }
 
+  @concurrent
   public func fetchIndex() async throws -> RFCIndex {
     let data = try await fetch(RFCEditorEndpoints.index)
     do {
@@ -133,14 +142,6 @@ public actor RFCEditorClient {
     try await fetch(RFCEditorEndpoints.document(id, format: format), notFoundAs: id)
   }
 
-  /// Parses a document, preferring the semantic XML source when available and
-  /// falling back to the plain-text rendering otherwise.
-  public func fetchDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil) async throws
-    -> RFCDocument
-  {
-    try await fetchPreferredDocument(id, availableFormats: availableFormats).document
-  }
-
   /// A document fetched in the best format it has, with the bytes it came as.
   public struct FetchedDocument: Sendable {
     public let data: Data
@@ -153,11 +154,12 @@ public actor RFCEditorClient {
 
   /// The XML where the index lists it, the plain text otherwise (#125).
   ///
-  /// The text is fetched only when there is no XML: a 404 for it. A cancelled
+  /// The text is fetched only when there is no XML: a 404 for it. A canceled
   /// load, a server error or a network failure is the error, and asking for the
   /// text after one would start a second request and report *its* failure instead.
   /// XML that is there but does not parse falls back to the text too, so the
   /// document stays readable, and the parse error comes back beside it.
+  @concurrent
   public func fetchPreferredDocument(_ id: DocumentID, availableFormats: [FileFormat]? = nil)
     async throws -> FetchedDocument
   {
@@ -215,23 +217,16 @@ public actor RFCEditorClient {
     }
   }
 
-  public func fetchMetadata(_ id: DocumentID) async throws -> RFCEditorMetadataRecord {
-    let data = try await fetch(RFCEditorEndpoints.metadata(id), notFoundAs: id)
-    do {
-      return try JSONDecoder().decode(RFCEditorMetadataRecord.self, from: data)
-    } catch {
-      throw ClientError.decoding(context: "\(id.fileStem).json", underlying: error)
-    }
-  }
-
   /// `revisions.json`, decoded, and the bytes it came as, which the caller keeps. A
   /// plain GET: every run writes a new `generatedAt`, so a conditional request would
   /// never be answered 304.
+  @concurrent
   public func fetchRevisions() async throws -> (revisions: RFCRevisions, data: Data) {
     let data = try await fetch(RFCEditorEndpoints.revisions)
     return (try RFCRevisions.decode(data), data)
   }
 
+  @concurrent
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)
     return try RecentFeedParser.parse(data)
@@ -284,49 +279,6 @@ public actor RFCEditorClient {
       throw ClientError.httpStatus(response.statusCode, url)
     }
   }
-}
-
-/// The RFC Editor's per-document JSON (`/rfc/rfc9110.json`).
-public struct RFCEditorMetadataRecord: Codable, Sendable {
-  public var docID: String
-  public var title: String
-  public var authors: [String]
-  public var format: [String]
-  public var pageCount: String?
-  public var pubStatus: String
-  public var status: String
-  public var source: String?
-  public var abstract: String?
-  public var pubDate: String
-  public var keywords: [String]
-  public var obsoletes: [String]
-  public var obsoletedBy: [String]
-  public var updates: [String]
-  public var updatedBy: [String]
-  public var seeAlso: [String]
-  public var doi: String?
-  public var errataURL: String?
-  public var draft: String?
-
-  enum CodingKeys: String, CodingKey {
-    case docID = "doc_id"
-    case title, authors, format
-    case pageCount = "page_count"
-    case pubStatus = "pub_status"
-    case status, source, abstract
-    case pubDate = "pub_date"
-    case keywords, obsoletes
-    case obsoletedBy = "obsoleted_by"
-    case updates
-    case updatedBy = "updated_by"
-    case seeAlso = "see_also"
-    case doi
-    case errataURL = "errata_url"
-    case draft
-  }
-
-  public var id: DocumentID? { DocumentID(parsing: docID) }
-  public var currentStatus: PublicationStatus { PublicationStatus(rawValue: status) ?? .unknown }
 }
 
 /// One entry of the "Recent RFCs" RSS feed.

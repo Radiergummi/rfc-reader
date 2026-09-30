@@ -12,92 +12,21 @@ import RFCReaderKit
 /// navigation with it: before this milestone each block was its own accessibility
 /// element and VoiceOver could move between them, but a plain text view is one
 /// element, navigable only character by character or line by line. Three custom
-/// rotors — headings, links, diagrams — restore jump navigation, built straight
-/// from the attributes `DocumentTextBuilder` already tags runs with.
-///
-/// `.rfcAnchor` is set on heading runs only (not every anchor `AnchorIndex` carries
-/// — that index also covers figures, tables and reference rows, which would make
-/// the headings rotor list hundreds of non-headings), so enumerating it directly
-/// over the storage is both the correct filter and the only way to get a text
-/// *range* per heading, which the index's bare offsets do not carry.
+/// rotors — headings, links, diagrams — restore jump navigation. Which runs are
+/// stops, and which stop comes next, is `AccessibleReading.Rotors` and
+/// `AccessibleReading.nextRotorItem`, in RFCReaderKit, where they are tested; this
+/// only hands them to each platform's rotor API.
 extension RFCTextViewCoordinator {
-  /// One rotor stop: the run's extent, and — for diagrams only — what VoiceOver
-  /// should say about it. Headings and links keep `label` nil and let VoiceOver
-  /// read the actual text at `range`, which already says the right thing.
-  struct AccessibilityRotorItem {
-    let range: NSRange
-    let label: String?
-  }
+  typealias AccessibilityRotorItem = AccessibleReading.RotorItem
 
-  /// Enumerates `.rfcAnchor`, `.link` and `.rfcVerbatim` once and caches the
-  /// result, so a rotor search is a lookup in a small cached array rather than a
-  /// fresh walk of the whole document. Called once from `install(_:)`, the only
-  /// place the storage changes — the cache is invalidated by the next `install`
-  /// overwriting it, not by anything rotor-search-triggered.
+  /// Called once from `install(_:)`, the only place the storage changes — the
+  /// cache is invalidated by the next `install` overwriting it, not by anything
+  /// rotor-search-triggered.
   func deriveAccessibilityItems() {
-    guard let text = built?.text else {
-      accessibilityHeadings = []
-      accessibilityLinks = []
-      accessibilityDiagrams = []
-      return
-    }
-    let full = NSRange(location: 0, length: text.length)
-
-    // Both rotors are the same walk: every run carrying the attribute, labelled
-    // by the text under it.
-    func items(carrying key: NSAttributedString.Key) -> [AccessibilityRotorItem] {
-      var items: [AccessibilityRotorItem] = []
-      text.enumerateAttribute(key, in: full) { value, range, _ in
-        guard value != nil else { return }
-        items.append(AccessibilityRotorItem(range: range, label: nil))
-      }
-      return items
-    }
-    accessibilityHeadings = items(carrying: .rfcAnchor)
-    accessibilityLinks = items(carrying: .link)
-
-    // Only what VoiceOver says as a diagram (`AccessibleReading.isDiagram`); source
-    // code and artwork that is not a drawing are read as text. Adjacent runs
-    // sharing the same `VerbatimBox` instance are one diagram: coalescing by
-    // reference identity keeps a multi-line artwork's many runs as one rotor stop
-    // rather than one per run.
-    var diagrams: [AccessibilityRotorItem] = []
-    var openBox: ObjectIdentifier?
-    text.enumerateAttribute(.rfcVerbatim, in: full) { value, range, _ in
-      guard let box = value as? VerbatimBox, AccessibleReading.isDiagram(box) else {
-        openBox = nil
-        return
-      }
-      let identity = ObjectIdentifier(box)
-      if identity == openBox, let last = diagrams.popLast() {
-        diagrams.append(
-          AccessibilityRotorItem(range: NSUnionRange(last.range, range), label: last.label))
-      } else {
-        diagrams.append(
-          AccessibilityRotorItem(
-            range: range, label: AccessibleReading.rotorLabel(at: range.location, in: text)))
-      }
-      openBox = identity
-    }
-    accessibilityDiagrams = diagrams
-  }
-
-  /// The next (or previous) item strictly after (or before) `location`, or the
-  /// first/last item when there is no current position — matching both
-  /// platforms' "nil current item means start from the end the direction
-  /// implies" contract. Returns nil at either end of the list, which both
-  /// platforms treat as "no further item" and VoiceOver marks with a boundary
-  /// sound rather than repeating the last item.
-  static func nextAccessibilityItem(
-    in items: [AccessibilityRotorItem],
-    after location: Int?,
-    forward: Bool
-  ) -> AccessibilityRotorItem? {
-    guard !items.isEmpty else { return nil }
-    guard let location, location != NSNotFound else { return forward ? items.first : items.last }
-    return forward
-      ? items.first { $0.range.location > location }
-      : items.last { $0.range.location < location }
+    let rotors = built.map { AccessibleReading.Rotors($0.text) } ?? .empty
+    accessibilityHeadings = rotors.headings
+    accessibilityLinks = rotors.links
+    accessibilityDiagrams = rotors.diagrams
   }
 }
 
@@ -126,7 +55,7 @@ extension RFCTextViewCoordinator {
     /// `UIAccessibilityCustomRotorItemResult` has no label override (unlike its
     /// AppKit counterpart's `customLabel`), so on iOS a diagram rotor stop is
     /// announced from whatever VoiceOver already reads at `targetRange` — real
-    /// navigation to the diagram, but not a spoken name. See the task report.
+    /// navigation to the diagram, but not a spoken name.
     private func accessibilityRotorResult(
       items: [AccessibilityRotorItem],
       predicate: UIAccessibilityCustomRotorSearchPredicate
@@ -142,7 +71,7 @@ extension RFCTextViewCoordinator {
         currentOffset = textView.offset(from: textView.beginningOfDocument, to: range.start)
       }
       guard
-        let item = Self.nextAccessibilityItem(
+        let item = AccessibleReading.nextRotorItem(
           in: items, after: currentOffset, forward: predicate.searchDirection == .next),
         let start = textView.position(
           from: textView.beginningOfDocument, offset: item.range.location),
@@ -191,7 +120,7 @@ extension RFCTextViewCoordinator {
       }
       let currentLocation = searchParameters.currentItem?.targetRange.location
       guard
-        let item = Self.nextAccessibilityItem(
+        let item = AccessibleReading.nextRotorItem(
           in: items,
           after: currentLocation,
           forward: searchParameters.searchDirection == .next

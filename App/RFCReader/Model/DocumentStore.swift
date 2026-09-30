@@ -26,7 +26,7 @@ actor DocumentStore {
 
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
-  /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
+  /// canceled (#116). Original Text fetches the `.txt` on its own, so it has its
   /// own.
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()
@@ -463,7 +463,7 @@ actor DocumentStore {
   func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
-      return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+      return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
     let (data, isKept) = try await originalTexts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
@@ -472,6 +472,6 @@ actor DocumentStore {
       try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
       hasGrown = true
     }
-    return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 }

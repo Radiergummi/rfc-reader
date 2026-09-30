@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 
-# Only main's newest commit needs analysing: a run a later push supersedes is
-# cancelled, and the later one covers its changes.
+# Only main's newest commit needs analyzing: a run a later push supersedes is
+# canceled, and the later one covers its changes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -52,7 +52,7 @@ jobs:
 
       # One build, so each file is extracted once: the app compiles RFCKit and
       # RFCReaderKit with it. corpus-build, an offline tool the app does not
-      # depend on, is not analysed.
+      # depend on, is not analyzed.
       - name: Build
         run: make build-app CODE_SIGNING_ALLOWED=NO
 

@@ -138,11 +138,11 @@ struct RequirementsTests {
   /// is one requirement; a cell that is a sentence of its own stays one.
   @Test func `a table row whose cell is only key words is one requirement`() {
     let table = Table(
-      title: nil, header: [[[.text("Algorithm")], [.text("Status")]]],
+      title: nil, header: [Table.Row(cells: [[.text("Algorithm")], [.text("Status")]])],
       rows: [
-        [[.text("alg-one")], [.text("MUST")]],
-        [[.text("alg-two")], [.text("SHOULD NOT")]],
-        [[.text("Field")], [.text("It MAY be empty.")]],
+        Table.Row(cells: [[.text("alg-one")], [.text("MUST")]]),
+        Table.Row(cells: [[.text("alg-two")], [.text("SHOULD NOT")]]),
+        Table.Row(cells: [[.text("Field")], [.text("It MAY be empty.")]]),
       ])
     let document = RFCDocument(
       header: DocumentHeader(title: "T"),

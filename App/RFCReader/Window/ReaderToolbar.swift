@@ -39,21 +39,6 @@
 
   extension NSToolbarItem: FlexibleToolbarItem {}
 
-  /// The window's toolbar.
-  ///
-  /// `NSToolbar` only accepts items from its delegate, which is why the overlay panel
-  /// could never split it: SwiftUI owned the delegate and would not share it. The item
-  /// that does the splitting is `NSTrackingSeparatorToolbarItem`, bound to the divider
-  /// between the reader and the panel — AppKit then lays the document's actions out in
-  /// what is left of the titlebar, and the panel's toggle sits out on the panel's own
-  /// glass, which is where Pages puts it.
-  ///
-  /// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
-  /// ones were tried first, to keep the declarations `DocumentView` already had: a
-  /// hosting view reports no width the toolbar will honour, so every item was laid out
-  /// on top of the one before it — the bookmark drew inside the back/forward group and
-  /// the share icon over the panel's toggle. Native items also get the system's own
-  /// grouping and glass, which a hosted control cannot.
   /// A title over a line of detail, as a window's own titlebar draws its title over
   /// its subtitle: the list's title.
   private final class TitleStack: NSStackView {
@@ -99,10 +84,10 @@
       label(.systemFont(ofSize: 11), .secondaryLabelColor)
     }
 
-    private static func label(_ font: NSFont, _ colour: NSColor) -> NSTextField {
+    private static func label(_ font: NSFont, _ color: NSColor) -> NSTextField {
       let field = NSTextField(labelWithString: "")
       field.font = font
-      field.textColor = colour
+      field.textColor = color
       field.lineBreakMode = .byTruncatingTail
       field.cell?.usesSingleLineMode = true
       // Truncated rather than pushing its title wider than it was given.
@@ -174,7 +159,7 @@
   /// nothing at all below `ToolbarTitleLayout.isWorthDrawing`. Its text rises out
   /// from under the toolbar's bottom edge and fades in as the heading passes under
   /// the toolbar, scrubbing with the scroll; see `ToolbarTitleReveal`. Its subtitle
-  /// names the section being read; see `ToolbarSubtitle`.
+  /// names the section being read; see `RunningHeading`.
   private final class DocumentTitleView: NSView {
     private let title = TitleStack.titleLabel()
     /// The subtitle's line, clipped to itself: a section's heading hands over to
@@ -243,15 +228,15 @@
     func update(_ state: ToolbarTitleState) {
       let previous = self.state
       self.state = state
-      if state.subtitle.outgoing != previous.subtitle.outgoing
-        || state.subtitle.incoming != previous.subtitle.incoming
+      if state.runningHeading.outgoing != previous.runningHeading.outgoing
+        || state.runningHeading.incoming != previous.runningHeading.incoming
       {
         applyText()
       }
       if state.reveal != previous.reveal {
         placeContent()
       }
-      if state.subtitle.progress != previous.subtitle.progress {
+      if state.runningHeading.progress != previous.runningHeading.progress {
         placeHandOver()
       }
     }
@@ -281,8 +266,8 @@
     /// Each label only when its words change: a label assigned the same string
     /// redraws for nothing.
     private func applyText() {
-      let outgoingText = state.subtitle.outgoing ?? documentTitle
-      let incomingText = state.subtitle.incoming ?? documentTitle
+      let outgoingText = state.runningHeading.outgoing ?? documentTitle
+      let incomingText = state.runningHeading.incoming ?? documentTitle
       if outgoing.stringValue != outgoingText { outgoing.stringValue = outgoingText }
       if incoming.stringValue != incomingText { incoming.stringValue = incomingText }
     }
@@ -310,7 +295,7 @@
     /// The hand-over: the outgoing heading rises out of the subtitle's line as
     /// the incoming one rises in, each transparent while the line's edge cuts it.
     private func placeHandOver() {
-      let handOver = state.subtitle.progress
+      let handOver = state.runningHeading.progress
       let width = lineWidth
       outgoing.frame = CGRect(
         x: 0, y: handOver * subtitleHeight, width: width, height: subtitleHeight)
@@ -323,6 +308,21 @@
     }
   }
 
+  /// The window's toolbar.
+  ///
+  /// `NSToolbar` only accepts items from its delegate, which is why the overlay panel
+  /// could never split it: SwiftUI owned the delegate and would not share it. The item
+  /// that does the splitting is `NSTrackingSeparatorToolbarItem`, bound to the divider
+  /// between the reader and the panel — AppKit then lays the document's actions out in
+  /// what is left of the titlebar, and the panel's toggle sits out on the panel's own
+  /// glass, which is where Pages puts it.
+  ///
+  /// The items are AppKit's own rather than SwiftUI hosted in `NSHostingView`. Hosted
+  /// ones were tried first, to keep the declarations `DocumentView` already had: a
+  /// hosting view reports no width the toolbar will honor, so every item was laid out
+  /// on top of the one before it — the bookmark drew inside the back/forward group and
+  /// the share icon over the panel's toggle. Native items also get the system's own
+  /// grouping and glass, which a hosted control cannot.
   final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
     private unowned let controller: ReaderWindowController
 
@@ -342,7 +342,8 @@
     private var navigation: NavigationModel { controller.navigation }
     private var reader: ReaderState { controller.reader }
     private var id: DocumentID? { navigation.selection }
-    private var metadata: RFCMetadata? { id.flatMap { LibraryModel.shared.metadata($0) } }
+    private var library: LibraryModel { controller.library }
+    private var metadata: RFCMetadata? { id.flatMap { library.metadata($0) } }
 
     init(controller: ReaderWindowController) {
       self.controller = controller
@@ -359,6 +360,24 @@
 
     func showDocumentTitle(_ title: String, subtitle: String) {
       documentTitleView.show(title, subtitle: subtitle)
+    }
+
+    /// The bookmark item, for its glyph.
+    private weak var bookmarkItem: NSToolbarItem?
+
+    /// What the bookmark item's glyph is currently showing.
+    private var bookmarkSymbol = "bookmark"
+
+    /// Fills the bookmark glyph or empties it. Set from the window's observation of
+    /// the selection and the bookmarks, not in `validateToolbarItem`: the item is an
+    /// `NSMenuToolbarItem`, which AppKit never validates, so a glyph kept there stayed
+    /// empty however the document was bookmarked. An image is made only when the
+    /// glyph actually changes.
+    func showBookmarked(_ isBookmarked: Bool) {
+      let symbol = isBookmarked ? "bookmark.fill" : "bookmark"
+      guard symbol != bookmarkSymbol else { return }
+      bookmarkSymbol = symbol
+      bookmarkItem?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
     }
 
     func updateDocumentTitle(_ state: ToolbarTitleState) {
@@ -408,7 +427,7 @@
         .rfcBookmark, .rfcCite, .rfcShare, .rfcMore,
         // The panel's own section. The flexible space holds the toggles against
         // the window's trailing corner, so they stay in the corner whether the
-        // panel is showing or not rather than travelling with the panel's edge.
+        // panel is showing or not rather than traveling with the panel's edge.
         // Two, as Pages has Format and Document: each shows its own pane in the
         // one panel (#25).
         .rfcPanelSeparator, .flexibleSpace, .rfcInfoToggle, .rfcPanelToggle,
@@ -493,11 +512,14 @@
         // A click bookmarks; the indicator opens Add to Collection (#349).
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
         item.label = "Bookmark"
-        item.image = NSImage(systemSymbolName: "bookmark", accessibilityDescription: "Bookmark")
+        // What `showBookmarked` last chose, which may have come before the item did.
+        item.image = NSImage(
+          systemSymbolName: bookmarkSymbol, accessibilityDescription: "Bookmark")
         item.showsIndicator = true
         item.target = self
         item.action = #selector(toggleBookmark)
         item.menu = collectionMenu
+        bookmarkItem = item
         return item
 
       case .rfcCite:
@@ -566,80 +588,55 @@
       let title = NSMenuItem()
       title.isHidden = true
       menu.addItem(title)
+      let sections: DocumentMenus.Sections
       switch menu {
       case citeMenu:
-        for style in CitationStyle.allCases {
-          let item = NSMenuItem(
-            title: style.displayName, action: #selector(copyCitation), keyEquivalent: "")
-          item.target = self
-          item.representedObject = style
-          menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        add(to: menu, "Copy Link to Current Section", #selector(copySectionLink))
-
+        sections = DocumentMenus.cite()
       case moreMenu:
-        let original = NSMenuItem(
-          title: "Original Text", action: #selector(toggleOriginalText), keyEquivalent: "")
-        original.target = self
-        original.state = reader.showOriginal ? .on : .off
-        menu.addItem(original)
-        add(to: menu, "Open on rfc-editor.org", #selector(openInfoPage))
-        if metadata?.errataURL != nil {
-          add(to: menu, "Errata", #selector(openErrata))
-        }
-        add(to: menu, "Datatracker", #selector(openDatatracker))
-        if reader.precedingDraft != nil {
-          add(to: menu, "Preceding Draft", #selector(openPrecedingDraft))
-        }
-        menu.addItem(.separator())
-        add(to: menu, "Export…", #selector(exportDocument))
-        add(to: menu, "Print…", #selector(printDocument))
-
+        sections = DocumentMenus.more(
+          showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+          precedingDraft: reader.precedingDraft)
       case collectionMenu:
-        let library = LibraryModel.shared
-        let containing = id.map { library.collections.collections(containing: $0) } ?? []
-        for entry in library.collections.collections {
+        sections = DocumentMenus.addToCollection(id, in: library.collections)
+      default:
+        return
+      }
+      for (index, items) in sections.enumerated() {
+        if index > 0 { menu.addItem(.separator()) }
+        for entry in items {
           let item = NSMenuItem(
-            title: entry.name, action: #selector(toggleCollection), keyEquivalent: "")
+            title: entry.title, action: #selector(performMenuAction), keyEquivalent: "")
           item.target = self
-          item.representedObject = entry.id
-          item.state = containing.contains(entry.id) ? .on : .off
+          item.representedObject = entry.action
+          if let isOn = entry.isOn { item.state = isOn ? .on : .off }
+          if let icon = entry.icon {
+            item.image = icon.image
+            item.showsImageOnMacOS27()
+          }
           menu.addItem(item)
         }
-        if !library.collections.collections.isEmpty { menu.addItem(.separator()) }
-        add(to: menu, "New Collection…", #selector(newCollection))
-
-      default:
-        break
+      }
+      // Export and Print are the Mac's own: a chooser and the print panel, where
+      // iOS lists the formats and presents its print sheet.
+      if menu === moreMenu {
+        menu.addItem(.separator())
+        let exportItem = NSMenuItem(
+          title: "Export…", action: #selector(exportDocument), keyEquivalent: "")
+        exportItem.target = self
+        menu.addItem(exportItem)
+        let printItem = NSMenuItem(
+          title: "Print…", action: #selector(printDocument), keyEquivalent: "")
+        printItem.target = self
+        menu.addItem(printItem)
       }
     }
 
-    private func add(to menu: NSMenu, _ title: String, _ action: Selector) {
-      let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-      item.target = self
-      menu.addItem(item)
-    }
-
     // MARK: - Validation
-
-    /// What the bookmark item's glyph is currently showing.
-    private var bookmarkSymbol = "bookmark"
 
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
       switch item.itemIdentifier.rawValue {
       case "rfc.back": return navigation.canGoBack
       case "rfc.forward": return navigation.canGoForward
-      case NSToolbarItem.Identifier.rfcBookmark.rawValue:
-        // The filled glyph is the state, and validation is the one call AppKit
-        // makes often enough to keep it honest — which is also why it allocates
-        // an image only when the glyph actually changed.
-        let symbol = controller.isBookmarked ? "bookmark.fill" : "bookmark"
-        if symbol != bookmarkSymbol {
-          bookmarkSymbol = symbol
-          item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
-        }
-        return id != nil
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
         return reader.hasDocument
@@ -661,54 +658,38 @@
     @objc private func toggleBookmark() { controller.toggleBookmark() }
     @objc private func toggleSidebar() { controller.toggleSidebar() }
 
-    @objc private func toggleCollection(_ sender: NSMenuItem) {
-      guard let document = id, let collection = sender.representedObject as? UUID else { return }
-      LibraryModel.shared.editCollections {
-        try CollectionStore.toggle(
-          document, in: collection, undoManager: controller.window?.undoManager, in: $0)
+    /// What an item of Cite, More or Add to Collection does.
+    @objc private func performMenuAction(_ sender: NSMenuItem) {
+      guard let id, let action = sender.representedObject as? DocumentMenus.Action else { return }
+      switch action {
+      case .copyCitation(let style):
+        guard let metadata else { return }
+        Clipboard.copy(
+          DocumentActions.citation(metadata, section: reader.currentSection, style: style))
+      case .copySectionLink:
+        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
+      case .toggleOriginalText:
+        reader.showOriginal.toggle()
+      case .openInfoPage:
+        NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
+      case .openErrata(let url), .openPrecedingDraft(let url):
+        NSWorkspace.shared.open(url)
+      case .openDatatracker:
+        NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
+      case .toggleCollection(let collection):
+        library.editCollections {
+          try CollectionStore.toggle(
+            id, in: collection, undoManager: controller.window?.undoManager, in: $0)
+        }
+      case .newCollection:
+        navigation.collectionEditor = .create(adding: id)
       }
-    }
-
-    @objc private func newCollection() {
-      navigation.collectionEditor = .create(adding: id)
     }
 
     @objc private func newEmptyCollection() { controller.newCollection() }
 
     @objc private func printDocument() { controller.printDocument() }
     @objc private func exportDocument() { controller.exportDocument() }
-    @objc private func toggleOriginalText() { reader.showOriginal.toggle() }
-
-    @objc private func copyCitation(_ sender: NSMenuItem) {
-      guard let metadata, let style = sender.representedObject as? CitationStyle else { return }
-      Clipboard.copy(
-        DocumentActions.citation(metadata, section: reader.currentSection, style: style))
-    }
-
-    @objc private func copySectionLink() {
-      guard let id else { return }
-      Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-    }
-
-    @objc private func openInfoPage() {
-      guard let id else { return }
-      NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
-    }
-
-    @objc private func openErrata() {
-      guard let url = metadata?.errataURL else { return }
-      NSWorkspace.shared.open(url)
-    }
-
-    @objc private func openDatatracker() {
-      guard let id else { return }
-      NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
-    }
-
-    @objc private func openPrecedingDraft() {
-      guard let draft = reader.precedingDraft else { return }
-      NSWorkspace.shared.open(draft)
-    }
   }
 
   extension ReaderToolbar: NSSharingServicePickerToolbarItemDelegate {

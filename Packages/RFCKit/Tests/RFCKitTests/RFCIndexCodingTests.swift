@@ -10,13 +10,12 @@ struct RFCIndexCodingTests {
     let decoded = try JSONDecoder().decode(RFCIndex.self, from: JSONEncoder().encode(index))
     #expect(decoded.rfcs == index.rfcs)
     #expect(decoded.series == index.series)
-    #expect(decoded.notIssued == index.notIssued)
   }
 
   @Test func `a decoded index answers lookups by number`() throws {
     let index = try Fixtures.sampleIndex()
     let decoded = try JSONDecoder().decode(RFCIndex.self, from: JSONEncoder().encode(index))
     #expect(decoded[9110]?.title == "HTTP Semantics")
-    #expect(decoded.latestNumber == index.latestNumber)
+    #expect(decoded.rfcs.last?.number == index.rfcs.last?.number)
   }
 }

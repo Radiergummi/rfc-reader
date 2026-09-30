@@ -105,25 +105,3 @@ enum XMLTree {
     }
   }
 }
-
-extension String {
-  /// Collapses any run of whitespace (including newlines) to a single space and trims the ends.
-  func collapsingWhitespace() -> String {
-    var result = ""
-    result.reserveCapacity(count)
-    var previousWasSpace = true
-    for scalar in unicodeScalars {
-      // XML whitespace is #x20, #x9, #xD and #xA only. U+00A0 and friends are
-      // content: collapsing them would undo non-breaking reference labels.
-      if scalar == " " || scalar == "\t" || scalar == "\r" || scalar == "\n" {
-        if !previousWasSpace { result.append(" ") }
-        previousWasSpace = true
-      } else {
-        result.unicodeScalars.append(scalar)
-        previousWasSpace = false
-      }
-    }
-    if result.hasSuffix(" ") { result.removeLast() }
-    return result
-  }
-}

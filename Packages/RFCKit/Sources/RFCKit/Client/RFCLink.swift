@@ -27,7 +27,7 @@ public struct RFCLink: Hashable, Sendable {
     var components = URLComponents()
     components.scheme = Self.scheme
     components.host = id.series == .rfc ? String(id.number) : id.fileStem
-    components.fragment = section.map(Self.fragment(for:))
+    components.fragment = section.map(SectionAnchor.anchor(forSectionNumber:))
     // Unwrapped because nothing here can fail: the host is a document ID's own
     // letters and digits, and the one caller-supplied part, the section, goes in
     // as a fragment, which `URLComponents` percent-encodes (#150).
@@ -44,7 +44,7 @@ public struct RFCLink: Hashable, Sendable {
     guard let section,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
-    components.fragment = fragment(for: section)
+    components.fragment = SectionAnchor.anchor(forSectionNumber: section)
     return components.url ?? url
   }
 
@@ -57,7 +57,8 @@ public struct RFCLink: Hashable, Sendable {
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
     // and `section-4.2%20draft` has to come back as the section it was.
-    let fragmentSection = Self.section(fromFragment: url.fragment(percentEncoded: false))
+    let fragmentSection = url.fragment(percentEncoded: false).flatMap(
+      SectionAnchor.sectionNumber(fromAnchor:))
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
@@ -88,28 +89,4 @@ public struct RFCLink: Hashable, Sendable {
       return nil
     }
   }
-
-  /// The RFC Editor's and Datatracker's fragment convention, which the app's own
-  /// scheme follows too: `4.2` → `section-4.2`, appendix `A.1` → `appendix-A.1`.
-  /// `section(fromFragment:)` is the other half, and the two are kept together so
-  /// neither can drift.
-  static func fragment(for section: String) -> String {
-    if section.hasPrefix(appendixPrefix) { return section }
-    return section.first?.isLetter == true ? "\(appendixPrefix)\(section)" : "section-\(section)"
-  }
-
-  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
-  /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
-  /// read as `1`, it named section 1.
-  private static func section(fromFragment fragment: String?) -> String? {
-    guard let fragment else { return nil }
-    for prefix in ["section-", appendixPrefix] where fragment.hasPrefix(prefix) {
-      let value = String(fragment.dropFirst(prefix.count))
-      guard !value.isEmpty else { return nil }
-      return prefix == appendixPrefix && value.first?.isNumber == true ? fragment : value
-    }
-    return nil
-  }
-
-  static let appendixPrefix = "appendix-"
 }

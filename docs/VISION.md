@@ -29,12 +29,14 @@ Modern Apple platforms make a fundamentally better reader cheap to build:
 - **Everything is a link.** `[RFC2119]`, `Section 4.2`, `Section 3 of [RFC9000]`, `Figure 1`, `https://` — all tappable, all in-app, with a peek before you commit.
 - **Truth about status.** The first thing a reader sees is whether the document is current, updated, obsoleted or has errata.
 - **Offline by default.** The index and everything you have opened stays on device. Sync the user's own data through iCloud, never their reading history to us.
-- **Kind to metered and poor connections.** Never spend bandwidth on something nobody is waiting for: a download the reader has walked away from is cancelled, not finished in the background.
+- **Kind to metered and poor connections.** Never spend bandwidth on something nobody is waiting for: a download the reader has walked away from is canceled, not finished in the background.
 - **Native on every platform.** One SwiftUI code base. Real menu bar commands and keyboard shortcuts on Mac, Split View and Pencil on iPad, Handoff and Spotlight everywhere.
 
 ## Feature set, in tiers
 
 ### Tier 0 — the core reader (MVP, "0.1")
+
+*Shipped. Items of later tiers that have shipped say so.*
 
 Browse and find
 - Full index of every RFC, BCP, STD and FYI, refreshed from the RFC Editor. Snapshot bundled for offline first launch.
@@ -43,7 +45,7 @@ Browse and find
 - Command-L "Go to RFC…" accepting a number, `BCP 14`, or any rfc-editor.org / datatracker URL.
 
 Read
-- Native rendering of the document model: headings, paragraphs, lists, definition lists, tables, figures, monospaced artwork and code with copy button, references.
+- Native rendering of the document model: headings, paragraphs, lists, definition lists, tables, figures, monospaced artwork and code (copied with Copy Figure or an ordinary selection), references.
 - Legacy text RFCs: page furniture removed, paragraphs reflowed and re-joined across page breaks, prose vs. ASCII art detected, headings recovered, references linked. "Original text" toggle shows the file as published.
 - Status banner: obsoleted by / updated by / has errata, with one-tap navigation to the newer document.
 - Table of contents inspector that tracks the current section.
@@ -60,20 +62,20 @@ Reference
 ### Tier 1 — the reader people recommend ("0.2 – 0.3")
 
 - **Full-text search** across downloaded documents with snippets and section-level results (SQLite FTS5 via GRDB). Offer "download everything" (~600 MB of text) for people who want a complete offline corpus.
-- **Reference peek.** Long-press or hover a `[RFC7231]` link to see title, status, abstract and the referenced section, without leaving the page.
+- **Reference peek** *(shipped)*. Long-press or hover a `[RFC7231]` link to see title, status, abstract and the referenced section, without leaving the page.
 - **Lineage view.** For any RFC: what it obsoletes and updates, what obsoletes and updates it, drawn as a small graph. "Show me the current version of this" in one tap.
 - **Errata inline.** Fetch the errata feed; mark affected sections with a glyph; show original vs. corrected text in a popover. This is a real reading aid nobody offers.
-- **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection.
+- **Collections.** Manual reading lists plus automatic ones: a STD or BCP number is already a collection; a working group is a collection; "everything this RFC references" is a collection. *Shipped, except the last.*
 - **iCloud sync** of bookmarks, reading positions and collections (SwiftData + CloudKit is mostly a capability toggle).
 - **Highlights and notes**, synced, exportable as Markdown with citations attached.
 - **Spotlight indexing** of the index (title, number, abstract) so system search finds RFCs; Handoff between iPhone, iPad and Mac.
-- **Mac polish**: multiple windows and tabs, Services menu ("Open RFC" on selected text), Quick Look-style popover for reference links, printing and PDF export of the rendered document.
+- **Mac polish**: multiple windows and tabs *(shipped)*, Services menu ("Open RFC" on selected text), Quick Look-style popover for reference links, printing and PDF export of the rendered document.
 - **Widgets**: "Just published", "Continue reading".
 
 ### Tier 2 — beyond RFCs ("later, if it earns its place")
 
 - **Internet-Drafts** from the Datatracker, with the same renderer, and "what changed" diffs between draft versions or between a draft and the RFC it became.
-- **On-device intelligence** via the Foundation Models framework: summarise a section, explain a term in context, "which sections of RFC 9110 replaced Section 5.1 of RFC 7231". Everything stays on device, and every answer links to the text it came from. Worth doing only if it can be honest about its sources.
+- **On-device intelligence** via the Foundation Models framework: summarize a section, explain a term in context, "which sections of RFC 9110 replaced Section 5.1 of RFC 7231". Everything stays on device, and every answer links to the text it came from. Worth doing only if it can be honest about its sources.
 - **Translation** of a selection via the Translation framework, for non-native readers.
 - **visionOS**: a reading room with a spec pinned next to your code is a genuinely good use of the platform.
 - **Pencil annotation** on iPad, kept as an overlay per section so it survives re-rendering.
@@ -91,12 +93,12 @@ Ideas from the first brainstorm session and where each one lands.
 | Idea | Where it lands | Notes |
 |---|---|---|
 | Prose reflowed to the viewport with adjustable typography (Safari Reader, Apple Books) | Tier 0, already the core design | The block model separates prose from artwork, so reflow is free. Add a `ReadingSettings` object: font family, size, line height, measure, margins, theme incl. sepia. Pagination is a possible later mode; scrolling stays the default. |
-| Full semantic search, BM25 and/or vectors | Tier 1 (BM25), Tier 1–2 (hybrid) | SQLite FTS5 has BM25 built in: section-level hits with snippets over everything downloaded plus every abstract. Vectors come second as a reranker: `NLContextualEmbedding` on device, one vector per abstract (~10k, ~20 MB, shipped precomputed via a GitHub release) and per section only for downloaded documents. |
+| Full semantic search, BM25 and/or vectors | Tier 1 (BM25), Tier 1–2 (hybrid) | SQLite FTS5 has BM25 built in: section-level hits with snippets over everything downloaded plus every abstract. Vectors come second, as an optional reranker of BM25's top hits with a retrieval-tuned model we ship; `NLContextualEmbedding` was measured and helped nothing. The measured configuration is ARCHITECTURE.md's search decision. |
 | ASCII flowcharts and diagrams rendered well | Tier 1 | Per-block, reversible upgrade of `+-|` art to Unicode box drawing. Packet diagrams (`0 1 2 3 … +-+-+`) follow a strict format and can be parsed into a native bit-field table, which no reader does today. SVG alternatives in newer RFCs need a small dependency or a web view for that one block. |
-| ABNF and other grammars, syntax highlighting for code (confirmed: ABNF, not "DNF") | Tier 1 | RFCXML labels `<sourcecode type="abnf">`, `json`, `http-message`, `yang`, `asn.1`, `c`; legacy text ABNF is detectable from `rulename =` lines. A small regex tokenizer per language in RFCKit produces tokens the renderer colours. No JavaScript-based highlighters. |
+| ABNF and other grammars, syntax highlighting for code (confirmed: ABNF, not "DNF") | Tier 1 | RFCXML labels `<sourcecode type="abnf">`, `json`, `http-message`, `yang`, `asn.1`, `c`; legacy text ABNF is detectable from `rulename =` lines. A small regex tokenizer per language in RFCKit produces tokens the renderer colors. No JavaScript-based highlighters. |
 | Working inter-spec links | Tier 0, done in the model | Cross references resolve to document and section at parse time. Still to add: Internet-Draft references (`[I-D.ietf-quic-http]`) and IANA registry URLs. |
 | Drafts, and a pleasing delta between versions | Tier 2 | Every draft revision is served as text (and XML for recent ones) from the IETF archive, so both sides parse into the same model. Diff at three levels: align sections by title and position, LCS over paragraphs, word-level diff inside changed paragraphs. The same engine gives "what changed from RFC 7231 to RFC 9110", probably the more valuable view for implementers. Fuzzy alignment after restructurings is the hard part. Drafts also enable "notify me when this draft has a new version". |
-| Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body will be a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See ARCHITECTURE.md. |
+| Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body is a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See ARCHITECTURE.md. |
 | Handoff between iPhone, iPad and Mac | Tier 1 | `NSUserActivity` carrying the `rfc://` link of the current section. |
 | ⌘-click a reference to open it in a new window (Mac) | Tier 1 | Falls out of navigation being a link. |
 
@@ -106,7 +108,7 @@ Ideas from the first brainstorm session and where each one lands.
 
 **iPad and Mac.** Three columns: sidebar, list, reader; the table of contents docks as an inspector on the right. Command-L jumps to a number, Command-F finds in document, Command-Option-I toggles contents, Command-D bookmarks. On Mac the reader opens in tabs, cross references can open in a new window with Command-click, and the menu bar has everything.
 
-**Reading typography.** Prose in the system serif or a well-chosen humanist face at a comfortable measure (about 70 characters), artwork in SF Mono in a subtle card that scrolls horizontally rather than wrapping. Headings numbered exactly as the RFC numbers them. Dark mode from day one.
+**Reading typography.** Prose in the system serif or a well-chosen humanist face at a comfortable measure (about 70 characters), artwork in SF Mono in a subtle card, never wrapped and scaled so its widest line fits the measure. Headings numbered exactly as the RFC numbers them. Dark mode from day one.
 
 **The status banner** sits between title and abstract, not in a toolbar. If a document is obsolete, the banner is red and the newer RFC is one tap away. That single design decision would already put this app ahead of the web.
 
@@ -122,15 +124,15 @@ Ideas from the first brainstorm session and where each one lands.
 | Errata | `https://www.rfc-editor.org/errata.json` | ~12 MB, every erratum with section and original/corrected text |
 | Datatracker record | `https://datatracker.ietf.org/api/v1/doc/document/?name=rfcNNNN&format=json` | Working group, history, related drafts |
 
-The 8,464 legacy text-only RFCs are a closed set; they are converted to RFCXML once, offline, and shipped as optional packs together with search indexes and the citation graph. `DATA_PIPELINE.md` has sizes and the delivery design.
+The 8,464 legacy RFCs are a closed set; the 8,457 of them published as text are converted to RFCXML once, offline, and shipped as optional packs together with search indexes and the citation graph. `DATA_PIPELINE.md` has sizes and the delivery design.
 
 RFC numbers passed 10000 in 2026 (RFC 10050 was published on 19 September 2026). Nothing may assume four digits.
 
 ## Risks and open questions
 
 - **Legacy text parsing will never be perfect.** Definition lists with hanging indents, nested lists, and tables drawn in ASCII are hard to classify. Mitigation: bias toward preformatted (never mangle), keep the original text one toggle away, and let users report a misrendered section.
-- **Rendering performance.** A 1,400-paragraph document in a lazy stack is fine; scroll-to-anchor inside a lazy stack is less reliable. Fallback is a plain stack for documents under a threshold, or `UITextView`/`NSTextView` with TextKit 2 if SwiftUI text proves limiting.
-- **Search latency.** Metadata search over the whole index takes ~70 ms per query in the current in-memory implementation. Fine off the main actor with a debounce; FTS5 replaces it when full-text search arrives.
+- **Rendering performance.** Settled: the reader body is one TextKit 2 text storage per document in `UITextView`/`NSTextView`, not a lazy stack of SwiftUI views; ARCHITECTURE.md has the decision.
+- **Search latency.** Metadata search over the whole index takes 3.6 ms per query in the current in-memory implementation. FTS5 replaces it when full-text search arrives.
 - **Business model.** The app will be public and possibly sold. AGPL open source plus a paid App Store build is a legitimate combination (the source is free, the convenience and signing are not). This makes the licensing of the legacy XML pack a real question rather than a formality; see DATA_PIPELINE.md.
 - **Name.** "RFC Reader" is descriptive and probably taken. Worth a short list of alternatives before the App Store listing exists.
 

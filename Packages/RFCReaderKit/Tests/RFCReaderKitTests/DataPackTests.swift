@@ -45,7 +45,7 @@ struct DataPackTests {
         Manifest.Entry(path: path, bytes: data.count, sha256: Manifest.hex(SHA256.hash(data: data)))
       )
     }
-    let manifest = Manifest(version: "2026.09", generatedAt: "2026-09-29T00:00:00Z", files: entries)
+    let manifest = Manifest(version: "2026.09", files: entries)
     try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
     return directory
   }

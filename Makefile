@@ -1,19 +1,28 @@
 .PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
 
-# The two Swift packages. RFCKit holds everything the app and the pipeline share
+# The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
-# does, including Linux. corpus-build is the offline pipeline that turns the
-# legacy plain-text RFCs into RFCXML packs (docs/DATA_PIPELINE.md).
+# does, including Linux. RFCReaderKit is the app's testable half, and imports
+# UIKit/AppKit, so it needs an Apple SDK. corpus-build is the offline pipeline that
+# turns the legacy plain-text RFCs into RFCXML packs (docs/DATA_PIPELINE.md).
 RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
 CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
 
+# Whether this machine has an Apple SDK, so RFCReaderKit can build here.
+DARWIN := $(filter Darwin,$(shell uname -s))
+
 # The corpus working directory (see the corpus targets below). Set here rather
 # than with them because `test-corpus` names files in it as prerequisites, and
 # make expands a prerequisite where it reads the rule.
 CORPUS ?= corpus
+
+# What every download below sends, as corpus-build's fetch does
+# (`RetryingTransport.userAgent`): a bulk fetch the RFC Editor can tell apart. curl
+# retries what can pass -- a timeout, a 429, a 5xx -- three times with backoff.
+CURL := curl -fsS --retry 3 -A 'rfc-reader corpus-build (+https://github.com/Radiergummi/rfc-reader)'
 
 # Every Swift source we own. Found rather than handed to swift-format's
 # --recursive, which would also walk the SwiftPM build directories and format
@@ -55,9 +64,13 @@ fmt:
 	swift format --in-place --parallel $(SWIFT_SOURCES)
 
 ## Build the Swift packages
+# RFCReaderKit only on a Mac; elsewhere it cannot build.
 build:
 	swift build --package-path $(RFCKIT)
 	swift build --package-path $(CORPUS_BUILD)
+ifneq ($(DARWIN),)
+	swift build --package-path $(RFCREADERKIT)
+endif
 
 ## Run the RFCKit and corpus-build test suites
 # The fast loop: no simulator, no Xcode project.
@@ -66,30 +79,40 @@ test:
 	swift test --package-path $(CORPUS_BUILD)
 
 ## Run all checks (lint + packages + tests)
-# The gate before committing. CI does not call this: it runs the same commands as
-# separate jobs, each in its own pinned environment (see `lint` above, and
-# .github/workflows/ci.yml). Deliberately without build-app, which needs Xcode.
+# The gate before committing. On a Mac it also builds and tests RFCReaderKit, as
+# CI's macOS job does; elsewhere it cannot, and is weaker than CI by that package.
+# CI does not call this: it runs the same commands as separate jobs, each in its
+# own pinned environment (see `lint` above, and .github/workflows/ci.yml).
+# Deliberately without build-app, which needs Xcode.
+ifneq ($(DARWIN),)
+check: lint build test test-app
+else
 check: lint build test
+endif
 
 ## Run the app-side test suite (RFCReaderKit)
-# Not part of `check`: this package imports UIKit/AppKit, so it needs an Apple
-# SDK and cannot run in the swift:6.3 container the Linux job uses.
+# Not part of `test`: this package imports UIKit/AppKit, so it needs an Apple
+# SDK and cannot run in the swift:6.3 container the Linux job uses. `check` runs
+# it on a Mac.
 test-app:
 	swift test --package-path $(RFCREADERKIT)
 
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1122 rfc1140 rfc1178 rfc1198 rfc1343 rfc1415 rfc1441 rfc1581 rfc206 rfc2300 rfc2326 rfc2569 rfc2910 rfc355 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc7231 rfc783 rfc791 rfc793 rfc8011
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1122 rfc1140 rfc1142 rfc1178 rfc1198 rfc1343 rfc1415 rfc1441 rfc1581 rfc1958 rfc206 rfc2196 rfc2300 rfc2326 rfc2569 rfc2910 rfc355 rfc5193 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc8011 rfc817
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
 
 ## Run the corpus-backed RFCKit suites, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
 # RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
-# `make test` and on CI.
-# Filtered by their type names, all `CorpusBacked...`: --filter matches a test's
-# identifier, not the `Corpus-backed: ...` name its suite displays.
+# `make test`; CI runs them weekly (.github/workflows/corpus-tests.yml). Filtered by
+# their type names, all `CorpusBacked...`: --filter matches a test's identifier, not
+# the `Corpus-backed: ...` name its suite displays.
+#
+# The lists above are kept by hand. A test that reads a document not on them fails
+# saying so, from `CorpusText`, rather than on a missing file.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
@@ -128,12 +151,12 @@ $(BENCHMARK_CORPUS)/%:
 # partial file first, so an interrupted download is not taken for the document.
 $(CORPUS)/text.noindex/%.txt:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
 
 # One RFC authored in RFCXML, fetched where `make corpus-fetch-xml` would have put it.
 $(CORPUS)/xml.noindex/%.xml:
 	@mkdir -p $(@D)
-	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 ## Download the pinned XcodeGen release into XCODEGEN_DIR, checking its SHA-256
 # Its binary is then XCODEGEN_DIR/xcodegen/bin/xcodegen, which `xcodeproj` prefers
@@ -284,7 +307,8 @@ corpus-tool:
 	swift build -c release --package-path $(CORPUS_BUILD)
 
 # Twenty documents by default, enough to exercise the pipeline in a minute. The
-# full set is 8,464 legacy RFCs, roughly 450 MB and twenty minutes:
+# full set is the 8,457 legacy RFCs with a text file, roughly 450 MB and twenty
+# minutes:
 #
 #   make corpus CORPUS_LIMIT= CORPUS_VERSION=2026.09
 #
@@ -319,18 +343,29 @@ corpus-fetch-xml: corpus-tool
 
 ## Convert the fetched text to RFCXML v3, writing a conversion report
 # The report's `schema` field says, per document, why the output is not valid
-# RFCXML; `[]` is a document that validates. A regression is one that stops.
+# RFCXML; `[]` is a document that validates. A regression is one that stops, and it
+# fails the step once the new report is written. That report is the next run's
+# baseline, so rerunning passes: read the documents it names first.
 corpus-convert: corpus-tool
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
 
 ## Check the schema check: three RFCs as the RFC Editor published them must validate
-# Needs them fetched (`make corpus-fetch-xml CORPUS_LIMIT=`). If one fails, the
-# schema or the validator is wrong, and no count the convert step reports means
-# anything until it is fixed.
-corpus-schema-control:
-	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(addprefix $(CORPUS)/xml.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+# If one fails, the schema or the validator is wrong, and no count the convert step
+# reports means anything until it is fixed; so `corpus` runs this before converting.
+# The three are fetched into a directory of their own, not the XML directory: a
+# limited run leaves them out of it, and one fetched there would join the manifest
+# and the packs of a run that never asked for it.
+SCHEMA_CONTROL_DOCUMENTS := $(addprefix $(CORPUS)/schema-control.noindex/,rfc8999.xml rfc9113.xml rfc9220.xml)
+
+corpus-schema-control: $(SCHEMA_CONTROL_DOCUMENTS)
+	xmllint --noout --relaxng $(CORPUS_SCHEMA) $(SCHEMA_CONTROL_DOCUMENTS)
+
+# One RFC as published in RFCXML, for the schema control.
+$(CORPUS)/schema-control.noindex/%.xml:
+	@mkdir -p $(@D)
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
 ## Check that each scripted override is still what its script makes
 # An override corrected by a script (corpus/overrides/rfcNNNN.py) is a snapshot of
@@ -342,7 +377,7 @@ corpus-overrides-check: corpus-tool
 	@status=0; for script in $(CORPUS)/overrides/rfc*.py; do \
 	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
 	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
-	    curl -fsS -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
+	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
 	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
@@ -367,12 +402,13 @@ corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
 	  --version $(CORPUS_VERSION)
 
-## Rebuild the cross-reference judgement set used to measure search ranking
+## Rebuild the cross-reference judgment set used to measure search ranking
 # Not part of `corpus`: it reads the converted corpus rather than producing it, and
-# the set only changes when the corpus or the filtering does. See
-# Tools/corpus-build/Evaluation/README.md for which query set measures what.
+# the set only changes when the corpus or the filtering does. It is written into the
+# gitignored corpus directory, never the tree, because its queries are RFC sentences.
+# See Tools/corpus-build/Evaluation/README.md for which query set measures what.
 corpus-queries: corpus-tool
-	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out Tools/corpus-build/Evaluation/queries-xref.json
+	$(CORPUS_BIN) queries --in $(CORPUS)/xml.noindex --out $(CORPUS)/queries-xref.json
 
 ## Scan datatracker for adopted drafts revising an RFC, into corpus/revisions
 revisions: corpus-tool
@@ -381,4 +417,4 @@ revisions: corpus-tool
 ## Run the whole corpus pipeline: fetch, convert, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-fetch-xml corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-manifest
