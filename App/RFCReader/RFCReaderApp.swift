@@ -247,15 +247,16 @@ struct DocumentCommands: Commands {
           // (#157).
           Button("Contents") { active.controller?.press(.navigation) }
             .keyboardShortcut("i", modifiers: [.command, .option])
-            // As the toolbar's button is: opened with no document, the panel is an
-            // empty strip, and nothing closes it again until a document arrives.
-            // Not `showsDocument`: clearing the selection leaves `hasDocument` set
-            // and the panel open, and the chord has to be able to close it.
-            .disabled(reader?.hasDocument != true)
+            // As the toolbar's button is: on whatever the index describes, a
+            // document still loading or one that failed to included (#325), and
+            // nothing else, where the panel is an empty strip. Not `showsDocument`,
+            // which also needs a selection: the chord has to be able to close a
+            // panel that is still open.
+            .disabled(reader?.canDescribe != true)
           // ⌘I, Get Info in Finder and Preview.
           Button("Info") { active.controller?.press(.info) }
             .keyboardShortcut("i", modifiers: .command)
-            .disabled(reader?.hasDocument != true)
+            .disabled(reader?.canDescribe != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }

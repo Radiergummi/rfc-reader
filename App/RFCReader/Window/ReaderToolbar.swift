@@ -639,7 +639,8 @@
       case "rfc.forward": return navigation.canGoForward
       case NSToolbarItem.Identifier.rfcPanelToggle.rawValue,
         NSToolbarItem.Identifier.rfcInfoToggle.rawValue:
-        return reader.hasDocument
+        // Whatever the index describes, before its body or without it (#325).
+        return reader.canDescribe
       case NSToolbarItem.Identifier.rfcNewCollection.rawValue,
         NSToolbarItem.Identifier.rfcSidebarToggle.rawValue:
         // Neither needs a document, so a window without one has both.
