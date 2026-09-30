@@ -42,7 +42,12 @@ public struct RFCXMLSerializer: Sendable {
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
     let referenceAnchors = Self.referenceAnchors(in: document)
-    var context = Context(referenceAnchors: referenceAnchors, sections: document.sections)
+    var entryAnchors: Set<String> = []
+    for case .references(let list) in document.blocks {
+      entryAnchors.formUnion(list.entries.map(\.anchor))
+    }
+    var context = Context(
+      referenceAnchors: referenceAnchors, entryAnchors: entryAnchors, sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -482,8 +487,12 @@ public struct RFCXMLSerializer: Sendable {
       let target = Writer.escapeAttribute(anchor)
       return content.isEmpty
         ? "<xref target=\"\(target)\"/>" : "<xref target=\"\(target)\">\(content)</xref>"
-    case .document(let id, let section, _):
-      if let anchor = context.referenceAnchors[id] {
+    case .document(let id, let section, let entry):
+      // The entry the citation resolved to, where it names one: the first entry naming
+      // the same document may be another -- an erratum listed ahead of the RFC it
+      // corrects, a second entry under another label (#424).
+      let resolved = entry.flatMap { context.entryAnchors.contains($0) ? $0 : nil }
+      if let anchor = resolved ?? context.referenceAnchors[id] {
         var attributes = " target=\"\(Writer.escapeAttribute(anchor))\""
         // The source's own wording, not a fixed "of": it decides how the label
         // reads on the way back in, and `bare` in particular means something
@@ -505,6 +514,8 @@ public struct RFCXMLSerializer: Sendable {
 
   private struct Context {
     var referenceAnchors: [DocumentID: String]
+    /// Every entry's anchor, so a citation's own entry is written only where it is declared.
+    var entryAnchors: Set<String>
     var warnings: [String] = []
     /// Every references section, the back's own among them, in document order, which
     /// the back writes ahead of its sections (#315).
@@ -517,8 +528,9 @@ public struct RFCXMLSerializer: Sendable {
     /// `pn` then declared the ID the lifted list's anchor declared too.
     private var partNumbers: [String: String] = [:]
 
-    init(referenceAnchors: [DocumentID: String], sections: [Section]) {
+    init(referenceAnchors: [DocumentID: String], entryAnchors: Set<String>, sections: [Section]) {
       self.referenceAnchors = referenceAnchors
+      self.entryAnchors = entryAnchors
       var claimed: Set<String> = []
       func claim(_ sections: [Section]) {
         for section in sections {
