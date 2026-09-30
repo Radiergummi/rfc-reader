@@ -262,7 +262,11 @@ struct DocumentView: View {
 
   @ViewBuilder
   private var states: some View {
-    if reader.showOriginal {
+    // Before Original Text too: the original is the PDF or the PostScript, and the
+    // text is not there or only says where it is.
+    if let original = publishedOriginal {
+      originalOnly(original)
+    } else if reader.showOriginal {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
@@ -349,8 +353,6 @@ struct DocumentView: View {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
-    } else if let original = session.state.failure?.error as? PublishedOriginal {
-      originalOnly(original)
     } else if let failure = session.state.failure {
       ContentUnavailableView {
         Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
@@ -367,35 +369,50 @@ struct DocumentView: View {
     }
   }
 
+  /// The original this RFC is (#207), as the load found or, for a load that ran
+  /// before the index was here and so fetched without its formats, as the index says
+  /// once it is.
+  private var publishedOriginal: PublishedOriginal? {
+    if let original = session.state.failure?.error as? PublishedOriginal { return original }
+    guard let formats = metadata?.formats else { return nil }
+    if let document = session.state.document {
+      return PublishedOriginal(id, formats: formats, text: document)
+    }
+    return PublishedOriginal(id, formats: formats)
+  }
+
   /// An RFC that is its PDF or PostScript original (#207): the header the index
   /// gives, and the original to open, rather than an error or a text that only says
   /// where the original is.
   private func originalOnly(_ original: PublishedOriginal) -> some View {
     let name = original.format == .pdf ? "PDF" : "PostScript"
-    return ScrollView {
-      VStack(alignment: .leading, spacing: 24) {
-        DocumentHeaderView(
-          library: library, navigation: navigation,
-          identity: DocumentHeaderView.Identity(
-            header: DocumentHeader(id: id, title: metadata?.title ?? id.displayName),
-            metadata: metadata,
-            revisions: metadata.map { library.revisionsSummary(for: $0.id) }),
-          heading: heading)
-        ContentUnavailableView {
-          Label("Published as \(name)", systemImage: "doc.richtext")
-        } description: {
-          Text("The RFC Editor publishes \(id.displayName) only as a \(name) file.")
-        } actions: {
-          Link("Open the Original (\(name))", destination: original.url)
-            // The reader's own handler would read the file's URL as a link to this
-            // RFC, and open it here again.
-            .environment(\.openURL, OpenURLAction { _ in .systemAction })
-        }
+    // Centered rather than scrolled from the top, as the error is: on macOS the
+    // reader's hosted root refuses the safe area, so a scroll view would put the
+    // title under the toolbar, and what is here fits the pane.
+    return VStack(alignment: .leading, spacing: 24) {
+      DocumentHeaderView(
+        library: library, navigation: navigation,
+        identity: DocumentHeaderView.Identity(
+          header: DocumentHeader(id: id, title: metadata?.title ?? id.displayName),
+          metadata: metadata,
+          revisions: metadata.map { library.revisionsSummary(for: $0.id) }),
+        heading: heading)
+      ContentUnavailableView {
+        Label("Published as \(name)", systemImage: "doc.richtext")
+      } description: {
+        Text("The RFC Editor publishes \(id.displayName) only as a \(name) file.")
+      } actions: {
+        Link("Open the Original (\(name))", destination: original.url)
+          // The reader's own handler would read the file's URL as a link to this
+          // RFC, and open it here again.
+          .environment(\.openURL, OpenURLAction { _ in .systemAction })
       }
-      .frame(maxWidth: column, alignment: .leading)
-      .padding(.vertical, 16)
-      .frame(maxWidth: .infinity)
+      // Its own height, so it does not fill the pane and push the header up.
+      .fixedSize(horizontal: false, vertical: true)
     }
+    .frame(maxWidth: column, alignment: .leading)
+    .padding(.vertical, 16)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   /// On iOS only; the Mac's toolbar is the window's, and stays.
