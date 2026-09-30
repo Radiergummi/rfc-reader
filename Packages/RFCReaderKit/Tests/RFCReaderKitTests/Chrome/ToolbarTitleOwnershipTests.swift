@@ -71,6 +71,28 @@ struct ToolbarTitleOwnershipTests {
     #expect(ownership.state == .hidden)
   }
 
+  /// An RFC published only as a scan has no text to load, and its page shows the
+  /// header the index gives, in either mode (#207): the fetch that finds no text, the
+  /// original text preferred, and the index arriving after the fetch failed all leave
+  /// the title out of the toolbar.
+  @Test func `a published original's page keeps the title out`() {
+    var ownership = ToolbarTitleOwnership()
+    ownership.beginLoading()
+    ownership.showsPublishedOriginal = true
+    #expect(ownership.state == .hidden)
+    ownership.showsOriginal = true
+    #expect(ownership.state == .hidden)
+    ownership.failLoading()
+    #expect(ownership.state == .hidden)
+  }
+
+  /// With no document, as with the original text, there is no page to show it.
+  @Test func `a published original with no document hides the title`() {
+    var ownership = ToolbarTitleOwnership()
+    ownership.showsPublishedOriginal = true
+    #expect(ownership.state == .hidden)
+  }
+
   /// Try Again starts another load, under a header on its way again.
   @Test func `trying again after a failure hides the title`() {
     var ownership = ToolbarTitleOwnership()

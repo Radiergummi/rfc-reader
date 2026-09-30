@@ -220,7 +220,10 @@ struct DocumentView: View {
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
-      .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.indexState) {
+        deriveInfo()
+        markPublishedOriginal()
+      }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
@@ -262,11 +265,12 @@ struct DocumentView: View {
 
   @ViewBuilder
   private var states: some View {
-    // Before Original Text too: there is no text to show. From the index rather than
-    // the load, which may have run before the index was here, without its formats.
-    if let original = metadata.flatMap({ PublishedOriginal(id, formats: $0.formats) }) {
-      originalOnly(
-        original, explanation: "The RFC Editor publishes \(id.displayName) only as a scan.")
+    if let metadata,
+      let page = PublishedOriginalPage(
+        id, formats: metadata.formats, showsOriginal: reader.showOriginal,
+        text: session.state.document)
+    {
+      originalOnly(page, metadata: metadata)
     } else if reader.showOriginal {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
@@ -279,13 +283,6 @@ struct DocumentView: View {
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
-    } else if let document = session.state.document,
-      let original = metadata.flatMap({ PublishedOriginal(id, formats: $0.formats, text: document) }
-      )
-    {
-      // After Original Text, which shows that text as published.
-      originalOnly(
-        original, explanation: "The text of \(id.displayName) only says where its original is.")
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -380,22 +377,22 @@ struct DocumentView: View {
   /// An RFC that is its PDF or PostScript original (#207): the header the index
   /// gives, and the original to open, rather than an error or a text that only says
   /// where the original is.
-  private func originalOnly(_ original: PublishedOriginal, explanation: String) -> some View {
-    let name = original.format == .pdf ? "PDF" : "PostScript"
-    let page = VStack(alignment: .leading, spacing: 24) {
+  private func originalOnly(_ page: PublishedOriginalPage, metadata: RFCMetadata) -> some View {
+    let name = page.original.format.displayName
+    let content = VStack(alignment: .leading, spacing: 24) {
       DocumentHeaderView(
         library: library, navigation: navigation,
         identity: DocumentHeaderView.Identity(
-          header: DocumentHeader(id: id, title: metadata?.title ?? id.displayName),
+          header: DocumentHeader(id: id, title: metadata.title),
           metadata: metadata,
-          revisions: metadata.map { library.revisionsSummary(for: $0.id) }),
+          revisions: library.revisionsSummary(for: metadata.id)),
         heading: heading)
       ContentUnavailableView {
         Label("Published as \(name)", systemImage: "doc.richtext")
       } description: {
-        Text(explanation)
+        Text(page.explanation)
       } actions: {
-        Link("Open the Original (\(name))", destination: original.url)
+        Link("Open the Original (\(name))", destination: page.original.url)
           // The reader's own handler would read the file's URL as a link to this
           // RFC, and open it here again.
           .environment(\.openURL, OpenURLAction { _ in .systemAction })
@@ -411,8 +408,8 @@ struct DocumentView: View {
     // Scrolled where it does not, at a large text size or on a phone held sideways,
     // so the link stays in reach.
     return ViewThatFits(in: .vertical) {
-      page.frame(maxHeight: .infinity)
-      ScrollView { page }
+      content.frame(maxHeight: .infinity)
+      ScrollView { content }
     }
   }
 
@@ -516,6 +513,7 @@ struct DocumentView: View {
     // Its header is on its way until the reader reports, so the title stays out of
     // the toolbar rather than showing and then dropping (#281).
     reader.documentStartsLoading()
+    markPublishedOriginal()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
@@ -546,14 +544,21 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
-    } failed: { [reader, navigation, library, id] in
-      // No header is coming, so the toolbar names the RFC that failed. Unless it is a
-      // scan, which had no text to load: its page shows the header (#207).
-      guard navigation.selection == id,
-        library.metadata(id).flatMap({ PublishedOriginal(id, formats: $0.formats) }) == nil
-      else { return }
+    } failed: { [reader, navigation, id] in
+      // No header is coming, so the toolbar names the RFC that failed; unless it is
+      // a scan (`showsPublishedOriginal`), whose page shows the header.
+      guard navigation.selection == id else { return }
       reader.documentFailedToLoad()
     }
+  }
+
+  /// Whether the index says this RFC is only a scan, whose page shows its header
+  /// (#207); again when the index loads, which may be after the fetch failed.
+  private func markPublishedOriginal() {
+    // Not while fading out: the reader state is the selected document's.
+    guard navigation.selection == id else { return }
+    reader.showsPublishedOriginal =
+      metadata.flatMap { PublishedOriginal(id, formats: $0.formats) } != nil
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document

@@ -185,15 +185,14 @@ public struct DocumentInfo: Equatable, Sendable {
   /// is hosted, which the reader already keeps its own copy of the text of.
   private static func formats(_ metadata: RFCMetadata) -> [Row] {
     metadata.formats.map { format in
-      let (label, symbol) =
+      let symbol =
         switch format {
-        case .text: ("Plain Text", "doc.plaintext")
-        case .html: ("HTML", "doc.richtext")
-        case .xml: ("XML", "chevron.left.forwardslash.chevron.right")
-        case .pdf: ("PDF", "doc.text")
-        case .postScript: ("PostScript", "doc.text")
+        case .text: "doc.plaintext"
+        case .html: "doc.richtext"
+        case .xml: "chevron.left.forwardslash.chevron.right"
+        case .pdf, .postScript: "doc.text"
         }
-      return Row(label: label, value: .file(metadata.id, format), symbol: symbol)
+      return Row(label: format.displayName, value: .file(metadata.id, format), symbol: symbol)
     }
   }
 
@@ -254,6 +253,20 @@ public struct DocumentInfo: Equatable, Sendable {
     case "usv": "User Services"
     case "wit": "Web and Internet Transport"
     default: code.uppercased()
+    }
+  }
+}
+
+extension FileFormat {
+  /// The format's name, as the Info pane lists it and the page of an RFC that is its
+  /// original offers it.
+  public var displayName: String {
+    switch self {
+    case .text: "Plain Text"
+    case .html: "HTML"
+    case .xml: "XML"
+    case .pdf: "PDF"
+    case .postScript: "PostScript"
     }
   }
 }

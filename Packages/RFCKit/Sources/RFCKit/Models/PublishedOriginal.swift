@@ -26,8 +26,15 @@ public struct PublishedOriginal: Sendable, Hashable {
   /// The text only says where the original is: a PostScript original is listed, and
   /// the text is one block or none. Checked in that order, so a document with no
   /// PostScript is never walked.
+  ///
+  /// Asked each time the reader renders, so it counts no further than two of the
+  /// document's own blocks, rather than flattening all of `blocks` for a long one.
   public init?(_ id: DocumentID, formats: [FileFormat], text document: RFCDocument) {
-    guard formats.contains(.postScript), document.blocks.count <= 1 else { return nil }
+    guard formats.contains(.postScript) else { return nil }
+    let topLevel =
+      Array(document.header.abstract.prefix(2))
+      + document.allSections.lazy.flatMap(\.blocks).prefix(2)
+    guard Array(topLevel.prefix(2)).flattened.count <= 1 else { return nil }
     self.init(id, original: formats)
   }
 

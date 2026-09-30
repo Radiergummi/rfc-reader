@@ -78,6 +78,12 @@ final class ReaderState {
     didSet { titleOwnership.showsOriginal = showOriginal }
   }
 
+  /// An RFC published only as a scan, whose page shows the header the index gives
+  /// (#207). Set by the reader, and again when the index arrives.
+  var showsPublishedOriginal = false {
+    didSet { titleOwnership.showsPublishedOriginal = showsPublishedOriginal }
+  }
+
   /// Who says how far the title has come into the toolbar, and the one place its
   /// state is pushed from (#281); see `ToolbarTitleOwnership`.
   @ObservationIgnored private var titleOwnership = ToolbarTitleOwnership() {

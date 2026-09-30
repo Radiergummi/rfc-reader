@@ -57,6 +57,35 @@ struct PublishedOriginalTests {
     #expect(PublishedOriginal(.rfc(1119), formats: pointerFormats, text: twoParagraphs) == nil)
   }
 
+  /// Counted as `RFCDocument.blocks` counts them, without walking the whole document:
+  /// the abstract's, every section's, and those nested in a block.
+  @Test func `a block counts wherever the text puts it`() {
+    let paragraph = Block.paragraph(Paragraph(text: "Published in another form."))
+    let inAbstract = RFCDocument(
+      header: DocumentHeader(title: "", abstract: [paragraph]),
+      sections: [Section(anchor: "section-1", title: "", blocks: [paragraph])],
+      source: .text)
+    let inTwoSections = RFCDocument(
+      header: DocumentHeader(title: ""),
+      sections: [
+        Section(anchor: "section-1", title: "", blocks: []),
+        Section(
+          anchor: "section-2", title: "",
+          subsections: [
+            Section(anchor: "section-2.1", title: "", blocks: [paragraph]),
+            Section(anchor: "section-2.2", title: "", blocks: [paragraph]),
+          ]),
+      ],
+      source: .text)
+    let nested = RFCDocument(
+      header: DocumentHeader(title: ""),
+      sections: [Section(anchor: "section-1", title: "", blocks: [.blockQuote([paragraph])])],
+      source: .text)
+    for document in [inAbstract, inTwoSections, nested] {
+      #expect(PublishedOriginal(.rfc(1119), formats: pointerFormats, text: document) == nil)
+    }
+  }
+
   @Test func `an empty text beside an original is a pointer to it`() {
     let empty = RFCDocument(header: DocumentHeader(title: ""), sections: [], source: .text)
     #expect(PublishedOriginal(.rfc(570), formats: pointerFormats, text: empty)?.format == .pdf)

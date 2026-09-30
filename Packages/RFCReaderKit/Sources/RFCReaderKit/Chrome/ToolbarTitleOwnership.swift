@@ -24,12 +24,16 @@ public struct ToolbarTitleOwnership: Sendable {
   private var report: (reader: ObjectIdentifier, state: ToolbarTitleState)?
   /// The 72-column original, which has no header, instead of the rendered document.
   public var showsOriginal = false
+  /// An RFC published only as a scan (#207). Its page shows the header the index
+  /// gives in either mode, and no reader reports on it, so the title stays out.
+  public var showsPublishedOriginal = false
 
   public init() {}
 
   public var state: ToolbarTitleState {
     switch document {
     case .none: .hidden
+    case _ where showsPublishedOriginal: .hidden
     case .failed: .shown
     case .withHeader where showsOriginal: .shown
     case .withHeader: report?.state ?? .hidden
