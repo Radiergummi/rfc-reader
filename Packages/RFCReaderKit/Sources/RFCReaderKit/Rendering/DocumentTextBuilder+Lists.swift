@@ -9,7 +9,17 @@ import RFCKit
 
 extension DocumentTextBuilder {
   func appendList(_ list: ListBlock, indent: CGFloat) {
-    let markerColumn = indent + style.indentStep
+    // Measured once for the list, as a grid table's columns are: every item then
+    // hangs its marker in the same column, however wide the widest one is.
+    let markerFont: [NSAttributedString.Key: Any] = [.font: style.bodyFont]
+    let markerWidths = list.items.indices.map { index in
+      NSAttributedString(string: Self.marker(for: list.style, at: index), attributes: markerFont)
+        .size().width
+    }
+    let markerColumn =
+      indent
+      + Self.markerColumnWidth(
+        markerWidths: markerWidths, gap: style.bodySize * 0.5, step: style.indentStep)
     // Every item of one list shares its indents and spacing, so both dictionaries
     // and the tab stop are built once for the list rather than once per item.
     let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
