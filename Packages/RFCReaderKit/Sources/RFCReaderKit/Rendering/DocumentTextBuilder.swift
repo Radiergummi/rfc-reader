@@ -117,8 +117,12 @@ public final class DocumentTextBuilder {
   /// `NSException`; a `CTLine`'s typographic bounds answer the same question
   /// directly, without going through a drawing context at all.
   func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
-    let line = CTLineCreateWithAttributedString(
-      NSAttributedString(string: string, attributes: [.font: font]))
+    lineWidth(NSAttributedString(string: string, attributes: [.font: font]))
+  }
+
+  /// The width of `text` set as one line, in the fonts its runs carry.
+  func lineWidth(_ text: NSAttributedString) -> CGFloat {
+    let line = CTLineCreateWithAttributedString(text)
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
   }
 }

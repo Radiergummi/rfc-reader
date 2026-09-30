@@ -29,18 +29,27 @@ extension DocumentTextBuilder {
 
   func naturalColumnWidths(_ table: RFCKit.Table) -> [CGFloat] {
     // Measure what appendGridTable renders: header rows in bold, data rows in
-    // the regular weight. Bold glyphs are wider, and the header is frequently
-    // the widest content in its column, so measuring both in the regular font
-    // under-measures and lets a tab stop fall through to defaultTabInterval.
-    let rows: [(cells: [[Inline]], font: PlatformFont)] =
-      table.header.map { ($0.cells, style.boldBodyFont) }
-      + table.rows.map { ($0.cells, style.bodyFont) }
+    // the regular weight, and each cell through the runs it is set in, so strong
+    // text is measured bold in a data cell and heavy in a header (#360). Bold
+    // glyphs are wider, and the header is frequently the widest content in its
+    // column, so measuring less than is drawn lets a tab stop fall through to
+    // defaultTabInterval.
+    var data = bodyAttributes(NSParagraphStyle.default)
+    data[.paragraphStyle] = nil
+    var header = data
+    header[.font] = style.boldBodyFont
+    let rows: [(cells: [[Inline]], base: [NSAttributedString.Key: Any])] =
+      table.header.map { ($0.cells, header) } + table.rows.map { ($0.cells, data) }
     let columns = rows.map { $0.cells.count }.max() ?? 0
     guard columns > 0 else { return [] }
+    // Building a cell's runs numbers its chips; what is only measured is not kept,
+    // so the chips that are set keep the numbers they would have had.
+    let chipID = nextChipID
+    defer { nextChipID = chipID }
     return (0..<columns).map { column in
       rows.compactMap { row -> CGFloat? in
         guard row.cells.count > column else { return nil }
-        return lineWidth(row.cells[column].plainText, font: row.font)
+        return lineWidth(inlineRuns(row.cells[column], base: row.base))
       }.max() ?? 0
     }
   }
