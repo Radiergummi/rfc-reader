@@ -141,6 +141,10 @@ struct ReadingPlaceTests {
 @Suite("Reading place: line geometry")
 struct ReadingPlaceLineGeometryTests {
   private struct Laid {
+    /// Kept so `layout` can still be hit-tested: the layout manager does not
+    /// retain its content manager.
+    let storage: NSTextContentStorage
+    let layout: NSTextLayoutManager
     let lines: [NSTextLineFragment]
     let fragment: NSRange
     let frameTop: CGFloat
@@ -182,6 +186,8 @@ struct ReadingPlaceLineGeometryTests {
       let end = layout.offset(of: fragment.rangeInElement.endLocation)
       if start > 0 {
         found = Laid(
+          storage: storage,
+          layout: layout,
           lines: fragment.textLineFragments,
           fragment: NSRange(location: start, length: end - start),
           frameTop: fragment.layoutFragmentFrame.minY,
@@ -279,6 +285,30 @@ struct ReadingPlaceLineGeometryTests {
         }
       }
     }
+  }
+
+  /// The paragraph a jump puts at the top is the one read there, even once the
+  /// scroll view has rounded the offset down to a pixel. Hit-tested at the
+  /// viewport's top itself, a rounded-down offset lands in the paragraph above,
+  /// and a section's heading put at the top reads as the section before it
+  /// (#299, #286).
+  @Test func `a paragraph scrolled to the top is the one read there`() throws {
+    let paragraph = try paragraph(spacing: 20)
+    let target = paragraph.frameTop
+    let firstLine = try #require(paragraph.lines.first).characterRange
+    for top in [target, (target * 2).rounded(.down) / 2 - 0.5] {
+      let place = try #require(paragraph.layout.readingPlace(atViewportTop: top))
+      #expect(place.fragmentStart == paragraph.fragmentStart, "read at a viewport top of \(top)")
+      #expect(place.line == NSRange(location: paragraph.fragmentStart, length: firstLine.length))
+    }
+  }
+
+  /// The read-back only forgives rounding: with the paragraph above still showing
+  /// by more than that, it is the paragraph above that is read.
+  @Test func `a paragraph still showing above the top is the one read there`() throws {
+    let paragraph = try paragraph(spacing: 20)
+    let place = try #require(paragraph.layout.readingPlace(atViewportTop: paragraph.frameTop - 2))
+    #expect(place.fragmentStart == 0)
   }
 
   @Test func `the fragments first character scrolls to the fragments top`() throws {
