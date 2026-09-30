@@ -174,8 +174,11 @@ extension DocumentTextBuilder {
       addKern(padding, at: NSMaxRange(chip) - 1, in: output)
       let before = chip.location - 1
       // A chip that starts a line has nothing before it to make room in: its
-      // tint reaches into the margin, as a card's does.
-      if before >= 0, text.character(at: before) != 0x0A {
+      // tint reaches into the margin, as a card's does. Nor does one that starts a
+      // table cell: the layout ignores a tab's kern and sets the chip at its stop,
+      // so kerning the tab would only let the measuring of the cell, which cannot
+      // see the tab, disagree with the drawing where a layout did honor it.
+      if before >= 0, text.character(at: before) != 0x0A, text.character(at: before) != 0x09 {
         addKern(padding, at: before, in: output)
       }
     }

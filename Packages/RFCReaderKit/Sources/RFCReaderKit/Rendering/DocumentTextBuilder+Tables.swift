@@ -63,23 +63,21 @@ extension DocumentTextBuilder {
     }
     // Kerned as `build` kerns the whole text, so the cell is measured with its
     // chips' padding. A cell's own runs are the context that needs: the character
-    // before a chip that opens a cell is the row's newline, which the pass skips,
-    // or its tab, whose kern the layout ignores.
+    // before a chip that opens a cell is the row's newline or its tab, which the
+    // pass skips.
     let runs = NSMutableAttributedString(attributedString: inlineRuns(cell, base: base))
     Self.reserveChipPadding(in: runs)
     return lineWidth(runs) + chipSymbolWidth(in: runs)
   }
 
   /// The width of the chips' symbols in `runs`: an attachment, which `lineWidth(_:)`
-  /// measures as nothing, drawn as wide as the bounds `chipSymbolRun` gives it.
+  /// measures as nothing, drawn as wide as the bounds `chipSymbolRun` gives it. A
+  /// chip's symbol is the only attachment inline runs make.
   private func chipSymbolWidth(in runs: NSAttributedString) -> CGFloat {
     var width: CGFloat = 0
     runs.enumerateAttribute(.attachment, in: NSRange(location: 0, length: runs.length)) {
-      value, range, _ in
-      guard let attachment = value as? NSTextAttachment,
-        runs.attribute(.rfcChip, at: range.location, effectiveRange: nil) != nil
-      else { return }
-      width += attachment.bounds.width
+      value, _, _ in
+      if let attachment = value as? NSTextAttachment { width += attachment.bounds.width }
     }
     return width
   }
