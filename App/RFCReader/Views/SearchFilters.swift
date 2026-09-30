@@ -60,7 +60,7 @@ import SwiftUI
 
   /// `.searchable(text:tokens:)` over `NavigationModel.searchText`. The tokens and the
   /// text are a view of that one string, `SearchQuery.tokenized`, and every edit of
-  /// either writes it back with `SearchQuery.joined`, so the list filters on exactly
+  /// either writes it back with `replacingText` or `replacingTerms`, so the list filters on exactly
   /// what the field shows, and the sidebar's field and the list's agree.
   private struct FilterSearchable: ViewModifier {
     @Environment(LibraryModel.self) private var library
@@ -93,8 +93,7 @@ import SwiftUI
       Binding {
         SearchQuery.tokenized(navigation.searchText).text
       } set: { text in
-        let terms = SearchQuery.tokenized(navigation.searchText).terms
-        navigation.searchText = SearchQuery.joined(terms: terms, text: text)
+        navigation.searchText = SearchQuery.replacingText(in: navigation.searchText, with: text)
       }
     }
 
@@ -102,8 +101,7 @@ import SwiftUI
       Binding {
         SearchQuery.tokenized(navigation.searchText).terms
       } set: { terms in
-        let text = SearchQuery.tokenized(navigation.searchText).text
-        navigation.searchText = SearchQuery.joined(terms: terms, text: text)
+        navigation.searchText = SearchQuery.replacingTerms(in: navigation.searchText, with: terms)
       }
     }
   }

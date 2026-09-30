@@ -420,18 +420,17 @@ struct SidebarView: View {
         responseHandler(NSSuggestionItemResponse(items: items))
       }
 
-      /// The field's text while a suggestion is highlighted: the query with it taken.
-      func textField(
-        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<SearchQuery.Suggestion>
-      ) -> String? {
-        item.representedValue.accepted
-      }
+      // No inline completion while a suggestion is highlighted: AppKit's assumes it
+      // extends what was typed, and `is:b` completes to `status:bcp`.
 
+      /// Taking a suggestion applies it at once, as Return does: a pick is not
+      /// typing, and the list should not wait for a pause.
       func textField(
         _ textField: NSTextField, didSelect item: NSSuggestionItem<SearchQuery.Suggestion>
       ) {
         textField.stringValue = item.representedValue.accepted
         navigation.searchText = textField.stringValue
+        navigation.applySearchWithoutPause()
       }
 
       // MARK: Editing

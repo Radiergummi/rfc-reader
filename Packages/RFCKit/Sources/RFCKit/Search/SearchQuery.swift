@@ -82,18 +82,17 @@ public enum SearchQuery {
         name: "std", longSpellings: ["standard", "standards"],
         statuses: [.internetStandard, .draftStandard, .proposedStandard],
         label: "Standards Track"),
-      StatusValue(name: "bcp", longSpellings: [], statuses: [.bestCurrentPractice]),
-      StatusValue(name: "info", longSpellings: ["informational"], statuses: [.informational]),
-      StatusValue(name: "exp", longSpellings: ["experimental"], statuses: [.experimental]),
-      StatusValue(name: "historic", longSpellings: [], statuses: [.historic]),
+      StatusValue(name: "bcp", longSpellings: [], status: .bestCurrentPractice),
+      StatusValue(name: "info", longSpellings: ["informational"], status: .informational),
+      StatusValue(name: "exp", longSpellings: ["experimental"], status: .experimental),
+      StatusValue(name: "historic", longSpellings: [], status: .historic),
       StatusValue(name: "current", longSpellings: [], statuses: [], label: "Not Obsoleted"),
     ]
 
     /// A value standing for one status, labeled with that status's name.
-    init(name: String, longSpellings: [String], statuses: Set<PublicationStatus>) {
+    init(name: String, longSpellings: [String], status: PublicationStatus) {
       self.init(
-        name: name, longSpellings: longSpellings, statuses: statuses,
-        label: statuses.first?.displayName ?? name)
+        name: name, longSpellings: longSpellings, statuses: [status], label: status.displayName)
     }
 
     init(name: String, longSpellings: [String], statuses: Set<PublicationStatus>, label: String) {
@@ -203,12 +202,24 @@ public enum SearchQuery {
     return terms
   }
 
-  /// `query` without `term`, in the canonical form: a chip removed.
+  /// `query` without `term`: a chip removed. The words that set its filter are taken
+  /// out, and every other word is left as the reader typed it, a word `parseQuery`
+  /// ignores included.
+  ///
+  /// A working group, an author, a year and `has:` hold one value, the last word's,
+  /// so every word naming one goes, or an earlier one would take over. A status or a
+  /// stream is a union, so only the words naming this one go.
   public static func removing(_ term: Term, from query: String) -> String {
-    let parsed = IndexSearch.parseQuery(query)
-    let kept = terms(of: parsed.filters).filter { $0 != term }
-    let filters = IndexSearch.parseQuery(kept.map(\.word).joined(separator: " ")).filters
-    return format(text: parsed.text, filters: filters)
+    let removed = qualifier(in: term.word).flatMap { Qualifier(spelling: $0.key) }
+    let kept = words(in: query).filter { word in
+      let parsed = IndexSearch.parseQuery(word)
+      guard parsed.text.isEmpty, !parsed.filters.isEmpty,
+        let key = qualifier(in: word)?.key, Qualifier(spelling: key) == removed
+      else { return true }
+      let isUnion = removed == .status || removed == .stream
+      return isUnion && !terms(of: parsed.filters).contains(term)
+    }
+    return kept.joined(separator: " ")
   }
 
   // MARK: - Tokens
@@ -248,9 +259,20 @@ public enum SearchQuery {
       terms: terms(of: filters), text: text.joined(separator: " ") + trailingSpace)
   }
 
+  /// `query` with the text the iOS field shows replaced by `text`, as typed, and its
+  /// tokens kept.
+  public static func replacingText(in query: String, with text: String) -> String {
+    joined(terms: tokenized(query).terms, text: text)
+  }
+
+  /// `query` with its tokens replaced by `terms`, a token removed, and its text kept.
+  public static func replacingTerms(in query: String, with terms: [Term]) -> String {
+    joined(terms: terms, text: tokenized(query).text)
+  }
+
   /// Tokens and text put back together into the one search text: each token's word
   /// with a space after it, so it reads back as finished, then the text as typed.
-  public static func joined(terms: [Term], text: String) -> String {
+  static func joined(terms: [Term], text: String) -> String {
     terms.map { "\($0.word) " }.joined() + text
   }
 
@@ -390,12 +412,12 @@ public enum SearchQuery {
   }
 
   /// The completions a search field shows as the reader types: `suggestions(for:in:)`,
-  /// except for a word just begun after a space. A list over the results at every
-  /// space would hide them while the reader types; an empty field is where the
-  /// vocabulary is learned, and is offered all of it.
+  /// only once a word has been begun. A list over the results at every space, after
+  /// every filter taken as a token, or on clearing the field would hide them while
+  /// the reader types.
   public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
     // A space inside an open quote is the value's, and the word is still being typed.
-    let typing = words(in: query).last.map(query.hasSuffix) ?? query.isEmpty
+    let typing = words(in: query).last.map(query.hasSuffix) ?? false
     guard typing else { return [] }
     return suggestions(for: query, in: index)
   }

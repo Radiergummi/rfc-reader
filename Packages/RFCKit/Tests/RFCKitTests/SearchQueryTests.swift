@@ -243,17 +243,43 @@ struct SearchQueryTermTests {
     #expect(terms("cache color:red").isEmpty)
   }
 
-  /// Removing a chip rewrites the query without it, in the canonical form, keeping
-  /// the other filters and the free text.
-  @Test func `a term removed from a query leaves the rest`() throws {
-    let query = "cache wg:httpbis is:bcp"
+  /// Removing a chip takes out the words that set it and leaves the rest of the
+  /// query as the reader typed it: its order, its aliases, and a word `parseQuery`
+  /// ignores, like a stream it does not know.
+  @Test func `a term removed from a query leaves the rest as typed`() throws {
+    let query = "stream:iab-x cache wg:tls is:standard is:bcp"
+    let group = try #require(terms(query).first { $0.word == "wg:tls" })
+    #expect(SearchQuery.removing(group, from: query) == "stream:iab-x cache is:standard is:bcp")
     let status = try #require(terms(query).first { $0.word == "status:bcp" })
-    #expect(SearchQuery.removing(status, from: query) == "wg:httpbis cache")
+    #expect(SearchQuery.removing(status, from: query) == "stream:iab-x cache wg:tls is:standard")
   }
 
-  @Test func `removing the last term leaves the free text`() throws {
-    let group = try #require(terms("wg:tls cache").first)
-    #expect(SearchQuery.removing(group, from: "wg:tls cache") == "cache")
+  /// Only the last working group filters; removing its chip removes the earlier ones
+  /// too, or one would take its place.
+  @Test func `removing a working group removes every word naming one`() throws {
+    let query = "wg:quic cache wg:tls"
+    let group = try #require(terms(query).first)
+    #expect(SearchQuery.removing(group, from: query) == "cache")
+  }
+
+  /// A chip that has gone from the query while the list catches up removes nothing.
+  @Test func `removing a term the query no longer has leaves it`() throws {
+    let group = try #require(terms("wg:tls").first)
+    #expect(SearchQuery.removing(group, from: "cache status:bcp") == "cache status:bcp")
+  }
+
+  // MARK: - Editing tokens and text
+
+  /// What the reader types in the iOS field replaces the text and keeps the tokens.
+  @Test func `new text keeps the tokens`() {
+    #expect(SearchQuery.replacingText(in: "wg:tls cache", with: "caching ") == "wg:tls caching ")
+  }
+
+  /// A token removed from the iOS field leaves the text as it was.
+  @Test func `new tokens keep the text`() {
+    let query = "wg:tls is:bcp cache "
+    let kept = SearchQuery.tokenized(query).terms.filter { $0.word != "wg:tls" }
+    #expect(SearchQuery.replacingTerms(in: query, with: kept) == "status:bcp cache ")
   }
 
   // MARK: - Tokens
@@ -312,16 +338,16 @@ struct SearchQueryTermTests {
       ])
   }
 
-  /// A list over the results at every space would hide them as the reader types; an
-  /// empty field is where the vocabulary is learned, and offers all of it.
-  @Test func `a word begun after a space is offered nothing until it has a letter`() throws {
+  /// A list over the results at every space, after every filter taken as a token, or
+  /// on clearing the field would hide them as the reader types.
+  @Test func `a word is offered nothing until it has a letter`() throws {
     let index = try Fixtures.sampleIndex()
     #expect(SearchQuery.suggestionsWhileTyping(for: "cache ", in: index).isEmpty)
+    #expect(SearchQuery.suggestionsWhileTyping(for: "", in: index).isEmpty)
     #expect(
       SearchQuery.suggestionsWhileTyping(for: "cache w", in: index).map(\.completion) == [
         "cache wg:"
       ])
-    #expect(SearchQuery.suggestionsWhileTyping(for: "", in: index).count == 6)
   }
 
   /// What the suggestion list shows: the word completed, not the whole query.
