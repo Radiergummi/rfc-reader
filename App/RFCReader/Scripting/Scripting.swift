@@ -61,7 +61,18 @@
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
-      key == "rfcs"
+      key == "rfcs" || key == "orderedWindows"
+    }
+
+    /// The application's `windows`, less any reader window that has closed but is
+    /// still alive (#432). Closing empties such a window, so a script would see an
+    /// invisible window that answers nothing. Open means still registered here, not
+    /// still having a controller: a print or export under way keeps the controller
+    /// of a window that has closed.
+    @objc var orderedWindows: [NSWindow] {
+      NSApp.orderedWindows.filter { window in
+        !(window is ReaderWindow) || controllers.contains { $0.window === window }
+      }
     }
 
     /// Every RFC, for `every rfc`. `count of rfcs` and `rfc 5` go through the two
