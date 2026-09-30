@@ -55,6 +55,14 @@ struct InFlightDownloadsTests {
       return data
     }
 
+    /// What a reader not told to keep a shared download relies on: returning, it
+    /// finds the download on disk unless a removal kept it off, because the reader
+    /// who keeps it writes before anyone else is told the download ended.
+    func openAndLook(_ id: DocumentID, gate: Gate) async throws -> Bool {
+      _ = try await open(id, gate: gate)
+      return written.contains(id)
+    }
+
     func remove(_ id: DocumentID) {
       downloads.removed(id)
     }
@@ -134,6 +142,22 @@ struct InFlightDownloadsTests {
 
     #expect(try await first.value == second.value)
     #expect(await store.written == [.rfc(9110)])
+  }
+
+  /// The document's load and Original Text share a text-only RFC's `.txt`, and the
+  /// load parses what is on disk once the download has ended: whichever of them
+  /// was told to keep it, it has been written by then.
+  @Test func `every reader of a shared download finds it written`() async throws {
+    let store = Store()
+    let gate = Gate()
+    let first = Task { try await store.openAndLook(.rfc(9110), gate: gate) }
+    await untilRunning(.rfc(9110), in: store)
+    let second = Task { try await store.openAndLook(.rfc(9110), gate: gate) }
+    await untilWaiting(2, for: .rfc(9110), in: store)
+    await gate.open()
+
+    #expect(try await first.value)
+    #expect(try await second.value)
   }
 
   @Test func `a second open joins the download already running`() async throws {
