@@ -63,7 +63,7 @@ extension LegacyTextParser {
 
   /// A contents entry's end: a leader of four dots or more, run on or spaced, then a
   /// page number. Four, because a range in a title is three, `0...255`.
-  private static let contentsEntryPattern = Pattern(#/(?:\.\s?){4,}\s*(?<page>\d+|[ivx]+)$/#)
+  private static let contentsEntryPattern = Pattern(#/(?:\.\s?){4,}\s*(?<page>\d+|[ivx]+)\s*$/#)
 
   /// A contents entry, `2.  Overview ........ 5`, which reads as a heading at column
   /// 0 and never is one: RFC 791, 793 and the specifications set like them list their
@@ -73,9 +73,8 @@ extension LegacyTextParser {
   /// `isContentsEntries`, which takes two dots: this one refuses a heading, and a
   /// title may hold a range, `1..5`.
   static func isContentsEntry(_ line: String) -> Bool {
-    guard let match = line.trimmingCharacters(in: .whitespaces).firstMatch(of: contentsEntryPattern)
-    else { return false }
-    return match.page.allSatisfy(\.isNumber) || isRomanPageNumber(match.page)
+    guard let match = line.firstMatch(of: contentsEntryPattern) else { return false }
+    return isPageNumber(match.page)
   }
 
   /// The numbered headings set off column 0, by line:
