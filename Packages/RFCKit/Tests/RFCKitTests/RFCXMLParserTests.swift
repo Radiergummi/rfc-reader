@@ -446,6 +446,61 @@ struct RFCXMLParserTests {
     #expect(xrefs.map(\.label) == labels)
   }
 
+  /// RFC 9220 cites RFC 8441 with `format="title"`, whose `derivedContent` is the
+  /// entry's title. A title is not a tag, so it reads as the title, not in brackets.
+  @Test func `a citation by title reads as the title, unbracketed`() throws {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml")).everyCrossReference
+    let labels = xrefs.filter { $0.target == .document(.rfc(8441), section: nil, entry: "RFC8441") }
+      .map(\.label)
+    #expect(labels.contains("Bootstrapping WebSockets with HTTP/2"))
+    #expect(!labels.contains("[Bootstrapping WebSockets with HTTP/2]"))
+  }
+
+  /// `format="none"` asks for the element's own text and nothing else: a citation of
+  /// a tagged entry is not bracketed, and an empty one shows nothing, as xml2rfc
+  /// renders it, rather than its anchor. No committed fixture has either outside a
+  /// table of contents, so the tree is hand-written, in RFCXML's shape, quoted from none.
+  @Test func `a citation formatted as none shows only its own text`() throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGETS" format="none" derivedContent="">the widget
+        protocol</xref>, <xref target="WIDGETS" format="none" derivedContent=""/>,
+        <xref target="RFC9999" format="none" derivedContent="">RFC 9999</xref> and
+        <xref target="gadgets" format="none" derivedContent=""/>.</t>
+      </section>
+      <section anchor="gadgets"><name>Gadgets</name><t>Gadgets.</t></section></middle>
+      <back><references><name>References</name>
+        <reference anchor="WIDGETS"><front><title>Widgets</title></front>
+          <seriesInfo name="RFC" value="9998"/></reference>
+        <reference anchor="RFC9999"><front><title>Gadgets</title></front>
+          <seriesInfo name="RFC" value="9999"/></reference>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(xrefs.map(\.label) == ["the widget protocol", "", "RFC 9999", ""])
+  }
+
+  /// A `<referencegroup>` is one entry in the bibliography, and its members have none
+  /// of their own, so a citation of a member outside the series links to the group's
+  /// entry, as a member in the series already does. Hand-written, as no committed
+  /// fixture groups an entry outside the series; in RFCXML's shape, quoted from none.
+  @Test func `a citation of a group member outside the series links to the group`() throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGET-1" format="default" derivedContent="WIDGET-1"/>.</t>
+      </section></middle>
+      <back><references><name>References</name>
+        <referencegroup anchor="WIDGETS">
+          <reference anchor="WIDGET-1"><front><title>Widgets, part 1</title></front></reference>
+          <reference anchor="WIDGET-2"><front><title>Widgets, part 2</title></front></reference>
+        </referencegroup>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(xrefs.map(\.target) == [.anchor("WIDGETS")])
+    #expect(xrefs.map(\.label) == ["[WIDGET-1]"])
+  }
+
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
   /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
   /// Reading only the first kept the six counters and dropped the rest.

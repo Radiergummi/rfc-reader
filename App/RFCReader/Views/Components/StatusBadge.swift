@@ -29,6 +29,16 @@ struct StatusBadge: View {
       appearanceDependent: StatusPalette.colors(for: status, in: .light).fill,
       dark: StatusPalette.colors(for: status, in: .dark).fill)
   }
+
+  /// The Info pane's Obsolete box's text color, measured as a status's is.
+  static let obsoleteColor = Color(
+    appearanceDependent: StatusPalette.obsolete(in: .light).text,
+    dark: StatusPalette.obsolete(in: .dark).text)
+
+  /// The Obsolete box's fill: opaque, as a status's is.
+  static let obsoleteFill = Color(
+    appearanceDependent: StatusPalette.obsolete(in: .light).fill,
+    dark: StatusPalette.obsolete(in: .dark).fill)
 }
 
 extension Color {

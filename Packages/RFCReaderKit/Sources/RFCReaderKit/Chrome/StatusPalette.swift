@@ -1,7 +1,7 @@
 import RFCKit
 
-/// The status badges' colors: a text color on an opaque fill, for each status, in
-/// light and dark appearance (#317).
+/// The status badges' colors: a text color on an opaque fill, for each status and
+/// for the Info pane's Obsolete box, in light and dark appearance (#317).
 ///
 /// Stated rather than taken from the system colors, as the author monograms' are
 /// (`AuthorMonogram.palette`). The badges drew each status's system color on a 15%
@@ -35,6 +35,12 @@ public enum StatusPalette {
   public static func colors(for status: PublicationStatus, in appearance: Appearance) -> Colors {
     let (light, dark) = pair(for: status)
     return appearance == .light ? light : dark
+  }
+
+  /// The Info pane's Obsolete box, which is red, made the way a status's colors are:
+  /// 4.51:1 light (the system color's 2.90:1), 4.55:1 dark (3.95:1).
+  public static func obsolete(in appearance: Appearance) -> Colors {
+    appearance == .light ? colors(0xC7_2C23, on: 0xFF_E2E0) : colors(0xFF_6158, on: 0x49_2424)
   }
 
   private static func pair(for status: PublicationStatus) -> (light: Colors, dark: Colors) {

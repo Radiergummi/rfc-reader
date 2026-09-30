@@ -20,12 +20,26 @@ struct StatusPaletteTests {
     }
   }
 
+  /// The Info pane's Obsolete box is red, and held to the same minimum.
+  @Test(arguments: StatusPalette.Appearance.allCases)
+  func `the obsolete box's text clears the minimum on its fill`(
+    appearance: StatusPalette.Appearance
+  ) {
+    let colors = StatusPalette.obsolete(in: appearance)
+    let contrast = colors.text.contrast(with: colors.fill)
+    #expect(contrast >= StatusPalette.minimumContrast, "\(appearance): \(contrast)")
+  }
+
   /// A badge draws its own opaque fill, so it reads the same on a selected row as on
-  /// a plain one; a light fill in light appearance and a dark one in dark.
+  /// a plain one; a light fill in light appearance and a dark one in dark. The
+  /// Obsolete box's fill is made the same way.
   @Test func `the fills are light in light appearance and dark in dark`() {
-    for status in PublicationStatus.allCases {
-      #expect(StatusPalette.colors(for: status, in: .light).fill.relativeLuminance > 0.7)
-      #expect(StatusPalette.colors(for: status, in: .dark).fill.relativeLuminance < 0.1)
+    let palettes = PublicationStatus.allCases.map { status in
+      { StatusPalette.colors(for: status, in: $0) }
+    }
+    for colors in palettes + [StatusPalette.obsolete(in:)] {
+      #expect(colors(.light).fill.relativeLuminance > 0.7)
+      #expect(colors(.dark).fill.relativeLuminance < 0.1)
     }
   }
 
