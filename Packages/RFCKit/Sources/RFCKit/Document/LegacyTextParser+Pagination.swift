@@ -7,16 +7,22 @@ extension LegacyTextParser {
     /// The first sighting of a section's running header: page furniture that may be
     /// the only thing saying where its section starts (RFC 770's `References`), or a
     /// copy of a heading the document sets itself (RFC 793's `Philosophy`). Which one
-    /// is a structure decision, and `rawSections` makes it, by what the document
-    /// heads nearby (#291). Everywhere else it reads as the line of text it is.
-    case sectionHeader(String)
+    /// is a structure decision, made by what the document heads nearby once its
+    /// headings can be told (#291); see `LegacyTextParser.headsNearby`. Until then it
+    /// reads as the line of text it is. The sighting is where `paginated` put it,
+    /// which names it through double spacing collapsed and back.
+    case sectionHeader(String, sighting: Int)
 
     /// The line's text, or nil for a page break.
     var string: String? {
       switch self {
-      case .text(let string), .sectionHeader(let string): string
+      case .text(let string), .sectionHeader(let string, _): string
       case .pageBreak: nil
       }
+    }
+
+    var isSectionHeader: Bool {
+      if case .sectionHeader = self { true } else { false }
     }
   }
 
@@ -25,15 +31,23 @@ extension LegacyTextParser {
     #/^(RFC|Request for Comments:?)\s*\d+\b.*\b\d{4}\s*$/#)
 
   /// Removes form feeds, running headers and page footers, keeping everything else verbatim.
+  ///
+  /// A section running header's first sighting goes where `parse` drops it, the
+  /// document heading that section itself, and stays where it is the only thing
+  /// saying where the section starts.
   public static func stripPagination(_ text: String) -> String {
     var output: [String] = []
     var pendingBlank = 0
     var breakOccurred = false
-    for line in depaginate(text) {
+    let lines = depaginate(text)
+    let headed = headedSectionHeaders(in: lines)
+    for line in lines {
       switch line {
+      case .sectionHeader(_, let sighting) where headed.contains(sighting):
+        continue
       case .pageBreak:
         breakOccurred = true
-      case .text(let string), .sectionHeader(let string):
+      case .text(let string), .sectionHeader(let string, _):
         if string.trimmingCharacters(in: .whitespaces).isEmpty {
           pendingBlank += 1
         } else {
@@ -55,21 +69,27 @@ extension LegacyTextParser {
   /// For the corpus report: a dropped line leaves no trace in the block counts, so
   /// without this a rule that deletes the body's own lines looks like a clean run.
   ///
-  /// The first sighting of a section's running header is not among them: whether it
-  /// goes is `rawSections`' to decide (#291).
+  /// A section running header's first sighting is among them where `parse` drops it,
+  /// the document heading that section itself (#291).
   public static func recurringFurniture(in text: String) -> [String] {
     let lines = paginated(text)
-    return recurringFurniture(lines).dropped.sorted().compactMap { lines[$0].string }
+    let headed = headedSectionHeaders(in: depaginate(lines))
+    return recurringFurniture(lines).dropped.union(headed).sorted().compactMap {
+      lines[$0].string
+    }
   }
 
   static func depaginate(_ text: String) -> [Line] {
-    let lines = paginated(text)
+    depaginate(paginated(text))
+  }
+
+  private static func depaginate(_ lines: [Line]) -> [Line] {
     let furniture = recurringFurniture(lines)
-    guard !furniture.dropped.isEmpty || !furniture.sectionHeaders.isEmpty else { return lines }
+    guard !furniture.dropped.isEmpty else { return lines }
     return lines.enumerated().compactMap { offset, line in
       if furniture.dropped.contains(offset) { return nil }
       if furniture.sectionHeaders.contains(offset), let string = line.string {
-        return .sectionHeader(string)
+        return .sectionHeader(string, sighting: offset)
       }
       return line
     }

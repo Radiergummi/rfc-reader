@@ -66,7 +66,7 @@ extension LegacyTextParser {
     switch lines[index] {
     case .pageBreak:
       return true
-    case .text(let string), .sectionHeader(let string):
+    case .text(let string), .sectionHeader(let string, _):
       return string.isBlank
     }
   }
