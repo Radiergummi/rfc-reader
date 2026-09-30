@@ -98,6 +98,9 @@ struct OriginalTextBody {
       textView.textDragDelegate = textView
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
+      // The content is wider than an iPhone, so a slightly diagonal flick while
+      // reading down would otherwise also drift sideways.
+      textView.isDirectionalLockEnabled = true
       textView.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
       // Not wrapping: the container is unbounded across, and the content grows to
       // what is laid out in it.
