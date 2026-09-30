@@ -195,7 +195,9 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        guard let request else { return }
+        // Not while fading out over the next document's reader: the request is
+        // the selected document's.
+        guard navigation.selection == id, let request else { return }
         if request.isUnrecorded {
           follow(request.section)
         } else {
@@ -257,6 +259,8 @@ struct DocumentView: View {
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
         onVisibleAnchorChange: {
+          // Not while fading out: the reader state is the selected document's.
+          guard navigation.selection == id else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
           // section link need the number, and on macOS the toolbar is in the
@@ -277,7 +281,10 @@ struct DocumentView: View {
           reader.report(title: state, from: source)
         },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
-        onSelectionChange: { reader.hasSelection = $0 },
+        onSelectionChange: {
+          guard navigation.selection == id else { return }
+          reader.hasSelection = $0
+        },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
