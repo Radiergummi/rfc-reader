@@ -515,15 +515,22 @@ struct CorpusBackedBibliographyEntryTests {
     let targets = converted.everyCrossReference.map(\.target)
     #expect(targets.contains(.document(.rfc(8174), section: nil, entry: "RFC8174")))
     #expect(!targets.contains(.document(.rfc(2119), section: nil, entry: "RFC8174")))
-    func citations(of entry: String, in document: RFCDocument) -> Int {
-      document.everyCrossReference.count {
-        guard case .document(_, _, entry) = $0.target else { return false }
-        return true
+    // Each citation, paired with its conversion: one that resolved to an entry keeps
+    // it, and a bare "RFC 7159", which records none, converts to RFC 7159's own entry
+    // rather than the erratum listed ahead of it.
+    let citations = parsed.everyCrossReference.map(\.target)
+    try #require(citations.count == targets.count)
+    #expect(citations.contains(.document(.rfc(7159), section: nil, entry: "Err3915")))
+    #expect(citations.contains(.document(.rfc(7159), section: nil, entry: nil)))
+    for (citation, conversion) in zip(citations, targets) {
+      switch citation {
+      case .document(.rfc(7159), let section, nil):
+        #expect(conversion == .document(.rfc(7159), section: section, entry: "RFC7159"))
+      case .document(_, _, .some):
+        #expect(conversion == citation)
+      default:
+        continue
       }
     }
-    #expect(citations(of: "RFC7159", in: parsed) > 0)
-    // A bare "RFC 7159" in the prose records no entry, and converts to RFC 7159's own.
-    #expect(citations(of: "RFC7159", in: converted) > citations(of: "RFC7159", in: parsed))
-    #expect(citations(of: "Err3915", in: converted) == citations(of: "Err3915", in: parsed))
   }
 }

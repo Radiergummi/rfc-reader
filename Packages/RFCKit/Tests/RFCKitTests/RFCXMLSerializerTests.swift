@@ -222,8 +222,16 @@ struct RFCXMLSerializerTests {
                 .text("See "),
                 .crossReference(
                   CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "Err1"), text: "[Err1]")),
+                .text(", "),
+                .crossReference(
+                  CrossReference(
                     target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]"
                   )),
+                .text(" and "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: nil), text: "RFC 7159")),
                 .text("."),
               ]))
           ]),
@@ -246,11 +254,16 @@ struct RFCXMLSerializerTests {
       source: .text
     )
     let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("<xref target=\"Err1\">[Err1]</xref>"), "\(xml)")
     #expect(xml.contains("<xref target=\"RFC7159\">[RFC7159]</xref>"), "\(xml)")
+    // A bare mention records no entry, and goes to the one anchored under its document.
+    #expect(xml.contains("<xref target=\"RFC7159\">RFC 7159</xref>"), "\(xml)")
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(
       reparsed.everyCrossReference.map(\.target) == [
-        .document(.rfc(7159), section: nil, entry: "RFC7159")
+        .document(.rfc(7159), section: nil, entry: "Err1"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
       ])
   }
 

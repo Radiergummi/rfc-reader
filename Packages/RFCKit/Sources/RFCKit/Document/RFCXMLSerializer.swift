@@ -41,7 +41,7 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    let (referenceAnchors, entryDocuments) = Self.referenceAnchors(in: document)
+    let (referenceAnchors, entryDocuments) = Self.referenceIndex(in: document)
     var context = Context(
       referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
       sections: document.sections)
@@ -567,9 +567,9 @@ public struct RFCXMLSerializer: Sendable {
   /// names. The fallback is the first entry naming the document, unless a later one is
   /// anchored under the document itself: RFC 8259 lists an erratum of RFC 7159 ahead of
   /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
-  private static func referenceAnchors(
+  private static func referenceIndex(
     in document: RFCDocument
-  ) -> (byDocument: [DocumentID: String], documents: [String: DocumentID]) {
+  ) -> (referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID]) {
     var anchors: [DocumentID: String] = [:]
     var documents: [String: DocumentID] = [:]
     for case .references(let list) in document.blocks {
