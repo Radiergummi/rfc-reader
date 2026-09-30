@@ -98,7 +98,7 @@ public final class VerbatimBox: Sendable {
 
   public let content: Preformatted
   /// Its place among the document's verbatim blocks, in the order the build sets
-  /// them: what a presentation choice is keyed by.
+  /// them: what a presentation choice is keyed by when the block has no anchor.
   public let ordinal: Int
   public let classification: ArtworkClassification
   public let shown: Shown
@@ -120,6 +120,11 @@ public final class VerbatimBox: Sendable {
 }
 
 extension VerbatimBox {
+  /// What a presentation choice names this block by.
+  public var presentationKey: PresentationKey {
+    PresentationKey(anchor: content.anchor, ordinal: ordinal)
+  }
+
   /// Which segment of its Figure | Source control is on, or nil for a block with no
   /// rendering to switch to.
   public var segment: FigureControl.Segment? {

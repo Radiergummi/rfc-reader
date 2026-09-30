@@ -94,7 +94,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onToggleSource`.
-  var onToggleSource: ((Int) -> Void)?
+  var onToggleSource: ((PresentationKey) -> Void)?
   /// The Figure | Source buttons laid over the text view.
   let figureControls = FigureControls()
   /// Whether the column changed under a storage built for another, whose layout

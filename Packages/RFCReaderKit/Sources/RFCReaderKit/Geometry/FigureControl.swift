@@ -15,6 +15,8 @@ public enum FigureControl {
   /// is on.
   public struct Control: Equatable, Sendable {
     public let ordinal: Int
+    /// What pressing it switches, in the reader's choices.
+    public let key: PresentationKey
     public let shown: Segment
   }
 
@@ -69,7 +71,7 @@ public enum FigureControl {
         as? VerbatimBox,
       text.extent(ofBox: .rfcVerbatim, at: fragment.location)?.location == fragment.location
     else { return nil }
-    return Control(ordinal: box.ordinal, shown: shown)
+    return Control(ordinal: box.ordinal, key: box.presentationKey, shown: shown)
   }
 
   /// Every block that has a control, in document order. Without

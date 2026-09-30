@@ -165,7 +165,9 @@ extension RFCTextViewCoordinator {
 
   /// Shows the block's other presentation.
   @objc func pressedFigureControl(_ sender: FigureButton) {
-    onToggleSource?(sender.tag)
+    guard let block = figureControls.blocks.first(where: { $0.control.ordinal == sender.tag })
+    else { return }
+    onToggleSource?(block.control.key)
   }
 
   private func containerOrigin(of textView: PlatformTextView) -> CGPoint {

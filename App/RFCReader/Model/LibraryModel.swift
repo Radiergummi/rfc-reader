@@ -80,15 +80,15 @@ final class LibraryModel {
   /// Which verbatim blocks the reader asked to see as their source, per document,
   /// for the app's session. Here rather than in `DocumentSession`, which goes when
   /// the reader goes back. Not persisted.
-  private(set) var shownAsSource: [DocumentID: Set<Int>] = [:]
+  private(set) var shownAsSource: [DocumentID: Set<PresentationKey>] = [:]
 
   func presentationChoices(for id: DocumentID) -> PresentationChoices {
     PresentationChoices(shownAsSource: shownAsSource[id] ?? [])
   }
 
-  func toggleSource(_ ordinal: Int, in id: DocumentID) {
-    if shownAsSource[id, default: []].remove(ordinal) == nil {
-      shownAsSource[id, default: []].insert(ordinal)
+  func toggleSource(_ key: PresentationKey, in id: DocumentID) {
+    if shownAsSource[id, default: []].remove(key) == nil {
+      shownAsSource[id, default: []].insert(key)
     }
   }
 

@@ -30,7 +30,8 @@ extension DocumentTextBuilder {
         content, classification,
         context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
       : nil
-    let showsSource = choices.shownAsSource.contains(ordinal)
+    let showsSource = choices.shownAsSource.contains(
+      PresentationKey(anchor: content.anchor, ordinal: ordinal))
     let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }

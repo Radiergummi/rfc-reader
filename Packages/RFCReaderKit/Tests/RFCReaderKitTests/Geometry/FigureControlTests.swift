@@ -44,7 +44,8 @@ struct FigureControlTests {
     let blockStart = try #require(built.text.extent(ofBox: .rfcVerbatim, at: first)).location
     #expect(
       FigureControl.blocks(in: built.text) == [
-        FigureControl.Block(location: blockStart, control: .init(ordinal: 0, shown: .figure))
+        FigureControl.Block(
+          location: blockStart, control: .init(ordinal: 0, key: .ordinal(0), shown: .figure))
       ])
   }
 
@@ -66,7 +67,9 @@ struct FigureControlTests {
 
   /// A rendered diagram's card sits in the middle of the column, whichever of its
   /// presentations shows, so switching them moves nothing sideways.
-  @Test(arguments: [PresentationChoices.defaults, PresentationChoices(shownAsSource: [0])])
+  @Test(arguments: [
+    PresentationChoices.defaults, PresentationChoices(shownAsSource: [.ordinal(0)]),
+  ])
   func `a rendered diagram's card is centered in the column`(choices: PresentationChoices) throws {
     let style = ReadingStyle()
     let built = build(style: style, choices: choices)
@@ -110,7 +113,7 @@ struct FigureControlTests {
   }
 
   @Test func `a block shown as its source shows the source segment`() throws {
-    let built = build(choices: PresentationChoices(shownAsSource: [0]))
+    let built = build(choices: PresentationChoices(shownAsSource: [.ordinal(0)]))
     let first = try Fixtures.offset(of: "    0 ", in: built.text)
     #expect(
       FigureControl.control(atFragment: fragment(at: first, in: built.text), in: built.text)?.shown

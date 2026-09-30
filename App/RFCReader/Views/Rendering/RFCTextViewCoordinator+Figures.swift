@@ -28,7 +28,7 @@
             UIAction(
               title: FigureControl.title(offeredFrom: shown),
               image: UIImage(systemName: FigureControl.symbol(offeredFrom: shown))
-            ) { _ in onToggleSource(box.ordinal) })
+            ) { _ in onToggleSource(box.presentationKey) })
         }
       }
       return extra.isEmpty ? nil : UIMenu(children: suggestedActions + extra)

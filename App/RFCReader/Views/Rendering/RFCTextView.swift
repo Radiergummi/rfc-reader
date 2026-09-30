@@ -32,7 +32,7 @@ struct RFCTextView: View {
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
-    onToggleSource: ((Int) -> Void)? = nil,
+    onToggleSource: ((PresentationKey) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
@@ -109,9 +109,9 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
-  /// Shows a rendered verbatim block as its source, or back, by ordinal. Nil where
-  /// the reader cannot, as in a force-click preview: no block offers to switch.
-  let onToggleSource: ((Int) -> Void)?
+  /// Shows a rendered verbatim block as its source, or back. Nil where the reader
+  /// cannot, as in a force-click preview: no block offers to switch.
+  let onToggleSource: ((PresentationKey) -> Void)?
   /// Whether reading on may hide the bars, and what to tell when it does or they
   /// come back; iOS only, see `ReaderChrome`.
   let hidesChrome: Bool
