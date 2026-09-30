@@ -46,4 +46,21 @@ public enum ReaderLayout {
   public static func headerHeight(measured: CGFloat, offered: CGFloat) -> CGFloat {
     measured < offered ? measured : 0
   }
+
+  /// The container y to put back at the viewport's top after the header above the
+  /// text changed height, given the viewport's top, in container coordinates,
+  /// before it did — or nil to leave the scroll offset where it is.
+  ///
+  /// The header is the text container's top inset, so a change of its height moves
+  /// every line by the change while the scroll offset stays put. Metadata that
+  /// arrives after a place was restored — the revisions banner, on a cold launch
+  /// into a section — did exactly that, and left the end of the previous section
+  /// showing above the place (#492). A line's container y does not move with the
+  /// inset, so holding it is putting the same y back at the top. A viewport whose
+  /// top is above the container is looking at the header, which belongs to no
+  /// line: there the header is left to change in place, as `ReadingPlaceTracker`
+  /// treats such a place as the very top.
+  public static func containerTopHeldThroughHeaderChange(viewportTop: CGFloat) -> CGFloat? {
+    viewportTop >= 0 ? viewportTop : nil
+  }
 }

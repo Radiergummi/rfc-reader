@@ -407,6 +407,12 @@ final class RFCTextViewCoordinator: NSObject {
     guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
     else { return }
     let columnChanged = column != laidOutColumn
+    // Read before the inset moves: after it, the same offset names another line.
+    // Only a header that changed height on an unchanged column holds the line; a
+    // change of column restores the place below, or waits for its rebuild to.
+    let heldTop =
+      !columnChanged && laidOutHeaderHeight != nil && headerHeight != laidOutHeaderHeight
+      ? ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: textView.viewportTop) : nil
     laidOutColumn = column
     laidOutGutter = gutter
     laidOutHeaderHeight = headerHeight
@@ -421,6 +427,7 @@ final class RFCTextViewCoordinator: NSObject {
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
+    if let heldTop { scrollContainerTopTo(heldTop, animated: false) }
 
     // The container is the column, set here and nowhere else. Tracking the text
     // view's width instead re-wrapped the storage on *every* resize: the frame
