@@ -279,6 +279,7 @@ struct NavigationHistoryTests {
     #expect(
       history.go(to: place(9110, "section-4.2"), leaving: "section-9") == place(9110, "section-4.2")
     )
+    #expect(history.current == place(9110, "section-4.2"))
     #expect(history.goBack() == place(9110))
     #expect(!history.canGoBack)
   }
