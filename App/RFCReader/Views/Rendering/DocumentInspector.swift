@@ -109,7 +109,10 @@ struct DocumentInspector: View {
       // RFC, the top of the list is a long way from where the reader is.
       ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
-          .task {
+          // Again when a place first arrives, not on every crossing: a panel left
+          // open from the previous document shows this list before the new one
+          // has reported where it is (#325).
+          .task(id: current != nil) {
             // A turn later, once the list has rows to scroll to: a timing guess,
             // since `List` offers no initial scroll position to declare instead.
             await Task.yield()

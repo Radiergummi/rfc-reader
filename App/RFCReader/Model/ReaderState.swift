@@ -49,7 +49,9 @@ final class ReaderState {
   /// opens on it, so a document that is still loading, or failed to load or was
   /// offline, still has its Info (#325), and an open panel stays open from one
   /// document to the next.
-  var canDescribe: Bool { hasDocument || info != nil }
+  var canDescribe: Bool {
+    InspectorPane.hasContent(.info, hasBody: hasDocument, isDescribed: info != nil)
+  }
 
   /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
   /// without one, as Copy is (#186). Reported by the text view's coordinator.
