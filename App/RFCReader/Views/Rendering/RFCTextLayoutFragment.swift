@@ -16,7 +16,8 @@ import RFCReaderKit
 /// main thread.
 nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// The fragment every layout manager of built text asks its delegate for: the
-  /// reader's, and a print's (`DocumentPDF`), so the two cannot draw differently.
+  /// reader's, and a print's (`DocumentPDF`), so the two draw the same decorations.
+  /// Only where a card's joins go differs, by `surface`.
   static func make(for textElement: NSTextElement, on surface: Surface) -> NSTextLayoutFragment {
     RFCTextLayoutFragment(
       textElement: textElement, range: textElement.elementRange, surface: surface)
@@ -76,9 +77,14 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
-    // On a whole point, or a UITextView moves the fragment by the surface's own
-    // fraction too, and its card no longer meets its neighbors' (#273).
-    return decorationSpan == nil ? bounds : FragmentGeometry.startingOnAWholePoint(bounds)
+    #if canImport(UIKit)
+      // On a whole point, or a UITextView moves the fragment by the surface's own
+      // fraction too, and its card no longer meets its neighbors' (#273).
+      if decorationSpan != nil, surface == .textView {
+        bounds = FragmentGeometry.startingOnAWholePoint(bounds)
+      }
+    #endif
+    return bounds
   }
 
   // MARK: - Content

@@ -99,16 +99,29 @@ struct FlooredFragmentSeamTests {
     }
   }
 
-  /// On NSTextView's exact placement and in a print, nothing is floored, and the
-  /// neighbor's origin is exactly a frame's height below.
-  @Test func `on whole pixels already, a join does not move`() {
+  /// A fragment whose top and bottom are both on the device grid is not moved by
+  /// the floor, so its join stays a frame's height below its origin.
+  @Test(arguments: [2, 3] as [CGFloat])
+  func `on whole pixels already, a join does not move`(scale: CGFloat) {
+    let height = 88 / scale
     let placement = FragmentGeometry.Placement(
-      origin: CGPoint(x: 0, y: 4), frame: CGRect(x: 0, y: 100, width: 600, height: 29.5),
+      origin: CGPoint(x: 0, y: 4), frame: CGRect(x: 0, y: 100, width: 600, height: height),
       containerWidth: 600, indent: 0
     )
-    let rect = CGRect(x: 0, y: 4, width: 600, height: 29.5)
-    #expect(placement.meetingFlooredNeighbor(of: rect, bottom: true, scale: 2) == rect)
+    let rect = CGRect(x: 0, y: 4, width: 600, height: height)
+    let met = placement.meetingFlooredNeighbor(of: rect, bottom: true, scale: scale)
+    #expect(met.minY == rect.minY)
+    #expect(abs(met.maxY - rect.maxY) < 1e-9)
+  }
+
+  @Test func `only a bottom join moves`() {
+    let placement = FragmentGeometry.Placement(
+      origin: .zero, frame: CGRect(x: 0, y: 74588.5392, width: 600, height: 29.25),
+      containerWidth: 600, indent: 0
+    )
+    let rect = CGRect(x: 0, y: 0, width: 600, height: 29.25)
     #expect(placement.meetingFlooredNeighbor(of: rect, bottom: false, scale: 3) == rect)
+    #expect(placement.meetingFlooredNeighbor(of: rect, bottom: true, scale: 3) != rect)
   }
 
   @Test func `a surface starts on a whole point, and ends where it did`() {
