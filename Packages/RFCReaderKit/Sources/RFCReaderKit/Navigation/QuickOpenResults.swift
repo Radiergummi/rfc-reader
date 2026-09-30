@@ -172,7 +172,10 @@ public struct QuickOpenResults: Equatable, Sendable {
     let rows = rows
     guard !rows.isEmpty else { return }
     let current = selected.flatMap { rows.firstIndex(of: $0) } ?? 0
-    selected = rows[min(max(current + offset, 0), rows.count - 1)]
+    let next = rows[min(max(current + offset, 0), rows.count - 1)]
+    // A press that stops at either end chooses nothing.
+    guard next != selected else { return }
+    selected = next
     isSelectionMoved = true
   }
 

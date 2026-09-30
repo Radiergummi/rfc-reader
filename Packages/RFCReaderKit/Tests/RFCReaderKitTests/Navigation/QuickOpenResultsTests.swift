@@ -119,6 +119,17 @@ struct QuickOpenResultsTests {
     #expect(results.selected?.link.id == .rfc(4))
   }
 
+  /// ↑ on the top row goes nowhere, so it chooses nothing either.
+  @Test func `an arrow press that stops at the end moves nothing to keep`() {
+    var results = QuickOpenResults()
+    results.show(query: "a", exact: nil)
+    results.show(hits: [.rfc(1), .rfc(2), .rfc(3)], for: "a")
+    results.moveSelection(by: -1)
+    results.show(query: "ab", exact: nil)
+    results.show(hits: [.rfc(4), .rfc(5), .rfc(1)], for: "ab")
+    #expect(results.selected?.link.id == .rfc(4))
+  }
+
   @Test func `return during a search nobody moved in opens the top row it finds`() {
     var results = QuickOpenResults()
     results.show(query: "a", exact: nil)
