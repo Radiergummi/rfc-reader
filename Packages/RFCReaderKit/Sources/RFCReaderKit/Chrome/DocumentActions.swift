@@ -27,6 +27,12 @@ public enum DocumentActions {
     metadata?.title ?? documentTitle ?? id.displayName
   }
 
+  /// Whether the document is bookmarked, in words: what the Bookmark button, whose
+  /// label stays "Bookmark", says beside its glyph to VoiceOver (#278).
+  public static func bookmarkState(isBookmarked: Bool) -> String {
+    isBookmarked ? "Bookmarked" : "Not bookmarked"
+  }
+
   /// What the document is called, under its designation in the reader's title.
   ///
   /// The same sources as `bookmarkTitle`, in the same order, without its last

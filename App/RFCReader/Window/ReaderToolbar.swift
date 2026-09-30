@@ -373,11 +373,18 @@
     /// `NSMenuToolbarItem`, which AppKit never validates, so a glyph kept there stayed
     /// empty however the document was bookmarked. An image is made only when the
     /// glyph actually changes.
+    ///
+    /// The state goes in the tooltip as well, which VoiceOver reads as the item's
+    /// help after its label (#278). It would be its value, as on iOS, but neither
+    /// `NSToolbarItem` nor `NSMenuToolbarItem` has any accessibility API: the button
+    /// VoiceOver reads is a private view AppKit makes for the item, and the tooltip
+    /// is the one public way to reach it.
     func showBookmarked(_ isBookmarked: Bool) {
       let symbol = isBookmarked ? "bookmark.fill" : "bookmark"
       guard symbol != bookmarkSymbol else { return }
       bookmarkSymbol = symbol
       bookmarkItem?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
+      bookmarkItem?.toolTip = DocumentActions.bookmarkState(isBookmarked: isBookmarked)
     }
 
     func updateDocumentTitle(_ state: ToolbarTitleState) {
@@ -515,6 +522,8 @@
         // What `showBookmarked` last chose, which may have come before the item did.
         item.image = NSImage(
           systemSymbolName: bookmarkSymbol, accessibilityDescription: "Bookmark")
+        item.toolTip = DocumentActions.bookmarkState(
+          isBookmarked: bookmarkSymbol == "bookmark.fill")
         item.showsIndicator = true
         item.target = self
         item.action = #selector(toggleBookmark)

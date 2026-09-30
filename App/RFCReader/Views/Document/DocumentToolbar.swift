@@ -73,12 +73,13 @@ import SwiftUI
         AddToCollectionItems(
           document: id, library: library, navigation: navigation, undoManager: undoManager)
       } label: {
-        Label(
-          isBookmarked ? "Remove Bookmark" : "Bookmark",
-          systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+        Label("Bookmark", systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
       } primaryAction: {
         toggleBookmark()
       }
+      // A fixed label, and the state as its value, which the glyph alone never told
+      // VoiceOver (#278).
+      .accessibilityValue(DocumentActions.bookmarkState(isBookmarked: isBookmarked))
       .keyboardShortcut("d", modifiers: .command)
     }
 
