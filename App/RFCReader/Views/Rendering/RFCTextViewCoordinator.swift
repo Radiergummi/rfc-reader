@@ -475,6 +475,26 @@ final class RFCTextViewCoordinator: NSObject {
     if ReaderLayoutEngine.isEnabled, !columnChanged { engine.pin() }
   }
 
+  #if !canImport(UIKit)
+    func attach(scroller: ReaderScroller, to scroll: ReaderScrollView) {
+      scroll.knob = { [weak self] in self?.engine.knob() }
+      scroller.knobMoved = { [weak self] fraction in
+        self?.engine.jump(toFraction: fraction)
+        self?.reportVisibleAnchor()
+      }
+      scroller.knobTracking = { [weak self] tracking in
+        guard let self else { return }
+        if tracking {
+          self.engine.knobTrackingBegan()
+        }
+      }
+      engine.onHeightChange = { [weak scroll] in
+        guard let scroll else { return }
+        scroll.reflectScrolledClipView(scroll.contentView)
+      }
+    }
+  #endif
+
   // MARK: - Scrolling
 
   /// Puts the anchor's fragment at the top of the viewport.

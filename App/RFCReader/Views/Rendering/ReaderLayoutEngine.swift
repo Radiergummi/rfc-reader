@@ -102,6 +102,56 @@ final class ReaderLayoutEngine: PinSurface {
     return anchor.characterOffset
   }
 
+  // MARK: - The scroller
+
+  /// The knob's position and size (`HeightModel.knob`): where the line at the top
+  /// sits in the model, plus how far into its paragraph the viewport's top is.
+  func knob() -> (position: Double, proportion: CGFloat)? {
+    guard let textView, let layout = textView.textLayoutManager, let model else { return nil }
+    let visible = textView.viewportHeight
+    guard case .line(let anchor) = keeper.place,
+      let location = layout.location(atOffset: anchor.characterOffset),
+      let fragment = layout.textLayoutFragment(for: location)
+    else {
+      return model.knob(paragraph: 0, within: 0, visible: visible, shown: scrollerHeight.shown)
+    }
+    return model.knob(
+      paragraph: model.paragraph(containing: anchor.characterOffset),
+      within: textView.viewportTop - fragment.layoutFragmentFrame.minY,
+      visible: visible, shown: scrollerHeight.shown)
+  }
+
+  /// The knob moved to `fraction`: the paragraph at that height in the model, put
+  /// at the top by the pin recipe, then the rest of the way into it. The ends are
+  /// the document's first line and its last screen.
+  func jump(toFraction fraction: Double) {
+    guard let textView, let layout = textView.textLayoutManager, let model, model.count > 0 else {
+      return
+    }
+    let target = model.target(
+      atFraction: fraction, visible: textView.viewportHeight, shown: scrollerHeight.shown)
+    keeper.jumped(
+      to: ReaderAnchor(characterOffset: model.characterOffset(ofParagraph: target.paragraph)))
+    pin()
+    guard target.within > 0 else { return }
+    keeper.beginEngineMove()
+    scroll(toContainerY: containerTop + target.within)
+    layOutViewport()
+    keeper.endEngineMove(top: containerTop)
+    if let start = layout.textViewportLayoutController.viewportRange?.location,
+      let found = PinRecipe.anchor(atContainerTop: containerTop, in: layout, from: start)
+    {
+      keeper.jumped(to: found.anchor)
+    }
+  }
+
+  /// A knob drag began: the knob's height freezes, and completion pauses, for as
+  /// long as it sends actions.
+  func knobTrackingBegan() {
+    scrollerHeight.interactionBegan()
+    lastUserScroll = .now
+  }
+
   // MARK: - Background completion
 
   private var planner = SlicePlanner(length: 0)

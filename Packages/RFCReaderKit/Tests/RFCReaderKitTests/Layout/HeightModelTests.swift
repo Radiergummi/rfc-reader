@@ -85,4 +85,45 @@ struct HeightModelTests {
     model.setColumn(320)
     #expect(model.total > wide)
   }
+
+  // MARK: - The knob
+
+  @Test func `the knob is at the start at the top and at the end at the last screen`() throws {
+    let model = HeightModel(paragraphs: try LayoutFixture.built().paragraphs, column: 712)
+    let top = try #require(model.knob(paragraph: 0, within: 0, visible: 900, shown: model.total))
+    #expect(top.position == 0)
+    #expect(abs(top.proportion - 900 / model.total) < 0.0001)
+    let end = try #require(
+      model.knob(paragraph: model.count - 1, within: 10_000, visible: 900, shown: model.total))
+    #expect(end.position == 1)
+  }
+
+  /// Review focus: a one-page RFC. Nothing to scroll, so the knob fills the track,
+  /// and no division by the zero-height range.
+  @Test func `a document shorter than the viewport fills the track`() throws {
+    let model = HeightModel(paragraphs: try LayoutFixture.built().paragraphs, column: 712)
+    let knob = try #require(
+      model.knob(paragraph: 3, within: 0, visible: model.total * 2, shown: model.total))
+    #expect(knob.proportion == 1)
+    #expect(knob.position.isFinite)
+    let target = model.target(atFraction: 1, visible: model.total * 2, shown: model.total)
+    #expect(target.paragraph == 0 && target.within == 0)
+  }
+
+  @Test func `an empty model has no knob`() {
+    let model = HeightModel(paragraphs: [], column: 712)
+    #expect(model.knob(paragraph: 0, within: 0, visible: 900, shown: 0) == nil)
+  }
+
+  /// Dragging the knob and reading it back agree, so the knob does not jump away
+  /// from under the pointer once the jump lands.
+  @Test(arguments: [0.0, 0.1, 0.37, 0.5, 0.93, 1.0])
+  func `a fraction the knob is dragged to reads back as that fraction`(fraction: Double) throws {
+    let model = HeightModel(paragraphs: try LayoutFixture.built().paragraphs, column: 712)
+    let target = model.target(atFraction: fraction, visible: 900, shown: model.total)
+    let knob = try #require(
+      model.knob(
+        paragraph: target.paragraph, within: target.within, visible: 900, shown: model.total))
+    #expect(abs(knob.position - fraction) < 0.0001)
+  }
 }

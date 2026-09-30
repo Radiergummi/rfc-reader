@@ -129,6 +129,32 @@ public struct HeightModel: Sendable {
     return min(max(0, tops.partitioningIndex { $0 > height } - 1), paragraphs.count - 1)
   }
 
+  /// The scroller's knob when the viewport's top is `within` points into
+  /// `paragraph`: its position, 0 at the top and 1 at the last screen, and its
+  /// size, against the height the scroller shows (`ScrollerHeight.shown`). Nil
+  /// with nothing to scroll through; a document shorter than the viewport fills
+  /// the track.
+  public func knob(
+    paragraph: Int, within: CGFloat, visible: CGFloat, shown: CGFloat
+  ) -> (position: Double, proportion: CGFloat)? {
+    guard count > 0, shown > 0 else { return nil }
+    let range = shown - visible
+    guard range > 0 else { return (0, 1) }
+    let height = top(ofParagraph: paragraph) + max(0, within)
+    return (Double(min(1, max(0, height / range))), visible / shown)
+  }
+
+  /// Where the viewport's top goes for the knob dragged to `fraction`: the
+  /// paragraph at that height and how far into it. The inverse of `knob`, so the
+  /// knob stays under the pointer once the jump lands.
+  public func target(
+    atFraction fraction: Double, visible: CGFloat, shown: CGFloat
+  ) -> (paragraph: Int, within: CGFloat) {
+    let height = CGFloat(min(1, max(0, fraction))) * max(0, shown - visible)
+    let paragraph = paragraph(atHeight: height)
+    return (paragraph, max(0, height - top(ofParagraph: paragraph)))
+  }
+
   private mutating func recomputeTops() {
     var tops: [CGFloat] = [0]
     tops.reserveCapacity(heights.count + 1)
