@@ -141,18 +141,19 @@ public enum CitationFormatter {
   /// backslash of the text's own is spelled out too, so it can't start a command.
   /// BibTeX accepts `_ $ # ^ ~`, but LaTeX reads them as markup when it typesets
   /// the field (#242). `\^` and `\~` are accent commands, so those two are
-  /// spelled out as well.
+  /// spelled out as well. It goes by scalar, since a combining mark after one of
+  /// these makes a `Character` that no case matches.
   static func bibtexEscaped(_ text: String) -> String {
     var escaped = ""
-    for character in text {
-      switch character {
+    for scalar in text.unicodeScalars {
+      switch scalar {
       case "\\": escaped.append("\\textbackslash{}")
       case "{": escaped.append("\\textbraceleft{}")
       case "}": escaped.append("\\textbraceright{}")
-      case "%", "&", "_", "$", "#": escaped.append("\\\(character)")
+      case "%", "&", "_", "$", "#": escaped.append("\\\(scalar)")
       case "^": escaped.append("\\textasciicircum{}")
       case "~": escaped.append("\\textasciitilde{}")
-      default: escaped.append(character)
+      default: escaped.unicodeScalars.append(scalar)
       }
     }
     return escaped
