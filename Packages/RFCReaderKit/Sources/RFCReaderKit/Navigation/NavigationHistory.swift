@@ -57,9 +57,10 @@ public struct NavigationHistory: Sendable {
   /// where the tab was sent, not where the reader has scrolled since (#287).
   /// Striking out in a new direction drops whatever was ahead, as a browser does.
   @discardableResult
-  public mutating func go(to place: HistoryEntry, leaving position: String? = nil)
-    -> HistoryEntry?
-  {
+  public mutating func go(
+    to place: HistoryEntry, leaving position: String? = nil,
+    resolving anchor: (String) -> String = { $0 }
+  ) -> HistoryEntry? {
     defer { isHidden = false }
     guard place != current else { return place.section == nil ? nil : place }
     // Reopening the hidden document from its row, which names no section: back
