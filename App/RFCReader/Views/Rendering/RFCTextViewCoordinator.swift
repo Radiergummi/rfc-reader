@@ -152,7 +152,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// because the tap is recognized only after a double tap has failed, and by
     /// then a link it followed may have scrolled the text away from under it.
     private var chromeTapPoint = CGPoint.zero
-    /// True while `layOut` holds the line at the top across a change of the
+    /// True while `layOut` keeps the place at the top across a change of the
     /// header's height: that scroll is the header's, not the reader's, even when it
     /// lands during a drag, and moves no bars.
     private var isHoldingPlace = false
@@ -412,9 +412,10 @@ final class RFCTextViewCoordinator: NSObject {
     else { return }
     let columnChanged = column != laidOutColumn
     // Read before the inset moves: after it, the same offset names another line.
-    let heldTop = laidOutHeaderHeight.flatMap {
-      ReaderLayout.containerTopAfterHeaderChange(
-        viewportTop: textView.viewportTop, from: $0, to: headerHeight, columnChanged: columnChanged)
+    let headerChange = laidOutHeaderHeight.flatMap {
+      ReaderLayout.headerChange(
+        viewportTop: textView.viewportTop, from: $0, to: headerHeight, columnChanged: columnChanged,
+        atRestoredPlace: tracker.isAtRestoredPlace)
     }
     laidOutColumn = column
     laidOutGutter = gutter
@@ -430,12 +431,17 @@ final class RFCTextViewCoordinator: NSObject {
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
-    if let heldTop {
+    if let headerChange {
       #if canImport(UIKit)
         isHoldingPlace = true
         defer { isHoldingPlace = false }
       #endif
-      scrollContainerTopTo(heldTop, animated: false)
+      switch headerChange {
+      case .restorePlace:
+        tracker.restoring()
+        restorePlace()
+      case .hold(let containerTop): scrollContainerTopTo(containerTop, animated: false)
+      }
     }
 
     // The container is the column, set here and nowhere else. Tracking the text

@@ -118,4 +118,42 @@ struct ReadingPlaceTrackerTests {
     tracker.jumped(to: ReadingPlace(anchor: "section-2", offset: 0))
     #expect(tracker.place == .line(ReadingPlace(anchor: "section-2", offset: 0)))
   }
+
+  /// Whether the viewport is still where the last restore left it: the reader has
+  /// not scrolled since, and the place is the one carried rather than the line on
+  /// screen.
+  @Test func `is at the restored place until the reader scrolls or jumps away`() {
+    var tracker = reading()
+    #expect(!tracker.isAtRestoredPlace, "nothing was restored")
+    tracker.restored(top: 280)
+    #expect(tracker.isAtRestoredPlace)
+    tracker.report(
+      viewportTop: 280, line: NSRange(location: 200, length: 40), in: index, length: 500)
+    #expect(tracker.isAtRestoredPlace)
+    tracker.report(
+      viewportTop: 260, line: NSRange(location: 160, length: 40), in: index, length: 500)
+    #expect(!tracker.isAtRestoredPlace)
+    tracker.restored(top: 280)
+    tracker.jumped(to: ReadingPlace(anchor: "section-2", offset: 0))
+    #expect(!tracker.isAtRestoredPlace)
+  }
+
+  /// A place restored again after the header changed height lands, at the
+  /// document's end, clamped somewhere else than the first restore did; the scroll
+  /// that gets it there is not the reader's, and records nothing.
+  @Test func `restoring the place again pauses tracking until it is restored`() {
+    var tracker = reading()
+    let laysOutNarrow = tracker.columnChanged(to: narrow)
+    #expect(!laysOutNarrow)
+    tracker.installed(atColumn: narrow)
+    tracker.restored(top: 280)
+    tracker.restoring()
+    tracker.report(
+      viewportTop: 220, line: NSRange(location: 150, length: 40), in: index, length: 500)
+    #expect(tracker.place == .line(ReadingPlace(anchor: "section-1-1", offset: 120)))
+    tracker.restored(top: 220)
+    tracker.report(
+      viewportTop: 220, line: NSRange(location: 150, length: 40), in: index, length: 500)
+    #expect(tracker.place == .line(ReadingPlace(anchor: "section-1-1", offset: 120)))
+  }
 }

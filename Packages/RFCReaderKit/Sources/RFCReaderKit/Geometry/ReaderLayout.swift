@@ -72,4 +72,34 @@ public enum ReaderLayout {
     guard viewportTop < 0 else { return viewportTop }
     return min(0, viewportTop + oldHeight - newHeight)
   }
+
+  /// What a change of the header's height asks of the viewport.
+  public enum HeaderChange: Equatable, Sendable {
+    /// Put the carried place back at the top, as a restore does.
+    case restorePlace
+    /// Put this container y back at the top; see `containerTopAfterHeaderChange`.
+    case hold(containerTop: CGFloat)
+  }
+
+  /// What to do once the header above the text has changed from `oldHeight` to
+  /// `newHeight`, or nil when there is nothing to do.
+  ///
+  /// A place restored and not scrolled from since (`atRestoredPlace`, see
+  /// `ReadingPlaceTracker.isAtRestoredPlace`) is restored again rather than held.
+  /// A restore at the document's end is clamped, so the line at the top is not the
+  /// one holding the place; on macOS the header's height is also the padding under
+  /// the last line, so a header that shrinks clamps a held line again, off where
+  /// the restore left it, and tracking then records that line over the place.
+  /// Restored again, the place is carried as it was. Anywhere else the line at the
+  /// top is the reader's own, and is held.
+  public static func headerChange(
+    viewportTop: CGFloat, from oldHeight: CGFloat, to newHeight: CGFloat, columnChanged: Bool,
+    atRestoredPlace: Bool
+  ) -> HeaderChange? {
+    guard
+      let held = containerTopAfterHeaderChange(
+        viewportTop: viewportTop, from: oldHeight, to: newHeight, columnChanged: columnChanged)
+    else { return nil }
+    return atRestoredPlace ? .restorePlace : .hold(containerTop: held)
+  }
 }

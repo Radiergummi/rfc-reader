@@ -127,4 +127,33 @@ struct ReaderLayoutTests {
       ReaderLayout.containerTopAfterHeaderChange(
         viewportTop: 14_200, from: 208, to: 208, columnChanged: false) == nil)
   }
+
+  /// A place restored at the document's end is clamped, so the line at the top is
+  /// not the one holding it, and on macOS a header that shrinks shrinks the padding
+  /// under the last line with it: a held line is clamped again, and tracking then
+  /// records it over the place. Until the reader scrolls, the place is restored
+  /// again instead, as a change of column restores it.
+  @Test func `a restored place nobody scrolled from is restored again, not held`() {
+    #expect(
+      ReaderLayout.headerChange(
+        viewportTop: 14_200, from: 289, to: 229, columnChanged: false, atRestoredPlace: true)
+        == .restorePlace)
+    #expect(
+      ReaderLayout.headerChange(
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: false, atRestoredPlace: false)
+        == .hold(containerTop: 14_200))
+  }
+
+  /// A change of column restores the place or waits for its rebuild on its own, and
+  /// an unchanged header asks for nothing, restored place or not.
+  @Test func `a header change asks for nothing where there is nothing to hold`() {
+    #expect(
+      ReaderLayout.headerChange(
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: true, atRestoredPlace: true)
+        == nil)
+    #expect(
+      ReaderLayout.headerChange(
+        viewportTop: 14_200, from: 208, to: 208, columnChanged: false, atRestoredPlace: true)
+        == nil)
+  }
 }

@@ -32,6 +32,11 @@ public struct ReadingPlaceTracker: Sendable, Equatable {
   /// place; until the reader scrolls away from it, the place is the one carried.
   private var restoredTop: CGFloat?
 
+  /// Whether the viewport is still where the last restore left it: nothing has
+  /// scrolled or jumped since, so the place is the one carried, not the line at the
+  /// top — which, clamped at the document's end, may be another.
+  public var isAtRestoredPlace: Bool { restoredTop != nil }
+
   public init() {}
 
   /// A new storage went in, laid out at `column` — nil if no column is known yet.
@@ -66,6 +71,14 @@ public struct ReadingPlaceTracker: Sendable, Equatable {
   public mutating func restored(top: CGFloat?) {
     isTracking = true
     restoredTop = top
+  }
+
+  /// The place is about to be put back at the top of the viewport, over a layout
+  /// that has not changed column — after the header above the text changed height.
+  /// The scroll that does it is not the reader's, so tracking pauses until
+  /// `restored(top:)`.
+  public mutating func restoring() {
+    isTracking = false
   }
 
   /// A jump names the place directly, and holds even while tracking waits: a jump
