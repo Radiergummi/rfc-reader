@@ -49,8 +49,10 @@ extension DocumentTextBuilder {
 
   /// A cell's width as it is set. Plain text is measured as a string in the row's
   /// attributes, which is what nearly every cell is; only a cell with formatting has
-  /// its runs built to be measured, so a registry of hundreds of rows is not built
-  /// twice. Building runs numbers a chip, so measuring advances `nextChipID`; the
+  /// its runs built to be measured, so a registry's plain columns are not built
+  /// twice. A reference column is: each of its chips is built to be measured and
+  /// again to be set, and still measures narrower than it is drawn (#488).
+  /// Building runs numbers a chip, so measuring advances `nextChipID`; the
   /// numbers only have to differ between neighbors, so the gap is harmless.
   private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
     let isPlainText = cell.allSatisfy { inline in

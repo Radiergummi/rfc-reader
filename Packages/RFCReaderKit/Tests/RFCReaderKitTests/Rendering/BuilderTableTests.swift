@@ -75,19 +75,24 @@ struct BuilderTableTests {
   /// A cell is measured as it is set: strong text in a data cell renders bold, and
   /// in a header cell heavy, and measuring its plain text in the row's font alone
   /// left the column too narrow for it, so the text ran past its tab stop (#360).
-  @Test func `a cell is measured in the fonts it is set in`() {
-    func width(of cell: [Inline], inHeader: Bool) -> CGFloat {
-      let cells = [cell]
-      let table = RFCKit.Table(
-        title: nil, header: inHeader ? [RFCKit.Table.Row(cells: cells)] : [],
-        rows: inHeader ? [] : [RFCKit.Table.Row(cells: cells)])
-      return DocumentTextBuilder(style: ReadingStyle()).naturalColumnWidths(table)[0]
-    }
+  @Test func `a cell is measured in the fonts it is set in`() throws {
     let words = "Implementation Considerations"
     for inHeader in [false, true] {
-      let plain = width(of: [.text(words)], inHeader: inHeader)
-      let strong = width(of: [.strong([.text(words)])], inHeader: inHeader)
-      #expect(strong > plain, "header: \(inHeader)")
+      func table(_ cell: [Inline]) -> RFCKit.Table {
+        let rows = [RFCKit.Table.Row(cells: [cell])]
+        return RFCKit.Table(title: nil, header: inHeader ? rows : [], rows: inHeader ? [] : rows)
+      }
+      let builder = DocumentTextBuilder(style: ReadingStyle())
+      let plain = builder.naturalColumnWidths(table([.text(words)]))[0]
+      let strong = table([.strong([.text(words)])])
+      let measured = builder.naturalColumnWidths(strong)[0]
+      #expect(measured > plain, "header: \(inHeader)")
+
+      let built = DocumentTextBuilder.build(document(strong), style: ReadingStyle())
+      let offset = try Fixtures.offset(of: words, in: built.text)
+      let set = built.text.attributedSubstring(
+        from: NSRange(location: offset, length: (words as NSString).length))
+      #expect(measured == builder.lineWidth(set), "header: \(inHeader)")
     }
   }
 
