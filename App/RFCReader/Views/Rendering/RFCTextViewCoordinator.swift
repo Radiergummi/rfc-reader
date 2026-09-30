@@ -95,7 +95,7 @@ final class RFCTextViewCoordinator: NSObject {
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onToggleSource`.
   var onToggleSource: (Int) -> Void = { _ in }
-  /// The Figure | Source controls laid over the text view.
+  /// The Figure | Source buttons laid over the text view.
   let figureControls = FigureControls()
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
@@ -964,7 +964,7 @@ final class RFCTextViewCoordinator: NSObject {
       reportVisibleAnchor()
       hover.send(.scrolled)
       // The text moved under a pointer that may not have.
-      updateFigureControls(fades: true)
+      updateFigureControls()
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
@@ -995,7 +995,7 @@ final class RFCTextViewCoordinator: NSObject {
           content: NSHostingController(rootView: preview), anchor: rect)
       }
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
-      hover.pointerMoved = { [weak self] in self?.updateFigureControls(fades: true) }
+      hover.pointerMoved = { [weak self] in self?.updateFigureControls() }
     }
 
     /// Called from `dismantleNSView`.

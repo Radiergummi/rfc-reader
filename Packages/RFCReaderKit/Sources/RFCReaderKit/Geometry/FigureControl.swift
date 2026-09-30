@@ -1,9 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// The Figure | Source control in a rendered block's card: which of the block's
-/// presentations is showing, and the way to the other. A native segmented control
-/// the coordinator lays over the text view, in a strip the builder reserves above
+/// The button in a rendered block's card that switches it between its figure and
+/// its source. A native icon button the coordinator lays over the text view, in a strip the builder reserves above
 /// the block's first line, so it is nothing in the storage. Which blocks have one,
 /// and where it goes, are answered here.
 public enum FigureControl {
@@ -25,9 +24,9 @@ public enum FigureControl {
     public let control: Control
   }
 
-  /// AppKit's mini segmented control, fitted to the two labels.
-  public static let width: CGFloat = 91
-  public static let height: CGFloat = 16
+  /// A square icon button.
+  public static let width: CGFloat = 20
+  public static let height: CGFloat = 20
   /// From the card's top and right edges: half the card's padding, where the
   /// card's own rounding leaves room.
   public static let inset: CGFloat = FragmentGeometry.cardPadding / 2
@@ -35,10 +34,20 @@ public enum FigureControl {
   /// sits in, so showing it moves no text.
   public static let strip: CGFloat = 22
 
-  public static func label(of segment: Segment) -> String {
-    switch segment {
-    case .figure: "Figure"
-    case .source: "Source"
+  /// What the button says it does when `shown` is showing, as its tooltip and
+  /// to VoiceOver: the context menu's words.
+  public static func title(offeredFrom shown: Segment) -> String {
+    switch shown {
+    case .figure: "Show Source"
+    case .source: "Show Rendering"
+    }
+  }
+
+  /// The SF Symbol of what the button switches to: code, or a grid of fields.
+  public static func symbol(offeredFrom shown: Segment) -> String {
+    switch shown {
+    case .figure: "chevron.left.forwardslash.chevron.right"
+    case .source: "square.grid.3x3"
     }
   }
 

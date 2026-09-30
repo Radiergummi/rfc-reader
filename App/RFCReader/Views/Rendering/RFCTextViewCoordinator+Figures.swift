@@ -24,13 +24,11 @@
             UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
           })
         if box.shown != .plain {
-          let rendered = box.shown == .rendered
+          let shown: FigureControl.Segment = box.shown == .rendered ? .figure : .source
           extra.append(
             UIAction(
-              title: rendered ? "Show Source" : "Show Rendering",
-              image: UIImage(
-                systemName: rendered ? "chevron.left.forwardslash.chevron.right" : "square.grid.3x3"
-              )
+              title: FigureControl.title(offeredFrom: shown),
+              image: UIImage(systemName: FigureControl.symbol(offeredFrom: shown))
             ) { [weak self] _ in self?.onToggleSource(box.ordinal) })
         }
       }

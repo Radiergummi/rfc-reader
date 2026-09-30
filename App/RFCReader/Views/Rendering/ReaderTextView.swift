@@ -140,7 +140,7 @@ import RFCReaderKit
     /// The text view sets the I-beam over its whole bounds — over the header's
     /// author chips too, which are buttons, and its title, which cannot be selected.
     /// Over the header the pointer is the arrow, and over a rendered block's Figure |
-    /// Source control. Both overrides are needed: a cursor
+    /// Source button. Both overrides are needed: a cursor
     /// update the hosting view does not handle arrives here through the responder
     /// chain, and every move resets it.
     override func cursorUpdate(with event: NSEvent) {
@@ -159,12 +159,12 @@ import RFCReaderKit
       super.mouseMoved(with: event)
     }
 
-    /// Over the header, or a Figure | Source control showing.
+    /// Over the header, or a Figure | Source button showing.
     private func isOverControl(_ event: NSEvent) -> Bool {
       let point = convert(event.locationInWindow, from: nil)
       if header?.frame.contains(point) == true { return true }
       return subviews.contains { view in
-        view is NSSegmentedControl && !view.isHidden && view.frame.contains(point)
+        view is FigureButton && !view.isHidden && view.frame.contains(point)
       }
     }
 
@@ -302,7 +302,7 @@ import RFCReaderKit
         result.insertItem(item, at: 0)
         if let box, box.shown != .plain {
           let toggle = NSMenuItem(
-            title: box.shown == .rendered ? "Show Source" : "Show Rendering",
+            title: FigureControl.title(offeredFrom: box.shown == .rendered ? .figure : .source),
             action: #selector(toggleSourceItem(_:)), keyEquivalent: "")
           toggle.target = self
           toggle.tag = box.ordinal

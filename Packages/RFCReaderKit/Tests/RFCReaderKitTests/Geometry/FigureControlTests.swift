@@ -24,12 +24,18 @@ struct FigureControlTests {
     #expect(control.height == FigureControl.height)
   }
 
-  /// The size AppKit's mini segmented control fits "Figure" and "Source" in, so
-  /// the native control fills the rect the card and its strip were made for.
-  @Test func `the control is the size of a mini native segmented control`() {
-    #expect(FigureControl.width == 91)
-    #expect(FigureControl.height == 16)
+  @Test func `the button is a square that fits in its strip`() {
+    #expect(FigureControl.width == FigureControl.height)
     #expect(FigureControl.height <= FigureControl.strip)
+  }
+
+  /// The button offers the presentation that is not showing, in the context
+  /// menu's words.
+  @Test func `the button offers the source of a figure and the rendering of a source`() {
+    #expect(FigureControl.title(offeredFrom: .figure) == "Show Source")
+    #expect(FigureControl.symbol(offeredFrom: .figure) == "chevron.left.forwardslash.chevron.right")
+    #expect(FigureControl.title(offeredFrom: .source) == "Show Rendering")
+    #expect(FigureControl.symbol(offeredFrom: .source) == "square.grid.3x3")
   }
 
   @Test func `the controlled blocks are found at their first characters`() throws {

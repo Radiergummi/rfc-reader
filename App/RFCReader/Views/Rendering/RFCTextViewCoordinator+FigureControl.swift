@@ -3,140 +3,107 @@ import RFCReaderKit
 #if canImport(UIKit)
   import UIKit
 
-  typealias PlatformSegmentedControl = UISegmentedControl
+  /// A rendered block's Figure | Source button, told apart from the text view's
+  /// other subviews by its class.
+  final class FigureButton: UIButton {}
 #else
   import AppKit
 
-  typealias PlatformSegmentedControl = NSSegmentedControl
+  /// A rendered block's Figure | Source button, told apart from the text view's
+  /// other subviews by its class: over it the pointer is the arrow.
+  final class FigureButton: NSButton {}
 #endif
 
-/// The Figure | Source controls, native segmented controls laid over the text view
-/// in the strip the builder reserves above a rendered block's first line, where no
-/// text is. Subviews of the text view, so they scroll with it; placed again only
-/// when the text moves under them. A print or an export draws fragments alone, so
-/// never shows one.
+/// The buttons that switch a rendered block between its figure and its source:
+/// native icon buttons laid over the text view in the strip the builder reserves
+/// above the block's first line, where no text is. Subviews of the text view, so
+/// they scroll with it; placed again only when the text moves under them. A print
+/// or an export draws fragments alone, so never shows one.
 ///
-/// On iOS every block whose first line is on screen shows its control; on macOS only
-/// the one the pointer is over, fading in dimmed and brightening under the pointer,
-/// so a page of diagrams is neither covered in controls nor shouting.
+/// On iOS every block whose first line is on screen shows its button; on macOS only
+/// the one the pointer is over, so a page of diagrams is not covered in buttons.
 final class FigureControls {
-  /// The installed document's blocks that have a control.
+  /// The installed document's blocks that have a button.
   var blocks: [FigureControl.Block] = []
   /// The block the pointer is over, on macOS.
   var hovered: Int?
-  /// Whether the pointer is on that block's control itself, which then shows at
-  /// full strength rather than dimmed.
-  var pointerOnControl = false
   /// Showing, by the ordinal of the block each belongs to.
-  private var placed: [Int: PlatformSegmentedControl] = [:]
-  private var spare: [PlatformSegmentedControl] = []
-  /// How strongly a macOS control shows while the pointer is over its block but
-  /// not on it.
-  private static let restingAlpha: CGFloat = 0.5
+  private var placed: [Int: FigureButton] = [:]
+  private var spare: [FigureButton] = []
 
   func frame(of ordinal: Int?) -> CGRect? {
     ordinal.flatMap { placed[$0]?.frame }
   }
 
-  /// Shows a control at each frame, in the text view's coordinates, and puts away
-  /// the rest.
+  /// Shows a button at each frame, in the text view's coordinates, and hides the
+  /// rest.
   func show(
     _ wanted: [(control: FigureControl.Control, frame: CGRect)], over view: PlatformTextView,
-    target: AnyObject, action: Selector, fades: Bool
+    target: AnyObject, action: Selector
   ) {
     let ordinals = Set(wanted.map(\.control.ordinal))
-    for (ordinal, segmented) in placed where !ordinals.contains(ordinal) {
+    for (ordinal, button) in placed where !ordinals.contains(ordinal) {
       placed[ordinal] = nil
-      retire(segmented, fades: fades)
+      button.isHidden = true
+      spare.append(button)
     }
     for (control, frame) in wanted {
-      let segmented =
-        placed[control.ordinal]
-        ?? bringOut(over: view, target: target, action: action, fades: fades)
-      segmented.frame = frame
-      segmented.tag = control.ordinal
-      #if !canImport(UIKit)
-        let alpha = pointerOnControl ? 1 : Self.restingAlpha
-        if segmented.alphaValue != alpha {
-          if fades {
-            NSAnimationContext.runAnimationGroup { _ in segmented.animator().alphaValue = alpha }
-          } else {
-            segmented.alphaValue = alpha
-          }
-        }
-      #endif
-      #if canImport(UIKit)
-        segmented.selectedSegmentIndex = control.shown == .figure ? 0 : 1
-      #else
-        segmented.selectedSegment = control.shown == .figure ? 0 : 1
-      #endif
-      placed[control.ordinal] = segmented
+      let button =
+        placed[control.ordinal] ?? spare.popLast() ?? make(target: target, action: action)
+      if button.superview !== view { view.addSubview(button) }
+      button.isHidden = false
+      button.frame = frame
+      button.tag = control.ordinal
+      offer(from: control.shown, on: button)
+      placed[control.ordinal] = button
     }
   }
 
-  private func bringOut(
-    over view: PlatformTextView, target: AnyObject, action: Selector, fades: Bool
-  ) -> PlatformSegmentedControl {
-    let segmented = spare.popLast() ?? make(target: target, action: action)
-    if segmented.superview !== view { view.addSubview(segmented) }
-    segmented.isHidden = false
-    return segmented
-  }
-
-  /// Hidden, and kept for the next block. A fade ends hidden only if nothing
-  /// brought the control out again meanwhile.
-  private func retire(_ segmented: PlatformSegmentedControl, fades: Bool) {
-    spare.append(segmented)
+  /// The symbol and the words of the presentation `shown` switches to.
+  private func offer(from shown: FigureControl.Segment, on button: FigureButton) {
+    let title = FigureControl.title(offeredFrom: shown)
+    let symbol = FigureControl.symbol(offeredFrom: shown)
     #if canImport(UIKit)
-      segmented.isHidden = true
+      button.setImage(UIImage(systemName: symbol), for: .normal)
+      button.accessibilityLabel = title
     #else
-      guard fades else {
-        segmented.alphaValue = 0
-        segmented.isHidden = true
-        return
-      }
-      NSAnimationContext.runAnimationGroup { _ in
-        segmented.animator().alphaValue = 0
-      } completionHandler: {
-        // AppKit runs it on the main thread.
-        MainActor.assumeIsolated {
-          if segmented.alphaValue == 0 { segmented.isHidden = true }
-        }
-      }
+      button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+      button.toolTip = title
     #endif
   }
 
-  private func make(target: AnyObject, action: Selector) -> PlatformSegmentedControl {
-    let labels = [FigureControl.Segment.figure, .source].map(FigureControl.label(of:))
+  private func make(target: AnyObject, action: Selector) -> FigureButton {
     #if canImport(UIKit)
-      let segmented = UISegmentedControl(items: labels)
-      segmented.setTitleTextAttributes(
-        [.font: UIFont.systemFont(ofSize: 10, weight: .medium)], for: .normal)
-      segmented.addTarget(target, action: action, for: .valueChanged)
+      let button = FigureButton(type: .system)
+      button.setPreferredSymbolConfiguration(
+        UIImage.SymbolConfiguration(pointSize: 12, weight: .medium), forImageIn: .normal)
+      button.tintColor = .secondaryLabel
+      button.addTarget(target, action: action, for: .primaryActionTriggered)
     #else
-      let segmented = NSSegmentedControl(
-        labels: labels, trackingMode: .selectOne, target: target, action: action)
-      segmented.controlSize = .mini
-      segmented.font = .systemFont(ofSize: NSFont.systemFontSize(for: .mini))
-      // Out from hidden, so the first placement fades it in.
-      segmented.alphaValue = 0
+      let button = FigureButton()
+      // AppKit's accessory-bar button: bare until the pointer is on it.
+      button.bezelStyle = .accessoryBarAction
+      button.showsBorderOnlyWhileMouseInside = true
+      button.imagePosition = .imageOnly
+      button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+      button.contentTintColor = .secondaryLabelColor
+      button.target = target
+      button.action = action
     #endif
-    return segmented
+    return button
   }
 }
 
 extension RFCTextViewCoordinator {
-  /// Lays the controls over the blocks that show one now: on iOS those whose first
+  /// Lays the buttons over the blocks that show one now: on iOS those whose first
   /// line is on screen, on macOS the one the pointer is over. Called whenever the
   /// text moves under them or the pointer moves over it.
-  func updateFigureControls(fades: Bool = false) {
+  func updateFigureControls() {
     guard let textView, let built, let layout = textView.textLayoutManager else { return }
     #if !canImport(UIKit)
-      let pointer = textView.window.flatMap {
+      figureControls.hovered = textView.window.flatMap {
         figureBlock(atWindowPoint: $0.mouseLocationOutsideOfEventStream)
       }
-      figureControls.hovered = pointer?.ordinal
-      figureControls.pointerOnControl = pointer?.onControl ?? false
     #endif
     let origin = containerOrigin(of: textView)
     var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
@@ -151,11 +118,10 @@ extension RFCTextViewCoordinator {
       wanted.append((block.control, rect.offsetBy(dx: origin.x, dy: origin.y)))
     }
     figureControls.show(
-      wanted, over: textView, target: self, action: #selector(pressedFigureControl(_:)),
-      fades: fades)
+      wanted, over: textView, target: self, action: #selector(pressedFigureControl(_:)))
   }
 
-  /// A block's control in text-container coordinates, from its first fragment.
+  /// A block's button in text-container coordinates, from its first fragment.
   nonisolated static func figureControlRect(
     of fragment: NSTextLayoutFragment, range: NSRange, in text: NSAttributedString
   ) -> CGRect? {
@@ -171,17 +137,9 @@ extension RFCTextViewCoordinator {
       inCard: placement.cardRect(padding: FragmentGeometry.cardPadding, span: span))
   }
 
-  /// Shows the other presentation when the segment pressed is not the one on.
-  @objc func pressedFigureControl(_ sender: PlatformSegmentedControl) {
-    #if canImport(UIKit)
-      let pressed: FigureControl.Segment = sender.selectedSegmentIndex == 0 ? .figure : .source
-    #else
-      let pressed: FigureControl.Segment = sender.selectedSegment == 0 ? .figure : .source
-    #endif
-    guard let block = figureControls.blocks.first(where: { $0.control.ordinal == sender.tag }),
-      pressed != block.control.shown
-    else { return }
-    onToggleSource(block.control.ordinal)
+  /// Shows the block's other presentation.
+  @objc func pressedFigureControl(_ sender: FigureButton) {
+    onToggleSource(sender.tag)
   }
 
   private func containerOrigin(of textView: PlatformTextView) -> CGPoint {
@@ -213,10 +171,9 @@ extension RFCTextViewCoordinator {
       block.control.ordinal == figureControls.hovered
     }
 
-    /// The block with a control under a point in window coordinates: its lines, or
-    /// the control showing for it, which reaches above its first line; and whether
-    /// the point is on that control.
-    private func figureBlock(atWindowPoint point: NSPoint) -> (ordinal: Int, onControl: Bool)? {
+    /// The block with a button under a point in window coordinates: its lines, or
+    /// the button showing for it, which reaches above its first line.
+    private func figureBlock(atWindowPoint point: NSPoint) -> Int? {
       guard let textView, let built, let layout = textView.textLayoutManager,
         let window = textView.window,
         // A window of another app over this one hides the pointer from it.
@@ -227,10 +184,8 @@ extension RFCTextViewCoordinator {
       guard textView.visibleRect.contains(viewPoint),
         headerHost?.view.frame.contains(viewPoint) != true
       else { return nil }
-      if let hovered = figureControls.hovered,
-        figureControls.frame(of: hovered)?.contains(viewPoint) == true
-      {
-        return (hovered, true)
+      if figureControls.frame(of: figureControls.hovered)?.contains(viewPoint) == true {
+        return figureControls.hovered
       }
       let origin = containerOrigin(of: textView)
       guard
@@ -238,8 +193,7 @@ extension RFCTextViewCoordinator {
           for: CGPoint(x: viewPoint.x - origin.x, y: viewPoint.y - origin.y))
       else { return nil }
       return FigureControl.ordinal(
-        at: layout.offset(of: fragment.rangeInElement.location), in: built.text
-      ).map { ($0, false) }
+        at: layout.offset(of: fragment.rangeInElement.location), in: built.text)
     }
   #endif
 }
