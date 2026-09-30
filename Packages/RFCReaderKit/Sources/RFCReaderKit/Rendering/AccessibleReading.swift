@@ -81,7 +81,7 @@ public enum AccessibleReading {
         return
       }
       if piece.location == diagram.location {
-        pieces.append(.label(label))
+        pieces.append(.label(label(for: box)))
       }
       // The builder ends every verbatim block with a line break.
       let last = NSMaxRange(diagram) - 1
@@ -90,6 +90,15 @@ public enum AccessibleReading {
       }
     }
     return pieces
+  }
+
+  /// What a diagram is said as: a rendered packet diagram as its fields, from the
+  /// model its rendering was drawn from; anything else as `label`.
+  public static func label(for box: VerbatimBox) -> String {
+    guard box.shown == .rendered, box.classification.type?.name == "packet",
+      let diagram = PacketDiagram.recognize(box.content.text)
+    else { return label }
+    return PacketSummary.spoken(diagram)
   }
 
   /// Whether a verbatim block is said as a label rather than read: artwork that is
