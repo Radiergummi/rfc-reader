@@ -152,6 +152,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// because the tap is recognized only after a double tap has failed, and by
     /// then a link it followed may have scrolled the text away from under it.
     private var chromeTapPoint = CGPoint.zero
+    /// True while `layOut` holds the line at the top across a change of the
+    /// header's height: that scroll is the header's, not the reader's, even when it
+    /// lands during a drag, and moves no bars.
+    private var isHoldingPlace = false
   #endif
 
   /// Where section tracking last put the reader, written the moment it is computed.
@@ -426,7 +430,13 @@ final class RFCTextViewCoordinator: NSObject {
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
-    if let heldTop { scrollContainerTopTo(heldTop, animated: false) }
+    if let heldTop {
+      #if canImport(UIKit)
+        isHoldingPlace = true
+        defer { isHoldingPlace = false }
+      #endif
+      scrollContainerTopTo(heldTop, animated: false)
+    }
 
     // The container is the column, set here and nowhere else. Tracking the text
     // view's width instead re-wrapped the storage on *every* resize: the frame
@@ -827,8 +837,8 @@ final class RFCTextViewCoordinator: NSObject {
           offset: scrollView.contentOffset.y, topInset: insets.top, bottomInset: insets.bottom,
           contentHeight: scrollView.contentSize.height,
           viewportHeight: scrollView.bounds.height,
-          isUserDriven: scrollView.isTracking || scrollView.isDragging
-            || scrollView.isDecelerating))
+          isUserDriven: !isHoldingPlace
+            && (scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating)))
       reportChrome()
     }
 
