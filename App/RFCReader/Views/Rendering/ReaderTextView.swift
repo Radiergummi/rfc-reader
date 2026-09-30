@@ -139,11 +139,12 @@ import RFCReaderKit
 
     /// The text view sets the I-beam over its whole bounds — over the header's
     /// author chips too, which are buttons, and its title, which cannot be selected.
-    /// Over the header the pointer is the arrow. Both overrides are needed: a cursor
+    /// Over the header the pointer is the arrow, and over a rendered block's Figure |
+    /// Source control. Both overrides are needed: a cursor
     /// update the hosting view does not handle arrives here through the responder
     /// chain, and every move resets it.
     override func cursorUpdate(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !isOverControl(event) else {
         NSCursor.arrow.set()
         return
       }
@@ -151,16 +152,20 @@ import RFCReaderKit
     }
 
     override func mouseMoved(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !isOverControl(event) else {
         NSCursor.arrow.set()
         return
       }
       super.mouseMoved(with: event)
     }
 
-    private func isOverHeader(_ event: NSEvent) -> Bool {
-      guard let header else { return false }
-      return header.frame.contains(convert(event.locationInWindow, from: nil))
+    /// Over the header, or a Figure | Source control showing.
+    private func isOverControl(_ event: NSEvent) -> Bool {
+      let point = convert(event.locationInWindow, from: nil)
+      if header?.frame.contains(point) == true { return true }
+      return subviews.contains { view in
+        view is NSSegmentedControl && !view.isHidden && view.frame.contains(point)
+      }
     }
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its

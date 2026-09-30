@@ -17,16 +17,22 @@ import RFCReaderKit
 /// never shows one.
 ///
 /// On iOS every block whose first line is on screen shows its control; on macOS only
-/// the one the pointer is over, fading in and out, so a page of diagrams is not
-/// covered in controls.
+/// the one the pointer is over, fading in dimmed and brightening under the pointer,
+/// so a page of diagrams is neither covered in controls nor shouting.
 final class FigureControls {
   /// The installed document's blocks that have a control.
   var blocks: [FigureControl.Block] = []
   /// The block the pointer is over, on macOS.
   var hovered: Int?
+  /// Whether the pointer is on that block's control itself, which then shows at
+  /// full strength rather than dimmed.
+  var pointerOnControl = false
   /// Showing, by the ordinal of the block each belongs to.
   private var placed: [Int: PlatformSegmentedControl] = [:]
   private var spare: [PlatformSegmentedControl] = []
+  /// How strongly a macOS control shows while the pointer is over its block but
+  /// not on it.
+  private static let restingAlpha: CGFloat = 0.5
 
   func frame(of ordinal: Int?) -> CGRect? {
     ordinal.flatMap { placed[$0]?.frame }
@@ -49,6 +55,16 @@ final class FigureControls {
         ?? bringOut(over: view, target: target, action: action, fades: fades)
       segmented.frame = frame
       segmented.tag = control.ordinal
+      #if !canImport(UIKit)
+        let alpha = pointerOnControl ? 1 : Self.restingAlpha
+        if segmented.alphaValue != alpha {
+          if fades {
+            NSAnimationContext.runAnimationGroup { _ in segmented.animator().alphaValue = alpha }
+          } else {
+            segmented.alphaValue = alpha
+          }
+        }
+      #endif
       #if canImport(UIKit)
         segmented.selectedSegmentIndex = control.shown == .figure ? 0 : 1
       #else
@@ -64,15 +80,6 @@ final class FigureControls {
     let segmented = spare.popLast() ?? make(target: target, action: action)
     if segmented.superview !== view { view.addSubview(segmented) }
     segmented.isHidden = false
-    #if canImport(UIKit)
-      segmented.alpha = 1
-    #else
-      if fades {
-        NSAnimationContext.runAnimationGroup { _ in segmented.animator().alphaValue = 1 }
-      } else {
-        segmented.alphaValue = 1
-      }
-    #endif
     return segmented
   }
 
@@ -104,13 +111,15 @@ final class FigureControls {
     #if canImport(UIKit)
       let segmented = UISegmentedControl(items: labels)
       segmented.setTitleTextAttributes(
-        [.font: UIFont.systemFont(ofSize: 11, weight: .medium)], for: .normal)
+        [.font: UIFont.systemFont(ofSize: 10, weight: .medium)], for: .normal)
       segmented.addTarget(target, action: action, for: .valueChanged)
     #else
       let segmented = NSSegmentedControl(
         labels: labels, trackingMode: .selectOne, target: target, action: action)
-      segmented.controlSize = .small
-      segmented.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
+      segmented.controlSize = .mini
+      segmented.font = .systemFont(ofSize: NSFont.systemFontSize(for: .mini))
+      // Out from hidden, so the first placement fades it in.
+      segmented.alphaValue = 0
     #endif
     return segmented
   }
@@ -123,9 +132,11 @@ extension RFCTextViewCoordinator {
   func updateFigureControls(fades: Bool = false) {
     guard let textView, let built, let layout = textView.textLayoutManager else { return }
     #if !canImport(UIKit)
-      figureControls.hovered = textView.window.flatMap {
+      let pointer = textView.window.flatMap {
         figureBlock(atWindowPoint: $0.mouseLocationOutsideOfEventStream)
       }
+      figureControls.hovered = pointer?.ordinal
+      figureControls.pointerOnControl = pointer?.onControl ?? false
     #endif
     let origin = containerOrigin(of: textView)
     var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
@@ -177,7 +188,10 @@ extension RFCTextViewCoordinator {
     #if canImport(UIKit)
       CGPoint(x: textView.textContainerInset.left, y: textView.textContainerInset.top)
     #else
-      textView.textContainerOrigin
+      // From the inset, which `layOut` has just set, rather than
+      // `textContainerOrigin`, which AppKit brings up to date only when it next lays
+      // the view out: during a live resize, a frame late.
+      CGPoint(x: textView.textContainerInset.width, y: textView.textContainerInset.height)
     #endif
   }
 
@@ -200,8 +214,9 @@ extension RFCTextViewCoordinator {
     }
 
     /// The block with a control under a point in window coordinates: its lines, or
-    /// the control showing for it, which reaches above its first line.
-    private func figureBlock(atWindowPoint point: NSPoint) -> Int? {
+    /// the control showing for it, which reaches above its first line; and whether
+    /// the point is on that control.
+    private func figureBlock(atWindowPoint point: NSPoint) -> (ordinal: Int, onControl: Bool)? {
       guard let textView, let built, let layout = textView.textLayoutManager,
         let window = textView.window,
         // A window of another app over this one hides the pointer from it.
@@ -212,16 +227,19 @@ extension RFCTextViewCoordinator {
       guard textView.visibleRect.contains(viewPoint),
         headerHost?.view.frame.contains(viewPoint) != true
       else { return nil }
-      if figureControls.frame(of: figureControls.hovered)?.contains(viewPoint) == true {
-        return figureControls.hovered
+      if let hovered = figureControls.hovered,
+        figureControls.frame(of: hovered)?.contains(viewPoint) == true
+      {
+        return (hovered, true)
       }
-      let origin = textView.textContainerOrigin
+      let origin = containerOrigin(of: textView)
       guard
         let fragment = layout.textLayoutFragment(
           for: CGPoint(x: viewPoint.x - origin.x, y: viewPoint.y - origin.y))
       else { return nil }
       return FigureControl.ordinal(
-        at: layout.offset(of: fragment.rangeInElement.location), in: built.text)
+        at: layout.offset(of: fragment.rangeInElement.location), in: built.text
+      ).map { ($0, false) }
     }
   #endif
 }

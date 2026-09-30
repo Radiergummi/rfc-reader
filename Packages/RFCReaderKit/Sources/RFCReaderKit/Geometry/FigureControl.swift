@@ -25,9 +25,9 @@ public enum FigureControl {
     public let control: Control
   }
 
-  /// AppKit's small segmented control, fitted to the two labels.
-  public static let width: CGFloat = 110
-  public static let height: CGFloat = 20
+  /// AppKit's mini segmented control, fitted to the two labels.
+  public static let width: CGFloat = 91
+  public static let height: CGFloat = 16
   /// From the card's top and right edges: half the card's padding, where the
   /// card's own rounding leaves room.
   public static let inset: CGFloat = FragmentGeometry.cardPadding / 2

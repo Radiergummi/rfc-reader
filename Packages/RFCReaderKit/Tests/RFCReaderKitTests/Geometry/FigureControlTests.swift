@@ -24,11 +24,11 @@ struct FigureControlTests {
     #expect(control.height == FigureControl.height)
   }
 
-  /// The size AppKit's small segmented control fits "Figure" and "Source" in, so
+  /// The size AppKit's mini segmented control fits "Figure" and "Source" in, so
   /// the native control fills the rect the card and its strip were made for.
-  @Test func `the control is the size of a small native segmented control`() {
-    #expect(FigureControl.width == 110)
-    #expect(FigureControl.height == 20)
+  @Test func `the control is the size of a mini native segmented control`() {
+    #expect(FigureControl.width == 91)
+    #expect(FigureControl.height == 16)
     #expect(FigureControl.height <= FigureControl.strip)
   }
 
