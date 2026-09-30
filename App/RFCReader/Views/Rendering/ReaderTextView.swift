@@ -11,27 +11,36 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: UITextView {
+    /// Whether the bars are hidden, set by the coordinator the moment `ReaderChrome`
+    /// decides so, before the safe area follows: the top inset holds at the bars'
+    /// height meanwhile (`ReaderChrome.topInset`).
+    var barsHidden = false
+
     /// The reader runs under both bars and the home indicator (`DocumentView` lets
     /// it into the vertical safe areas), so the bars are glass over the text rather
-    /// than a solid strip above it, and the bars going or coming back moves nothing:
-    /// only these insets change, and the text stays where it is. At the top the
-    /// inset keeps the header clear of the top bar; at the bottom it is room to
-    /// scroll the last line clear of the bar and the home indicator.
+    /// than a solid strip above it. At the top the inset keeps the header clear of
+    /// the top bar; at the bottom it is room to scroll the last line clear of the bar
+    /// and the home indicator.
     ///
     /// By hand, because `contentInsetAdjustmentBehavior` is `.never`. The top inset
     /// moves `contentOffset`'s origin, so the scroll arithmetic asks for the
     /// viewport through `PlatformTextView+Scrolling`, which measures from the inset's
-    /// edge, as the Mac does from the toolbar's. The offset stays when the inset
-    /// changes, except at the top of the document, which stays at the top — the
-    /// inset arriving on the first layout included.
+    /// edge, as the Mac does from the toolbar's. When the top inset changes — the
+    /// first layout, a rotation, not the bars going, which it holds through — the
+    /// offset moves with it, so the line at the top of the uncovered viewport stays
+    /// there: a place restored before the inset arrived is not put under the bar.
+    /// The bottom inset changing leaves the offset alone, so the bottom bar going
+    /// moves nothing.
     override func safeAreaInsetsDidChange() {
       super.safeAreaInsetsDidChange()
       let insets = safeAreaInsets
-      if contentInset.top != insets.top {
-        let atTop = contentOffset.y <= -contentInset.top
-        contentInset.top = insets.top
-        verticalScrollIndicatorInsets.top = insets.top
-        if atTop { contentOffset.y = -insets.top }
+      let top = ReaderChrome.topInset(
+        current: contentInset.top, safeArea: insets.top, barsHidden: barsHidden)
+      if contentInset.top != top {
+        let moved = top - contentInset.top
+        contentInset.top = top
+        verticalScrollIndicatorInsets.top = top
+        contentOffset.y -= moved
       }
       if contentInset.bottom != insets.bottom {
         contentInset.bottom = insets.bottom

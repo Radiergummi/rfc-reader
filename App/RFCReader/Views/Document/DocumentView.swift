@@ -63,11 +63,13 @@ struct DocumentView: View {
   /// Whether reading on may hide the bars: on iPhone, where they cost the most of
   /// the screen, and not under VoiceOver, where a control that leaves may be gone
   /// before it is reached. Beside other columns the bars are a small part of it.
+  /// Not on an iPad in a compact width either, Slide Over or a narrow split: that
+  /// is where a keyboard is, and the bottom bar's shortcuts leave with its items.
   private var hidesChrome: Bool {
     #if os(macOS)
       false
     #else
-      isCompact && !voiceOverEnabled
+      isCompact && UIDevice.current.userInterfaceIdiom == .phone && !voiceOverEnabled
     #endif
   }
   /// Where the reader is, written the moment tracking computes it. This is the

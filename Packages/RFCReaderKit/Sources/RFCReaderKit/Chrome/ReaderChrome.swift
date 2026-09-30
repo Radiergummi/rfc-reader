@@ -29,6 +29,20 @@ public struct ReaderChrome: Equatable, Sendable {
       self.distanceToEnd = distanceToEnd
       self.isUserDriven = isUserDriven
     }
+
+    /// The scroll a scroll view is at, from its offset, its insets and its size.
+    /// The position is the offset alone, which the insets changing leaves where it
+    /// is.
+    public init(
+      offset: CGFloat, topInset: CGFloat, bottomInset: CGFloat, contentHeight: CGFloat,
+      viewportHeight: CGFloat, isUserDriven: Bool
+    ) {
+      self.init(
+        position: offset,
+        distanceFromTop: offset + topInset,
+        distanceToEnd: contentHeight + bottomInset - viewportHeight - offset,
+        isUserDriven: isUserDriven)
+    }
   }
 
   /// How far a scroll down runs before the bars go: a nudge to settle a line is
@@ -38,10 +52,10 @@ public struct ReaderChrome: Equatable, Sendable {
   /// because someone scrolling back is usually looking for them, but not so little
   /// that a finger's wobble at the end of a drag brings them back.
   public static let showDistance: CGFloat = 20
-  /// How near either end of the document the bars stay. More than either bar is
-  /// tall: the bars going takes their height off the insets, and so off the
-  /// distance to either end, and nearer than this that would land on the end,
-  /// where the bars come straight back.
+  /// How near either end of the document the bars stay. More than the bottom bar
+  /// is tall: the bars going takes its height off the bottom inset, and so off the
+  /// distance to the end, and nearer than this that would land on the end, where
+  /// the bars come straight back.
   public static let hideFloor: CGFloat = 120
 
   public private(set) var isHidden = false
@@ -105,6 +119,19 @@ public struct ReaderChrome: Equatable, Sendable {
   public mutating func jumped() {
     isHidden = false
     restartRun()
+  }
+
+  /// The reader's top content inset for the top safe area, which is the top bar's
+  /// bottom edge.
+  ///
+  /// While the bars are hidden it holds at their height rather than following the
+  /// safe area in: what the uncovered viewport is measured from does not move, so a
+  /// jump made while they are hidden lands its place just below where the bar comes
+  /// back, and the bars going or coming back is no change of inset at all.
+  public static func topInset(
+    current: CGFloat, safeArea: CGFloat, barsHidden: Bool
+  ) -> CGFloat {
+    barsHidden ? max(current, safeArea) : safeArea
   }
 
   private static func mayHide(at scroll: Scroll) -> Bool {

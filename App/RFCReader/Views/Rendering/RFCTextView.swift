@@ -213,6 +213,10 @@ struct ReaderInputs {
 
       let host = UIHostingController(rootView: inputs.header)
       host.view.backgroundColor = .clear
+      // No safe area: the reader runs under the top bar, and the header scrolled
+      // under it would otherwise be padded down by the overlap, and measured with
+      // that padding by `layOut(width:measure:)`, which makes it the top inset.
+      host.safeAreaRegions = []
       textView.addSubview(host.view)
 
       // Shows and hides the bars; see `RFCTextViewCoordinator.tappedText(_:)`.

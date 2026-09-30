@@ -176,3 +176,45 @@ struct ReaderChromeTests {
     #expect(!reader.chrome.isHidden)
   }
 }
+
+/// What the text view feeds `ReaderChrome` and takes from it: the scroll measured
+/// from its offset and insets, and the top inset it keeps.
+@Suite("Reader chrome, measured")
+struct ReaderChromeMeasureTests {
+  @Test func `a scroll is measured from the offset and the insets`() {
+    let scroll = ReaderChrome.Scroll(
+      offset: 400, topInset: 113, bottomInset: 86, contentHeight: 5_000,
+      viewportHeight: 852, isUserDriven: true)
+    #expect(scroll.position == 400)
+    #expect(scroll.distanceFromTop == 513)
+    #expect(scroll.distanceToEnd == 3_834)
+  }
+
+  /// At rest at the top the offset is minus the top inset, which is no distance at
+  /// all; at the end, the offset that shows the bottom inset's strip is none left.
+  @Test func `the top and the end are measured as zero`() {
+    let top = ReaderChrome.Scroll(
+      offset: -113, topInset: 113, bottomInset: 86, contentHeight: 5_000,
+      viewportHeight: 852, isUserDriven: false)
+    #expect(top.distanceFromTop == 0)
+    let end = ReaderChrome.Scroll(
+      offset: 5_000 + 86 - 852, topInset: 113, bottomInset: 86, contentHeight: 5_000,
+      viewportHeight: 852, isUserDriven: false)
+    #expect(end.distanceToEnd == 0)
+  }
+
+  @Test func `the top inset follows the safe area while the bars show`() {
+    #expect(ReaderChrome.topInset(current: 0, safeArea: 113, barsHidden: false) == 113)
+    #expect(ReaderChrome.topInset(current: 113, safeArea: 59, barsHidden: false) == 59)
+  }
+
+  /// The bar leaving takes the safe area in to the status bar; the inset stays at
+  /// the bar's height, so nothing measured from it moves.
+  @Test func `the top inset holds while the bars are hidden`() {
+    #expect(ReaderChrome.topInset(current: 113, safeArea: 59, barsHidden: true) == 113)
+  }
+
+  @Test func `a safe area growing while they are hidden still widens it`() {
+    #expect(ReaderChrome.topInset(current: 59, safeArea: 113, barsHidden: true) == 113)
+  }
+}

@@ -602,6 +602,30 @@ final class RFCTextViewCoordinator: NSObject {
     textView.scroll(toY: target, animated: animated)
   }
 
+  /// Hit-tests a point in text-container coordinates down to a character offset,
+  /// fragment → line → glyph, or nil beside the text. `NSTextView`'s older
+  /// `characterIndex(for:)` goes through the TextKit 1 compatibility shim and is
+  /// unreliable on a view built `usingTextLayoutManager: true`, and `UITextView`'s
+  /// `closestPosition(to:)` snaps a point beside the text onto the nearest
+  /// character; this walks the same TextKit 2 object graph `RFCTextLayoutFragment`
+  /// draws against, in reverse.
+  private func characterOffset(atContainerPoint containerPoint: CGPoint) -> Int? {
+    guard let layout = textView?.textLayoutManager,
+      let fragment = layout.textLayoutFragment(for: containerPoint)
+    else { return nil }
+    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+    guard fragmentStart >= 0 else { return nil }
+    let pointInFragment = CGPoint(
+      x: containerPoint.x - fragment.layoutFragmentFrame.minX,
+      y: containerPoint.y - fragment.layoutFragmentFrame.minY
+    )
+    return FragmentGeometry.characterOffset(
+      in: fragment.textLineFragments,
+      fragmentStart: fragmentStart,
+      at: pointInFragment
+    )
+  }
+
   // MARK: - References
 
   /// The cross reference at this absolute character offset, and its whole
@@ -759,18 +783,13 @@ final class RFCTextViewCoordinator: NSObject {
       reportChrome()
     }
 
-    /// The scroll as `ReaderChrome` wants it. The position is the offset alone,
-    /// which stays put while the bars going or coming back changes the insets
-    /// (`ReaderTextView.safeAreaInsetsDidChange`).
     private func followChrome(_ scrollView: UIScrollView) {
-      let offset = scrollView.contentOffset.y
       let insets = scrollView.adjustedContentInset
       chrome.scrolled(
         ReaderChrome.Scroll(
-          position: offset,
-          distanceFromTop: offset + insets.top,
-          distanceToEnd: scrollView.contentSize.height + insets.bottom
-            - scrollView.bounds.height - offset,
+          offset: scrollView.contentOffset.y, topInset: insets.top, bottomInset: insets.bottom,
+          contentHeight: scrollView.contentSize.height,
+          viewportHeight: scrollView.bounds.height,
           isUserDriven: scrollView.isTracking || scrollView.isDragging
             || scrollView.isDecelerating))
       reportChrome()
@@ -780,6 +799,9 @@ final class RFCTextViewCoordinator: NSObject {
       let hidden = chrome.isHidden
       guard hidden != reportedChromeHidden else { return }
       reportedChromeHidden = hidden
+      // Now, not with the report: the safe area follows the bars, which follow the
+      // report, and the top inset must already know to hold.
+      (textView as? ReaderTextView)?.barsHidden = hidden
       Task { self.onChromeHidden(hidden) }
     }
 
@@ -790,16 +812,11 @@ final class RFCTextViewCoordinator: NSObject {
     @objc func tappedText(_ tap: UITapGestureRecognizer) {
       guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
       let point = tap.location(in: textView)
-      guard point.y >= textView.textContainerInset.top else { return }
-      if let position = textView.closestPosition(to: point) {
-        let offset = textView.offset(from: textView.beginningOfDocument, to: position)
-        let length = textView.textLayoutManager?.attributedText?.length ?? 0
-        // Either side of the insertion point nearest the tap: a tap on a link's
-        // last character lands after it.
-        let onLink = [offset - 1, offset].contains {
-          (0..<length).contains($0) && link(at: $0) != nil
-        }
-        guard !onLink else { return }
+      let inset = textView.textContainerInset
+      guard point.y >= inset.top else { return }
+      let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
+      if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
+        return
       }
       chrome.tapped()
       reportChrome()
@@ -811,7 +828,8 @@ final class RFCTextViewCoordinator: NSObject {
       _ gestureRecognizer: UIGestureRecognizer,
       shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
-      gestureRecognizer === chromeTap
+      // The delegate of `chromeTap` alone, so always that one.
+      true
     }
 
     /// After a double tap has failed: the first tap of one that selects a word is
@@ -1043,29 +1061,8 @@ final class RFCTextViewCoordinator: NSObject {
       ).map { HoverTarget(box: $0.box, range: $0.range) }
     }
 
-    /// Hit-tests a point in text-container coordinates down to a character offset,
-    /// fragment → line → glyph. `NSTextView`'s older `characterIndex(for:)` goes
-    /// through the TextKit 1 compatibility shim and is unreliable on a view built
-    /// `usingTextLayoutManager: true`; this walks the same TextKit 2 object graph
-    /// `RFCTextLayoutFragment` draws against, in reverse.
     private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
-      guard let layout = textView?.textLayoutManager,
-        let fragment = layout.textLayoutFragment(for: containerPoint)
-      else { return nil }
-      let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-      guard fragmentStart >= 0 else { return nil }
-      let pointInFragment = CGPoint(
-        x: containerPoint.x - fragment.layoutFragmentFrame.minX,
-        y: containerPoint.y - fragment.layoutFragmentFrame.minY
-      )
-      guard
-        let offset = FragmentGeometry.characterOffset(
-          in: fragment.textLineFragments,
-          fragmentStart: fragmentStart,
-          at: pointInFragment
-        )
-      else { return nil }
-      return reference(at: offset)
+      characterOffset(atContainerPoint: containerPoint).flatMap { reference(at: $0) }
     }
 
     /// The rect of a reference's run, in text-container coordinates — the
