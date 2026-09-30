@@ -108,31 +108,28 @@ extension Reference {
   /// its date, with commas between.
   ///
   /// The tag is what the row shows and the prose cites (`HTTP`, `1`), so it comes
-  /// first, and only where it is not the document's name already: `RFC0001` is `RFC
-  /// 1`, which VoiceOver says as words rather than spelling the anchor out. Commas,
-  /// not the row's middle dots, which can be read aloud. An entry the legacy parser
-  /// could not structure is its own words, which hold its series and date already.
+  /// first. A tag that names a document is said as that document's name, which
+  /// VoiceOver says as words rather than spelling the anchor out: `RFC0001` is `RFC
+  /// 1`. No document is named twice, so a series is left out once the tag or the
+  /// document's name has said it. Commas, not the row's middle dots, which can be
+  /// read aloud. An entry the legacy parser could not structure is its own words,
+  /// which hold its series and date already.
   public var accessibilityLabel: String {
-    let id = documentID
-    var names: [String] = []
-    if id == nil || DocumentID(label: displayAnchor) != id {
-      names.append(displayAnchor)
-    }
-    if let id { names.append(id.displayName) }
+    let tag = DocumentID(label: displayAnchor)
+    let said = Set([tag, documentID].compactMap { $0 })
+    var names = [tag?.displayName ?? displayAnchor]
+    if let id = documentID, id != tag { names.append(id.displayName) }
     guard !title.isEmpty else {
       return (names + [rawText ?? ""]).filter { !$0.isEmpty }.joined(separator: ", ")
     }
     let authors = authors.map(\.displayName).joined(separator: ", ")
     let series =
       seriesInfo
-      // Compared as documents, the way `documentID` reads them, so `rfc 0791` is
-      // not said again after `RFC 791`.
-      .filter { info in
-        guard info.name != "DOI" else { return false }
-        guard let id else { return true }
-        return Reference(anchor: "", title: "", seriesInfo: [info]).documentID != id
+      .filter { $0.name != "DOI" }
+      .compactMap { info -> String? in
+        guard let id = info.documentID else { return "\(info.name) \(info.value)" }
+        return said.contains(id) ? nil : id.displayName
       }
-      .map { "\($0.name) \($0.value)" }
     let parts = names + [title, authors] + series + [date?.formatted ?? ""]
     return parts.filter { !$0.isEmpty }.joined(separator: ", ")
   }

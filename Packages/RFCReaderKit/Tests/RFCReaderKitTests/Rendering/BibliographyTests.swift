@@ -45,8 +45,31 @@ struct BibliographyTests {
         == "RFC 791, Postel, J., Internet Protocol, STD 5, RFC 791, September 1981.")
   }
 
-  /// An entry in no series is spoken by its tag
-  /// keeps whatever series it does name.
+  /// A tag that names a document in another series is spoken as that document's
+  /// name, not spelled out, and is not said again among the entry's series.
+  @Test func `a tag in another series is spoken once, by its document's name`() {
+    let entry = Reference(
+      anchor: "STD5", title: "Internet Protocol", authors: [Author(name: "J. Postel")],
+      date: PublicationDate(year: 1981, month: 9),
+      seriesInfo: [SeriesInfo(name: "STD", value: "5"), SeriesInfo(.rfc(791))])
+    #expect(
+      entry.accessibilityLabel == "STD 5, RFC 791, Internet Protocol, J. Postel, September 1981")
+  }
+
+  /// Another series the entry names is spoken by that document's name, whatever
+  /// case or padding the source gave it.
+  @Test func `another series is spoken by its document's name`() {
+    let entry = Reference(
+      anchor: "BCP14", title: "Key Words",
+      seriesInfo: [
+        SeriesInfo(name: "BCP", value: "14"), SeriesInfo(name: "rfc", value: "02119"),
+        SeriesInfo(name: "rfc", value: "08174"),
+      ])
+    #expect(entry.accessibilityLabel == "BCP 14, RFC 2119, Key Words, RFC 8174")
+  }
+
+  /// An entry in none of the RFC Editor's series is spoken by its tag, and keeps
+  /// the series it does name.
   @Test func `an entry outside the series is spoken by its tag`() {
     let entry = Reference(
       anchor: "I-D.ietf-quic-tls", displayAnchor: "QUIC-TLS", title: "Using TLS to Secure QUIC",
