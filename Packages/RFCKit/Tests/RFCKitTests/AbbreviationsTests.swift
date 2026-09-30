@@ -57,6 +57,14 @@ struct AbbreviationsTests {
     #expect(abbreviations["SDTV"] == nil)
   }
 
+  /// RFC 2511 expands POP only in the heading of its section 4, and uses it alone
+  /// after that (#319).
+  @Test func `a legacy heading's expansion is found`() throws {
+    let abbreviation = try #require(try Fixtures.document("rfc2511.txt").abbreviations["POP"])
+    #expect(abbreviation.expansion == "Proof of Possession")
+    #expect(abbreviation.sectionAnchor == "section-4")
+  }
+
   /// RFC 8999 expands AEAD first inside a bibliography entry's abstract, which is
   /// another document's text; the document's own first expansion is in its appendix.
   @Test func `bibliography entries are not the documents words`() throws {
@@ -82,6 +90,53 @@ struct AbbreviationsTests {
       ],
       source: .xml)
     #expect(Abbreviations.defined(in: document)["TLS"] == nil)
+  }
+
+  private func document(abstract: [Block] = [], heading: String) -> RFCDocument {
+    RFCDocument(
+      header: DocumentHeader(title: "Headed", abstract: abstract),
+      sections: [
+        Section(
+          anchor: "section-3", number: "3", title: heading,
+          blocks: [.paragraph(Paragraph([.text("Each connection uses TLS.")]))])
+      ],
+      source: .xml)
+  }
+
+  /// A heading is prose like the rest: one that expands an abbreviation the body only
+  /// uses gives it its expansion, defined where the heading is (#319).
+  @Test func `a heading's expansion is found, in its own section`() throws {
+    let found = Abbreviations.defined(in: document(heading: "Transport Layer Security (TLS)"))
+    let tls = try #require(found["TLS"])
+    #expect(tls.expansion == "Transport Layer Security")
+    #expect(tls.sectionAnchor == "section-3")
+  }
+
+  /// The first expansion still wins: one in the abstract comes before the heading.
+  @Test func `an earlier expansion wins over a heading's`() throws {
+    let abstract: [Block] = [
+      .paragraph(Paragraph([.text("It runs over Transport Layer Security (TLS).")]))
+    ]
+    let found = Abbreviations.defined(
+      in: document(abstract: abstract, heading: "Transport Layer Security (TLS)"))
+    #expect(try #require(found["TLS"]).sectionAnchor == nil)
+  }
+
+  /// The heading is read before its section's body, as the reader meets it.
+  @Test func `a heading's expansion wins over its body's`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Headed"),
+      sections: [
+        Section(
+          anchor: "section-3", number: "3", title: "Transport Layer Security (TLS)",
+          blocks: [
+            .paragraph(Paragraph([.text("Each connection uses Thread Local Storage (TLS).")]))
+          ])
+      ],
+      source: .xml)
+    #expect(
+      try #require(Abbreviations.defined(in: document)["TLS"]).expansion
+        == "Transport Layer Security")
   }
 
   // MARK: The matching itself
