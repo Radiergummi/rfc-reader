@@ -88,7 +88,7 @@ public struct RFCXMLSerializer: Sendable {
       writeSection(abstract, writer: &writer, context: &context)
     }
     for section in document.sections[..<backStart] {
-      writeTopLevel(section, writer: &writer, context: &context)
+      writeOrLift(section, writer: &writer, context: &context)
     }
     writer.close("middle")
 
@@ -97,17 +97,13 @@ public struct RFCXMLSerializer: Sendable {
     // those lifted from its sections (#315). Its sections are written apart and
     // first, so what they lift can still go ahead of them.
     let back = document.sections[backStart...]
-    let ownReferences = back.prefix(while: Self.isReferences)
-    let liftedFromMiddle = context.lifted
-    context.lifted = []
     var sections = Writer(depth: writer.depth + 1)
-    for section in back.dropFirst(ownReferences.count) {
-      writeTopLevel(section, writer: &sections, context: &context)
+    for section in back {
+      writeOrLift(section, writer: &sections, context: &context)
     }
-    let bibliographies = liftedFromMiddle + ownReferences + context.lifted
-    if !back.isEmpty || !bibliographies.isEmpty {
+    if !context.lifted.isEmpty || !back.isEmpty {
       writer.open("back")
-      for section in bibliographies {
+      for section in context.lifted {
         writeReferences(section, writer: &writer, context: &context)
       }
       writer.append(sections)
@@ -227,13 +223,14 @@ public struct RFCXMLSerializer: Sendable {
 
   // MARK: - Sections
 
-  /// A chapter, in `<middle>` or among the back's sections. A references section
-  /// there is lifted into the back's references, keeping its anchor, number and name
-  /// (#315): the schema has room for `<references>` nowhere else. One ahead of the
-  /// back (RFC 2511's `9. References`, before its appendices and theirs) written as a
-  /// section would wrap its list in a second, unnumbered `<references>`, and read back
-  /// as a section holding a subsection it never had.
-  private func writeTopLevel(_ section: Section, writer: inout Writer, context: inout Context) {
+  /// A section at any depth, in `<middle>` or among the back's sections, written in
+  /// place, or, when it is a references section, set aside for the back's references
+  /// (`Context.lifted`), keeping its anchor, number and name (#315): the schema has
+  /// room for `<references>` nowhere else. One ahead of the back (RFC 2511's `9.
+  /// References`, before its appendices and theirs) written as a section would wrap
+  /// its list in a second, unnumbered `<references>`, and read back as a section
+  /// holding a subsection it never had.
+  private func writeOrLift(_ section: Section, writer: inout Writer, context: inout Context) {
     if Self.isReferences(section) {
       context.lifted.append(section)
     } else {
@@ -257,7 +254,7 @@ public struct RFCXMLSerializer: Sendable {
     // A bibliography under a section, a subsection of References or one under an
     // appendix, goes to the back, and the section keeps the rest (#315).
     for subsection in section.subsections {
-      writeTopLevel(subsection, writer: &writer, context: &context)
+      writeOrLift(subsection, writer: &writer, context: &context)
     }
     writer.close("section")
   }
@@ -285,7 +282,7 @@ public struct RFCXMLSerializer: Sendable {
       // Named after the list, which is unique, rather than counted, so it stays
       // what it was from one build to the next.
       writer.open("references", [("anchor", "\(section.anchor)-entries")])
-      writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+      writer.line("<name>\(inlineXML(title, context: &context))</name>")
     }
     for reference in entries {
       writeReference(reference, writer: &writer, context: &context)
@@ -509,8 +506,8 @@ public struct RFCXMLSerializer: Sendable {
   private struct Context {
     var referenceAnchors: [DocumentID: String]
     var warnings: [String] = []
-    /// The references sections found outside the back, in document order, which the
-    /// back writes after its own (#315).
+    /// Every references section, the back's own among them, in document order, which
+    /// the back writes ahead of its sections (#315).
     var lifted: [Section] = []
     private var autoAnchor = 0
     /// Each numbered section's `pn`, by its anchor, claimed in document order: the

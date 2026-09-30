@@ -113,6 +113,39 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// The schema puts `<references>` in `<back>` only, but XML from elsewhere, and
+  /// legacy conversions made before #315, can hold one in `<middle>` or in a chapter.
+  /// A citation into it still resolves, and the one in a chapter reads back as that
+  /// chapter's subsection.
+  @Test func `a reference list outside the back is read`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Misplaced</title></front>
+        <middle>
+          <section anchor="intro"><name>Intro</name>
+            <t>See <xref target="A"/> and <xref target="B"/>.</t>
+            <references anchor="intro-refs"><name>Chapter References</name>
+              <reference anchor="A"><front><title>A</title></front>
+                <seriesInfo name="RFC" value="1111"/></reference>
+            </references>
+          </section>
+          <references anchor="refs"><name>References</name>
+            <reference anchor="B"><front><title>B</title></front>
+              <seriesInfo name="RFC" value="2222"/></reference>
+          </references>
+        </middle>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let cited = document.everyCrossReference.compactMap { xref -> DocumentID? in
+      if case .document(let id, _, _) = xref.target { id } else { nil }
+    }
+    #expect(cited == [.rfc(1111), .rfc(2222)])
+    let intro = try #require(document.section(anchor: "intro"))
+    #expect(intro.subsections.map(\.anchor) == ["intro-refs"])
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))

@@ -48,9 +48,8 @@ struct SerializerSchemaShapeTests {
   /// its appendices, one of which holds references of its own, so the back begins
   /// after it. The schema has room for a `<references>` in `<back>` only, so it is
   /// lifted there, keeping its anchor, number and name (#315). The `[HMAC]` its prose
-  /// cites is RFC 2104 only while the parser reads reference lists wherever they sit,
-  /// and the section reads back as the one references section it was, not as a
-  /// section holding a second one.
+  /// cites is still RFC 2104 on a round trip, and the section reads back as the one
+  /// references section it was, not as a section holding a second one.
   @Test func `a references section ahead of the back is lifted into it and still resolves`()
     throws
   {
@@ -86,22 +85,18 @@ struct SerializerSchemaShapeTests {
       }
     }
     #expect(chapters(reparsed) == chapters(document))
+    let bibliographies = { (document: RFCDocument) in
+      document.allSections.filter(RFCXMLSerializer.isReferences).map { section in
+        "\(section.anchor) \(section.subsections.count)"
+      }.sorted()
+    }
+    #expect(bibliographies(reparsed) == bibliographies(document))
   }
 
   // MARK: Bibliographies outside the back
 
   private static func entry(_ anchor: String) -> Reference {
     Reference(anchor: anchor, title: "Entry \(anchor)")
-  }
-
-  private static func bibliography(
-    _ number: String, entries: [String] = ["A"], subsections: [Section] = []
-  ) -> Section {
-    Section(
-      anchor: "section-\(number)", number: number, title: "References \(number)",
-      blocks: entries.isEmpty
-        ? [] : [.references(ReferenceList(title: "References", entries: entries.map(entry)))],
-      subsections: subsections)
   }
 
   private static func serialized(_ sections: [Section]) throws -> XMLTree.Element {
@@ -117,11 +112,11 @@ struct SerializerSchemaShapeTests {
   @Test func `a bibliography under a section is lifted into the back`() throws {
     var chapter = Self.chapter("1")
     chapter.blocks = [.paragraph(Paragraph([.text("Prose.")]))]
-    chapter.subsections = [Self.bibliography("1.3", entries: ["B"])]
+    chapter.subsections = [Self.references("1.3", entries: ["B"])]
     var appendix = Self.appendix("A")
     appendix.blocks = [.paragraph(Paragraph([.text("More prose.")]))]
-    appendix.subsections = [Self.bibliography("A.2", entries: ["C"])]
-    let rfc = try Self.serialized([chapter, Self.bibliography("2"), appendix])
+    appendix.subsections = [Self.references("A.2", entries: ["C"])]
+    let rfc = try Self.serialized([chapter, Self.references("2", entries: ["A"]), appendix])
 
     let middle = try #require(rfc.first("middle"))
     #expect(Self.nested("references", in: middle).isEmpty)
@@ -144,8 +139,8 @@ struct SerializerSchemaShapeTests {
     var later = Self.chapter("11")
     later.anchor = "section-11-2"
     let rfc = try Self.serialized([
-      Self.chapter("1"), Self.bibliography("11", entries: ["B"]), later,
-      Self.bibliography("12", entries: ["C"]),
+      Self.chapter("1"), Self.references("11", entries: ["B"]), later,
+      Self.references("12", entries: ["C"]),
     ])
     let ids = Self.declaredIDs(in: rfc)
     #expect(ids.count == Set(ids).count, "\(ids)")
@@ -155,8 +150,8 @@ struct SerializerSchemaShapeTests {
   /// A list holding entries beside nested lists is the one shape the schema refuses
   /// there: its own entries go in a nested `<references>` named after it.
   @Test func `entries beside nested lists are wrapped in a list of their own`() throws {
-    let parent = Self.bibliography(
-      "3", entries: ["A", "B"], subsections: [Self.bibliography("3.1", entries: ["C"])])
+    let parent = Self.references(
+      "3", entries: ["A", "B"], subsections: [Self.references("3.1", entries: ["C"])])
     let rfc = try Self.serialized([Self.chapter("1"), parent])
     let list = try #require(rfc.first("back")?.first("references"))
     #expect(list.all("reference").isEmpty)
@@ -166,6 +161,22 @@ struct SerializerSchemaShapeTests {
     #expect(nested.first?.first("name")?.text == "References 3")
     #expect(nested.first?.all("reference").map { $0["anchor"] } == ["A", "B"])
     #expect(nested.last?["pn"] == "section-3.1")
+  }
+
+  /// The wrapper repeats its list's name as written, the number too when a section
+  /// numbered alike took the list's part number and it is written unnumbered.
+  @Test func `a wrapper is named as its list is`() throws {
+    var repeated = Self.references(
+      "3", entries: ["B"], subsections: [Self.references("3.1", entries: ["C"])])
+    repeated.anchor = "section-3-2"
+    let rfc = try Self.serialized([
+      Self.chapter("1"), Self.references("3", entries: ["A"]), repeated,
+    ])
+    let list = try #require(rfc.first("back")?.all("references").last)
+    #expect(list["pn"] == nil)
+    let wrapper = try #require(list.all("references").first)
+    #expect(wrapper["anchor"] == "section-3-2-entries")
+    #expect(wrapper.first("name")?.text == list.first("name")?.text)
   }
 
   /// RFC 338's first chapter, `I.`, reads as an appendix, which left the middle
@@ -223,10 +234,13 @@ struct SerializerSchemaShapeTests {
     Section(anchor: "appendix-\(number)", number: number, title: "Appendix", isAppendix: true)
   }
 
-  private static func references(_ number: String) -> Section {
+  private static func references(
+    _ number: String, entries: [String] = [], subsections: [Section] = []
+  ) -> Section {
     Section(
-      anchor: "section-\(number)", number: number, title: "References",
-      blocks: [.references(ReferenceList(title: "References", entries: []))])
+      anchor: "section-\(number)", number: number, title: "References \(number)",
+      blocks: [.references(ReferenceList(title: "References", entries: entries.map(entry)))],
+      subsections: subsections)
   }
 
   /// The back is the last run of references sections and everything after it.
