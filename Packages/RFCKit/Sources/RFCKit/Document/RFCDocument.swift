@@ -576,6 +576,15 @@ public struct CrossReference: Sendable, Hashable, Codable {
     /// entry. Nil for a mention nothing in the bibliography matched, such as a bare
     /// "RFC 3986" in prose.
     case document(DocumentID, section: String?, entry: String? = nil)
+    /// A section of a bibliography entry outside the series: "Section 4.9 of
+    /// [FETCH]" (#473).
+    ///
+    /// `entry` is the anchor of the entry, as `.anchor` would name it, and what a
+    /// preview shows; `tag` is the name the document gives the entry (RFCXML's
+    /// `derivedContent`), which the label is worded around. `url` is the section's
+    /// own page (`derivedLink`), which a click opens, as the RFC Editor's rendering
+    /// does; without one, a click opens the entry.
+    case entrySection(entry: String, tag: String, section: String, url: URL?)
   }
 
   /// How the source asked a section reference to be worded.
@@ -634,13 +643,20 @@ public struct CrossReference: Sendable, Hashable, Codable {
     case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
-      let sectionLabel = Self.nonBreakingLabel("Section \(section)")
-      switch sectionFormat {
-      case .of: return "\(sectionLabel) of [\(name)]"
-      case .comma: return "[\(name)], \(sectionLabel)"
-      case .parens: return "[\(name)] (\(sectionLabel))"
-      case .bare: return section
-      }
+      return sectionLabel(section, of: name)
+    case .entrySection(_, let tag, let section, _):
+      return sectionLabel(section, of: Self.nonBreakingLabel(tag))
+    }
+  }
+
+  /// `section` of the document or entry called `name`, worded by `sectionFormat`.
+  private func sectionLabel(_ section: String, of name: String) -> String {
+    let sectionLabel = Self.nonBreakingLabel("Section \(section)")
+    switch sectionFormat {
+    case .of: return "\(sectionLabel) of [\(name)]"
+    case .comma: return "[\(name)], \(sectionLabel)"
+    case .parens: return "[\(name)] (\(sectionLabel))"
+    case .bare: return section
     }
   }
 

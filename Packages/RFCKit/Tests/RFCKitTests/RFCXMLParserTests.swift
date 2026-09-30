@@ -429,21 +429,44 @@ struct RFCXMLParserTests {
     #expect(table.label == "Table 7")
   }
 
-  /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
-  /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
-  /// `derivedContent` would put a second tag where the section belongs; wording the
-  /// section is #473's. In document order: RFC 9783 cites the whole entry, then a
-  /// section of it; RFC 9290 cites the registry's section, then the whole registry.
+  /// A citation of a section of such an entry names the section, worded by its
+  /// `sectionFormat` as a citation of a section of an RFC is: RFC 9783's "Section
+  /// 2.3.3 of [RATS-AR4SI]", and RFC 9290's `bare` citation of the registry's "CBOR
+  /// Tags", which is the section alone (#473). In document order: RFC 9783 cites the
+  /// whole entry, then a section of it; RFC 9290 cites the registry's section, then
+  /// the whole registry.
   @Test(arguments: [
-    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "RATS-AR4SI"]),
-    ("rfc9290.xml", "IANA.cbor-tags", ["IANA.cbor-tags", "[IANA.cbor-tags]"]),
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "Section\u{00A0}2.3.3 of [RATS-AR4SI]"]),
+    ("rfc9290.xml", "IANA.cbor-tags", ["CBOR Tags", "[IANA.cbor-tags]"]),
   ])
-  func `a citation of a section of an entry outside the series is not bracketed`(
-    fixture: String, target: String, labels: [String]
+  func `a citation of a section of an entry outside the series names the section`(
+    fixture: String, entry: String, labels: [String]
   ) throws {
     let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
-    let xrefs = document.everyCrossReference.filter { $0.target == .anchor(target) }
+    let xrefs = document.everyCrossReference.filter { xref in
+      switch xref.target {
+      case .anchor(let anchor): anchor == entry
+      case .entrySection(let cited, _, _, _): cited == entry
+      case .document: false
+      }
+    }
     #expect(xrefs.map(\.label) == labels)
+  }
+
+  /// RFC 9842 cites "Section 4.9 of [FETCH]", and the RFC Editor links it to the
+  /// section's own page, its `derivedLink`, rather than to the bibliography entry
+  /// (#473).
+  @Test func `a citation of a section of an entry outside the series links to the section`()
+    throws
+  {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml")).everyCrossReference
+    let page = try #require(URL(string: "https://fetch.spec.whatwg.org/#cors-check"))
+    let cors = try #require(
+      xrefs.first {
+        $0.target == .entrySection(entry: "FETCH", tag: "FETCH", section: "4.9", url: page)
+      })
+    #expect(cors.label == "Section\u{00A0}4.9 of [FETCH]")
+    #expect(cors.display == CrossReference.Display(text: cors.label, isChip: false))
   }
 
   /// RFC 9220 cites RFC 8441 with `format="title"`, whose `derivedContent` is the
