@@ -96,7 +96,7 @@ public final class DocumentTextBuilder {
     let builder = DocumentTextBuilder(style: style)
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
-    builder.reserveChipPadding()
+    reserveChipPadding(in: builder.output)
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
     // shallow, sharing every attribute value with the original, so it protected
@@ -138,7 +138,8 @@ public final class DocumentTextBuilder {
   /// directly, without going through a drawing context at all.
   ///
   /// An attachment measures nothing here, and a chip's padding kern is added only
-  /// once the build is done, so a chip is measured narrower than it is drawn.
+  /// once the build is done, so a chip is measured narrower than it is drawn; a
+  /// table cell adds both before it measures, in `cellWidth`.
   func lineWidth(_ text: NSAttributedString) -> CGFloat {
     let line = CTLineCreateWithAttributedString(text)
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
