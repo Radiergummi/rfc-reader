@@ -109,4 +109,23 @@ struct StrokeGeometryTests {
     }
     #expect(checked == 1)
   }
+
+  /// A dashed edge crosses several lines' fragments, and each draws its own piece:
+  /// started at phase 0 in every one, the pattern broke into a stub or a double dash
+  /// at every line. The phase is how far the piece starts from the stroke's start.
+  @Test func `a dashed piece carries its distance from the stroke's start as its phase`() {
+    let dashed = [
+      Stroke(start: GridPoint(x: 7, y: 9), end: GridPoint(x: 7, y: 13), style: .dashed)
+    ]
+    let piece = StrokeGeometry.segments(
+      dashed, line: 5, in: .init(top: 100, height: 20, columnZero: 10, advance: 8)
+    ).first
+    // The stroke starts half a line above line 5's box; the piece, half a point
+    // above it.
+    #expect(piece?.dashPhase == 9.5)
+    let first = StrokeGeometry.segments(
+      dashed, line: 4, in: .init(top: 80, height: 20, columnZero: 10, advance: 8)
+    ).first
+    #expect(first?.dashPhase == 0)
+  }
 }

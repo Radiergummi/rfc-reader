@@ -96,6 +96,16 @@ struct LoadStateTests {
     #expect(state.buildDelay == .milliseconds(650))
   }
 
+  /// A choice made once, Show Source from a menu, has nothing to settle: waiting
+  /// only made the menu item seem to do nothing for most of a second.
+  @Test func `a rebuild for a discrete change runs at once`() {
+    var state = LoadState()
+    state.finish(document)
+    state.install(built())
+    #expect(state.buildDelay(settling: false) == .zero)
+    #expect(state.buildDelay(settling: true) == .milliseconds(650))
+  }
+
   // MARK: - Whether a build runs
 
   @Test func `inputs nothing was built for start a build`() {

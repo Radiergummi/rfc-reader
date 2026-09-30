@@ -17,11 +17,16 @@ public enum StrokeGeometry {
     public var start: CGPoint
     public var end: CGPoint
     public var style: Stroke.Style
+    /// For a dashed piece, how far it starts from its stroke's start, so the pattern
+    /// runs on across the lines' fragments rather than starting again in each; 0
+    /// for every other style.
+    public var dashPhase: CGFloat
 
-    public init(start: CGPoint, end: CGPoint, style: Stroke.Style) {
+    public init(start: CGPoint, end: CGPoint, style: Stroke.Style, dashPhase: CGFloat = 0) {
       self.start = start
       self.end = end
       self.style = style
+      self.dashPhase = dashPhase
     }
   }
 
@@ -93,11 +98,13 @@ public enum StrokeGeometry {
         // Past the line's edge where the stroke runs on into the next line.
         let above = stroke.start.y < first ? overlap : 0
         let below = stroke.end.y > last ? overlap : 0
+        let top = yPosition(lower) - above
         result.append(
           Segment(
-            start: CGPoint(x: xPosition(stroke.start.x), y: yPosition(lower) - above),
+            start: CGPoint(x: xPosition(stroke.start.x), y: top),
             end: CGPoint(x: xPosition(stroke.start.x), y: yPosition(upper) + below),
-            style: stroke.style))
+            style: stroke.style,
+            dashPhase: stroke.style == .dashed ? max(0, top - yPosition(stroke.start.y)) : 0))
       }
     }
     return result

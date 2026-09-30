@@ -178,7 +178,7 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
         context.setLineDash(phase: 0, lengths: [])
         context.strokeLineSegments(between: [start, end])
       case .dashed:
-        context.setLineDash(phase: 0, lengths: [3, 2])
+        context.setLineDash(phase: segment.dashPhase, lengths: [3, 2])
         context.strokeLineSegments(between: [start, end])
       case .double:
         context.setLineDash(phase: 0, lengths: [])

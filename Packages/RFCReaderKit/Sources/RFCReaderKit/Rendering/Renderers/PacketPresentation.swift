@@ -11,7 +11,9 @@ enum PacketPresentation {
     ])
 
   static func render(_ text: String) -> Rendition? {
-    guard let (diagram, layout) = PacketDiagram.analyze(text) else { return nil }
+    guard let (diagram, layout) = PacketDiagram.analyze(text),
+      !text.unicodeScalars.contains(where: isDoubleWidth)
+    else { return nil }
     // Columns count `Character`s, the storage UTF-16 units; they part at the first
     // character outside the Basic Multilingual Plane or with a combining mark. So
     // each line is walked once, into the UTF-16 range of every column.
@@ -39,6 +41,20 @@ enum PacketPresentation {
         secondary: layout.rulerLines.map(lineRange),
         strokes: strokes(for: layout.marks),
         spokenLabel: PacketSummary.spoken(diagram)))
+  }
+
+  /// A character a monospaced font sets two cells wide: CJK ideographs and syllables,
+  /// full-width forms and emoji. Counted as one column, it would put every line
+  /// after it on its row a cell off the border it draws.
+  static func isDoubleWidth(_ scalar: Unicode.Scalar) -> Bool {
+    switch scalar.value {
+    case 0x1100...0x115F, 0x2E80...0x303E, 0x3041...0x33FF, 0x3400...0x4DBF, 0x4E00...0x9FFF,
+      0xA000...0xA4CF, 0xAC00...0xD7A3, 0xF900...0xFAFF, 0xFE30...0xFE4F, 0xFF00...0xFF60,
+      0xFFE0...0xFFE6, 0x1F300...0x1F64F, 0x1F900...0x1F9FF, 0x20000...0x3FFFD:
+      true
+    default:
+      false
+    }
   }
 
   private struct Cell: Hashable {

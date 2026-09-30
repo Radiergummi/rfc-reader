@@ -73,4 +73,23 @@ struct PacketPresentationTests {
   @Test func `text that is not a packet diagram is declined`() {
     #expect(PacketPresentation.render("+---+\n| A |\n+---+") == nil)
   }
+
+  @Test func `the delimiter after a name with a combining mark is among the hidden`() throws {
+    let text = PacketSamples.combining as NSString
+    let decorated = try decorated(PacketSamples.combining)
+    #expect(
+      decorated.hidden.count == PacketDiagram.layout(of: PacketSamples.combining)?.marks.count)
+    let name = text.range(of: "Le\u{0302}ngth")
+    let delimiter = text.range(
+      of: "|", range: NSRange(location: NSMaxRange(name), length: text.length - NSMaxRange(name)))
+    #expect(decorated.hidden.contains(delimiter))
+  }
+
+  /// A character set two cells wide in a monospaced font counts as one column, so
+  /// the lines after it would land a cell off their borders on the rest of its row.
+  @Test func `a diagram with a double-width character is declined`() {
+    let wide = PacketSamples.variable.replacingOccurrences(of: "Type", with: "Ty\u{6F22}e")
+    #expect(PacketDiagram.layout(of: wide) != nil, "the recognizer still reads it")
+    #expect(PacketPresentation.render(wide) == nil)
+  }
 }

@@ -24,6 +24,15 @@ struct BuildInputs: Equatable {
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
+  /// Whether these are `other` with only the blocks shown as source changed.
+  func differsOnlyInChoices(from other: BuildInputs?) -> Bool {
+    guard let other, other.choices != choices else { return false }
+    return BuildInputs(
+      hasDocument: other.hasDocument, fontSize: other.fontSize,
+      underlineLinks: other.underlineLinks, textSize: other.textSize,
+      legibilityWeight: other.legibilityWeight, column: other.column, choices: choices) == self
+  }
+
   var style: ReadingStyle? {
     column.map {
       ReadingStyle(
@@ -174,7 +183,8 @@ final class DocumentSession {
       return
     }
     buildingFor = inputs
-    let delay = state.buildDelay
+    // Only the blocks shown as source changed: a menu choice, with nothing to settle.
+    let delay = state.buildDelay(settling: !inputs.differsOnlyInChoices(from: builtInputs))
     trace("building")
     build = Task(name: "Build document") { [weak self] in
       if delay > .zero {

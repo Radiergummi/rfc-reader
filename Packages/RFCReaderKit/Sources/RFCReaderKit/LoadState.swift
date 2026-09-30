@@ -75,7 +75,13 @@ public struct LoadState {
   /// wait: there is nothing on screen to disturb, and the column is already known,
   /// so it is built once and built right.
   public var buildDelay: Duration {
-    built == nil ? .zero : .milliseconds(650)
+    buildDelay(settling: true)
+  }
+
+  /// The same, for a change that may still be `settling`: a slider or a window edge
+  /// is, a choice made once from a menu (Show Source) is not, and builds at once.
+  public func buildDelay(settling: Bool) -> Duration {
+    built == nil || !settling ? .zero : .milliseconds(650)
   }
 }
 

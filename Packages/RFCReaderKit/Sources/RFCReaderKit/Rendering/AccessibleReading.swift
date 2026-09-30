@@ -117,8 +117,10 @@ public enum AccessibleReading {
   /// Whether a verbatim block is said as a label rather than read: artwork that is
   /// a drawing. Legacy documents set every block that is not prose as artwork —
   /// grammars, message examples, tables — and those read perfectly well as words.
+  /// A block its rendering says something about is a diagram whatever it draws
+  /// with; only one with no rendering to say is left to the drawing-share guess.
   public static func isDiagram(_ box: VerbatimBox) -> Bool {
-    box.content.kind == .artwork && looksLikeDrawing(box.content.text)
+    box.spokenLabel != nil || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
   }
 
   /// A drawing is mostly lines, boxes and arrows: at least this share of the
