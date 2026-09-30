@@ -48,14 +48,16 @@ extension DocumentTextBuilder {
   }
 
   /// A cell's width as it is set. Plain text is measured as a string in the row's
-  /// font, which is what nearly every cell is; only a cell with formatting has its
-  /// runs built to be measured, so a registry of hundreds of rows is not built twice.
+  /// attributes, which is what nearly every cell is; only a cell with formatting has
+  /// its runs built to be measured, so a registry of hundreds of rows is not built
+  /// twice. Building runs numbers a chip, so measuring advances `nextChipID`; the
+  /// numbers only have to differ between neighbors, so the gap is harmless.
   private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
     let isPlainText = cell.allSatisfy { inline in
       if case .text = inline { true } else { false }
     }
-    if isPlainText, let font = base[.font] as? PlatformFont {
-      return lineWidth(cell.plainText, font: font)
+    if isPlainText {
+      return lineWidth(NSAttributedString(string: cell.plainText, attributes: base))
     }
     return lineWidth(inlineRuns(cell, base: base))
   }
