@@ -97,6 +97,10 @@ final class RFCTextViewCoordinator: NSObject {
   var onToggleSource: (Int) -> Void = { _ in }
   /// The Figure | Source buttons laid over the text view.
   let figureControls = FigureControls()
+  /// Whether the column changed under a storage built for another, whose layout
+  /// was thrown away until the rebuild installs: what is on screen until then has
+  /// no fragment frames to place anything by.
+  var columnAwaitsRebuild = false
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -269,6 +273,7 @@ final class RFCTextViewCoordinator: NSObject {
     reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
+    columnAwaitsRebuild = false
     figureControls.blocks = FigureControl.blocks(in: built.text)
     updateFigureControls()
   }
@@ -457,7 +462,8 @@ final class RFCTextViewCoordinator: NSObject {
       #else
         textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
       #endif
-      if tracker.columnChanged(to: column) {
+      columnAwaitsRebuild = !tracker.columnChanged(to: column)
+      if !columnAwaitsRebuild {
         beginLayout()
         restorePlace()
       } else {

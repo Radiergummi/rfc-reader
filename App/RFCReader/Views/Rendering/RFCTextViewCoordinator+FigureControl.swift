@@ -112,7 +112,9 @@ extension RFCTextViewCoordinator {
     #endif
     let origin = containerOrigin(of: textView)
     var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
-    for block in figureControls.blocks where showsFigureControl(of: block) {
+    // None while a resize waits for its rebuild, which places them again: the
+    // frames they would be placed by belong to the old column (#546).
+    for block in figureControls.blocks where !columnAwaitsRebuild && showsFigureControl(of: block) {
       guard
         let location = layout.location(
           layout.documentRange.location, offsetBy: block.location),
