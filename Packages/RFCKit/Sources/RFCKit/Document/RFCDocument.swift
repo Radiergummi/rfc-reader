@@ -700,9 +700,10 @@ public struct CrossReference: Sendable, Hashable, Codable {
   public var displayLabel: String { display.text }
 
   /// "Appendix" for an appendix, `A` or `A.1`, as xml2rfc words it, and "Section"
-  /// for anything else, a named section such as a registry's included.
+  /// for anything else. xml2rfc words a section that is neither numbered nor lettered,
+  /// such as a registry's named one, "Part"; the reader keeps "Section" for it.
   static func sectionNoun(_ section: String) -> String {
-    guard let first = section.first, first.isUppercase, first.isLetter else { return "Section" }
+    guard let first = section.first, ("A"..."Z").contains(first) else { return "Section" }
     let rest = section.dropFirst()
     return rest.isEmpty || rest.first == "." ? "Appendix" : "Section"
   }

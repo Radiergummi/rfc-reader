@@ -886,9 +886,7 @@ public enum RFCXMLParser {
         let target = CrossReference.Target.entrySection(
           entry: entry, tag: derived ?? targetAnchor, section: section,
           // A link without a scheme leads nowhere; the entry is then the target.
-          url: element["derivedLink"].flatMap(URL.init(string:)).flatMap {
-            $0.scheme == nil ? nil : $0
-          })
+          url: element["derivedLink"].flatMap(absoluteURL))
         if !innerText.isEmpty || format == "none" {
           return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
         }
@@ -992,11 +990,17 @@ extension RFCXMLParser {
       // link, to nowhere; it and one `URL` cannot read are shown as written.
       if let uri = contact.uri {
         lines.append([
-          .text("URI: "), link(URL(string: uri).flatMap { $0.scheme == nil ? nil : $0 }, uri),
+          .text("URI: "), link(absoluteURL(uri), uri),
         ])
       }
     }
     return Array(lines.joined(separator: [Inline.lineBreak]))
+  }
+
+  /// `string` as a URL, unless it has no scheme: a relative link leads nowhere in
+  /// the reader.
+  static func absoluteURL(_ string: String) -> URL? {
+    URL(string: string).flatMap { $0.scheme == nil ? nil : $0 }
   }
 
   private static func link(_ url: URL?, _ text: String) -> Inline {

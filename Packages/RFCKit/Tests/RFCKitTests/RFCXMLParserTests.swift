@@ -506,11 +506,12 @@ struct RFCXMLParserTests {
     #expect(xrefs.map(\.label) == ["the widget protocol", "", "RFC 9999", ""])
   }
 
-  /// An appendix is worded "Appendix A.1", as xml2rfc words it; a named section, such
-  /// as a registry's, stays "Section" (#473).
+  /// An appendix is worded "Appendix A.1", as xml2rfc words it, which takes only an
+  /// ASCII capital for one; a named section, such as a registry's, stays "Section"
+  /// (#473).
   @Test(arguments: [
     ("4.2", "Section"), ("A", "Appendix"), ("A.1", "Appendix"), ("CBOR Tags", "Section"),
-    ("Abstract", "Section"),
+    ("Abstract", "Section"), ("\u{00C4}.1", "Section"),
   ])
   func `a section is an appendix when it is a letter`(section: String, noun: String) {
     #expect(CrossReference.sectionNoun(section) == noun)
