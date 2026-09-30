@@ -195,7 +195,7 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section, animated: true)
+        jump(toSection: request?.section, animated: true, revealingReferences: true)
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -508,10 +508,21 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?, animated: Bool) {
+  ///
+  /// An anchor the body does not hold scrolls nowhere: a document already open stays
+  /// where the reader is, and one just opened stays at its top (#276). In a document
+  /// already open, a place naming a bibliography entry shows it; see
+  /// `LinkDestination.landing(at:in:bibliography:)`.
+  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
     guard let section, let document = session.state.document else { return }
-    scrollTarget = ReaderScrollTarget(
-      anchor: document.anchor(forPlace: section), animated: animated)
+    switch LinkDestination.landing(at: section, in: document, bibliography: reader.groups) {
+    case .reference(let anchor) where revealingReferences:
+      reader.reveal(reference: anchor)
+    case .reference(let anchor), .jump(let anchor):
+      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+    case .document, .unhandled:
+      break
+    }
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.

@@ -203,6 +203,16 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link.id) == [.rfc(2119), .rfc(8174), .rfc(7322)])
   }
 
+  /// A fragment that names no section is the place each member row opens at, as a
+  /// section is (#276).
+  @Test func `a member row keeps the links anchor`() {
+    var results = QuickOpenResults()
+    results.show(
+      query: "rfc://bcp14#sample", exact: RFCLink(id: Self.bcp14, anchor: "sample"),
+      members: [.rfc(2119)])
+    #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(2119), anchor: "sample")])
+  }
+
   /// Before the index has loaded there are no members to list.
   @Test func `a series with no known members is listed as itself`() {
     var results = QuickOpenResults()

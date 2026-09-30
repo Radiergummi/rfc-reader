@@ -96,18 +96,76 @@ struct RFCLinkTests {
     #expect(document.anchor(forPlace: "1") == "section-1")
   }
 
-  /// The prefix is the convention, not decoration: an unprefixed fragment is not a
-  /// section, and `#page-12` stays unrecognized rather than becoming one. Both
-  /// schemes are strict about it.
+  /// A fragment that names no section is an anchor, kept as it is: the reader resolves
+  /// one the document defines, such as an author's anchor, and opens at the top for
+  /// one it doesn't, like the RFC Editor's `#page-12`, rather than at the reading
+  /// position (#276). It is no section, so no citation names it.
   @Test(
     arguments: [
-      "rfc://9110#4.2",
-      "rfc://9110#page-12",
-      "https://www.rfc-editor.org/rfc/rfc9110#4.2",
-      "https://www.rfc-editor.org/rfc/rfc9110#page-12",
+      "rfc://9000#sample-varint",
+      "https://www.rfc-editor.org/rfc/rfc9000.html#sample-varint",
+      "https://datatracker.ietf.org/doc/html/rfc9000#sample-varint",
     ])
-  func `an unprefixed or unrelated fragment is not a section`(input: String) throws {
+  func `a fragment that names no section is kept as an anchor`(input: String) throws {
+    let url = try #require(URL(string: input))
+    #expect(RFCLink(url: url) == RFCLink(id: .rfc(9000), anchor: "sample-varint"))
+    #expect(RFCLink(url: url)?.section == nil)
+    #expect(RFCLink(url: url)?.place == "sample-varint")
+  }
+
+  @Test func `a page fragment is kept, so the document opens at the top`() throws {
+    let link = try #require(
+      RFCLink(url: URL(string: "https://www.rfc-editor.org/rfc/rfc9110#page-12")!))
+    #expect(link.anchor == "page-12")
+  }
+
+  /// The prefix is the convention for a section: a bare `#4.2` is none, and no
+  /// anchor either, since an XML ID cannot start with a digit.
+  @Test(arguments: ["rfc://9110#4.2", "https://www.rfc-editor.org/rfc/rfc9110#4.2"])
+  func `an unprefixed number is neither a section nor an anchor`(input: String) throws {
     let url = try #require(URL(string: input))
     #expect(RFCLink(url: url) == RFCLink(id: .rfc(9110)))
+  }
+
+  /// An anchor goes back out as the fragment it came in as, not as a section's, even
+  /// when it has the shape of an appendix number, as `X.690` does.
+  @Test(arguments: ["sample-varint", "X.690"])
+  func `an anchor round trips as itself`(anchor: String) throws {
+    let link = RFCLink(id: .rfc(9000), anchor: anchor)
+    #expect(link.appURL.absoluteString == "rfc://9000#\(anchor)")
+    #expect(link.webURL.absoluteString == "https://www.rfc-editor.org/rfc/rfc9000#\(anchor)")
+    #expect(RFCLink(url: link.appURL) == link)
+    #expect(RFCLink(url: link.webURL) == link)
+  }
+
+  /// A section's anchor as the place goes out as itself, not as
+  /// `appendix-section-8.3`, and comes back as the number it names.
+  @Test func `a section's anchor goes out as its own fragment`() {
+    let link = RFCLink(id: .rfc(9110), section: "section-8.3")
+    #expect(link.appURL.absoluteString == "rfc://9110#section-8.3")
+    #expect(RFCLink(url: link.appURL)?.section == "8.3")
+  }
+
+  /// The prepped XML's `pn` attributes spell an appendix `section-a.1`; it is the
+  /// same appendix as `appendix-A.1`.
+  @Test(
+    arguments: [
+      ("rfc://9000#section-a.1", "A.1"),
+      ("rfc://9000#appendix-a.1", "A.1"),
+      ("rfc://9000#appendix-b", "B"),
+      ("https://www.rfc-editor.org/rfc/rfc9000#section-a", "A"),
+    ])
+  func `a lower-case appendix letter names the appendix`(input: String, section: String) throws {
+    let url = try #require(URL(string: input))
+    #expect(RFCLink(url: url)?.section == section)
+  }
+
+  /// Only a single letter is an appendix's: past the prefix, `foo` is no number, and
+  /// the whole fragment is the anchor, not `FOO` or `foo`.
+  @Test func `a prefixed fragment that is no number stays whole`() throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://9000#section-foo")!))
+    #expect(link.section == nil)
+    #expect(link.anchor == "section-foo")
+    #expect(link.appURL.absoluteString == "rfc://9000#section-foo")
   }
 }

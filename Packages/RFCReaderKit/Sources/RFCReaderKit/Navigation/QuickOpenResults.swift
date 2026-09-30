@@ -118,7 +118,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     }
     let rows: [RFCLink]
     if let exact, !members.isEmpty {
-      rows = members.map { RFCLink(id: $0, section: exact.section) }
+      rows = members.map { RFCLink(id: $0, section: exact.section, anchor: exact.anchor) }
     } else {
       rows = exact.map { [$0] } ?? []
     }

@@ -69,6 +69,49 @@ struct LinkDestinationTests {
     #expect(asked == .document(RFCLink(id: current, section: "4.2")))
   }
 
+  /// A link's fragment that names no section is still a place in this document
+  /// (#276).
+  @Test func `an anchor fragment of this document jumps within it`() {
+    #expect(resolve("rfc://9110#sample-varint") == .jump("sample-varint"))
+  }
+
+  // MARK: - Landing
+
+  private let document = RFCDocument(
+    header: DocumentHeader(title: "T"),
+    sections: [
+      RFCKit.Section(anchor: "section-1", number: "1", title: "Introduction"),
+      RFCKit.Section(anchor: "sample-varint", number: "A.1", title: "Sample", isAppendix: true),
+    ],
+    source: .xml)
+  private let bibliography = [
+    ReferenceGroup(
+      title: "Normative References", entries: [Reference(anchor: "RFC3986", title: "URI")])
+  ]
+
+  @Test(arguments: [
+    ("1", "section-1"), ("A.1", "sample-varint"), ("sample-varint", "sample-varint"),
+  ])
+  func `a place lands on the anchor it resolves to`(place: String, anchor: String) {
+    #expect(
+      LinkDestination.landing(at: place, in: document, bibliography: bibliography) == .jump(anchor))
+  }
+
+  /// The body leaves the bibliography out, so a place naming an entry shows it.
+  @Test func `a place naming a bibliography entry reveals it`() {
+    #expect(
+      LinkDestination.landing(at: "RFC3986", in: document, bibliography: bibliography)
+        == .reference("RFC3986"))
+  }
+
+  /// One the document does not define is still a jump; the reader finds nothing to
+  /// scroll to, and stays where it is.
+  @Test func `a place the document does not define is a jump to nowhere`() {
+    #expect(
+      LinkDestination.landing(at: "page-12", in: document, bibliography: bibliography)
+        == .jump("page-12"))
+  }
+
   // MARK: - Not ours
 
   @Test(
