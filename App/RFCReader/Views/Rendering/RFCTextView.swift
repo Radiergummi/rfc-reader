@@ -148,7 +148,11 @@ struct ReaderInputs {
     // scrolling.
     if coordinator.headerIdentity != headerIdentity {
       coordinator.headerIdentity = headerIdentity
-      coordinator.headerHost?.rootView = header
+      #if canImport(UIKit)
+        coordinator.headerHost?.rootView = coordinator.hostedHeader(header)
+      #else
+        coordinator.headerHost?.rootView = header
+      #endif
     }
     coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
@@ -215,7 +219,7 @@ struct ReaderInputs {
         coordinator?.quote(of: range)
       }
 
-      let host = UIHostingController(rootView: inputs.header)
+      let host = UIHostingController(rootView: context.coordinator.hostedHeader(inputs.header))
       host.view.backgroundColor = .clear
       // No safe area: the reader runs under the top bar, and the header scrolled
       // under it would otherwise be padded down by the overlap, and measured with

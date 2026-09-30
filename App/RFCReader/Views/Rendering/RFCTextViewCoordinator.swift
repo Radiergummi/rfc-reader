@@ -823,20 +823,37 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     /// A tap on the text brings the bars back, or puts them away. Not a tap on a
-    /// link or a chip, which follows it; not one on the header, whose author chips
-    /// and banner links are buttons; and not one that clears a selection or stops
-    /// a flick.
+    /// link or a chip, which follows it; not one on the header, which takes its own
+    /// (`tappedHeader()`); and not one that clears a selection or stops a flick.
     @objc func tappedText(_ tap: UITapGestureRecognizer) {
       guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
       let point = chromeTapPoint
+      if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
-      guard point.y >= inset.top else { return }
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
       if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
         return
       }
       chrome.tapped()
       reportChrome()
+    }
+
+    /// A tap on the header's blank space, as a tap on the text is. Told by a tap
+    /// gesture on the header's root (`hostedHeader(_:)`), which the header's author
+    /// chips and banner links take precedence over, being SwiftUI gestures below
+    /// it: a tap on one of them does only what it does.
+    func tappedHeader() {
+      guard !tapIsNotForTheBars else { return }
+      chrome.tapped()
+      reportChrome()
+    }
+
+    /// The header as hosted: with a tap on its blank space for the bars.
+    func hostedHeader(_ header: AnyView) -> AnyView {
+      AnyView(
+        header
+          .contentShape(.rect)
+          .onTapGesture { [weak self] in self?.tappedHeader() })
     }
 
     /// Beside the text view's own recognizers, so a tap on a link still follows it
