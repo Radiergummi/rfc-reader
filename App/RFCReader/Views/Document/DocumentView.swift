@@ -90,6 +90,11 @@ struct DocumentView: View {
   /// than waiting to be told by the text view it has not created yet — which is
   /// why nothing is built until the geometry reader has run once.
   @State private var paneWidth: CGFloat?
+  #if os(macOS)
+    /// How far the toolbar reaches over the pane, which the published-original page
+    /// starts below (#207).
+    @State private var toolbarInset: CGFloat = 0
+  #endif
 
   /// Derived from the pane's width and the measure preference, and nothing else.
   ///
@@ -377,40 +382,51 @@ struct DocumentView: View {
   /// An RFC that is its PDF or PostScript original (#207): the header the index
   /// gives, and the original to open, rather than an error or a text that only says
   /// where the original is.
+  ///
+  /// Laid out as the reader lays out a document: the header at the top of the
+  /// column, padded as `RFCTextView` pads it, and the notice below it, centered in
+  /// the same column.
   private func originalOnly(_ page: PublishedOriginalPage, metadata: RFCMetadata) -> some View {
     let name = page.original.format.displayName
-    let content = VStack(alignment: .leading, spacing: 24) {
-      DocumentHeaderView(
-        library: library, navigation: navigation,
-        identity: DocumentHeaderView.Identity(
-          header: DocumentHeader(id: id, title: metadata.title),
-          metadata: metadata,
-          revisions: library.revisionsSummary(for: metadata.id)),
-        heading: heading)
-      ContentUnavailableView {
-        Label("Published as \(name)", systemImage: "doc.richtext")
-      } description: {
-        Text(page.explanation)
-      } actions: {
-        Link("Open the Original (\(name))", destination: page.original.url)
-          // The reader's own handler would read the file's URL as a link to this
-          // RFC, and open it here again.
-          .environment(\.openURL, OpenURLAction { _ in .systemAction })
+    return ScrollView {
+      VStack(alignment: .leading, spacing: 0) {
+        DocumentHeaderView(
+          library: library, navigation: navigation,
+          identity: DocumentHeaderView.Identity(
+            header: DocumentHeader(id: id, title: metadata.title),
+            metadata: metadata,
+            revisions: library.revisionsSummary(for: metadata.id)),
+          heading: heading
+        )
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        ContentUnavailableView {
+          Label("Published as \(name)", systemImage: "doc.richtext")
+        } description: {
+          Text(page.explanation)
+        } actions: {
+          Link("Open the Original (\(name))", destination: page.original.url)
+            // The reader's own handler would read the file's URL as a link to this
+            // RFC, and open it here again.
+            .environment(\.openURL, OpenURLAction { _ in .systemAction })
+        }
+        // Its own height, so it does not fill the pane and push itself down.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity)
       }
-      // Its own height, so it does not fill the pane and push the header up.
-      .fixedSize(horizontal: false, vertical: true)
+      // The column `RFCTextView` sets its header and text in, centered in the pane
+      // as its gutters center it.
+      .frame(width: column)
+      .frame(maxWidth: .infinity)
+      .padding(.bottom, ReaderLayout.margin)
     }
-    .frame(maxWidth: column, alignment: .leading)
-    .padding(.vertical, 16)
-    .frame(maxWidth: .infinity)
-    // Centered, as the error is, where it fits: on macOS the reader's hosted root
-    // refuses the safe area, so a scroll view puts the title under the toolbar.
-    // Scrolled where it does not, at a large text size or on a phone held sideways,
-    // so the link stays in reach.
-    return ViewThatFits(in: .vertical) {
-      content.frame(maxHeight: .infinity)
-      ScrollView { content }
-    }
+    #if os(macOS)
+      // The reader's hosted root refuses the safe area, so the scroll view would
+      // start under the toolbar; the reader's own scroll view is AppKit's, and
+      // insets itself by as much.
+      .contentMargins(.top, toolbarInset, for: .scrollContent)
+      .background(ToolbarInsetReader { toolbarInset = $0 })
+    #endif
   }
 
   /// On iOS only; the Mac's toolbar is the window's, and stays.
@@ -736,3 +752,34 @@ struct DocumentView: View {
     }
   }
 }
+
+#if os(macOS)
+  /// Reports how far the window's toolbar reaches over this view: the distance from
+  /// its top down to the window's `contentLayoutRect`. SwiftUI cannot say, since
+  /// the reader's hosted root refuses the safe area.
+  private struct ToolbarInsetReader: NSViewRepresentable {
+    let report: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ReaderView { ReaderView() }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+      view.report = report
+    }
+
+    final class ReaderView: NSView {
+      var report: (CGFloat) -> Void = { _ in }
+      private var reported: CGFloat?
+
+      override func layout() {
+        super.layout()
+        guard let window else { return }
+        let top = convert(NSPoint(x: 0, y: bounds.maxY), to: nil).y
+        let inset = max(0, top - window.contentLayoutRect.maxY)
+        guard inset != reported else { return }
+        reported = inset
+        // Not during the layout pass that measured it.
+        Task { @MainActor [report] in report(inset) }
+      }
+    }
+  }
+#endif
