@@ -35,6 +35,11 @@
       set {
         guard newValue != isBookmarked else { return }
         LibraryModel.shared.toggleBookmark(id)
+        // Applied, as the window applies it, but not kept: a script is told, rather
+        // than seeing a success that is gone at the next launch (#318).
+        if AppData.isStoredInMemory {
+          ScriptError.report(AppData.storeWarning.message)
+        }
       }
     }
 
