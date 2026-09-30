@@ -80,6 +80,9 @@
     /// preview, swallowing a click — are returned.
     @discardableResult
     func send(_ event: ReferenceHover.Event) -> [ReferenceHover.Effect] {
+      // Read per event rather than observed: it is a property read, and so is
+      // always current when VoiceOver is turned on or off mid-document.
+      state.previewsOnHover = !NSWorkspace.shared.isVoiceOverEnabled
       let effects = state.handle(event)
       for effect in effects {
         switch effect {

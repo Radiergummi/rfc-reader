@@ -105,6 +105,11 @@ public struct ReferenceHover {
 
   /// A link preview's own reader, whose clicks commit it and which previews nothing.
   public var isPreviewReader: Bool
+  /// Whether the pointer coming to rest on a reference previews it. Off while
+  /// VoiceOver runs (#514): it moves the pointer onto whatever it reads and scrolls
+  /// the text there, and a card that opened for that took VoiceOver's focus away
+  /// from the text. A force click still previews.
+  public var previewsOnHover = true
 
   /// The reference the pointer is over, timing or already previewed.
   public private(set) var hovered: ReferenceBox?
@@ -177,7 +182,7 @@ public struct ReferenceHover {
       // by every tick, so the resting pointer is hit-tested once scrolling stops
       // rather than per frame of a fling. Not for the scroll a link caused.
       var effects = cancel()
-      guard linkClickPointer == nil else { return effects }
+      guard previewsOnHover, linkClickPointer == nil else { return effects }
       dwell = .restingPointer
       effects.append(.startDwell(.restingPointer))
       return effects
@@ -263,6 +268,7 @@ public struct ReferenceHover {
     guard let target else { return cancel() }
     guard target.box !== hovered else { return [] }
     var effects = cancel()
+    guard previewsOnHover else { return effects }
     hovered = target.box
     dwell = .card(target)
     effects.append(.startDwell(.card(target)))

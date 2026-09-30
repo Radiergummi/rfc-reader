@@ -127,7 +127,7 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.restingDwellElapsed(target: first)).isEmpty)
   }
 
-  @Test func `with hover previews off, a force click still previews, and moving over it keeps it`() {
+  @Test func `with hover previews off, a force click still previews, and moving keeps it`() {
     var hover = ReferenceHover()
     hover.previewsOnHover = false
     #expect(hover.handle(.forceClickCard(first)) == [.showCard(first)])
