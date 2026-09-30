@@ -16,9 +16,8 @@ public enum LinkRouting {
     for document: DocumentID, in scenes: [Scene], showing: (Scene) -> DocumentID?,
     preferring isPreferred: (Scene) -> Bool = { _ in false }
   ) -> Scene? {
-    let showingDocument = scenes.filter { showing($0) == document }
-    return showingDocument.first(where: isPreferred)
-      ?? showingDocument.first
+    scenes.first { showing($0) == document && isPreferred($0) }
+      ?? scenes.first { showing($0) == document }
       ?? scenes.first(where: isPreferred)
       ?? scenes.first
   }

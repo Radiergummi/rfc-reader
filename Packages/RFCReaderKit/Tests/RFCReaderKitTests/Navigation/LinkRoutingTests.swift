@@ -71,6 +71,8 @@ struct LinkRoutingTests {
 
   @Test func `a preferred tab that is not open does not take it`() {
     let closed = Tab(name: "closed", selection: .rfc(791))
+    let tabs = [Tab(name: "front", selection: .rfc(793))]
+    #expect(target(for: .rfc(2119), in: tabs, preferring: closed) == "front")
     #expect(target(for: .rfc(2119), in: [], preferring: closed) == nil)
   }
 }

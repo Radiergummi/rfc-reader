@@ -26,7 +26,9 @@ nonisolated private let libraryLog = Logger(
     func openTab(inBackground: Bool)
     /// The window showing `scene`, made key and its tab selected.
     func bringForward(_ scene: NavigationModel)
-    /// The tab the menu acts on: the front tab of the window the user is looking at.
+    /// The tab the menu acts on, and the one `route(_:)` prefers: the front tab of
+    /// the reader window made key last, which it stays while the app is in the
+    /// background.
     var activeNavigation: NavigationModel? { get }
   }
 #endif
@@ -732,9 +734,9 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil || $0.model === scene }
   }
 
-  /// Marks a scene as the one the reader is using, which is where an untargeted
-  /// link lands -- on macOS only failing the tab of the window that was key last,
-  /// which `route(_:)` prefers.
+  /// Makes a scene the most recently used, which is where an untargeted link lands
+  /// when no tab is preferred over it -- on macOS `route(_:)` prefers the tab of the
+  /// window that was key last.
   func activate(_ scene: NavigationModel) {
     guard scenes.first?.model !== scene else { return }
     promote(scene)

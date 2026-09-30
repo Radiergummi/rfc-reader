@@ -15,9 +15,9 @@ struct ReaderScene: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      // Any navigation in this tab makes it the one an untargeted deep link lands in
-      // -- on macOS only failing the tab of the window that was key last, which
-      // `LibraryModel.route` prefers.
+      // Any navigation in this tab makes it the most recently used, where an
+      // untargeted deep link lands when no tab is preferred over it -- on macOS
+      // `LibraryModel.route` prefers the tab of the window that was key last.
       .onChange(of: navigation.selection) {
         library.activate(navigation)
         // A deselected row leaves nothing on screen, and the panel and the toolbar
