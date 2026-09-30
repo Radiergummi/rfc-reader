@@ -18,7 +18,7 @@ extension DocumentTextBuilder {
       indent
       + Self.markerColumnWidth(
         markerWidths: markerWidths, gap: style.bodySize * Self.markerGapShare,
-        step: style.indentStep, limit: style.measure * Self.markerColumnShare)
+        step: style.indentStep, limit: (style.measure - indent) * Self.markerColumnShare)
     // Every item of one list shares its indents and spacing, so both dictionaries
     // and the tab stop are built once for the list rather than once per item.
     let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
@@ -86,8 +86,10 @@ extension DocumentTextBuilder {
   /// is capped by the column (#331), even "1." at the accessibility sizes on an
   /// iPhone. The limit keeps what #331 capped the step for: a nested list's indent
   /// is its parent's column, and a column without one gave a sliver of text to a list
-  /// of `Requirement 1:` markers three levels down at those sizes. A marker wider than
-  /// the limit runs past its stop, as every wide marker did before.
+  /// of `Requirement 1:` markers three levels down at those sizes. The limit is a share
+  /// of the width left after the list's indent, not of the whole column, so each level
+  /// takes less than the one outside it and no depth of nesting takes all of it (#153).
+  /// A marker wider than the limit runs past its stop, as every wide marker did before.
   static func markerColumnWidth(
     markerWidths: [CGFloat], gap: CGFloat, step: CGFloat, limit: CGFloat
   ) -> CGFloat {
@@ -98,7 +100,8 @@ extension DocumentTextBuilder {
   /// item's text. It grows with the text, unlike a table's fixed `columnGutter`.
   static let markerGapShare: CGFloat = 0.5
 
-  /// The most of the column a list's markers may take; see `markerColumnWidth`.
+  /// The most of the width left after a list's indent that its markers may take;
+  /// see `markerColumnWidth`.
   static let markerColumnShare: CGFloat = 0.2
 
   /// The marker the item at `index` is drawn with. A numbered list's is its

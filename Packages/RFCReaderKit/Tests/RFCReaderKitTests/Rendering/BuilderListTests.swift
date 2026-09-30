@@ -158,4 +158,38 @@ struct BuilderListTests {
     #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > markerWidth)
     #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
   }
+
+  /// A nested list's indent is its parent's marker column, so a column bounded by a
+  /// share of the whole measure let five levels of wide markers at the largest
+  /// accessibility size on an iPhone take all of it and leave the text none, as the
+  /// indent steps did before #153 bounded them. Bounded by a share of the width left
+  /// after its indent, each level takes less than the one outside it.
+  @Test func `five nested lists of wide markers leave the text a width`() throws {
+    let style = ReadingStyle(bodySize: 17, measure: 345, textSize: .accessibility5)
+    let numbering = ListNumbering(prefix: "Requirement ", suffix: ":")
+    let levels = 1...5
+    var nested: [Block] = []
+    for level in levels.reversed() {
+      let item = ListItem(blocks: [.paragraph(Paragraph(text: "level \(level)"))] + nested)
+      nested = [.list(ListBlock(style: .numbered(numbering), items: [item]))]
+    }
+    let built = DocumentTextBuilder.build(Fixtures.document(nested[0]), style: style)
+
+    var textColumn: CGFloat = 0
+    for level in levels {
+      let offset = try Fixtures.offset(of: "level \(level)", in: built.text)
+      let paragraph = try #require(
+        built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+      let indent = paragraph.firstLineHeadIndent
+      let widthLeft = style.measure - indent
+      // The column is its indent plus its width, so it comes back off by a rounding.
+      let rounding: CGFloat = 0.001
+      #expect(
+        paragraph.headIndent - indent
+          <= max(style.indentStep, widthLeft * DocumentTextBuilder.markerColumnShare) + rounding,
+        "level \(level)'s marker column must stay within its share of the width left")
+      textColumn = paragraph.headIndent
+    }
+    #expect(style.measure - textColumn > 0, "the innermost item's text must have a width")
+  }
 }
