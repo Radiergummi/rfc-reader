@@ -263,6 +263,17 @@ struct CorpusBackedHangingDefinitionTests {
     #expect(document.artworkText.allSatisfy { !$0.hasPrefix("submission:") })
   }
 
+  /// A page break in RFC 5545 cuts the first parameter's `Description:` in the
+  /// middle of a sentence. The prose test that rejoins a paragraph's halves refuses
+  /// a hanging one, so the rest was the definition's second paragraph.
+  @Test func `a definition cut by a page break is one paragraph`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5545"))
+    let description = try #require(
+      definitionLists(in: document).flatMap { $0 }.first { $0.term.plainText == "Description:" })
+    #expect(description.definition.count == 1)
+    #expect(description.definition.first?.paragraph?.plainText.contains("quoted-string") == true)
+  }
+
   /// RFC 6614's terminology aligns each definition under its own text, and sets
   /// the first, one line long, above the two that hang. One list of three.
   @Test func `a one-line entry joins the hanging entries beside it`() throws {

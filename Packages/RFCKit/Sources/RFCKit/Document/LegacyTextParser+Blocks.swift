@@ -166,7 +166,10 @@ extension LegacyTextParser {
     // own while no hanging one had said they are a list: how many blocks of `result`
     // they took, and their entries.
     var loneDefinitions: (blocks: Int, definitions: HangingDefinitions)?
+    // Whether a page break ended the block above this one.
+    var pageBreakAbove = false
     for block in merged {
+      defer { pageBreakAbove = block.followedByPageBreak }
       // Probed once: the continuation test needs to know the block opens with no
       // marker, and a list the block produces needs the column of its own.
       let marker = listMarker(of: block.lines)
@@ -174,9 +177,10 @@ extension LegacyTextParser {
       let loneAbove = loneDefinitions
       openDefinitions = nil
       loneDefinitions = nil
-      if let definitions = definitionsAbove,
+      if let definitions = definitionsAbove, marker == nil,
         attachContinuation(
-          block, toDefinitions: definitions, marker: marker, in: &result, linker: linker)
+          block, toDefinitions: definitions, afterPageBreak: pageBreakAbove, in: &result,
+          linker: linker)
       {
         openDefinitions = definitions
         continue
@@ -191,7 +195,7 @@ extension LegacyTextParser {
         let continuationColumn = hanging.continuationColumn
           ?? definitionsAbove.flatMap({ $0.indent == hanging.indent ? $0.continuationColumn : nil })
       {
-        var items = definitionItems(hanging, linker: linker)
+        var items = definitionItems(hanging.entries, linker: linker)
         if definitionsAbove?.indent == hanging.indent,
           case .definitionList(let previous)? = result.last
         {
@@ -199,7 +203,7 @@ extension LegacyTextParser {
         } else {
           if let lone = loneAbove, lone.definitions.indent == hanging.indent {
             result.removeLast(lone.blocks)
-            items = definitionItems(lone.definitions, linker: linker) + items
+            items = definitionItems(lone.definitions.entries, linker: linker) + items
           }
           result.append(.definitionList(items))
         }
@@ -278,10 +282,12 @@ extension LegacyTextParser {
     return result
   }
 
-  private static func definitionItems(_ definitions: HangingDefinitions, linker: InlineLinker)
-    -> [DefinitionItem]
-  {
-    definitions.entries.map { entry in
+  /// Each entry of a catalog or of a hanging-indent list, its term as it stands and
+  /// its text as a paragraph.
+  private static func definitionItems(
+    _ entries: [(term: String, text: String)], linker: InlineLinker
+  ) -> [DefinitionItem] {
+    entries.map { entry in
       DefinitionItem(
         term: [.text(entry.term)], definition: [.paragraph(Paragraph(linker.link(entry.text)))])
     }
@@ -289,23 +295,25 @@ extension LegacyTextParser {
 
   /// A paragraph standing under a hanging-indent definition, past its term, is the
   /// rest of that definition: xml2rfc sets a `<dd>`'s second paragraph at the
-  /// column its first one's lines hang in.
+  /// column its first one's lines hang in, and carrying no marker of its own (the
+  /// caller asks). After a page break, one that opens in lower case is the rest of
+  /// the paragraph the page cut.
   private static func attachContinuation(
     _ block: RawBlock,
     toDefinitions definitions: (indent: Int, continuationColumn: Int),
-    marker: ListMarker?,
+    afterPageBreak: Bool,
     in result: inout [Block],
     linker: InlineLinker
   ) -> Bool {
-    guard case .definitionList(var items)? = result.last, var item = items.last,
-      marker == nil, continuesHangingDefinition(block.lines, column: definitions.continuationColumn)
-    else { return false }
-    let inlines = linker.link(joinWrappedLines(block.lines))
-    guard !inlines.isEmpty else { return false }
-    item.definition.append(.paragraph(Paragraph(inlines)))
-    items[items.count - 1] = item
-    result[result.count - 1] = .definitionList(items)
-    return true
+    guard continuesHangingDefinition(block.lines, column: definitions.continuationColumn) else {
+      return false
+    }
+    // A page break cuts a definition as it cuts any paragraph, but the prose test
+    // that rejoins the halves refuses the hanging one.
+    let continuingItsSentence =
+      afterPageBreak && block.lines.first?.first(where: { $0 != " " })?.isLowercase == true
+    return appendToLastDefinition(
+      block.lines, continuingItsSentence: continuingItsSentence, in: &result, linker: linker)
   }
 
   /// A paragraph indented past a catalog entry's number and carrying no marker of
@@ -328,16 +336,34 @@ extension LegacyTextParser {
     in result: inout [Block],
     linker: InlineLinker
   ) -> Bool {
-    guard case .definitionList(var items)? = result.last, var item = items.last else {
-      return false
-    }
     guard marker == nil,
       continuesCatalogEntry(
         block.lines, numberIndent: catalog.indent, textColumn: catalog.textColumn)
     else { return false }
-    let inlines = linker.link(joinWrappedLines(block.lines))
+    return appendToLastDefinition(
+      block.lines, continuingItsSentence: false, in: &result, linker: linker)
+  }
+
+  /// `lines` as the next paragraph of the last definition in the list `result`
+  /// ends with, or, when `continuingItsSentence` and that paragraph stops short of
+  /// a sentence's end, as the rest of it. False when `result` ends with no list.
+  private static func appendToLastDefinition(
+    _ lines: [String], continuingItsSentence: Bool, in result: inout [Block],
+    linker: InlineLinker
+  ) -> Bool {
+    guard case .definitionList(var items)? = result.last, var item = items.last else {
+      return false
+    }
+    let inlines = linker.link(joinWrappedLines(lines))
     guard !inlines.isEmpty else { return false }
-    item.definition.append(.paragraph(Paragraph(inlines)))
+    if continuingItsSentence, case .paragraph(var paragraph)? = item.definition.last,
+      let last = paragraph.plainText.last, !".:!?".contains(last)
+    {
+      paragraph.inlines += [.text(" ")] + inlines
+      item.definition[item.definition.count - 1] = .paragraph(paragraph)
+    } else {
+      item.definition.append(.paragraph(Paragraph(inlines)))
+    }
     items[items.count - 1] = item
     result[result.count - 1] = .definitionList(items)
     return true
@@ -358,6 +384,13 @@ extension LegacyTextParser {
     guard indent > numberIndent, indent <= textColumn + catalogContinuationSlack,
       catalogEntries(lines) == nil
     else { return false }
+    return readsAsEntryText(lines)
+  }
+
+  /// The prose test with its cap excused, and past the classic cap its sentence
+  /// share excused too for a block of two lines at most: what an entry above a
+  /// block lets it be.
+  private static func readsAsEntryText(_ lines: [String]) -> Bool {
     let refusals = diagnose(lines, maxIndent: .max, thorough: true).rejections
     let excused = lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
     return refusals.allSatisfy(excused.contains)
@@ -371,9 +404,7 @@ extension LegacyTextParser {
   /// Internal, so the test can be pinned on hand-written lines.
   static func continuesHangingDefinition(_ lines: [String], column: Int) -> Bool {
     guard lines.allSatisfy({ $0.leadingSpaceCount == column }) else { return false }
-    let refusals = diagnose(lines, maxIndent: .max, thorough: true).rejections
-    let excused = lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
-    return refusals.allSatisfy(excused.contains)
+    return readsAsEntryText(lines)
   }
 
   /// A block indented past a list's marker and carrying no marker of its own is the
@@ -713,14 +744,7 @@ extension LegacyTextParser {
     // past it. Before the prose test, which takes a one-line entry for a paragraph
     // and the rest of the block for artwork.
     if let entries = catalogEntries {
-      return [
-        .definitionList(
-          entries.map { entry in
-            DefinitionItem(
-              term: [.text(entry.term)],
-              definition: [.paragraph(Paragraph(linker.link(entry.text)))])
-          })
-      ]
+      return [.definitionList(definitionItems(entries, linker: linker))]
     }
 
     if looksLikeProse(lines, maxIndent: proseIndent) {
@@ -803,7 +827,11 @@ extension LegacyTextParser {
   /// definition with a drawing or a column gap in it. Internal, so the shape can be
   /// pinned on hand-written lines.
   static func hangingDefinitions(_ lines: [String]) -> HangingDefinitions? {
-    guard let first = lines.first, let head = first.firstMatch(of: hangingTermPattern) else {
+    // Asked of every block with no marker: a substring test turns nearly all of
+    // them away before the regex starts.
+    guard let first = lines.first, first.contains(":  "),
+      let head = first.firstMatch(of: hangingTermPattern)
+    else {
       return nil
     }
     let indent = head.indent.count
