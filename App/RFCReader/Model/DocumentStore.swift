@@ -308,6 +308,8 @@ actor DocumentStore {
       if isCachedKept { parsed.store(cached, for: id) }
       return cached
     }
+    // A fetch Original Text started may have finished while the disk was read (#324).
+    if let cached = parsed.value(for: id) { return cached }
 
     return try await fetched(id, formats: formats, client: client).document
   }
@@ -374,8 +376,7 @@ actor DocumentStore {
     let interval = signposter.beginInterval(
       "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Fetch document", interval) }
-    let fetched = try await client.fetchPreferredDocument(
-      id, availableFormats: formats.isEmpty ? nil : formats)
+    let fetched = try await client.fetchPreferredDocument(id, availableFormats: formats)
     if let failure = fetched.xmlParseFailure {
       storeLog.error(
         "\(id.displayName, privacy: .public): XML did not parse, shown from the text: \(String(describing: failure), privacy: .public)"
@@ -481,7 +482,7 @@ actor DocumentStore {
     // where the pack serves the document: nothing downloads it, so there is nothing
     // to join, and the shared fetch would parse the text for nobody.
     if legacyPack?.file(for: id) == nil,
-      RFCEditorClient.textIsTheDocument(availableFormats: formats.isEmpty ? nil : formats)
+      RFCEditorClient.textIsTheDocument(availableFormats: formats)
     {
       let data = try await fetched(id, formats: formats, client: client).data
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
