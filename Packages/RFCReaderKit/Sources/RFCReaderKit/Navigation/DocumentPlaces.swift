@@ -10,13 +10,11 @@ import RFCKit
 /// reader reports the figure's section.
 public struct DocumentPlaces: Sendable {
   private let document: RFCDocument
-  private let sections: AnchorIndex
   private let anchors: AnchorIndex
 
   public init(document: RFCDocument, anchors: AnchorIndex) {
     self.document = document
     self.anchors = anchors
-    self.sections = anchors.sections
   }
 
   /// The anchor `place` names, as a jump resolves it.
@@ -25,9 +23,15 @@ public struct DocumentPlaces: Sendable {
   }
 
   /// The section the reader reports while `place` is at its top: the section
-  /// `place` is in, or `place` itself when the build holds no such anchor.
+  /// `place` is in, the first section for a place ahead of it, as the reader
+  /// reports there, or `place` itself when the build holds no such anchor.
+  ///
+  /// The sections are indexed here, not on creation, because only a jump to the
+  /// history's current place asks.
   public func section(of place: String) -> String {
     let anchor = anchor(for: place)
-    return anchors.offset(of: anchor).flatMap(sections.anchor(at:)) ?? anchor
+    guard let offset = anchors.offset(of: anchor) else { return anchor }
+    let sections = anchors.sections
+    return sections.anchor(at: offset) ?? sections.entries.first?.anchor ?? anchor
   }
 }

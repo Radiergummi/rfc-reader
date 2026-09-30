@@ -256,7 +256,7 @@ final class NavigationModel: Identifiable {
 
   /// A jump within the document already open — a section link in the prose, a row
   /// in the table of contents, or `jump to section`. Handed to the reader, which
-  /// records it through `jump(toSection:in:)` where its document holds the place.
+  /// records it through `recordJump(to:in:)` where its document holds the place.
   func jump(toSection section: String) {
     guard selection != nil else { return }
     scrollRequest = ScrollRequest(section: section, isUnrecorded: true)
@@ -265,7 +265,7 @@ final class NavigationModel: Identifiable {
   /// A place the document on screen holds: its own history entry, so Back undoes
   /// it, unless the reader is already there. Compared in `places`' spelling, so a
   /// section's number and its anchor are one place (#482).
-  func jump(toSection section: String, in places: DocumentPlaces) {
+  func recordJump(to section: String, in places: DocumentPlaces) {
     guard let id = selection else { return }
     go(to: HistoryEntry(id: id, section: section), in: places)
   }

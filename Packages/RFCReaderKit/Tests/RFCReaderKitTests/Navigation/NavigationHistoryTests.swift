@@ -296,12 +296,14 @@ struct NavigationHistoryTests {
     ],
     source: .xml)
 
-  /// The build's anchors: every section's, and a figure in §4.2.
+  /// The build's anchors: every section's, the abstract ahead of them, and a
+  /// figure in §4.2.
   private var places: DocumentPlaces {
     DocumentPlaces(
       document: document,
       anchors: AnchorIndex([
-        .init(anchor: "section-1", offset: 0, heading: "1. Introduction", number: "1"),
+        .init(anchor: "abstract", offset: 0),
+        .init(anchor: "section-1", offset: 50, heading: "1. Introduction", number: "1"),
         .init(anchor: "section-4", offset: 100, heading: "4. Semantics", number: "4"),
         .init(anchor: "section-4.2", offset: 200, heading: "4.2. Methods", number: "4.2"),
         .init(anchor: "figure-1", offset: 300),
@@ -373,6 +375,19 @@ struct NavigationHistoryTests {
       history.go(to: place(9110, "figure-1"), leaving: "section-4.2", in: places)
         == place(9110, "figure-1"))
     #expect(history.goBack() == place(9110, "section-1"))
+    #expect(!history.canGoBack)
+  }
+
+  /// Ahead of the first section the reader reports that section, so a place
+  /// there is where the reader is while it does.
+  @Test func `a place ahead of the first section is where the reader is`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-9"))
+    history.go(to: place(9110, "abstract"), leaving: "section-9", in: places)
+    #expect(
+      history.go(to: place(9110, "abstract"), leaving: "section-1", in: places)
+        == place(9110, "abstract"))
+    #expect(history.goBack() == place(9110, "section-9"))
     #expect(!history.canGoBack)
   }
 

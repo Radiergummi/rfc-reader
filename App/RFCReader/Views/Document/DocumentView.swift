@@ -592,8 +592,8 @@ struct DocumentView: View {
     else { return }
     switch landing(at: place) {
     case .jump(let anchor):
-      navigation.jump(
-        toSection: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+      navigation.recordJump(
+        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:
