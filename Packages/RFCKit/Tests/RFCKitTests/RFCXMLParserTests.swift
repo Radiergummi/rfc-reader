@@ -436,7 +436,10 @@ struct RFCXMLParserTests {
   /// whole entry, then a section of it; RFC 9290 cites the registry's section, then
   /// the whole registry.
   @Test(arguments: [
-    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "Section\u{00A0}2.3.3 of [RATS-AR4SI]"]),
+    (
+      "rfc9783.xml", "I-D.ietf-rats-ar4si",
+      ["[RATS-AR4SI]", "Section\u{00A0}2.3.3 of [RATS-AR4SI]"]
+    ),
     ("rfc9290.xml", "IANA.cbor-tags", ["CBOR Tags", "[IANA.cbor-tags]"]),
   ])
   func `a citation of a section of an entry outside the series names the section`(

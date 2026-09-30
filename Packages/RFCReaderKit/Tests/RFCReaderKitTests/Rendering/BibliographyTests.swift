@@ -106,6 +106,14 @@ struct BibliographyTests {
     #expect(groups.kind(of: .anchor("QUIC-TLS")) == .informative)
   }
 
+  /// A section of an entry outside the series has the kind of the entry (#473).
+  @Test func `a citation of a section of an entry has the entry's kind`() throws {
+    let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
+    let section = CrossReference.Target.entrySection(
+      entry: "QUIC-TLS", tag: "QUIC-TLS", section: "4", url: nil)
+    #expect(groups.kind(of: section) == .informative)
+  }
+
   @Test func `a citation no list holds has no kind`() throws {
     let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
     #expect(groups.kind(of: .document(.rfc(1), section: nil)) == .unknown)

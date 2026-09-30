@@ -290,6 +290,8 @@ extension DocumentTextBuilder {
     case .anchor(let anchor):
       let scheme = referenceAnchors.contains(anchor) ? Self.referenceScheme : Self.anchorScheme
       return Self.url(anchor, scheme: scheme)
+    case .entrySection(let entry, _, _, let url):
+      return url ?? Self.url(entry, scheme: Self.referenceScheme)
     }
   }
 
