@@ -96,6 +96,43 @@ struct BuilderTableTests {
     }
   }
 
+  /// A reference chip is measured as it is drawn: its symbol is an attachment, which
+  /// CoreText measures as nothing, and the padding kern around it is added only once
+  /// the build is done. Measured as its label alone, the column was too narrow for it,
+  /// the chip ran past its tab stop, and the next cell fell through to
+  /// `defaultTabInterval` (#488).
+  @Test func `a chip cell ends before its tab stop`() throws {
+    let xref = CrossReference(target: .document(.rfc(9110), section: nil))
+    let table = RFCKit.Table(
+      title: nil,
+      header: [],
+      rows: [RFCKit.Table.Row(cells: [[.crossReference(xref)], [.text("next")]])]
+    )
+    #expect(shape(table) == .grid)
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let next = try Fixtures.offset(of: "next", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: next, effectiveRange: nil) as? NSParagraphStyle)
+    let stop = try #require(paragraph.tabStops.first).location
+
+    let storage = NSTextContentStorage()
+    storage.textStorage?.setAttributedString(built.text)
+    let layout = NSTextLayoutManager()
+    storage.addTextLayoutManager(layout)
+    let container = NSTextContainer(size: CGSize(width: 10_000, height: 100_000))
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
+    layout.ensureLayout(for: layout.documentRange)
+    defer { withExtendedLifetime(storage) {} }
+
+    let location = try #require(layout.location(atOffset: next))
+    let fragment = try #require(layout.textLayoutFragment(for: location))
+    let start = layout.offset(of: fragment.rangeInElement.location)
+    let line = try #require(fragment.textLineFragments.first)
+    let x = line.typographicBounds.minX + line.locationForCharacter(at: next - start).x
+    #expect(abs(x - stop) < 0.5, "the next cell starts at \(x), its tab stop is at \(stop)")
+  }
+
   @Test func `grid rows are tab separated and carry tab stops`() throws {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("GET\tyes\tyes"))
