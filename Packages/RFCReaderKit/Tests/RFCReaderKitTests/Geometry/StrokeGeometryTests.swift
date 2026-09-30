@@ -21,24 +21,26 @@ struct StrokeGeometryTests {
   ]
 
   private func segments(line: Int) -> [StrokeGeometry.Segment] {
-    StrokeGeometry.segments(box, line: line, top: 100, height: 20, columnZero: 10, advance: 8)
+    StrokeGeometry.segments(
+      box, line: line, in: .init(top: 100, height: 20, columnZero: 10, advance: 8))
   }
 
-  private func segment(_ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat)
+  private func segment(_ start: (CGFloat, CGFloat), _ end: (CGFloat, CGFloat))
     -> StrokeGeometry.Segment
   {
     StrokeGeometry.Segment(
-      start: CGPoint(x: x1, y: y1), end: CGPoint(x: x2, y: y2), style: .solid)
+      start: CGPoint(x: start.0, y: start.1), end: CGPoint(x: end.0, y: end.1), style: .solid)
   }
 
   @Test func `a field line draws only the verticals the whole height of the line`() {
-    #expect(segments(line: 3) == [segment(38, 100, 38, 120), segment(294, 100, 294, 120)])
+    #expect(segments(line: 3) == [segment((38, 100), (38, 120)), segment((294, 100), (294, 120))])
   }
 
   @Test func `a border line draws its rule through the middle and the verticals below it`() {
     #expect(
       segments(line: 2) == [
-        segment(38, 110, 294, 110), segment(38, 110, 38, 120), segment(294, 110, 294, 120),
+        segment((38, 110), (294, 110)), segment((38, 110), (38, 120)),
+        segment((294, 110), (294, 120)),
       ])
   }
 

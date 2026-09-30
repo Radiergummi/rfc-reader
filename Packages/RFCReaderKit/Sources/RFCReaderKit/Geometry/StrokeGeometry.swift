@@ -49,21 +49,28 @@ public enum StrokeGeometry {
   ) -> [Segment] {
     let bounds = lineFragment.typographicBounds
     return segments(
-      strokes, line: line, top: origin.y + bounds.minY, height: bounds.height,
-      columnZero: origin.x + bounds.minX + lineFragment.locationForCharacter(at: 0).x,
-      advance: advance(of: font))
+      strokes, line: line,
+      in: LineBox(
+        top: origin.y + bounds.minY, height: bounds.height,
+        columnZero: origin.x + bounds.minX + lineFragment.locationForCharacter(at: 0).x,
+        advance: advance(of: font)))
   }
 
-  /// The pure core: a line's box from `top`, `height` tall; column 0 starting at
-  /// `columnZero`, each column `advance` wide.
-  static func segments(
-    _ strokes: [Stroke], line: Int, top: CGFloat, height: CGFloat, columnZero: CGFloat,
-    advance: CGFloat
-  ) -> [Segment] {
+  /// A line's box on the page: from `top`, `height` tall, its column 0 starting at
+  /// `columnZero` and each column `advance` wide.
+  struct LineBox {
+    var top: CGFloat
+    var height: CGFloat
+    var columnZero: CGFloat
+    var advance: CGFloat
+  }
+
+  /// The pure core, over a line's box.
+  static func segments(_ strokes: [Stroke], line: Int, in box: LineBox) -> [Segment] {
     let first = 2 * line
     let last = 2 * line + 2
-    func xPosition(_ grid: Int) -> CGFloat { columnZero + CGFloat(grid) / 2 * advance }
-    func yPosition(_ grid: Int) -> CGFloat { top + CGFloat(grid - first) / 2 * height }
+    func xPosition(_ grid: Int) -> CGFloat { box.columnZero + CGFloat(grid) / 2 * box.advance }
+    func yPosition(_ grid: Int) -> CGFloat { box.top + CGFloat(grid - first) / 2 * box.height }
     var result: [Segment] = []
     for stroke in strokes {
       if stroke.start.y == stroke.end.y {
