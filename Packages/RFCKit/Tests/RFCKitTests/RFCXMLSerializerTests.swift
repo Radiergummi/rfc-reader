@@ -207,6 +207,52 @@ struct RFCXMLSerializerTests {
     #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
   }
 
+  /// A citation is written against the entry it resolved to, not the first entry that
+  /// names the same document: an erratum listed ahead of the RFC it corrects took
+  /// that RFC's citations, 887 of them in 569 converted documents (#424).
+  @Test func `a citation is written against the entry it resolved to`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(99999), title: "Test"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Intro",
+          blocks: [
+            .paragraph(
+              Paragraph([
+                .text("See "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]")),
+                .text("."),
+              ]))
+          ]),
+        Section(
+          anchor: "section-2", number: "2", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References",
+                entries: [
+                  Reference(
+                    anchor: "Err1", title: "Erratum",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                  Reference(
+                    anchor: "RFC7159", title: "The Format",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                ]))
+          ]),
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("<xref target=\"RFC7159\">[RFC7159]</xref>"), "\(xml)")
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(
+      reparsed.everyCrossReference.map(\.target) == [
+        .document(.rfc(7159), section: nil, entry: "RFC7159")
+      ])
+  }
+
   @Test func `artwork is preserved byte for byte`() throws {
     let art = "  +---+\n  | a |  <-- & <\n  +---+"
     let document = RFCDocument(
