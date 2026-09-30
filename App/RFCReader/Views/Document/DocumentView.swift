@@ -227,9 +227,9 @@ struct DocumentView: View {
         // the selected document's.
         guard navigation.selection == id, let request else { return }
         if request.isUnrecorded {
-          follow(request.section)
+          follow(request, animated: true)
         } else {
-          jump(toSection: request.section, animated: true, revealingReferences: true)
+          jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
         }
       }
       .onDisappear(perform: saveReadingPosition)
@@ -342,7 +342,7 @@ struct DocumentView: View {
       .onAppear {
         // Deep link or restored reading position.
         if let request = navigation.scrollRequest, request.isUnrecorded {
-          follow(request.section)
+          follow(request, animated: false)
         } else if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
         } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
@@ -499,6 +499,8 @@ struct DocumentView: View {
       // No header is coming, so the toolbar names the RFC that failed.
       guard navigation.selection == id else { return }
       reader.documentFailedToLoad()
+      // A jump waiting for the text is not coming.
+      if let request = navigation.scrollRequest { navigation.settle(request) }
     }
   }
 
@@ -583,21 +585,32 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is.
-  private func follow(_ place: String) {
+  /// leaves the history as it is. False while there is no build to look in.
+  @discardableResult
+  private func follow(_ place: String, animated: Bool = true) -> Bool {
     // Not while fading out over the next document's reader: the place is the
     // selected document's.
     guard navigation.selection == id, let document = session.state.document,
       let built = session.state.built
-    else { return }
+    else { return false }
     switch landing(at: place) {
     case .jump(let anchor):
       navigation.recordJump(
-        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
+        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors),
+        animated: animated)
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:
       break
+    }
+    return true
+  }
+
+  /// A place handed over unrecorded, settled once followed. Without a build it
+  /// waits for the text to appear, and is followed there, unanimated.
+  private func follow(_ request: NavigationModel.ScrollRequest, animated: Bool) {
+    if follow(request.section, animated: animated) {
+      navigation.settle(request)
     }
   }
 

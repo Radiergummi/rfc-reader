@@ -29,6 +29,9 @@ final class NavigationModel: Identifiable {
     /// nothing (#276). Only the reader can tell, having the build, and only it can
     /// say that `4.2` and `section-4.2` are the same place (#482).
     var isUnrecorded = false
+    /// False for a jump the reader makes as its text appears: a document just
+    /// loaded opens at the place rather than animating there from its top.
+    var isAnimated = true
     private let issue = UUID()
   }
 
@@ -144,7 +147,21 @@ final class NavigationModel: Identifiable {
       }
     }
   }
-  private(set) var scrollRequest: ScrollRequest?
+  private(set) var scrollRequest: ScrollRequest? {
+    didSet {
+      // A jump waited on is done once the reader has recorded it, which replaces
+      // it with the request to scroll there, or once anything else replaces it
+      // before the reader got to it.
+      if let waiting = jumpWaiter, waiting.request != scrollRequest {
+        jumpWaiter = nil
+        waiting.done()
+      }
+    }
+  }
+
+  /// Whoever waits for the unrecorded jump requested last: a script, whose next
+  /// command must find the jump in the history (#482).
+  @ObservationIgnored private var jumpWaiter: (request: ScrollRequest, done: () -> Void)?
 
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
@@ -257,17 +274,33 @@ final class NavigationModel: Identifiable {
   /// A jump within the document already open — a section link in the prose, a row
   /// in the table of contents, or `jump to section`. Handed to the reader, which
   /// records it through `recordJump(to:in:)` where its document holds the place.
-  func jump(toSection section: String) {
-    guard selection != nil else { return }
-    scrollRequest = ScrollRequest(section: section, isUnrecorded: true)
+  /// `whenSettled` runs once it has, or once the reader has done what else it will
+  /// with the place: after the document loads, if it is still loading.
+  func jump(toSection section: String, whenSettled done: @escaping () -> Void = {}) {
+    guard selection != nil else {
+      done()
+      return
+    }
+    let request = ScrollRequest(section: section, isUnrecorded: true)
+    scrollRequest = request
+    jumpWaiter = (request, done)
+  }
+
+  /// The reader has done what it will with `request`, where that recorded nothing:
+  /// a bibliography entry shown, a place the document does not hold, or a document
+  /// that failed to load.
+  func settle(_ request: ScrollRequest) {
+    guard let waiting = jumpWaiter, waiting.request == request else { return }
+    jumpWaiter = nil
+    waiting.done()
   }
 
   /// A place the document on screen holds: its own history entry, so Back undoes
   /// it, unless the reader is already there. Compared in `places`' spelling, so a
   /// section's number and its anchor are one place (#482).
-  func recordJump(to section: String, in places: DocumentPlaces) {
+  func recordJump(to section: String, in places: DocumentPlaces, animated: Bool = true) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section), in: places)
+    go(to: HistoryEntry(id: id, section: section), in: places, animated: animated)
   }
 
   func goBack() {
@@ -280,13 +313,15 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
+  private func go(
+    to place: HistoryEntry, in places: DocumentPlaces? = nil, animated: Bool = true
+  ) {
     guard let place = history.go(to: place, leaving: visiblePosition, in: places) else { return }
-    arrive(at: place)
+    arrive(at: place, animated: animated)
   }
 
-  private func arrive(at place: HistoryEntry) {
-    scrollRequest = place.section.map { ScrollRequest(section: $0) }
+  private func arrive(at place: HistoryEntry, animated: Bool = true) {
+    scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
   }
 }
