@@ -221,7 +221,10 @@ extension DocumentTextBuilder {
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size and its bounds are centered on that font's cap height.
+  /// the run's own font size and its bounds are centered on that font's cap height,
+  /// to the nearest whole point: a symbol that hangs below the line's descender
+  /// makes its line that much taller, even past a fixed line height, and a
+  /// fraction there puts every fragment below it off the pixel grid (#273).
   private func chipSymbolRun(
     _ name: String, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
@@ -232,7 +235,7 @@ extension DocumentTextBuilder {
     let attachment = NSTextAttachment()
     attachment.image = symbol
     attachment.bounds = CGRect(
-      x: 0, y: (font.capHeight - symbol.size.height) / 2, width: symbol.size.width,
+      x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width,
       height: symbol.size.height)
     let run = NSMutableAttributedString(attachment: attachment)
     run.addAttributes(attributes, range: NSRange(location: 0, length: run.length))

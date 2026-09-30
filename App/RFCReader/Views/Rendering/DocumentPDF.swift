@@ -165,7 +165,7 @@ nonisolated enum DocumentPDF {
       textLayoutFragmentFor location: any NSTextLocation,
       in textElement: NSTextElement
     ) -> NSTextLayoutFragment {
-      RFCTextLayoutFragment.make(for: textElement, on: .paper)
+      RFCTextLayoutFragment.make(for: textElement)
     }
   }
 

@@ -381,55 +381,6 @@ public enum FragmentGeometry {
       let maxY = bottom ? snap(rect.maxY) : rect.maxY
       return CGRect(x: rect.minX, y: minY, width: rect.width, height: maxY - minY)
     }
-
-    /// `rect` with its bottom edge, when `bottom`, where a UITextView draws the
-    /// top of the fragment below: for a text view that moves every fragment onto
-    /// the pixel at or above its own top (#273).
-    ///
-    /// NSTextView draws a fragment exactly where the layout put it. UITextView
-    /// gives each fragment a view whose frame is `UIRectIntegralWithScale` of the
-    /// fragment's frame, moved by the container's origin and the rendering
-    /// surface's top, and draws the fragment at `.zero` inside it (UIKitCore,
-    /// `_UITextLayoutFragmentViewBase _updateGeometry`). Each fragment then sits
-    /// up to a pixel above its place, each by a different fraction, so two
-    /// neighbors that tile in points are drawn apart: a gap of up to a pixel,
-    /// which a translucent card shows as a light hairline. Rounding each half of
-    /// the join in its own space cannot close it, because the two spaces are not
-    /// the same fraction off.
-    ///
-    /// The fragment below draws its top join at its own origin, so this one ends
-    /// where that origin lands in its space: the distance between the two floored
-    /// tops. That holds only while every fragment's surface starts on a whole
-    /// point (`startingOnAWholePoint`), or the second floor moves each view by the
-    /// surface's own fraction. The top join is left alone; it already is this
-    /// fragment's origin. `snappingJoins` still follows, and leaves an edge that
-    /// is already on the device grid where it is.
-    public func meetingFlooredNeighbor(of rect: CGRect, bottom: Bool, scale: CGFloat) -> CGRect {
-      guard bottom, scale > 0 else { return rect }
-      let maxY =
-        origin.y + FragmentGeometry.flooredToPixel(frame.maxY, scale: scale)
-        - FragmentGeometry.flooredToPixel(frame.minY, scale: scale)
-      return CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: maxY - rect.minY)
-    }
-  }
-
-  /// `y` moved onto the device pixel at or above it, as `UIRectIntegralWithScale`
-  /// moves an origin: an edge within 0.0001 of a pixel below counts as on it.
-  static func flooredToPixel(_ y: CGFloat, scale: CGFloat) -> CGFloat {
-    let pixels = y * scale
-    let below = pixels.rounded(.up)
-    return (below - pixels < 0.0001 ? below : pixels.rounded(.down)) / scale
-  }
-
-  /// `bounds` grown upwards to start on a whole point, for a fragment's rendering
-  /// surface: UITextView floors a fragment view's frame *after* adding the
-  /// surface's top, so a surface starting at a fraction moves its fragment by that
-  /// fraction as well, and a card's neighbors no longer agree on where their join
-  /// is (`Placement.meetingFlooredNeighbor`). A whole point is a whole pixel at
-  /// every integer scale.
-  public static func startingOnAWholePoint(_ bounds: CGRect) -> CGRect {
-    let top = bounds.minY.rounded(.down)
-    return CGRect(x: bounds.minX, y: top, width: bounds.width, height: bounds.maxY - top)
   }
 
   /// The document-relative character offset under `pointInFragment`, or nil when

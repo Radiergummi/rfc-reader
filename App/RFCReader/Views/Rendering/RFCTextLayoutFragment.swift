@@ -16,44 +16,9 @@ import RFCReaderKit
 /// main thread.
 nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// The fragment every layout manager of built text asks its delegate for: the
-  /// reader's, and a print's (`DocumentPDF`), so the two draw the same decorations.
-  /// Only where a card's joins go differs, by `surface`.
-  static func make(for textElement: NSTextElement, on surface: Surface) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment(
-      textElement: textElement, range: textElement.elementRange, surface: surface)
-  }
-
-  /// What the fragment is drawn into, which decides where a card's joins go: a
-  /// UITextView moves each fragment onto the pixel at or above its top, and a
-  /// card's halves have to meet where it put them (#273). An NSTextView and a
-  /// page draw a fragment exactly where the layout put it.
-  enum Surface {
-    case textView
-    case paper
-  }
-
-  private let surface: Surface
-
-  /// Whether a UITextView draws the fragment, on the pixel at or above its top.
-  /// Both halves of #273's fix go by this, the whole-point rendering surface and
-  /// the bottom join that meets the floored fragment below, because either one
-  /// without the other leaves the seam.
-  private var isFlooredByUITextView: Bool {
-    #if canImport(UIKit)
-      surface == .textView
-    #else
-      false
-    #endif
-  }
-
-  private init(textElement: NSTextElement, range: NSTextRange?, surface: Surface) {
-    self.surface = surface
-    super.init(textElement: textElement, range: range)
-  }
-
-  required init?(coder: NSCoder) {
-    surface = .textView
-    super.init(coder: coder)
+  /// reader's, and a print's (`DocumentPDF`), so the two cannot draw differently.
+  static func make(for textElement: NSTextElement) -> NSTextLayoutFragment {
+    RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
   }
 
   static let cardPadding = FragmentGeometry.cardPadding
@@ -88,11 +53,6 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
-    }
-    // On a whole point, or a UITextView moves the fragment by the surface's own
-    // fraction too, and its card no longer meets its neighbors' (#273).
-    if decorationSpan != nil, isFlooredByUITextView {
-      bounds = FragmentGeometry.startingOnAWholePoint(bounds)
     }
     return bounds
   }
@@ -233,21 +193,14 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   }
 
   /// `rect` with the edges it shares with the run's other fragments on the device
-  /// pixel grid; `Placement.snappingJoins` says where they go. In a UITextView the
-  /// bottom one first goes where the fragment below is drawn,
-  /// `Placement.meetingFlooredNeighbor`.
+  /// pixel grid; `Placement.snappingJoins` says where they go.
   private func joined(
     _ rect: CGRect,
     placement: FragmentGeometry.Placement,
     span: FragmentGeometry.DecorationSpan,
     in context: CGContext
   ) -> CGRect {
-    var rect = rect
-    if isFlooredByUITextView {
-      rect = placement.meetingFlooredNeighbor(
-        of: rect, bottom: !span.isLast, scale: abs(context.userSpaceToDeviceSpaceTransform.d))
-    }
-    return placement.snappingJoins(
+    placement.snappingJoins(
       of: rect,
       top: !span.isFirst,
       bottom: !span.isLast,
