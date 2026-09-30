@@ -222,7 +222,8 @@ struct RFCXMLSerializerTests {
                 .text("See "),
                 .crossReference(
                   CrossReference(
-                    target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]")),
+                    target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]"
+                  )),
                 .text("."),
               ]))
           ]),

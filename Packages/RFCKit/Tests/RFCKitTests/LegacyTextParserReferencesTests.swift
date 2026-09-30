@@ -169,6 +169,7 @@ struct LegacyTextParserReferencesTests {
     ])
     #expect(entries.map(\.documentID) == [.rfc(9990), .rfc(9991), nil])
     #expect(entries[0].seriesInfo.contains(SeriesInfo(name: "BCP", value: "14")))
-    #expect(!entries[2].seriesInfo.contains { $0.name == "BCP" }, "the title's BCP is not the entry's")
+    #expect(
+      !entries[2].seriesInfo.contains { $0.name == "BCP" }, "the title's BCP is not the entry's")
   }
 }
