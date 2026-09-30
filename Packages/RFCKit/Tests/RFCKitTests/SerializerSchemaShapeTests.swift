@@ -73,11 +73,19 @@ struct SerializerSchemaShapeTests {
     #expect(cited(document).contains(.rfc(2104)))
     #expect(cited(reparsed) == cited(document))
     // Every section reads back, once and with its number, a lifted one at the end of
-    // the document rather than where it stood.
+    // the document rather than where it stood; the rest in their order, each with the
+    // subsections it had but its bibliographies.
     let outline = { (document: RFCDocument) in
       document.allSections.map { "\($0.anchor) \($0.number, default: "-")" }.sorted()
     }
     #expect(outline(reparsed) == outline(document))
+    let chapters = { (document: RFCDocument) in
+      document.allSections.filter { !RFCXMLSerializer.isReferences($0) }.map { section in
+        let kept = section.subsections.count { !RFCXMLSerializer.isReferences($0) }
+        return "\(section.anchor) \(kept)"
+      }
+    }
+    #expect(chapters(reparsed) == chapters(document))
   }
 
   // MARK: Bibliographies outside the back
@@ -121,8 +129,8 @@ struct SerializerSchemaShapeTests {
     let back = try #require(rfc.first("back"))
     #expect(back.elements.map(\.name) == ["references", "references", "references", "section"])
     #expect(
-      back.all("references").map { $0["pn"] } == ["section-2", "section-1.3", "section-A.2"])
-    #expect(back.all("references")[1].first("name")?.text == "References 1.3")
+      back.all("references").map { $0["pn"] } == ["section-1.3", "section-2", "section-A.2"])
+    #expect(back.all("references")[0].first("name")?.text == "References 1.3")
     #expect(Self.nested("references", in: try #require(back.first("section"))).isEmpty)
   }
 
@@ -141,7 +149,7 @@ struct SerializerSchemaShapeTests {
     ])
     let ids = Self.declaredIDs(in: rfc)
     #expect(ids.count == Set(ids).count, "\(ids)")
-    #expect(rfc.first("back")?.all("references").map { $0["pn"] } == ["section-12", "section-11"])
+    #expect(rfc.first("back")?.all("references").map { $0["pn"] } == ["section-11", "section-12"])
   }
 
   /// A list holding entries beside nested lists is the one shape the schema refuses
@@ -154,6 +162,7 @@ struct SerializerSchemaShapeTests {
     #expect(list.all("reference").isEmpty)
     let nested = list.all("references")
     #expect(nested.count == 2)
+    #expect(nested.first?["anchor"] == "section-3-entries")
     #expect(nested.first?.first("name")?.text == "References 3")
     #expect(nested.first?.all("reference").map { $0["anchor"] } == ["A", "B"])
     #expect(nested.last?["pn"] == "section-3.1")

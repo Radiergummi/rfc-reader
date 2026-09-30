@@ -92,18 +92,22 @@ public struct RFCXMLSerializer: Sendable {
     }
     writer.close("middle")
 
-    // The back is its own references, then every bibliography lifted from elsewhere,
-    // then its sections, which the schema requires in that order. Its sections are
-    // written apart and first, so what they lift can still go ahead of them.
+    // The back is every bibliography, in document order, then its sections, which
+    // the schema requires in that order: those lifted from the middle, its own, then
+    // those lifted from its sections (#315). Its sections are written apart and
+    // first, so what they lift can still go ahead of them.
     let back = document.sections[backStart...]
     let ownReferences = back.prefix(while: Self.isReferences)
+    let liftedFromMiddle = context.lifted
+    context.lifted = []
     var sections = Writer(depth: writer.depth + 1)
     for section in back.dropFirst(ownReferences.count) {
       writeTopLevel(section, writer: &sections, context: &context)
     }
-    if !back.isEmpty || !context.lifted.isEmpty {
+    let bibliographies = liftedFromMiddle + ownReferences + context.lifted
+    if !back.isEmpty || !bibliographies.isEmpty {
       writer.open("back")
-      for section in ownReferences + context.lifted {
+      for section in bibliographies {
         writeReferences(section, writer: &writer, context: &context)
       }
       writer.append(sections)
@@ -278,7 +282,9 @@ public struct RFCXMLSerializer: Sendable {
     // they go in a list of their own, named after it (#315).
     let wrapsEntries = !entries.isEmpty && !section.subsections.isEmpty
     if wrapsEntries {
-      writer.open("references", [("anchor", "refs-\(context.nextAutoAnchor())")])
+      // Named after the list, which is unique, rather than counted, so it stays
+      // what it was from one build to the next.
+      writer.open("references", [("anchor", "\(section.anchor)-entries")])
       writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
     }
     for reference in entries {
@@ -536,7 +542,8 @@ public struct RFCXMLSerializer: Sendable {
     /// name, so it reads the same and names nothing twice (#65). Given once: a second
     /// section of the same anchor gets none.
     mutating func partNumber(of section: Section) -> String? {
-      partNumbers.removeValue(forKey: section.anchor)
+      guard section.number != nil else { return nil }
+      return partNumbers.removeValue(forKey: section.anchor)
     }
 
     mutating func nextAutoAnchor() -> Int {

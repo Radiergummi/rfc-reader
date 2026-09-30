@@ -21,9 +21,10 @@ public enum RFCXMLParser {
     guard root.name == "rfc" else { throw .notAnRFC(rootElement: root.name) }
 
     // References first, so cross references in the body resolve to RFC numbers.
-    // Every list, not only the back's: a converted legacy document can hold one in
-    // `<middle>` (RFC 2511's `9. References`, ahead of its appendices), or in a
-    // chapter, and a citation into it is as much a link as one into the back.
+    // Every list, not only the back's: XML from elsewhere, and legacy conversions
+    // made before #315 lifted every bibliography into `<back>`, can hold one in
+    // `<middle>` or in a chapter, and a citation into it is as much a link as one
+    // into the back.
     let back = root.first("back")
     let builder = Builder(referenceTargets: Builder.referenceTargets(in: root))
 
@@ -257,8 +258,9 @@ public enum RFCXMLParser {
         case "section":
           count += 1
           return parseSection(child, appendix: appendix, position: childPosition(count))
-        // Not valid RFCXML, but our serializer emits it for a references subsection
-        // whose siblings are ordinary sections; keep it as a subsection.
+        // Not valid RFCXML, but legacy conversions made before #315 have it, a
+        // references subsection whose siblings are ordinary sections; keep it as a
+        // subsection.
         case "references":
           count += 1
           return parseReferencesSection(child, position: childPosition(count))
