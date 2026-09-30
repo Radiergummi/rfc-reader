@@ -46,16 +46,25 @@ enum XMLDriver {
     parser.shouldResolveExternalEntities = false
     _ = parser.parse()
     if delegate.rootClosed { return }
-    // An empty document is said as one on both platforms: Darwin reports it only in
-    // `parserError`, and swift-corelibs-foundation may report it as text with no
-    // element in it.
-    if let failure = delegate.failure, !data.isEmpty { throw failure }
+    if let failure = delegate.failure, !isBlank(data) { throw failure }
     // Not `parserError`: the error left there once `parse()` gives up is a generic
     // one, 111, and the one for an empty document is 1, an internal error.
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber,
       message: delegate.depth == 0
-        ? "empty document" : "the document ended before its root element closed")
+        ? noRootMessage(for: data) : "the document ended before its root element closed")
+  }
+
+  /// An empty document is said as one on both platforms, and only a blank one is:
+  /// libxml2 may report a blank document as text with no element in it, and Darwin
+  /// reports nothing at all for input shorter than four bytes, blank or not.
+  private static func isBlank(_ data: Data) -> Bool {
+    data.allSatisfy { byte in byte == 0x20 || byte == 0x09 || byte == 0x0A || byte == 0x0D }
+  }
+
+  /// What a document that ended with no root opened, and no error reported, says.
+  private static func noRootMessage(for data: Data) -> String {
+    isBlank(data) ? "empty document" : "no XML element where the document starts"
   }
 
   /// What went wrong, in words (#320). Neither platform's error says so itself: its
@@ -85,17 +94,24 @@ enum XMLDriver {
   private static func description(ofLibxml2Error code: Int) -> String? {
     switch code {
     case 3: "no root element where the document starts"
-    // What libxml2 reports for text that is no XML at all; an empty `Data` reports
-    // nothing, and is `run`'s own "empty document".
+    // What libxml2 reports for text that is no XML at all; a blank document is the
+    // driver's own "empty document".
     case 4: "no XML element where the document starts"
     case 5: "the document ended before its root element closed"
     case 9: "a character XML does not allow"
+    case 23: "an entity reference without its closing ;"
     case 26: "an entity that is not declared"
+    case 32: "an encoding that is not supported"
     case 38: "a < inside an attribute value"
     case 39: "an attribute value without its opening quote"
     case 40: "an attribute value without its closing quote"
     case 41: "an attribute without a value"
+    case 42: "an attribute given twice"
+    case 45: "a comment that is not closed"
     case 64: "an XML declaration that is not at the start"
+    case 65: "a space missing where XML requires one"
+    // Most often a bare & that starts no entity reference.
+    case 68: "a name missing where XML requires one"
     case 72: "a tag without its opening <"
     case 73: "a tag without its closing >"
     case 76: "an end tag that does not match the element it closes"
@@ -128,10 +144,9 @@ enum XMLDriver {
         line: parser.lineNumber, column: parser.columnNumber,
         message: "the root element is <\(root.name)>, not <\(name)>")
     }
-    // As in `run`: an empty document is said as one on both platforms.
-    if let failure = delegate.failure, !data.isEmpty { throw failure }
+    if let failure = delegate.failure, !isBlank(data) { throw failure }
     throw XMLSyntaxError(
-      line: parser.lineNumber, column: parser.columnNumber, message: "empty document")
+      line: parser.lineNumber, column: parser.columnNumber, message: noRootMessage(for: data))
   }
 
   private final class RootDelegate: NSObject, XMLParserDelegate {
@@ -197,7 +212,7 @@ enum XMLDriver {
       guard failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
-        message: XMLDriver.message(for: parseError, rootOpened: depth > 0 || rootClosed))
+        message: XMLDriver.message(for: parseError, rootOpened: depth > 0))
     }
   }
 }

@@ -68,6 +68,25 @@ struct XMLDriverTests {
     #expect(error.message == "empty document")
   }
 
+  /// A body too short for Darwin's parser to report anything is still not empty, and
+  /// one of only whitespace is, whatever its length, through both entry points.
+  @Test func `only a blank document says it is empty`() throws {
+    for (body, expected) in [
+      ("OK\n", "no XML element where the document starts"),
+      ("  \n\n  \n", "empty document"),
+    ] {
+      let data = Data(body.utf8)
+      let tree = try #require(throws: XMLSyntaxError.self) {
+        _ = try XMLTree.parse(data)
+      }
+      let root = try #require(throws: XMLSyntaxError.self) {
+        _ = try XMLDriver.rootAttributes(of: data, named: "rfc")
+      }
+      #expect(tree.message == expected)
+      #expect(root.message == expected)
+    }
+  }
+
   /// libxml2 reports the same code, 5, for a document cut short in its prolog as for
   /// one cut short inside its root; the message tells them apart.
   @Test func `a document that ends in its prolog says no root opened`() throws {
