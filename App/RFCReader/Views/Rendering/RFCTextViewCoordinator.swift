@@ -513,7 +513,8 @@ final class RFCTextViewCoordinator: NSObject {
     reportVisibleAnchor()
   }
 
-  /// Hit-tests the top of the visible rect. Deliberately not
+  /// Reads the top of the visible rect, through `readingPlace(atViewportTop:)`,
+  /// which reads it one point down (#299). Deliberately not
   /// `textViewportLayoutController.viewportRange`: that range is larger than the
   /// visible rect, so its start names a section already scrolled past.
   func reportVisibleAnchor() {
@@ -522,25 +523,18 @@ final class RFCTextViewCoordinator: NSObject {
     updateToolbarTitle()
     guard let textView,
       let built,
-      let layout = textView.textLayoutManager
+      let place = textView.textLayoutManager?.readingPlace(
+        atViewportTop: max(0, textView.viewportTop))
     else { return }
-    let top = max(0, textView.viewportTop)
-    let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
-    guard let fragment = layout.textLayoutFragment(for: point) else { return }
-    let offset = layout.offset(of: fragment.rangeInElement.location)
-    let line = FragmentGeometry.topLine(
-      atViewportTop: top,
-      fragmentTop: fragment.layoutFragmentFrame.minY,
-      in: fragment.textLineFragments,
-      fragmentStart: offset,
-      fragmentEnd: layout.offset(of: fragment.rangeInElement.endLocation)
-    )
     tracker.report(
-      viewportTop: textView.viewportTop, line: line, in: built.anchors, length: built.text.length)
+      viewportTop: textView.viewportTop, line: place.line, in: built.anchors,
+      length: built.text.length)
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
-    guard let anchor = sectionIndex.anchor(at: offset) ?? sectionIndex.entries.first?.anchor,
+    guard
+      let anchor = sectionIndex.anchor(at: place.fragmentStart)
+        ?? sectionIndex.entries.first?.anchor,
       anchor != lastReportedAnchor
     else { return }
     lastReportedAnchor = anchor

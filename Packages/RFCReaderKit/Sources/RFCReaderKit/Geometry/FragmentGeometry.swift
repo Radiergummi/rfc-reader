@@ -480,7 +480,7 @@ public enum FragmentGeometry {
   /// pixel, rather than as the line or the paragraph above it. Hit-testing the
   /// fragment at the top itself made a section's heading, put at the top by a
   /// jump, read as the end of the section before (#299).
-  public static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
+  static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
     top + readBackSlack
   }
 
@@ -495,5 +495,28 @@ public enum FragmentGeometry {
   /// hand-trace and every single-line fixture looked right while this was wrong.
   private static func elementIndex(of documentOffset: Int, fragmentStart: Int) -> Int {
     documentOffset - fragmentStart
+  }
+}
+
+extension NSTextLayoutManager {
+  /// What is at the top of the viewport, `top` in container coordinates: the start
+  /// of the paragraph there, which names the section, and the line within it the
+  /// reader records as its place.
+  ///
+  /// Both are read at the same point, `FragmentGeometry.readBackY(atViewportTop:)`.
+  /// Reading the paragraph at the top itself and the line a point below it is what
+  /// made a heading put at the top by a jump read as the section before (#299).
+  public func readingPlace(atViewportTop top: CGFloat) -> (fragmentStart: Int, line: NSRange)? {
+    let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
+    guard let fragment = textLayoutFragment(for: point) else { return nil }
+    let fragmentStart = offset(of: fragment.rangeInElement.location)
+    let line = FragmentGeometry.topLine(
+      atViewportTop: top,
+      fragmentTop: fragment.layoutFragmentFrame.minY,
+      in: fragment.textLineFragments,
+      fragmentStart: fragmentStart,
+      fragmentEnd: offset(of: fragment.rangeInElement.endLocation)
+    )
+    return (fragmentStart, line)
   }
 }
