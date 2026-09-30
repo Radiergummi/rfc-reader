@@ -139,6 +139,31 @@ struct AbbreviationsTests {
         == "Transport Layer Security")
   }
 
+  /// A legacy heading is often set in capitals, and its long form then says nothing
+  /// about the author's casing: a heading's expansion that is all capitals is not
+  /// taken, so the body's own, properly cased, wins.
+  @Test func `an all-capitals heading's expansion gives way to its body's`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Headed"),
+      sections: [
+        Section(
+          anchor: "section-3", number: "3", title: "TRANSPORT LAYER SECURITY (TLS)",
+          blocks: [
+            .paragraph(Paragraph([.text("Each connection uses Transport Layer Security (TLS).")]))
+          ])
+      ],
+      source: .text)
+    #expect(
+      try #require(Abbreviations.defined(in: document)["TLS"]).expansion
+        == "Transport Layer Security")
+  }
+
+  /// With no expansion in the body, an all-capitals heading's is still not taken.
+  @Test func `an all-capitals heading's expansion is not taken`() {
+    let found = Abbreviations.defined(in: document(heading: "TRANSPORT LAYER SECURITY (TLS)"))
+    #expect(found["TLS"] == nil)
+  }
+
   // MARK: The matching itself
 
   private func pairs(_ text: String) -> [String] {

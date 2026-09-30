@@ -46,7 +46,10 @@ enum Abbreviations {
     for section in document.allSections {
       // The heading first, as the reader meets it, and defined in its own section:
       // `3. Transport Layer Security (TLS)` over a body that uses `TLS` alone (#319).
-      record(expansions(in: section.titleText), in: section.anchor)
+      // One set all in capitals, as legacy headings often are, is not the author's
+      // casing, so it is left for the body's own: `RECIPIENT (RCPT)`.
+      record(
+        expansions(in: section.titleText).filter { !isAllCapitals($0.long) }, in: section.anchor)
       visit(section.blocks) { record($0, in: section.anchor) }
     }
     return found
@@ -277,6 +280,11 @@ enum Abbreviations {
       .map { $0.trimmingCharacters(in: .punctuationCharacters) }
       .filter { !$0.isEmpty && !functionWords.contains($0.lowercased()) }
       .count
+  }
+
+  /// Whether every letter of `text` is a capital.
+  private static func isAllCapitals(_ text: String) -> Bool {
+    !text.contains(where: \.isLowercase)
   }
 
   private static func letters(in short: String) -> Int {
