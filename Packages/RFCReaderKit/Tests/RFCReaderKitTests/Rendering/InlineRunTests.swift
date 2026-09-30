@@ -26,7 +26,9 @@ struct InlineRunTests {
 
     let strong = Fixtures.inlineRun([.strong([.text("x")])])
     let boldFont = strong.attribute(.font, at: 0, effectiveRange: nil) as? PlatformFont
-    #expect(boldFont?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true)
+    #expect(
+      boldFont?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true,
+      "\(boldFont.map(Fixtures.describe) ?? "no font")")
   }
 
   @Test func `code uses the monospaced font`() {
@@ -65,7 +67,8 @@ struct InlineRunTests {
     let text = Fixtures.inlineRun([.strong([.emphasis([.text("see "), .code("foo")])])])
     let offset = try Fixtures.offset(of: "foo", in: text)
     let font = try #require(text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
-    #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
+    #expect(
+      font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(Fixtures.describe(font))")
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.italic))
     #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.monospace))
   }
@@ -76,8 +79,12 @@ struct InlineRunTests {
       let offset = try Fixtures.offset(of: script, in: strong)
       let font = try #require(
         strong.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont)
-      #expect(font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(script) lost bold")
-      #expect(font.pointSize == style.bodySize * 0.75)
+      // The font itself in the messages: this failed under concurrent runs with a
+      // 9 pt font, three quarters of 12 pt rather than of the body (#326).
+      #expect(
+        font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold),
+        "\(script) lost bold: \(Fixtures.describe(font))")
+      #expect(font.pointSize == style.bodySize * 0.75, "\(script): \(Fixtures.describe(font))")
     }
   }
 

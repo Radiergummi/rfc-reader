@@ -90,6 +90,18 @@ struct DocumentActionsTests {
     #expect(link.contains("section-4.2"))
   }
 
+  /// Read inside an appendix numbered like a section, the place being read is the
+  /// appendix's, not section 1's: the reader passes the section's `place` (#429).
+  @Test func `a numbered appendix is cited and linked as an appendix`() {
+    let appendix = Section(
+      anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
+    let citation = DocumentActions.citation(
+      metadata(title: "HTTP Semantics"), section: appendix.place, style: .short)
+    #expect(citation == "RFC 9110, Appendix 1")
+    let link = DocumentActions.sectionLink(id: id, section: appendix.place)
+    #expect(link == "https://www.rfc-editor.org/rfc/rfc9110#appendix-1")
+  }
+
   @Test func `the link points at the document when no section is known`() {
     let link = DocumentActions.sectionLink(id: id, section: nil)
     #expect(!link.contains("section"))

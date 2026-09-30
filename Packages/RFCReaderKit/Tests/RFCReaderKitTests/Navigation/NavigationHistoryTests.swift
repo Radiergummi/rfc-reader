@@ -269,19 +269,134 @@ struct NavigationHistoryTests {
     #expect(!history.canGoBack)
   }
 
-  /// The entry records where the tab was sent, not where the reader has scrolled
-  /// since, so going to it again is a scroll back there, without a second entry
-  /// (#287).
-  @Test func `going to the section already current arrives there again`() {
+  /// Going to the section the reader is in scrolls back to it, without a second
+  /// entry (#287).
+  @Test func `going to the section the reader is in arrives there again`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
     history.go(to: place(9110, "section-4.2"))
     #expect(
-      history.go(to: place(9110, "section-4.2"), leaving: "section-9") == place(9110, "section-4.2")
-    )
-    #expect(history.current == place(9110, "section-4.2"))
+      history.go(to: place(9110, "section-4.2"), leaving: "section-4.2")
+        == place(9110, "section-4.2"))
+    #expect(history.go(to: place(9110, "section-4.2")) == place(9110, "section-4.2"))
     #expect(history.goBack() == place(9110))
     #expect(!history.canGoBack)
+  }
+
+  // MARK: - Where the reader is, in either spelling (#482)
+
+  private let document = RFCDocument(
+    header: DocumentHeader(title: "T"),
+    sections: [
+      Section(anchor: "section-1", number: "1", title: "Introduction"),
+      Section(
+        anchor: "section-4", number: "4", title: "Semantics",
+        subsections: [Section(anchor: "section-4.2", number: "4.2", title: "Methods")]),
+      Section(anchor: "section-9", number: "9", title: "Security"),
+    ],
+    source: .xml)
+
+  /// The build's anchors: every section's, the abstract ahead of them, and a
+  /// figure in §4.2.
+  private var places: DocumentPlaces {
+    DocumentPlaces(
+      document: document,
+      anchors: AnchorIndex([
+        .init(anchor: "abstract", offset: 0),
+        .init(anchor: "section-1", offset: 50, heading: "1. Introduction", number: "1"),
+        .init(anchor: "section-4", offset: 100, heading: "4. Semantics", number: "4"),
+        .init(anchor: "section-4.2", offset: 200, heading: "4.2. Methods", number: "4.2"),
+        .init(anchor: "figure-1", offset: 300),
+        .init(anchor: "section-9", offset: 400, heading: "9. Security", number: "9"),
+      ]))
+  }
+
+  /// Read on from the section the tab was sent to, then sent there again: where
+  /// the reader had got to is a place to come back to, so it gets an entry.
+  @Test func `going to the current section after reading on is a navigation`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-1"))
+    history.go(to: place(9110, "section-4.2"), leaving: "section-1")
+    #expect(
+      history.go(to: place(9110, "section-4.2"), leaving: "section-9")
+        == place(9110, "section-4.2"))
+    #expect(history.returnOffer == place(9110, "section-9"))
+    #expect(history.goBack() == place(9110, "section-9"))
+    #expect(history.goBack() == place(9110, "section-1"))
+    #expect(!history.canGoBack)
+  }
+
+  @Test func `a place is recorded as its anchor`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    #expect(
+      history.go(to: place(9110, "4.2"), in: places)
+        == place(9110, "section-4.2"))
+    #expect(history.current == place(9110, "section-4.2"))
+  }
+
+  /// A link spells the place as a number, the contents and the reader's position
+  /// as an anchor; the same place clicked twice is still one entry.
+  @Test func `the same place in either spelling is one entry`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "4.2"), in: places)
+    history.go(
+      to: place(9110, "section-4.2"), leaving: "section-4.2", in: places)
+    history.go(
+      to: place(9110, "4.2"), leaving: "section-4.2", in: places)
+    #expect(history.goBack() == place(9110))
+    #expect(!history.canGoBack)
+  }
+
+  /// A deep link records the number before the document is loaded to resolve it.
+  @Test func `a number the tab was sent to is the anchor the reader reports`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "4.2"))
+    #expect(
+      history.go(to: place(9110, "section-4.2"), in: places)
+        == place(9110, "section-4.2"))
+    #expect(
+      history.go(
+        to: place(9110, "section-4.2"), leaving: "section-4.2",
+        in: places)
+        == place(9110, "section-4.2"))
+    #expect(!history.canGoBack)
+    #expect(history.current == place(9110, "section-4.2"))
+  }
+
+  /// The reader reports where it is by section, so while it reports the section a
+  /// figure is in, it is still at the figure.
+  @Test func `a place in the section the reader reports is where the reader is`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-1"))
+    history.go(to: place(9110, "figure-1"), leaving: "section-1", in: places)
+    #expect(
+      history.go(to: place(9110, "figure-1"), leaving: "section-4.2", in: places)
+        == place(9110, "figure-1"))
+    #expect(history.goBack() == place(9110, "section-1"))
+    #expect(!history.canGoBack)
+  }
+
+  /// Ahead of the first section the reader reports that section, so a place
+  /// there is where the reader is while it does.
+  @Test func `a place ahead of the first section is where the reader is`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-9"))
+    history.go(to: place(9110, "abstract"), leaving: "section-9", in: places)
+    #expect(
+      history.go(to: place(9110, "abstract"), leaving: "section-1", in: places)
+        == place(9110, "abstract"))
+    #expect(history.goBack() == place(9110, "section-9"))
+    #expect(!history.canGoBack)
+  }
+
+  /// Where the reader was is recorded in the same spelling as where it went.
+  @Test func `the place left behind is recorded as its anchor`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "1"))
+    history.go(to: place(9110, "9"), in: places)
+    #expect(history.goBack() == place(9110, "section-1"))
   }
 
   /// A row names no section, so it asks for nothing to scroll to in the document

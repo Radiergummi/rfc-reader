@@ -453,15 +453,26 @@ struct CorpusBackedOmittedBoilerplateTests {
     #expect(!document.allSections.contains { $0.titleText.hasPrefix("The following documents") })
   }
 
-  /// A refused line can continue a block rather than start one: RFC 7231's contents
-  /// has an entry wrapped to column 0 in the middle of a block. The omitted contents end
-  /// at that line, as they did when it was a heading, and the lines of its block
-  /// before it are the contents' still.
+  /// A refused line can continue a block rather than start one: RFC 2223 quotes a
+  /// `Status of this Memo` in its nroff source, and the sentence under it starts at
+  /// column 0 two lines into a block of requests. The omitted status ends at that line,
+  /// as it did when it was a heading, and the lines of its block before it are the
+  /// status's still.
   @Test func `a refused line inside a block ends the boilerplate at that line`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2223"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(text.contains { $0.hasPrefix("This memo") && $0.contains("avian carriers") })
+    #expect(!text.contains { $0.hasPrefix(".fi") && $0.contains("avian carriers") })
+  }
+
+  /// A contents entry takes no heading's place, so it ends no omitted contents: RFC
+  /// 7231's has one wrapped to column 0 behind a stray `ed` in the middle of a block,
+  /// which ended the contents there and put the rest of them in the body (#403).
+  @Test func `a contents entry at column zero does not end the contents`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc7231"))
     let text = document.paragraphs.map(\.plainText) + document.artworkText
     #expect(!text.contains { $0.contains("Payment Required ....") })
-    #expect(text.contains { $0.contains("Origination Date ....") })
+    #expect(!text.contains { $0.contains("Origination Date ....") })
   }
 }
 
