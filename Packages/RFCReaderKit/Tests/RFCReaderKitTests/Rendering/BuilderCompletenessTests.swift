@@ -165,7 +165,7 @@ struct BuilderCompletenessTests {
     let built = DocumentTextBuilder.build(document, style: style)
 
     var expected: Set<String> = []
-    for section in document.allSections where !DocumentTextBuilder.holdsOnlyReferences(section) {
+    for section in document.allSections where !section.holdsOnlyReferences {
       expected.insert(section.anchor)
       for block in section.blocks.flattened {
         // Bibliography entries are not in the body; they are the panel's.
