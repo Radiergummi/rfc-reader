@@ -387,8 +387,6 @@ struct SidebarView: View {
     func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation, library: library) }
 
     final class Coordinator: NSObject, NSSearchFieldDelegate, NSTextSuggestionsDelegate {
-      typealias SuggestionItemType = SearchQuery.Suggestion
-
       var navigation: NavigationModel
       var library: LibraryModel
 
@@ -404,12 +402,13 @@ struct SidebarView: View {
       /// what becomes of it.
       func textField(
         _ textField: NSTextField,
-        provideUpdatedSuggestions responseHandler: @escaping (ItemResponse) -> Void
+        provideUpdatedSuggestions responseHandler:
+          @escaping (NSSuggestionItemResponse<SearchQuery.Suggestion>) -> Void
       ) {
-        guard let index = library.index else { return responseHandler(ItemResponse()) }
+        guard let index = library.index else { return responseHandler(NSSuggestionItemResponse()) }
         let items = SearchQuery.suggestionsWhileTyping(for: textField.stringValue, in: index).map {
           suggestion in
-          var item = Item(representedValue: suggestion, title: suggestion.word)
+          var item = NSSuggestionItem(representedValue: suggestion, title: suggestion.word)
           if suggestion.isUnknown {
             var title = AttributedString(suggestion.word)
             title.foregroundColor = .secondaryLabelColor
@@ -418,15 +417,19 @@ struct SidebarView: View {
           }
           return item
         }
-        responseHandler(ItemResponse(items: items))
+        responseHandler(NSSuggestionItemResponse(items: items))
       }
 
       /// The field's text while a suggestion is highlighted: the query with it taken.
-      func textField(_ textField: NSTextField, textCompletionFor item: Item) -> String? {
+      func textField(
+        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<SearchQuery.Suggestion>
+      ) -> String? {
         item.representedValue.accepted
       }
 
-      func textField(_ textField: NSTextField, didSelect item: Item) {
+      func textField(
+        _ textField: NSTextField, didSelect item: NSSuggestionItem<SearchQuery.Suggestion>
+      ) {
         textField.stringValue = item.representedValue.accepted
         navigation.searchText = textField.stringValue
       }
