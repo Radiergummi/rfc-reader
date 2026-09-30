@@ -23,9 +23,13 @@ struct LoadFailureTests {
     #expect(LoadFailure(error: error).kind == .notFound)
   }
 
-  @Test func `a server error is the server's`() {
-    let error = RFCEditorClient.ClientError.httpStatus(503, url)
+  @Test(arguments: [500, 502, 503, 504])
+  func `a server error is the server's`(status: Int) {
+    let error = RFCEditorClient.ClientError.httpStatus(status, url)
     #expect(LoadFailure(error: error).kind == .server)
+  }
+
+  @Test func `a client error is not the server's`() {
     #expect(LoadFailure(error: RFCEditorClient.ClientError.httpStatus(403, url)).kind == .other)
   }
 
@@ -47,11 +51,13 @@ struct LoadFailureTests {
   }
 
   /// Each kind shows as itself: only a lost connection has the Wi-Fi symbol, and
-  /// each says what to do about it.
+  /// each says what to do about it. The symbol is one SF Symbols has, since a name
+  /// it lacks draws nothing.
   @Test func `each kind has a symbol and a suggestion of its own`() {
-    let kinds: [LoadFailure.Kind] = [.offline, .notFound, .server, .unreadable, .other]
+    let kinds = LoadFailure.Kind.allCases
     #expect(Set(kinds.map(\.symbol)).count == kinds.count)
     #expect(kinds.filter { $0.symbol.hasPrefix("wifi") } == [.offline])
+    #expect(kinds.allSatisfy { PlatformImage(systemName: $0.symbol) != nil })
     #expect(kinds.allSatisfy { !$0.recoverySuggestion.isEmpty })
   }
 }

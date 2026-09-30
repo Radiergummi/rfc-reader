@@ -112,7 +112,7 @@ public struct LoadFailure {
 
   public var message: String { error.localizedDescription }
 
-  public enum Kind: Sendable, Hashable {
+  public enum Kind: Sendable, Hashable, CaseIterable {
     case offline, notFound, server, unreadable, other
 
     public var symbol: String { "" }
