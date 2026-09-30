@@ -45,4 +45,21 @@ struct ReferencedDocumentsTests {
 
     #expect(document.referencedDocuments == [.rfc(9110)])
   }
+
+  /// "This document, RFC 9110, …": the abstract is where a document most often names
+  /// itself, and the documents it cites are by definition others (#279).
+  @Test func `a document citing itself is not among the documents it references`() {
+    let header = DocumentHeader(
+      id: .rfc(9110), title: "Example",
+      abstract: [
+        .paragraph(
+          Paragraph([
+            .text("This document, "), citing(9110), .text(", obsoletes "), citing(7230),
+            .text("."),
+          ]))
+      ])
+    let document = RFCDocument(header: header, sections: [], source: .xml)
+
+    #expect(document.referencedDocuments == [.rfc(7230)])
+  }
 }

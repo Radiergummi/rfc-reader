@@ -65,6 +65,12 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// section bodies missed a document cited there alone (#127). So does a reference's
   /// annotation, which is prose too. Captions are plain strings in the model and
   /// cannot cite.
+  ///
+  /// Never the document's own number, which the abstract and the headings are the
+  /// likeliest to name ("This document, RFC 9110, …"): what it cites are other
+  /// documents, and a citation graph built on this would otherwise carry a self-edge
+  /// (#279). A series the document belongs to, such as RFC 9110's "STD 97", is still
+  /// listed: the header knows the document's number, not its series.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
     for inline in proseInlines {
@@ -74,6 +80,9 @@ public struct RFCDocument: Sendable, Hashable, Codable {
     }
     for case .references(let list) in blocks {
       seen.formUnion(list.entries.compactMap(\.documentID))
+    }
+    if let id = header.id {
+      seen.remove(id)
     }
     return seen.sorted()
   }
