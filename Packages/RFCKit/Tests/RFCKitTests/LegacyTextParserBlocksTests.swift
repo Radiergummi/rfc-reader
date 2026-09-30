@@ -233,6 +233,74 @@ struct LegacyTextParserBlocksTests {
     #expect(!LegacyTextParser.continuesHangingDefinition(atTerms, column: 6))
   }
 
+  /// A page break cuts a hanging definition as it cuts any paragraph, in its first
+  /// paragraph or in one after it. The halves are joined as lines, before linking,
+  /// so a compound word broken at its hyphen is one word again and a cross reference
+  /// that runs over the break is still linked.
+  @Test func `a definition cut by a page break is rejoined as lines`() throws {
+    let linker = InlineLinker(sectionNumbers: ["3.2"], referenceTargets: [:])
+    let endOfPage = LegacyTextParser.RawBlock(
+      lines: [
+        "   Widget:  A part that is carried over a point-",
+        "      to-point link, as set out in Section",
+      ],
+      followedByPageBreak: true)
+    let nextPage = LegacyTextParser.RawBlock(lines: ["      3.2 and in the rest of the text."])
+    let first = try #require(
+      LegacyTextParser.blocks(from: [endOfPage, nextPage], proseIndent: 6, linker: linker)
+        .first?.definitionItems?.first)
+    let paragraph = try #require(first.definition.first?.paragraph)
+    #expect(first.definition.count == 1)
+    #expect(paragraph.plainText.contains("point-to-point"))
+    #expect(paragraph.inlines.contains { $0.crossReference != nil })
+
+    let definition = LegacyTextParser.RawBlock(lines: [
+      "   Widget:  A part that is set on the term's line and",
+      "      goes on under it.",
+    ])
+    let secondParagraph = LegacyTextParser.RawBlock(
+      lines: ["      Its second paragraph runs to the foot of the media-"],
+      followedByPageBreak: true)
+    let rest = LegacyTextParser.RawBlock(lines: ["      independent page, and ends there."])
+    let second = try #require(
+      LegacyTextParser.blocks(
+        from: [definition, secondParagraph, rest], proseIndent: 6, linker: linker
+      ).first?.definitionItems?.first)
+    #expect(second.definition.count == 2)
+    #expect(second.definition.last?.paragraph?.plainText.contains("media-independent") == true)
+  }
+
+  /// A definition that ends a sentence at the foot of a page is not continued by the
+  /// paragraph at the top of the next.
+  @Test func `a finished definition is not joined across a page`() {
+    let finished = LegacyTextParser.RawBlock(lines: [
+      "   Widget:  A part whose definition ends",
+      "      at the foot of the page.",
+    ])
+    let nextParagraph = LegacyTextParser.RawBlock(lines: [
+      "      A second paragraph of the same definition."
+    ])
+    #expect(
+      !LegacyTextParser.continuesDefinitionAcrossPage(finished, nextParagraph, hangColumn: nil))
+    let restOfSentence = LegacyTextParser.RawBlock(lines: ["      and its end."])
+    #expect(
+      LegacyTextParser.continuesDefinitionAcrossPage(finished, restOfSentence, hangColumn: nil))
+  }
+
+  /// A catalog entry whose title has a colon and two spaces in it takes a hanging
+  /// definition's shape too, but it is the catalog's: its term is its number.
+  @Test func `a catalog entry with a colon in its title stays the catalog's`() throws {
+    let catalog = LegacyTextParser.RawBlock(lines: [
+      "   2063 - Flow Counting:  The part that sets out how the",
+      "          counters are kept and read.",
+    ])
+    let blocks = LegacyTextParser.blocks(
+      from: [catalog], proseIndent: 6,
+      linker: InlineLinker(sectionNumbers: [], referenceTargets: [:]))
+    let items = try #require(blocks.first?.definitionItems)
+    #expect(items.map(\.term.plainText) == ["2063"])
+  }
+
   @Test func `lines that only look like hanging definitions are not`() {
     // An exchange in a protocol trace: the arrow is a drawing's.
     #expect(
