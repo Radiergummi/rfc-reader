@@ -110,17 +110,20 @@ public final class DocumentTextBuilder {
     output.append(NSAttributedString(string: string, attributes: attributes))
   }
 
-  /// The width of `string` set as one line in `font`, via CoreText rather than
-  /// `NSAttributedString.size()`. NSStringDrawing applies line-breaking and
-  /// drawing-context layout semantics that are the wrong tool for measuring a
-  /// single line, and under CPU load it has been observed to raise an uncaught
-  /// `NSException`; a `CTLine`'s typographic bounds answer the same question
-  /// directly, without going through a drawing context at all.
+  /// The width of `string` set as one line in `font`.
   func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
     lineWidth(NSAttributedString(string: string, attributes: [.font: font]))
   }
 
-  /// The width of `text` set as one line, in the fonts its runs carry.
+  /// The width of `text` set as one line, in the fonts its runs carry, via CoreText
+  /// rather than `NSAttributedString.size()`. NSStringDrawing applies line-breaking
+  /// and drawing-context layout semantics that are the wrong tool for measuring a
+  /// single line, and under CPU load it has been observed to raise an uncaught
+  /// `NSException`; a `CTLine`'s typographic bounds answer the same question
+  /// directly, without going through a drawing context at all.
+  ///
+  /// An attachment measures nothing here, and a chip's padding kern is added only
+  /// once the build is done, so a chip is measured narrower than it is drawn.
   func lineWidth(_ text: NSAttributedString) -> CGFloat {
     let line = CTLineCreateWithAttributedString(text)
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
