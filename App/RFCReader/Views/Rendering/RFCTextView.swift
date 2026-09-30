@@ -271,6 +271,7 @@ struct ReaderInputs {
       context.coordinator.chromeTap = tap
 
       context.coordinator.textView = textView
+      textView.holdsContentSize = ReaderLayoutEngine.isEnabled
       context.coordinator.headerHost = host
       context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
       return textView

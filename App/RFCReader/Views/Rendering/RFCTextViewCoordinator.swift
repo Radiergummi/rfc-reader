@@ -844,6 +844,20 @@ final class RFCTextViewCoordinator: NSObject {
       reportVisibleAnchor()
       followChrome(scrollView)
     }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+      settleHeldContentSize()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+      if !decelerate { settleHeldContentSize() }
+    }
+
+    private func settleHeldContentSize() {
+      guard ReaderLayoutEngine.isEnabled, let textView = textView as? ReaderTextView else { return }
+      textView.applyHeldContentSize()
+      engine.pin()
+    }
   }
 
   // MARK: - The bars on iPhone

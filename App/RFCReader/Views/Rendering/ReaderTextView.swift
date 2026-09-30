@@ -48,6 +48,29 @@ import RFCReaderKit
       }
     }
 
+    /// On while the viewport-layout engine runs: a content size TextKit reports while
+    /// the reader touches or flings is held and applied when they stop, so the
+    /// indicator does not jump under them.
+    var holdsContentSize = false
+    private var heldContentSize: CGSize?
+
+    override var contentSize: CGSize {
+      get { super.contentSize }
+      set {
+        guard holdsContentSize, isTracking || isDecelerating else {
+          super.contentSize = newValue
+          return
+        }
+        heldContentSize = newValue
+      }
+    }
+
+    func applyHeldContentSize() {
+      guard let held = heldContentSize else { return }
+      heldContentSize = nil
+      super.contentSize = held
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
