@@ -77,22 +77,23 @@ extension PacketDiagram {
   /// One character that draws the grid, where it is in the block's text: `line`
   /// from 0, `column` in `Character`s.
   public struct Mark: Equatable, Sendable {
-    public enum Kind: Equatable, Sendable {
-      /// `+`
-      case corner
-      /// `-` in a border, running into another or a corner.
-      case rule
-      /// `=`, the same.
-      case doubleRule
-      /// `|` on a bit boundary.
-      case delimiter
-      /// `~`, `:`, `/`, `\` or `.` at a row's end: a field of no fixed length.
-      case variableDelimiter
-    }
-
     public var line: Int
     public var column: Int
-    public var kind: Kind
+    public var kind: MarkKind
+  }
+
+  /// What a `Mark` draws.
+  public enum MarkKind: Equatable, Sendable {
+    /// `+`
+    case corner
+    /// `-` in a border, running into another or a corner.
+    case rule
+    /// `=`, the same.
+    case doubleRule
+    /// `|` on a bit boundary.
+    case delimiter
+    /// `~`, `:`, `/`, `\` or `.` at a row's end: a field of no fixed length.
+    case variableDelimiter
   }
 
   public struct Layout: Equatable, Sendable {
