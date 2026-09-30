@@ -303,11 +303,11 @@ struct NavigationHistoryTests {
       document: document,
       anchors: AnchorIndex([
         .init(anchor: "abstract", offset: 0),
-        .init(anchor: "section-1", offset: 50, heading: "1. Introduction", number: "1"),
-        .init(anchor: "section-4", offset: 100, heading: "4. Semantics", number: "4"),
-        .init(anchor: "section-4.2", offset: 200, heading: "4.2. Methods", number: "4.2"),
+        .init(anchor: "section-1", offset: 50, heading: "1. Introduction", place: "1"),
+        .init(anchor: "section-4", offset: 100, heading: "4. Semantics", place: "4"),
+        .init(anchor: "section-4.2", offset: 200, heading: "4.2. Methods", place: "4.2"),
         .init(anchor: "figure-1", offset: 300),
-        .init(anchor: "section-9", offset: 400, heading: "9. Security", number: "9"),
+        .init(anchor: "section-9", offset: 400, heading: "9. Security", place: "9"),
       ]))
   }
 
