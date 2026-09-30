@@ -923,17 +923,10 @@ final class LibraryModel {
   // MARK: - Documents
 
   /// Fetching a document caches it, so the offline set is refreshed after.
-  ///
-  /// Throws `PublishedOriginal` for an RFC that is its PDF or PostScript original
-  /// (#207): without fetching, when the index lists no text, and in place of a text
-  /// that only says where the original is.
   func document(for id: DocumentID) async throws -> RFCDocument {
-    let formats = index?[id]?.formats ?? []
-    if let original = PublishedOriginal(id, formats: formats) { throw original }
-    let document = try await store.document(id, formats: formats, client: client)
+    let document = try await store.document(id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()
     await refreshDownloadedNumbers()
-    if let original = PublishedOriginal(id, formats: formats, text: document) { throw original }
     return document
   }
 

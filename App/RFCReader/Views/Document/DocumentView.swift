@@ -262,10 +262,11 @@ struct DocumentView: View {
 
   @ViewBuilder
   private var states: some View {
-    // Before Original Text too: the original is the PDF or the PostScript, and the
-    // text is not there or only says where it is.
-    if let original = publishedOriginal {
-      originalOnly(original)
+    // Before Original Text too: there is no text to show. From the index rather than
+    // the load, which may have run before the index was here, without its formats.
+    if let original = metadata.flatMap({ PublishedOriginal(id, formats: $0.formats) }) {
+      originalOnly(
+        original, explanation: "The RFC Editor publishes \(id.displayName) only as a scan.")
     } else if reader.showOriginal {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
@@ -278,6 +279,13 @@ struct DocumentView: View {
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
+    } else if let document = session.state.document,
+      let original = metadata.flatMap({ PublishedOriginal(id, formats: $0.formats, text: document) }
+      )
+    {
+      // After Original Text, which shows that text as published.
+      originalOnly(
+        original, explanation: "The text of \(id.displayName) only says where its original is.")
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -369,27 +377,12 @@ struct DocumentView: View {
     }
   }
 
-  /// The original this RFC is (#207), as the load found or, for a load that ran
-  /// before the index was here and so fetched without its formats, as the index says
-  /// once it is.
-  private var publishedOriginal: PublishedOriginal? {
-    if let original = session.state.failure?.error as? PublishedOriginal { return original }
-    guard let formats = metadata?.formats else { return nil }
-    if let document = session.state.document {
-      return PublishedOriginal(id, formats: formats, text: document)
-    }
-    return PublishedOriginal(id, formats: formats)
-  }
-
   /// An RFC that is its PDF or PostScript original (#207): the header the index
   /// gives, and the original to open, rather than an error or a text that only says
   /// where the original is.
-  private func originalOnly(_ original: PublishedOriginal) -> some View {
+  private func originalOnly(_ original: PublishedOriginal, explanation: String) -> some View {
     let name = original.format == .pdf ? "PDF" : "PostScript"
-    // Centered rather than scrolled from the top, as the error is: on macOS the
-    // reader's hosted root refuses the safe area, so a scroll view would put the
-    // title under the toolbar, and what is here fits the pane.
-    return VStack(alignment: .leading, spacing: 24) {
+    let page = VStack(alignment: .leading, spacing: 24) {
       DocumentHeaderView(
         library: library, navigation: navigation,
         identity: DocumentHeaderView.Identity(
@@ -400,7 +393,7 @@ struct DocumentView: View {
       ContentUnavailableView {
         Label("Published as \(name)", systemImage: "doc.richtext")
       } description: {
-        Text("The RFC Editor publishes \(id.displayName) only as a \(name) file.")
+        Text(explanation)
       } actions: {
         Link("Open the Original (\(name))", destination: original.url)
           // The reader's own handler would read the file's URL as a link to this
@@ -412,7 +405,15 @@ struct DocumentView: View {
     }
     .frame(maxWidth: column, alignment: .leading)
     .padding(.vertical, 16)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .frame(maxWidth: .infinity)
+    // Centered, as the error is, where it fits: on macOS the reader's hosted root
+    // refuses the safe area, so a scroll view puts the title under the toolbar.
+    // Scrolled where it does not, at a large text size or on a phone held sideways,
+    // so the link stays in reach.
+    return ViewThatFits(in: .vertical) {
+      page.frame(maxHeight: .infinity)
+      ScrollView { page }
+    }
   }
 
   /// On iOS only; the Mac's toolbar is the window's, and stays.
@@ -545,9 +546,12 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
-    } failed: { [reader, navigation, id] in
-      // No header is coming, so the toolbar names the RFC that failed.
-      guard navigation.selection == id else { return }
+    } failed: { [reader, navigation, library, id] in
+      // No header is coming, so the toolbar names the RFC that failed. Unless it is a
+      // scan, which had no text to load: its page shows the header (#207).
+      guard navigation.selection == id,
+        library.metadata(id).flatMap({ PublishedOriginal(id, formats: $0.formats) }) == nil
+      else { return }
       reader.documentFailedToLoad()
     }
   }

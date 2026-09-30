@@ -36,8 +36,8 @@ struct PublishedOriginalTests {
         == "https://www.rfc-editor.org/rfc/rfc8.pdf")
   }
 
-  /// A pointer is one paragraph at most; the shortest real documents with an
-  /// original beside them have three blocks or more.
+  /// A pointer is one paragraph at most, beside a PostScript original; the shortest
+  /// real documents with an original beside them have three blocks or more.
   @Test func `a text of one paragraph beside an original is a pointer to it`() {
     let pointer = RFCDocument(
       header: DocumentHeader(title: ""),
@@ -49,6 +49,8 @@ struct PublishedOriginalTests {
       source: .text)
     #expect(PublishedOriginal(.rfc(1119), formats: pointerFormats, text: pointer)?.format == .pdf)
     #expect(PublishedOriginal(.rfc(1119), formats: [.text], text: pointer) == nil)
+    // PostScript is what marks the era: most RFCs list a PDF.
+    #expect(PublishedOriginal(.rfc(1119), formats: [.text, .pdf, .html], text: pointer) == nil)
 
     var twoParagraphs = pointer
     twoParagraphs.sections[0].blocks.append(.paragraph(Paragraph(text: "And more.")))
