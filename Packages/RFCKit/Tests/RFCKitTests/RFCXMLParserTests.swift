@@ -506,6 +506,36 @@ struct RFCXMLParserTests {
     #expect(xrefs.map(\.label) == ["the widget protocol", "", "RFC 9999", ""])
   }
 
+  /// An appendix is worded "Appendix A.1", as xml2rfc words it; a named section, such
+  /// as a registry's, stays "Section" (#473).
+  @Test(arguments: [
+    ("4.2", "Section"), ("A", "Appendix"), ("A.1", "Appendix"), ("CBOR Tags", "Section"),
+    ("Abstract", "Section"),
+  ])
+  func `a section is an appendix when it is a letter`(section: String, noun: String) {
+    #expect(CrossReference.sectionNoun(section) == noun)
+  }
+
+  /// A `derivedLink` without a scheme leads nowhere a click can follow, so the
+  /// citation opens the entry instead (#473). In RFCXML's shape, quoted from none.
+  @Test func `a section citation without a followable link targets the entry`() throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGETS" section="A.2" sectionFormat="of" format="default"
+        derivedLink="#widget-parts" derivedContent="WIDGETS"/>.</t>
+      </section></middle>
+      <back><references><name>References</name>
+        <reference anchor="WIDGETS"><front><title>Widgets</title></front></reference>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(
+      xrefs.map(\.target) == [
+        .entrySection(entry: "WIDGETS", tag: "WIDGETS", section: "A.2", url: nil)
+      ])
+    #expect(xrefs.map(\.label) == ["Appendix\u{00A0}A.2 of [WIDGETS]"])
+  }
+
   /// A `<referencegroup>` is one entry in the bibliography, and its members have none
   /// of their own, so a citation of a member outside the series links to the group's
   /// entry, as a member in the series already does. Hand-written, as no committed

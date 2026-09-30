@@ -651,7 +651,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
 
   /// `section` of the document or entry called `name`, worded by `sectionFormat`.
   private func sectionLabel(_ section: String, of name: String) -> String {
-    let sectionLabel = Self.nonBreakingLabel("Section \(section)")
+    let sectionLabel = Self.nonBreakingLabel("\(Self.sectionNoun(section))\u{00A0}\(section)")
     switch sectionFormat {
     case .of: return "\(sectionLabel) of [\(name)]"
     case .comma: return "[\(name)], \(sectionLabel)"
@@ -698,6 +698,14 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// The text a reader shows for this reference -- what `[Inline].plainText`
   /// flattens to, and what the reader draws.
   public var displayLabel: String { display.text }
+
+  /// "Appendix" for an appendix, `A` or `A.1`, as xml2rfc words it, and "Section"
+  /// for anything else, a named section such as a registry's included.
+  static func sectionNoun(_ section: String) -> String {
+    guard let first = section.first, first.isUppercase, first.isLetter else { return "Section" }
+    let rest = section.dropFirst()
+    return rest.isEmpty || rest.first == "." ? "Appendix" : "Section"
+  }
 
   /// A label should never break between its word and its number, so "RFC 9110"
   /// and "Section 4.2" are joined with U+00A0.

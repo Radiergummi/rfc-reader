@@ -490,6 +490,10 @@ public struct RFCXMLSerializer: Sendable {
       if let url {
         attributes += " derivedLink=\"\(Writer.escapeAttribute(url.absoluteString))\""
       }
+      // Words that are there but empty are `none`'s nothing, not ours to compose.
+      if xref.text?.isEmpty == true {
+        attributes += " format=\"none\""
+      }
       return content.isEmpty ? "<xref\(attributes)/>" : "<xref\(attributes)>\(content)</xref>"
     case .document(let id, let section, _):
       if let anchor = context.referenceAnchors[id] {

@@ -184,6 +184,32 @@ struct RFCXMLSerializerTests {
     #expect(serialization.warnings.first?.contains("references") == true)
   }
 
+  /// `format="none"` with nothing inside shows nothing; written back without its
+  /// format, it would come back composed as "Section 4.9 of [WIDGETS]" (#473).
+  @Test func `an empty citation of a section of an entry stays empty`() throws {
+    let xref = CrossReference(
+      target: .entrySection(entry: "WIDGETS", tag: "WIDGETS", section: "4.9", url: nil), text: "")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Test"),
+      sections: [
+        Section(
+          anchor: "intro", title: "Introduction",
+          blocks: [.paragraph(Paragraph([.text("See "), .crossReference(xref), .text(".")]))]),
+        Section(
+          anchor: "references", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References", entries: [Reference(anchor: "WIDGETS", title: "Widgets")]))
+          ]),
+      ],
+      source: .xml
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(reparsed.map(\.label) == [""])
+  }
+
   @Test func `unresolved document references survive as links`() throws {
     // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
     let document = RFCDocument(

@@ -885,7 +885,10 @@ public enum RFCXMLParser {
       if let entry, let section {
         let target = CrossReference.Target.entrySection(
           entry: entry, tag: derived ?? targetAnchor, section: section,
-          url: element["derivedLink"].flatMap(URL.init(string:)))
+          // A link without a scheme leads nowhere; the entry is then the target.
+          url: element["derivedLink"].flatMap(URL.init(string:)).flatMap {
+            $0.scheme == nil ? nil : $0
+          })
         if !innerText.isEmpty || format == "none" {
           return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
         }
