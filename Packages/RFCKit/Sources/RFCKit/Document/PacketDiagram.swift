@@ -68,8 +68,14 @@ public struct PacketDiagram: Equatable, Sendable {
   /// Where the diagram's lines are and which characters draw its grid: what a
   /// renderer hides and draws over. Nil exactly when `recognize` is.
   public static func layout(of text: String) -> Layout? {
+    analyze(text)?.layout
+  }
+
+  /// Both at once, from one reading of `text`: what a renderer needs to draw the
+  /// diagram and to say what it holds.
+  public static func analyze(_ text: String) -> (diagram: PacketDiagram, layout: Layout)? {
     var recognizer = Recognizer(text: text)
-    return recognizer.analyze()?.layout
+    return recognizer.analyze()
   }
 }
 

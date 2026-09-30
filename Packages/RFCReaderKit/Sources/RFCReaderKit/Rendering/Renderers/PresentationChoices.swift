@@ -16,5 +16,5 @@ public struct PresentationChoices: Sendable, Hashable {
 extension ArtworkHints {
   /// The reviewed verdicts that ship with the app. Empty until the first is
   /// reviewed; entries carry no RFC text, only an RFC, a `pn` and a type.
-  public static let bundled = ArtworkHints([:])
+  public static let bundled = ArtworkHints.empty
 }

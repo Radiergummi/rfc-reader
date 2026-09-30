@@ -102,7 +102,7 @@ struct SelectionTextTests {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
       style: ReadingStyle())
-    let rich = SelectionText.richText(of: built.text)
+    let rich = try #require(SelectionText.richText(of: built.text))
     #expect(rich.string == built.text.string)
     var hidden = 0
     rich.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: rich.length)) {

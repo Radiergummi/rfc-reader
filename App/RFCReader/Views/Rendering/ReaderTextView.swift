@@ -212,10 +212,9 @@ import RFCReaderKit
     ) -> Bool {
       if type == .rtf || type == .rtfd {
         let selection = attributedString().attributedSubstring(from: selectedRange())
-        guard SelectionText.hidesCharacters(selection) else {
+        guard let rich = SelectionText.richText(of: selection) else {
           return super.writeSelection(to: pboard, type: type)
         }
-        let rich = SelectionText.richText(of: selection)
         let whole = NSRange(location: 0, length: rich.length)
         let data =
           type == .rtf

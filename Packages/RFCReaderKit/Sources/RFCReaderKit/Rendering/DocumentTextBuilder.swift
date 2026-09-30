@@ -45,7 +45,7 @@ public final class DocumentTextBuilder {
 
   var monospaceAdvance: CGFloat {
     if let cached = monospaceAdvances[style.bodySize] { return cached }
-    let advance = lineWidth("0", font: style.monospacedFont(scale: 1))
+    let advance = Self.lineWidth("0", font: style.monospacedFont(scale: 1))
     monospaceAdvances[style.bodySize] = advance
     return advance
   }
@@ -136,11 +136,15 @@ public final class DocumentTextBuilder {
   /// single line, and under CPU load it has been observed to raise an uncaught
   /// `NSException`; a `CTLine`'s typographic bounds answer the same question
   /// directly, without going through a drawing context at all.
-  func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
+  static func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
     let line = CTLineCreateWithAttributedString(
       NSAttributedString(string: string, attributes: [.font: font]))
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
   }
+  func lineWidth(_ string: String, font: PlatformFont) -> CGFloat {
+    Self.lineWidth(string, font: font)
+  }
+
 }
 
 extension DocumentTextBuilder {

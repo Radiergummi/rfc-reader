@@ -92,13 +92,10 @@ public enum AccessibleReading {
     return pieces
   }
 
-  /// What a diagram is said as: a rendered packet diagram as its fields, from the
-  /// model its rendering was drawn from; anything else as `label`.
+  /// What a diagram is said as: what its rendering says it holds, such as a packet
+  /// diagram's fields, or else `label`.
   public static func label(for box: VerbatimBox) -> String {
-    guard box.shown == .rendered, box.classification.type?.name == "packet",
-      let diagram = PacketDiagram.recognize(box.content.text)
-    else { return label }
-    return PacketSummary.spoken(diagram)
+    box.spokenLabel ?? label
   }
 
   /// Whether a verbatim block is said as a label rather than read: artwork that is

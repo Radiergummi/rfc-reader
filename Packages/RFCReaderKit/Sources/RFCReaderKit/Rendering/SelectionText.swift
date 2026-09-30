@@ -48,30 +48,20 @@ public enum SelectionText {
   /// the same runs, with every character a decorated block hides behind its strokes
   /// in the text color again. The strokes are the reader's drawing and do not travel,
   /// so a rich paste without its borders would be a grid of field names in space.
-  public static func richText(of attributed: NSAttributedString) -> NSAttributedString {
-    let result = NSMutableAttributedString(attributedString: attributed)
-    let whole = NSRange(location: 0, length: result.length)
-    attributed.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
+  /// Nil when nothing in the selection is hidden, and the rich flavors can stay
+  /// AppKit's.
+  public static func richText(of attributed: NSAttributedString) -> NSAttributedString? {
+    var result: NSMutableAttributedString?
+    attributed.enumerateAttribute(
+      .foregroundColor, in: NSRange(location: 0, length: attributed.length)
+    ) { value, range, _ in
       guard let color = value as? PlatformColor, color == DocumentTextBuilder.hiddenColor else {
         return
       }
-      result.addAttribute(.foregroundColor, value: RFCColors.label, range: range)
+      if result == nil { result = NSMutableAttributedString(attributedString: attributed) }
+      result?.addAttribute(.foregroundColor, value: RFCColors.label, range: range)
     }
     return result
-  }
-
-  /// Whether a selection holds characters a decorated block hides.
-  public static func hidesCharacters(_ attributed: NSAttributedString) -> Bool {
-    var found = false
-    attributed.enumerateAttribute(
-      .foregroundColor, in: NSRange(location: 0, length: attributed.length)
-    ) { value, _, stop in
-      if let color = value as? PlatformColor, color == DocumentTextBuilder.hiddenColor {
-        found = true
-        stop.pointee = true
-      }
-    }
-    return found
   }
 
   /// A label with its typesetting taken back out.

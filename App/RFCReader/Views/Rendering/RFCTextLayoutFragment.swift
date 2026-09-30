@@ -95,12 +95,16 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   private var strokeSegments: [StrokeGeometry.Segment] {
     if let cachedStrokeSegments { return cachedStrokeSegments }
     guard let text = textLayoutManager?.attributedText, let range = documentRange,
-      let (strokes, line) = StrokeGeometry.line(of: range, in: text),
-      let lineFragment = textLineFragments.first,
-      let font = text.attribute(.font, at: range.location, effectiveRange: nil) as? PlatformFont
+      let lineFragment = textLineFragments.first
     else { return [] }
-    let segments = StrokeGeometry.segments(
-      strokes, line: line, in: lineFragment, font: font, origin: .zero)
+    // Cached empty too: most fragments are prose, and this is read on every draw.
+    var segments: [StrokeGeometry.Segment] = []
+    if let (strokes, line) = StrokeGeometry.line(of: range, in: text),
+      let font = text.attribute(.font, at: range.location, effectiveRange: nil) as? PlatformFont
+    {
+      segments = StrokeGeometry.segments(
+        strokes, line: line, in: lineFragment, font: font, origin: .zero)
+    }
     cachedStrokeSegments = segments
     return segments
   }

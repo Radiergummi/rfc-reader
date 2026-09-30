@@ -84,15 +84,20 @@ public final class VerbatimBox: Sendable {
   public let ordinal: Int
   public let classification: ArtworkClassification
   public let shown: Shown
+  /// What VoiceOver says in place of a rendered block's drawing, from its
+  /// rendition (`DecoratedText.spokenLabel`); nil unless it is shown rendered.
+  public let spokenLabel: String?
 
   public init(
     _ content: Preformatted, ordinal: Int = 0,
-    classification: ArtworkClassification = .unclassified, shown: Shown = .plain
+    classification: ArtworkClassification = .unclassified, shown: Shown = .plain,
+    spokenLabel: String? = nil
   ) {
     self.content = content
     self.ordinal = ordinal
     self.classification = classification
     self.shown = shown
+    self.spokenLabel = spokenLabel
   }
 }
 

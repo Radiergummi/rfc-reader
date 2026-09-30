@@ -40,7 +40,7 @@ extension DocumentTextBuilder {
     return (0..<columns).map { column in
       rows.compactMap { row -> CGFloat? in
         guard row.cells.count > column else { return nil }
-        return lineWidth(row.cells[column].plainText, font: row.font)
+        return Self.lineWidth(row.cells[column].plainText, font: row.font)
       }.max() ?? 0
     }
   }

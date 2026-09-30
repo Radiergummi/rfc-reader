@@ -45,11 +45,17 @@ public struct DecoratedText: Equatable, Sendable {
   public var hidden: [NSRange]
   public var secondary: [NSRange]
   public var strokes: [Stroke]
+  /// What VoiceOver says in place of the block's drawing, from the model it was
+  /// drawn from; nil to say it as any other diagram.
+  public var spokenLabel: String?
 
-  public init(hidden: [NSRange], secondary: [NSRange], strokes: [Stroke]) {
+  public init(
+    hidden: [NSRange], secondary: [NSRange], strokes: [Stroke], spokenLabel: String? = nil
+  ) {
     self.hidden = hidden
     self.secondary = secondary
     self.strokes = strokes
+    self.spokenLabel = spokenLabel
   }
 }
 

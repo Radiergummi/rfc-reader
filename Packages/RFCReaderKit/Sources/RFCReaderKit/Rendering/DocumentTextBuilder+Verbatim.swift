@@ -32,7 +32,11 @@ extension DocumentTextBuilder {
       : nil
     let showsSource = choices.shownAsSource.contains(ordinal)
     let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
-    let box = VerbatimBox(content, ordinal: ordinal, classification: classification, shown: shown)
+    let decorated: DecoratedText? =
+      if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
+    let box = VerbatimBox(
+      content, ordinal: ordinal, classification: classification, shown: shown,
+      spokenLabel: decorated?.spokenLabel)
 
     // Before the label, so the label is inside the card it names.
     let start = output.length
@@ -54,7 +58,7 @@ extension DocumentTextBuilder {
         .paragraphStyle: paragraphStyle(
           indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
       ])
-    if shown == .rendered, case .decorated(let decorated)? = rendition {
+    if let decorated {
       decorate(decorated, from: bodyStart)
     }
     // Every line ends a paragraph, so the spacing that separates the block from what
@@ -76,15 +80,14 @@ extension DocumentTextBuilder {
   func decorate(_ decorated: DecoratedText, from bodyStart: Int) {
     let body = NSRange(location: bodyStart, length: output.length - bodyStart)
     output.addAttribute(.rfcStrokes, value: StrokeBox(decorated.strokes), range: body)
-    for range in decorated.secondary {
-      output.addAttribute(
-        .foregroundColor, value: RFCColors.secondaryLabel,
-        range: NSRange(location: bodyStart + range.location, length: range.length))
-    }
-    for range in decorated.hidden {
-      output.addAttribute(
-        .foregroundColor, value: Self.hiddenColor,
-        range: NSRange(location: bodyStart + range.location, length: range.length))
+    for (ranges, color) in [
+      (decorated.secondary, RFCColors.secondaryLabel), (decorated.hidden, Self.hiddenColor),
+    ] {
+      for range in ranges {
+        output.addAttribute(
+          .foregroundColor, value: color,
+          range: NSRange(location: bodyStart + range.location, length: range.length))
+      }
     }
   }
 

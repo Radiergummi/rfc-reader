@@ -5,36 +5,40 @@ import RFCKit
 /// and ruler left as the text they are.
 enum PacketPresentation {
   static let entry = RendererEntry(
-    types: ["packet"],
+    types: [ArtworkType.packet.name],
     presentations: [
       Presentation(id: "packet-grid") { block, _, _ in render(block.text) }
     ])
 
   static func render(_ text: String) -> Rendition? {
-    guard let layout = PacketDiagram.layout(of: text) else { return nil }
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    var lineStarts: [Int] = []
-    var offset = 0
-    for line in lines {
-      lineStarts.append(offset)
-      offset += line.utf16.count + 1
-    }
+    guard let (diagram, layout) = PacketDiagram.analyze(text) else { return nil }
     // Columns count `Character`s, the storage UTF-16 units; they part at the first
-    // character outside the Basic Multilingual Plane or with a combining mark.
-    func range(of mark: PacketDiagram.Mark) -> NSRange {
-      let line = lines[mark.line]
-      let start = line.index(line.startIndex, offsetBy: mark.column)
-      return NSRange(
-        location: lineStarts[mark.line] + line[..<start].utf16.count,
-        length: line[start].utf16.count)
+    // character outside the Basic Multilingual Plane or with a combining mark. So
+    // each line is walked once, into the UTF-16 range of every column.
+    var columns: [[NSRange]] = []
+    var offset = 0
+    for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+      var ranges: [NSRange] = []
+      for character in line {
+        let length = character.utf16.count
+        ranges.append(NSRange(location: offset, length: length))
+        offset += length
+      }
+      columns.append(ranges)
+      offset += 1
+    }
+    func lineRange(_ line: Int) -> NSRange {
+      guard let first = columns[line].first, let last = columns[line].last else {
+        return NSRange(location: 0, length: 0)
+      }
+      return NSRange(location: first.location, length: NSMaxRange(last) - first.location)
     }
     return .decorated(
       DecoratedText(
-        hidden: layout.marks.map(range(of:)),
-        secondary: layout.rulerLines.map {
-          NSRange(location: lineStarts[$0], length: lines[$0].utf16.count)
-        },
-        strokes: strokes(for: layout.marks)))
+        hidden: layout.marks.map { columns[$0.line][$0.column] },
+        secondary: layout.rulerLines.map(lineRange),
+        strokes: strokes(for: layout.marks),
+        spokenLabel: PacketSummary.spoken(diagram)))
   }
 
   private struct Cell: Hashable {
@@ -52,7 +56,9 @@ enum PacketPresentation {
       kinds[Cell(line: mark.line, column: mark.column)] = mark.kind
     }
     var pieces: [Stroke] = []
-    func add(_ start: (Int, Int), _ end: (Int, Int), _ style: Stroke.Style) {
+    // In either order: a stroke runs from its upper or left end.
+    func add(_ one: (Int, Int), _ other: (Int, Int), _ style: Stroke.Style) {
+      let (start, end) = one <= other ? (one, other) : (other, one)
       pieces.append(
         Stroke(
           start: GridPoint(x: start.0, y: start.1), end: GridPoint(x: end.0, y: end.1), style: style
@@ -67,17 +73,12 @@ enum PacketPresentation {
       case .delimiter, .variableDelimiter:
         add((x, y - 1), (x, y + 1), style(of: mark.kind))
       case .corner:
-        if let left = kinds[Cell(line: mark.line, column: mark.column - 1)], drawsAcross(left) {
-          add((x - 1, y), (x, y), style(of: left))
-        }
-        if let right = kinds[Cell(line: mark.line, column: mark.column + 1)], drawsAcross(right) {
-          add((x, y), (x + 1, y), style(of: right))
-        }
-        if let above = kinds[Cell(line: mark.line - 1, column: mark.column)], drawsDown(above) {
-          add((x, y - 1), (x, y), style(of: above))
-        }
-        if let below = kinds[Cell(line: mark.line + 1, column: mark.column)], drawsDown(below) {
-          add((x, y), (x, y + 1), style(of: below))
+        for (across, down) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+          guard
+            let neighbor = kinds[Cell(line: mark.line + down, column: mark.column + across)],
+            across == 0 ? drawsDown(neighbor) : drawsAcross(neighbor)
+          else { continue }
+          add((x, y), (x + across, y + down), style(of: neighbor))
         }
       }
     }

@@ -15,6 +15,11 @@ public struct ArtworkType: Sendable, Hashable {
     self.parameters = parameters
   }
 
+  /// A packet diagram, recognized by `PacketDiagram`: the one type the vocabulary
+  /// has no name for that a recognizer assigns, so the classifier and its renderer
+  /// agree on it here.
+  public static let packet = ArtworkType(name: "packet")
+
   /// Types that say nothing about what a block is. `ascii-art` is RFCXML's default
   /// for a drawing of any kind.
   static let generic: Set<String> = ["", "ascii-art", "drawing", "ascii", "text", "plain", "none"]
@@ -106,7 +111,7 @@ public enum ArtworkClassifier {
     }
     // Source code is text an author typed as code, never a drawing.
     if block.kind == .artwork, PacketDiagram.recognize(block.text) != nil {
-      return ArtworkClassification(type: ArtworkType(name: "packet"))
+      return ArtworkClassification(type: .packet)
     }
     return .unclassified
   }

@@ -36,7 +36,8 @@ public enum FigureCopy {
     box(in: range, of: text)?.content
   }
 
-  /// The box of the one figure a selection touches, as `figure(in:of:)` finds it.
+  /// The box of the one figure a selection touches, or nil when it touches none or
+  /// more than one; `figure(in:of:)` is its block.
   public static func box(in range: NSRange, of text: NSAttributedString) -> VerbatimBox? {
     guard range.length > 0 else { return box(at: range.location, in: text) }
     let clamped = NSIntersectionRange(range, NSRange(location: 0, length: text.length))

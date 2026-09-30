@@ -1,4 +1,3 @@
-import CoreText
 import Foundation
 
 #if canImport(UIKit)
@@ -117,8 +116,7 @@ public enum StrokeGeometry {
 
   /// One column of a monospaced font, measured as the builder measures it.
   static func advance(of font: PlatformFont) -> CGFloat {
-    let line = CTLineCreateWithAttributedString(
-      NSAttributedString(string: "0", attributes: [.font: font]))
-    return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+    DocumentTextBuilder.lineWidth("0", font: font)
   }
+
 }
