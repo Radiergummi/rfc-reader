@@ -78,6 +78,10 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  /// Where the reader was when the text view last went — turning Original Text on
+  /// takes it away — so that it comes back there (#449). Nil until it has gone with
+  /// a place, which it has once the text has shown.
+  @State private var placeLeft: ReaderPlaceLeft?
   @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
@@ -340,14 +344,28 @@ struct DocumentView: View {
         .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
-        // Deep link or restored reading position.
-        if let request = navigation.scrollRequest, request.isUnrecorded {
+        // Deep link or restored reading position — or, when the text view is made
+        // again, where the reader was (#449).
+        let arrival = ReaderArrival.onAppear(
+          pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
+          request: navigation.scrollRequest,
+          storedAnchor: storedPosition()?.anchor.flatMap {
+            document.section(anchor: $0) != nil ? $0 : nil
+          })
+        switch arrival {
+        case .place(let anchor):
+          scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+        case .request(let request) where request.isUnrecorded:
           follow(request, animated: false)
-        } else if let request = navigation.scrollRequest {
+        case .request(let request):
           jump(toSection: request.section, animated: false)
-        } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
-          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
+        case .stay:
+          break
         }
+      }
+      .onDisappear {
+        placeLeft =
+          lastVisibleAnchor.isAheadOfSections ? .top : lastVisibleAnchor.anchor.map { .section($0) }
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {

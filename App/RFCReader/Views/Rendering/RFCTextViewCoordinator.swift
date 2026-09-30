@@ -24,6 +24,9 @@ import os
 /// reads this instead: it is written the moment the anchor is computed.
 final class VisibleAnchorBox {
   var anchor: String?
+  /// Whether the top of the viewport is ahead of section one, which `anchor`
+  /// reports as section one.
+  var isAheadOfSections = false
 }
 
 /// Where the header's heading ends, in the hosted header's own coordinates, as
@@ -532,9 +535,11 @@ final class RFCTextViewCoordinator: NSObject {
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
-    guard
-      let anchor = sectionIndex.anchor(at: place.fragmentStart)
-        ?? sectionIndex.entries.first?.anchor,
+    // The box tells the two apart for the one that must not scroll there: the
+    // reader's text made again, which starts at the top (#449).
+    let section = sectionIndex.anchor(at: place.fragmentStart)
+    lastVisibleAnchor?.isAheadOfSections = section == nil
+    guard let anchor = section ?? sectionIndex.entries.first?.anchor,
       anchor != lastReportedAnchor
     else { return }
     lastReportedAnchor = anchor
