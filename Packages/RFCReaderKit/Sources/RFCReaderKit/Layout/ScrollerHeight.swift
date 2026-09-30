@@ -42,6 +42,7 @@ public struct ScrollerHeight: Sendable, Equatable {
   }
 
   public mutating func interactionEnded(now: TimeInterval) {
+    guard isInteracting else { return }
     isInteracting = false
     guard target != shown else { return }
     easeFrom = shown

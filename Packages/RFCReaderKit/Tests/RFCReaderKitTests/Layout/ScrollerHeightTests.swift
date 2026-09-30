@@ -38,6 +38,18 @@ struct ScrollerHeightTests {
     #expect(!height.isEasing)
   }
 
+  /// The engine says so on every idle turn; restarting the ease each time would
+  /// never let it reach the model's total.
+  @Test func `ending an interaction that is not in progress does not restart an ease`() {
+    var height = ScrollerHeight(total: 1000)
+    height.modelChanged(to: 2000, now: 0)
+    height.advance(to: ScrollerHeight.easeDuration / 2)
+    height.interactionEnded(now: ScrollerHeight.easeDuration / 2)
+    height.advance(to: ScrollerHeight.easeDuration)
+    #expect(height.shown == 2000)
+    #expect(!height.isEasing)
+  }
+
   @Test func `an interaction that ends with nothing changed starts no ease`() {
     var height = ScrollerHeight(total: 1000)
     height.interactionBegan()

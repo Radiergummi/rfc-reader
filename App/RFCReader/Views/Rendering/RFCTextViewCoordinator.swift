@@ -1040,6 +1040,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// the next reader already owns. And what it said of the title goes with it: its
     /// header is gone, and only the next reader, or a mode without one, says more.
     func releaseDocument() {
+      engine.stop()
       layoutTask?.cancel()
       NotificationCenter.default.removeObserver(
         self, name: NSView.boundsDidChangeNotification, object: nil)
