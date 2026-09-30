@@ -177,6 +177,89 @@ struct LegacyTextParserBlocksTests {
     #expect(!LegacyTextParser.continuesCatalogEntry(atNumber, numberIndent: 6, textColumn: 13))
   }
 
+  /// xml2rfc sets a `<dl>` entry as its term, two spaces and the definition, with
+  /// the rest of the definition hung three columns in (#436). The lines here are
+  /// written in that shape, not quoted.
+  @Test func `a hanging-indent definition is split into its term and its text`() throws {
+    let entry = try #require(
+      LegacyTextParser.hangingDefinitions([
+        "   Widget:  A part that is set on the term's line and",
+        "      goes on under it, three columns in.",
+      ]))
+    #expect(entry.indent == 3)
+    #expect(entry.continuationColumn == 6)
+    #expect(entry.entries.map(\.term) == ["Widget:"])
+    #expect(
+      entry.entries.map(\.text) == [
+        "A part that is set on the term's line and goes on under it, three columns in."
+      ])
+  }
+
+  /// A term short enough for the hang sets its definition in the hang's column, and
+  /// the lines under it stand there too; with no blank line between them, several
+  /// entries arrive as one block.
+  @Test func `aligned and compact hanging definitions are split per term`() throws {
+    let aligned = try #require(
+      LegacyTextParser.hangingDefinitions([
+        "   Gadget Name:  A part whose text keeps to its",
+        "                 own column under the term.",
+        "   Other Name:   Another part, the same column.",
+      ]))
+    #expect(aligned.continuationColumn == 17)
+    #expect(aligned.entries.map(\.term) == ["Gadget Name:", "Other Name:"])
+    #expect(aligned.entries.last?.text == "Another part, the same column.")
+
+    let oneLine = try #require(LegacyTextParser.hangingDefinitions(["   Short:  One line only."]))
+    #expect(oneLine.continuationColumn == nil)
+    #expect(oneLine.entries.map(\.term) == ["Short:"])
+  }
+
+  @Test func `lines that only look like hanging definitions are not`() {
+    // An exchange in a protocol trace: the arrow is a drawing's.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   A->B:  HELLO part/1",
+        "      Part-Name: first",
+      ]) == nil)
+    // One space after the colon: a label, not xml2rfc's term.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Label: some text that runs on and",
+        "      is indented under it.",
+      ]) == nil)
+    // A sentence, then two spaces: no term ends in a full stop.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   It ends here.  Then it goes on",
+        "      under it.",
+      ]) == nil)
+    // Hung past where the definition starts.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set",
+        "                  far past it.",
+      ]) == nil)
+    // Back at the margin.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set",
+        "back at the margin.",
+      ]) == nil)
+    // Hung at two different columns.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set at",
+        "      one column and then",
+        "        at another.",
+      ]) == nil)
+    // A column gap in the definition is a table's.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  first     second",
+        "      third     fourth",
+      ]) == nil)
+  }
+
   /// RFC 757 is typeset justified: every line is padded with extra spaces between words
   /// to reach a common right margin. Those runs of spaces are what tells prose from
   /// artwork everywhere else, so all 60-odd of its paragraphs were preformatted blocks.

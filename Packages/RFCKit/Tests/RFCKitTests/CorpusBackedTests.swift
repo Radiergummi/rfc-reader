@@ -247,6 +247,33 @@ struct CorpusBackedCatalogTests {
   }
 }
 
+@Suite("Corpus-backed: hanging-indent definitions", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedHangingDefinitionTests {
+  private func definitionLists(in document: RFCDocument) -> [[DefinitionItem]] {
+    document.everyBlock.compactMap(\.definitionItems)
+  }
+
+  /// RFC 6186 sets each SRV service label as xml2rfc sets a `<dl>` entry: the label,
+  /// two spaces, and its description hung three columns in. Each was artwork (#436).
+  @Test func `a hanging-indent entry is a definition, not artwork`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc6186"))
+    let terms = definitionLists(in: document).flatMap { $0 }.map(\.term.plainText)
+    #expect(terms.contains("submission:"))
+    #expect(terms.contains("_imap:"))
+    #expect(document.artworkText.allSatisfy { !$0.hasPrefix("submission:") })
+  }
+
+  /// RFC 6614's terminology aligns each definition under its own text, and sets
+  /// the first, one line long, above the two that hang. One list of three.
+  @Test func `a one-line entry joins the hanging entries beside it`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc6614"))
+    let list = try #require(
+      definitionLists(in: document).first { $0.contains { $0.term.plainText == "RADIUS/TLS Client:" } })
+    #expect(
+      list.map(\.term.plainText) == ["RADIUS/TLS node:", "RADIUS/TLS Client:", "RADIUS/TLS Server:"])
+  }
+}
+
 @Suite("Corpus-backed: references sections", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedReferencesSectionTests {
   /// The first section of that title with anything in it: RFC 2196's contents

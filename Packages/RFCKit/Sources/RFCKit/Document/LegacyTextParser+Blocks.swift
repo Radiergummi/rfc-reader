@@ -685,6 +685,22 @@ extension LegacyTextParser {
     return entries.map { ($0.term, joinWrappedLines($0.lines)) }
   }
 
+  /// The entries of a block set as xml2rfc sets a `<dl>`: each a term ending in a
+  /// colon, two spaces or more, and its definition, with the rest of the definition
+  /// hung under it (#436). Nil when the block is not one.
+  static func hangingDefinitions(_ lines: [String]) -> HangingDefinitions? {
+    nil
+  }
+
+  /// A block of hanging-indent definitions: the column its terms stand in, the
+  /// column the lines under them stand in (nil when no entry runs past one line),
+  /// and each entry's term and its text with those lines joined.
+  struct HangingDefinitions {
+    var indent: Int
+    var continuationColumn: Int?
+    var entries: [(term: String, text: String)]
+  }
+
   /// The column an entry line's text starts in, past its number and dash, or nil
   /// when the line is no entry. Internal, so it can be pinned on hand-written lines.
   static func catalogTextColumn(of line: String) -> Int? {
