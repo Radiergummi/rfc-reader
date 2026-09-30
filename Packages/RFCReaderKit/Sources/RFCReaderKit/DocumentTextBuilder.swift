@@ -272,8 +272,12 @@ extension DocumentTextBuilder {
     output.append(inlineRuns(section.displayTitleInlines, base: headingAttributes))
     if let citing = backlinks[section.anchor] {
       output.append(backlinkChip(section.anchor, count: citing.count, base: headingAttributes))
+      // Nor is the line break after the chip the heading's, or the heading's run
+      // would resume on it: a second stop in the headings rotor, on an empty line.
+      append("\n", Self.outsideHeading(headingAttributes))
+    } else {
+      append("\n", headingAttributes)
     }
-    append("\n", headingAttributes)
     appendBlocks(section.blocks, indent: 0)
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)

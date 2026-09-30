@@ -105,6 +105,14 @@ struct BuilderBacklinkTests {
       in: NSRange(location: 0, length: built.text.length))
     #expect(heading as? String == "two")
     #expect(NSMaxRange(run) == chip.range.location)
+    // Nor the line break after it, or the heading's run resumes there: a second
+    // stop in the rotor, on an empty line.
+    var headingRuns = 0
+    built.text.enumerateAttribute(.rfcAnchor, in: NSRange(location: 0, length: built.text.length)) {
+      value, _, _ in
+      if value as? String == "two" { headingRuns += 1 }
+    }
+    #expect(headingRuns == 1)
     #if canImport(UIKit)
       #expect(
         built.text.attribute(

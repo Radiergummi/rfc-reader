@@ -202,11 +202,7 @@ extension DocumentTextBuilder {
   func backlinkChip(
     _ anchor: String, count: Int, base: [NSAttributedString.Key: Any]
   ) -> NSAttributedString {
-    var attributes = base
-    attributes[.rfcAnchor] = nil
-    for key in Self.headingLevel(depth: 1).keys {
-      attributes[key] = nil
-    }
+    var attributes = Self.outsideHeading(base)
     attributes[.rfcBacklinks] = anchor
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
     if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
@@ -214,6 +210,19 @@ extension DocumentTextBuilder {
     }
     result.append(chipRun(String(count), symbol: "arrow.turn.up.left", attributes: attributes))
     return result
+  }
+
+  /// A heading's attributes less what makes a run the heading: its anchor and its
+  /// level, which the headings rotor reads as one stop per run.
+  static func outsideHeading(
+    _ attributes: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any] {
+    var outside = attributes
+    outside[.rfcAnchor] = nil
+    for key in headingLevel(depth: 1).keys {
+      outside[key] = nil
+    }
+    return outside
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's

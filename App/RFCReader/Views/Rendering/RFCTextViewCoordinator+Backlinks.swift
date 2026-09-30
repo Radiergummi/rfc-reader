@@ -90,7 +90,7 @@ extension RFCTextViewCoordinator {
           })
       else { return }
       present(NSHostingController(rootView: list), size: nil, at: rect)
-      isShowingDocumentPreview = true
+      isShowingPopoverToEnter = true
     }
   }
 #endif

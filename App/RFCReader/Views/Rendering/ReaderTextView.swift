@@ -197,9 +197,11 @@ import RFCReaderKit
     /// How far, in points, a press on a reference moves before it is a drag.
     private static let dragThreshold: CGFloat = 3
 
-    /// AppKit asks for each declared type in turn. Only the plain-text flavour is
-    /// rewritten -- that is the one a terminal, a mail body or a code editor reads,
-    /// and the one the chip's characters are wrong for. The rich flavours stay
+    /// AppKit asks for each declared type in turn, by its legacy name
+    /// (`SelectionText.flavor(of:)`), and the reply is written under the name asked
+    /// for. Only the plain-text flavour is rewritten -- that is the one a terminal, a
+    /// mail body or a code editor reads, and the one the chip's characters are wrong
+    /// for. The rich flavours stay
     /// AppKit's, because a rich target receives the attachment as an image, which is
     /// the chip's symbol and is what it looks like on screen. A heading's backlink
     /// chip is the exception (#183): it is the reader's, not the document's, so a
@@ -209,24 +211,25 @@ import RFCReaderKit
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
     ) -> Bool {
-      let selection = attributedString().attributedSubstring(from: selectedRange())
-      switch type {
-      case .string:
-        pboard.setString(SelectionText.plainText(of: selection), forType: .string)
-        return true
+      let flavor = SelectionText.flavor(of: type)
+      switch flavor {
+      case .plain:
+        let selection = attributedString().attributedSubstring(from: selectedRange())
+        return pboard.setString(SelectionText.plainText(of: selection), forType: type)
       case .rtf, .rtfd:
+        let selection = attributedString().attributedSubstring(from: selectedRange())
         let copied = SelectionText.withoutBacklinkChips(of: selection)
         guard selectedRanges.count == 1, copied.length != selection.length else {
           return super.writeSelection(to: pboard, type: type)
         }
         let whole = NSRange(location: 0, length: copied.length)
         let data =
-          type == .rtf
+          flavor == .rtf
           ? copied.rtf(from: whole, documentAttributes: [:])
           : copied.rtfd(from: whole, documentAttributes: [:])
         guard let data else { return false }
         return pboard.setData(data, forType: type)
-      default:
+      case nil:
         return super.writeSelection(to: pboard, type: type)
       }
     }

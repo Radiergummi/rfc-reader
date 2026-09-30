@@ -190,7 +190,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// The popover up is one the pointer is meant to travel into — a document
     /// preview (#29), or a heading's backlinks (#183) — unlike a card, which leaving
     /// the reference closes.
-    var isShowingDocumentPreview = false
+    var isShowingPopoverToEnter = false
     /// The reference a force click just previewed, whose own mouse-up must not
     /// follow it: see `clickedOnLink`. The next mouse-down starts a click of its
     /// own, and forgets it.
@@ -921,7 +921,7 @@ final class RFCTextViewCoordinator: NSObject {
       // A preview previews nothing itself: a card over a card over the reader. And
       // a document preview is to be read and scrolled, so the pointer leaving the
       // reference on its way there must not close it, as it does a card.
-      guard commitsOnClick == nil, !isShowingDocumentPreview else { return }
+      guard commitsOnClick == nil, !isShowingPopoverToEnter else { return }
       guard let (box, range) = reference(atWindowPoint: point) else {
         cancelHover()
         return
@@ -971,7 +971,7 @@ final class RFCTextViewCoordinator: NSObject {
       case .document(let id, let place):
         // Already open from this force click: the stage-2 pressure step and a
         // `quickLook(with:)` can both arrive for one force click.
-        if forceClickedBox === box, isShowingDocumentPreview { return true }
+        if forceClickedBox === box, isShowingPopoverToEnter { return true }
         // Over a hover card too: this is the bigger answer to the same question.
         guard let library, let rect = referenceRect(for: range) else { return false }
         cancelHover()
@@ -1023,7 +1023,7 @@ final class RFCTextViewCoordinator: NSObject {
       // controller is outside every environment chain.
       let host = NSHostingController(rootView: preview.environment(library))
       present(host, size: preview.size, at: rect)
-      isShowingDocumentPreview = true
+      isShowingPopoverToEnter = true
     }
 
     /// Shared by the card and the document preview, so the two popovers are
@@ -1057,7 +1057,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// way into the popover, which is where it is meant to go.
     @objc(mouseExited:)
     private func mouseExited(with event: NSEvent) {
-      guard !isShowingDocumentPreview else { return }
+      guard !isShowingPopoverToEnter else { return }
       cancelHover()
     }
 
@@ -1070,7 +1070,7 @@ final class RFCTextViewCoordinator: NSObject {
       dwellTimer = nil
       hoveredBox = nil
       forceClickedBox = nil
-      isShowingDocumentPreview = false
+      isShowingPopoverToEnter = false
       if popover?.isShown == true { popover?.performClose(nil) }
       popover = nil
     }
@@ -1138,7 +1138,7 @@ final class RFCTextViewCoordinator: NSObject {
       popover = nil
       hoveredBox = nil
       forceClickedBox = nil
-      isShowingDocumentPreview = false
+      isShowingPopoverToEnter = false
     }
   }
 #endif

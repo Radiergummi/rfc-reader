@@ -108,13 +108,16 @@ extension NSAttributedString {
   /// without that space -- what its list is anchored to. A heading can wrap at the
   /// space, which would anchor the list to the end of the line above.
   public func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
-    guard offset >= 0, offset < length else { return nil }
-    var run = NSRange(location: 0, length: 0)
-    guard
-      let anchor = attribute(
-        .rfcBacklinks, at: offset, longestEffectiveRange: &run,
-        in: NSRange(location: 0, length: length)) as? String
+    // Looked at before the extent is asked for: a longest range of nothing reaches
+    // out to the next chip or the end of the document, and this is asked of every
+    // click on a link and every context menu.
+    guard offset >= 0, offset < length,
+      let anchor = attribute(.rfcBacklinks, at: offset, effectiveRange: nil) as? String
     else { return nil }
+    var run = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcBacklinks, at: offset, longestEffectiveRange: &run,
+      in: NSRange(location: 0, length: length))
     var chip = run
     _ = attribute(.rfcChip, at: NSMaxRange(run) - 1, longestEffectiveRange: &chip, in: run)
     return (anchor, chip)

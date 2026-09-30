@@ -73,3 +73,32 @@ public enum SelectionText {
     reference.label.replacingOccurrences(of: "\u{00A0}", with: " ")
   }
 }
+
+#if !canImport(UIKit) && canImport(AppKit)
+  extension SelectionText {
+    /// The flavors of a copy the reader writes itself rather than leaving to AppKit.
+    public enum Flavor: Sendable, Equatable {
+      case plain
+      case rtf
+      case rtfd
+    }
+
+    /// The flavor a pasteboard type asks for, or nil for one the reader leaves to
+    /// AppKit. `NSTextView` asks `writeSelection(to:type:)` for the legacy names --
+    /// `NSStringPboardType` and the two `NeXT` ones -- which never equal `.string`,
+    /// `.rtf` or `.rtfd`, measured on macOS 27. A pasteboard written under the
+    /// legacy name reads back under the modern one.
+    public static func flavor(of type: NSPasteboard.PasteboardType) -> Flavor? {
+      switch type.rawValue {
+      case NSPasteboard.PasteboardType.string.rawValue, "NSStringPboardType":
+        .plain
+      case NSPasteboard.PasteboardType.rtf.rawValue, "NeXT Rich Text Format v1.0 pasteboard type":
+        .rtf
+      case NSPasteboard.PasteboardType.rtfd.rawValue, "NeXT RTFD pasteboard type":
+        .rtfd
+      default:
+        nil
+      }
+    }
+  }
+#endif
