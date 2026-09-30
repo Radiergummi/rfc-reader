@@ -82,4 +82,21 @@ struct ReaderLayoutTests {
       ReaderLayout.headerHeight(
         measured: .greatestFiniteMagnitude, offered: .greatestFiniteMagnitude) == 0)
   }
+
+  /// A header that changes height after a place was restored — the revisions banner
+  /// arriving on a cold launch into a section (#492) — moves every line below it by
+  /// the change, and a scroll offset nobody moves then shows the end of the
+  /// previous section above the place. The line at the top is held instead: its
+  /// y in the container is the same before and after, only the inset above it moved.
+  @Test func `a header that changes height keeps the line at the top`() {
+    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: 14_200) == 14_200)
+    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: 0) == 0)
+  }
+
+  /// Above the text is the header, which belongs to no line: a reader looking at it
+  /// sees it grow, as `ReadingPlaceTracker` restores such a place to the very top.
+  @Test func `a reader in the header sees it change height in place`() {
+    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: -208) == nil)
+    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: -1) == nil)
+  }
 }
