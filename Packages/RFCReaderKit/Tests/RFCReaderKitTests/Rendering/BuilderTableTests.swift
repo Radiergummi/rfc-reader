@@ -72,6 +72,25 @@ struct BuilderTableTests {
     #expect(shape(narrow, measure: total - 1) == .stacked)
   }
 
+  /// A cell is measured as it is set: strong text in a data cell renders bold, and
+  /// in a header cell heavy, and measuring its plain text in the row's font alone
+  /// left the column too narrow for it, so the text ran past its tab stop (#360).
+  @Test func `a cell is measured in the fonts it is set in`() {
+    func width(of cell: [Inline], inHeader: Bool) -> CGFloat {
+      let cells = [cell]
+      let table = RFCKit.Table(
+        title: nil, header: inHeader ? [RFCKit.Table.Row(cells: cells)] : [],
+        rows: inHeader ? [] : [RFCKit.Table.Row(cells: cells)])
+      return DocumentTextBuilder(style: ReadingStyle()).naturalColumnWidths(table)[0]
+    }
+    let words = "Implementation Considerations"
+    for inHeader in [false, true] {
+      let plain = width(of: [.text(words)], inHeader: inHeader)
+      let strong = width(of: [.strong([.text(words)])], inHeader: inHeader)
+      #expect(strong > plain, "header: \(inHeader)")
+    }
+  }
+
   @Test func `grid rows are tab separated and carry tab stops`() throws {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("GET\tyes\tyes"))
