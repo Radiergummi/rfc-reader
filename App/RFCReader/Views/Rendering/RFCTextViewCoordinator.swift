@@ -460,7 +460,14 @@ final class RFCTextViewCoordinator: NSObject {
   /// `FragmentGeometry.scrollTarget(of:in:fragmentStart:)`.
   private func scroll(toOffset offset: Int, animated: Bool = false) {
     guard let textView, let layout = textView.textLayoutManager else { return }
+    // What a deep jump into a document still laying out costs: everything above the
+    // target, at once, on the main thread (#295). Free once the document is laid
+    // out.
+    let jumpInterval = signposter.beginInterval(
+      "Jump layout", id: signposter.makeSignpostID(),
+      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     ensureLayout(through: offset + Self.layoutSlice)
+    signposter.endInterval("Jump layout", jumpInterval)
     guard let location = layout.location(atOffset: offset),
       let fragment = layout.textLayoutFragment(for: location)
     else { return }
