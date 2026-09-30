@@ -27,7 +27,7 @@ actor DocumentStore {
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
   /// canceled (#116). Original Text joins a document's own where the text is all
-  /// there is to it, and has its own where the document is XML (#324).
+  /// there is to it and no pack serves it, and has its own otherwise (#324).
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
@@ -477,8 +477,12 @@ actor DocumentStore {
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
     // The `.txt` is the document: the same download as the document's, which Prefer
-    // Original Text starts at the same moment, fetched once for both (#324).
-    if RFCEditorClient.textIsTheDocument(availableFormats: formats.isEmpty ? nil : formats) {
+    // Original Text starts at the same moment, fetched once for both (#324). Not
+    // where the pack serves the document: nothing downloads it, so there is nothing
+    // to join, and the shared fetch would parse the text for nobody.
+    if legacyPack?.file(for: id) == nil,
+      RFCEditorClient.textIsTheDocument(availableFormats: formats.isEmpty ? nil : formats)
+    {
       let data = try await fetched(id, formats: formats, client: client).data
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
