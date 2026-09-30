@@ -13,8 +13,8 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   // Read here, above the reader's own `openURL`, which follows links in the app:
-  // the toolbar and the failed load's link sit inside it, and reading it there
-  // opened rfc-editor.org's own page as the RFC it names (#450).
+  // the failed load's link sits inside it, as the iOS toolbar does, and reading
+  // it there opened rfc-editor.org's own page as the RFC it names (#450).
   @Environment(\.openURL) private var systemOpenURL
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -357,7 +357,8 @@ struct DocumentView: View {
         Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
-        Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
+        Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
+          .environment(\.openURL, systemOpenURL)
       }
     } else {
       ProgressView("Loading \(id.displayName)…")
