@@ -99,11 +99,12 @@ it as a function in `RFCReaderKit` with tests over each case.
 | `table` | row by row: cells joined by `\t`, rows by `\n`, header rows first. Never the stacked labels |
 | A table row, as an anchor | its cells, joined by `\t` |
 | `blockQuote`, `aside` | their blocks, joined by `\n` |
-| A section, as an anchor | its heading, `\n`, then its blocks joined by `\n`. Subsections are **not** included: each is its own anchor |
+| A section, as an anchor | its heading, `\n`, then its blocks joined by `\n`, **including** blocks that carry anchors of their own. Subsections are **not** included: each is its own anchor |
 
-An element's model text is the text of its **innermost anchor**. A block without an anchor of
-its own, like every legacy paragraph until #491, lies inside its section's text at the
-offset of that join.
+An element's model text is the text of its **innermost anchor**. An anchor's text contains
+the text of every anchored block inside it, so a block gaining an anchor, as legacy paragraphs
+do with #491, leaves every offset into its section valid. A block without an anchor of its
+own lies inside its section's text at the offset of that join.
 
 ### The position map
 
@@ -118,10 +119,16 @@ number does not reach into the block before it.
   anchor's start. It holds for every build: the reader's at any column, the print's and the
   export's.
 - Selection to position, and position to storage range, are pure queries on it.
+- The other direction has holes too: a model position may have no storage in a given build.
+  An RFC 8792 folding header and the blank line after it are part of a folded block's model
+  text, and the unfolded display drops both. The build declares such positions **hidden**, and
+  a highlight is clipped to the positions that are mapped. A highlight with none is not drawn
+  in that build, and is not detached for it.
 - **The guard:** a `BuilderCompletenessTests`-style test over committed fixtures that every
-  storage character is mapped or declared storage-only, and that model → storage → model
-  round-trips for every mapped position. It runs at two column widths, so the fold/unfold and
-  grid/stacked differences are both exercised.
+  storage character is mapped or declared storage-only, that every model position is mapped
+  or declared hidden in that build, and that model → storage → model round-trips for every
+  mapped position. It runs at two column widths, so the fold/unfold and grid/stacked
+  differences are both exercised.
 
 ## Positions, targets and relocation
 
@@ -141,14 +148,18 @@ Target
   .range(start, end, quote)             any span, possibly across blocks
 Quote
   exact                                 the text the range covered, at most 256 characters
-  prefix, suffix                        up to 32 characters either side
+  prefix, suffix                        up to 32 characters before the range's start and after its end
+  length                                the length of the whole covered text, when exact was cut
   digest                                a SHA-256 of the whole covered text, when exact was cut
 ```
 
 This follows the shape of the W3C Web Annotation selectors: a position selector, with a text
 quote selector as its fallback. "Note on this figure / table / paragraph" is a `.range`
 covering exactly that block. A quote over a large artwork keeps its first 256 characters plus
-the digest, so the row stays small when it syncs.
+the length and digest, so the row stays small when it syncs. The suffix is always taken after
+the range's real end, never after the cut. A cut quote is matched by its first 256 characters
+and its prefix or suffix, as any quote is; its end is its start plus the length, and it
+counts only if the digest of the text it then covers matches.
 
 ### Relocation
 
@@ -160,12 +171,16 @@ raw model text, and every offset `relocate` returns is a raw model offset, never
 one.
 
 1. If the normalized text at the stored position matches the quote, the result is `.exact`.
+   When a finer anchor now contains the position, it is re-expressed under that innermost
+   anchor, and written to the relocated fields as a `.moved` result would be.
 2. Otherwise it searches for the quote under the same anchor, then in the anchor's section,
    then in the whole document. A candidate must match the exact text **and** its prefix or
    suffix. A quote of fewer than 12 characters must match both.
 3. If exactly one candidate is found, the result is `.moved`. If several are found, the
-   result is `.ambiguous`, as happens with repeated boilerplate or a repeated MUST sentence:
-   the annotation is shown at its stored position if that is still in range, and flagged. The
+   result is `.ambiguous`, as happens with repeated boilerplate or a repeated MUST sentence.
+   An ambiguous annotation is **drawn nowhere and never exported**: the text at its stored
+   position no longer matches, so drawing it there would mark an unrelated passage. It is
+   listed, flagged, in the Annotations tab, where the reader can re-place or delete it. The
    code never guesses between candidates by nearness.
 4. If nothing is found, the result is `.detached`. **A detached annotation is never deleted.**
    It is kept and shown apart, as "this passage no longer exists in this document".
@@ -175,11 +190,12 @@ exists.
 
 **The original is never overwritten.** A row keeps the position it was made at. A `.moved`
 result is written to separate **relocated** fields, only for a unique match, and without
-touching `modifiedAt`, so a relocation made on one device can never beat an edit made on
-another. Once the relocated fields match, reads use them, and relocation does not run again
-on every open. If a later pipeline change breaks the relocated position, relocation starts
-over from the original. When a finer anchor exists, the relocated fields take it: a position
-under `section-4.2` relocates to one under `section-4.2-3` once #491 lands, with no migration.
+touching `modifiedAt`. How a relocation and an edit made on another device meet is the sync
+work's conflict policy, not this design's. Once the relocated fields match, reads use them, and
+relocation does not run again on every open. If a later pipeline change breaks the relocated
+position, relocation starts over from the original. When a finer anchor exists, the relocated
+fields take it, whether the result was `.exact` or `.moved`: a position under `section-4.2` is
+re-expressed under `section-4.2-3` once #491 lands, with no migration.
 
 RFCs never change once published. Text only moves when this project's own pipeline changes:
 a heuristic fix, #491, or a document moving from converted legacy text to authored XML. The
@@ -197,7 +213,7 @@ Uniqueness is the store's job. Every row is keyed on the document's `fileStem` a
   - `id` (UUID) and `documentKey`;
   - `startAnchor`, `startOffset`, `endAnchor`, `endOffset`;
   - the relocated copies of those four, optional;
-  - `quoteExact`, `quotePrefix`, `quoteSuffix`, `quoteDigest`;
+  - `quoteExact`, `quotePrefix`, `quoteSuffix`, `quoteLength`, `quoteDigest`;
   - `color`: a name from the palette. `underline` is one of the names, and draws a rule
     rather than a fill;
   - `createdAt`, `modifiedAt`.
@@ -215,9 +231,10 @@ Uniqueness is the store's job. Every row is keyed on the document's `fileStem` a
   - `data`, in `@Attribute(.externalStorage)`.
 
 **Orphans are kept, never deleted.** Under sync, a note can arrive before its highlight and an
-attachment before its note, and a note whose highlight is missing shows as detached. The sweep
-with a grace period that collections are waiting on (`ARCHITECTURE.md`) covers these rows too,
-and it belongs to the sync work.
+attachment before its note. A note whose highlight is missing is re-pointed to the surviving
+highlight that covers its quote, as happens when a merge on another device deleted its
+highlight; with none, it shows as detached. The sweep with a grace period that collections are
+waiting on (`ARCHITECTURE.md`) covers these rows too, and it belongs to the sync work.
 
 **Deleting.** Deleting a highlight that has notes asks first, then deletes the highlight and
 its notes. Deleting a note deletes its attachments.
@@ -305,10 +322,11 @@ The selection snaps to word boundaries.
 
 ### Merging
 
-A new highlight that overlaps an existing one **merges** with it: one highlight covering both
-ranges, in the new color. Notes are **not** joined. Every note of either highlight is re-pointed
-to the merged one, as several notes may share a highlight. Undo restores both highlights and
-the notes' owners.
+A new highlight that overlaps existing ones **merges** with every one it overlaps: one
+highlight covering all their ranges, in the new color. The **oldest** row survives, keeping its
+`id` and `createdAt`; the others are deleted. Notes are **not** joined. Every note of an
+absorbed highlight is re-pointed to the survivor, as several notes may share a highlight.
+Undo restores every highlight and the notes' owners.
 
 ### Changing one
 
@@ -326,8 +344,9 @@ selection. Everything else behaves as it does now:
 ### The Annotations inspector tab
 
 The tab lists every highlight in document order, with its quote and section. Clicking one
-scrolls to its passage. Ambiguous and detached highlights are listed last, marked as such. It
-follows the `RequirementsView` pattern. From slice 2 on, it lists notes too.
+scrolls to its passage. Ambiguous and detached highlights are listed last, marked as such. The
+reader can re-place or delete an ambiguous one there. It follows the `RequirementsView`
+pattern. From slice 2 on, it lists notes too.
 
 If the document fails to load, the tab lists the stored quotes without positions and says the
 document is unavailable. Nothing is detached for that reason.
@@ -465,7 +484,10 @@ The probe builds both on RFC 9110, and measures them.
   function. The text view's geometry is untouched.
 
 Under either, the text column's width is `ReaderLayout`'s from the reader pane's width and
-the notes toggle. **The contents panel stays out of it:**
+the notes toggle. This **amends** the rule on `DocumentView.column`, "the pane's width and the
+measure preference, and nothing else": the toggle becomes its third input. Slice 3 updates
+that comment and `ARCHITECTURE.md` along with its decision. **The contents panel stays out of
+it:**
 
 - with notes on, the panel covers the notes, exactly as it covers the slack today;
 - the notes are not pushed aside;
@@ -527,8 +549,8 @@ is deferred until the column exists and has been used.
   exported, then the annotations in document order, grouped under their section headings.
 - Each highlight is a block quote with a citation link, such as
   `[RFC 9110, Section 4.2](https://www.rfc-editor.org/rfc/rfc9110#section-4.2)`, with its notes
-  under it. Section and block notes sit under their heading. Ambiguous and detached
-  annotations come last, with their quotes.
+  under it. Section and block notes sit under their heading. Detached annotations come last,
+  with their quotes. Ambiguous ones are left out.
 - A note body is already Markdown. The export only rewrites its links: `rfc://` becomes an
   rfc-editor.org URL, since the file leaves the app, and `attachment:<uuid>` becomes a relative
   path into a folder written beside the file. Without attachments, the export is a single
@@ -541,7 +563,8 @@ is deferred until the column exists and has been used.
 - Export as PDF gets a toggle, Include Highlights and Notes. With it on:
   - each highlight becomes a `.highlight` or `.underline` markup annotation in its color, and
     its notes' Markdown becomes the annotation's contents;
-  - a section note becomes a text annotation at its heading.
+  - a section note becomes a text annotation at its heading;
+  - an ambiguous highlight is left out.
 - **Annotations do not print.** `shouldPrint = false` is set explicitly on every annotation. This
   is decided: the annotations are for reading on screen in a PDF app, and a printout of the
   export is a clean copy. Print itself never adds annotations.
@@ -571,8 +594,9 @@ is deferred until the column exists and has been used.
 - **Pure logic in `RFCReaderKit`,** with Swift Testing and raw-identifier names:
   - the model text for every element, and the position map's completeness and round trip, at
     two column widths;
-  - normalization and relocation, including `.ambiguous`;
-  - merging and note re-pointing;
+  - normalization and relocation, including `.ambiguous`, a cut quote, and an `.exact` result
+    re-expressed under a finer anchor;
+  - merging across several highlights, the oldest surviving, and note re-pointing;
   - gutter placement, and the card solver;
   - the Markdown body's parse and serialize round trip;
   - both exports.
