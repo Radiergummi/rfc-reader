@@ -50,10 +50,15 @@ public enum LinkDestination: Equatable, Sendable {
   /// resolves to, or the bibliography entry it names, as `#RFC9110` does in the RFC
   /// Editor's HTML, which the body leaves out (#276). A document just opened only
   /// scrolls, and stays at its top for an entry.
+  ///
+  /// `.unhandled` when the build holds no such anchor, as it holds no `#page-12`: the
+  /// jump would move nothing, so it is no jump, and gets no entry in the history.
   public static func landing(
-    at place: String, in document: RFCDocument, bibliography: [ReferenceGroup]
+    at place: String, in document: RFCDocument, bibliography: [ReferenceGroup],
+    anchors: AnchorIndex
   ) -> LinkDestination {
     let anchor = document.anchor(forPlace: place)
-    return bibliography.entry(anchor: anchor) != nil ? .reference(anchor) : .jump(anchor)
+    if bibliography.entry(anchor: anchor) != nil { return .reference(anchor) }
+    return anchors.offset(of: anchor) != nil ? .jump(anchor) : .unhandled
   }
 }
