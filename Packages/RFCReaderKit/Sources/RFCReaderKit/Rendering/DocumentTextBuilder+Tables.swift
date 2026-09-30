@@ -51,9 +51,9 @@ extension DocumentTextBuilder {
   /// attributes, which is what nearly every cell is; only a cell with formatting has
   /// its runs built to be measured, so a registry's plain columns are not built
   /// twice. A reference column is: each of its chips is built to be measured and
-  /// again to be set, and still measures narrower than it is drawn (#488).
-  /// Building runs numbers a chip, so measuring advances `nextChipID`; the
-  /// numbers only have to differ between neighbors, so the gap is harmless.
+  /// again to be set. Building runs numbers a chip, so measuring advances
+  /// `nextChipID`; the numbers only have to differ between neighbors, so the gap is
+  /// harmless.
   private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
     let isPlainText = cell.allSatisfy { inline in
       if case .text = inline { true } else { false }
@@ -61,7 +61,26 @@ extension DocumentTextBuilder {
     if isPlainText {
       return lineWidth(NSAttributedString(string: cell.plainText, attributes: base))
     }
-    return lineWidth(inlineRuns(cell, base: base))
+    let runs = inlineRuns(cell, base: base)
+    return lineWidth(runs) + chipAllowance(in: runs)
+  }
+
+  /// What `lineWidth(_:)` leaves out of a chip, which is drawn wider than CoreText
+  /// measures it (#488): its symbol, an attachment that measures nothing, as wide
+  /// as the bounds `chipSymbolRun` gives it; and the padding kern on either side of
+  /// it, which `reserveChipPadding` adds only once the build is done.
+  private func chipAllowance(in runs: NSAttributedString) -> CGFloat {
+    let whole = NSRange(location: 0, length: runs.length)
+    var allowance: CGFloat = 0
+    runs.enumerateAttribute(.attachment, in: whole) { value, _, _ in
+      if let attachment = value as? NSTextAttachment { allowance += attachment.bounds.width }
+    }
+    // The default options give the longest effective range, which is the whole
+    // chip, as in `reserveChipPadding`.
+    runs.enumerateAttribute(.rfcChip, in: whole) { value, _, _ in
+      if value != nil { allowance += 2 * FragmentGeometry.chipPadding }
+    }
+    return allowance
   }
 
   /// A grid's header row and data row attributes in `paragraphStyle`: only the font

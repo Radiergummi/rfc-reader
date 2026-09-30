@@ -138,7 +138,8 @@ public final class DocumentTextBuilder {
   /// directly, without going through a drawing context at all.
   ///
   /// An attachment measures nothing here, and a chip's padding kern is added only
-  /// once the build is done, so a chip is measured narrower than it is drawn.
+  /// once the build is done, so a chip is measured narrower than it is drawn; a
+  /// table cell adds what is missing with `chipAllowance(in:)`.
   func lineWidth(_ text: NSAttributedString) -> CGFloat {
     let line = CTLineCreateWithAttributedString(text)
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
