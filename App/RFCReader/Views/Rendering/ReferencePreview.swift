@@ -1,4 +1,5 @@
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 /// A card previewing a cross reference's target: hover on macOS, long press on
@@ -77,26 +78,30 @@ struct ReferencePreview: View {
   /// What the References panel shows for the entry, without its button: the tag
   /// the document cites it by, the title — or, for a legacy entry that could not be
   /// structured, its own words — whether it is normative or informative, the
-  /// authors and where it was published, and the host it links to.
-  @ViewBuilder
+  /// authors and where it was published, and the host it links to. Read as one
+  /// element, with the label the panel's row has.
   private func entryDescription(_ entry: Reference) -> some View {
-    Text(entry.displayAnchor).font(.subheadline.weight(.semibold))
-    if entry.title.isEmpty {
-      if let raw = entry.rawText {
-        Text(raw).font(.callout).foregroundStyle(.secondary).lineLimit(6)
+    VStack(alignment: .leading, spacing: 8) {
+      Text(entry.displayAnchor).font(.subheadline.weight(.semibold))
+      if entry.title.isEmpty {
+        if let raw = entry.rawText {
+          Text(raw).font(.callout).foregroundStyle(.secondary).lineLimit(6)
+        }
+        kindLine
+      } else {
+        Text(entry.title).font(.headline).lineLimit(3)
+        kindLine
+        let byline = entry.authors.map(\.displayName).joined(separator: ", ")
+        let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
+        if !detail.isEmpty {
+          Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+        }
       }
-      kindLine
-    } else {
-      Text(entry.title).font(.headline).lineLimit(3)
-      kindLine
-      let byline = entry.authors.map(\.displayName).joined(separator: ", ")
-      let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
-      if !detail.isEmpty {
-        Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+      if let host = entry.url?.host() {
+        Text(host).font(.caption).foregroundStyle(.secondary)
       }
     }
-    if let host = entry.url?.host() {
-      Text(host).font(.caption).foregroundStyle(.secondary)
-    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.accessibilityLabel)
   }
 }
