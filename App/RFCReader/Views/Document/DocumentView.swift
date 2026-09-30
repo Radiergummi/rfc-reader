@@ -239,10 +239,6 @@ struct DocumentView: View {
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
-      // No header to show the title here, so the toolbar shows it throughout.
-      // On `hasDocument` rather than on appearing: loading a document clears
-      // the title back to hidden after this view may already have appeared.
-      .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -269,7 +265,8 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onToolbarTitle: { reader.updateToolbarTitle($0) },
+        onToolbarTitle: { reader.report(title: $0, from: $1) },
+        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
         onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
@@ -404,6 +401,9 @@ struct DocumentView: View {
     // The scene's `ReaderState` must not carry the previous document's place into
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
+    // Its header is pending until the reader reports, so the title stays out of the
+    // toolbar rather than showing and then dropping (#281).
+    reader.documentStartsLoading()
     reader.showOriginal = preferOriginalText
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
@@ -435,6 +435,10 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
+    } failed: { [reader, navigation, id] in
+      // No header is coming, so the toolbar names the RFC that failed.
+      guard navigation.selection == id else { return }
+      reader.documentFailedToLoad()
     }
   }
 

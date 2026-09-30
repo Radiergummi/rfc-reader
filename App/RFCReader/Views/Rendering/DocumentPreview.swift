@@ -90,7 +90,8 @@ struct DocumentPreview: View {
         onScrollHandled: { scrollTarget = nil },
         onVisibleAnchorChange: { _ in },
         onLink: { _, _ in true },
-        onToolbarTitle: { _ in },
+        onToolbarTitle: { _, _ in },
+        onToolbarTitleReleased: { _ in },
         heading: heading,
         headerIdentity: DocumentHeaderView.Identity(
           header: loaded.document.header, metadata: library.metadata(id)),

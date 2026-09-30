@@ -124,7 +124,12 @@ final class RFCTextViewCoordinator: NSObject {
   /// the scroll, and a hop through a `Task` would leave it a frame behind the text.
   /// That is safe where `onVisibleAnchorChange` is not because it touches no
   /// SwiftUI state.
-  var onToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
+  ///
+  /// With the coordinator, which owns what it reports until it gives it back through
+  /// `onToolbarTitleReleased` in `releaseDocument()` (#281): the reader is made per
+  /// document, and the last one's teardown can come after the next one's report.
+  var onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void = { _, _ in }
+  var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
   var heading: HeadingBox?
   private var lastToolbarTitle: ToolbarTitleState?
 
@@ -527,7 +532,7 @@ final class RFCTextViewCoordinator: NSObject {
       // Steady for almost all of a document; only a change is news.
       guard state != lastToolbarTitle else { return }
       lastToolbarTitle = state
-      onToolbarTitle(state)
+      onToolbarTitle(state, self)
     #endif
   }
 
@@ -831,12 +836,14 @@ final class RFCTextViewCoordinator: NSObject {
     /// `textContainer` setter is not to be called directly, and measured in the same
     /// program both free the same. The scroll observer goes too, so a viewport left
     /// without a layout manager reports nothing to the window's toolbar title, which
-    /// the next reader already owns.
+    /// the next reader already owns. And the title is given back: this reader's
+    /// header is gone, and with nothing else to say otherwise, the title shows.
     func releaseDocument() {
       layoutTask?.cancel()
       NotificationCenter.default.removeObserver(
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
+      onToolbarTitleReleased(self)
     }
 
     private func referenceUnderRestingPointer() -> HoverTarget? {
