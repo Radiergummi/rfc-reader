@@ -152,6 +152,18 @@ public struct RFCEditorClient: Sendable {
     public let xmlParseFailure: (any Error)?
   }
 
+  /// Whether the plain text is all there is: formats are given, and XML is not among
+  /// them. With none given, or an empty list, the XML is tried first.
+  ///
+  /// Then Original Text and the document are the same `.txt`, which the app fetches
+  /// once for both (#324).
+  public static func textIsTheDocument(availableFormats: [FileFormat]?) -> Bool {
+    guard let availableFormats, !availableFormats.isEmpty else {
+      return false
+    }
+    return !availableFormats.contains(.xml)
+  }
+
   /// The XML where the index lists it, the plain text otherwise (#125).
   ///
   /// The text is fetched only when there is no XML: a 404 for it. A canceled
@@ -164,7 +176,7 @@ public struct RFCEditorClient: Sendable {
     async throws -> FetchedDocument
   {
     var xmlParseFailure: (any Error)?
-    if availableFormats?.contains(.xml) ?? true {
+    if !Self.textIsTheDocument(availableFormats: availableFormats) {
       do {
         let data = try await fetchDocumentData(id, format: .xml)
         do {
