@@ -1,15 +1,15 @@
 import Foundation
 import RFCKit
 
-/// Builds the cross-reference judgement set used to measure search ranking (#37).
+/// Builds the cross-reference judgment set used to measure search ranking (#37).
 ///
-/// A cross reference that names a section of another RFC is a relevance judgement its
+/// A cross reference that names a section of another RFC is a relevance judgment its
 /// author already made: the sentence around it says what the target section is about.
 /// Excise the citation and that sentence becomes a query whose answer is known, which
-/// is the only way to get thousands of judgements without writing them by hand.
+/// is the only way to get thousands of judgments without writing them by hand.
 ///
-/// The filtering lives here rather than in a scratch script because the committed set
-/// is worthless if it cannot be reproduced.
+/// The filtering lives here rather than in a scratch script because the set is
+/// worthless if it cannot be reproduced.
 public struct QuerySet {
   /// Function words carry no discrimination over a corpus of specifications; a
   /// sentence made only of these describes nothing and cannot identify a section.
@@ -22,14 +22,6 @@ public struct QuerySet {
     "must", "shall", "should", "will", "would", "have", "has", "had", "get", "got", "about",
     "there", "here", "out", "up", "down", "over", "under", "again", "only", "own", "same",
   ]
-
-  /// A citation found at a known offset in the flattened text of one paragraph.
-  private struct Citation {
-    let target: String
-    let section: String
-    let start: Int
-    let length: Int
-  }
 
   private struct Candidate {
     let query: String
@@ -73,13 +65,16 @@ public struct QuerySet {
   public mutating func collect(_ document: RFCDocument, id: String) {
     for section in document.allSections {
       if let number = section.number, !number.isEmpty { known.insert("\(id)\u{1F}\(number)") }
-      Self.collect(section.blocks) { text, citations in
-        for citation in citations {
-          guard let sentence = Self.sentence(around: citation, in: text) else { continue }
+      for case .paragraph(let paragraph) in section.blocks.flattened {
+        let located = paragraph.inlines.locatedPlainText
+        for citation in located.crossReferences {
+          guard case .document(let target, let targetSection?, _) = citation.reference.target,
+            let sentence = Self.sentence(around: citation.range, in: located.text)
+          else { continue }
           candidates.append(
             Candidate(
               query: sentence, fromDoc: id,
-              toDoc: citation.target, toSection: citation.section))
+              toDoc: target.description, toSection: targetSection))
         }
       }
     }
@@ -120,7 +115,7 @@ public struct QuerySet {
     }
     let usable = kept.count
 
-    // Seeded so the committed set can be reproduced exactly; Swift's own shuffle
+    // Seeded so the set can be reproduced exactly; Swift's own shuffle
     // takes the system generator and would give a different sample every run.
     var generator = SplitMix64(seed: seed)
     kept.shuffle(using: &generator)
@@ -135,73 +130,28 @@ public struct QuerySet {
     .filter { $0.first?.isLetter == true || $0.first?.isNumber == true }
   }
 
-  /// Flattens inlines exactly as `plainText` does, recording where each qualifying
-  /// cross reference landed. The two must stay in step or the offsets are lies.
-  private static func flatten(
-    _ inlines: [Inline], into text: inout [Character], citations: inout [Citation]
-  ) {
-    for inline in inlines {
-      switch inline {
-      case .text(let value), .code(let value), .superscript(let value), .subscript(let value):
-        text += value
-      case .emphasis(let inner), .strong(let inner), .link(_, let inner):
-        flatten(inner, into: &text, citations: &citations)
-      case .lineBreak:
-        text += "\n"
-      case .crossReference(let reference):
-        let label = reference.displayLabel
-        if case .document(let id, let section, _) = reference.target, let section {
-          citations.append(
-            Citation(
-              target: id.description,
-              section: section, start: text.count, length: label.count))
-        }
-        text += label
-      }
+  /// The sentence containing the citation at `range` of `text`, with the citation
+  /// excised so the query cannot simply name its own answer.
+  private static func sentence(around range: Range<String.Index>, in text: String) -> String? {
+    guard range.lowerBound < text.endIndex else { return nil }
+    var low = range.lowerBound
+    while low > text.startIndex {
+      let previous = text.index(before: low)
+      if text[previous] == "." || text[previous] == "\n" { break }
+      low = previous
     }
-  }
-
-  /// The sentence containing the citation, with the citation excised so the query
-  /// cannot simply name its own answer.
-  private static func sentence(around citation: Citation, in characters: [Character]) -> String? {
-    let end = citation.start + citation.length
-    guard citation.start < characters.count, end <= characters.count else { return nil }
-    var low = citation.start
-    while low > 0, characters[low - 1] != ".", characters[low - 1] != "\n" { low -= 1 }
-    var high = end
-    while high < characters.count {
-      let character = characters[high]
-      high += 1
+    var high = range.upperBound
+    while high < text.endIndex {
+      let character = text[high]
+      high = text.index(after: high)
       if character == "." || character == "\n" { break }
     }
-    guard low < citation.start, high > end else { return nil }
-    let before = String(characters[low..<citation.start])
-    let after = String(characters[end..<high])
+    guard low < range.lowerBound, high > range.upperBound else { return nil }
+    let before = text[low..<range.lowerBound]
+    let after = text[range.upperBound..<high]
     return (before + " " + after)
       .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
       .trimmingCharacters(in: .whitespacesAndNewlines)
-  }
-
-  private static func collect(_ blocks: [Block], _ handle: ([Character], [Citation]) -> Void) {
-    for block in blocks {
-      switch block {
-      case .paragraph(let paragraph):
-        var text: [Character] = []
-        var citations: [Citation] = []
-        flatten(paragraph.inlines, into: &text, citations: &citations)
-        if !citations.isEmpty { handle(text, citations) }
-      case .list(let list):
-        for item in list.items { collect(item.blocks, handle) }
-      case .definitionList(let items):
-        for item in items { collect(item.definition, handle) }
-      case .figure(let figure):
-        collect(figure.blocks, handle)
-      case .blockQuote(let inner), .aside(let inner):
-        collect(inner, handle)
-      default:
-        break
-      }
-    }
   }
 }
 

@@ -69,8 +69,7 @@ struct ClientTransportTests {
     }
   }
 
-  /// A malformed index or metadata record names what it was reading and keeps why it
-  /// failed.
+  /// A malformed index names what it was reading and keeps why it failed.
   @Test func `a decoding error keeps the error beneath it`() async throws {
     struct Garbage: HTTPTransport {
       func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -86,13 +85,6 @@ struct ClientTransportTests {
       guard case .decoding(let context, let underlying) = error as? RFCEditorClient.ClientError
       else { return false }
       return context == "rfc-index.xml" && underlying is RFCIndexParser.ParseError
-    }
-    await #expect {
-      _ = try await RFCEditorClient(transport: Garbage()).fetchMetadata(.rfc(9110))
-    } throws: { error in
-      guard case .decoding(let context, let underlying) = error as? RFCEditorClient.ClientError
-      else { return false }
-      return context == "rfc9110.json" && underlying is DecodingError
     }
   }
 }

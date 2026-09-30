@@ -44,7 +44,15 @@ final class NavigationModel: Identifiable {
       if filterChoice.enters(since: oldValue) { takeListInputs() }
     }
   }
-  var searchText = ""
+  /// What is typed into search. The list follows `appliedQuery`, not this.
+  var searchText = "" {
+    didSet { followSearchText(pausing: true) }
+  }
+  /// The query the list, its count and the sidebar's results are computed for: the
+  /// search text, trimmed, once typing pauses and its hits are ready (#124). Until
+  /// then the list keeps the results it has, as Mail and Finder do.
+  private(set) var appliedQuery = ""
+  @ObservationIgnored private var pendingSearch: Task<Void, Never>?
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -136,7 +144,7 @@ final class NavigationModel: Identifiable {
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
   /// Where Back returns to, straight after a jump within the document on screen.
-  var returnOffer: Place? { history.returnOffer }
+  var returnOffer: HistoryEntry? { history.returnOffer }
 
   func settleReturnOffer() {
     history.settleReturnOffer()
@@ -152,7 +160,15 @@ final class NavigationModel: Identifiable {
     if id.series != .rfc, let first = index?.series(id)?.members.first {
       id = first
     }
-    go(to: Place(id: id, section: link.section))
+    // An anchor of the document on screen may name nothing in its body, as the RFC
+    // Editor's `#page-12` doesn't, or an entry the reader shows rather than
+    // scrolls to. Asked for without an entry in the history, it leaves the reader,
+    // and the place it will be left from, where they are (#276).
+    if link.section == nil, let anchor = link.anchor, id == selection {
+      scrollRequest = ScrollRequest(section: anchor)
+      return
+    }
+    go(to: HistoryEntry(id: id, section: link.place))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
     sidebarSelection = .all
@@ -168,6 +184,52 @@ final class NavigationModel: Identifiable {
   func search(_ text: String) {
     sidebarSelection = .all
     searchText = text
+    applySearchWithoutPause()
+  }
+
+  // MARK: - Search
+
+  /// Applies the search text without waiting for a pause in typing: Return in the
+  /// field, or a search asked for with a click. The list still follows once the
+  /// query's hits are ready.
+  func applySearchWithoutPause() {
+    followSearchText(pausing: false)
+  }
+
+  /// Sets the search text and applies it before returning, searching on the main
+  /// actor: for a script, which reads the list straight after setting the text.
+  func setSearchTextSynchronously(_ text: String) {
+    searchText = text
+    pendingSearch?.cancel()
+    pendingSearch = nil
+    appliedQuery = AppliedSearch.query(for: text)
+  }
+
+  /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
+  /// or at once when it is cleared.
+  private func followSearchText(pausing: Bool) {
+    pendingSearch?.cancel()
+    pendingSearch = nil
+    switch AppliedSearch.step(applying: searchText, over: appliedQuery, pausing: pausing) {
+    case nil:
+      // Typed back to the query on show: nothing is left to apply.
+      return
+    case .apply(let query):
+      appliedQuery = query
+    case .search(let query, let delay):
+      pendingSearch = Task(name: "Apply search") { [library] in
+        if delay > .zero {
+          do {
+            try await Task.sleep(for: delay)
+          } catch {
+            return
+          }
+        }
+        await library.prepareSearch(query)
+        guard !Task.isCancelled else { return }
+        appliedQuery = query
+      }
+    }
   }
 
   /// A row picked in the document list.
@@ -182,14 +244,14 @@ final class NavigationModel: Identifiable {
   /// for `.series`, from the members those entries resolve to. A list that could
   /// show a series row would have to come back through `open`.
   func select(_ id: DocumentID) {
-    go(to: Place(id: id))
+    go(to: HistoryEntry(id: id))
   }
 
   /// A jump within the document already open — a section link in the prose, or a
   /// row in the table of contents. Its own history entry, so Back undoes it.
   func jump(toSection section: String) {
     guard let id = selection else { return }
-    go(to: Place(id: id, section: section))
+    go(to: HistoryEntry(id: id, section: section))
   }
 
   func goBack() {
@@ -202,14 +264,12 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: Place) {
-    let before = history.current
-    history.go(to: place, leaving: visiblePosition)
-    guard history.current != before else { return }
+  private func go(to place: HistoryEntry) {
+    guard let place = history.go(to: place, leaving: visiblePosition) else { return }
     arrive(at: place)
   }
 
-  private func arrive(at place: Place) {
+  private func arrive(at place: HistoryEntry) {
     scrollRequest = place.section.map { ScrollRequest(section: $0) }
     visiblePosition = place.section
   }

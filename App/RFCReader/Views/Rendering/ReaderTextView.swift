@@ -199,11 +199,11 @@ import RFCReaderKit
 
     /// AppKit asks for each declared type in turn, by its legacy name
     /// (`SelectionText.flavor(of:)`), and the reply is written under the name asked
-    /// for. Only the plain-text flavour is rewritten -- that is the one a terminal, a
+    /// for. Only the plain-text flavor is rewritten -- that is the one a terminal, a
     /// mail body or a code editor reads, and the one the chip's characters are wrong
-    /// for. The rich flavours stay
-    /// AppKit's, because a rich target receives the attachment as an image, which is
-    /// the chip's symbol and is what it looks like on screen. A heading's backlink
+    /// for. The rich flavors stay AppKit's, because a rich target receives the
+    /// attachment as an image, which is the chip's symbol and is what it looks like
+    /// on screen. A heading's backlink
     /// chip is the exception (#183): it is the reader's, not the document's, so a
     /// selection holding one writes its RTF and RTFD without it. A selection of
     /// several ranges stays AppKit's to join, chip and all.

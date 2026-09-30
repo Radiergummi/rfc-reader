@@ -255,7 +255,7 @@ struct PrintFurnitureTests {
     DocumentHeader(
       id: .rfc(9999), title: "A Protocol for Examples", abbreviatedTitle: "Examples",
       authors: authors, date: PublicationDate(year: 2026, month: 6),
-      workingGroup: "Example Working Group", category: "Standards Track")
+      workingGroup: "Example Working Group", category: .standardsTrack)
   }
 
   @Test func `the running header is number, short title and date`() {
@@ -288,7 +288,7 @@ struct PrintFurnitureTests {
   @Test func `the title block carries the identity line and the authors`() {
     let furniture = PrintFurniture(
       header: header(authors: [
-        Author(name: "A. Writer", role: "editor"), Author(name: "B. Scribe"),
+        Author(name: "A. Writer", role: .editor), Author(name: "B. Scribe"),
       ]),
       metadata: nil)
     #expect(furniture.titleBlock.title == "A Protocol for Examples")

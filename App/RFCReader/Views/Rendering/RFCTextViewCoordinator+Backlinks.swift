@@ -82,15 +82,15 @@ extension RFCTextViewCoordinator {
           of: anchor,
           follow: { [weak self] section in
             guard let self else { return }
-            self.cancelHover()
-            // A click, as far as the reader is concerned: the scroll it causes must
-            // not preview whatever lands under the pointer.
-            self.linkClickPointer = NSEvent.mouseLocation
+            // Committed as a document preview is: the list closes, and the scroll
+            // the jump causes previews nothing that lands under the pointer.
+            self.hover.send(.previewCommitted(pointer: NSEvent.mouseLocation))
             self.followBacklink(to: section)
           })
       else { return }
-      present(NSHostingController(rootView: list), size: nil, at: rect)
-      isShowingPopoverToEnter = true
+      hover.showBacklinks(
+        ReferenceHoverController.Popover(
+          content: NSHostingController(rootView: list), size: nil, anchor: rect))
     }
   }
 #endif

@@ -4,10 +4,6 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 struct FetchCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "fetch",
@@ -79,7 +75,12 @@ struct FetchCommand: AsyncParsableCommand {
       index = try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path))
     } else {
       Self.logger.info("downloading index", metadata: ["url": "\(RFCEditorEndpoints.index)"])
-      let data = try await Self.download(RFCEditorEndpoints.index)
+      // Asked unconditionally, so the answer is the index itself, never a 304.
+      let fetch = try await Self.client.fetchIndexData(
+        unlessMatching: nil, onExpensiveNetworks: true)
+      guard case .changed(let data, _) = fetch else {
+        throw RFCEditorClient.ClientError.httpStatus(304, RFCEditorEndpoints.index)
+      }
       try data.write(to: outDirectory.appending(path: "rfc-index.xml"), options: .atomic)
       index = try RFCIndexParser.parse(data)
     }
@@ -107,7 +108,7 @@ struct FetchCommand: AsyncParsableCommand {
           do {
             return (
               id,
-              .success(try await Self.download(RFCEditorEndpoints.document(id, format: fileFormat)))
+              .success(try await Self.client.fetchDocumentData(id, format: fileFormat))
             )
           } catch { return (id, .failure(error)) }
         }
@@ -135,15 +136,8 @@ struct FetchCommand: AsyncParsableCommand {
     if failures > 0 { throw ExitCode.failure }
   }
 
-  static func download(_ url: URL) async throws -> Data {
-    var request = URLRequest(url: url)
-    request.setValue(
-      "rfc-reader corpus-build (+https://github.com/Radiergummi/rfc-reader)",
-      forHTTPHeaderField: "User-Agent")
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-      throw PipelineError.http((response as? HTTPURLResponse)?.statusCode ?? -1, url)
-    }
-    return data
-  }
+  /// The RFC Editor's client, naming this tool in its User-Agent and retrying what
+  /// can pass (`RetryingTransport`).
+  private static let client = RFCEditorClient(
+    transport: RetryingTransport(URLSessionTransport(userAgent: RetryingTransport.userAgent)))
 }

@@ -32,7 +32,7 @@ public enum CitationFormatter {
   {
     switch style {
     case .short:
-      return sectionSuffix(section).map { "\(rfc.id.displayName), \($0)" } ?? rfc.id.displayName
+      return shortCitation(rfc.id, section: section)
     case .url:
       return Self.url(for: rfc.id, section: section).absoluteString
     case .markdown:
@@ -52,11 +52,16 @@ public enum CitationFormatter {
       RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), section: section)
   }
 
+  /// `RFC 9110, Section 4.2`, `RFC 9110, Appendix A.1`, or the document alone.
+  public static func shortCitation(_ id: DocumentID, section: String? = nil) -> String {
+    sectionSuffix(section).map { "\(id.displayName), \($0)" } ?? id.displayName
+  }
+
   private static func sectionSuffix(_ section: String?) -> String? {
     guard let section, !section.isEmpty else { return nil }
     // An appendix numbered like a section is named by its anchor (`RFCLink.section`).
-    if section.hasPrefix(RFCLink.appendixPrefix) {
-      return "Appendix \(section.dropFirst(RFCLink.appendixPrefix.count))"
+    if section.hasPrefix(SectionAnchor.appendixPrefix) {
+      return "Appendix \(section.dropFirst(SectionAnchor.appendixPrefix.count))"
     }
     return section.first?.isLetter == true ? "Appendix \(section)" : "Section \(section)"
   }

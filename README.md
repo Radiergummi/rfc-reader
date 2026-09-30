@@ -23,12 +23,12 @@ Every RFC, beautifully readable, instantly searchable, and one tap from any refe
 
 ```sh
 swift test --package-path Packages/RFCKit   # core library, any Swift 6.3 toolchain
-brew install xcodegen && xcodegen generate  # then open RFCReader.xcodeproj
+make xcodegen-install xcodeproj             # then open RFCReader.xcodeproj
 ```
 
 ## Data
 
-Everything comes from the RFC Editor's public endpoints (`rfc-index.xml`, `rfc/rfcNNNN.xml|txt|json`, `rfcrss.xml`, `errata.json`) and the IETF Datatracker API. No accounts, no server of our own. The 8,464 legacy text-only RFCs are converted to RFCXML once, offline, and shipped as an optional data pack; see [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md).
+Everything comes from the RFC Editor's public endpoints (`rfc-index.xml`, `rfc/rfcNNNN.xml|txt`, `rfcrss.xml`). No accounts, no server of our own. The 8,457 legacy RFCs published as text are converted to RFCXML once, offline, and shipped as an optional data pack; see [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md).
 
 ## License
 

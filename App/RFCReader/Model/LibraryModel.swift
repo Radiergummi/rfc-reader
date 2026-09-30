@@ -14,10 +14,32 @@ nonisolated private let libraryLog = Logger(
   import UIKit
 #endif
 
-/// Application state: the index, navigation, and the document cache.
+#if os(macOS)
+  /// What the library asks of the window layer, which on macOS is the app's own:
+  /// `AppDelegate` makes every window, and answers these when it sets itself as
+  /// `LibraryModel.windows`. The library says what it needs, and never reaches for
+  /// the delegate itself.
+  protocol WindowOpening: AnyObject {
+    /// A window of its own, in front.
+    func openWindow()
+    /// A tab of the window the user is looking at.
+    func openTab(inBackground: Bool)
+    /// The window showing `scene`, made key and its tab selected.
+    func bringForward(_ scene: NavigationModel)
+    /// The tab the menu acts on, and the one `route(_:)` prefers: the front tab of
+    /// the reader window made key last, which it stays while the app is in the
+    /// background.
+    var activeNavigation: NavigationModel? { get }
+  }
+#endif
+
+/// The library, one per process: the index and its search, the lists drawn from
+/// it, the document cache, and the registry of open tabs a link is routed through.
 ///
-/// One observable object keeps the SwiftUI surface small; SwiftData holds the
-/// user's own data (bookmarks, reading positions) separately.
+/// Navigation is each tab's own (`NavigationModel`), and what the reader shows is
+/// each window's (`ReaderState`). The user's own data — bookmarks, reading
+/// positions, collections — is SwiftData's; this holds the sets read from it that
+/// every tab shows.
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
@@ -66,15 +88,22 @@ final class LibraryModel {
   /// it enters that filter rather than waiting on the store's actor.
   private(set) var downloadedNumbers: Set<Int> = []
 
+  /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
+  /// of `recentlyReadNumbers()`, kept current on every save rather than by a live
+  /// query of every reading position in the view.
+  private(set) var recentlyReadCount = 0
+
   private init() {
     refreshBookmarks()
     refreshCollections()
+    refreshRecentlyReadCount()
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.refreshBookmarks()
         self?.refreshCollections()
+        self?.refreshRecentlyReadCount()
       }
     }
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
@@ -90,8 +119,23 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
+        self.recheckSpotlight()
       }
     }
+  }
+
+  private func refreshRecentlyReadCount() {
+    let count: Int
+    do {
+      count = try ReadingPositionStore.recentlyReadRFCCount(in: AppData.container.mainContext)
+    } catch {
+      // The last count read stands until a fetch succeeds.
+      libraryLog.error(
+        "counting the recently read failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    guard count != recentlyReadCount else { return }
+    recentlyReadCount = count
   }
 
   private func refreshCollections() {
@@ -106,14 +150,10 @@ final class LibraryModel {
     }
   }
 
-  /// What a filter is called, wherever it is shown: a collection's name, or the
-  /// filter's own title. Every title goes through here, so a collection is never
-  /// shown by the empty title its filter carries.
+  /// What a filter is called, wherever it is shown, against the collections as they
+  /// are now.
   func title(for filter: LibraryFilter) -> String {
-    if case .collection(let identifier) = filter {
-      return collections[identifier]?.name ?? ""
-    }
-    return filter.title
+    filter.title(in: collections)
   }
 
   /// How many of a collection's documents the index knows, for the sidebar. Nil
@@ -135,8 +175,31 @@ final class LibraryModel {
     }
   }
 
+  /// Adds the bookmark or removes it, on the app's context, titled from the index
+  /// or else `documentTitle`, what an open reader has parsed. A failure is logged
+  /// rather than shown, as a collection's is (#125). A failed lookup changes
+  /// nothing; a failed save leaves the change pending in the context, saved with
+  /// the next save that succeeds.
+  func toggleBookmark(_ id: DocumentID, documentTitle: String? = nil) {
+    let title = DocumentActions.bookmarkTitle(
+      metadata: metadata(id), documentTitle: documentTitle, id: id)
+    do {
+      try BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+    } catch {
+      libraryLog.error(
+        "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
   private func refreshBookmarks() {
-    let documents = BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
+    let documents: Set<DocumentID>
+    do {
+      documents = try BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
+    } catch {
+      // The last set read stands until a fetch succeeds.
+      libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
+      return
+    }
     // Only a change is news: most saves record a reading position, not a bookmark.
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
@@ -198,6 +261,76 @@ final class LibraryModel {
       indexState = .failed(error.localizedDescription)
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
+    // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
+    // fetch them for nothing.
+    #if os(macOS)
+      Task(name: "Load registries") { await refreshRegistries() }
+    #endif
+  }
+
+  // MARK: - Registries
+
+  /// The IANA registry values the Go to RFC palette looks up (#175). Not observed:
+  /// the palette asks on each keystroke, and nothing on screen lists them.
+  @ObservationIgnored private var registryEntries: [RegistryEntry] = []
+
+  /// Registries change more often than RFCs, but not by the day.
+  private static let registryMaximumAge: TimeInterval = 7 * 86_400
+
+  /// When the registries were last checked, nil until launch first checks them.
+  @ObservationIgnored private var registriesCheckedAt: Date?
+
+  /// Checks the registries again if the last check is older than
+  /// `registryMaximumAge`: the palette asks as it opens, since the app may stay open
+  /// for weeks after the check at launch.
+  func refreshRegistriesIfDue() {
+    guard let checked = registriesCheckedAt,
+      checked.timeIntervalSinceNow < -Self.registryMaximumAge
+    else { return }
+    Task(name: "Refresh registries") { await refreshRegistries() }
+  }
+
+  /// Reads the cached registries, then fetches those that are due: a first fetch on
+  /// any network, a refresh only on a cheap one (`RegistryRefresh`). A registry that
+  /// cannot be fetched keeps its cached entries, and is logged rather than shown
+  /// (#125): the palette still finds RFCs without it.
+  private func refreshRegistries() async {
+    // Set before the first suspension, so a palette opened meanwhile does not start
+    // a second check.
+    registriesCheckedAt = .now
+    var cached = await store.cachedRegistries(maximumAge: Self.registryMaximumAge)
+    registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+    let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
+    for fetch in fetches {
+      let registry = fetch.registry
+      let fetched: (entries: [RegistryEntry], data: Data)
+      do {
+        fetched = try await (fetch.onExpensiveNetworks ? client : clientOnCheapNetworks)
+          .fetchRegistry(registry, onExpensiveNetworks: fetch.onExpensiveNetworks)
+      } catch {
+        libraryLog.error(
+          "fetching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+        continue
+      }
+      // Listed as soon as it is read, not after the slowest of the others, and
+      // whether or not it can be kept for the next launch.
+      cached.entries[registry] = fetched.entries
+      registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
+      do {
+        try await store.storeRegistry(fetched.data, for: registry)
+      } catch {
+        libraryLog.error(
+          "caching the \(registry.file, privacy: .public) registry failed: \(String(describing: error), privacy: .public)"
+        )
+      }
+    }
+  }
+
+  /// The registry values `query` names exactly: `425`, `tls alert 70`,
+  /// `application/dns-message`.
+  func registryMatches(for query: String) -> [RegistryEntry] {
+    RegistryLookup.matches(query, in: registryEntries)
   }
 
   #if DEBUG
@@ -288,6 +421,10 @@ final class LibraryModel {
         apply(prepared, updatedAt: .now)
       }
     } catch {
+      // With an index already showing, the failure is not shown, but it is not
+      // discarded either.
+      libraryLog.error(
+        "refreshing the index failed: \(String(describing: error), privacy: .public)")
       if index == nil { indexState = .failed(error.localizedDescription) }
     }
   }
@@ -298,9 +435,39 @@ final class LibraryModel {
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
     self.indexCounts = prepared.counts
-    listCache.removeAll()
+    listCache = RecentValues(capacity: Self.listCacheCapacity)
+    hitCache = RecentValues(capacity: Self.listCacheCapacity)
+    indexGeneration += 1
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
+    indexForSpotlight(prepared.index.rfcs)
+  }
+
+  // MARK: - Spotlight
+
+  /// The Spotlight indexing under way (#178), canceled when a newer one starts.
+  @ObservationIgnored private var spotlightIndexing: Task<Void, Never>?
+  /// When the last one started, so an activation knows whether the week has turned.
+  @ObservationIgnored private var spotlightCheckedAt: Date?
+
+  private func indexForSpotlight(_ rfcs: [RFCMetadata]) {
+    // A launch with a day-old cache applies it, then the refreshed index: the first
+    // indexing gives way, so the older index cannot finish last and win.
+    spotlightIndexing?.cancel()
+    spotlightCheckedAt = .now
+    spotlightIndexing = Task(name: "Index for Spotlight") {
+      await SpotlightIndexer.update(rfcs)
+    }
+  }
+
+  /// On activation: an app left running past its items' `lifetime` would otherwise
+  /// lose every RFC from Spotlight, since only a newer index checks. Once a week at
+  /// most, and the indexer skips an unchanged state.
+  private func recheckSpotlight() {
+    guard let index, let spotlightCheckedAt,
+      SpotlightEntry.isRecheckDue(lastCheckedAt: spotlightCheckedAt, now: .now)
+    else { return }
+    indexForSpotlight(index.rfcs)
   }
 
   // MARK: - Revisions
@@ -353,23 +520,6 @@ final class LibraryModel {
   /// the same reason `topWorkingGroups` is (#344).
   private(set) var indexCounts: [LibraryFilter: Int] = [:]
 
-  /// Everything the list is a function of.
-  ///
-  /// The filter and the query are passed in rather than read off `self`: they belong
-  /// to one tab (`NavigationModel`), and two tabs may be listing different things at
-  /// the same time. Gathering them into one value also gives the cache its key.
-  private struct ListKey: Hashable {
-    let filter: LibraryFilter
-    let query: String
-    let bookmarked: Set<Int>
-    let recentlyRead: [Int]
-    let downloaded: Set<Int>
-    let options: ListOptions
-    /// A collection's members in order, so adding, removing or reordering changes
-    /// the key and the cache cannot serve a stale list (#349).
-    let members: [Int]
-  }
-
   /// Answers remembered against their inputs.
   ///
   /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
@@ -380,8 +530,8 @@ final class LibraryModel {
   ///
   /// A dictionary rather than a single slot because tabs have their own filters now:
   /// with one slot, two tabs listing different things evict each other on every pass
-  /// and the hit rate collapses to zero. Capped, and cleared wholesale when it fills
-  /// -- this is a cache, so losing an entry costs time, never correctness.
+  /// and the hit rate collapses to zero. Bounded, forgetting the list used longest
+  /// ago -- this is a cache, so losing an entry costs time, never correctness.
   ///
   /// Not observed: `list` writes it from a view's body on a miss, and a write to
   /// a property the running body read invalidated that body, so every miss rendered
@@ -389,8 +539,9 @@ final class LibraryModel {
   /// That makes a hit read nothing observable, though, so `list` reads `index`
   /// before looking here: the key carries every other input, and those the caller
   /// reads for itself.
-  @ObservationIgnored private var listCache: [ListKey: [RFCMetadata]] = [:]
-  private static let listCacheLimit = 8
+  @ObservationIgnored private var listCache = RecentValues<LibraryList, [RFCMetadata]>(
+    capacity: listCacheCapacity)
+  private static let listCacheCapacity = 8
 
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
@@ -435,9 +586,9 @@ final class LibraryModel {
     // bookmark toggled, and an order hashed on every lookup for a filter that
     // ignores it.
     let filter = scene.filter
-    let key = ListKey(
+    let key = LibraryList(
       filter: filter,
-      query: scene.searchText.trimmingCharacters(in: .whitespaces),
+      query: scene.appliedQuery,
       bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : [],
@@ -453,9 +604,7 @@ final class LibraryModel {
   func librarySearch(_ query: String) -> [RFCMetadata] {
     // Observed on every call, for the reason `list(for:)` gives.
     guard let index else { return [] }
-    let key = ListKey(
-      filter: .all, query: query.trimmingCharacters(in: .whitespaces),
-      bookmarked: [], recentlyRead: [], downloaded: [], options: ListOptions(), members: [])
+    let key = LibraryList(filter: .all, query: query)
     return list(key, in: index)
   }
 
@@ -466,12 +615,20 @@ final class LibraryModel {
     return collections[identifier]?.rfcNumbers ?? []
   }
 
-  private func list(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
-    if let hit = listCache[key] { return hit }
-    let computed = key.options.apply(
-      to: computeList(key, in: index), filter: key.filter, query: key.query)
-    if listCache.count >= Self.listCacheLimit { listCache.removeAll(keepingCapacity: true) }
-    listCache[key] = computed
+  /// Every input is read off the key, so the cache cannot go stale against something
+  /// the list consults but the key does not carry. The one input not in the key is
+  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
+  /// empties the cache: that keeps the cache correct, and the read of `index` at the
+  /// top of `list` is what gets the view to ask again. The index is handed in from
+  /// that read rather than read again here, so the observed read is the only one.
+  private func list(_ key: LibraryList, in index: RFCIndex) -> [RFCMetadata] {
+    if let hit = listCache.value(for: key) { return hit }
+    let computed = signposter.withIntervalSignpost(
+      "List", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+    ) {
+      key.rows(in: index, search: search, hits: hitCache.value(for: key.query))
+    }
+    listCache.store(computed, for: key)
     return computed
   }
 
@@ -482,41 +639,39 @@ final class LibraryModel {
     indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
   }
 
-  /// Reads every input off the key, so the cache cannot go stale against something
-  /// this consults but the key does not carry. The one input not in the key is
-  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
-  /// empties the cache: that keeps the cache correct, and the read of `index` at the
-  /// top of `list` is what gets the view to ask again. The index is handed in from
-  /// that read rather than read again here, so the observed read is the only one.
-  private func computeList(_ key: ListKey, in index: RFCIndex) -> [RFCMetadata] {
-    let filter = key.filter
-    let base: [RFCMetadata]
-    switch filter {
-    case .all: base = index.rfcs.reversed()
-    case .recent: base = key.recentlyRead.compactMap { index[$0] }
-    case .bookmarks: base = key.bookmarked.sorted(by: >).compactMap { index[$0] }
-    case .downloaded: base = key.downloaded.sorted(by: >).compactMap { index[$0] }
-    // Through the predicate the sidebar's counts use, so the two cannot disagree.
-    case .standards, .bestCurrentPractice, .stream, .workingGroup:
-      base = index.rfcs.reversed().filter { filter.includes($0) == true }
-    case .series(let id): base = index.series(id)?.members.compactMap { index[$0] } ?? []
-    case .collection: base = key.members.compactMap { index[$0] }
-    }
+  /// Every hit for a query, best first, searched off the main actor by
+  /// `prepareSearch(_:)` before a scene applies the query (#124), so a list
+  /// computed for it only filters. The scan measures 7–11 ms in Release and up to
+  /// 98 ms in Debug. A query that is not here, as after `apply` or for a script,
+  /// is searched on the spot.
+  ///
+  /// Not observed, for the reason `listCache` gives; applying the query is what
+  /// the list observes.
+  @ObservationIgnored private var hitCache = RecentValues<String, [RFCMetadata]>(
+    capacity: listCacheCapacity)
+  /// Counts the indexes `apply` has installed, so a search that outlived its index
+  /// is not kept.
+  @ObservationIgnored private var indexGeneration = 0
 
-    guard !key.query.isEmpty, let search else { return base }
-    // Every hit, not the top few hundred: the search scores and sorts all of them
-    // anyway, the list windows its rows itself (`ListWindow`), and the count over
-    // the list says how many there are. A cap also cut before the filter below,
-    // so a search inside a collection lost whatever ranked outside the cap overall.
-    let hits = signposter.withIntervalSignpost(
-      "Search", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
+  /// Searches for `query` off the main actor, so the list can apply it without
+  /// scanning the index in a view update.
+  func prepareSearch(_ query: String) async {
+    guard !query.isEmpty, hitCache.value(for: query) == nil, let search else { return }
+    let generation = indexGeneration
+    let hits = await Self.hits(in: search, for: query)
+    // A new index landed meanwhile, so these are hits in the old one; or typing
+    // moved on, and a query nobody applies would push out one that is applied.
+    guard indexGeneration == generation, !Task.isCancelled else { return }
+    hitCache.store(hits, for: query)
+  }
+
+  @concurrent
+  private static func hits(in search: IndexSearch, for query: String) async -> [RFCMetadata] {
+    signposter.withIntervalSignpost(
+      "Search", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
     ) {
-      search.search(key.query, limit: .max)
+      search.search(query, limit: .max).map(\.rfc)
     }
-    // Everything is allowed in the whole library, so there is nothing to filter.
-    if case .all = filter { return hits.map(\.rfc) }
-    let allowed = Set(base.map(\.number))
-    return hits.compactMap { allowed.contains($0.rfc.number) ? $0.rfc : nil }
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
@@ -526,6 +681,26 @@ final class LibraryModel {
   func suggestions(for query: String, limit: Int) async -> [DocumentID] {
     guard let search else { return [] }
     return await Self.suggestions(in: search, for: query, limit: limit)
+  }
+
+  /// What the Go to RFC palette and sheet list under what was typed, once the reader
+  /// has paused: run per change of the query and canceled by the next, which is the
+  /// debounce, so only a pause long enough to outlast the sleep reaches the search.
+  ///
+  /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
+  ///   without searching, for a link, which names its document outright and which
+  ///   no title or abstract contains, and while the index is still loading.
+  func quickOpenHits(for query: String) async -> [DocumentID]? {
+    guard !query.isEmpty else { return nil }
+    if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
+    guard index != nil else { return [] }
+    do {
+      try await Task.sleep(for: .milliseconds(120))
+    } catch {
+      return nil
+    }
+    let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
+    return Task.isCancelled ? nil : hits
   }
 
   @concurrent
@@ -559,6 +734,12 @@ final class LibraryModel {
   /// cleared there, so no later window picks up a stale one.
   private var pendingSceneLink: RFCLink?
 
+  #if os(macOS)
+    /// The window layer, set by `AppDelegate` at launch. Weak: the delegate owns the
+    /// windows, and the library only asks it for them.
+    @ObservationIgnored weak var windows: (any WindowOpening)?
+  #endif
+
   /// Registers a new scene, and gives it the link it was opened for if it was
   /// opened for one. Nil for a window from the menu or at launch, which lands on
   /// the library as before.
@@ -573,8 +754,9 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil || $0.model === scene }
   }
 
-  /// Marks a scene as the one the reader is using, which is where an untargeted
-  /// link lands.
+  /// Makes a scene the most recently used, which is where an untargeted link lands
+  /// when no tab is preferred over it -- on macOS `route(_:)` prefers the tab of the
+  /// window that was key last.
   func activate(_ scene: NavigationModel) {
     guard scenes.first?.model !== scene else { return }
     promote(scene)
@@ -586,7 +768,9 @@ final class LibraryModel {
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
-  /// there is one, otherwise the most recently used tab.
+  /// there is one, otherwise the tab the reader is in -- on macOS the one whose
+  /// window was key last, which a tab opened in the background does not displace --
+  /// and failing that the most recently used tab.
   ///
   /// A link can arrive before any scene has registered -- a URL or the Open RFC
   /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
@@ -603,8 +787,16 @@ final class LibraryModel {
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
-    let target = scenes.first { $0.model?.selection == link.id }?.model ?? scenes.first?.model
-    guard let target else {
+    let open = scenes.compactMap(\.model)
+    #if os(macOS)
+      let preferred = windows?.activeNavigation
+    #else
+      let preferred: NavigationModel? = nil
+    #endif
+    guard
+      let target = LinkRouting.target(
+        for: link.id, in: open, showing: \.selection, preferring: { $0 === preferred })
+    else {
       openInNewWindow(link)
       return
     }
@@ -619,7 +811,7 @@ final class LibraryModel {
     // its selection did not change and `activate` was not called for it.
     activate(scene)
     #if os(macOS)
-      AppDelegate.shared?.bringForward(scene)
+      windows?.bringForward(scene)
     #endif
   }
 
@@ -627,7 +819,7 @@ final class LibraryModel {
   private func openInNewWindow(_ link: RFCLink) {
     pendingSceneLink = link
     #if os(macOS)
-      AppDelegate.shared?.openWindow(tabbedWith: nil, inBackground: false)
+      windows?.openWindow()
     #endif
   }
 
@@ -652,18 +844,45 @@ final class LibraryModel {
 
   /// Opens `link` in a tab of its own, either behind the current one or in front.
   ///
-  /// Through AppKit, because on macOS the app makes its own windows: there is no
+  /// On macOS through AppKit, because the app makes its own windows: there is no
   /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
-  /// controller rather than by SwiftUI.
+  /// controller rather than by SwiftUI. Nothing can be passed to a window as it is
+  /// made, so the link waits in `pendingSceneLink` for the window that appears to
+  /// take it in `register(_:)`.
   ///
-  /// Nothing can be passed to a window as it is made, so the link waits in
-  /// `pendingSceneLink` for the window that appears to take it in `register(_:)`.
+  /// On iPad a window of its own, asked of UIKit with a user activity carrying the
+  /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
+  /// app's `WindowGroup` is a plain one, which cannot take a value. A new window
+  /// always comes to the front there, so `inBackground` does not apply.
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
       pendingSceneLink = link
-      AppDelegate.shared?.openTab(inBackground: inBackground)
+      windows?.openTab(inBackground: inBackground)
+    #else
+      guard opensNewWindows else { return }
+      let activity = NSUserActivity(activityType: SceneRequest.activityType)
+      activity.userInfo = SceneRequest.userInfo(for: link)
+      UIApplication.shared.activateSceneSession(
+        for: UISceneSessionActivationRequest(role: .windowApplication, userActivity: activity)
+      ) { @Sendable error in
+        // Sendable: UIKit does not promise to call this on the main thread, and a
+        // main-actor closure called off it traps.
+        libraryLog.error(
+          "opening a window failed: \(String(describing: error), privacy: .public)")
+      }
     #endif
   }
+
+  #if !os(macOS)
+    /// Whether this device can show another window: an iPad, not an iPhone. Menus
+    /// offer Open in New Window only where it is.
+    var opensNewWindows: Bool { UIApplication.shared.supportsMultipleScenes }
+
+    /// Opens `id` in a window of its own, from a menu that offers it.
+    func openWindow(for id: DocumentID) {
+      openInNewScene(RFCLink(id: id), inBackground: false)
+    }
+  #endif
 
   #if os(macOS)
     /// Where a document asked for by name opens.
@@ -675,14 +894,14 @@ final class LibraryModel {
 
     /// Opens `link` where `placement` says.
     ///
-    /// The front tab is the one the menu acts on (`AppDelegate.activeController`),
+    /// The front tab is the one the menu acts on (`WindowOpening.activeNavigation`),
     /// not whichever tab `route(_:)` would pick: a script that says "open this"
     /// means the window it is looking at. With no window open there is no front
     /// tab, and the link is routed the way one from outside is, which opens one.
     func open(_ link: RFCLink, placement: Placement) {
       switch placement {
       case .frontTab:
-        if let scene = AppDelegate.shared?.activeController?.navigation {
+        if let scene = windows?.activeNavigation {
           deliver(link, to: scene)
         } else {
           route(link)
@@ -712,7 +931,8 @@ final class LibraryModel {
   }
 
   func originalText(for id: DocumentID) async throws -> String {
-    let text = try await store.originalText(id, client: client)
+    let text = try await store.originalText(
+      id, formats: index?[id]?.formats ?? [], client: client)
     await evictIfGrown()
     await refreshDownloadedNumbers()
     return text
@@ -722,19 +942,30 @@ final class LibraryModel {
   /// set's fetches nor the cache's enumeration.
   private func evictIfGrown() async {
     guard await store.hasGrownSinceEviction else { return }
-    let evicted = await store.evict(pinned: pinnedDocuments(), bound: CacheEviction.defaultBound)
+    // No pinned set, no eviction: an empty one would let it delete exactly the
+    // documents it promises to keep. The cache has still grown, so the next open
+    // tries again.
+    let pinned: Set<DocumentID>
+    do {
+      pinned = try pinnedDocuments()
+    } catch {
+      libraryLog.error(
+        "eviction skipped, reading what it keeps failed: \(String(describing: error), privacy: .public)"
+      )
+      return
+    }
+    let evicted = await store.evict(pinned: pinned, bound: CacheEviction.defaultBound)
     forgetPreviews(of: evicted)
   }
 
   /// What eviction never removes (#39): bookmarks, a bookmark being a promise to
   /// keep the document offline; what was read in the last month; and whatever a
   /// window has open, which includes the document just fetched.
-  private func pinnedDocuments() -> Set<DocumentID> {
+  private func pinnedDocuments() throws -> Set<DocumentID> {
     let context = AppData.container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
-    let recent = FetchDescriptor<ReadingPosition>(predicate: #Predicate { $0.updatedAt > monthAgo })
-    let read = ((try? context.fetch(recent)) ?? []).compactMap(\.document)
-    let bookmarked = BookmarkStore.bookmarkedDocuments(in: context)
+    let read = try ReadingPositionStore.read(since: monthAgo, in: context)
+    let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
     let open = scenes.compactMap { $0.model?.selection }
     return bookmarked.union(read).union(open)
   }
@@ -753,12 +984,19 @@ final class LibraryModel {
   /// read list is history as of the moment the filter is entered, and a live query
   /// re-sorted it under the click that was reading it. `NavigationModel` takes one
   /// of these when its filter changes, exactly as it takes `downloadedNumbers`.
+  ///
+  /// Empty when the fetch fails, which is logged: the list is only shown, and
+  /// nothing is decided by its being empty.
   func recentlyReadNumbers() -> [Int] {
-    let descriptor = FetchDescriptor<ReadingPosition>(
-      sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-    )
-    let positions = (try? AppData.container.mainContext.fetch(descriptor)) ?? []
-    return positions.compactMap(\.document).filter { $0.series == .rfc }.map(\.number)
+    let documents: [DocumentID]
+    do {
+      documents = try ReadingPositionStore.recentlyRead(in: AppData.container.mainContext)
+    } catch {
+      libraryLog.error(
+        "reading the recently read list failed: \(String(describing: error), privacy: .public)")
+      return []
+    }
+    return documents.filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

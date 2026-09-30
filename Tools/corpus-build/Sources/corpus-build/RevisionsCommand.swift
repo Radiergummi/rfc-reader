@@ -4,6 +4,10 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// The revisions scanner (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md):
 /// lists every active, adopted draft on datatracker, reads the header of each one that
 /// changed, and writes `revisions.json` for the app and `revisions-scan.json` for its
@@ -106,7 +110,7 @@ struct RevisionsCommand: AsyncParsableCommand {
       do {
         return try await fetch(
           Datatracker.draft(draft.name, rev: draft.rev, extension: pathExtension))
-      } catch PipelineError.http(404, _) {
+      } catch RFCEditorClient.ClientError.httpStatus(404, _) {
         return nil
       }
     }
@@ -127,8 +131,17 @@ struct RevisionsCommand: AsyncParsableCommand {
     return pages
   }
 
+  /// Through the transport `fetch` uses too: this tool's User-Agent, and a bounded
+  /// retry of what can pass.
+  private static let transport = RetryingTransport(
+    URLSessionTransport(userAgent: RetryingTransport.userAgent))
+
   private static func fetch(_ url: URL) async throws -> Data {
     try await Task.sleep(for: pause)
-    return try await FetchCommand.download(url)
+    let (data, response) = try await transport.response(for: URLRequest(url: url))
+    guard (200..<300).contains(response.statusCode) else {
+      throw RFCEditorClient.ClientError.httpStatus(response.statusCode, url)
+    }
+    return data
   }
 }

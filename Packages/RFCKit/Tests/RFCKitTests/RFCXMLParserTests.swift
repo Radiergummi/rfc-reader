@@ -6,7 +6,7 @@ import Testing
 @Suite("RFCXML v3 parser")
 struct RFCXMLParserTests {
   static func document() throws -> RFCDocument {
-    try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    try Fixtures.document("rfc8999.xml")
   }
 
   @Test func `header`() throws {
@@ -24,7 +24,7 @@ struct RFCXMLParserTests {
     #expect(document.header.date == PublicationDate(year: 2021, month: 5))
     #expect(document.header.workingGroup == "QUIC")
     #expect(document.header.keywords.count == 7)
-    #expect(document.header.category == "Standards Track")
+    #expect(document.header.category == .standardsTrack)
     #expect(document.header.draftName == "draft-ietf-quic-invariants-13")
     #expect(document.header.abstract.count == 1)
     if case .paragraph(let paragraph) = document.header.abstract[0] {
@@ -59,22 +59,103 @@ struct RFCXMLParserTests {
     #expect(document.section(anchor: "status-of-memo") == nil)
   }
 
+  /// Unprepped XML -- a draft, or an RFC before the prep tool ran -- has sections with
+  /// neither `anchor` nor `pn`. Their anchors key the table of contents, deep links and
+  /// reading positions, so they must be the same on every parse and distinct in one.
+  @Test func `an unprepped section's anchor is stable and unique`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle>
+          <section><name>First</name>
+            <section><name>Nested</name></section>
+          </section>
+          <section><name>Second</name></section>
+        </middle>
+        <back>
+          <section><name>Appendix</name></section>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 4)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
+  /// Two anchorless reference lists -- normative and informative, in unprepped XML --
+  /// would otherwise share one fallback anchor, and a link to the second would land on
+  /// the first.
+  @Test func `unprepped reference lists get distinct anchors`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Unprepped</title></front>
+        <middle><section anchor="intro"><name>Intro</name></section></middle>
+        <back>
+          <references><name>Normative References</name>
+            <reference anchor="A"><front><title>A</title></front></reference>
+          </references>
+          <references><name>Informative References</name>
+            <reference anchor="B"><front><title>B</title></front></reference>
+          </references>
+        </back>
+      </rfc>
+      """
+    let first = try RFCXMLParser.parse(Data(xml.utf8))
+    let second = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(first == second)
+    let anchors = first.allSections.map(\.anchor)
+    #expect(anchors.count == 3)
+    #expect(Set(anchors).count == anchors.count)
+  }
+
+  /// The schema puts `<references>` in `<back>` only, but XML from elsewhere, and
+  /// legacy conversions made before #315, can hold one in `<middle>` or in a chapter.
+  /// A citation into it still resolves, and the one in a chapter reads back as that
+  /// chapter's subsection.
+  @Test func `a reference list outside the back is read`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Misplaced</title></front>
+        <middle>
+          <section anchor="intro"><name>Intro</name>
+            <t>See <xref target="A"/> and <xref target="B"/>.</t>
+            <references anchor="intro-refs"><name>Chapter References</name>
+              <reference anchor="A"><front><title>A</title></front>
+                <seriesInfo name="RFC" value="1111"/></reference>
+            </references>
+          </section>
+          <references anchor="refs"><name>References</name>
+            <reference anchor="B"><front><title>B</title></front>
+              <seriesInfo name="RFC" value="2222"/></reference>
+          </references>
+        </middle>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let cited = document.everyCrossReference.compactMap { xref -> DocumentID? in
+      if case .document(let id, _, _) = xref.target { id } else { nil }
+    }
+    #expect(cited == [.rfc(1111), .rfc(2222)])
+    let intro = try #require(document.section(anchor: "intro"))
+    #expect(intro.subsections.map(\.anchor) == ["intro-refs"])
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
 
-    let definitionLists = notation.blocks.compactMap { block -> [DefinitionItem]? in
-      if case .definitionList(let items) = block { return items }
-      return nil
-    }
+    let definitionLists = notation.blocks.compactMap(\.definitionItems)
     #expect(definitionLists.count == 1)
     #expect(definitionLists[0].count == 4)
     #expect(definitionLists[0][0].term.plainText == "x (A):")
 
-    let figures = notation.blocks.compactMap { block -> Figure? in
-      if case .figure(let figure) = block { return figure }
-      return nil
-    }
+    let figures = notation.blocks.compactMap(\.figure)
     #expect(figures.count == 1)
     #expect(figures[0].title == "Example Format")
     #expect(figures[0].number == 1)
@@ -107,10 +188,7 @@ struct RFCXMLParserTests {
       Issue.record("expected a paragraph")
       return
     }
-    let xrefs = paragraph.inlines.compactMap { inline -> CrossReference? in
-      if case .crossReference(let xref) = inline { return xref }
-      return nil
-    }
+    let xrefs = paragraph.inlines.compactMap(\.crossReference)
     let transport = try #require(xrefs.first)
     #expect(transport.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT"))
     #expect(transport.text == "[QUIC-TRANSPORT]")
@@ -125,10 +203,7 @@ struct RFCXMLParserTests {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let bcp14 = try #require(
@@ -145,10 +220,7 @@ struct RFCXMLParserTests {
     let document = try Self.document()
     let xrefs = document.allSections.flatMap(\.blocks).flatMap { block -> [CrossReference] in
       guard case .paragraph(let paragraph) = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
 
     let bcp14 = try #require(
@@ -156,11 +228,12 @@ struct RFCXMLParserTests {
     #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
     #expect(
       bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
-    #expect(bcp14.display.chip != nil)
+    #expect(bcp14.display.isChip)
 
     let transport = try #require(
       xrefs.first { $0.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT") })
     #expect(!transport.isCanonicalLabel, "an author's own tag must survive verbatim")
+    #expect(!transport.display.isChip)
   }
 
   /// "Section 4.2 of [RFC 9110]" must not break after "Section" either.
@@ -191,10 +264,7 @@ struct RFCXMLParserTests {
       return
     }
     let xref = try #require(
-      paragraph.inlines.compactMap { inline -> CrossReference? in
-        if case .crossReference(let value) = inline { return value }
-        return nil
-      }.first)
+      paragraph.inlines.compactMap(\.crossReference).first)
     #expect(xref.text == nil, "the whole phrasing is ours to compose")
     #expect(xref.label == "Section\u{00A0}4.2 of [RFC\u{00A0}9110]")
   }
@@ -245,10 +315,7 @@ struct RFCXMLParserTests {
 
     func xrefs(_ block: Block?) -> [CrossReference] {
       guard case .paragraph(let paragraph)? = block else { return [] }
-      return paragraph.inlines.compactMap { inline in
-        if case .crossReference(let xref) = inline { return xref }
-        return nil
-      }
+      return paragraph.inlines.compactMap(\.crossReference)
     }
     #expect(
       xrefs(section.blocks.first).map(\.target) == [
@@ -279,7 +346,7 @@ struct RFCXMLParserTests {
     #expect(normative.entries.map(\.anchor) == ["RFC2119", "RFC8174"])
     let bcp = normative.entries[0]
     #expect(bcp.title == "Key words for use in RFCs to Indicate Requirement Levels")
-    #expect(bcp.authors == ["S. Bradner"])
+    #expect(bcp.authors == [Author(name: "S. Bradner")])
     #expect(bcp.date == PublicationDate(year: 1997, month: 3))
     #expect(bcp.documentID == .rfc(2119))
     #expect(bcp.url?.absoluteString == "https://www.rfc-editor.org/info/rfc2119")
@@ -299,7 +366,7 @@ struct RFCXMLParserTests {
   /// cites them as `[HTTP/2]` and `[HTTP/3]`. The entry has to read the same, or a
   /// reader cannot find the citation in the bibliography -- while the anchor stays
   /// what `<xref target>` points at.
-  @Test func `an entry is labelled the way its citations are`() throws {
+  @Test func `an entry is labeled the way its citations are`() throws {
     let entries = try Self.entries(in: "rfc9220.xml")
     let http2 = try #require(entries.first { $0.anchor == "HTTP2" })
     #expect(http2.displayAnchor == "HTTP/2")
@@ -343,10 +410,40 @@ struct RFCXMLParserTests {
 
   /// RFC 8761 sets `symRefs="false"`: its prose cites `[1]`, `[2]`, and nothing in the
   /// bibliography says `BT2020-2` anywhere a reader can see.
-  @Test func `numbered references are labelled by number`() throws {
+  @Test func `numbered references are labeled by number`() throws {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+  }
+
+  /// RFC 8761 cites a draft and a codec specification, neither in a series, by the
+  /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
+  /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
+  @Test func `a citation of an entry outside the series keeps its brackets`() throws {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml")).everyCrossReference
+    let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
+    #expect(draft.label == "[14]")
+    let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
+    #expect(codec.label == "[6]")
+    let table = try #require(xrefs.first { $0.target == .anchor("codec-levels") })
+    #expect(table.label == "Table 7")
+  }
+
+  /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
+  /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
+  /// `derivedContent` would put a second tag where the section belongs; wording the
+  /// section is #473's. In document order: RFC 9783 cites the whole entry, then a
+  /// section of it; RFC 9290 cites the registry's section, then the whole registry.
+  @Test(arguments: [
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "RATS-AR4SI"]),
+    ("rfc9290.xml", "IANA.cbor-tags", ["IANA.cbor-tags", "[IANA.cbor-tags]"]),
+  ])
+  func `a citation of a section of an entry outside the series is not bracketed`(
+    fixture: String, target: String, labels: [String]
+  ) throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let xrefs = document.everyCrossReference.filter { $0.target == .anchor(target) }
+    #expect(xrefs.map(\.label) == labels)
   }
 
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
@@ -354,16 +451,13 @@ struct RFCXMLParserTests {
   /// Reading only the first kept the six counters and dropped the rest.
   @Test func `every table body is read`() throws {
     let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
-    let tables = document.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
-      if case .table(let table) = block { return table }
-      return nil
-    }
+    let tables = document.everyBlock.flattened.compactMap(\.table)
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
     #expect(table.rows.count == 32)
-    #expect(table.rows.first?.first?.plainText == "counter32")
-    #expect(table.rows[6].first?.plainText == "object-identifier")
-    #expect(table.rows.last?.first?.plainText == "yang-identifier")
+    #expect(table.rows.first?.cells.first?.plainText == "counter32")
+    #expect(table.rows[6].cells.first?.plainText == "object-identifier")
+    #expect(table.rows.last?.cells.first?.plainText == "yang-identifier")
   }
 
   /// Every prepped RFC names the draft it was published from as `<link rel="prev">`,

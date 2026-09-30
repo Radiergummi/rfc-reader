@@ -44,42 +44,31 @@ enum Abbreviations {
     }
     visit(document.header.abstract) { record($0, in: nil) }
     for section in document.allSections {
+      // The heading first, as the reader meets it, and defined in its own section:
+      // `3. Transport Layer Security (TLS)` over a body that uses `TLS` alone (#319).
+      record(expansions(in: section.titleText), in: section.anchor)
       visit(section.blocks) { record($0, in: section.anchor) }
     }
     return found
   }
 
-  /// Every block that holds prose, in document order. Artwork and source code are
-  /// set as the author typed them rather than written as prose, and bibliography
-  /// entries are other documents' words.
+  /// Every run of prose in `blocks` and the blocks nested in them, in document
+  /// order, as `Block.proseRuns` has it, and a glossary entry where a definition
+  /// list is one. Artwork and source code are set as the author typed them rather
+  /// than written as prose, and a bibliography is other documents' words -- its
+  /// annotations included, which `proseRuns` counts as prose for cross references.
   private static func visit(
     _ blocks: [Block], _ found: ([(short: String, long: String)]) -> Void
   ) {
-    for block in blocks {
-      switch block {
-      case .paragraph(let paragraph):
-        found(expansions(in: paragraph.inlines.plainText))
-      case .list(let list):
-        for item in list.items { visit(item.blocks, found) }
-      case .definitionList(let items):
+    for block in blocks.flattened {
+      if case .references = block { continue }
+      for run in block.proseRuns { found(expansions(in: run.plainText)) }
+      if case .definitionList(let items) = block {
         for item in items {
-          let term = item.term.plainText
-          found(expansions(in: term))
-          if let pair = glossaryEntry(term: term, definition: item.definition) {
+          if let pair = glossaryEntry(term: item.term.plainText, definition: item.definition) {
             found([pair])
           }
-          visit(item.definition, found)
         }
-      case .figure(let figure):
-        visit(figure.blocks, found)
-      case .table(let table):
-        for cell in (table.header + table.rows).joined() {
-          found(expansions(in: cell.plainText))
-        }
-      case .blockQuote(let inner), .aside(let inner):
-        visit(inner, found)
-      case .preformatted, .references:
-        break
       }
     }
   }
@@ -226,7 +215,7 @@ enum Abbreviations {
 
   /// Where the long form starts: the matched word, unless it is a lowercase function
   /// word, in which case the nearest earlier word with the same initial that is not
-  /// one, capitalised or not, so not a sentence's opening `The` or `A`. With none,
+  /// one, capitalized or not, so not a sentence's opening `The` or `A`. With none,
   /// there is no expansion. A hyphenated word is one word, so `on-path attackers
   /// (OPAs)` starts on `on-path`, not on `on`.
   ///

@@ -33,9 +33,15 @@
     @objc var isBookmarked: Bool {
       get { LibraryModel.shared.bookmarkedDocuments.contains(id) }
       set {
+        // Applied, as the window applies it, but not kept: a script is told, rather
+        // than seeing a success that is gone at the next launch (#318). Told when
+        // the value is already the one asked for as well: in memory, a bookmark that
+        // is already there was made this session, and is no more kept than a new one.
+        if AppData.isStoredInMemory {
+          ScriptError.report(AppData.storeWarning.message)
+        }
         guard newValue != isBookmarked else { return }
-        let title = DocumentActions.bookmarkTitle(metadata: metadata, documentTitle: nil, id: id)
-        BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+        LibraryModel.shared.toggleBookmark(id)
       }
     }
 
@@ -118,7 +124,8 @@
 
     @objc var scriptSearchText: String {
       get { controller?.navigation.searchText ?? "" }
-      set { controller?.navigation.searchText = newValue }
+      // A script reads the list straight after setting the text.
+      set { controller?.navigation.setSearchTextSynchronously(newValue) }
     }
 
     @objc var scriptListedRFCs: [ScriptableRFC] {
@@ -148,7 +155,11 @@
       get {
         guard let reader = controller?.reader else { return ScriptCode.contents }
         if reader.pane == .info { return ScriptCode.info }
-        return reader.tab == .references ? ScriptCode.references : ScriptCode.contents
+        switch reader.tab {
+        case .contents: return ScriptCode.contents
+        case .references: return ScriptCode.references
+        case .requirements: return ScriptCode.requirements
+        }
       }
       set {
         guard let reader = controller?.reader else { return }
@@ -158,6 +169,9 @@
         case ScriptCode.references:
           reader.pane = .navigation
           reader.tab = .references
+        case ScriptCode.requirements:
+          reader.pane = .navigation
+          reader.tab = .requirements
         default:
           reader.pane = .navigation
           reader.tab = .contents
@@ -251,6 +265,7 @@
   enum ScriptCode {
     static let contents = code("RIpC")
     static let references = code("RIpR")
+    static let requirements = code("RIpQ")
     static let info = code("RIpI")
     static let newTab = code("RPnT")
     static let newWindow = code("RPnW")

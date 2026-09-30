@@ -2,9 +2,20 @@ import RFCKit
 import RFCReaderKit
 import SwiftUI
 
-enum InspectorTab {
+enum InspectorTab: CaseIterable {
   case contents
   case references
+  /// Every BCP 14 requirement the document states (#180).
+  case requirements
+
+  /// Named once, for both platforms' tab bars (#258).
+  var title: String {
+    switch self {
+    case .contents: "Contents"
+    case .references: "References"
+    case .requirements: "Requirements"
+    }
+  }
 }
 
 /// The inspector beside the reader: the document's two navigational views, or what
@@ -20,6 +31,7 @@ struct DocumentInspector: View {
   /// every section crossing re-evaluates this body.
   let sections: [RFCKit.Section]
   let groups: [ReferenceGroup]
+  let requirements: [Requirement]?
   let info: DocumentInfo?
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
@@ -59,8 +71,9 @@ struct DocumentInspector: View {
         // than the inspector column's: 10 and 8 left the control against the
         // sheet's top edge, its capsule ends inside the sheet's rounded corners.
         Picker("Panel", selection: $tab) {
-          Text("Contents").tag(InspectorTab.contents)
-          Text("References").tag(InspectorTab.references)
+          ForEach(InspectorTab.allCases, id: \.self) { tab in
+            Text(tab.title).tag(tab)
+          }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -91,8 +104,21 @@ struct DocumentInspector: View {
     case .references:
       // A document with no bibliography says so here rather than being steered
       // away from the tab.
-      ReferencesView(groups: groups, revealed: revealed, open: openDocument)
+      ReferencesView(
+        groups: groups, revealed: revealed, open: openDocument,
+        openInNewWindow: openInNewWindow)
+    case .requirements:
+      RequirementsView(requirements: requirements, document: document, select: selectSection)
     }
+  }
+
+  /// Offered on iPad, where a reference can open in a window of its own (#158).
+  private var openInNewWindow: ((DocumentID) -> Void)? {
+    #if os(macOS)
+      nil
+    #else
+      library.opensNewWindows ? { library.openWindow(for: $0) } : nil
+    #endif
   }
 }
 
@@ -128,6 +154,7 @@ struct PanelHost: View {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
+        requirements: reader.requirements,
         info: reader.info,
         document: navigation.selection,
         library: library,
@@ -174,7 +201,7 @@ struct PanelHost: View {
     #if !os(macOS)
       if closesAfterChoice {
         isPresented = false
-        DispatchQueue.main.async(execute: choice)
+        Task { choice() }
         return
       }
     #endif
@@ -197,11 +224,12 @@ private struct InspectorTabBar: View {
   @Binding var tab: InspectorTab
 
   var body: some View {
-    // No rule between the two: Pages draws one only between labels that are both
-    // unselected, and with two tabs one of them always is the pill.
+    // No rule between them: Pages draws one only between labels that are both
+    // unselected, and the pill sits between any two of these.
     HStack(spacing: 0) {
-      segment(.contents, "Contents")
-      segment(.references, "References")
+      ForEach(InspectorTab.allCases, id: \.self) { tab in
+        segment(tab, tab.title)
+      }
     }
     // The track the segments sit in, and the inset that keeps the selected pill
     // inside it rather than flush with its edge.
@@ -242,6 +270,7 @@ struct ReferencesView: View {
   let groups: [ReferenceGroup]
   let revealed: ReaderState.RevealedReference?
   let open: (DocumentID) -> Void
+  let openInNewWindow: ((DocumentID) -> Void)?
 
   /// The revealed entry, marked for a moment so the eye finds it in the list.
   @State private var highlighted: String?
@@ -257,7 +286,7 @@ struct ReferencesView: View {
               ForEach(group.entries) { entry in
                 // Identified by its anchor already (`Reference.id`), which is
                 // what the reveal scrolls to.
-                ReferenceRow(entry: entry, open: open)
+                ReferenceRow(entry: entry, open: open, openInNewWindow: openInNewWindow)
                   .listRowBackground(
                     highlighted == entry.anchor
                       ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
@@ -266,6 +295,8 @@ struct ReferencesView: View {
           }
         }
         .listStyle(.sidebar)
+        // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+        .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
         // the list is new when the request arrives.
         .task(id: revealed) {
@@ -289,6 +320,8 @@ struct ReferencesView: View {
 struct ReferenceRow: View {
   let entry: Reference
   let open: (DocumentID) -> Void
+  /// Nil where a reference cannot open in a window of its own.
+  let openInNewWindow: ((DocumentID) -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -302,8 +335,21 @@ struct ReferenceRow: View {
           entryDescription.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        #if !os(macOS)
+          .contextMenu {
+            if let openInNewWindow {
+              Button {
+                openInNewWindow(id)
+              } label: {
+                Label("Open in New Window", systemImage: "macwindow.badge.plus")
+              }
+            }
+          }
+        #endif
       } else {
-        entryDescription
+        // Not a button, so the combined element needs a role of its own, or macOS
+        // exposes it as AXUnknown (#300).
+        entryDescription.accessibilityAddTraits(.isStaticText)
         // An entry that names no RFC opens nothing in the reader, so where it
         // lives is the one way on from it — and what a citation of it reveals the
         // row for.
@@ -353,7 +399,7 @@ struct ReferenceRow: View {
         }
       } else {
         Text(entry.title).font(.callout).fixedSize(horizontal: false, vertical: true)
-        let byline = entry.authors.joined(separator: ", ")
+        let byline = entry.authors.map(\.displayName).joined(separator: ", ")
         let detail = [byline, entry.provenance].filter { !$0.isEmpty }.joined(separator: " · ")
         if !detail.isEmpty {
           Text(detail)
@@ -364,5 +410,9 @@ struct ReferenceRow: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    // One stop, whether or not the entry names an RFC: its tag, title and byline
+    // were three for an entry that is no button (#300).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.accessibilityLabel)
   }
 }

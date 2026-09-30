@@ -52,6 +52,15 @@ struct AnchorResolutionTests {
     #expect(Self.anchors(in: document).contains("EventFSD"))
   }
 
+  /// A row's anchor is part of the row, so it names that row's cells and no other.
+  @Test func `a row anchor names its own row's cells`() throws {
+    let document = try Fixtures.document("rfc9271.xml")
+    let rows = document.blocks.compactMap(\.table).flatMap { $0.header + $0.rows }
+    let row = try #require(rows.first { $0.anchor == "EventFSD" })
+    #expect(row.cells.first?.plainText == "none")
+    #expect(row.cells.dropFirst().first?.plainText == "FSD")
+  }
+
   /// No RFC yet anchors a `<thead>` row, but the schema lets one, and a link to it
   /// should land as surely as a link to a body row. So RFC 9271's first table with
   /// a header is given one, and the anchor has to come back through the serializer
@@ -63,7 +72,7 @@ struct AnchorResolutionTests {
         for index in sections[section].blocks.indices {
           guard case .table(var table) = sections[section].blocks[index], !table.header.isEmpty
           else { continue }
-          table.headerRowAnchors = ["cited-header"]
+          table.header[0].anchor = "cited-header"
           sections[section].blocks[index] = .table(table)
           return true
         }
@@ -75,13 +84,10 @@ struct AnchorResolutionTests {
 
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-    let tables = reparsed.allSections.flatMap(\.blocks).flattened.compactMap { block -> Table? in
-      if case .table(let table) = block { return table }
-      return nil
-    }
-    let table = try #require(tables.first { $0.anchor(ofHeaderRow: 0) == "cited-header" })
-    #expect(table.headerRowAnchors == ["cited-header"])
-    #expect(!table.rowAnchors.contains("cited-header"))
+    let tables = reparsed.everyBlock.flattened.compactMap(\.table)
+    let table = try #require(tables.first { $0.header.first?.anchor == "cited-header" })
+    #expect(table.header.map(\.anchor) == ["cited-header"])
+    #expect(!table.rows.contains { $0.anchor == "cited-header" })
     #expect(Self.anchors(in: reparsed).contains("cited-header"))
   }
 

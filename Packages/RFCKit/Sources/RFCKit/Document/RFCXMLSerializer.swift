@@ -27,10 +27,22 @@ public struct RFCXMLSerializer: Sendable {
     self.options = options
   }
 
+  /// The XML, and what could not be written into it.
+  public struct Serialization: Sendable {
+    public var xml: String
+    /// One line for each part of the document the XML has no place for and so leaves out.
+    public var warnings: [String]
+  }
+
+  /// The XML alone, for a caller that has no use for the warnings.
   public func serialize(_ document: RFCDocument) -> String {
+    serialization(of: document).xml
+  }
+
+  public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
     let referenceAnchors = Self.referenceAnchors(in: document)
-    var context = Context(referenceAnchors: referenceAnchors)
+    var context = Context(referenceAnchors: referenceAnchors, sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -41,8 +53,8 @@ public struct RFCXMLSerializer: Sendable {
     if let id = document.header.id, id.series == .rfc {
       rfcAttributes.append(("number", String(id.number)))
     }
-    if let category = document.header.category, let code = Self.categoryCode(category) {
-      rfcAttributes.append(("category", code))
+    if let category = document.header.category {
+      rfcAttributes.append(("category", category.rawValue))
     }
     if let draft = document.header.draftName { rfcAttributes.append(("docName", draft)) }
     if !document.header.obsoletes.isEmpty {
@@ -76,19 +88,29 @@ public struct RFCXMLSerializer: Sendable {
       writeSection(abstract, writer: &writer, context: &context)
     }
     for section in document.sections[..<backStart] {
-      writeTopLevel(section, writer: &writer, context: &context)
+      writeOrLift(section, writer: &writer, context: &context)
     }
     writer.close("middle")
 
-    if backStart < document.sections.count {
+    // The back is every bibliography, in document order, then its sections, which
+    // the schema requires in that order: those lifted from the middle, its own, then
+    // those lifted from its sections (#315). Its sections are written apart and
+    // first, so what they lift can still go ahead of them.
+    let back = document.sections[backStart...]
+    var sections = Writer(depth: writer.depth + 1)
+    for section in back {
+      writeOrLift(section, writer: &sections, context: &context)
+    }
+    if !context.lifted.isEmpty || !back.isEmpty {
       writer.open("back")
-      for section in document.sections[backStart...] {
-        writeTopLevel(section, writer: &writer, context: &context)
+      for section in context.lifted {
+        writeReferences(section, writer: &writer, context: &context)
       }
+      writer.append(sections)
       writer.close("back")
     }
     writer.close("rfc")
-    return writer.output
+    return Serialization(xml: writer.output, warnings: context.warnings)
   }
 
   /// Where `<back>` starts. The schema orders it as its `<references>`, then its
@@ -132,7 +154,7 @@ public struct RFCXMLSerializer: Sendable {
     }
     for author in header.authors {
       var attributes: [(String, String)] = [("fullname", author.name)]
-      if author.isEditor { attributes.append(("role", "editor")) }
+      if let role = author.role { attributes.append(("role", role.rawValue)) }
       if let contact = author.contact {
         writer.open("author", attributes)
         writeContact(contact, writer: &writer)
@@ -201,25 +223,23 @@ public struct RFCXMLSerializer: Sendable {
 
   // MARK: - Sections
 
-  /// A chapter, in `<middle>` or `<back>`. A references section is `<references>`
-  /// wherever it sits: one ahead of the back (RFC 2511's `9. References`, before its
-  /// appendices and theirs) is no more valid in `<middle>` than inside a `<section>`,
-  /// but written as a section it would wrap its list in a second, unnumbered
-  /// `<references>`, and read back as a section holding a subsection it never had.
-  private func writeTopLevel(_ section: Section, writer: inout Writer, context: inout Context) {
+  /// A section at any depth, in `<middle>` or among the back's sections, written in
+  /// place, or, when it is a references section, set aside for the back's references
+  /// (`Context.lifted`), keeping its anchor, number and name (#315): the schema has
+  /// room for `<references>` nowhere else. One ahead of the back (RFC 2511's `9.
+  /// References`, before its appendices and theirs) written as a section would wrap
+  /// its list in a second, unnumbered `<references>`, and read back as a section
+  /// holding a subsection it never had.
+  private func writeOrLift(_ section: Section, writer: inout Writer, context: inout Context) {
     if Self.isReferences(section) {
-      writeReferences(section, writer: &writer, context: &context)
+      context.lifted.append(section)
     } else {
       writeSection(section, writer: &writer, context: &context)
     }
   }
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
-    // Two sections numbered alike (RFC 1 has two appendices A) would share a `pn`,
-    // which is an ID. The second is written unnumbered, its number in its name, so it
-    // reads the same and names nothing twice (#65).
-    let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
-      .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = context.partNumber(of: section)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
@@ -231,34 +251,43 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("section", attributes)
     writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
+    // A bibliography under a section, a subsection of References or one under an
+    // appendix, goes to the back, and the section keeps the rest (#315).
     for subsection in section.subsections {
-      if Self.isReferences(subsection) {
-        writeReferences(subsection, writer: &writer, context: &context)
-      } else {
-        writeSection(subsection, writer: &writer, context: &context)
-      }
+      writeOrLift(subsection, writer: &writer, context: &context)
     }
     writer.close("section")
   }
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
-    let partNumber = section.number.map { Self.partNumber($0, isAppendix: section.isAppendix) }
-      .flatMap { context.claim($0) ? $0 : nil }
+    let partNumber = context.partNumber(of: section)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
     writer.line("<name>\(inlineXML(title, context: &context))</name>")
+    var entries: [Reference] = []
     for block in section.blocks {
       guard case .references(let list) = block else {
         context.warnings.append(
           "dropped non-reference block in references section \(section.anchor)")
         continue
       }
-      for reference in list.entries {
-        writeReference(reference, writer: &writer, context: &context)
-      }
+      entries += list.entries
     }
+    // A list holding entries beside lists of its own may not hold them directly:
+    // they go in a list of their own, named after it (#315).
+    let wrapsEntries = !entries.isEmpty && !section.subsections.isEmpty
+    if wrapsEntries {
+      // Named after the list, which is unique, rather than counted, so it stays
+      // what it was from one build to the next.
+      writer.open("references", [("anchor", "\(section.anchor)-entries")])
+      writer.line("<name>\(inlineXML(title, context: &context))</name>")
+    }
+    for reference in entries {
+      writeReference(reference, writer: &writer, context: &context)
+    }
+    if wrapsEntries { writer.close("references") }
     for subsection in section.subsections {
       writeReferences(subsection, writer: &writer, context: &context)
     }
@@ -279,10 +308,8 @@ public struct RFCXMLSerializer: Sendable {
       "title",
       text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
-      let isEditor = author.hasSuffix(", Ed.")
-      let name = isEditor ? String(author.dropLast(5)) : author
-      var authorAttributes: [(String, String)] = [("fullname", name)]
-      if isEditor { authorAttributes.append(("role", "editor")) }
+      var authorAttributes: [(String, String)] = [("fullname", author.name)]
+      if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
       writer.empty("author", authorAttributes)
     }
     // The published series' own spelling of an entry naming no one (RFC 9293's `offload`).
@@ -327,10 +354,10 @@ public struct RFCXMLSerializer: Sendable {
       case .bare:
         name = "ul"
         attributes.append(("empty", "true"))
-      case .numbered(let format, let start):
+      case .numbered(let numbering):
         name = "ol"
-        attributes.append(("type", format ?? "1"))
-        attributes.append(("start", String(start)))
+        attributes.append(("type", numbering.type))
+        attributes.append(("start", String(numbering.start)))
       }
       if list.isCompact { attributes.append(("spacing", "compact")) }
       writer.open(name, attributes)
@@ -369,7 +396,9 @@ public struct RFCXMLSerializer: Sendable {
     case .figure(let figure):
       var attributes: [(String, String)] = []
       if let anchor = figure.anchor { attributes.append(("anchor", anchor)) }
-      if let number = figure.number { attributes.append(("pn", "figure-\(number)")) }
+      if let number = figure.number {
+        attributes.append(("pn", PartNumber.figure(number).attribute))
+      }
       writer.open("figure", attributes)
       if let title = figure.title { writer.element("name", text: title) }
       for inner in figure.blocks { writeBlock(inner, writer: &writer, context: &context) }
@@ -377,22 +406,22 @@ public struct RFCXMLSerializer: Sendable {
     case .table(let table):
       var attributes: [(String, String)] = []
       if let anchor = table.anchor { attributes.append(("anchor", anchor)) }
-      if let number = table.number { attributes.append(("pn", "table-\(number)")) }
+      if let number = table.number { attributes.append(("pn", PartNumber.table(number).attribute)) }
       writer.open("table", attributes)
       if let title = table.title { writer.element("name", text: title) }
       if !table.header.isEmpty {
         writer.open("thead")
-        for (index, row) in table.header.enumerated() {
-          writer.open("tr", table.anchor(ofHeaderRow: index).map { [("anchor", $0)] } ?? [])
-          for cell in row { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
+        for row in table.header {
+          writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+          for cell in row.cells { writer.line("<th>\(inlineXML(cell, context: &context))</th>") }
           writer.close("tr")
         }
         writer.close("thead")
       }
       writer.open("tbody")
-      for (index, row) in table.rows.enumerated() {
-        writer.open("tr", table.anchor(ofRow: index).map { [("anchor", $0)] } ?? [])
-        for cell in row { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
+      for row in table.rows {
+        writer.open("tr", row.anchor.map { [("anchor", $0)] } ?? [])
+        for cell in row.cells { writer.line("<td>\(inlineXML(cell, context: &context))</td>") }
         writer.close("tr")
       }
       writer.close("tbody")
@@ -477,16 +506,41 @@ public struct RFCXMLSerializer: Sendable {
   private struct Context {
     var referenceAnchors: [DocumentID: String]
     var warnings: [String] = []
+    /// Every references section, the back's own among them, in document order, which
+    /// the back writes ahead of its sections (#315).
+    var lifted: [Section] = []
     private var autoAnchor = 0
-    private var claimedPartNumbers: Set<String> = []
+    /// Each numbered section's `pn`, by its anchor, claimed in document order: the
+    /// first of two sections numbered alike takes it, however the two are written.
+    /// A bibliography lifted into the back is written after sections that follow it
+    /// (#315), and claiming in writing order gave its number to the later one, whose
+    /// `pn` then declared the ID the lifted list's anchor declared too.
+    private var partNumbers: [String: String] = [:]
 
-    /// Whether `partNumber` is still free, taking it if it is.
-    mutating func claim(_ partNumber: String) -> Bool {
-      claimedPartNumbers.insert(partNumber).inserted
+    init(referenceAnchors: [DocumentID: String], sections: [Section]) {
+      self.referenceAnchors = referenceAnchors
+      var claimed: Set<String> = []
+      func claim(_ sections: [Section]) {
+        for section in sections {
+          if let number = section.number, partNumbers[section.anchor] == nil {
+            let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
+              .attribute
+            if claimed.insert(partNumber).inserted { partNumbers[section.anchor] = partNumber }
+          }
+          claim(section.subsections)
+        }
+      }
+      claim(sections)
     }
 
-    init(referenceAnchors: [DocumentID: String]) {
-      self.referenceAnchors = referenceAnchors
+    /// The section's `pn`, or nil when it has no number or an earlier section claimed
+    /// that one. Two sections numbered alike (RFC 1 has two appendices A) would share
+    /// a `pn`, which is an ID. The second is written unnumbered, its number in its
+    /// name, so it reads the same and names nothing twice (#65). Given once: a second
+    /// section of the same anchor gets none.
+    mutating func partNumber(of section: Section) -> String? {
+      guard section.number != nil else { return nil }
+      return partNumbers.removeValue(forKey: section.anchor)
     }
 
     mutating func nextAutoAnchor() -> Int {
@@ -522,28 +576,18 @@ public struct RFCXMLSerializer: Sendable {
     anchor == partNumber ? [] : [("anchor", anchor)]
   }
 
-  /// `4.2` → `section-4.2`; appendix `A.1` → `section-appendix.a.1`.
-  static func partNumber(_ number: String, isAppendix: Bool) -> String {
-    guard isAppendix else { return "section-\(number)" }
-    var parts = number.split(separator: ".").map(String.init)
-    if let first = parts.first { parts[0] = first.lowercased() }
-    return "section-appendix.\(parts.joined(separator: "."))"
-  }
-
-  static func categoryCode(_ category: String) -> String? {
-    switch category.lowercased() {
-    case "standards track", "std": "std"
-    case "best current practice", "bcp": "bcp"
-    case "informational", "info": "info"
-    case "experimental", "exp": "exp"
-    case "historic": "historic"
-    default: nil
-    }
-  }
-
   private struct Writer {
     private(set) var output = ""
-    private var depth = 0
+    private(set) var depth: Int
+
+    /// Starting `depth` levels in, for what is written apart and appended there.
+    init(depth: Int = 0) {
+      self.depth = depth
+    }
+
+    mutating func append(_ other: Writer) {
+      output += other.output
+    }
 
     mutating func raw(_ string: String) {
       output += string

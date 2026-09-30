@@ -21,6 +21,9 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// written (issue #67). Both parsers collect them as their last step, so the
   /// expansion is read from the document the reader is shown.
   public var abbreviations: [String: Abbreviation] = [:]
+  /// The terms the document defines itself, keyed by the term as written (#176). See
+  /// `DefinedTerms`.
+  public var definedTerms: [String: DefinedTerm] = [:]
 
   public init(header: DocumentHeader, sections: [Section], source: DocumentSource) {
     self.header = header
@@ -62,6 +65,12 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// section bodies missed a document cited there alone (#127). So does a reference's
   /// annotation, which is prose too. Captions are plain strings in the model and
   /// cannot cite.
+  ///
+  /// Never the document's own number, which the abstract and the headings are the
+  /// likeliest to name ("This document, RFC 9110, …"): what it cites are other
+  /// documents, and a citation graph built on this would otherwise carry a self-edge
+  /// (#279). A series the document belongs to, such as RFC 9110's "STD 97", is still
+  /// listed: the header knows the document's number, not its series.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
     for inline in proseInlines {
@@ -72,11 +81,52 @@ public struct RFCDocument: Sendable, Hashable, Codable {
     for case .references(let list) in blocks {
       seen.formUnion(list.entries.compactMap(\.documentID))
     }
+    if let id = header.id {
+      seen.remove(id)
+    }
     return seen.sorted()
   }
 }
 
 public struct DocumentHeader: Sendable, Hashable, Codable {
+  /// A document's category, RFCXML's `category` attribute: its code is the raw
+  /// value, and a legacy header's `Category:` line states its name.
+  public enum Category: String, Sendable, Hashable, Codable, CaseIterable {
+    case standardsTrack = "std"
+    case bestCurrentPractice = "bcp"
+    case informational = "info"
+    case experimental = "exp"
+    case historic
+
+    /// "Standards Track", as a header states it.
+    public var name: String {
+      switch self {
+      case .standardsTrack: "Standards Track"
+      case .bestCurrentPractice: "Best Current Practice"
+      case .informational: "Informational"
+      case .experimental: "Experimental"
+      case .historic: "Historic"
+      }
+    }
+
+    /// Reads the code or the name, in any case, and the `Standard Track` a few
+    /// legacy headers write. Nil for anything else: the FYI series' own
+    /// categories (`User Guides`, `On-line collections`) are none of these.
+    public init?(parsing text: String) {
+      let lowered = text.trimmingCharacters(in: .whitespaces).lowercased()
+      if lowered == "standard track" {
+        self = .standardsTrack
+        return
+      }
+      guard
+        let category = Self.allCases.first(where: {
+          $0.rawValue == lowered || $0.name.lowercased() == lowered
+        })
+      else { return nil }
+      self = category
+    }
+  }
+
   public var id: DocumentID?
   public var title: String
   public var abbreviatedTitle: String?
@@ -88,7 +138,7 @@ public struct DocumentHeader: Sendable, Hashable, Codable {
   public var area: String?
   public var obsoletes: [DocumentID]
   public var updates: [DocumentID]
-  public var category: String?
+  public var category: Category?
   public var draftName: String?
   /// The Internet-Draft this RFC was published from, as the RFC Editor links it
   /// (`<link rel="prev">`): a Datatracker URL naming the draft and, usually, its
@@ -108,7 +158,7 @@ public struct DocumentHeader: Sendable, Hashable, Codable {
     area: String? = nil,
     obsoletes: [DocumentID] = [],
     updates: [DocumentID] = [],
-    category: String? = nil,
+    category: Category? = nil,
     draftName: String? = nil,
     precedingDraft: URL? = nil
   ) {
@@ -238,8 +288,8 @@ public struct Paragraph: Sendable, Hashable, Codable {
 public struct ListBlock: Sendable, Hashable, Codable {
   public enum Style: Sendable, Hashable, Codable {
     case bullet
-    /// Numbered with the given format, e.g. `%d.` or `(%c)`; nil means plain decimal.
-    case numbered(format: String?, start: Int)
+    /// Numbered, counting as `ListNumbering` says.
+    case numbered(ListNumbering)
     /// No marker; used for hanging indents and the RFCXML `empty` attribute.
     case bare
   }
@@ -328,41 +378,33 @@ public struct Figure: Sendable, Hashable, Codable {
 }
 
 public struct Table: Sendable, Hashable, Codable {
+  /// One row: its cells, and its anchor (`<tr anchor>`) if it has one. A document
+  /// can cite a row, as RFC 9271 does its `EventFSD` (#166), and the schema lets a
+  /// `<thead>` row carry an anchor just as a body row can.
+  public struct Row: Sendable, Hashable, Codable {
+    public var cells: [[Inline]]
+    public var anchor: String?
+
+    public init(cells: [[Inline]], anchor: String? = nil) {
+      self.cells = cells
+      self.anchor = anchor
+    }
+  }
+
   public var title: String?
   public var number: Int?
-  public var header: [[[Inline]]]
-  public var rows: [[[Inline]]]
+  public var header: [Row]
+  public var rows: [Row]
   public var anchor: String?
-  /// Each body row's anchor (`<tr anchor>`), by index into `rows`; shorter than
-  /// `rows`, or empty, where rows have none. A document can cite a row: RFC 9271's
-  /// `EventFSD` (#166).
-  public var rowAnchors: [String?]
-  /// The same for the header rows, by index into `header`. The schema lets a
-  /// `<thead>` row carry an anchor just as a body row can, and a link to one
-  /// should land as surely.
-  public var headerRowAnchors: [String?]
 
   public init(
-    title: String?, number: Int? = nil, header: [[[Inline]]], rows: [[[Inline]]],
-    anchor: String? = nil, rowAnchors: [String?] = [], headerRowAnchors: [String?] = []
+    title: String?, number: Int? = nil, header: [Row], rows: [Row], anchor: String? = nil
   ) {
     self.title = title
     self.number = number
     self.header = header
     self.rows = rows
     self.anchor = anchor
-    self.rowAnchors = rowAnchors
-    self.headerRowAnchors = headerRowAnchors
-  }
-
-  /// The anchor of body row `index`, if it has one.
-  public func anchor(ofRow index: Int) -> String? {
-    rowAnchors.indices.contains(index) ? rowAnchors[index] : nil
-  }
-
-  /// The anchor of header row `index`, if it has one.
-  public func anchor(ofHeaderRow index: Int) -> String? {
-    headerRowAnchors.indices.contains(index) ? headerRowAnchors[index] : nil
   }
 }
 
@@ -378,7 +420,7 @@ extension Reference {
 }
 
 /// One `<seriesInfo>` of a reference: a series and the document's place in it, such
-/// as RFC 9110 or DOI 10.17487/RFC9110. A struct rather than a labelled tuple, which
+/// as RFC 9110 or DOI 10.17487/RFC9110. A struct rather than a labeled tuple, which
 /// could be none of `Hashable`, `Codable` or `Equatable`, and so kept every type that
 /// held a reference from being any of them (#130).
 public struct SeriesInfo: Hashable, Codable, Sendable {
@@ -388,6 +430,21 @@ public struct SeriesInfo: Hashable, Codable, Sendable {
   public init(name: String, value: String) {
     self.name = name
     self.value = value
+  }
+
+  /// The entry naming `id`: `RFC 9110`, `BCP 14`.
+  public init(_ id: DocumentID) {
+    self.init(name: id.series.rawValue, value: String(id.number))
+  }
+
+  /// The document the entry names, when its series is one of the RFC Editor's:
+  /// `RFC 9110`, and `rfc 09110` the same. Nil for a DOI or an Internet-Draft.
+  public var documentID: DocumentID? {
+    guard let series = DocumentID.Series(rawValue: name.uppercased()), let number = Int(value)
+    else {
+      return nil
+    }
+    return DocumentID(series: series, number: number)
   }
 }
 
@@ -455,7 +512,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
   /// `derivedAnchor`. Never a link key: anchors are.
   public var displayAnchor: String
   public var title: String
-  public var authors: [String]
+  public var authors: [Author]
   public var date: PublicationDate?
   /// `RFC 7301`, `DOI 10.17487/RFC7301`, `STD 90`, ...
   public var seriesInfo: [SeriesInfo]
@@ -478,7 +535,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
     anchor: String,
     displayAnchor: String? = nil,
     title: String,
-    authors: [String] = [],
+    authors: [Author] = [],
     date: PublicationDate? = nil,
     seriesInfo: [SeriesInfo] = [],
     url: URL? = nil,
@@ -500,12 +557,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
 
   /// The RFC/BCP/STD this reference points at, when it is one.
   public var documentID: DocumentID? {
-    let ids = seriesInfo.compactMap { info -> DocumentID? in
-      guard let series = DocumentID.Series(rawValue: info.name.uppercased()),
-        let number = Int(info.value)
-      else { return nil }
-      return DocumentID(series: series, number: number)
-    }
+    let ids = seriesInfo.compactMap(\.documentID)
     // A BCP or STD reference usually also names its RFC; the RFC is the thing to open.
     return ids.first { $0.series == .rfc } ?? ids.first ?? DocumentID(label: anchor)
   }
@@ -568,7 +620,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// Which is the same question as whether the source had anything to say about the
   /// wording. An author's own words and a document's own tag are both answers a
   /// renderer must not overrule; everything else is ours.
-  public var isCanonicalLabel: Bool { text == nil }
+  var isCanonicalLabel: Bool { text == nil }
 
   /// The label this reference shows in plain text: the source's words when it has
   /// them, otherwise the one composed from the target. `[Inline].plainText` and the
@@ -592,8 +644,8 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
   }
 
-  /// How a reader lays this reference out: the text it shows, and which part of
-  /// that text -- if any -- may be drawn as a chip.
+  /// How a reader lays this reference out: the text it shows, and whether it may be
+  /// drawn as a chip.
   ///
   /// One rule, in one place, because the screen and a copied selection have to
   /// agree. The renderer used to compose the section form itself while `plainText`
@@ -601,29 +653,30 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// "Section 4.2 of [RFC 9110]".
   public struct Display: Sendable, Equatable {
     public let text: String
-    /// The span of `text` a chip covers, or nil when the reference reads as
-    /// ordinary link text.
-    public let chip: Range<String.Index>?
+    /// Whether all of `text` is drawn as one chip; when not, the reference reads as
+    /// ordinary link text. A chip is always the whole reference: the section is a
+    /// suffix of the document it is in, so there is no text beside it to leave out.
+    public let isChip: Bool
   }
 
   public var display: Display {
     // Words from the source, or a reference within this document: neither is ours
     // to restyle.
     guard text == nil, case .document(let id, let section, _) = target else {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     // `bare` is the source asking for the section number alone. Drawing "RFC 9110
     // § 4.2" over the top of that would be answering a question it already
     // answered.
     if sectionFormat == .bare, section != nil {
-      return Display(text: label, chip: nil)
+      return Display(text: label, isChip: false)
     }
     let name = Self.nonBreakingLabel(id.displayName)
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
     let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
-    return Display(text: composed, chip: composed.startIndex..<composed.endIndex)
+    return Display(text: composed, isChip: true)
   }
 
   /// The text a reader shows for this reference -- what `[Inline].plainText`
@@ -651,8 +704,6 @@ public struct CrossReference: Sendable, Hashable, Codable {
   /// One predicate for both parsers on purpose: they each used to decide it, and
   /// they disagreed, so the same reference could draw as a chip from one source
   /// format and as plain text from the other.
-  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
-
   public static func isCanonicalTag(_ tag: String, for id: DocumentID) -> Bool {
     // One pass, no `CharacterSet`: this runs per bracket match over every document
     // in the corpus, and `id.description` ("RFC9110") already has the separator
@@ -665,6 +716,10 @@ public struct CrossReference: Sendable, Hashable, Codable {
     }
     return squeezed.caseInsensitiveCompare(id.description) == .orderedSame
   }
+
+  /// What `isCanonicalTag` strips from a tag before comparing: the brackets and
+  /// either kind of space, which are presentation, not the name.
+  private static let presentationCharacters: Set<Character> = ["[", "]", " ", "\u{00A0}"]
 }
 
 public enum Inline: Sendable, Hashable, Codable {
@@ -682,14 +737,45 @@ public enum Inline: Sendable, Hashable, Codable {
 
 extension Array where Element == Inline {
   /// Flattened plain text, with derived text for cross references.
-  public var plainText: String {
-    map { inline -> String in
+  public var plainText: String { locatedPlainText.text }
+
+  /// `plainText`, and where in it each cross reference's label landed. One walk makes
+  /// both, so an offset taken from here cannot drift from the text.
+  public var locatedPlainText: LocatedPlainText {
+    var located = LocatedPlainText()
+    located.append(self)
+    return located
+  }
+}
+
+/// Plain text made from inlines, with the range each cross reference occupies in it
+/// (`[Inline].locatedPlainText`).
+public struct LocatedPlainText: Sendable, Hashable {
+  /// One cross reference, and the range of `text` its label occupies.
+  public struct LocatedCrossReference: Sendable, Hashable {
+    public var reference: CrossReference
+    public var range: Range<String.Index>
+  }
+
+  public var text = ""
+  /// Every cross reference, however deeply nested, in text order.
+  public var crossReferences: [LocatedCrossReference] = []
+
+  mutating func append(_ inlines: [Inline]) {
+    for inline in inlines {
       switch inline {
-      case .text(let text), .code(let text), .superscript(let text), .subscript(let text): text
-      case .emphasis(let inner), .strong(let inner), .link(_, let inner): inner.plainText
-      case .crossReference(let xref): xref.displayLabel
-      case .lineBreak: "\n"
+      case .text(let value), .code(let value), .superscript(let value), .subscript(let value):
+        text += value
+      case .emphasis(let inner), .strong(let inner), .link(_, let inner):
+        append(inner)
+      case .crossReference(let reference):
+        let start = text.endIndex
+        text += reference.displayLabel
+        crossReferences.append(
+          LocatedCrossReference(reference: reference, range: start..<text.endIndex))
+      case .lineBreak:
+        text += "\n"
       }
-    }.joined()
+    }
   }
 }

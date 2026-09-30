@@ -6,8 +6,9 @@ import Testing
 // Findings about what the parser makes of a whole document, over documents read from
 // a fetched corpus rather than committed as fixtures (`CorpusText`). `make
 // test-corpus` fetches them and runs these; everywhere else they are skipped. The
-// guards these findings led to are tested over a few lines each, beside the other
-// corpus findings; these check that the whole document still comes out that way.
+// guards these findings led to are tested over a few lines each, in the suite of the
+// parser stage they belong to; these check that the whole document still comes out
+// that way.
 
 /// The text of every block of the document's lead-in, a list's items included, so a
 /// finding about what leaves the lead-in holds whatever kind of block it would be.
@@ -175,21 +176,18 @@ struct CorpusBackedAppendixHeadingTests {
   }
 }
 
-@Suite("Corpus-backed: catalogues", .enabled(if: CorpusText.isAvailable))
-struct CorpusBackedCatalogueTests {
-  private func catalogues(in document: RFCDocument) -> [[DefinitionItem]] {
-    document.everyBlock.compactMap {
-      if case .definitionList(let items) = $0 { return items }
-      return nil
-    }
+@Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedCatalogTests {
+  private func catalogs(in document: RFCDocument) -> [[DefinitionItem]] {
+    document.everyBlock.compactMap(\.definitionItems)
   }
 
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
   /// each hung past its number. They were artwork, every reference in them unlinked;
-  /// they are one catalogue now, numbered as the document numbers them (#204).
-  @Test func `the RFC index of RFC 1012 is a catalogue`() throws {
+  /// they are one catalog now, numbered as the document numbers them (#204).
+  @Test func `the RFC index of RFC 1012 is a catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
-    let entries = try #require(catalogues(in: document).max { $0.count < $1.count })
+    let entries = try #require(catalogs(in: document).max { $0.count < $1.count })
     #expect(entries.count > 900)
     #expect(entries.first?.term.plainText == "1")
     #expect(
@@ -203,49 +201,150 @@ struct CorpusBackedCatalogueTests {
   @Test func `an entry's indented description joins the entry`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
     let entry = try #require(
-      catalogues(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
+      catalogs(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
     #expect(entry.definition.count == 2)
   }
 
   /// Most of those descriptions are a short phrase in title case (`A Draft Standard
   /// protocol.`), which the sentence test a list item's continuation asks refuses.
-  /// Kept as artwork, each one ended the catalogue above it, and the summary came
+  /// Kept as artwork, each one ended the catalog above it, and the summary came
   /// out as one list per entry or two.
-  @Test func `a short description does not break the catalogue`() throws {
+  @Test func `a short description does not break the catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
-    let lists = catalogues(in: document)
-    #expect(lists.count < 20, "\(lists.count) catalogues")
+    let lists = catalogs(in: document)
+    #expect(lists.count < 20, "\(lists.count) catalogs")
     #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
   }
 
   /// RFC 793 sets a legend under each sequence-space diagram, one line to an entry,
-  /// and centres the figure's captions under it. A caption is not the last entry's
+  /// and centers the figure's captions under it. A caption is not the last entry's
   /// second paragraph.
   @Test func `a caption centered under a legend stays out of it`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
-    let entries = catalogues(in: document).flatMap { $0 }
+    let entries = catalogs(in: document).flatMap { $0 }
     #expect(!entries.isEmpty)
     #expect(entries.allSatisfy { $0.definition.count == 1 }, "an entry took a second paragraph")
   }
 
   /// RFC 1140 right-aligns its numbers, so `996` stands a column deeper than `1006`,
-  /// its text in the same column. One catalogue still.
-  @Test func `right-aligned numbers stay one catalogue`() throws {
+  /// its text in the same column. One catalog still.
+  @Test func `right-aligned numbers stay one catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1140"))
     let holding996 = try #require(
-      catalogues(in: document).first { $0.contains { $0.term.plainText == "996" } })
+      catalogs(in: document).first { $0.contains { $0.term.plainText == "996" } })
     #expect(holding996.contains { $0.term.plainText == "1006" })
   }
 
   /// RFC 206 sets three error-code tables one after another, each under its own
-  /// caption. They are three catalogues, not one that runs its numbering again.
-  @Test func `tables under their own captions are separate catalogues`() throws {
+  /// caption. They are three catalogs, not one that runs its numbering again.
+  @Test func `tables under their own captions are separate catalogs`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc206"))
-    for entries in catalogues(in: document) {
+    for entries in catalogs(in: document) {
       let terms = entries.compactMap { Int($0.term.plainText) }
-      #expect(terms == terms.sorted(), "a catalogue restarts its numbering: \(terms)")
+      #expect(terms == terms.sorted(), "a catalog restarts its numbering: \(terms)")
       #expect(entries.allSatisfy { $0.definition.count == 1 })
     }
+  }
+}
+
+@Suite("Corpus-backed: references sections", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedReferencesSectionTests {
+  /// The first section of that title with anything in it: RFC 2196's contents
+  /// listing leaves an empty `9. References` of its own ahead of the real one.
+  private static func section(titled title: String, in stem: String) throws -> Section {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    return try #require(
+      document.firstSection { $0.title.plainText == title && !$0.blocks.isEmpty })
+  }
+
+  private static func holdsEntries(_ block: Block) -> Bool {
+    if case .references(let list) = block { return !list.entries.isEmpty }
+    return false
+  }
+
+  /// RFC 1958 opens its references with a note on why there are only two, and RFC
+  /// 2196 with a warning that some may be hard to find. A references section kept
+  /// only its entries, so what came before the first one was dropped (74 documents).
+  @Test func `the text before the first entry is kept`() throws {
+    for (stem, opening) in [
+      ("rfc1958", "Note that the"),
+      ("rfc2196", "The following references"),
+    ] {
+      let references = try Self.section(titled: "References", in: stem)
+      guard case .paragraph(let first)? = references.blocks.first else {
+        Issue.record(
+          "\(stem) opens its references with \(String(describing: references.blocks.first))")
+        continue
+      }
+      #expect(first.plainText.hasPrefix(opening), "\(stem)")
+      #expect(references.blocks.contains(where: Self.holdsEntries), "\(stem) lost its entries")
+    }
+  }
+
+  /// RFC 6186's `Priority for Domain Preferences` has `references` inside
+  /// `preferences`, and was read as a bibliography from its first bracketed line.
+  @Test func `a heading that says preferences is not a bibliography`() throws {
+    let section = try Self.section(titled: "Priority for Domain Preferences", in: "rfc6186")
+    #expect(!section.blocks.contains { if case .references = $0 { true } else { false } })
+    #expect(
+      section.blocks.contains {
+        guard case .paragraph(let paragraph) = $0 else { return false }
+        return paragraph.plainText.hasPrefix("The priority field")
+      })
+  }
+}
+
+@Suite("Corpus-backed: body layouts", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedBodyLayoutTests {
+  /// RFC 5193 sets its title at column 0 under a header block whose right-hand
+  /// column runs on past the left one. Shapes found in the first full corpus run
+  /// (September 2026).
+  @Test func `a title at column zero is the title`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5193"))
+    #expect(document.header.id == .rfc(5193))
+    #expect(
+      document.header.title
+        == "Protocol for Carrying Authentication for Network Access (PANA) Framework")
+    #expect(document.header.date == PublicationDate(year: 2008, month: 5))
+  }
+
+  /// A tab is indentation too: the contents listing of RFC 1142 is tab-indented, and
+  /// every entry matched the numbered-heading pattern.
+  @Test func `tab indented contents entries are not headings`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1142"))
+    let scope = document.allSections.filter { $0.titleText == "Scope and Field of Application" }
+    #expect(scope.map(\.number) == ["1"])
+  }
+
+  /// RFC 775 indents its headings like its body, so the scan for the end of the front
+  /// matter never finds a column-0 heading. The text still has to survive.
+  @Test func `a document without column zero headings keeps its prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc775"))
+    #expect(document.header.title == "DIRECTORY ORIENTED FTP COMMANDS")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(paragraphs.contains { $0.contains("Remote Site Maintenance") })
+    #expect(paragraphs.contains { $0.hasSuffix("to our server:") })
+  }
+
+  /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+  /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line made
+  /// every one of those paragraphs artwork.
+  @Test func `paragraphs with a first line indent are prose`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc722"))
+    let paragraphs = document.paragraphs.map(\.plainText)
+    #expect(paragraphs.contains { $0.hasPrefix("A model is developed") })
+    #expect(!document.artworkText.contains { $0.contains("Using this model") })
+  }
+
+  /// RFC 817 is typeset double spaced: a single blank line is a wrapped line and two
+  /// or more are the real break. No paragraph ever formed and every line stood alone,
+  /// so it produced 577 sections for 658 lines of text.
+  @Test func `a double spaced document is collapsed`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc817"))
+    #expect(document.allSections.count < 20, "\(document.allSections.count) sections")
+    let paragraphs = document.paragraphs.map(\.plainText)
+    let experience = try #require(paragraphs.first { $0.hasPrefix("Experience suggests") })
+    #expect(experience.hasSuffix("the operating system."))
   }
 }
 
@@ -329,5 +428,74 @@ struct CorpusBackedOmittedBoilerplateTests {
     let text = document.paragraphs.map(\.plainText) + document.artworkText
     #expect(!text.contains { $0.contains("Payment Required ....") })
     #expect(text.contains { $0.contains("Origination Date ....") })
+  }
+}
+
+@Suite("Corpus-backed: page furniture", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPageFurnitureTests {
+  /// RFC 798 heads each of its chapters itself, `III.` at column 0, and runs the
+  /// same words at the head of the chapter's later pages. The first of those copies
+  /// was kept, because the document-wide check read only a heading numbered in
+  /// digits (#57): each chapter's name stood twice, the second time as a stray
+  /// block. Answered on the pages around the copy now (#291), the chapter is named
+  /// once.
+  @Test(arguments: ["Encoding Algorithm", "the Data Header"])
+  func `a chapter headed by the document is not named again by its running header`(
+    words: String
+  ) throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc798"))
+    #expect(document.allSections.count { $0.titleText.contains(words) } == 1)
+    #expect(!document.artworkText.contains { $0.contains(words) })
+  }
+}
+
+@Suite("Corpus-backed: packet diagrams", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPacketDiagramTests {
+  /// RFC 791's IPv4 header, as the parser hands it over: every field, with its
+  /// width, the three-bit Flags included.
+  @Test func `the IPv4 header in RFC 791 is recognized with every field`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc791"))
+    let artwork = try #require(
+      document.blocks.lazy.compactMap { block -> String? in
+        guard case .preformatted(let content) = block, content.text.contains("Total Length")
+        else { return nil }
+        return content.text
+      }.first)
+    let diagram = try #require(PacketDiagram.recognize(artwork))
+    #expect(
+      diagram.fields.map(\.name) == [
+        "Version", "IHL", "Type of Service", "Total Length", "Identification", "Flags",
+        "Fragment Offset", "Time to Live", "Protocol", "Header Checksum", "Source Address",
+        "Destination Address", "Options", "Padding",
+      ])
+    #expect(diagram.fields.map(\.bitWidth) == [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32, 24, 8])
+  }
+}
+
+@Suite("Corpus-backed: defined terms", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedDefinedTermsTests {
+  /// RFC 9110 marks a definition with a primary index entry in the paragraph that
+  /// gives it, and a status code's with one directly in its section (#176).
+  @Test func `a primary index entry defines its term where the document does`() throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml("rfc9110"))
+    let upstream = try #require(document.definedTerms["upstream"])
+    #expect(upstream.anchor == "section-3.7-4")
+    #expect(upstream.definition.count == 1)
+    let status = try #require(document.definedTerms["100 Continue (status code)"])
+    #expect(status.anchor == "status.100")
+    #expect(status.definition.isEmpty, "an entry directly in a section has no one block")
+  }
+
+  /// RFC 9114 marks `connection error` in its section and defines it in its
+  /// terminology list: the term lands on the list item, with its definition.
+  @Test func `a definition list entry supplies an index entry's definition`() throws {
+    let document = try RFCXMLParser.parse(try CorpusText.xml("rfc9114"))
+    for (term, anchor) in [
+      ("connection error", "section-2.2-4.7"), ("stream error", "section-2.2-4.25"),
+    ] {
+      let defined = try #require(document.definedTerms[term])
+      #expect(defined.anchor == anchor, "\(term)")
+      #expect(!defined.definition.isEmpty, "\(term)")
+    }
   }
 }

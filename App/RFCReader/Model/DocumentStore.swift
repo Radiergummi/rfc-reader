@@ -26,8 +26,8 @@ actor DocumentStore {
 
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
-  /// cancelled (#116). Original Text fetches the `.txt` on its own, so it has its
-  /// own.
+  /// canceled (#116). Original Text joins a document's own where the text is all
+  /// there is to it and no pack serves it, and has its own otherwise (#324).
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
   private let originalTexts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
@@ -200,6 +200,50 @@ actor DocumentStore {
     try data.write(to: revisionsURL, options: .atomic)
   }
 
+  // MARK: - Registries
+
+  /// The IANA registries the Go to RFC palette looks values up in (#175), one file
+  /// each, as IANA serves it.
+  private var registriesDirectory: URL {
+    directory.appending(path: "Registries", directoryHint: .isDirectory)
+  }
+
+  private func registryURL(_ registry: IANARegistry) -> URL {
+    registriesDirectory.appending(path: "\(registry.file).xml")
+  }
+
+  /// Every cached registry's entries, and which registries are due a fetch: never
+  /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
+  /// entries are still returned, to use until the fetch succeeds.
+  func cachedRegistries(maximumAge: TimeInterval) -> (
+    entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
+  ) {
+    var entries: [IANARegistry: [RegistryEntry]] = [:]
+    var stale: [IANARegistry] = []
+    for registry in IANARegistry.allCases {
+      let url = registryURL(registry)
+      guard let data = try? Data(contentsOf: url),
+        let parsed = try? IANARegistry.parse(data, as: registry)
+      else {
+        stale.append(registry)
+        continue
+      }
+      entries[registry] = parsed
+      let fetched = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate
+      if (fetched ?? .distantPast).timeIntervalSinceNow < -maximumAge {
+        stale.append(registry)
+      }
+    }
+    return (entries, stale)
+  }
+
+  func storeRegistry(_ data: Data, for registry: IANARegistry) throws {
+    try FileManager.default.createDirectory(
+      at: registriesDirectory, withIntermediateDirectories: true)
+    try data.write(to: registryURL(registry), options: .atomic)
+  }
+
   // MARK: - Documents
 
   private func fileURL(_ id: DocumentID, format: FileFormat) -> URL {
@@ -264,13 +308,24 @@ actor DocumentStore {
       if isCachedKept { parsed.store(cached, for: id) }
       return cached
     }
+    // A fetch Original Text started may have finished while the disk was read (#324).
+    if let cached = parsed.value(for: id) { return cached }
 
+    return try await fetched(id, formats: formats, client: client).document
+  }
+
+  /// The document's own download, which a second open and, where the text is all
+  /// there is, Original Text join; written by whichever of its readers keeps it, with
+  /// no suspension between, so a removal cannot slip in before the write (#116).
+  private func fetched(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+    async throws -> RFCEditorClient.FetchedDocument
+  {
     let (fetched, isKept) = try await downloads.value(for: id) {
       Task { try await Self.fetch(id, formats: formats, client: client) }
     }
     // A removal while this was in flight, or another reader of the same fetch has
     // kept it: the document is shown, and not written here (#116).
-    guard isKept else { return fetched.document }
+    guard isKept else { return fetched }
     let url = fileURL(id, format: fetched.format)
     try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
     hasGrown = true
@@ -278,7 +333,7 @@ actor DocumentStore {
     if legacyPack?.file(for: id) == nil {
       parsed.store(fetched.document, for: id)
     }
-    return fetched.document
+    return fetched
   }
 
   /// The body on disk, parsed: the cached XML if there is one, then the installed
@@ -321,8 +376,7 @@ actor DocumentStore {
     let interval = signposter.beginInterval(
       "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
     defer { signposter.endInterval("Fetch document", interval) }
-    let fetched = try await client.fetchPreferredDocument(
-      id, availableFormats: formats.isEmpty ? nil : formats)
+    let fetched = try await client.fetchPreferredDocument(id, availableFormats: formats)
     if let failure = fetched.xmlParseFailure {
       storeLog.error(
         "\(id.displayName, privacy: .public): XML did not parse, shown from the text: \(String(describing: failure), privacy: .public)"
@@ -416,10 +470,22 @@ actor DocumentStore {
     return victims
   }
 
-  func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
+  func originalText(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+    async throws -> String
+  {
     let textURL = fileURL(id, format: .text)
     if let data = try? Data(contentsOf: textURL) {
-      return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+      return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
+    }
+    // The `.txt` is the document: the same download as the document's, which Prefer
+    // Original Text starts at the same moment, fetched once for both (#324). Not
+    // where the pack serves the document: nothing downloads it, so there is nothing
+    // to join, and the shared fetch would parse the text for nobody.
+    if legacyPack?.file(for: id) == nil,
+      RFCEditorClient.textIsTheDocument(availableFormats: formats)
+    {
+      let data = try await fetched(id, formats: formats, client: client).data
+      return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
     let (data, isKept) = try await originalTexts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
@@ -428,6 +494,6 @@ actor DocumentStore {
       try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
       hasGrown = true
     }
-    return LegacyTextParser.stripPagination(String(decoding: data, as: UTF8.self))
+    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
   }
 }

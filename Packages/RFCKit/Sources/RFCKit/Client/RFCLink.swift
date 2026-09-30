@@ -9,11 +9,20 @@ public struct RFCLink: Hashable, Sendable {
   /// number alone names section 1. A place is a number or an anchor, and
   /// `RFCDocument.anchor(forPlace:)` resolves either.
   public var section: String?
+  /// A fragment that names no section, kept as it came: an anchor the document may
+  /// define, such as an author's `sample-varint`, or one it doesn't, such as the RFC
+  /// Editor's `page-12` (#276). Only the reader reads it, to go there or to open at
+  /// the top; a citation names a section, and never this.
+  public var anchor: String?
 
-  public init(id: DocumentID, section: String? = nil) {
+  public init(id: DocumentID, section: String? = nil, anchor: String? = nil) {
     self.id = id
     self.section = section
+    self.anchor = anchor
   }
+
+  /// Where in the document the reader goes: the section, or else the anchor.
+  public var place: String? { section ?? anchor }
 
   /// The app's own URL scheme: `rfc://9110`, `rfc://9110#section-4.2`, `rfc://bcp14`.
   ///
@@ -27,7 +36,7 @@ public struct RFCLink: Hashable, Sendable {
     var components = URLComponents()
     components.scheme = Self.scheme
     components.host = id.series == .rfc ? String(id.number) : id.fileStem
-    components.fragment = section.map(Self.fragment(for:))
+    components.fragment = section.map(SectionAnchor.anchor(forSectionNumber:)) ?? anchor
     // Unwrapped because nothing here can fail: the host is a document ID's own
     // letters and digits, and the one caller-supplied part, the section, goes in
     // as a fragment, which `URLComponents` percent-encodes (#150).
@@ -41,15 +50,26 @@ public struct RFCLink: Hashable, Sendable {
   /// `URL(string:)` refused wherever it contained a space or a reserved character
   /// (#150): `appURL` trapped, and the web builders silently dropped the section.
   static func url(_ url: URL, section: String?) -> URL {
-    guard let section,
+    Self.url(url, fragment: section.map(SectionAnchor.anchor(forSectionNumber:)))
+  }
+
+  /// `url` with `fragment` as its fragment, percent-encoded as `url(_:section:)`
+  /// says.
+  static func url(_ url: URL, fragment: String?) -> URL {
+    guard let fragment,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
-    components.fragment = fragment(for: section)
+    components.fragment = fragment
     return components.url ?? url
   }
 
   public var webURL: URL {
-    CitationFormatter.url(for: id, section: section)
+    guard section == nil, let anchor else {
+      return CitationFormatter.url(for: id, section: section)
+    }
+    // The document's page, which defines the anchor, rather than its info page.
+    return Self.url(
+      RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), fragment: anchor)
   }
 
   public init?(url: URL) {
@@ -57,11 +77,16 @@ public struct RFCLink: Hashable, Sendable {
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
     // and `section-4.2%20draft` has to come back as the section it was.
-    let fragmentSection = Self.section(fromFragment: url.fragment(percentEncoded: false))
+    let fragment = url.fragment(percentEncoded: false) ?? ""
+    let fragmentSection = SectionAnchor.sectionNumber(fromAnchor: fragment)
+    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
+    // cannot, and a bare `#4.2` is no section either (#276).
+    let fragmentAnchor =
+      fragmentSection == nil && fragment.first?.isNumber == false ? fragment : nil
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
       return
     }
 
@@ -76,40 +101,16 @@ public struct RFCLink: Hashable, Sendable {
       }
       let stem = (components[1] as NSString).deletingPathExtension
       guard let id = DocumentID(parsing: stem) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":
       // /doc/html/rfc9110, /doc/rfc9110/, /html/rfc9110
       guard let stem = components.last(where: { DocumentID(parsing: $0) != nil }) else {
         return nil
       }
       guard let id = DocumentID(parsing: stem) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     default:
       return nil
     }
   }
-
-  /// The RFC Editor's and Datatracker's fragment convention, which the app's own
-  /// scheme follows too: `4.2` → `section-4.2`, appendix `A.1` → `appendix-A.1`.
-  /// `section(fromFragment:)` is the other half, and the two are kept together so
-  /// neither can drift.
-  static func fragment(for section: String) -> String {
-    if section.hasPrefix(appendixPrefix) { return section }
-    return section.first?.isLetter == true ? "\(appendixPrefix)\(section)" : "section-\(section)"
-  }
-
-  /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
-  /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
-  /// read as `1`, it named section 1.
-  private static func section(fromFragment fragment: String?) -> String? {
-    guard let fragment else { return nil }
-    for prefix in ["section-", appendixPrefix] where fragment.hasPrefix(prefix) {
-      let value = String(fragment.dropFirst(prefix.count))
-      guard !value.isEmpty else { return nil }
-      return prefix == appendixPrefix && value.first?.isNumber == true ? fragment : value
-    }
-    return nil
-  }
-
-  static let appendixPrefix = "appendix-"
 }

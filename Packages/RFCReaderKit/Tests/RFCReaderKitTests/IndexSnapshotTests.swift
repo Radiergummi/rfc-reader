@@ -14,7 +14,6 @@ struct IndexSnapshotTests {
     let decoded = try IndexSnapshot.decode(IndexSnapshot.encode(parsed))
     #expect(decoded.rfcs == parsed.rfcs)
     #expect(decoded.series == parsed.series)
-    #expect(decoded.notIssued == parsed.notIssued)
   }
 
   @Test func `a snapshot written after the index and the app is current`() {

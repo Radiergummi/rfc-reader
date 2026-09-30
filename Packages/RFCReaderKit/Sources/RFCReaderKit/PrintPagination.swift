@@ -97,8 +97,8 @@ public enum PrintPagination {
   ///   enumerates its fragments. Searched by bisection, so a page of a long
   ///   document does not walk every paragraph before it.
   public static func spans(_ spans: [Span], on page: Page) -> Range<Int> {
-    let first = boundary(in: spans[...]) { $0.maxY > page.top }
-    let end = boundary(in: spans[first...]) { $0.minY >= page.bottom }
+    let first = spans.partitioningIndex { $0.maxY > page.top }
+    let end = spans[first...].partitioningIndex { $0.minY >= page.bottom }
     return first..<end
   }
 
@@ -106,25 +106,7 @@ public enum PrintPagination {
   /// whose top is at or above it. What an exported PDF places a destination or a
   /// link on (#376). Nil above the first page, or with no pages.
   public static func page(containing y: CGFloat, in pages: [Page]) -> Int? {
-    let after = boundary(in: pages[...]) { $0.top > y }
+    let after = pages.partitioningIndex { $0.top > y }
     return after > 0 ? after - 1 : nil
-  }
-
-  /// The first index of `elements` that satisfies `isPast`, which is false up to
-  /// some index and true from there on; the end index when it never holds.
-  private static func boundary<Element>(
-    in elements: ArraySlice<Element>, where isPast: (Element) -> Bool
-  ) -> Int {
-    var low = elements.startIndex
-    var high = elements.endIndex
-    while low < high {
-      let middle = low + (high - low) / 2
-      if isPast(elements[middle]) {
-        high = middle
-      } else {
-        low = middle + 1
-      }
-    }
-    return low
   }
 }

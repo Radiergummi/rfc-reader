@@ -135,7 +135,7 @@ struct BoundarySampleTests {
   /// `report.json` is what a corpus run is compared against, so sampling the boundary
   /// leaves it as it is; the sample goes to its own file and the log.
   @Test func `sampling the boundary leaves the report unchanged`() throws {
-    let text = DocumentConverter.text(decoding: try Data(contentsOf: Fixtures.url("rfc1245.txt")))
+    let text = LegacyTextParser.text(decoding: try Data(contentsOf: Fixtures.url("rfc1245.txt")))
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
     let plain = DocumentConverter().convert(text: text, stem: "rfc1245", metadata: nil)

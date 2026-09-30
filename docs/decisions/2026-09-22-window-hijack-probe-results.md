@@ -183,7 +183,7 @@ SPIKE2 Edit menu has 17 items: ["Undo", "Redo", "", "Cut", "Copy", "Paste", "Del
 SPIKE2 Window menu: ["Minimize", "Zoom", "", "Bring All to Front", "", "Spike2"]
 ```
 
-SwiftUI still builds the menu bar and still honours `.commands` — "Custom
+SwiftUI still builds the menu bar and still honors `.commands` — "Custom
 Command" is the app's own, injected with `CommandGroup(after: .newItem)`. What
 is missing is what `WindowGroup` used to contribute: **New Window**. That, and
 New Tab, become our own command group.

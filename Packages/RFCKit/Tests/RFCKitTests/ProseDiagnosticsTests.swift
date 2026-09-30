@@ -124,6 +124,21 @@ struct ProseDiagnosticsTests {
       "a clause closed on its own line leaves the lines after it counted")
   }
 
+  /// Most pre-1990 RFCs indent the first line of a paragraph and set the rest at the
+  /// left margin (RFC 722, 891, 904). Taking the block's indent from the first line
+  /// made every one of those paragraphs artwork.
+  @Test func `a paragraph indented only on its first line is prose`() {
+    let lines = [
+      "     A model is set out here of the interactions between two programs,",
+      "and the features of that model which make a service reliable are",
+      "named one by one.",
+    ]
+    let diagnosis = LegacyTextParser.diagnose(lines)
+    #expect(diagnosis.isProse)
+    #expect(diagnosis.indent == 0)
+    #expect(diagnosis.firstLineIndent == 5)
+  }
+
   @Test func `first line indent out of range is distinct from indent`() {
     let lines = [
       "                The opening line is set far too deep relative to the body",
@@ -229,7 +244,7 @@ struct ProseDiagnosticsTests {
   }
 
   /// What the title page leaves in the lead-in, `parse` drops unread (#76), so the
-  /// report does not diagnose it either: RFC 1441's centred status paragraph and its
+  /// report does not diagnose it either: RFC 1441's centered status paragraph and its
   /// contents listing are refused by the prose test, and were counted as its refusals.
   /// RFC 757's phone number is the whole of its lead-in, and the report has none.
   @Test func `the title pages leftovers are not diagnosed`() throws {

@@ -9,8 +9,6 @@ struct SidebarView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.editMode) private var editMode
-    /// For Recently Read's count, which is every document with a place kept.
-    @Query private var readingPositions: [ReadingPosition]
   #endif
   // Which sections are open, kept across launches (#344).
   @AppStorage("sidebar.libraryExpanded") private var libraryExpanded = true
@@ -19,6 +17,8 @@ struct SidebarView: View {
   @AppStorage("sidebar.collectionsExpanded") private var collectionsExpanded = true
   /// The collection whose deletion is being confirmed (#349).
   @State private var deleting: CollectionSnapshot.Entry?
+  /// The store warning, shown again from the sidebar's unsaved-session row (#318).
+  @State private var showsStoreWarning = false
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -73,12 +73,13 @@ struct SidebarView: View {
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
       .searchable(text: Bindable(navigation).searchText, prompt: "Search")
+      .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
-          library.librarySearch(navigation.searchText).isEmpty
+          library.librarySearch(navigation.appliedQuery).isEmpty
         {
-          ContentUnavailableView.search(text: navigation.searchText)
+          ContentUnavailableView.search(text: navigation.appliedQuery)
         }
       }
       // Coming back from a list is leaving the search that list was narrowed by,
@@ -91,6 +92,11 @@ struct SidebarView: View {
       .navigationBarTitleDisplayMode(.large)
     #endif
     .labelStyle(SidebarLabelStyle())
+    .alert(AppData.storeWarning.title, isPresented: $showsStoreWarning) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(AppData.storeWarning.message)
+    }
     .confirmationDialog(
       "Delete “\(deleting?.name ?? "")”?",
       isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -116,6 +122,26 @@ struct SidebarView: View {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
+      // While the store is in memory, and only then: the launch alert says so once,
+      // and a session can run for hours after it (#318). Here, where someone looks
+      // when they wonder where their bookmarks went.
+      if AppData.isStoredInMemory {
+        Button {
+          showsStoreWarning = true
+        } label: {
+          Label {
+            Text("Not saved in this session")
+          } icon: {
+            // On the icon itself, or `SidebarLabelStyle` draws it in the accent
+            // color on iOS, as it does the places: this is a status, not a place.
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.secondary)
+          }
+          .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(AppData.storeWarning.message)
+      }
     }
     if !library.collections.collections.isEmpty {
       group("Collections", isExpanded: $collectionsExpanded) {
@@ -134,7 +160,7 @@ struct SidebarView: View {
       row(.all)
       row(.standards)
       row(.bestCurrentPractice)
-      ForEach([RFCKit.Stream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
+      ForEach([PublicationStream.ietf, .irtf, .iab, .independent], id: \.self) { stream in
         row(.stream(stream))
       }
     }
@@ -156,8 +182,8 @@ struct SidebarView: View {
   ///
   /// On iOS the header is drawn here rather than by `Section(isExpanded:)`, whose
   /// header could not be made to look like Notes': `.headerProminence(.increased)`
-  /// left it small and grey, its toggle came out black where Notes' is a dimmed
-  /// grey, and it sat inset from the cards' edge, where Notes' is level with it.
+  /// left it small and gray, its toggle came out black where Notes' is a dimmed
+  /// gray, and it sat inset from the cards' edge, where Notes' is level with it.
   @ViewBuilder
   private func group<Content: View>(
     _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
@@ -174,13 +200,13 @@ struct SidebarView: View {
           HStack {
             Text(title)
               .font(.title2.weight(.semibold))
-              // The label colour itself: `.primary` resolves against the
-              // header's own style, which is grey.
+              // The label color itself: `.primary` resolves against the
+              // header's own style, which is gray.
               .foregroundStyle(Color(uiColor: .label))
             Spacer()
             Image(systemName: "chevron.down.circle.fill")
-              // Notes' size and grey, measured on the same phone: 17 pt across,
-              // in a grey a step darker than `systemGray2`.
+              // Notes' size and gray, measured on the same phone: 17 pt across,
+              // in a gray a step darker than `systemGray2`.
               .font(.body)
               .foregroundStyle(.white, Color(uiColor: .systemGray))
               .rotationEffect(.degrees(isExpanded.wrappedValue ? 0 : -90))
@@ -202,14 +228,14 @@ struct SidebarView: View {
     /// could see.
     private var isSearchingInPlace: Bool {
       horizontalSizeClass == .compact
-        && !navigation.searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        && !navigation.appliedQuery.isUnsearchedQuery
     }
 
     /// The first results, and the way to all of them in All RFCs, which keeps the
     /// query: the list is windowed (`ListWindow`) and this is not.
     @ViewBuilder
     private var searchResults: some View {
-      let results = library.librarySearch(navigation.searchText)
+      let results = library.librarySearch(navigation.appliedQuery)
       let bookmarked = library.bookmarkedNumbers
       Section {
         ForEach(results.prefix(Self.searchResultLimit)) { rfc in
@@ -321,7 +347,7 @@ struct SidebarView: View {
       switch filter {
       case .bookmarks: library.bookmarkedNumbers.count
       case .downloaded: library.downloadedNumbers.count
-      case .recent: readingPositions.count { $0.document?.series == .rfc }
+      case .recent: library.recentlyReadCount
       default: library.indexCounts[filter]
       }
     }
@@ -391,6 +417,16 @@ struct SidebarView: View {
         guard let field = notification.object as? NSSearchField else { return }
         navigation.searchText = field.stringValue
       }
+
+      /// Return applies the search without waiting for a pause in typing.
+      func control(
+        _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
+      ) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+          navigation.applySearchWithoutPause()
+        }
+        return false
+      }
     }
   }
 #endif
@@ -429,7 +465,7 @@ private struct SidebarLabelStyle: LabelStyle {
         icon
           .frame(width: column)
           #if !os(macOS)
-            // In the accent colour, as Notes draws its folders (#343). Not on
+            // In the accent color, as Notes draws its folders (#343). Not on
             // macOS, whose sidebar tints its icons already and turns them white
             // on a selected row, which an explicit style would override.
             .foregroundStyle(.tint)

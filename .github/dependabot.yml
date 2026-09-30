@@ -13,11 +13,10 @@ updates:
       github-actions:
         patterns: ["*"]
 
+  # Only corpus-build has remote dependencies; RFCKit and RFCReaderKit depend on
+  # nothing but each other, by path.
   - package-ecosystem: swift
-    directories:
-      - /Packages/RFCKit
-      - /Packages/RFCReaderKit
-      - /Tools/corpus-build
+    directory: /Tools/corpus-build
     schedule:
       interval: weekly
       day: monday

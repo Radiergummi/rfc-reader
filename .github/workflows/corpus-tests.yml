@@ -1,0 +1,30 @@
+name: Corpus-backed tests
+
+# The RFCKit suites that read whole legacy RFCs (`Corpus-backed: ...`), which
+# `make check` and CI skip because the documents are fetched, not committed. Weekly
+# and on demand: the parser changes rarely enough that a week is the most a
+# regression waits, and the dozen documents are fetched fresh each time.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-corpus:
+    name: Corpus-backed RFCKit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The image carries neither.
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq make curl >/dev/null
+      # Fetches the documents in the Makefile's CORPUS_TEST_DOCUMENTS, checks every
+      # document a test reads is among them, and runs the suites.
+      - run: make test-corpus

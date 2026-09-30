@@ -25,7 +25,7 @@ public struct PrintFurniture: Equatable, Sendable {
   public init(header: DocumentHeader, metadata: RFCMetadata?) {
     let summary = HeaderSummary(header: header, metadata: metadata)
     let id = header.id ?? metadata?.id
-    let status = metadata?.currentStatus.displayName ?? header.category
+    let status = metadata?.currentStatus.displayName ?? header.category?.name
 
     headerLeading = id?.displayName ?? ""
     headerCenter = header.abbreviatedTitle ?? summary.title

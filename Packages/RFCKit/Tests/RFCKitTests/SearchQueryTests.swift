@@ -54,6 +54,45 @@ struct SearchQueryTests {
       SearchQuery.format(text: parsed.text, filters: parsed.filters) == #"author:"roy fielding""#)
   }
 
+  // MARK: - One vocabulary
+
+  /// Parsing and completion read the same table, so every spelling of every
+  /// qualifier filters rather than searching as text, and completion offers its
+  /// long name.
+  @Test(arguments: SearchQuery.Qualifier.allCases)
+  func `every spelling of a qualifier is parsed and completed`(
+    qualifier: SearchQuery.Qualifier
+  ) throws {
+    for spelling in qualifier.spellings {
+      #expect(try completions(spelling) == [qualifier.completion])
+      let parsed = IndexSearch.parseQuery("\(spelling):\(Self.value(for: qualifier))")
+      #expect(parsed.text.isEmpty, "\(spelling): searched as text")
+      #expect(!parsed.filters.isEmpty, "\(spelling): set no filter")
+    }
+  }
+
+  /// A value each qualifier takes.
+  private static func value(for qualifier: SearchQuery.Qualifier) -> String {
+    switch qualifier {
+    case .workingGroup: "httpbis"
+    case .status: "std"
+    case .author: "fielding"
+    case .stream: "ietf"
+    case .year: "2020"
+    case .has: "xml"
+    }
+  }
+
+  /// Every spelling of every `status:` value filters, and completes to its value.
+  @Test func `every status spelling is parsed and completed`() throws {
+    for value in SearchQuery.StatusValue.all {
+      for spelling in value.spellings {
+        #expect(IndexSearch.parseQuery("status:\(spelling)").text.isEmpty, "\(spelling)")
+        #expect(try completions("status:\(spelling)") == ["status:\(value.name)"])
+      }
+    }
+  }
+
   @Test func `an empty query formats as nothing`() {
     #expect(SearchQuery.format(text: "", filters: SearchFilters()) == "")
   }
@@ -164,8 +203,8 @@ struct SearchQueryTests {
   /// qualifier means nothing, so a typo is not silently a word.
   @Test func `an unknown qualifier is marked as unknown`() throws {
     let suggestions = SearchQuery.suggestions(
-      for: "cache colour:red", in: try Fixtures.sampleIndex())
+      for: "cache color:red", in: try Fixtures.sampleIndex())
     #expect(suggestions.map(\.isUnknown) == [true])
-    #expect(suggestions.first?.completion == "cache colour:red")
+    #expect(suggestions.first?.completion == "cache color:red")
   }
 }
