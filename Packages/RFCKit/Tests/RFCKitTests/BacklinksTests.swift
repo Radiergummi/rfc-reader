@@ -95,7 +95,9 @@ struct BacklinksTests {
 
   /// A section with prose beside its bibliography is drawn in the body, so it is
   /// referred to and refers like any other; the rows of its bibliography are not
-  /// places. A section that is only a bibliography cites nothing.
+  /// drawn, so an annotation's reference is no backlink. A section that is only a
+  /// bibliography cites nothing, and nor does a `References` parent over
+  /// bibliographies, even from its heading: the reader draws neither.
   @Test func `only a bibliography's rows and a bibliography alone are left out`() {
     let entries = Block.references(
       ReferenceList(
@@ -107,13 +109,16 @@ struct BacklinksTests {
         section("one", [.paragraph(Paragraph([refer(to: "mixed"), refer(to: "REF")]))]),
         section("mixed", [.paragraph(Paragraph([refer(to: "one")])), entries]),
         section("bibliography", [entries]),
+        Section(
+          anchor: "references", title: [refer(to: "one")],
+          subsections: [section("normative", [entries])]),
       ],
       source: .text)
     let backlinks = Backlinks.within(document)
     #expect(backlinks["mixed"] == [Backlink(section: "one", count: 1)])
     #expect(
-      backlinks["one"] == [Backlink(section: "mixed", count: 2)],
-      "the mixed section's prose and its annotation; not the bibliography's")
+      backlinks["one"] == [Backlink(section: "mixed", count: 1)],
+      "the mixed section's prose; not its annotation, the bibliography's or the parent's heading")
     #expect(backlinks["REF"] == nil && backlinks["bibliography"] == nil)
   }
 

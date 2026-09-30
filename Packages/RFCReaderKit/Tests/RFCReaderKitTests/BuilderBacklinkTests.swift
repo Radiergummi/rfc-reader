@@ -81,14 +81,16 @@ struct BuilderBacklinkTests {
     #expect(SelectionText.plainText(of: selection) == "2. Two\n")
   }
 
-  /// Pressed on any of its characters, the chip answers with all of it: what its
-  /// list points at.
+  /// Pressed on any of its characters, the chip answers with all of it but the
+  /// space before it: what its list points at, which a heading wrapping at that
+  /// space would otherwise stretch across two lines.
   @Test func `the chip is found whole from any of its characters`() throws {
     let built = DocumentTextBuilder.build(document, style: ReadingStyle())
     let chip = try #require(chips(in: built.text).first)
+    let drawn = NSRange(location: chip.range.location + 1, length: chip.range.length - 1)
     for offset in chip.range.location..<NSMaxRange(chip.range) {
       let found = try #require(built.text.backlinkChip(at: offset))
-      #expect(found.anchor == "two" && found.range == chip.range)
+      #expect(found.anchor == "two" && found.range == drawn)
     }
     #expect(built.text.backlinkChip(at: chip.range.location - 1) == nil)
   }

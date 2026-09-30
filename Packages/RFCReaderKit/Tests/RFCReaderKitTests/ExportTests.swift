@@ -199,7 +199,7 @@ struct ExportOutlineTests {
     }
     // The bibliography is in the panel, not the body, so not in the outline either.
     let listed = Set(all(outline).map(\.anchor))
-    for section in document.allSections where DocumentTextBuilder.holdsOnlyReferences(section) {
+    for section in document.allSections where section.holdsOnlyReferences {
       #expect(!listed.contains(section.anchor))
     }
     // Nested as the document nests them.

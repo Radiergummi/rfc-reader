@@ -20,9 +20,10 @@ public struct Backlink: Sendable, Hashable {
 /// section, and a reference to a subsection is the subsection's alone. So is a
 /// reference made in a subsection. A section referring to itself is left out. So is a
 /// bibliography entry as a target, since a citation names the work, not the row that
-/// lists it; and a section that is only a bibliography as a citing place, since the
-/// reader leaves it out of the body and a backlink there would lead nowhere. A
-/// section with prose beside its bibliography is drawn, and counts like any other.
+/// lists it. Only what the reader draws in the body refers, since a backlink has to
+/// lead somewhere: not a section that `holdsOnlyReferences`, and not a bibliography's
+/// annotations, which are the references panel's. A section with prose beside its
+/// bibliography is drawn, and its prose counts like any other.
 /// Only references to anchors count; which other documents cite this one is the
 /// corpus's to answer (#174).
 public enum Backlinks {
@@ -30,28 +31,29 @@ public enum Backlinks {
   /// of the citing sections, the abstract first.
   public static func within(_ document: RFCDocument) -> [String: [Backlink]] {
     var holder: [String: String] = [:]
-    var bibliographies: Set<String> = []
     for section in document.allSections {
       holder[section.anchor] = section.anchor
-      for block in section.blocks.flattened {
-        if case .references = block { continue }
+      for block in drawn(section.blocks) {
         for anchor in block.anchors {
           holder[anchor] = section.anchor
         }
       }
-      let onlyReferences = section.blocks.allSatisfy { block in
-        if case .references = block { return true } else { return false }
-      }
-      if !section.blocks.isEmpty, onlyReferences {
-        bibliographies.insert(section.anchor)
-      }
     }
+    // `proseInlinesBySection`, less what the body leaves out.
+    let abstract = drawn(document.header.abstract).flatMap(\.proseRuns)
+    let places =
+      [(sectionAnchor: String?.none, runs: abstract)]
+      + document.allSections.filter { !$0.holdsOnlyReferences }.map { section in
+        (
+          sectionAnchor: Optional(section.anchor),
+          runs: [section.title] + drawn(section.blocks).flatMap(\.proseRuns)
+        )
+      }
     var backlinks: [String: [Backlink]] = [:]
-    for place in document.proseInlinesBySection
-    where !(place.sectionAnchor.map(bibliographies.contains) ?? false) {
+    for place in places {
       var counts: [String: Int] = [:]
       var order: [String] = []
-      for inline in place.inlines {
+      for inline in place.runs.flatMap(\.flattened) {
         guard case .crossReference(let xref) = inline, case .anchor(let anchor) = xref.target,
           let section = holder[anchor], section != place.sectionAnchor
         else { continue }
@@ -64,5 +66,13 @@ public enum Backlinks {
       }
     }
     return backlinks
+  }
+
+  /// These blocks and every block nested in them, but for a bibliography.
+  private static func drawn(_ blocks: [Block]) -> [Block] {
+    blocks.flattened.filter { block in
+      if case .references = block { return false }
+      return true
+    }
   }
 }

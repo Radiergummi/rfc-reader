@@ -255,7 +255,7 @@ extension DocumentTextBuilder {
     // several screens of rows nobody reads in order. It lives in a panel
     // instead — see `ReferencesPanel` in the app — and is skipped here, heading
     // and all, rather than left behind as an empty "9. References".
-    guard !Self.holdsOnlyReferences(section) else { return }
+    guard !section.holdsOnlyReferences else { return }
     mark(section.anchor, heading: section.displayTitle, number: section.number)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
@@ -278,19 +278,6 @@ extension DocumentTextBuilder {
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
-  }
-
-  /// True when nothing in this section, or anything below it, is prose: only
-  /// bibliography entries. A `References` section is usually empty itself and
-  /// carries `Normative` and `Informative` subsections, so this has to recurse
-  /// before it can say the whole tree is skippable.
-  static func holdsOnlyReferences(_ section: Section) -> Bool {
-    guard !section.blocks.isEmpty || !section.subsections.isEmpty else { return false }
-    let blocksAreReferences = section.blocks.allSatisfy { block in
-      if case .references = block { return true }
-      return false
-    }
-    return blocksAreReferences && section.subsections.allSatisfy(holdsOnlyReferences)
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {

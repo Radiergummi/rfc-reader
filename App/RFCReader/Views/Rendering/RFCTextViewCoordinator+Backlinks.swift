@@ -29,7 +29,7 @@ extension RFCTextViewCoordinator {
   func followBacklink(to anchor: String) {
     guard let url = DocumentTextBuilder.url(anchor, scheme: DocumentTextBuilder.anchorScheme)
     else { return }
-    _ = onLink(url, .here)
+    _ = onLink(url, .current)
   }
 }
 

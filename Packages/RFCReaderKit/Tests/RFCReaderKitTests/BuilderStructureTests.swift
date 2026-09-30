@@ -17,7 +17,7 @@ struct BuilderStructureTests {
   /// The bibliography lives in a panel, not in the reading flow, so its sections
   /// are deliberately absent from the storage. Everything else must be there.
   private func bodySections(of document: RFCDocument) -> [Section] {
-    document.allSections.filter { !DocumentTextBuilder.holdsOnlyReferences($0) }
+    document.allSections.filter { !$0.holdsOnlyReferences }
   }
 
   @Test func `every section anchor is indexed`() throws {
@@ -303,7 +303,7 @@ struct BuilderStructureTests {
   @Test func `the bibliography is not in the body`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: style)
-    let skipped = document.allSections.filter { DocumentTextBuilder.holdsOnlyReferences($0) }
+    let skipped = document.allSections.filter { $0.holdsOnlyReferences }
     #expect(!skipped.isEmpty, "RFC 8999 has a references section to skip")
     for section in skipped {
       #expect(
@@ -330,13 +330,13 @@ struct BuilderStructureTests {
     let parent = Section(anchor: "s3", title: "References", subsections: [pure])
     let empty = Section(anchor: "s4", title: "Placeholder")
 
-    #expect(DocumentTextBuilder.holdsOnlyReferences(pure))
-    #expect(!DocumentTextBuilder.holdsOnlyReferences(mixed))
+    #expect(pure.holdsOnlyReferences)
+    #expect(!mixed.holdsOnlyReferences)
     #expect(
-      DocumentTextBuilder.holdsOnlyReferences(parent),
+      parent.holdsOnlyReferences,
       "a parent of bibliography subsections goes too")
     #expect(
-      !DocumentTextBuilder.holdsOnlyReferences(empty), "an empty section is not a bibliography")
+      !empty.holdsOnlyReferences, "an empty section is not a bibliography")
   }
 
   private func paragraphStyle(of needle: String, in built: BuiltDocument) throws

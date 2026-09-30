@@ -203,7 +203,8 @@ import RFCReaderKit
     /// AppKit's, because a rich target receives the attachment as an image, which is
     /// the chip's symbol and is what it looks like on screen. A heading's backlink
     /// chip is the exception (#183): it is the reader's, not the document's, so a
-    /// selection holding one writes its RTF and RTFD without it.
+    /// selection holding one writes its RTF and RTFD without it. A selection of
+    /// several ranges stays AppKit's to join, chip and all.
     override func writeSelection(
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
@@ -215,7 +216,7 @@ import RFCReaderKit
         return true
       case .rtf, .rtfd:
         let copied = SelectionText.withoutBacklinkChips(of: selection)
-        guard copied.length != selection.length else {
+        guard selectedRanges.count == 1, copied.length != selection.length else {
           return super.writeSelection(to: pboard, type: type)
         }
         let whole = NSRange(location: 0, length: copied.length)

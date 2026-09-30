@@ -103,17 +103,20 @@ extension NSAttributedString {
     return (box, range)
   }
 
-  /// The heading's backlink chip at this character offset (#183): the section it
-  /// lists the backlinks of, and its whole extent, the space before it included —
-  /// what its list is anchored to. The attribute's run, as for a reference.
+  /// The heading's backlink chip at this character offset (#183), the space before
+  /// it included: the section it lists the backlinks of, and the chip's own extent,
+  /// without that space -- what its list is anchored to. A heading can wrap at the
+  /// space, which would anchor the list to the end of the line above.
   public func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
     guard offset >= 0, offset < length else { return nil }
-    var range = NSRange(location: 0, length: 0)
+    var run = NSRange(location: 0, length: 0)
     guard
       let anchor = attribute(
-        .rfcBacklinks, at: offset, longestEffectiveRange: &range,
+        .rfcBacklinks, at: offset, longestEffectiveRange: &run,
         in: NSRange(location: 0, length: length)) as? String
     else { return nil }
-    return (anchor, range)
+    var chip = run
+    _ = attribute(.rfcChip, at: NSMaxRange(run) - 1, longestEffectiveRange: &chip, in: run)
+    return (anchor, chip)
   }
 }
