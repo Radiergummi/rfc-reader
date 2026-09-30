@@ -34,10 +34,100 @@ struct XMLDriverTests {
     #expect(error.errorDescription?.contains("line \(error.line)") == true)
   }
 
-  @Test func `an empty document is malformed`() {
-    #expect(throws: XMLSyntaxError.self) {
+  @Test func `an empty document is malformed`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
       _ = try XMLTree.parse(Data())
     }
+    #expect(error.message == "empty document")
+  }
+
+  /// In words, the same on both platforms, rather than the error's domain and code,
+  /// "The operation couldn't be completed. (NSXMLParserErrorDomain error 76.)" (#320).
+  @Test func `the message says what the parser found`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(Data("<a><b></a>".utf8))
+    }
+    #expect(error.message == "an end tag that does not match the element it closes")
+  }
+
+  /// A plain-text error page served in place of a draft fails before any root, and
+  /// says why rather than "empty document".
+  @Test func `the root of a document that is not XML says why it is missing`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: Data("404 Not Found".utf8), named: "rfc")
+    }
+    #expect(error.message == "no XML element where the document starts")
+  }
+
+  /// The root's reader says an empty document is one, as `run` does, on both
+  /// platforms.
+  @Test func `the root of an empty document says it is empty`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: Data(), named: "rfc")
+    }
+    #expect(error.message == "empty document")
+  }
+
+  /// A body too short for Darwin's parser to report anything is still not empty, and
+  /// one of only whitespace is, whatever its length, through both entry points.
+  @Test func `only a blank document says it is empty`() throws {
+    for (body, expected) in [
+      ("OK\n", "no XML element where the document starts"),
+      ("  \n\n  \n", "empty document"),
+    ] {
+      let data = Data(body.utf8)
+      let tree = try #require(throws: XMLSyntaxError.self) {
+        _ = try XMLTree.parse(data)
+      }
+      let root = try #require(throws: XMLSyntaxError.self) {
+        _ = try XMLDriver.rootAttributes(of: data, named: "rfc")
+      }
+      #expect(tree.message == expected)
+      #expect(root.message == expected)
+    }
+  }
+
+  /// libxml2 reports the same code, 5, for a document cut short in its prolog as for
+  /// one cut short inside its root; the message tells them apart.
+  @Test func `a document that ends in its prolog says no root opened`() throws {
+    let prolog = Data("<?xml version=\"1.0\"?>\n<!-- a comment -->".utf8)
+    let tree = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(prolog)
+    }
+    let root = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: prolog, named: "rfc")
+    }
+    #expect(tree.message == "the document ended before its root element opened")
+    #expect(root.message == "the document ended before its root element opened")
+  }
+
+  /// A code the driver does not name keeps its number, which is still something to
+  /// go on in a bug report.
+  @Test func `an error the driver does not name keeps its code`() {
+    let error = NSError(domain: "NSXMLParserErrorDomain", code: 99_999)
+    #expect(XMLDriver.message(for: error, rootOpened: true) == "malformed XML (error 99999)")
+  }
+
+  /// Every error that wraps the syntax error says what it says: the app shows
+  /// `localizedDescription`, which for an error that is not `LocalizedError` is its
+  /// type's name and a number (#320).
+  @Test func `a wrapped syntax error keeps its description`() throws {
+    let truncated = Data("<rfc>\n<front>".utf8)
+    let expected = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(truncated)
+    }
+    let wrapped: [any Error] = [
+      RFCXMLParser.ParseError.malformed(expected),
+      RFCIndexParser.ParseError.malformed(expected),
+      RecentFeedParser.ParseError.malformed(expected),
+      IANARegistry.ParseError.malformed(expected),
+    ]
+    for error in wrapped {
+      #expect(error.localizedDescription == expected.errorDescription)
+    }
+    let decoding = RFCEditorClient.ClientError.decoding(
+      context: "rfc-index.xml", underlying: RFCIndexParser.ParseError.malformed(expected))
+    #expect(decoding.localizedDescription == "rfc-index.xml: \(expected.errorDescription ?? "")")
   }
 
   /// The same truncated input through each parser: each wraps exactly the error the

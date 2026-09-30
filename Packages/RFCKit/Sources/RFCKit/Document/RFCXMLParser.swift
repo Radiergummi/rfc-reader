@@ -6,9 +6,17 @@ import Foundation
 /// `derivedContent` on cross references, which this parser leans on for stable
 /// anchors and display text instead of re-implementing the numbering rules.
 public enum RFCXMLParser {
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case notAnRFC(rootElement: String)
     case malformed(XMLSyntaxError)
+
+    /// The syntax error's own words, which the app shows (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .notAnRFC(let root): "Not an RFC: the document's root element is <\(root)>."
+      case .malformed(let error): error.errorDescription
+      }
+    }
   }
 
   public static func parse(_ data: Data) throws(ParseError) -> RFCDocument {
