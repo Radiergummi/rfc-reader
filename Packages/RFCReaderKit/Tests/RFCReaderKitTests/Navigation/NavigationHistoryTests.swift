@@ -296,6 +296,19 @@ struct NavigationHistoryTests {
     ],
     source: .xml)
 
+  /// The build's anchors: every section's, and a figure in §4.2.
+  private var places: DocumentPlaces {
+    DocumentPlaces(
+      document: document,
+      anchors: AnchorIndex([
+        .init(anchor: "section-1", offset: 0, heading: "1. Introduction", number: "1"),
+        .init(anchor: "section-4", offset: 100, heading: "4. Semantics", number: "4"),
+        .init(anchor: "section-4.2", offset: 200, heading: "4.2. Methods", number: "4.2"),
+        .init(anchor: "figure-1", offset: 300),
+        .init(anchor: "section-9", offset: 400, heading: "9. Security", number: "9"),
+      ]))
+  }
+
   /// Read on from the section the tab was sent to, then sent there again: where
   /// the reader had got to is a place to come back to, so it gets an entry.
   @Test func `going to the current section after reading on is a navigation`() {
@@ -315,7 +328,7 @@ struct NavigationHistoryTests {
     var history = NavigationHistory()
     history.go(to: place(9110))
     #expect(
-      history.go(to: place(9110, "4.2"), resolving: document.anchor(forPlace:))
+      history.go(to: place(9110, "4.2"), in: places)
         == place(9110, "section-4.2"))
     #expect(history.current == place(9110, "section-4.2"))
   }
@@ -325,11 +338,11 @@ struct NavigationHistoryTests {
   @Test func `the same place in either spelling is one entry`() {
     var history = NavigationHistory()
     history.go(to: place(9110))
-    history.go(to: place(9110, "4.2"), resolving: document.anchor(forPlace:))
+    history.go(to: place(9110, "4.2"), in: places)
     history.go(
-      to: place(9110, "section-4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
+      to: place(9110, "section-4.2"), leaving: "section-4.2", in: places)
     history.go(
-      to: place(9110, "4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
+      to: place(9110, "4.2"), leaving: "section-4.2", in: places)
     #expect(history.goBack() == place(9110))
     #expect(!history.canGoBack)
   }
@@ -339,22 +352,35 @@ struct NavigationHistoryTests {
     var history = NavigationHistory()
     history.go(to: place(9110, "4.2"))
     #expect(
-      history.go(to: place(9110, "section-4.2"), resolving: document.anchor(forPlace:))
+      history.go(to: place(9110, "section-4.2"), in: places)
         == place(9110, "section-4.2"))
     #expect(
       history.go(
         to: place(9110, "section-4.2"), leaving: "section-4.2",
-        resolving: document.anchor(forPlace:))
+        in: places)
         == place(9110, "section-4.2"))
     #expect(!history.canGoBack)
     #expect(history.current == place(9110, "section-4.2"))
+  }
+
+  /// The reader reports where it is by section, so while it reports the section a
+  /// figure is in, it is still at the figure.
+  @Test func `a place in the section the reader reports is where the reader is`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110, "section-1"))
+    history.go(to: place(9110, "figure-1"), leaving: "section-1", in: places)
+    #expect(
+      history.go(to: place(9110, "figure-1"), leaving: "section-4.2", in: places)
+        == place(9110, "figure-1"))
+    #expect(history.goBack() == place(9110, "section-1"))
+    #expect(!history.canGoBack)
   }
 
   /// Where the reader was is recorded in the same spelling as where it went.
   @Test func `the place left behind is recorded as its anchor`() {
     var history = NavigationHistory()
     history.go(to: place(9110, "1"))
-    history.go(to: place(9110, "9"), resolving: document.anchor(forPlace:))
+    history.go(to: place(9110, "9"), in: places)
     #expect(history.goBack() == place(9110, "section-1"))
   }
 

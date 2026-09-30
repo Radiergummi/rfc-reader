@@ -585,10 +585,15 @@ struct DocumentView: View {
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
   /// leaves the history as it is.
   private func follow(_ place: String) {
-    guard let document = session.state.document else { return }
+    // Not while fading out over the next document's reader: the place is the
+    // selected document's.
+    guard navigation.selection == id, let document = session.state.document,
+      let built = session.state.built
+    else { return }
     switch landing(at: place) {
     case .jump(let anchor):
-      navigation.jump(toSection: anchor, in: document)
+      navigation.jump(
+        toSection: anchor, in: DocumentPlaces(document: document, anchors: built.anchors))
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:

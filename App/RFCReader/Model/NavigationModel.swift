@@ -167,12 +167,15 @@ final class NavigationModel: Identifiable {
     }
     // A place in the document on screen is a jump within it, which the reader
     // resolves: an anchor may name nothing in its body, as the RFC Editor's
-    // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276).
+    // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
+    // and only the reader can tell a section's number from its anchor (#482). An
+    // anchor leaves the list as it is.
     if let place = link.place, id == selection {
       jump(toSection: place)
-      return
+      guard link.section != nil else { return }
+    } else {
+      go(to: HistoryEntry(id: id, section: link.place))
     }
-    go(to: HistoryEntry(id: id, section: link.place))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
     sidebarSelection = .all
@@ -259,12 +262,12 @@ final class NavigationModel: Identifiable {
     scrollRequest = ScrollRequest(section: section, isUnrecorded: true)
   }
 
-  /// A place `document`, the one on screen, holds: its own history entry, so Back
-  /// undoes it, unless the reader is already there. Resolved through the document,
-  /// so a section's number and its anchor are one place (#482).
-  func jump(toSection section: String, in document: RFCDocument) {
+  /// A place the document on screen holds: its own history entry, so Back undoes
+  /// it, unless the reader is already there. Compared in `places`' spelling, so a
+  /// section's number and its anchor are one place (#482).
+  func jump(toSection section: String, in places: DocumentPlaces) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section), resolving: document.anchor(forPlace:))
+    go(to: HistoryEntry(id: id, section: section), in: places)
   }
 
   func goBack() {
@@ -277,10 +280,8 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry, resolving anchor: (String) -> String = { $0 }) {
-    guard let place = history.go(to: place, leaving: visiblePosition, resolving: anchor) else {
-      return
-    }
+  private func go(to place: HistoryEntry, in places: DocumentPlaces? = nil) {
+    guard let place = history.go(to: place, leaving: visiblePosition, in: places) else { return }
     arrive(at: place)
   }
 
