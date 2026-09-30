@@ -8,6 +8,14 @@ import Foundation
 /// `beginEngineMove()` and `endEngineMove()`, and the scrolls it causes record
 /// nothing. That one rule replaces `ReadingPlaceTracker`'s pausing around a
 /// rebuild: the engine never records its own moves, so there is nothing to pause.
+///
+/// Nor the platform's settling of them, which arrives after the move has ended:
+/// AppKit and UIKit align a scroll offset to the display's pixels on passes of
+/// their own and report it as a scroll. Measured on RFC 5661, that moved the top
+/// 0.18 to 0.75 pt into the paragraph above a pinned heading, and recording it
+/// walked the place back a line — the heading's spacing then showed above it after
+/// the next change of geometry. A scroll that leaves the top within
+/// `settleTolerance` of where the engine left it is that settling.
 public struct AnchorKeeper: Sendable, Equatable {
   public enum Place: Sendable, Equatable {
     /// Above the text, where the header is.
@@ -21,8 +29,13 @@ public struct AnchorKeeper: Sendable, Equatable {
     case line(ReadingPlace, fraction: CGFloat)
   }
 
+  /// Less than any line is tall, and more than two pixel alignments at 1x.
+  public static let settleTolerance: CGFloat = 1
+
   public private(set) var place: Place = .top
   private var engineMoves = 0
+  /// Where the engine's last move left the viewport's top, until the reader scrolls.
+  private var engineTop: CGFloat?
 
   public init() {}
 
@@ -32,14 +45,19 @@ public struct AnchorKeeper: Sendable, Equatable {
     engineMoves += 1
   }
 
-  public mutating func endEngineMove() {
+  /// Ends a move that left the viewport's top at `top`, in container coordinates.
+  public mutating func endEngineMove(top: CGFloat? = nil) {
     engineMoves = max(0, engineMoves - 1)
+    if let top { engineTop = top }
   }
 
-  /// The reader scrolled: `line` is at the top, `anchor` names it. While that line
-  /// still holds the character the place names, the character is kept.
-  public mutating func userScrolled(to anchor: ReaderAnchor, line: NSRange) {
+  /// The reader scrolled: `line` is at the top, which is at `top`, and `anchor`
+  /// names it. While that line still holds the character the place names, the
+  /// character is kept.
+  public mutating func userScrolled(to anchor: ReaderAnchor, line: NSRange, top: CGFloat? = nil) {
     guard !isEngineMoving else { return }
+    if let top, let engineTop, abs(top - engineTop) <= Self.settleTolerance { return }
+    engineTop = nil
     if case .line(let previous) = place,
       previous.characterOffset == line.location || NSLocationInRange(previous.characterOffset, line)
     {
@@ -53,6 +71,7 @@ public struct AnchorKeeper: Sendable, Equatable {
   public mutating func userScrolledAboveText() {
     guard !isEngineMoving else { return }
     place = .top
+    engineTop = nil
   }
 
   /// A jump names the place directly, even during an engine move.

@@ -22,6 +22,37 @@ struct AnchorKeeperTests {
     #expect(keeper.place == .line(ReaderAnchor(characterOffset: 120)))
   }
 
+  /// After the engine's move ends, the platform aligns the offset it set to the
+  /// display's pixels on a pass of its own, and reports that as a scroll: measured
+  /// on RFC 5661, 0.18 to 0.75 pt, into the paragraph above a pinned heading.
+  @Test func `the platform settling the engine's move is not the reader's scroll`() {
+    var keeper = AnchorKeeper()
+    keeper.jumped(to: ReaderAnchor(characterOffset: 500))
+    keeper.beginEngineMove()
+    keeper.endEngineMove(top: 1000.25)
+    keeper.userScrolled(
+      to: ReaderAnchor(characterOffset: 440, fraction: 0.97),
+      line: NSRange(location: 440, length: 60),
+      top: 999.5)
+    #expect(keeper.place == .line(ReaderAnchor(characterOffset: 500)))
+  }
+
+  @Test func `a scroll away from where the engine left the top is the reader's`() {
+    var keeper = AnchorKeeper()
+    keeper.jumped(to: ReaderAnchor(characterOffset: 500))
+    keeper.beginEngineMove()
+    keeper.endEngineMove(top: 1000)
+    keeper.userScrolled(
+      to: ReaderAnchor(characterOffset: 440, fraction: 0.5),
+      line: NSRange(location: 440, length: 60),
+      top: 990)
+    #expect(keeper.place == .line(ReaderAnchor(characterOffset: 440, fraction: 0.5)))
+    // Back where the engine left it, by the reader's own hand: theirs, too.
+    keeper.userScrolled(
+      to: ReaderAnchor(characterOffset: 500), line: NSRange(location: 500, length: 60), top: 1000)
+    #expect(keeper.place == .line(ReaderAnchor(characterOffset: 500)))
+  }
+
   @Test func `a scroll the reader makes moves the place`() {
     var keeper = AnchorKeeper()
     keeper.userScrolled(

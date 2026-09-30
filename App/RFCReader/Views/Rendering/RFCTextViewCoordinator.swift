@@ -52,6 +52,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// moment the view exists, hence the `didSet`; UIKit needs no such setup.
   weak var textView: PlatformTextView? {
     didSet {
+      engine.textView = textView
       #if !canImport(UIKit)
         setUpHover()
       #endif
@@ -173,6 +174,8 @@ final class RFCTextViewCoordinator: NSObject {
   /// same line back at the top of the new storage. The tracker decides when the
   /// top of the viewport is the reader's place at all; see `ReadingPlaceTracker`.
   private var tracker = ReadingPlaceTracker()
+  /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
+  let engine = ReaderLayoutEngine()
   private var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
@@ -263,8 +266,13 @@ final class RFCTextViewCoordinator: NSObject {
       storage.install(built.text)
     }
     reportSelection()
-    beginLayout()
-    if laidOutColumn != nil { restorePlace(fallback: fallback) }
+    if ReaderLayoutEngine.isEnabled {
+      engine.installed(built, column: laidOutColumn)
+      reportVisibleAnchor()
+    } else {
+      beginLayout()
+      if laidOutColumn != nil { restorePlace(fallback: fallback) }
+    }
   }
 
   /// Puts the place back at the top of the viewport and resumes tracking from
@@ -451,7 +459,9 @@ final class RFCTextViewCoordinator: NSObject {
       #else
         textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
       #endif
-      if tracker.columnChanged(to: column) {
+      if ReaderLayoutEngine.isEnabled {
+        engine.columnChanged(to: column)
+      } else if tracker.columnChanged(to: column) {
         beginLayout()
         restorePlace()
       } else {
@@ -461,6 +471,8 @@ final class RFCTextViewCoordinator: NSObject {
         laidOutThrough = 0
       }
     }
+    // The gutter or the header moved the container in the view: the same line stays on top.
+    if ReaderLayoutEngine.isEnabled, !columnChanged { engine.pin() }
   }
 
   // MARK: - Scrolling
@@ -489,6 +501,11 @@ final class RFCTextViewCoordinator: NSObject {
   /// Puts the line holding `offset` at the top of the viewport; see
   /// `FragmentGeometry.scrollTarget(of:in:fragmentStart:)`.
   private func scroll(toOffset offset: Int, animated: Bool = false) {
+    if ReaderLayoutEngine.isEnabled {
+      engine.jump(toOffset: offset)
+      reportVisibleAnchor()
+      return
+    }
     guard let textView, let layout = textView.textLayoutManager else { return }
     // What a deep jump into a document still laying out costs: everything above the
     // target, at once, on the main thread (#295). Recorded only when there is any,
@@ -524,18 +541,23 @@ final class RFCTextViewCoordinator: NSObject {
       let built,
       let layout = textView.textLayoutManager
     else { return }
-    let top = max(0, textView.viewportTop)
-    guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
-    let offset = layout.offset(of: fragment.rangeInElement.location)
-    let line = FragmentGeometry.topLine(
-      atViewportTop: top,
-      fragmentTop: fragment.layoutFragmentFrame.minY,
-      in: fragment.textLineFragments,
-      fragmentStart: offset,
-      fragmentEnd: layout.offset(of: fragment.rangeInElement.endLocation)
-    )
-    tracker.report(
-      viewportTop: textView.viewportTop, line: line, in: built.anchors, length: built.text.length)
+    let offset: Int
+    if ReaderLayoutEngine.isEnabled {
+      offset = engine.userScrolled() ?? 0
+    } else {
+      let top = max(0, textView.viewportTop)
+      guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
+      offset = layout.offset(of: fragment.rangeInElement.location)
+      let line = FragmentGeometry.topLine(
+        atViewportTop: top,
+        fragmentTop: fragment.layoutFragmentFrame.minY,
+        in: fragment.textLineFragments,
+        fragmentStart: offset,
+        fragmentEnd: layout.offset(of: fragment.rangeInElement.endLocation)
+      )
+      tracker.report(
+        viewportTop: textView.viewportTop, line: line, in: built.anchors, length: built.text.length)
+    }
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
