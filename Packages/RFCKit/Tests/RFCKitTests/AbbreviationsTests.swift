@@ -140,8 +140,8 @@ struct AbbreviationsTests {
   }
 
   /// A legacy heading is often set in capitals, and its long form then says nothing
-  /// about the author's casing: a heading's expansion that is all capitals is not
-  /// taken, so the body's own, properly cased, wins.
+  /// about the author's casing: a later expansion in mixed case replaces it, here the
+  /// body's own.
   @Test func `an all-capitals heading's expansion gives way to its body's`() throws {
     let document = RFCDocument(
       header: DocumentHeader(title: "Headed"),
@@ -158,10 +158,35 @@ struct AbbreviationsTests {
         == "Transport Layer Security")
   }
 
-  /// With no expansion in the body, an all-capitals heading's is still not taken.
-  @Test func `an all-capitals heading's expansion is not taken`() {
-    let found = Abbreviations.defined(in: document(heading: "TRANSPORT LAYER SECURITY (TLS)"))
-    #expect(found["TLS"] == nil)
+  /// A later heading's mixed-case expansion replaces it as well, defined where it is.
+  @Test func `an all-capitals heading's expansion gives way to a later heading's`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Headed"),
+      sections: [
+        Section(anchor: "section-3", number: "3", title: "TRANSPORT LAYER SECURITY (TLS)"),
+        Section(anchor: "section-4", number: "4", title: "Transport Layer Security (TLS) Use"),
+      ],
+      source: .text)
+    let tls = try #require(Abbreviations.defined(in: document)["TLS"])
+    #expect(tls.expansion == "Transport Layer Security")
+    #expect(tls.sectionAnchor == "section-4")
+  }
+
+  /// With nothing in mixed case after it, an all-capitals heading's expansion is kept,
+  /// and a later one in capitals does not replace it.
+  @Test func `an all-capitals heading's expansion is kept when nothing replaces it`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Headed"),
+      sections: [
+        Section(
+          anchor: "section-3", number: "3", title: "TRANSPORT LAYER SECURITY (TLS)",
+          blocks: [.paragraph(Paragraph([.text("Each connection uses TLS.")]))]),
+        Section(anchor: "section-4", number: "4", title: "TRANSPORT LAYER SECURITY (TLS) USE"),
+      ],
+      source: .text)
+    let tls = try #require(Abbreviations.defined(in: document)["TLS"])
+    #expect(tls.expansion == "TRANSPORT LAYER SECURITY")
+    #expect(tls.sectionAnchor == "section-3")
   }
 
   // MARK: The matching itself

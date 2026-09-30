@@ -36,20 +36,31 @@ public struct Abbreviation: Sendable, Hashable, Codable {
 enum Abbreviations {
   static func defined(in document: RFCDocument) -> [String: Abbreviation] {
     var found: [String: Abbreviation] = [:]
-    func record(_ pairs: [(short: String, long: String)], in anchor: String?) {
-      for pair in pairs where found[pair.short] == nil {
+    // A heading's expansion set all in capitals, as legacy headings often are, says
+    // nothing of the author's casing, so the next one in mixed case replaces it,
+    // from the body or a later heading: `RECIPIENT (RCPT)`.
+    var inCapitals: Set<String> = []
+    func record(
+      _ pairs: [(short: String, long: String)], in anchor: String?, isHeading: Bool = false
+    ) {
+      for pair in pairs {
+        let capitals = isAllCapitals(pair.long)
+        guard found[pair.short] == nil || (inCapitals.contains(pair.short) && !capitals)
+        else { continue }
         found[pair.short] = Abbreviation(
           short: pair.short, expansion: pair.long, sectionAnchor: anchor)
+        if isHeading, capitals {
+          inCapitals.insert(pair.short)
+        } else {
+          inCapitals.remove(pair.short)
+        }
       }
     }
     visit(document.header.abstract) { record($0, in: nil) }
     for section in document.allSections {
       // The heading first, as the reader meets it, and defined in its own section:
       // `3. Transport Layer Security (TLS)` over a body that uses `TLS` alone (#319).
-      // One set all in capitals, as legacy headings often are, is not the author's
-      // casing, so it is left for the body's own: `RECIPIENT (RCPT)`.
-      record(
-        expansions(in: section.titleText).filter { !isAllCapitals($0.long) }, in: section.anchor)
+      record(expansions(in: section.titleText), in: section.anchor, isHeading: true)
       visit(section.blocks) { record($0, in: section.anchor) }
     }
     return found
