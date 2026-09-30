@@ -32,6 +32,8 @@ struct RFCTextView: View {
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
+    hidesChrome: Bool = false,
+    onChromeHidden: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -50,6 +52,8 @@ struct RFCTextView: View {
       onToolbarTitle: onToolbarTitle,
       onToolbarTitleReleased: onToolbarTitleReleased,
       onSelectionChange: onSelectionChange,
+      hidesChrome: hidesChrome,
+      onChromeHidden: onChromeHidden,
       heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
@@ -103,6 +107,10 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
+  /// Whether reading on may hide the bars, and what to tell when it does or they
+  /// come back; iOS only, see `ReaderChrome`.
+  let hidesChrome: Bool
+  let onChromeHidden: (Bool) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -125,6 +133,10 @@ struct ReaderInputs {
     coordinator.onToolbarTitle = onToolbarTitle
     coordinator.onToolbarTitleReleased = onToolbarTitleReleased
     coordinator.onSelectionChange = onSelectionChange
+    #if canImport(UIKit)
+      coordinator.onChromeHidden = onChromeHidden
+      coordinator.setChromeEnabled(hidesChrome)
+    #endif
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
@@ -136,7 +148,11 @@ struct ReaderInputs {
     // scrolling.
     if coordinator.headerIdentity != headerIdentity {
       coordinator.headerIdentity = headerIdentity
-      coordinator.headerHost?.rootView = header
+      #if canImport(UIKit)
+        coordinator.headerHost?.rootView = coordinator.hostedHeader(header)
+      #else
+        coordinator.headerHost?.rootView = header
+      #endif
     }
     coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
@@ -188,10 +204,9 @@ struct ReaderInputs {
       textView.textDragInteraction?.isEnabled = false
       textView.backgroundColor = .clear
       textView.alwaysBounceVertical = true
-      // `.never`: automatic adjustment moves `contentOffset`'s origin away from the
-      // top of the content, which is what the anchor arithmetic is expressed in.
-      // SwiftUI places the view below the top bar; the bottom safe area, which the
-      // reader runs under, is `ReaderTextView.safeAreaInsetsDidChange`'s.
+      // `.never`: the insets for the bars the reader runs under are set by hand, in
+      // `ReaderTextView.safeAreaInsetsDidChange`, which keeps the place when they
+      // change; automatic adjustment would not.
       textView.contentInsetAdjustmentBehavior = .never
       textView.textContainer.lineFragmentPadding = 0
       // The coordinator sizes the container to the column; see `layOut(width:measure:)`.
@@ -204,9 +219,20 @@ struct ReaderInputs {
         coordinator?.quote(of: range)
       }
 
-      let host = UIHostingController(rootView: inputs.header)
+      let host = UIHostingController(rootView: context.coordinator.hostedHeader(inputs.header))
       host.view.backgroundColor = .clear
+      // No safe area: the reader runs under the top bar, and the header scrolled
+      // under it would otherwise be padded down by the overlap, and measured with
+      // that padding by `layOut(width:measure:)`, which makes it the top inset.
+      host.safeAreaRegions = []
       textView.addSubview(host.view)
+
+      // Shows and hides the bars; see `RFCTextViewCoordinator.tappedText(_:)`.
+      let tap = UITapGestureRecognizer(
+        target: context.coordinator, action: #selector(RFCTextViewCoordinator.tappedText(_:)))
+      tap.delegate = context.coordinator
+      textView.addGestureRecognizer(tap)
+      context.coordinator.chromeTap = tap
 
       context.coordinator.textView = textView
       context.coordinator.headerHost = host
@@ -216,6 +242,12 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, library: library, width: width)
+    }
+
+    /// Brings the bars back if this reader had put them away: the next one, after a
+    /// load or a failure, starts with them showing and would not report otherwise.
+    static func dismantleUIView(_ textView: UITextView, coordinator: RFCTextViewCoordinator) {
+      coordinator.setChromeEnabled(false)
     }
   }
 #else

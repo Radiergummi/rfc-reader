@@ -133,6 +133,27 @@ final class RFCTextViewCoordinator: NSObject {
   var heading: HeadingBox?
   private var lastToolbarTitle: ToolbarTitleState?
 
+  #if canImport(UIKit)
+    /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by
+    /// the text view's scrolls and taps, and reported through `onChromeHidden`.
+    var chrome = ReaderChrome()
+    /// Told when `chrome` hides or shows the bars. Deferred, as
+    /// `onVisibleAnchorChange` is: a jump reports from inside SwiftUI's update.
+    var onChromeHidden: (Bool) -> Void = { _ in }
+    private var reportedChromeHidden = false
+    /// The tap that shows and hides the bars, told apart from the text view's own
+    /// recognizers in the gesture delegate.
+    weak var chromeTap: UITapGestureRecognizer?
+    /// Whether the text had a selection when the tap began, or was still moving
+    /// after a flick: that tap clears the selection or stops the scroll, and is not
+    /// one for the bars.
+    private var tapIsNotForTheBars = false
+    /// Where that tap touched, in the text view's content. Taken when it begins,
+    /// because the tap is recognized only after a double tap has failed, and by
+    /// then a link it followed may have scrolled the text away from under it.
+    private var chromeTapPoint = CGPoint.zero
+  #endif
+
   /// Where section tracking last put the reader, written the moment it is computed.
   /// `visibleAnchor` in `DocumentView` is the observable copy and lags this by a
   /// main-actor hop, which `onDisappear` cannot afford to wait for.
@@ -455,6 +476,10 @@ final class RFCTextViewCoordinator: NSObject {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
     guard let offset = built?.anchors.offset(of: anchor) else { return }
+    #if canImport(UIKit)
+      chrome.jumped()
+      reportChrome()
+    #endif
     // Set here as well as by tracking, which does not run while a resize waits
     // for its rebuild: a jump in that window is where the rebuild must land.
     tracker.jumped(to: ReadingPlace(anchor: anchor, offset: 0))
@@ -596,6 +621,30 @@ final class RFCTextViewCoordinator: NSObject {
       target = min(target, max(0, content - textView.viewportHeight))
     }
     textView.scroll(toY: target, animated: animated)
+  }
+
+  /// Hit-tests a point in text-container coordinates down to a character offset,
+  /// fragment → line → glyph, or nil beside the text. `NSTextView`'s older
+  /// `characterIndex(for:)` goes through the TextKit 1 compatibility shim and is
+  /// unreliable on a view built `usingTextLayoutManager: true`, and `UITextView`'s
+  /// `closestPosition(to:)` snaps a point beside the text onto the nearest
+  /// character; this walks the same TextKit 2 object graph `RFCTextLayoutFragment`
+  /// draws against, in reverse.
+  private func characterOffset(atContainerPoint containerPoint: CGPoint) -> Int? {
+    guard let layout = textView?.textLayoutManager,
+      let fragment = layout.textLayoutFragment(for: containerPoint)
+    else { return nil }
+    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+    guard fragmentStart >= 0 else { return nil }
+    let pointInFragment = CGPoint(
+      x: containerPoint.x - fragment.layoutFragmentFrame.minX,
+      y: containerPoint.y - fragment.layoutFragmentFrame.minY
+    )
+    return FragmentGeometry.characterOffset(
+      in: fragment.textLineFragments,
+      fragmentStart: fragmentStart,
+      at: pointInFragment
+    )
   }
 
   // MARK: - References
@@ -751,6 +800,106 @@ final class RFCTextViewCoordinator: NSObject {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
+      followChrome(scrollView)
+    }
+  }
+
+  // MARK: - The bars on iPhone
+
+  extension RFCTextViewCoordinator: UIGestureRecognizerDelegate {
+    /// Whether the bars may go at all; see `ReaderChrome.isEnabled`.
+    func setChromeEnabled(_ enabled: Bool) {
+      guard chrome.isEnabled != enabled else { return }
+      chrome.isEnabled = enabled
+      reportChrome()
+    }
+
+    private func followChrome(_ scrollView: UIScrollView) {
+      let insets = scrollView.adjustedContentInset
+      chrome.scrolled(
+        ReaderChrome.Scroll(
+          offset: scrollView.contentOffset.y, topInset: insets.top, bottomInset: insets.bottom,
+          contentHeight: scrollView.contentSize.height,
+          viewportHeight: scrollView.bounds.height,
+          isUserDriven: scrollView.isTracking || scrollView.isDragging
+            || scrollView.isDecelerating))
+      reportChrome()
+    }
+
+    func reportChrome() {
+      let hidden = chrome.isHidden
+      guard hidden != reportedChromeHidden else { return }
+      reportedChromeHidden = hidden
+      // Now, not with the report: the safe area follows the bars, which follow the
+      // report, and the top inset must already know to hold.
+      (textView as? ReaderTextView)?.barsHidden = hidden
+      Task { self.onChromeHidden(hidden) }
+    }
+
+    /// A tap on the text brings the bars back, or puts them away. Not a tap on a
+    /// link or a chip, which follows it; not one on the header, which takes its own
+    /// (`tappedHeader()`); and not one that clears a selection or stops a flick.
+    @objc func tappedText(_ tap: UITapGestureRecognizer) {
+      guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
+      let point = chromeTapPoint
+      if headerHost?.view.frame.contains(point) == true { return }
+      let inset = textView.textContainerInset
+      let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
+      if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
+        return
+      }
+      chrome.tapped()
+      reportChrome()
+    }
+
+    /// A tap on the header's blank space, as a tap on the text is. Told by a tap
+    /// gesture on the header's root (`hostedHeader(_:)`), which the header's author
+    /// chips and banner links take precedence over, being SwiftUI gestures below
+    /// it: a tap on one of them does only what it does.
+    func tappedHeader() {
+      guard !tapIsNotForTheBars else { return }
+      chrome.tapped()
+      reportChrome()
+    }
+
+    /// The header as hosted: with a tap on its blank space for the bars.
+    func hostedHeader(_ header: AnyView) -> AnyView {
+      AnyView(
+        header
+          .contentShape(.rect)
+          .onTapGesture { [weak self] in self?.tappedHeader() })
+    }
+
+    /// Beside the text view's own recognizers, so a tap on a link still follows it
+    /// and a long press still previews it.
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      // The delegate of `chromeTap` alone, so always that one.
+      true
+    }
+
+    /// After a double tap has failed: the first tap of one that selects a word is
+    /// not a tap for the bars.
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      guard gestureRecognizer === chromeTap,
+        let tap = otherGestureRecognizer as? UITapGestureRecognizer
+      else { return false }
+      return tap.numberOfTapsRequired > 1
+    }
+
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
+    ) -> Bool {
+      if gestureRecognizer === chromeTap, let textView {
+        tapIsNotForTheBars = textView.selectedRange.length > 0 || textView.isDecelerating
+        chromeTapPoint = touch.location(in: textView)
+      }
+      return true
     }
   }
 #else
@@ -971,29 +1120,8 @@ final class RFCTextViewCoordinator: NSObject {
       ).map { HoverTarget(box: $0.box, range: $0.range) }
     }
 
-    /// Hit-tests a point in text-container coordinates down to a character offset,
-    /// fragment → line → glyph. `NSTextView`'s older `characterIndex(for:)` goes
-    /// through the TextKit 1 compatibility shim and is unreliable on a view built
-    /// `usingTextLayoutManager: true`; this walks the same TextKit 2 object graph
-    /// `RFCTextLayoutFragment` draws against, in reverse.
     private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
-      guard let layout = textView?.textLayoutManager,
-        let fragment = layout.textLayoutFragment(for: containerPoint)
-      else { return nil }
-      let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-      guard fragmentStart >= 0 else { return nil }
-      let pointInFragment = CGPoint(
-        x: containerPoint.x - fragment.layoutFragmentFrame.minX,
-        y: containerPoint.y - fragment.layoutFragmentFrame.minY
-      )
-      guard
-        let offset = FragmentGeometry.characterOffset(
-          in: fragment.textLineFragments,
-          fragmentStart: fragmentStart,
-          at: pointInFragment
-        )
-      else { return nil }
-      return reference(at: offset)
+      characterOffset(atContainerPoint: containerPoint).flatMap { reference(at: $0) }
     }
 
     /// The rect of a reference's run, in text-container coordinates — the

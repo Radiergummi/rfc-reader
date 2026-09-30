@@ -56,7 +56,22 @@ struct DocumentView: View {
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
     private var isCompact: Bool { horizontalSizeClass == .compact }
+    /// Whether reading on has put the bars away; see `ReaderChrome`.
+    @State private var barsHidden = false
   #endif
+
+  /// Whether reading on may hide the bars: on iPhone, where they cost the most of
+  /// the screen, and not under VoiceOver, where a control that leaves may be gone
+  /// before it is reached. Beside other columns the bars are a small part of it.
+  /// Not on an iPad in a compact width either, Slide Over or a narrow split: that
+  /// is where a keyboard is, and the bottom bar's shortcuts leave with its items.
+  private var hidesChrome: Bool {
+    #if os(macOS)
+      false
+    #else
+      isCompact && UIDevice.current.userInterfaceIdiom == .phone && !voiceOverEnabled
+    #endif
+  }
   /// Where the reader is, written the moment tracking computes it. This is the
   /// value; `ReaderState.currentAnchor` is its observable mirror, which lags it by
   /// a main-actor hop. Anything that cannot afford that lag — persisting the
@@ -125,8 +140,16 @@ struct DocumentView: View {
             id: id, metadata: metadata, library: library, navigation: navigation,
             reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
             openURL: systemOpenURL, showsInspector: $showsInspector,
-            exportDocument: exportDocument(as:), printDocument: printDocument)
+            exportDocument: exportDocument(as:), printDocument: printDocument,
+            showsBottomBar: !barsHidden)
         }
+        // The top bar, which leaves the status bar; the bottom one goes by losing
+        // its items (`DocumentToolbar.showsBottomBar`). The reader runs under both,
+        // so neither moves it.
+        .toolbarVisibility(barsHidden ? .hidden : .automatic, for: .navigationBar)
+        // The original text has no reader to bring them back with a tap, and the
+        // reader made afresh on the way back starts with them showing.
+        .onChange(of: reader.showOriginal) { barsHidden = false }
         // An overlay rather than an inset: it floats over the text and takes no
         // layout, so it cannot disturb the column, which is derived from this
         // view's frame.
@@ -290,6 +313,8 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.hasSelection = $0
         },
+        hidesChrome: hidesChrome,
+        onChromeHidden: setBarsHidden,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -306,11 +331,13 @@ struct DocumentView: View {
         }
       )
       #if !os(macOS)
-        // To the bottom edge of the screen, under the home indicator, rather than
-        // stopping above it at a hard edge with a blank strip below. The text view
-        // makes that strip room to scroll the last line clear of it. Vertical
-        // only: the column is derived from the width, which this leaves alone.
-        .ignoresSafeArea(.container, edges: .bottom)
+        // Under the top bar, so it is glass over the text rather than a solid
+        // strip above it, and its going moves nothing; and to the bottom edge of
+        // the screen, under the home indicator, rather than stopping above it at a
+        // hard edge with a blank strip below. The text view makes both strips
+        // insets, room to scroll the text clear of them. Vertical only: the column
+        // is derived from the width, which this leaves alone.
+        .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
         // Deep link or restored reading position.
@@ -336,6 +363,13 @@ struct DocumentView: View {
       ProgressView("Loading \(id.displayName)…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+
+  /// On iOS only; the Mac's toolbar is the window's, and stays.
+  private func setBarsHidden(_ hidden: Bool) {
+    #if !os(macOS)
+      withAnimation(.easeInOut(duration: 0.25)) { barsHidden = hidden }
+    #endif
   }
 
   #if !os(macOS)
