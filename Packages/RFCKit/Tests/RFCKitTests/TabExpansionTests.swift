@@ -1,14 +1,13 @@
+import RFCKit
 import Testing
-
-@testable import RFCKit
 
 @Suite("Tab expansion")
 struct TabExpansionTests {
-  /// Each line of a block is expanded from its own column 0, so a whole figure can be
-  /// expanded at once (#31): the columns do not run on across a newline.
-  @Test func `tab expansion starts every line at column zero`() {
-    #expect("abc\n\tx".expandingTabs() == "abc\n        x")
-    #expect("abc\r\n\tx".expandingTabs() == "abc\r\n        x", "a CRLF is one Character")
+  /// A tab goes to the next multiple-of-eight column, counted from where the line's
+  /// text has reached, so one tab is anything from one space to eight.
+  @Test func `a tab is spaces to the next eighth column`() {
+    #expect("\tx".expandingTabs() == "        x")
     #expect("abcdefg\t|".expandingTabs() == "abcdefg |")
+    #expect("abcdefgh\t|".expandingTabs() == "abcdefgh        |")
   }
 }

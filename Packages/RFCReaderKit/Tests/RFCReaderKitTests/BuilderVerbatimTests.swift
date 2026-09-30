@@ -280,9 +280,9 @@ struct BuilderVerbatimTests {
     #expect(builder.displayedText(of: content, indent: 0) == content.text)
   }
 
-  /// 168 artwork and source-code blocks in 65 published RFCXML documents carry a
-  /// literal tab, and the verbatim style sets no tab stops, so each tab went to the
-  /// next default stop, a distance in points unrelated to the monospaced columns
+  /// 168 artwork blocks in 65 published RFCXML documents carry a literal tab, and
+  /// the verbatim style sets no tab stops, so each tab went to the next default
+  /// stop, a distance in points unrelated to the monospaced columns
   /// around it, and the figure sheared (#31). The RFC Editor's own text rendering
   /// expands them to eight-column stops, each line on its own.
   @Test func `a tab in artwork is spaces to the next eighth column`() {

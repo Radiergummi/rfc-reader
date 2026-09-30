@@ -2789,7 +2789,7 @@ extension String {
     return count
   }
 
-  func trimmingTrailingWhitespace() -> String {
+  public func trimmingTrailingWhitespace() -> String {
     var result = self
     while let last = result.last, last.isWhitespace { result.removeLast() }
     return result
