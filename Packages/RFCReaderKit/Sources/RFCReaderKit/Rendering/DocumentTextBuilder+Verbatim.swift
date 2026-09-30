@@ -46,6 +46,11 @@ extension DocumentTextBuilder {
       append(type.uppercased() + "\n", label)
     }
 
+    let labelWidth =
+      output.length > start
+      ? lineWidth(
+        output.attributedSubstring(from: NSRange(location: start, length: output.length - start)))
+      : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
@@ -73,6 +78,10 @@ extension DocumentTextBuilder {
         lineHeightMultiple: lineHeight),
       range: lastLine)
     decorate(from: start, with: .artwork)
+    output.addAttribute(
+      .rfcContentWidth,
+      value: max(labelWidth, widestLine(of: text, scale: scale)),
+      range: NSRange(location: start, length: output.length - start))
   }
 
   /// Sets a decorated block's strokes on all of it, its ruler in the secondary
@@ -89,6 +98,14 @@ extension DocumentTextBuilder {
           range: NSRange(location: bodyStart + range.location, length: range.length))
       }
     }
+  }
+
+  /// How wide a verbatim block's widest line is set: its columns at the monospaced
+  /// advance, scaled as the block is. The same count `monospaceScale` fits.
+  func widestLine(of text: String, scale: CGFloat) -> CGFloat {
+    let columns =
+      text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
+    return CGFloat(columns) * monospaceAdvance * scale
   }
 
   /// What a verbatim block shows: unfolded, without its header, where RFC 8792

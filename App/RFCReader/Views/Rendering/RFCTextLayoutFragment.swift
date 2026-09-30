@@ -136,7 +136,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       origin: point,
       frame: layoutFragmentFrame,
       containerWidth: textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width,
-      indent: span.indent
+      indent: span.indent,
+      contentWidth: span.contentWidth
     )
   }
 

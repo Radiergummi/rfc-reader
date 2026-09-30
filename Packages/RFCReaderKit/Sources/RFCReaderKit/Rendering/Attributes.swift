@@ -44,6 +44,10 @@ extension NSAttributedString.Key {
   /// every character of the block so each line's fragment finds them, and which of
   /// the block's lines it holds, through the box's extent (`StrokeGeometry`).
   public static let rfcStrokes = NSAttributedString.Key("rfcStrokes")
+  /// How wide a verbatim block's widest line is set, in points, on every character
+  /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
+  /// which compares by value, so the runs of one block coalesce.
+  public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
 }
 
 public enum RFCDecoration: String, Sendable {
