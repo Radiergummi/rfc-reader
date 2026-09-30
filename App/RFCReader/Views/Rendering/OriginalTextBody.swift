@@ -80,3 +80,89 @@
     }
   }
 #endif
+
+#if os(iOS)
+  import RFCReaderKit
+  import SwiftUI
+  import UIKit
+
+  /// The RFC as published on iOS, in a `UITextView` rather than a SwiftUI `Text`, for
+  /// the reasons the macOS one is an `NSTextView`: incremental layout and Find
+  /// (#159, #240).
+  ///
+  /// Lines never wrap, so the view has to scroll sideways, which a `UITextView` does
+  /// not: it keeps its content as wide as its frame, whatever its container. The
+  /// text view below widens its content to what has been laid out.
+  struct OriginalTextBody {
+    let text: String
+    let fontSize: Double
+
+    /// The monospaced face the text is set in, as on macOS.
+    fileprivate var font: UIFont {
+      .monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
+    }
+
+    fileprivate var attributed: NSAttributedString {
+      NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
+    }
+
+    /// What the storage last received, so an update pass that changes neither does
+    /// not rewrite a whole RFC's text.
+    final class Coordinator {
+      var shown: (text: String, fontSize: Double)?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+  }
+
+  extension OriginalTextBody: UIViewRepresentable {
+    func makeUIView(context: Context) -> SidewaysTextView {
+      let textView = SidewaysTextView(usingTextLayoutManager: true)
+      textView.isEditable = false
+      textView.isSelectable = true
+      textView.isFindInteractionEnabled = true
+      textView.backgroundColor = .clear
+      textView.alwaysBounceVertical = true
+      textView.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+      // Not wrapping: the container is unbounded across, and the content grows to
+      // what is laid out in it.
+      textView.textContainer.lineFragmentPadding = 0
+      textView.textContainer.widthTracksTextView = false
+      textView.textContainer.size = CGSize(width: CGFloat.greatestFiniteMagnitude, height: 0)
+      return textView
+    }
+
+    func updateUIView(_ textView: SidewaysTextView, context: Context) {
+      if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
+      // Through the text storage, never the content storage's `attributedString`,
+      // which silently discards the backing store; see `NSTextContentStorage.install(_:)`.
+      textView.textStorage.setAttributedString(attributed)
+      context.coordinator.shown = (text, fontSize)
+    }
+  }
+
+  /// A `UITextView` whose content is as wide as its laid-out text, so unwrapped lines
+  /// scroll sideways rather than being clipped at the frame.
+  ///
+  /// UIKit sets the content size's width to the frame's on every layout pass;
+  /// this replaces that width on its way in, and asks again after each pass, since
+  /// incremental layout widens what has been laid out as the text scrolls.
+  final class SidewaysTextView: UITextView {
+    override var contentSize: CGSize {
+      get { super.contentSize }
+      set { super.contentSize = CGSize(width: laidOutWidth, height: newValue.height) }
+    }
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      if contentSize.width != laidOutWidth { contentSize = super.contentSize }
+    }
+
+    private var laidOutWidth: CGFloat {
+      OriginalTextLayout.contentWidth(
+        usedWidth: textLayoutManager?.usageBoundsForTextContainer.maxX ?? 0,
+        horizontalInsets: textContainerInset.left + textContainerInset.right,
+        viewWidth: bounds.width)
+    }
+  }
+#endif
