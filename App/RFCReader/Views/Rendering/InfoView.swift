@@ -64,7 +64,9 @@ struct InfoView: View {
           color: StatusBadge.color(for: info.status), fill: StatusBadge.fill(for: info.status))
       }
       if let summary = info.obsoleteSummary {
-        StandingBox(title: "Obsolete", summary: summary, color: .red, fill: .red.opacity(0.12))
+        StandingBox(
+          title: "Obsolete", summary: summary,
+          color: StatusBadge.obsoleteColor, fill: StatusBadge.obsoleteFill)
       }
     }
   }

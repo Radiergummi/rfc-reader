@@ -23,30 +23,56 @@ struct StatusBadge: View {
       dark: StatusPalette.colors(for: status, in: .dark).text)
   }
 
-  /// The status's fill: opaque, so the badge reads the same on a selected row.
+  /// The status's fill: opaque in light appearance, translucent in dark, so the pill
+  /// takes the color of what is behind it.
   static func fill(for status: PublicationStatus) -> Color {
     Color(
-      appearanceDependent: StatusPalette.colors(for: status, in: .light).fill,
-      dark: StatusPalette.colors(for: status, in: .dark).fill)
+      fill: StatusPalette.colors(for: status, in: .light),
+      dark: StatusPalette.colors(for: status, in: .dark))
   }
+
+  /// The Info pane's Obsolete box's text color, measured as a status's is.
+  static let obsoleteColor = Color(
+    appearanceDependent: StatusPalette.obsolete(in: .light).text,
+    dark: StatusPalette.obsolete(in: .dark).text)
+
+  /// The Obsolete box's fill, drawn as a status's is.
+  static let obsoleteFill = Color(
+    fill: StatusPalette.obsolete(in: .light), dark: StatusPalette.obsolete(in: .dark))
 }
 
 extension Color {
   /// Colors whose contrast RFCReaderKit has measured, drawn as exactly those sRGB
-  /// values: `light` in light appearance and `dark` in dark.
-  init(appearanceDependent light: SRGBColor, dark: SRGBColor) {
+  /// values at those opacities: `light` in light appearance and `dark` in dark.
+  init(
+    appearanceDependent light: SRGBColor, dark: SRGBColor, lightOpacity: Double = 1,
+    darkOpacity: Double = 1
+  ) {
     #if os(macOS)
       self.init(
         nsColor: NSColor(name: nil) { appearance in
-          let color = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-          return NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+          let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+          let color = isDark ? dark : light
+          return NSColor(
+            srgbRed: color.red, green: color.green, blue: color.blue,
+            alpha: isDark ? darkOpacity : lightOpacity)
         })
     #else
       self.init(
         uiColor: UIColor { traits in
-          let color = traits.userInterfaceStyle == .dark ? dark : light
-          return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1)
+          let isDark = traits.userInterfaceStyle == .dark
+          let color = isDark ? dark : light
+          return UIColor(
+            red: color.red, green: color.green, blue: color.blue,
+            alpha: isDark ? darkOpacity : lightOpacity)
         })
     #endif
+  }
+
+  /// A palette's fill, at the opacity it is measured at in each appearance.
+  init(fill light: StatusPalette.Colors, dark: StatusPalette.Colors) {
+    self.init(
+      appearanceDependent: light.fill, dark: dark.fill, lightOpacity: light.fillOpacity,
+      darkOpacity: dark.fillOpacity)
   }
 }

@@ -24,7 +24,8 @@ public struct SRGBColor: Hashable, Sendable {
   }
 
   public static let white = SRGBColor(red: 1, green: 1, blue: 1)
-  /// For the tests, which check the contrast formula against its extremes.
+  /// For the tests, which check the contrast formula against its extremes, and the
+  /// iOS document header a dark badge is drawn on.
   static let black = SRGBColor(red: 0, green: 0, blue: 0)
 
   /// WCAG 2.x relative luminance: each channel linearized from the sRGB curve, then
