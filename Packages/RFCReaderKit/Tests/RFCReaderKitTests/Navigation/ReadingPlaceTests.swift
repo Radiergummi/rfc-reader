@@ -142,6 +142,10 @@ struct ReadingPlaceTests {
 @MainActor
 struct ReadingPlaceLineGeometryTests {
   private struct Laid {
+    /// Kept so `layout` can still be hit-tested: the layout manager does not
+    /// retain its content manager.
+    let storage: NSTextContentStorage
+    let layout: NSTextLayoutManager
     let lines: [NSTextLineFragment]
     let fragment: NSRange
     let frameTop: CGFloat
@@ -175,6 +179,8 @@ struct ReadingPlaceLineGeometryTests {
       let end = layout.offset(of: fragment.rangeInElement.endLocation)
       if start > 0 {
         found = Laid(
+          storage: storage,
+          layout: layout,
           lines: fragment.textLineFragments,
           fragment: NSRange(location: start, length: end - start),
           frameTop: fragment.layoutFragmentFrame.minY,
@@ -271,6 +277,23 @@ struct ReadingPlaceLineGeometryTests {
           #expect(read == NSRange(location: start, length: line.characterRange.length))
         }
       }
+    }
+  }
+
+  /// The paragraph a jump puts at the top is the one hit-tested there, even once
+  /// the scroll view has rounded the offset down to a pixel. Hit-tested at the
+  /// viewport's top itself, a rounded-down offset lands in the paragraph above,
+  /// and a section's heading put at the top reads as the section before it
+  /// (#299, #286).
+  @Test func `a paragraph scrolled to the top is the one hit-tested there`() throws {
+    let paragraph = try paragraph(spacing: 20)
+    let target = paragraph.frameTop
+    for top in [target, (target * 2).rounded(.down) / 2 - 0.5] {
+      let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
+      let fragment = try #require(paragraph.layout.textLayoutFragment(for: point))
+      #expect(
+        paragraph.layout.offset(of: fragment.rangeInElement.location) == paragraph.fragmentStart,
+        "read at a viewport top of \(top)")
     }
   }
 

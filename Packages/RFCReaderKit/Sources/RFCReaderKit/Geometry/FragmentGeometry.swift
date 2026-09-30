@@ -477,6 +477,12 @@ public enum FragmentGeometry {
 
   private static let readBackSlack: CGFloat = 1
 
+  /// Where the reader hit-tests what is at the top of the viewport: the top
+  /// itself, for now.
+  public static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
+    top
+  }
+
   /// A document-relative offset as the index `NSTextLineFragment` wants.
   ///
   /// `locationForCharacter(at:)` and `characterIndex(for:)` are both indexed
