@@ -65,10 +65,14 @@
     }
 
     /// The application's `windows`, less any reader window that has closed but is
-    /// still alive (#432). Closing empties such a window and its controller goes, so
-    /// a script would see an invisible window that answers nothing.
+    /// still alive (#432). Closing empties such a window, so a script would see an
+    /// invisible window that answers nothing. Open means still registered here, not
+    /// still having a controller: a print or export under way keeps the controller
+    /// of a window that has closed.
     @objc var orderedWindows: [NSWindow] {
-      NSApp.orderedWindows.filter { !($0 is ReaderWindow) || $0.windowController != nil }
+      NSApp.orderedWindows.filter { window in
+        !(window is ReaderWindow) || controllers.contains { $0.window === window }
+      }
     }
 
     /// Every RFC, for `every rfc`. `count of rfcs` and `rfc 5` go through the two
