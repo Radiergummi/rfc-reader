@@ -265,7 +265,12 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onToolbarTitle: { reader.report(title: $0, from: $1) },
+        // Not while fading out over the next document's reader, as every callback
+        // here guards: the title is the selected document's.
+        onToolbarTitle: { [navigation, id] state, source in
+          guard navigation.selection == id else { return }
+          reader.report(title: state, from: source)
+        },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
         onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
@@ -401,10 +406,10 @@ struct DocumentView: View {
     // The scene's `ReaderState` must not carry the previous document's place into
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
-    // Its header is pending until the reader reports, so the title stays out of the
-    // toolbar rather than showing and then dropping (#281).
-    reader.documentStartsLoading()
     reader.showOriginal = preferOriginalText
+    // Its header is on its way until the reader reports, so the title stays out of
+    // the toolbar rather than showing and then dropping (#281).
+    reader.documentStartsLoading()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()

@@ -72,7 +72,7 @@ final class ReaderState {
     }
   }
 
-  /// A document starts loading, and its header is pending.
+  /// A document starts loading, and its header is on its way.
   func documentStartsLoading() {
     titleOwnership.beginLoading()
   }
@@ -87,7 +87,7 @@ final class ReaderState {
     titleOwnership.report(state, from: ObjectIdentifier(reader))
   }
 
-  /// That reader has gone away, and gives the title back.
+  /// That reader has gone away, and what it said goes with it.
   func releaseTitle(from reader: AnyObject) {
     titleOwnership.release(from: ObjectIdentifier(reader))
   }
@@ -132,6 +132,7 @@ final class ReaderState {
   }
 
   func clear() {
+    titleOwnership.close()
     sections = []
     groups = []
     requirements = nil

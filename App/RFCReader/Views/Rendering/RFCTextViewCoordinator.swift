@@ -125,7 +125,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// That is safe where `onVisibleAnchorChange` is not because it touches no
   /// SwiftUI state.
   ///
-  /// With the coordinator, which owns what it reports until it gives it back through
+  /// With the coordinator, which owns what it reports until it withdraws it through
   /// `onToolbarTitleReleased` in `releaseDocument()` (#281): the reader is made per
   /// document, and the last one's teardown can come after the next one's report.
   var onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void = { _, _ in }
@@ -836,8 +836,8 @@ final class RFCTextViewCoordinator: NSObject {
     /// `textContainer` setter is not to be called directly, and measured in the same
     /// program both free the same. The scroll observer goes too, so a viewport left
     /// without a layout manager reports nothing to the window's toolbar title, which
-    /// the next reader already owns. And the title is given back: this reader's
-    /// header is gone, and with nothing else to say otherwise, the title shows.
+    /// the next reader already owns. And what it said of the title goes with it: its
+    /// header is gone, and only the next reader, or a mode without one, says more.
     func releaseDocument() {
       layoutTask?.cancel()
       NotificationCenter.default.removeObserver(
