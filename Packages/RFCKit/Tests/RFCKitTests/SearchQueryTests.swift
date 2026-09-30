@@ -312,6 +312,18 @@ struct SearchQueryTermTests {
       ])
   }
 
+  /// A list over the results at every space would hide them as the reader types; an
+  /// empty field is where the vocabulary is learned, and offers all of it.
+  @Test func `a word begun after a space is offered nothing until it has a letter`() throws {
+    let index = try Fixtures.sampleIndex()
+    #expect(SearchQuery.suggestionsWhileTyping(for: "cache ", in: index).isEmpty)
+    #expect(
+      SearchQuery.suggestionsWhileTyping(for: "cache w", in: index).map(\.completion) == [
+        "cache wg:"
+      ])
+    #expect(SearchQuery.suggestionsWhileTyping(for: "", in: index).count == 6)
+  }
+
   /// What the suggestion list shows: the word completed, not the whole query.
   @Test func `a suggestion shows the word it completes`() throws {
     let index = try Fixtures.sampleIndex()
