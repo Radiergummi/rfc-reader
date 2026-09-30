@@ -37,6 +37,18 @@ public struct QuickOpenResults: Equatable, Sendable {
     }
   }
 
+  /// What a row says beside the number: the index's title for it, or why there is
+  /// none. `9110` typed before the index has loaded resolves exactly, but nothing
+  /// knows its title yet, and it is not missing from the index.
+  ///
+  /// - Parameters:
+  ///   - title: The index's title for the row's document, if it has one.
+  ///   - isIndexLoaded: Whether the index has loaded.
+  public static func title(_ title: String?, isIndexLoaded: Bool) -> String {
+    if let title { return title }
+    return isIndexLoaded ? "Not in the index" : "The index is still loading"
+  }
+
   /// What is typed now.
   public private(set) var query = ""
   /// What is typed, resolved exactly: one row, or one per member of a series.

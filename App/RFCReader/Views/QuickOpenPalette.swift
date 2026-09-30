@@ -123,6 +123,8 @@
     private func row(for row: QuickOpenResults.Row) -> some View {
       let link = row.link
       let isSelected = row == results.selected
+      let title = QuickOpenResults.title(
+        library.metadata(link.id)?.title, isIndexLoaded: library.index != nil)
       return HStack(spacing: 12) {
         if let entry = row.entry {
           // What was looked up, then where it is defined: "HTTP status 425 · Too
@@ -146,7 +148,7 @@
             .fontWeight(.semibold)
             .monospacedDigit()
             .frame(width: 84, alignment: .leading)
-          Text(library.metadata(link.id)?.title ?? "Not in the index")
+          Text(title)
             .lineLimit(1)
             .truncationMode(.tail)
             .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))

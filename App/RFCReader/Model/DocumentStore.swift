@@ -26,10 +26,12 @@ actor DocumentStore {
 
   /// The fetches running, so a second open joins the first, a removal made during
   /// one keeps its result off the disk, and one nobody waits for any more is
-  /// canceled (#116). Original Text joins a document's own where the text is all
-  /// there is to it and no pack serves it, and has its own otherwise (#324).
+  /// canceled (#116). A `.txt` is fetched in `texts`, which Original Text and, where
+  /// the text is all there is to a document, its load share (#324): the download
+  /// alone, parsed afterwards by a load that wants it, so Original Text shows it
+  /// without waiting for a parse, and a reader who leaves cancels nothing but bytes.
   private let downloads = InFlightDownloads<RFCEditorClient.FetchedDocument>()
-  private let originalTexts = InFlightDownloads<Data>()
+  private let texts = InFlightDownloads<Data>()
   /// The parses of cached bodies running, for the same three reasons: a parse
   /// suspends the open, so the actor lets a second open or a removal in meanwhile.
   private let parses = InFlightDownloads<RFCDocument?>()
@@ -273,7 +275,7 @@ actor DocumentStore {
   /// index records what the removal left on disk, not what it set out to do.
   func remove(_ id: DocumentID) {
     downloads.removed(id)
-    originalTexts.removed(id)
+    texts.removed(id)
     parses.removed(id)
     parsed.removeAll { $0 == id }
     let urls = DocumentCacheIndex.bodyFormats.map { fileURL(id, format: $0) }
@@ -294,6 +296,48 @@ actor DocumentStore {
     markOpened(id)
     if let cached = parsed.value(for: id) { return cached }
 
+    if let cached = try await cachedDocument(id, signpostID: signpostID) { return cached }
+    // A fetch another open started may have finished while the disk was read (#324).
+    if let cached = parsed.value(for: id) { return cached }
+
+    // The `.txt` is the document: the download Original Text shares (#324), parsed
+    // here once it is on disk. Written by then unless a removal kept it off, even
+    // when Original Text was the reader to write it.
+    if RFCEditorClient.textIsTheDocument(availableFormats: formats) {
+      let data: Data
+      do {
+        let fetchInterval = signposter.beginInterval(
+          "Fetch document", id: signposter.makeSignpostID(), "\(id.displayName, privacy: .public)")
+        defer { signposter.endInterval("Fetch document", fetchInterval) }
+        data = try await text(id, client: client)
+      }
+      if let cached = try await cachedDocument(id, signpostID: signpostID) { return cached }
+      // Removed while it downloaded: shown, and not kept (#116).
+      return await Self.parseText(data, signpostID: signpostID)
+    }
+
+    let (fetched, isKept) = try await downloads.value(for: id) {
+      Task { try await Self.fetch(id, formats: formats, client: client) }
+    }
+    // A removal while this was in flight, or another reader of the same fetch has
+    // kept it: the document is shown, and not written here (#116).
+    guard isKept else { return fetched.document }
+    let url = fileURL(id, format: fetched.format)
+    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
+    hasGrown = true
+    // A pack installed while this was in flight serves the document from now on.
+    if legacyPack?.file(for: id) == nil {
+      parsed.store(fetched.document, for: id)
+    }
+    return fetched.document
+  }
+
+  /// The body on disk, parsed and kept, or nil when there is none: the parse is
+  /// joined by a second open, and a body removed while it parsed is shown but not
+  /// kept, like a fetch (#116).
+  private func cachedDocument(_ id: DocumentID, signpostID: OSSignpostID) async throws
+    -> RFCDocument?
+  {
     let xmlURL = fileURL(id, format: .xml)
     let textURL = fileURL(id, format: .text)
     let packURL = legacyPack?.file(for: id)
@@ -303,37 +347,8 @@ actor DocumentStore {
           id, xml: xmlURL, pack: packURL, text: textURL, signpostID: signpostID)
       }
     }
-    if let cached {
-      // A body removed while it parsed is shown but not kept, like a fetch (#116).
-      if isCachedKept { parsed.store(cached, for: id) }
-      return cached
-    }
-    // A fetch Original Text started may have finished while the disk was read (#324).
-    if let cached = parsed.value(for: id) { return cached }
-
-    return try await fetched(id, formats: formats, client: client).document
-  }
-
-  /// The document's own download, which a second open and, where the text is all
-  /// there is, Original Text join; written by whichever of its readers keeps it, with
-  /// no suspension between, so a removal cannot slip in before the write (#116).
-  private func fetched(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
-    async throws -> RFCEditorClient.FetchedDocument
-  {
-    let (fetched, isKept) = try await downloads.value(for: id) {
-      Task { try await Self.fetch(id, formats: formats, client: client) }
-    }
-    // A removal while this was in flight, or another reader of the same fetch has
-    // kept it: the document is shown, and not written here (#116).
-    guard isKept else { return fetched }
-    let url = fileURL(id, format: fetched.format)
-    try cachedDocuments.update(id) { try fetched.data.write(to: url, options: .atomic) }
-    hasGrown = true
-    // A pack installed while this was in flight serves the document from now on.
-    if legacyPack?.file(for: id) == nil {
-      parsed.store(fetched.document, for: id)
-    }
-    return fetched
+    if let cached, isCachedKept { parsed.store(cached, for: id) }
+    return cached
   }
 
   /// The body on disk, parsed: the cached XML if there is one, then the installed
@@ -363,7 +378,12 @@ actor DocumentStore {
       }
     }
     guard let data = try? Data(contentsOf: text) else { return nil }
-    return signposter.withIntervalSignpost(
+    return await parseText(data, signpostID: signpostID)
+  }
+
+  @concurrent
+  private static func parseText(_ data: Data, signpostID: OSSignpostID) async -> RFCDocument {
+    signposter.withIntervalSignpost(
       "Parse document", id: signpostID, "text", around: { LegacyTextParser.parse(data) })
   }
 
@@ -470,30 +490,28 @@ actor DocumentStore {
     return victims
   }
 
-  func originalText(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
-    async throws -> String
-  {
-    let textURL = fileURL(id, format: .text)
-    if let data = try? Data(contentsOf: textURL) {
+  func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
+    if let data = try? Data(contentsOf: fileURL(id, format: .text)) {
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
-    // The `.txt` is the document: the same download as the document's, which Prefer
-    // Original Text starts at the same moment, fetched once for both (#324). Not
-    // where the pack serves the document: nothing downloads it, so there is nothing
-    // to join, and the shared fetch would parse the text for nobody.
-    if legacyPack?.file(for: id) == nil,
-      RFCEditorClient.textIsTheDocument(availableFormats: formats)
-    {
-      let data = try await fetched(id, formats: formats, client: client).data
-      return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
-    }
-    let (data, isKept) = try await originalTexts.value(for: id) {
+    let data = try await text(id, client: client)
+    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
+  }
+
+  /// The `.txt`, downloaded once for every reader that wants it at the same time,
+  /// and written by the one told to keep it, with no suspension between, so a
+  /// removal cannot slip in before the write, and the others find it on disk once
+  /// they have it (#116).
+  private func text(_ id: DocumentID, client: RFCEditorClient) async throws -> Data {
+    let (data, isKept) = try await texts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
     }
     if isKept {
-      try cachedDocuments.update(id) { try data.write(to: textURL, options: .atomic) }
+      try cachedDocuments.update(id) {
+        try data.write(to: fileURL(id, format: .text), options: .atomic)
+      }
       hasGrown = true
     }
-    return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
+    return data
   }
 }
