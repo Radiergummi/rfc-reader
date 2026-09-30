@@ -365,8 +365,8 @@
     /// The bookmark item, for its glyph.
     private weak var bookmarkItem: NSToolbarItem?
 
-    /// What the bookmark item's glyph is currently showing.
-    private var bookmarkSymbol = "bookmark"
+    /// Whether the bookmark item currently shows the document as bookmarked.
+    private var showsBookmarked = false
 
     /// Fills the bookmark glyph or empties it. Set from the window's observation of
     /// the selection and the bookmarks, not in `validateToolbarItem`: the item is an
@@ -380,11 +380,19 @@
     /// VoiceOver reads is a private view AppKit makes for the item, and the tooltip
     /// is the one public way to reach it.
     func showBookmarked(_ isBookmarked: Bool) {
-      let symbol = isBookmarked ? "bookmark.fill" : "bookmark"
-      guard symbol != bookmarkSymbol else { return }
-      bookmarkSymbol = symbol
-      bookmarkItem?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bookmark")
-      bookmarkItem?.toolTip = DocumentActions.bookmarkState(isBookmarked: isBookmarked)
+      guard isBookmarked != showsBookmarked else { return }
+      showsBookmarked = isBookmarked
+      if let bookmarkItem {
+        showBookmarkState(on: bookmarkItem)
+      }
+    }
+
+    /// Puts what `showBookmarked` last chose on the item: the glyph and the tooltip.
+    private func showBookmarkState(on item: NSToolbarItem) {
+      item.image = NSImage(
+        systemSymbolName: showsBookmarked ? "bookmark.fill" : "bookmark",
+        accessibilityDescription: "Bookmark")
+      item.toolTip = DocumentActions.bookmarkState(isBookmarked: showsBookmarked)
     }
 
     func updateDocumentTitle(_ state: ToolbarTitleState) {
@@ -520,10 +528,7 @@
         let item = NSMenuToolbarItem(itemIdentifier: identifier)
         item.label = "Bookmark"
         // What `showBookmarked` last chose, which may have come before the item did.
-        item.image = NSImage(
-          systemSymbolName: bookmarkSymbol, accessibilityDescription: "Bookmark")
-        item.toolTip = DocumentActions.bookmarkState(
-          isBookmarked: bookmarkSymbol == "bookmark.fill")
+        showBookmarkState(on: item)
         item.showsIndicator = true
         item.target = self
         item.action = #selector(toggleBookmark)
