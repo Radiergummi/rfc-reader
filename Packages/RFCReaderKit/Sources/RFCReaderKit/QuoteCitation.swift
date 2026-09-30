@@ -55,7 +55,7 @@ public enum QuoteCitation {
   /// document alone is cited. A selection spanning sections cites the first.
   public static func section(at offset: Int, anchors: AnchorIndex) -> String? {
     let sections = anchors.sections
-    return sections.index(at: offset).flatMap { sections.entries[$0].number }
+    return sections.index(at: offset).flatMap { sections.entries[$0].place }
   }
 
   /// The quote for `range` of a built document's text, cited from the section it

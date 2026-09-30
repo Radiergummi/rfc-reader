@@ -18,7 +18,7 @@ public struct AnchorIndex: Sendable, Equatable {
     /// which is what a place in it is cited as; nil for any other anchor and for an
     /// unnumbered section. Also the builder's to fill in, so a citation needs nothing
     /// but the build (#186).
-    public let number: String?
+    public let place: String?
 
     /// True when the anchor names a `Section`. Derived from `heading`, so the
     /// two cannot disagree: a section without a heading would have no card.
@@ -26,11 +26,11 @@ public struct AnchorIndex: Sendable, Equatable {
       heading != nil
     }
 
-    public init(anchor: String, offset: Int, heading: String? = nil, number: String? = nil) {
+    public init(anchor: String, offset: Int, heading: String? = nil, place: String? = nil) {
       self.anchor = anchor
       self.offset = offset
       self.heading = heading
-      self.number = number
+      self.place = place
     }
   }
 

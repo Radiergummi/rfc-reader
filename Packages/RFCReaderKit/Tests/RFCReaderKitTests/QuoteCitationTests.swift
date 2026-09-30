@@ -15,9 +15,9 @@ import Testing
 struct QuoteCitationTests {
   private let anchors = AnchorIndex([
     .init(anchor: "abstract", offset: 0),
-    .init(anchor: "section-8", offset: 100, heading: "8. Content", number: "8"),
+    .init(anchor: "section-8", offset: 100, heading: "8. Content", place: "8"),
     .init(anchor: "figure-3", offset: 150),
-    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type", number: "8.3"),
+    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type", place: "8.3"),
     .init(anchor: "acknowledgements", offset: 300, heading: "Acknowledgements"),
   ])
 
