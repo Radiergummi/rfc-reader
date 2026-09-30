@@ -30,9 +30,14 @@ struct StatusPaletteTests {
   }
 
   /// The statuses keep the hues they had: the standards share one, and each other
-  /// status has its own.
-  @Test func `standards share a color and the other statuses have their own`() {
-    let text = { (status: PublicationStatus) in StatusPalette.colors(for: status, in: .light).text }
+  /// status has its own, in either appearance.
+  @Test(arguments: StatusPalette.Appearance.allCases)
+  func `standards share a color and the other statuses have their own`(
+    appearance: StatusPalette.Appearance
+  ) {
+    let text = { (status: PublicationStatus) in
+      StatusPalette.colors(for: status, in: appearance).text
+    }
     #expect(text(.internetStandard) == text(.draftStandard))
     let distinct: [PublicationStatus] = [
       .internetStandard, .proposedStandard, .bestCurrentPractice, .informational, .experimental,
