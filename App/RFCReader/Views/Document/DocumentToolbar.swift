@@ -68,7 +68,9 @@ import SwiftUI
     }
 
     private var bookmarkButton: some View {
-      // A tap bookmarks, as before; a long press adds to a collection (#349).
+      // A tap bookmarks, as before; a long press adds to a collection (#349). ⌘D is
+      // not this button's but `DocumentCommands`', whose title says what it will do
+      // (#278).
       Menu {
         AddToCollectionItems(
           document: id, library: library, navigation: navigation, undoManager: undoManager)
@@ -80,7 +82,6 @@ import SwiftUI
       // A fixed label, and the state as its value, which the glyph alone never told
       // VoiceOver (#278).
       .accessibilityValue(DocumentActions.bookmarkState(isBookmarked: isBookmarked))
-      .keyboardShortcut("d", modifiers: .command)
     }
 
     private var citeMenu: some View {

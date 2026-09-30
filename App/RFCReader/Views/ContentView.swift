@@ -143,6 +143,7 @@ import SwiftUI
         navigation.isShowingGoToSheet = true
       }
       .focusedSceneValue(\.navigationModel, navigation)
+      .focusedSceneValue(\.readerState, reader)
       // Outermost, and it has to be: an environment value reaches what is *inside*
       // the modifier that sets it, and a presentation is the content of the
       // modifier that presents it. Written on the split view, this covered the
