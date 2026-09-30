@@ -70,19 +70,20 @@ struct StatusBanner: View {
     .font(.subheadline)
   }
 
-  /// The title and the documents wrap as one row, so a document updated by many
-  /// others flows onto as many lines as it takes (#439); an `HStack` squeezed every
-  /// chip to one letter's width instead.
+  /// The title and the documents wrap beside the symbol, so a document updated by
+  /// many others flows onto as many lines as it takes, indented under the title
+  /// (#439); an `HStack` squeezed every chip to one letter's width instead.
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
-    WrappingRowLayout(spacing: 6) {
-      HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Image(systemName: symbol).foregroundStyle(tint)
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Image(systemName: symbol).foregroundStyle(tint)
+      WrappingRowLayout(spacing: 6) {
         Text(title).fontWeight(.medium)
-      }
-      ForEach(ids, id: \.self) { id in
-        Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
-          .buttonStyle(.plain)
-          .foregroundStyle(.tint)
+        ForEach(ids, id: \.self) { id in
+          Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .lineLimit(1)
+        }
       }
     }
     .font(.subheadline)
