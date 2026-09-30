@@ -19,8 +19,11 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.defaultUnderlineLinks == ReadingStyle().underlinesLinks)
   }
 
-  /// View ▸ Bigger and Smaller, and the iOS text-size popover (#153), step
-  /// within the same range as the Settings slider.
+  // MARK: - Stepping
+
+  // View ▸ Bigger and Smaller, and the iOS text-size popover (#153), step
+  // within the same range as the Settings slider.
+
   @Test func `the default size is inside the range`() {
     #expect(ReaderPreferences.fontSizes.contains(ReaderPreferences.defaultFontSize))
   }
