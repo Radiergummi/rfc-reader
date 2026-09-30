@@ -880,15 +880,28 @@ public enum RFCXMLParser {
       // A member of a `<referencegroup>` has no entry of its own in the bibliography;
       // the group's is the one to link to.
       let entry = referenceEntries[targetAnchor]
+      // A section of an entry outside the series is worded as a section of an RFC
+      // is, around the entry's tag, and opens the section's own page (#473).
+      if let entry, let section {
+        let target = CrossReference.Target.entrySection(
+          entry: entry, tag: derived ?? targetAnchor, section: section,
+          // A link without a scheme leads nowhere; the entry is then the target.
+          url: element["derivedLink"].flatMap(absoluteURL))
+        if !innerText.isEmpty || format == "none" {
+          return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
+        }
+        if format == "default" {
+          return CrossReference(target: target, sectionFormat: sectionFormat)
+        }
+        return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
+      }
       let target = CrossReference.Target.anchor(entry ?? targetAnchor)
       // Empty or not, the element's own text is all `none` shows (xml2rfc renders an
       // empty one as nothing), never the anchor.
       if format == "none" {
         return CrossReference(target: target, text: innerText)
       }
-      // Only a citation of the whole entry: with a section, `derivedContent` is the
-      // entry's tag standing in for "Section 2.3.3 of [RATS-AR4SI]" (#473).
-      if innerText.isEmpty, format == "default", section == nil, entry != nil {
+      if innerText.isEmpty, format == "default", entry != nil {
         return CrossReference(target: target, text: "[\(derived ?? targetAnchor)]")
       }
       let text = innerText.isEmpty ? derived : innerText
@@ -977,11 +990,17 @@ extension RFCXMLParser {
       // link, to nowhere; it and one `URL` cannot read are shown as written.
       if let uri = contact.uri {
         lines.append([
-          .text("URI: "), link(URL(string: uri).flatMap { $0.scheme == nil ? nil : $0 }, uri),
+          .text("URI: "), link(absoluteURL(uri), uri),
         ])
       }
     }
     return Array(lines.joined(separator: [Inline.lineBreak]))
+  }
+
+  /// `string` as a URL, unless it has no scheme: a relative link leads nowhere in
+  /// the reader.
+  static func absoluteURL(_ string: String) -> URL? {
+    URL(string: string).flatMap { $0.scheme == nil ? nil : $0 }
   }
 
   private static func link(_ url: URL?, _ text: String) -> Inline {

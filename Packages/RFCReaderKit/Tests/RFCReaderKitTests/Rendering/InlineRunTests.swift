@@ -139,6 +139,27 @@ struct InlineRunTests {
     #expect(url.absoluteString == "rfc-anchor:section-3")
   }
 
+  /// A section of an entry outside the series opens the section's own page, as the
+  /// RFC Editor's rendering does, or the entry where the source gives no page
+  /// (#473). It is link text, not a chip: the chip is a document of ours.
+  @Test func `a section of an entry outside the series links to its page or to the entry`()
+    throws
+  {
+    let page = try #require(URL(string: "https://fetch.spec.whatwg.org/#cors-check"))
+    let linked = CrossReference(
+      target: .entrySection(entry: "FETCH", tag: "FETCH", section: "4.9", url: page))
+    let attributed = Fixtures.inlineRun([.crossReference(linked)])
+    #expect(attributed.string == "Section\u{00A0}4.9 of [FETCH]")
+    #expect(attributed.attribute(.link, at: 0, effectiveRange: nil) as? URL == page)
+
+    let unlinked = CrossReference(
+      target: .entrySection(entry: "FETCH", tag: "FETCH", section: "4.9", url: nil))
+    let fallback = Fixtures.inlineRun([.crossReference(unlinked)])
+    #expect(
+      (fallback.attribute(.link, at: 0, effectiveRange: nil) as? URL)?.absoluteString
+        == "\(DocumentTextBuilder.referenceScheme):FETCH")
+  }
+
   /// A reference with no text of its own is one the source left to us, so the
   /// reader composes it and draws it as a chip. The plain form it composes -- what
   /// `label` gives, brackets and all -- is what goes out through the serializer.

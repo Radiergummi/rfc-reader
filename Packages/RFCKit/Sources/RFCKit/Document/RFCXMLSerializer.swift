@@ -484,6 +484,19 @@ public struct RFCXMLSerializer: Sendable {
       let target = Writer.escapeAttribute(anchor)
       return content.isEmpty
         ? "<xref target=\"\(target)\"/>" : "<xref target=\"\(target)\">\(content)</xref>"
+    case .entrySection(let entry, let tag, let section, let url):
+      var attributes = " target=\"\(Writer.escapeAttribute(entry))\""
+      attributes += " section=\"\(Writer.escapeAttribute(section))\""
+      attributes += " sectionFormat=\"\(xref.sectionFormat.rawValue)\""
+      attributes += " derivedContent=\"\(Writer.escapeAttribute(tag))\""
+      if let url {
+        attributes += " derivedLink=\"\(Writer.escapeAttribute(url.absoluteString))\""
+      }
+      // Words that are there but empty are `none`'s nothing, not ours to compose.
+      if xref.text?.isEmpty == true {
+        attributes += " format=\"none\""
+      }
+      return content.isEmpty ? "<xref\(attributes)/>" : "<xref\(attributes)>\(content)</xref>"
     case .document(let id, let section, let entry):
       // The entry the citation resolved to, where it names one: the first entry naming
       // the same document may be another -- an erratum listed ahead of the RFC it

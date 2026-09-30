@@ -50,6 +50,7 @@ Inline (enum)
 CrossReference.target
   .anchor(String)                                          same document
   .document(DocumentID, section: String?, entry: String?)  another RFC, optionally a section, and the bibliography entry the citation resolved to
+  .entrySection(entry:, tag:, section:, url: URL?)          a section of a bibliography entry outside the series, and that section's page
 ```
 
 Design choices worth knowing:
@@ -166,6 +167,10 @@ painted by `RFCTextLayoutFragment`, the whole run marked `.rfcChip` so the build
 completeness test and the fragment's drawing code can both find it. `sectionFormat:
 .bare` is the one composed shape that does not chip: it is the source asking for the
 section number alone, which is a wording decision like any other.
+
+### Decision: a section of an entry outside the series is a target of its own
+
+*Decided September 2026 (issue #473).* RFCXML cites a section of a document outside the series the way it cites one of an RFC, `<xref target="FETCH" section="4.9" sectionFormat="of" derivedLink="https://fetch.spec.whatwg.org/#cors-check"/>`, and the RFC Editor renders it "Section 4.9 of [FETCH]", linked to `derivedLink`. `.anchor` has no section, and `.document` names a `DocumentID` such an entry does not have, so the parser made it `.anchor(entry)` and dropped the section: the citation read "FETCH" and opened the bibliography entry. `.entrySection` carries the entry's anchor, the tag the document calls it by (`derivedContent`), which the label is worded around, the section, and `derivedLink`. `label` words it by `sectionFormat` exactly as it words a section of an RFC; it is link text, not a chip, because a chip is a document of ours. A click opens `url`, the section's own page, as the RFC Editor's rendering does, and the entry where the source gives none; the hover card, a force click and a long press show the entry, as a citation of the whole entry does (`LinkPreview.resolve(_:linkedTo:from:in:)`), since the reader has nothing else of the document to show. Its kind is the entry's. The legacy parser has no bibliography of documents outside the series to cite sections of, and produces none.
 
 ### Decision: a reference previews on hover and force click on macOS, and on long press on iOS
 
@@ -396,7 +401,7 @@ The header, a hosting controller inside the text view, has no safe area (`safeAr
 
 ## Known gaps and the next technical steps
 
-- Legacy text: definition lists with hanging indents (e.g. the cache directives in RFC 2616 §14.9.1) render as preformatted blocks; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
+- Legacy text: a definition list set as xml2rfc sets one, `Term:  definition` with the rest hung under it, is read as one (#436), but a term on a line of its own with its definition under it (e.g. the cache directives in RFC 2616 §14.9.1) still renders as a preformatted block; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
 - Search covers the index's metadata only, in memory: 3.6 ms per query over all 9,842 entries, measured in a release build. Full-text search over document bodies is the decision above, not yet built (#37); metadata search moves into its database when it lands.
 - SVG artwork (`<artwork type="svg">`) is skipped in favor of the ASCII alternative.
 - No Spotlight indexing or iCloud sync yet. Errata and the Datatracker are pages the Info pane links to, not data the app fetches.

@@ -32,6 +32,19 @@ public enum LinkPreview: Equatable, Sendable {
       height: min(documentSize.height, (available.height * 0.6).rounded(.down)))
   }
 
+  /// What pressing `reference`, which links to `url`, previews. A section of an
+  /// entry outside the series links to the section's page on the web, and previews
+  /// the entry's card all the same, as a citation of the whole entry does (#473).
+  public static func resolve(
+    _ reference: CrossReference, linkedTo url: URL, from currentDocument: DocumentID,
+    in index: RFCIndex?
+  ) -> LinkPreview? {
+    if case .entrySection(let entry, _, _, _) = reference.target {
+      return .card(entry)
+    }
+    return resolve(url, from: currentDocument, in: index)
+  }
+
   /// Nil for a URL the reader does not own: a link to the web previews nothing. A
   /// BCP, STD or FYI previews its first member RFC, as a click on it opens that one
   /// (`NavigationModel.open`): the series has no document of its own to fetch.
