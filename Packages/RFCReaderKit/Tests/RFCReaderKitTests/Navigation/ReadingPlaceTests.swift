@@ -152,12 +152,15 @@ struct ReadingPlaceLineGeometryTests {
   /// the document's first character so a fragment-relative slip shows. The storage
   /// is kept alive through layout because the layout manager holds it weakly, and
   /// installed through its text storage, never by assigning `attributedString`:
-  /// see CLAUDE.md.
+  /// see CLAUDE.md. The paragraph style is an immutable copy, as CLAUDE.md asks of
+  /// every paragraph style: Foundation uniques equal attribute dictionaries
+  /// process-wide, so the style may be shared with another test's text.
   private func paragraph(spacing: CGFloat = 0) throws -> Laid {
     let font = PlatformFont.systemFont(ofSize: 17)
     let prose = (0..<80).map { "word\($0)" }.joined(separator: " ")
-    let style = NSMutableParagraphStyle()
-    style.paragraphSpacing = spacing
+    let mutableStyle = NSMutableParagraphStyle()
+    mutableStyle.paragraphSpacing = spacing
+    let style = try #require(mutableStyle.copy() as? NSParagraphStyle)
     let storage = NSTextContentStorage()
     defer { withExtendedLifetime(storage) {} }
     storage.install(
