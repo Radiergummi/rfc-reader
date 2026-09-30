@@ -208,3 +208,116 @@ struct SearchQueryTests {
     #expect(suggestions.first?.completion == "cache color:red")
   }
 }
+
+/// The active filters as the search field shows them (#21): chips under the Mac's
+/// field, tokens in the iOS one.
+@Suite("Search query terms")
+struct SearchQueryTermTests {
+  private func terms(_ query: String) -> [SearchQuery.Term] {
+    SearchQuery.terms(of: IndexSearch.parseQuery(query).filters)
+  }
+
+  /// One term per word of the canonical form, in its order, each named for a
+  /// reader rather than in the query's syntax.
+  @Test func `every filter is a term, in the canonical order`() {
+    let terms = terms(
+      "cache has:xml year:2022-2020 stream:irtf by:Fielding status:current is:bcp is:std group:HTTPBIS"
+    )
+    #expect(
+      terms.map(\.word) == [
+        "wg:httpbis", "status:std", "status:bcp", "status:current", "author:fielding",
+        "stream:irtf", "year:2020-2022", "has:xml",
+      ])
+    #expect(
+      terms.map(\.label) == [
+        "WG: httpbis", "Standards Track", "Best Current Practice", "Not Obsoleted",
+        "Author: fielding", "Stream: IRTF", "Year: 2020–2022", "Has XML",
+      ])
+  }
+
+  @Test func `a single year is labeled as one`() {
+    #expect(terms("year:1997").map(\.label) == ["Year: 1997"])
+  }
+
+  @Test func `free text is no term`() {
+    #expect(terms("cache color:red").isEmpty)
+  }
+
+  /// Removing a chip rewrites the query without it, in the canonical form, keeping
+  /// the other filters and the free text.
+  @Test func `a term removed from a query leaves the rest`() throws {
+    let query = "cache wg:httpbis is:bcp"
+    let status = try #require(terms(query).first { $0.word == "status:bcp" })
+    #expect(SearchQuery.removing(status, from: query) == "wg:httpbis cache")
+  }
+
+  @Test func `removing the last term leaves the free text`() throws {
+    let group = try #require(terms("wg:tls cache").first)
+    #expect(SearchQuery.removing(group, from: "wg:tls cache") == "cache")
+  }
+
+  // MARK: - Tokens
+
+  /// A filter the reader has finished typing becomes a token; the word still being
+  /// typed stays text, or `wg:t` would be a token before `wg:tls` could be typed.
+  @Test func `a finished filter becomes a token and the word being typed stays text`() {
+    let tokenized = SearchQuery.tokenized("cache wg:tls status:b")
+    #expect(tokenized.terms.map(\.word) == ["wg:tls"])
+    #expect(tokenized.text == "cache status:b")
+  }
+
+  /// The space the reader has just typed is kept, or the field would take it back.
+  @Test func `a trailing space stays in the text`() {
+    #expect(SearchQuery.tokenized("cache ").text == "cache ")
+    #expect(SearchQuery.tokenized("wg:tls ").text == "")
+    #expect(SearchQuery.tokenized("wg:tls ").terms.map(\.word) == ["wg:tls"])
+  }
+
+  /// A word with a colon that filters nothing is searched as text, so it stays text.
+  @Test func `a word that filters nothing stays text`() {
+    let tokenized = SearchQuery.tokenized("color:red status:stnd cache ")
+    #expect(tokenized.terms.isEmpty)
+    #expect(tokenized.text == "color:red status:stnd cache ")
+  }
+
+  /// A second working group replaces the first, as `parseQuery` reads the last one.
+  @Test func `a later working group replaces the token of an earlier one`() {
+    let tokenized = SearchQuery.tokenized(
+      SearchQuery.joined(terms: terms("wg:tls"), text: "wg:quic "))
+    #expect(tokenized.terms.map(\.word) == ["wg:quic"])
+  }
+
+  /// The one search text is what the list filters on; tokens and text are a view of
+  /// it, and put back together they are the same query.
+  @Test(arguments: ["", "cache", "cache ", "wg:tls status:b", "wg:tls is:bcp cache "])
+  func `tokens and text join back to the query they came from`(query: String) {
+    let tokenized = SearchQuery.tokenized(query)
+    let joined = SearchQuery.joined(terms: tokenized.terms, text: tokenized.text)
+    #expect(IndexSearch.parseQuery(joined) == IndexSearch.parseQuery(query))
+    #expect(SearchQuery.tokenized(joined) == tokenized)
+  }
+
+  // MARK: - Taking a suggestion
+
+  /// A suggestion that completes a filter ends with a space, so the next word begins
+  /// and on iOS the filter becomes a token; one that completes only the qualifier
+  /// waits for its value.
+  @Test func `a suggestion that completes a filter is taken with a space after it`() throws {
+    let index = try Fixtures.sampleIndex()
+    #expect(SearchQuery.suggestions(for: "wg:q", in: index).map(\.accepted) == ["wg:quic "])
+    #expect(SearchQuery.suggestions(for: "cache w", in: index).map(\.accepted) == ["cache wg:"])
+    #expect(
+      SearchQuery.suggestions(for: "cache color:red", in: index).map(\.accepted) == [
+        "cache color:red"
+      ])
+  }
+
+  /// What the suggestion list shows: the word completed, not the whole query.
+  @Test func `a suggestion shows the word it completes`() throws {
+    let index = try Fixtures.sampleIndex()
+    #expect(
+      SearchQuery.suggestions(for: "cache wg:no", in: index).map(\.word) == [
+        #"wg:"non working group""#
+      ])
+  }
+}
