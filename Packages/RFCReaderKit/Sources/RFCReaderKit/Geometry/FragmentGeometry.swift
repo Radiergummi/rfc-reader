@@ -459,11 +459,8 @@ public enum FragmentGeometry {
   }
 
   /// The line at the top of the viewport, `top` and `fragmentTop` both in container
-  /// coordinates: what the reader records as its place.
-  ///
-  /// Read a point below the top, so a line put exactly there by `scrollTarget` is
-  /// read back as that line even once the scroll view has rounded the offset down
-  /// to a pixel, rather than as the line above it.
+  /// coordinates: what the reader records as its place. Read at
+  /// `readBackY(atViewportTop:)`.
   public static func topLine(
     atViewportTop top: CGFloat,
     fragmentTop: CGFloat,
@@ -472,16 +469,22 @@ public enum FragmentGeometry {
     fragmentEnd: Int
   ) -> NSRange {
     let fragment = NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart)
-    return lineRange(at: top - fragmentTop + readBackSlack, in: lines, fragment: fragment)
+    return lineRange(at: readBackY(atViewportTop: top) - fragmentTop, in: lines, fragment: fragment)
+  }
+
+  /// Where to read what is at the top of the viewport, in the coordinates `top` is
+  /// in: both the fragment hit-tested there and the line within it.
+  ///
+  /// A point below the top, so that what `scrollTarget` put exactly there is read
+  /// back as itself even once the scroll view has rounded the offset down to a
+  /// pixel, rather than as the line or the paragraph above it. Hit-testing the
+  /// fragment at the top itself made a section's heading, put at the top by a
+  /// jump, read as the end of the section before (#299).
+  public static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
+    top + readBackSlack
   }
 
   private static let readBackSlack: CGFloat = 1
-
-  /// Where the reader hit-tests what is at the top of the viewport: the top
-  /// itself, for now.
-  public static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
-    top
-  }
 
   /// A document-relative offset as the index `NSTextLineFragment` wants.
   ///

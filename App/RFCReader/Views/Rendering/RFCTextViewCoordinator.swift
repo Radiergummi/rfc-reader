@@ -525,7 +525,8 @@ final class RFCTextViewCoordinator: NSObject {
       let layout = textView.textLayoutManager
     else { return }
     let top = max(0, textView.viewportTop)
-    guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
+    let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
+    guard let fragment = layout.textLayoutFragment(for: point) else { return }
     let offset = layout.offset(of: fragment.rangeInElement.location)
     let line = FragmentGeometry.topLine(
       atViewportTop: top,
