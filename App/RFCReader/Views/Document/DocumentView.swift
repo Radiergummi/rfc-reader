@@ -265,9 +265,9 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        // Not while fading out over the next document's reader, as every callback
-        // here guards: the title is the selected document's.
-        onToolbarTitle: { [navigation, id] state, source in
+        // Not while fading out over the next document's reader, as the load's
+        // and the build's callbacks guard: the title is the selected document's.
+        onToolbarTitle: { state, source in
           guard navigation.selection == id else { return }
           reader.report(title: state, from: source)
         },

@@ -53,6 +53,33 @@ struct ToolbarTitleOwnershipTests {
     #expect(ownership.state == .shown)
   }
 
+  /// The original text names the document, and with no document there is nothing to
+  /// name: the preference for it does not put a title over an empty reader.
+  @Test func `the original text with no document hides the title`() {
+    var ownership = ToolbarTitleOwnership()
+    ownership.showsOriginal = true
+    #expect(ownership.state == .hidden)
+  }
+
+  /// Back from the original text, the rendered reader has not reported yet, so its
+  /// header is still the one to say where the title is.
+  @Test func `leaving the original text before the reader reports hides the title`() {
+    var ownership = ToolbarTitleOwnership()
+    ownership.beginLoading()
+    ownership.showsOriginal = true
+    ownership.showsOriginal = false
+    #expect(ownership.state == .hidden)
+  }
+
+  /// Try Again starts another load, under a header on its way again.
+  @Test func `trying again after a failure hides the title`() {
+    var ownership = ToolbarTitleOwnership()
+    ownership.beginLoading()
+    ownership.failLoading()
+    ownership.beginLoading()
+    #expect(ownership.state == .hidden)
+  }
+
   /// A new load starts under its own header: what the last document's reader said
   /// is stale.
   @Test func `a new load drops the last reader's report`() {
