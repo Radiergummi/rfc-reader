@@ -9,6 +9,25 @@ public enum ReaderPreferences {
   /// The reader's body size, as it reads at the system's default text size.
   public static let fontSizeKey = "readingFontSize"
   public static let defaultFontSize = 17.0
+  /// Where the Settings slider, View ▸ Bigger and Smaller, and the iOS text-size
+  /// popover let the size go (#153).
+  public static let fontSizes = 12.0...28.0
+  /// One step of the slider, and of Bigger and Smaller.
+  public static let fontSizeStep = 1.0
+
+  /// The size after View ▸ Bigger: a step up, and never past the range.
+  public static func fontSize(steppingUp size: Double) -> Double {
+    clamped(size + fontSizeStep)
+  }
+
+  /// The size after View ▸ Smaller: a step down, and never past the range.
+  public static func fontSize(steppingDown size: Double) -> Double {
+    clamped(size - fontSizeStep)
+  }
+
+  private static func clamped(_ size: Double) -> Double {
+    min(max(size, fontSizes.lowerBound), fontSizes.upperBound)
+  }
 
   public static let underlineLinksKey = "underlineLinks"
   public static let defaultUnderlineLinks = false

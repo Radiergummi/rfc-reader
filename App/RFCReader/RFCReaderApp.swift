@@ -126,6 +126,9 @@ struct RFCReaderApp: App {
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+
   #if os(macOS)
     /// The key window's navigation, so Back and Forward act on the tab the reader is
     /// actually looking at. `@FocusedValue` cannot answer that any more: the views
@@ -231,16 +234,32 @@ struct DocumentCommands: Commands {
           .keyboardShortcut("p", modifiers: .command)
           .disabled(!showsDocument)
       }
-      // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
-      // list's view options before.
-      CommandGroup(after: .toolbar) {
+    #endif
+    CommandGroup(after: .toolbar) {
+      // View > Bigger, Smaller and Actual Size (#153), the reader's own size on top
+      // of the system's. A setting of the app's rather than the window's, as the
+      // Settings slider it steps is, so it needs no reader to act on.
+      Section {
+        Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
+          .keyboardShortcut("+", modifiers: .command)
+          .disabled(fontSize >= ReaderPreferences.fontSizes.upperBound)
+        Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
+          .keyboardShortcut("-", modifiers: .command)
+          .disabled(fontSize <= ReaderPreferences.fontSizes.lowerBound)
+        Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
+          .keyboardShortcut("0", modifiers: .command)
+          .disabled(fontSize == ReaderPreferences.defaultFontSize)
+      }
+      #if os(macOS)
+        // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
+        // list's view options before.
         if let navigation {
           Section {
             ListViewOptions(navigation: navigation)
           }
         }
-      }
-    #endif
+      #endif
+    }
     CommandGroup(before: .sidebar) {
       #if os(macOS)
         // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
@@ -411,7 +430,9 @@ private struct ReadingSettings: View {
 
   var body: some View {
     Form {
-      Slider(value: $fontSize, in: 12...28, step: 1) {
+      Slider(
+        value: $fontSize, in: ReaderPreferences.fontSizes, step: ReaderPreferences.fontSizeStep
+      ) {
         Text("Reading font size: \(Int(fontSize))")
       }
       Toggle(isOn: usesFullWidth) {
