@@ -25,6 +25,11 @@ extension NSAttributedString.Key {
   /// copied selection leaves these runs out (`SelectionText`): they are the reader's,
   /// not the document's words.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// What VoiceOver says in place of a run's characters, where the text view lets it
+  /// (`AccessibleReading`): a heading's backlink chip (#183), which would otherwise
+  /// read as its arrow and a bare number. A `String`, carried by every character of
+  /// the chip and nothing else.
+  public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
   /// (`AccessibleReading.rotorLabel`). Never read aloud with the diagram, because

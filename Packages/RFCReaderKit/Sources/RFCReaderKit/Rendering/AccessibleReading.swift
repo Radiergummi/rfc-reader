@@ -73,11 +73,27 @@ public enum AccessibleReading {
       }
     }
 
+    // A run with a `.rfcSpoken` label is said as it, where the range reaches its
+    // first character, and is silent after: its characters are never read out.
+    func readText(_ range: NSRange) {
+      text.enumerateAttribute(.rfcSpoken, in: range) { value, piece, _ in
+        guard let spoken = value as? String else {
+          read(piece)
+          return
+        }
+        var run = NSRange(location: 0, length: 0)
+        _ = text.attribute(.rfcSpoken, at: piece.location, longestEffectiveRange: &run, in: whole)
+        if piece.location == run.location {
+          pieces.append(.label(spoken))
+        }
+      }
+    }
+
     text.enumerateAttribute(.rfcVerbatim, in: range) { value, piece, _ in
       guard let box = value as? VerbatimBox, isDiagram(box),
         let diagram = text.extent(ofBox: .rfcVerbatim, at: piece.location)
       else {
-        read(piece)
+        readText(piece)
         return
       }
       if piece.location == diagram.location {
@@ -164,6 +180,12 @@ public enum AccessibleReading {
   /// drawing (#361 splits it out into a real title).
   public static let label = "Diagram"
 
+  /// What VoiceOver says in place of a heading's backlink chip (#183), whose arrow
+  /// and number say nothing of what they count.
+  public static func backlinksLabel(count: Int) -> String {
+    count == 1 ? "Referred to from 1 section" : "Referred to from \(count) sections"
+  }
+
   /// What the Diagrams rotor lists the diagram at `location` as: its figure's
   /// caption, which the rotor never reads through, so it is not said twice there,
   /// and which is what tells one figure from the next; `label` without one.
@@ -175,9 +197,10 @@ public enum AccessibleReading {
 // MARK: - Rotors
 
 extension AccessibleReading {
-  /// One rotor stop: the run's extent, and — for diagrams only — what VoiceOver
-  /// says about it. Headings and links keep `label` nil and let VoiceOver read the
-  /// text at `range`, which already says the right thing.
+  /// One rotor stop: the run's extent, and — for diagrams and a heading's backlink
+  /// chip only — what VoiceOver says about it. Headings and other links keep
+  /// `label` nil and let VoiceOver read the text at `range`, which already says the
+  /// right thing.
   public struct RotorItem: Equatable, Sendable {
     public let range: NSRange
     public let label: String?
@@ -215,11 +238,14 @@ extension AccessibleReading {
 
     public init(_ text: NSAttributedString) {
       let whole = NSRange(location: 0, length: text.length)
+      // A link with a `.rfcSpoken` label, a heading's backlink chip, is listed by
+      // it, as it is read.
       func items(carrying key: NSAttributedString.Key) -> [RotorItem] {
         var items: [RotorItem] = []
         text.enumerateAttribute(key, in: whole) { value, range, _ in
           guard value != nil else { return }
-          items.append(RotorItem(range: range, label: nil))
+          let spoken = text.attribute(.rfcSpoken, at: range.location, effectiveRange: nil)
+          items.append(RotorItem(range: range, label: spoken as? String))
         }
         return items
       }

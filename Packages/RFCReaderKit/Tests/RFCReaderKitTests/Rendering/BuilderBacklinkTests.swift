@@ -130,6 +130,32 @@ struct BuilderBacklinkTests {
     #expect(copied.string == "2. Two\n")
   }
 
+  /// What VoiceOver says for the chip, in place of its arrow and its number.
+  @Test func `the chip says to VoiceOver how many sections refer to the heading`() {
+    #expect(AccessibleReading.backlinksLabel(count: 1) == "Referred to from 1 section")
+    #expect(AccessibleReading.backlinksLabel(count: 3) == "Referred to from 3 sections")
+  }
+
+  /// Read a line at a time, the heading's line says the heading's words and then
+  /// the chip's label, once; the chip's characters are not read out.
+  @Test func `the chip is said as its label, and the links rotor lists it so`() throws {
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let run = try #require(chips(in: built.text).first)
+    let chip = try #require(built.text.backlinkChip(at: run.range.location))
+    let heading = try Fixtures.offset(of: "2. Two", in: built.text)
+    let line = NSRange(location: heading, length: NSMaxRange(chip.range) + 1 - heading)
+    let pieces = AccessibleReading.pieces(of: line, in: built.text)
+    #expect(
+      pieces == [
+        .text(NSRange(location: heading, length: chip.range.location - heading)),
+        .label("Referred to from 3 sections"),
+        .text(NSRange(location: NSMaxRange(chip.range), length: 1)),
+      ])
+    let links = AccessibleReading.Rotors(built.text).links
+    let stop = try #require(links.first { $0.range == chip.range })
+    #expect(stop.label == "Referred to from 3 sections")
+  }
+
   /// What the chip's popover lists: each citing section by its heading, in document
   /// order, and the abstract by name.
   @Test func `the chip lists the citing sections by heading`() {

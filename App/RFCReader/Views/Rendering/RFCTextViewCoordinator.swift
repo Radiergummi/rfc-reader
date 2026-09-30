@@ -781,8 +781,8 @@ final class RFCTextViewCoordinator: NSObject {
     {
       hover.send(.contextMenu)
       // A backlink chip's link is ours alone, and Copy Link would copy a URL
-      // nothing else can open.
-      if backlinkChip(at: charIndex) != nil { return nil }
+      // nothing else can open; the rest of the menu stays.
+      if backlinkChip(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
       return menu
     }
 

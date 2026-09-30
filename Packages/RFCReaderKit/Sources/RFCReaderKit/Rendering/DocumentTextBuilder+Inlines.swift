@@ -196,6 +196,7 @@ extension DocumentTextBuilder {
     var attributes = Self.outsideHeading(base)
     attributes[.rfcBacklinks] = anchor
     let result = NSMutableAttributedString(string: " ", attributes: attributes)
+    attributes[.rfcSpoken] = AccessibleReading.backlinksLabel(count: count)
     if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
