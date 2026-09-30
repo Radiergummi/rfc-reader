@@ -59,11 +59,7 @@ public enum CitationFormatter {
 
   private static func sectionSuffix(_ section: String?) -> String? {
     guard let section, !section.isEmpty else { return nil }
-    // An appendix numbered like a section is named by its anchor (`RFCLink.section`).
-    if section.hasPrefix(SectionAnchor.appendixPrefix) {
-      return "Appendix \(section.dropFirst(SectionAnchor.appendixPrefix.count))"
-    }
-    return section.first?.isLetter == true ? "Appendix \(section)" : "Section \(section)"
+    return PlaceName.spelledOut(section)
   }
 
   private static func fullCitation(_ rfc: RFCMetadata, section: String?) -> String {

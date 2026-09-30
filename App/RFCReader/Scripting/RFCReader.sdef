@@ -49,7 +49,7 @@
       <property name="current rfc" code="RWcr" type="rfc" access="r" description="The RFC the window shows; missing value if none.">
         <cocoa key="scriptCurrentRFC"/>
       </property>
-      <property name="current section" code="RWcs" type="text" access="r" description="The number of the section being read; missing value if none.">
+      <property name="current section" code="RWcs" type="text" access="r" description="The number of the section being read, or its anchor, such as “appendix-1”, for an appendix numbered like a section; missing value if none.">
         <cocoa key="scriptCurrentSection"/>
       </property>
       <property name="collection" code="RWco" type="text" description="The collection the list shows, by its name in the sidebar: “All RFCs”, “Bookmarks”, “Recently Read”, “Available Offline”, “Internet Standards”, “Best Current Practices”, a stream such as “IETF”, a working group such as “HTTPBIS”, or a series such as “BCP 14”. A collection you made is named as the sidebar shows it; built-in names, series and working groups are matched first, and among collections of one name the first in the sidebar.">
