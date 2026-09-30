@@ -429,7 +429,7 @@ struct DocumentView: View {
       horizontalSizeClass == .compact ? navigation.returnOffer : nil
     }
 
-    /// "Back to §4.2" after following a link within the document (#254). In a
+    /// "Back to § 4.2" after following a link within the document (#254). In a
     /// single column there is no back/forward pair, and the system back button
     /// leaves the document.
     @ViewBuilder

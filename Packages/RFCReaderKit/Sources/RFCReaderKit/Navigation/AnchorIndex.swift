@@ -14,9 +14,10 @@ public struct AnchorIndex: Sendable, Equatable {
     /// one, which the builder knows and nothing downstream can tell by looking.
     /// See `DocumentTextBuilder.mark`.
     public let heading: String?
-    /// A numbered section's number, `8.3` or `A`, which is what a place in it is
-    /// cited as; nil for any other anchor and for an unnumbered section. Also the
-    /// builder's to fill in, so a citation needs nothing but the build (#186).
+    /// A numbered section's place (`Section.place`), `8.3`, `A` or `appendix-1`,
+    /// which is what a place in it is cited as; nil for any other anchor and for an
+    /// unnumbered section. Also the builder's to fill in, so a citation needs nothing
+    /// but the build (#186).
     public let number: String?
 
     /// True when the anchor names a `Section`. Derived from `heading`, so the

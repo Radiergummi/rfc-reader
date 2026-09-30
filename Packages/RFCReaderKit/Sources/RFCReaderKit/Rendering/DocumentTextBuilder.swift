@@ -270,7 +270,7 @@ extension DocumentTextBuilder {
     // References tab instead — `DocumentInspector` in the app — and is skipped
     // here, heading and all, rather than left behind as an empty "9. References".
     guard !section.holdsOnlyReferences else { return }
-    mark(section.anchor, heading: section.displayTitle, number: section.number)
+    mark(section.anchor, heading: section.displayTitle, number: section.place)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs

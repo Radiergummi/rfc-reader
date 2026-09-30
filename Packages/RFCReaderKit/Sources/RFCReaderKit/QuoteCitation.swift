@@ -48,11 +48,11 @@ public enum QuoteCitation {
     }
   }
 
-  /// The number of the section a selection starting at `offset` is cited from: that of
-  /// the nearest section anchor at or before it. Only a section counts, not a figure or
-  /// a paragraph anchor, so the citation names what a reader looks up; nil before the
-  /// first section and in an unnumbered one, where the document alone is cited. A
-  /// selection spanning sections cites the first.
+  /// The place (`Section.place`) of the section a selection starting at `offset` is
+  /// cited from: that of the nearest section anchor at or before it. Only a section
+  /// counts, not a figure or a paragraph anchor, so the citation names what a reader
+  /// looks up; nil before the first section and in an unnumbered one, where the
+  /// document alone is cited. A selection spanning sections cites the first.
   public static func section(at offset: Int, anchors: AnchorIndex) -> String? {
     let sections = anchors.sections
     return sections.index(at: offset).flatMap { sections.entries[$0].number }

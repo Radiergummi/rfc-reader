@@ -288,6 +288,28 @@ struct QuoteCitationTests {
     #expect(quote.markdown.hasSuffix("(https://www.rfc-editor.org/rfc/rfc9110#section-2)"))
   }
 
+  /// Quoted from an appendix numbered like a section, the citation names the appendix,
+  /// as the toolbar's Cite does, not section 1 (#429).
+  @Test func `a quote from a numbered appendix cites the appendix`() throws {
+    let built = DocumentTextBuilder.build(
+      RFCDocument(
+        header: DocumentHeader(title: "T"),
+        sections: [
+          Section(
+            anchor: "appendix-1", number: "1", title: "Tables",
+            blocks: [.paragraph(Paragraph(text: "Quoted."))], isAppendix: true)
+        ],
+        source: .xml),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Quoted.", in: built.text)
+    let quote = try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: 7), in: built, document: .rfc(1163)))
+    #expect(
+      quote.markdown.hasSuffix(
+        "— [RFC 1163, Appendix 1](https://www.rfc-editor.org/rfc/rfc1163#appendix-1)"))
+  }
+
   /// A figure's own fence line would close a fence of the same length, and the rest of
   /// the figure would render as Markdown.
   @Test func `a figure holding a fence is fenced by a longer one`() throws {

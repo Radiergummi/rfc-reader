@@ -25,6 +25,15 @@ struct PlaceNameTests {
     #expect(appendix.place == "appendix-1")
   }
 
+  /// Read back from RFCXML, a subsection of a numbered appendix is in `<back>`, so it
+  /// is an appendix too, but its anchor is a section's: that anchor is where a link to
+  /// it has to go.
+  @Test func `a numbered appendix's subsection is placed by its number`() {
+    let subsection = Section(
+      anchor: "section-1.1", number: "1.1", title: "Transitions", isAppendix: true)
+    #expect(subsection.place == "1.1")
+  }
+
   @Test func `an unnumbered section has no place`() {
     #expect(Section(anchor: "abstract", title: "Abstract").place == nil)
   }
@@ -46,5 +55,13 @@ struct PlaceNameTests {
     let reference = CrossReference(target: .document(.rfc(1163), section: "appendix-1"))
     #expect(reference.label == "Appendix\u{00A0}1 of [RFC\u{00A0}1163]")
     #expect(reference.display.text == "RFC\u{00A0}1163\u{00A0}Appendix\u{00A0}1")
+    let bare = CrossReference(
+      target: .document(.rfc(1163), section: "appendix-1"), sectionFormat: .bare)
+    #expect(bare.label == "Appendix\u{00A0}1")
+  }
+
+  @Test func `a reference to a lettered appendix does not break before its letter`() {
+    let reference = CrossReference(target: .document(.rfc(9110), section: "A.1"))
+    #expect(reference.label == "Appendix\u{00A0}A.1 of [RFC\u{00A0}9110]")
   }
 }

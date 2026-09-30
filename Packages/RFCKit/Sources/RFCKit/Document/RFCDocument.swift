@@ -200,10 +200,18 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
   /// What a link or a citation names this section by, as `RFCLink.section` does: its
   /// number, or for an appendix numbered like a section its anchor, `appendix-1`,
   /// since the number alone names section 1 (#429). Nil when it has no number.
+  ///
+  /// Read from the anchor, the way `RFCLink` reads a fragment, rather than from
+  /// `isAppendix`: read back from RFCXML, a numbered appendix's subsection is in
+  /// `<back>` and so an appendix, but its anchor is a section's, `section-1.1`.
   public var place: String? {
     guard let number else { return nil }
-    return isAppendix && number.first?.isNumber == true
-      ? SectionAnchor.anchor(forAppendixNumber: number) : number
+    if let fromAnchor = SectionAnchor.sectionNumber(fromAnchor: anchor),
+      fromAnchor.hasPrefix(SectionAnchor.appendixPrefix)
+    {
+      return fromAnchor
+    }
+    return number
   }
 
   public init(
@@ -643,12 +651,15 @@ public struct CrossReference: Sendable, Hashable, Codable {
     case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
-      let sectionLabel = Self.nonBreakingLabel(PlaceName.spelledOut(section))
+      let sectionLabel = PlaceName.spelledOut(section).replacing(" ", with: "\u{00A0}")
       switch sectionFormat {
       case .of: return "\(sectionLabel) of [\(name)]"
       case .comma: return "[\(name)], \(sectionLabel)"
       case .parens: return "[\(name)] (\(sectionLabel))"
-      case .bare: return section
+      // The number alone, unless it is an appendix's that a number alone would
+      // call a section's.
+      case .bare:
+        return section.hasPrefix(SectionAnchor.appendixPrefix) ? sectionLabel : section
       }
     }
   }
