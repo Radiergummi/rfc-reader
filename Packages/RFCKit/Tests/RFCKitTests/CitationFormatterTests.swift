@@ -70,6 +70,26 @@ struct CitationFormatterTests {
       ))
   }
 
+  /// BibTeX accepts these, but LaTeX reads each as markup when it typesets the
+  /// field: `_` and `^` are errors outside math mode, `$` enters it, `#` is a macro
+  /// parameter and `~` becomes a space (#242). `\^` and `\~` are accents, not the
+  /// characters, so those two are spelled out.
+  @Test(arguments: [
+    ("_", #"\_"#),
+    ("$", #"\$"#),
+    ("#", ##"\#"##),
+    ("^", #"\textasciicircum{}"#),
+    ("~", #"\textasciitilde{}"#),
+  ])
+  func `bibtex escapes a character LaTeX reads as markup`(character: String, escaped: String) {
+    let rfc = RFCMetadata(
+      id: .rfc(1), title: "a\(character)b", date: PublicationDate(year: 1969),
+      abstract: "c\(character)d")
+    let entry = CitationFormatter.cite(rfc, style: .bibtex)
+    #expect(entry.contains("    title = {{a\(escaped)b}},"))
+    #expect(entry.contains("    abstract = {c\(escaped)d},"))
+  }
+
   /// BibTeX counts braces whether or not a backslash precedes them, so `\{` only
   /// works for braces that already pair up. A lone one in a title has to leave the
   /// entry's braces balanced, or the field runs on into the rest of the entry.
