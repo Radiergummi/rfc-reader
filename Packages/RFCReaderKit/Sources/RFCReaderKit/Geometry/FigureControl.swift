@@ -24,9 +24,9 @@ public enum FigureControl {
     public let control: Control
   }
 
-  /// A square icon button.
-  public static let width: CGFloat = 20
-  public static let height: CGFloat = 20
+  /// A round glass button, as tall as the strip it sits in.
+  public static let width: CGFloat = 22
+  public static let height: CGFloat = 22
   /// From the card's top and right edges: half the card's padding, where the
   /// card's own rounding leaves room.
   public static let inset: CGFloat = FragmentGeometry.cardPadding / 2

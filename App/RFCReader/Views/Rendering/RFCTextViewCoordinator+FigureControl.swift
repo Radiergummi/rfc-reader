@@ -64,7 +64,7 @@ final class FigureControls {
     let title = FigureControl.title(offeredFrom: shown)
     let symbol = FigureControl.symbol(offeredFrom: shown)
     #if canImport(UIKit)
-      button.setImage(UIImage(systemName: symbol), for: .normal)
+      button.configuration?.image = UIImage(systemName: symbol)
       button.accessibilityLabel = title
     #else
       button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
@@ -74,18 +74,23 @@ final class FigureControls {
 
   private func make(target: AnyObject, action: Selector) -> FigureButton {
     #if canImport(UIKit)
-      let button = FigureButton(type: .system)
-      button.setPreferredSymbolConfiguration(
-        UIImage.SymbolConfiguration(pointSize: 12, weight: .medium), forImageIn: .normal)
-      button.tintColor = .secondaryLabel
+      var configuration = UIButton.Configuration.glass()
+      // A capsule in a square frame: a circle.
+      configuration.cornerStyle = .capsule
+      configuration.contentInsets = .zero
+      configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(
+        pointSize: 10, weight: .medium)
+      configuration.baseForegroundColor = .secondaryLabel
+      let button = FigureButton(configuration: configuration)
       button.addTarget(target, action: action, for: .primaryActionTriggered)
     #else
       let button = FigureButton()
-      // AppKit's accessory-bar button: bare until the pointer is on it.
-      button.bezelStyle = .accessoryBarAction
-      button.showsBorderOnlyWhileMouseInside = true
+      // Glass, in a square frame: a circle.
+      button.bezelStyle = .glass
+      button.borderShape = .circle
+      button.controlSize = .small
       button.imagePosition = .imageOnly
-      button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+      button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .medium)
       button.contentTintColor = .secondaryLabelColor
       button.target = target
       button.action = action
