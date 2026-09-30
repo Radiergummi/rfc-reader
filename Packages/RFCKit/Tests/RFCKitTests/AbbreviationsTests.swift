@@ -84,6 +84,36 @@ struct AbbreviationsTests {
     #expect(Abbreviations.defined(in: document)["TLS"] == nil)
   }
 
+  private func document(abstract: [Block] = [], heading: String) -> RFCDocument {
+    RFCDocument(
+      header: DocumentHeader(title: "Headed", abstract: abstract),
+      sections: [
+        Section(
+          anchor: "section-3", number: "3", title: heading,
+          blocks: [.paragraph(Paragraph([.text("Each connection uses TLS.")]))])
+      ],
+      source: .xml)
+  }
+
+  /// A heading is prose like the rest: one that expands an abbreviation the body only
+  /// uses gives it its expansion, defined where the heading is (#319).
+  @Test func `a heading's expansion is found, in its own section`() throws {
+    let found = Abbreviations.defined(in: document(heading: "Transport Layer Security (TLS)"))
+    let tls = try #require(found["TLS"])
+    #expect(tls.expansion == "Transport Layer Security")
+    #expect(tls.sectionAnchor == "section-3")
+  }
+
+  /// The first expansion still wins: one in the abstract comes before the heading.
+  @Test func `an earlier expansion wins over a heading's`() throws {
+    let abstract: [Block] = [
+      .paragraph(Paragraph([.text("It runs over Transport Layer Security (TLS).")]))
+    ]
+    let found = Abbreviations.defined(
+      in: document(abstract: abstract, heading: "Transport Layer Security (TLS)"))
+    #expect(try #require(found["TLS"]).sectionAnchor == nil)
+  }
+
   // MARK: The matching itself
 
   private func pairs(_ text: String) -> [String] {
