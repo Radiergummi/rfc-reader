@@ -366,6 +366,8 @@ public enum LegacyTextParser {
     var sections: [RawSection] = [RawSection(heading: nil)]
     var current: [String] = []
     var pendingBreak = false
+    // The numbers headings have taken, which a centered heading may not take again.
+    var numbers: Set<String> = []
 
     func flushBlock() {
       if !current.isEmpty {
@@ -393,7 +395,7 @@ public enum LegacyTextParser {
           flushBlock()
         } else if let heading = Self.heading(
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-          startsBlock: current.isEmpty)
+          startsBlock: current.isEmpty), !isContentsEntry(string)
         {
           if heading.number == nil, refusesUnnumberedHeading(heading.title) {
             let last = sections.count - 1
@@ -403,7 +405,15 @@ public enum LegacyTextParser {
           } else {
             flushBlock()
             sections.append(RawSection(heading: heading))
+            if let number = heading.number { numbers.insert(number) }
           }
+        } else if let heading = centeredHeading(
+          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+          taken: numbers)
+        {
+          flushBlock()
+          sections.append(RawSection(heading: heading))
+          if let number = heading.number { numbers.insert(number) }
         } else {
           current.append(string)
         }
