@@ -387,11 +387,7 @@ struct RFCXMLParserTests {
   /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
   /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
   @Test func `a citation of an entry outside the series keeps its brackets`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml"))
-    let xrefs = document.proseInlines.compactMap { inline -> CrossReference? in
-      guard case .crossReference(let xref) = inline else { return nil }
-      return xref
-    }
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml")).everyCrossReference
     let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
     #expect(draft.label == "[14]")
     let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
@@ -403,22 +399,18 @@ struct RFCXMLParserTests {
   /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
   /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
   /// `derivedContent` would put a second tag where the section belongs; wording the
-  /// section is #473's.
+  /// section is #473's. In document order: RFC 9783 cites the whole entry, then a
+  /// section of it; RFC 9290 cites the registry's section, then the whole registry.
   @Test(arguments: [
-    ("rfc9783.xml", "I-D.ietf-rats-ar4si"), ("rfc9290.xml", "IANA.cbor-tags"),
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "RATS-AR4SI"]),
+    ("rfc9290.xml", "IANA.cbor-tags", ["IANA.cbor-tags", "[IANA.cbor-tags]"]),
   ])
   func `a citation of a section of an entry outside the series is not bracketed`(
-    fixture: String, target: String
+    fixture: String, target: String, labels: [String]
   ) throws {
     let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
-    let xrefs = document.proseInlines.compactMap { inline -> CrossReference? in
-      guard case .crossReference(let xref) = inline, xref.target == .anchor(target) else {
-        return nil
-      }
-      return xref
-    }
-    #expect(xrefs.contains { $0.label.hasPrefix("[") })
-    #expect(xrefs.contains { !$0.label.hasPrefix("[") })
+    let xrefs = document.everyCrossReference.filter { $0.target == .anchor(target) }
+    #expect(xrefs.map(\.label) == labels)
   }
 
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of
