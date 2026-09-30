@@ -12,9 +12,6 @@ import SwiftUI
     let navigation: NavigationModel
     let reader: ReaderState
     let isBookmarked: Bool
-    /// The system's, handed over by the reader: inside it, `openURL` is the reader's
-    /// own, which follows links in the app.
-    let openURL: OpenURLAction
     @Binding var showsInspector: Bool
     /// Save to Files and the print sheet, which are the reader's: their state and
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
@@ -27,6 +24,7 @@ import SwiftUI
     let showsBottomBar: Bool
 
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.openURL) private var openURL
 
     /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts

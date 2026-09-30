@@ -12,10 +12,6 @@ struct DocumentView: View {
   /// not inside this view any more.
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
-  // Read here, above the reader's own `openURL`, which follows links in the app:
-  // the failed load's link sits inside it, as the iOS toolbar does, and reading
-  // it there opened rfc-editor.org's own page as the RFC it names (#450).
-  @Environment(\.openURL) private var systemOpenURL
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -139,7 +135,7 @@ struct DocumentView: View {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
             reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
-            openURL: systemOpenURL, showsInspector: $showsInspector,
+            showsInspector: $showsInspector,
             exportDocument: exportDocument(as:), printDocument: printDocument,
             showsBottomBar: !barsHidden)
         }
@@ -233,7 +229,6 @@ struct DocumentView: View {
         }
       }
       .onDisappear(perform: saveReadingPosition)
-      .environment(\.openURL, OpenURLAction(handler: handleLink))
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
@@ -358,7 +353,6 @@ struct DocumentView: View {
       } actions: {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
-          .environment(\.openURL, systemOpenURL)
       }
     } else {
       ProgressView("Loading \(id.displayName)…")
@@ -624,18 +618,14 @@ struct DocumentView: View {
       at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
   }
 
-  /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
+  /// Cross references arrive as URLs from the attributed text, through the text
+  /// view's delegate, which reads the click's modifiers; it falls back to its own
+  /// action, the system's, when this returns false.
   ///
-  /// No modifiers here: SwiftUI's `openURL` carries no event, so a Cmd-click that
-  /// arrives this way follows the link in place. The text view's own delegate reads
-  /// the modifiers and is the path a click on a reference actually takes.
-  private func handleLink(_ url: URL) -> OpenURLAction.Result {
-    openInApp(url, activation: .here) ? .handled : .systemAction
-  }
-
-  /// The same decision as `handleLink`, as a `Bool`: the text view's delegate wants
-  /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
-  /// not `Equatable`.
+  /// The reader sets no `openURL` of its own: everything else under it that opens a
+  /// URL — the failed load's link, the iOS toolbar and panel — is a page on the web,
+  /// and an override here read rfc-editor.org's pages as the RFCs they name, and
+  /// reopened the document instead of the browser (#450).
   ///
   /// Where the click goes is decided in `LinkDestination`, which is testable; this
   /// is only the one effect per answer.
