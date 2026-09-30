@@ -71,6 +71,14 @@ extension DocumentTextBuilder {
     }
   }
 
+  /// How wide a list's marker column is: its widest marker and `gap`, never less than
+  /// `step`. One step was the column for every list, and a wider marker ran past its
+  /// tab stop (#359): "(iii)" at 17 pt, and since the step is capped by the column
+  /// (#331), even "1." at the accessibility sizes on an iPhone.
+  static func markerColumnWidth(markerWidths: [CGFloat], gap: CGFloat, step: CGFloat) -> CGFloat {
+    max(step, (markerWidths.max() ?? 0) + gap)
+  }
+
   /// The marker the item at `index` is drawn with. A numbered list's is its
   /// `ListNumbering`'s, which the parsers read once from either source.
   static func marker(for style: ListBlock.Style, at index: Int) -> String {

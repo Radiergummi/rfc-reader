@@ -119,4 +119,29 @@ struct BuilderListTests {
       paragraph.tabStops.contains { $0.location == paragraph.headIndent },
       "the marker's tab must land exactly on the wrapped-text column")
   }
+
+  /// One step is the floor; a marker wider than that widens the list's column, by a
+  /// gap past the widest (#359).
+  @Test func `a list's marker column is its widest marker and a gap, at least one step`() {
+    #expect(DocumentTextBuilder.markerColumnWidth(markerWidths: [8, 12], gap: 6, step: 24) == 24)
+    #expect(
+      DocumentTextBuilder.markerColumnWidth(markerWidths: [8, 40, 30], gap: 6, step: 24) == 46)
+    #expect(DocumentTextBuilder.markerColumnWidth(markerWidths: [], gap: 6, step: 24) == 24)
+  }
+
+  /// A marker wider than one step ran past its tab stop, so the tab fell through to
+  /// the next default stop and the first line started right of the wrapped ones
+  /// (#359). "10000." is wider than a step at any text size.
+  @Test func `a marker wider than one step still ends before the item's text`() throws {
+    let list = ListBlock(
+      style: .numbered(ListNumbering(type: "1", start: 10_000)),
+      items: [ListItem(text: "first"), ListItem(text: "second")])
+    let built = DocumentTextBuilder.build(Fixtures.document(.list(list)), style: style)
+    let offset = try Fixtures.offset(of: "first", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    let marker = NSAttributedString(string: "10000.", attributes: [.font: style.bodyFont])
+    #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > marker.size().width)
+    #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
+  }
 }
