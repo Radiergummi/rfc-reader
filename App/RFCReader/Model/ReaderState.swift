@@ -82,14 +82,15 @@ final class ReaderState {
   /// the reader as the load starts and ends, and again when the index arrives. A
   /// scan's page shows the header the index gives, so its title stays out of the
   /// toolbar.
-  var publishedOriginal: PublishedOriginalPage.Kind? {
-    didSet { titleOwnership.showsPublishedOriginal = publishedOriginal == .scan }
+  var publishedOriginal: PublishedOriginalPage.Status? {
+    didSet { titleOwnership.showsPublishedOriginal = publishedOriginal?.kind == .scan }
   }
 
   /// Whether Print and Export have something to offer: a document on screen, read
   /// as its text.
   var offersPrintAndExport: Bool {
-    PublishedOriginalPage.offersPrintAndExport(hasDocument: hasDocument, kind: publishedOriginal)
+    PublishedOriginalPage.offersPrintAndExport(
+      hasDocument: hasDocument, kind: publishedOriginal?.kind)
   }
 
   /// Who says how far the title has come into the toolbar, and the one place its

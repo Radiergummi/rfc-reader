@@ -587,9 +587,9 @@ struct DocumentView: View {
   /// Static, so the load's callback can ask it without capturing the view.
   private static func publishedOriginal(
     _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
-  ) -> PublishedOriginalPage.Kind? {
+  ) -> PublishedOriginalPage.Status? {
     library.metadata(id).flatMap {
-      PublishedOriginalPage.Kind(id, formats: $0.formats, text: document)
+      PublishedOriginalPage.Status(id, formats: $0.formats, text: document)
     }
   }
 

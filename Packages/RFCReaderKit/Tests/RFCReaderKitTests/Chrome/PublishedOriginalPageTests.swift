@@ -69,12 +69,26 @@ struct PublishedOriginalActionsTests {
     source: .text)
 
   @Test func `the kind is the same in either mode`() {
-    #expect(PublishedOriginalPage.Kind(.rfc(8), formats: [.pdf], text: nil) == .scan)
+    #expect(PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)?.kind == .scan)
     #expect(
-      PublishedOriginalPage.Kind(.rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)
-        == .pointer)
+      PublishedOriginalPage.Status(.rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)?
+        .kind == .pointer)
     #expect(
-      PublishedOriginalPage.Kind(.rfc(1119), formats: [.text, .postScript], text: nil) == nil)
+      PublishedOriginalPage.Status(.rfc(1119), formats: [.text, .postScript], text: nil) == nil)
+  }
+
+  /// What the panel says in place of its lists: why there are none, not that the
+  /// RFC failed to load.
+  @Test func `the panel says the RFC is its original`() {
+    #expect(
+      PublishedOriginalPage.Status(.rfc(8), formats: [.pdf], text: nil)?.panelExplanation
+        == "RFC 8 is published only as PDF.")
+    #expect(
+      PublishedOriginalPage.Status(.rfc(8), formats: [.postScript], text: nil)?.panelExplanation
+        == "RFC 8 is published only as PostScript.")
+    #expect(
+      PublishedOriginalPage.Status(.rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)?
+        .panelExplanation == "The text of RFC 1119 only says where its PDF original is.")
   }
 
   /// A scan has no text to fetch; an index that does not know the document yet, or

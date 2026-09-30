@@ -9,15 +9,37 @@ public struct PublishedOriginalPage: Hashable, Sendable {
     case scan
     /// The text loaded, and only says where the original is.
     case pointer
+  }
 
-    /// Whichever mode the reader is in; nil for an RFC read as its text.
+  /// An RFC read as its original, whichever mode the reader is in: why, and which
+  /// original.
+  public struct Status: Hashable, Sendable {
+    public let kind: Kind
+    public let original: PublishedOriginal
+
+    /// Nil for an RFC read as its text.
     public init?(_ id: DocumentID, formats: [FileFormat], text document: RFCDocument?) {
-      if PublishedOriginal(id, formats: formats) != nil {
-        self = .scan
-      } else if let document, PublishedOriginal(id, formats: formats, text: document) != nil {
-        self = .pointer
+      if let scan = PublishedOriginal(id, formats: formats) {
+        kind = .scan
+        original = scan
+      } else if let document,
+        let pointer = PublishedOriginal(id, formats: formats, text: document)
+      {
+        kind = .pointer
+        original = pointer
       } else {
         return nil
+      }
+    }
+
+    /// What the panel says in place of its contents, references and requirements:
+    /// why there are none, rather than that the RFC failed to load.
+    public var panelExplanation: String {
+      let id = original.id.displayName
+      let format = original.format.displayName
+      return switch kind {
+      case .scan: "\(id) is published only as \(format)."
+      case .pointer: "The text of \(id) only says where its \(format) original is."
       }
     }
   }
