@@ -80,8 +80,8 @@ struct InlineRunTests {
       // 9 pt font, three quarters of 12 pt rather than of the body (#326).
       #expect(
         font.fontDescriptor.symbolicTraits.contains(RFCTraits.bold),
-        "\(script) lost bold: \(describe(font))")
-      #expect(font.pointSize == style.bodySize * 0.75, "\(script): \(describe(font))")
+        "\(script) lost bold: \(Fixtures.describe(font))")
+      #expect(font.pointSize == style.bodySize * 0.75, "\(script): \(Fixtures.describe(font))")
     }
   }
 

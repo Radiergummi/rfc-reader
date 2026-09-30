@@ -58,7 +58,7 @@ struct BuilderListTests {
     // a 12 pt font that was not bold (#326), and which font it was decides the fix.
     #expect(
       font?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true,
-      "\(font.map(describe) ?? "no font")")
+      "\(font.map(Fixtures.describe) ?? "no font")")
 
     let definitionOffset = try Fixtures.offset(of: "absolute requirement", in: built.text)
     let paragraph =
