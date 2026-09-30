@@ -733,7 +733,8 @@ final class LibraryModel {
   }
 
   /// Marks a scene as the one the reader is using, which is where an untargeted
-  /// link lands.
+  /// link lands -- on macOS only failing the tab of the window that was key last,
+  /// which `route(_:)` prefers.
   func activate(_ scene: NavigationModel) {
     guard scenes.first?.model !== scene else { return }
     promote(scene)
@@ -772,7 +773,7 @@ final class LibraryModel {
     #endif
     guard
       let target = LinkRouting.target(
-        for: link.id, in: open, showing: \.selection, preferring: preferred)
+        for: link.id, in: open, showing: \.selection, preferring: { $0 === preferred })
     else {
       openInNewWindow(link)
       return

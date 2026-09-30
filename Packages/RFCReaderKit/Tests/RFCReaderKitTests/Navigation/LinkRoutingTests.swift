@@ -16,8 +16,10 @@ struct LinkRoutingTests {
   private func target(
     for document: DocumentID, in tabs: [Tab], preferring preferred: Tab? = nil
   ) -> String? {
-    LinkRouting.target(for: document, in: tabs, showing: \.selection, preferring: preferred)?
-      .name
+    LinkRouting.target(
+      for: document, in: tabs, showing: \.selection,
+      preferring: { $0.name == preferred?.name }
+    )?.name
   }
 
   @Test func `a tab already showing the document takes the link, however long ago it was used`() {
@@ -57,7 +59,18 @@ struct LinkRoutingTests {
     #expect(target(for: .rfc(9110), in: tabs, preferring: key) == "front")
   }
 
+  @Test func `of two tabs showing the document, the preferred one takes it`() {
+    let key = Tab(name: "key", selection: .rfc(9110))
+    let tabs = [Tab(name: "front", selection: .rfc(9110)), key]
+    #expect(target(for: .rfc(9110), in: tabs, preferring: key) == "key")
+  }
+
   @Test func `with no tab open nothing takes it`() {
     #expect(target(for: .rfc(2119), in: []) == nil)
+  }
+
+  @Test func `a preferred tab that is not open does not take it`() {
+    let closed = Tab(name: "closed", selection: .rfc(791))
+    #expect(target(for: .rfc(2119), in: [], preferring: closed) == nil)
   }
 }
