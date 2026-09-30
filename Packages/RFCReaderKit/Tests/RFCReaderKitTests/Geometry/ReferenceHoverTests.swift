@@ -109,6 +109,33 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.restingDwellElapsed(target: nil)).isEmpty)
   }
 
+  // MARK: - VoiceOver (#514)
+
+  /// VoiceOver moves the pointer onto whatever it reads, and scrolls the text to
+  /// it: neither is a reader resting the mouse on a reference.
+  @Test func `with hover previews off, the pointer arriving on a reference times nothing`() {
+    var hover = ReferenceHover()
+    hover.previewsOnHover = false
+    #expect(hover.handle(.pointerMoved(location: here, target: first)).isEmpty)
+    #expect(hover.handle(.cardDwellElapsed(buttonPressed: false)).isEmpty)
+  }
+
+  @Test func `with hover previews off, a scroll previews nothing under the pointer`() {
+    var hover = ReferenceHover()
+    hover.previewsOnHover = false
+    #expect(hover.handle(.scrolled).isEmpty)
+    #expect(hover.handle(.restingDwellElapsed(target: first)).isEmpty)
+  }
+
+  @Test func `with hover previews off, a force click still previews, and moving over it keeps it`() {
+    var hover = ReferenceHover()
+    hover.previewsOnHover = false
+    #expect(hover.handle(.forceClickCard(first)) == [.showCard(first)])
+    _ = hover.handle(.cardShown)
+    #expect(hover.handle(.pointerMoved(location: elsewhere, target: first)).isEmpty)
+    #expect(hover.handle(.pointerMoved(location: elsewhere, target: nil)) == [.closePopover])
+  }
+
   // MARK: - Following a link
 
   @Test func `following a link cancels a dwell, and follows`() {
