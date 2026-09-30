@@ -38,10 +38,9 @@ struct SerializerSchemaShapeTests {
   }
 
   /// Every element named `name` at or below `element`.
-  private static func descendants(_ name: String, of element: XMLTree.Element) -> [XMLTree.Element]
-  {
+  private static func nested(_ name: String, in element: XMLTree.Element) -> [XMLTree.Element] {
     element.elements.flatMap { child in
-      (child.name == name ? [child] : []) + descendants(name, of: child)
+      (child.name == name ? [child] : []) + nested(name, in: child)
     }
   }
 
@@ -57,12 +56,12 @@ struct SerializerSchemaShapeTests {
   {
     let (document, rfc) = try Self.converted("rfc2511.txt")
     let middle = try #require(rfc.first("middle"))
-    #expect(Self.descendants("references", of: middle).isEmpty)
+    #expect(Self.nested("references", in: middle).isEmpty)
     let back = try #require(rfc.first("back"))
     #expect(back.all("references").contains { $0["pn"] == "section-9" })
     #expect(
-      Self.descendants("section", of: back).allSatisfy {
-        Self.descendants("references", of: $0).isEmpty
+      Self.nested("section", in: back).allSatisfy {
+        Self.nested("references", in: $0).isEmpty
       })
 
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
@@ -117,14 +116,14 @@ struct SerializerSchemaShapeTests {
     let rfc = try Self.serialized([chapter, Self.bibliography("2"), appendix])
 
     let middle = try #require(rfc.first("middle"))
-    #expect(Self.descendants("references", of: middle).isEmpty)
-    #expect(Self.descendants("t", of: middle).contains { $0.text == "Prose." })
+    #expect(Self.nested("references", in: middle).isEmpty)
+    #expect(Self.nested("t", in: middle).contains { $0.text == "Prose." })
     let back = try #require(rfc.first("back"))
     #expect(back.elements.map(\.name) == ["references", "references", "references", "section"])
     #expect(
       back.all("references").map { $0["pn"] } == ["section-2", "section-1.3", "section-A.2"])
     #expect(back.all("references")[1].first("name")?.text == "References 1.3")
-    #expect(Self.descendants("references", of: try #require(back.first("section"))).isEmpty)
+    #expect(Self.nested("references", in: try #require(back.first("section"))).isEmpty)
   }
 
   /// A lifted bibliography is written after the sections that follow it, and a later
