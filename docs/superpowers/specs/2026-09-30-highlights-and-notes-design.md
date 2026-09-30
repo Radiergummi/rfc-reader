@@ -91,9 +91,13 @@ it as a function in `RFCReaderKit` with tests over each case.
 | `paragraph` | its inlines |
 | `list` | each item's blocks in order, items joined by `\n`, with no markers |
 | `definitionList` | each item's term, `\n`, then its definition blocks. Items joined by `\n` |
+| A list item, as an anchor | its blocks, joined by `\n` |
+| A definition item, as an anchor (`<dt>`) | its term, `\n`, then its definition blocks |
+| A definition, as an anchor (`<dd>`) | its definition blocks, joined by `\n` |
 | `preformatted` | `content.text` **as published**, the folded form. The unfolded display maps back through `FoldedLines`, which gains an offset map |
 | `figure` | its name or caption inlines, `\n`, then its artwork's text |
 | `table` | row by row: cells joined by `\t`, rows by `\n`, header rows first. Never the stacked labels |
+| A table row, as an anchor | its cells, joined by `\t` |
 | `blockQuote`, `aside` | their blocks, joined by `\n` |
 | A section, as an anchor | its heading, `\n`, then its blocks joined by `\n`. Subsections are **not** included: each is its own anchor |
 
@@ -106,7 +110,9 @@ offset of that join.
 As `DocumentTextBuilder` appends, it records a **position map**: an interval list pairing
 storage ranges with model ranges under an anchor. Every storage character either maps to a
 model position or is declared storage-only (a marker, a number, a stacked label, a chip
-character). A storage-only character snaps to the nearest model position in reading order.
+character). A storage-only character snaps to the nearest model position in reading order:
+forward at a range's start and backward at its end, so a selection that begins on a section
+number does not reach into the block before it.
 
 - The map lives in `BuiltDocument`, beside `AnchorIndex`, which today records only each
   anchor's start. It holds for every build: the reader's at any column, the print's and the
@@ -123,7 +129,8 @@ character). A storage-only character snaps to the nearest model position in read
 
 A position is `(anchor, offset)`. `anchor` is the innermost element containing the point
 that carries an anchor: a paragraph's `pn` where it has one, otherwise its section, and down to
-a table row or a `<dd>` wherever the model keeps one (`Block.anchors`). `offset` counts Unicode
+a list item, a definition's term or definition, or a table row wherever the model keeps one
+(`Block.anchors`). `offset` counts Unicode
 scalars into that anchor's model text.
 
 ### A target
@@ -148,7 +155,9 @@ the digest, so the row stays small when it syncs.
 `relocate(target, in: document) → .exact | .moved(Target) | .ambiguous | .detached` is a pure
 function. Everything it compares is **normalized** first: runs of whitespace collapse to one
 space, soft hyphens and line-end hyphenation are removed, and the reference spellings
-`[RFC2119]`, `RFC 2119` and `RFC2119` compare as one.
+`[RFC2119]`, `RFC 2119` and `RFC2119` compare as one. Normalization keeps a map back to the
+raw model text, and every offset `relocate` returns is a raw model offset, never a normalized
+one.
 
 1. If the normalized text at the stored position matches the quote, the result is `.exact`.
 2. Otherwise it searches for the quote under the same anchor, then in the anchor's section,
@@ -374,7 +383,8 @@ The leading gutter is kept for #433's hanging section numbers. Markers show on e
 While the editor has focus, the text view is not first responder:
 
 - ⌃⌘H does not apply;
-- ⌘K belongs to the editor;
+- ⌘K belongs to the editor. On iOS and iPadOS, ⌘K is already Go to RFC (`ContentView`'s
+  hidden button), so the editor's claim on it has to win there while it has focus;
 - Edit ▸ Find searches the note, not the document.
 
 Menu validation follows focus as it does anywhere in AppKit, and the plan checks each of those
@@ -582,7 +592,8 @@ is deferred until the column exists and has been used.
   keystrokes:
   - slice 1: highlighting leaves layout identical, with zero differing pixels outside the fills,
     and the selection is visible inside a fill;
-  - slice 2: ⌃⌘H, ⌘K and Find each do the right thing while a note is being edited;
+  - slice 2: ⌃⌘H, ⌘K and Find each do the right thing while a note is being edited, and ⌘K
+    again on an iPad with a keyboard, where it is also Go to RFC;
   - slice 3: the probe's measurements, above.
 - **Docs:** each slice adds its dated decision to `ARCHITECTURE.md`:
   - slice 1: the model text and position map, relocation, and highlights as rendering
