@@ -22,22 +22,35 @@ public enum ReaderArrival<Request> {
   ///     going, such as a jump from the contents panel over the original text. It
   ///     was asked for animated, over a text view that was not there; arriving, it
   ///     is not a movement the reader sees.
-  ///   - anchorLeft: where the reader was when the text view last went, or nil if
+  ///   - placeLeft: where the reader was when the text view last went, or nil if
   ///     it has not gone with a place yet. Taken as it goes, not as it comes back:
   ///     a text view reports the top of its text as it is made, before any restore.
   ///   - request: the navigation's scroll request, if it holds one.
   ///   - storedAnchor: the stored reading position's anchor, if the document holds
   ///     it. Read only when nothing before it decides.
   public static func onAppear(
-    pendingAnchor: String?, anchorLeft: String?, request: Request?,
+    pendingAnchor: String?, placeLeft: ReaderPlaceLeft?, request: Request?,
     storedAnchor: @autoclosure () -> String?
   ) -> Self {
     if let pendingAnchor { return .place(pendingAnchor) }
-    if let anchorLeft { return .place(anchorLeft) }
+    switch placeLeft {
+    case .top: return .stay
+    case .section(let anchor): return .place(anchor)
+    case nil: break
+    }
     if let request { return .request(request) }
     return storedAnchor().map(Self.place) ?? .stay
   }
 }
 
 extension ReaderArrival: Equatable where Request: Equatable {}
-extension ReaderArrival: Sendable where Request: Sendable {}
+
+/// Where the reader was when the reader's text view went.
+public enum ReaderPlaceLeft: Equatable {
+  /// Ahead of section one: the header, the abstract, a contents list. Tracking
+  /// reports that as section one, but a text view is made at the top, which is
+  /// nearer, and scrolling to section one would hide what the reader was reading.
+  case top
+  /// In the section this anchor names.
+  case section(String)
+}

@@ -81,7 +81,7 @@ struct DocumentView: View {
   /// Where the reader was when the text view last went — turning Original Text on
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
-  @State private var anchorLeft: String?
+  @State private var placeLeft: ReaderPlaceLeft?
   @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
@@ -347,7 +347,7 @@ struct DocumentView: View {
         // Deep link or restored reading position — or, when the text view is made
         // again, where the reader was (#449).
         let arrival = ReaderArrival.onAppear(
-          pendingAnchor: scrollTarget?.anchor, anchorLeft: anchorLeft,
+          pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
           request: navigation.scrollRequest,
           storedAnchor: storedPosition()?.anchor.flatMap {
             document.section(anchor: $0) != nil ? $0 : nil
@@ -363,7 +363,10 @@ struct DocumentView: View {
           break
         }
       }
-      .onDisappear { anchorLeft = lastVisibleAnchor.anchor }
+      .onDisappear {
+        placeLeft =
+          lastVisibleAnchor.isAheadOfSections ? .top : lastVisibleAnchor.anchor.map { .section($0) }
+      }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
         Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
