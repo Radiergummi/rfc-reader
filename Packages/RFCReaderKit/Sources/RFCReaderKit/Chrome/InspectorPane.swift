@@ -16,4 +16,15 @@ public enum InspectorPane: Sendable {
     if isOpen, showing == pressed { return (false, showing) }
     return (true, pressed)
   }
+
+  /// Whether `pane` has anything to show for a document `isDescribed` by the index
+  /// and whose body is here or not (#325). Info needs only the index's entry, so a
+  /// document still loading, or one that failed to or was offline, has it; the
+  /// navigation pane's contents, references and requirements come with the body.
+  public static func hasContent(_ pane: InspectorPane, hasBody: Bool, isDescribed: Bool) -> Bool {
+    switch pane {
+    case .info: isDescribed || hasBody
+    case .navigation: hasBody
+    }
+  }
 }

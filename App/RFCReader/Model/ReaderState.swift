@@ -40,8 +40,16 @@ final class ReaderState {
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?
 
-  /// Whether there is anything to describe. The panel draws nothing without it.
+  /// Whether the document's body is here: what the toolbar title, printing and
+  /// export need. The panel asks `canDescribe` instead.
   var hasDocument = false
+
+  /// Whether there is anything to describe: the index's entry, which `DocumentView`
+  /// derives as `info` the moment a document starts loading, or its body. The panel
+  /// opens on it, so a document that is still loading, or failed to load or was
+  /// offline, still has its Info (#325), and an open panel stays open from one
+  /// document to the next.
+  var canDescribe: Bool { hasDocument || info != nil }
 
   /// Whether the reader's text has a selection: Edit ▸ Copy as Quote is grayed out
   /// without one, as Copy is (#186). Reported by the text view's coordinator.

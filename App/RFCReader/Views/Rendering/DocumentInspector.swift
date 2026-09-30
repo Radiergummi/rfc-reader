@@ -33,6 +33,9 @@ struct DocumentInspector: View {
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
   let info: DocumentInfo?
+  /// Whether the body is here. Without it, a document the index describes still has
+  /// its Info, and the navigation pane's lists say why they are empty (#325).
+  let hasBody: Bool
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
@@ -88,6 +91,18 @@ struct DocumentInspector: View {
 
   @ViewBuilder
   private var selectedTab: some View {
+    if !InspectorPane.hasContent(.navigation, hasBody: hasBody, isDescribed: info != nil) {
+      // An empty list beside a failure reads as a second failure; this says why.
+      ContentUnavailableView(
+        "No \(tab.title)", systemImage: "doc.text.magnifyingglass",
+        description: Text("\(document?.displayName ?? "The document") hasn't loaded."))
+    } else {
+      loadedTab
+    }
+  }
+
+  @ViewBuilder
+  private var loadedTab: some View {
     switch tab {
     case .contents:
       // Opened at the section being read rather than at the top: from §15 of a long
@@ -150,12 +165,15 @@ struct PanelHost: View {
 
   var body: some View {
     @Bindable var reader = reader
-    if reader.hasDocument {
+    // On what the index describes, not only the body: a document still loading, or
+    // one that failed to or was offline, has its Info (#325).
+    if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
         requirements: reader.requirements,
         info: reader.info,
+        hasBody: reader.hasDocument,
         document: navigation.selection,
         library: library,
         pane: reader.pane,
