@@ -308,7 +308,7 @@ extension LegacyTextParser {
     // the stamp fell before the number line (#60).
     let skipped = (numberRun(in: lines) ?? 1) - 1
     for (offset, line) in lines.enumerated() {
-      guard case .text(let string) = line else { continue }
+      guard let string = line.string else { continue }
       if string.isBlank {
         if firstParagraph == nil, let start = runStart, run - skipped > 2 {
           let runLines = Array(front[start.frontCount...])
@@ -356,7 +356,7 @@ extension LegacyTextParser {
   private static func numberRun(in lines: [Line]) -> Int? {
     var run = 0
     var previousWasBlank = true
-    for case .text(let string) in lines {
+    for string in lines.lazy.compactMap(\.string) {
       if string.isBlank {
         previousWasBlank = true
         continue
