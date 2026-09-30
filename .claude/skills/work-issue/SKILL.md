@@ -1,6 +1,6 @@
 ---
 name: work-issue
-description: Work one GitHub issue of this repository end to end, autonomously - pick it from the agent queue (or take the number given), ask on the issue when something is the maintainer's call, fix it test-first in its own worktree, and hand it over as a pull request marked ready for review. An issue labeled `epic` is worked as a whole, one stacked pull request per sub-issue, with `gh stack`. Use when asked to "work on issues", "take the next issue", "work epic N", or "/work-issue [N]"; run it under /loop to drain the queue.
+description: Work one GitHub issue of this repository end to end, autonomously - pick it from the agent queue (or take the number given), ask on the issue when something is the maintainer's call, fix it test-first in its own worktree, and hand it over as a pull request marked ready for review. An issue labeled `epic` is worked as a whole, one stacked pull request per sub-issue, with `gh stack`. Use when asked to "work on issues", "take the next issue", "work epic N", or "/work-issue [N | label]" (a label such as `bug` narrows the queue to issues that carry it); run it under /loop to drain the queue.
 ---
 
 # Work one issue
@@ -28,7 +28,7 @@ A comment without that marker is the maintainer's.
 
 ## 1. Pick the issue
 
-If you were given a number, take that issue, whatever its labels. Otherwise go down this list and take the first match:
+If you were given a number, take that issue, whatever its labels. If you were given a label instead, such as `/work-issue bug`, it narrows every item in the list below to issues that carry it: in item 1, a pull request counts only when the issue it closes has the label, and an epic counts when the epic itself has it. Otherwise go down this list and take the first match:
 
 1. **A pull request of yours with unanswered review feedback.** Your pull requests are the open ones whose branch starts with `issue/` or `epic/`. A review or comment on one, newer than your last commit and your last marked comment, is feedback. Address it on that branch (in a stack, see [Epics](#epics)). Reply with the marker, then mark the pull request ready again if it went back to draft.
 2. **An `agent-blocked` issue that has been answered.** It counts as answered when the newest comment has no marker, or when your newest marked comment has a 👍 reaction (`gh api repos/{owner}/{repo}/issues/comments/ID/reactions`). Remove `agent-blocked` and pick up where you asked. When it is a sub-issue of an `epic`, or the epic itself, remove the label from both and resume the epic.
@@ -41,7 +41,7 @@ gh api graphql -F owner='{owner}' -F name='{repo}' -f query='query($owner:String
   --jq '.data.repository.issues.nodes[] | select(any(.blockedBy.nodes[]; .state=="OPEN")) | .number'
 ```
 
-If nothing matches, say that the queue is empty and stop. Under `/loop`, end the loop too.
+If nothing matches, say that the queue is empty (naming the label, if you were given one) and stop. Under `/loop`, end the loop too.
 
 ## 2. Understand it before touching code
 
