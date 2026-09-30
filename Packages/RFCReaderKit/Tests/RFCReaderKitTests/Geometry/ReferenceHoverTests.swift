@@ -156,6 +156,15 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.pointerMoved(location: elsewhere, target: nil)) == [.closePopover])
   }
 
+  @Test func `with hover previews off, another reference closes a card and times nothing`() {
+    var hover = ReferenceHover()
+    hover.previewsOnHover = false
+    _ = hover.handle(.forceClickCard(first))
+    _ = hover.handle(.cardShown)
+    #expect(hover.handle(.pointerMoved(location: elsewhere, target: second)) == [.closePopover])
+    #expect(hover.dwell == nil)
+  }
+
   // MARK: - Following a link
 
   @Test func `following a link cancels a dwell, and follows`() {
