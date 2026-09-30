@@ -113,6 +113,39 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// The schema puts `<references>` in `<back>` only, but XML from elsewhere, and
+  /// legacy conversions made before #315, can hold one in `<middle>` or in a chapter.
+  /// A citation into it still resolves, and the one in a chapter reads back as that
+  /// chapter's subsection.
+  @Test func `a reference list outside the back is read`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Misplaced</title></front>
+        <middle>
+          <section anchor="intro"><name>Intro</name>
+            <t>See <xref target="A"/> and <xref target="B"/>.</t>
+            <references anchor="intro-refs"><name>Chapter References</name>
+              <reference anchor="A"><front><title>A</title></front>
+                <seriesInfo name="RFC" value="1111"/></reference>
+            </references>
+          </section>
+          <references anchor="refs"><name>References</name>
+            <reference anchor="B"><front><title>B</title></front>
+              <seriesInfo name="RFC" value="2222"/></reference>
+          </references>
+        </middle>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let cited = document.everyCrossReference.compactMap { xref -> DocumentID? in
+      if case .document(let id, _, _) = xref.target { id } else { nil }
+    }
+    #expect(cited == [.rfc(1111), .rfc(2222)])
+    let intro = try #require(document.section(anchor: "intro"))
+    #expect(intro.subsections.map(\.anchor) == ["intro-refs"])
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
@@ -381,6 +414,36 @@ struct RFCXMLParserTests {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+  }
+
+  /// RFC 8761 cites a draft and a codec specification, neither in a series, by the
+  /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
+  /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
+  @Test func `a citation of an entry outside the series keeps its brackets`() throws {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml")).everyCrossReference
+    let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
+    #expect(draft.label == "[14]")
+    let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
+    #expect(codec.label == "[6]")
+    let table = try #require(xrefs.first { $0.target == .anchor("codec-levels") })
+    #expect(table.label == "Table 7")
+  }
+
+  /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
+  /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
+  /// `derivedContent` would put a second tag where the section belongs; wording the
+  /// section is #473's. In document order: RFC 9783 cites the whole entry, then a
+  /// section of it; RFC 9290 cites the registry's section, then the whole registry.
+  @Test(arguments: [
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "RATS-AR4SI"]),
+    ("rfc9290.xml", "IANA.cbor-tags", ["IANA.cbor-tags", "[IANA.cbor-tags]"]),
+  ])
+  func `a citation of a section of an entry outside the series is not bracketed`(
+    fixture: String, target: String, labels: [String]
+  ) throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let xrefs = document.everyCrossReference.filter { $0.target == .anchor(target) }
+    #expect(xrefs.map(\.label) == labels)
   }
 
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of

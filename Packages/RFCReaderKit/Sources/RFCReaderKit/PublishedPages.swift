@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreText
 import Foundation
+import RFCKit
 
 #if canImport(UIKit)
   import UIKit
@@ -26,10 +27,6 @@ public struct PublishedPages: Equatable, Sendable {
   /// the blank lines at the page's foot removed. Pages with no text are left out.
   public let pages: [[String]]
 
-  /// How often a tab stops: every eighth column, as the terminals the text was
-  /// written for set it.
-  static let tabWidth = 8
-
   public init(_ source: String) {
     pages = source.split(separator: "\u{0C}", omittingEmptySubsequences: false)
       .enumerated()
@@ -46,26 +43,12 @@ public struct PublishedPages: Equatable, Sendable {
       text = text.dropFirst()
     }
     var lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-      .map(expandingTabs)
+      .map { String($0).expandingTabs() }
       .map(droppingTrailingSpaces)
     while let last = lines.last, last.isEmpty {
       lines.removeLast()
     }
     return lines
-  }
-
-  private static func expandingTabs(_ line: Substring) -> String {
-    guard line.contains("\t") else { return String(line) }
-    var expanded = ""
-    for character in line {
-      if character == "\t" {
-        let spaces = tabWidth - expanded.count % tabWidth
-        expanded += String(repeating: " ", count: spaces)
-      } else {
-        expanded.append(character)
-      }
-    }
-    return expanded
   }
 
   private static func droppingTrailingSpaces(_ line: String) -> String {

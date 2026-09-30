@@ -109,3 +109,13 @@ targets:
         APP_ICON_2700: AppIcon-27
         EXCLUDED_SOURCE_FILE_NAMES: AppIcon-*.icon
         INCLUDED_SOURCE_FILE_NAMES: $(ASSETCATALOG_COMPILER_APPICON_NAME).icon
+
+# Declared so XcodeGen writes a shared scheme. Without one, xcodebuild makes a
+# scheme for the target on the fly and matches -destination against it before it
+# knows the target's platforms, logging "Supported platforms for the buildables in
+# the current scheme is empty" on every build.
+schemes:
+  RFCReader:
+    build:
+      targets:
+        RFCReader: all

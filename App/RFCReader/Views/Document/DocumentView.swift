@@ -218,7 +218,7 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section, animated: true)
+        jump(toSection: request?.section, animated: true, revealingReferences: true)
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -262,10 +262,6 @@ struct DocumentView: View {
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
-      // No header to show the title here, so the toolbar shows it throughout.
-      // On `hasDocument` rather than on appearing: loading a document clears
-      // the title back to hidden after this view may already have appeared.
-      .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -292,7 +288,13 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onToolbarTitle: { reader.updateToolbarTitle($0) },
+        // Not while fading out over the next document's reader, as the load's
+        // and the build's callbacks guard: the title is the selected document's.
+        onToolbarTitle: { state, source in
+          guard navigation.selection == id else { return }
+          reader.report(title: state, from: source)
+        },
+        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
         onSelectionChange: { reader.hasSelection = $0 },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
@@ -439,6 +441,9 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    // Its header is on its way until the reader reports, so the title stays out of
+    // the toolbar rather than showing and then dropping (#281).
+    reader.documentStartsLoading()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
@@ -469,6 +474,10 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
+    } failed: { [reader, navigation, id] in
+      // No header is coming, so the toolbar names the RFC that failed.
+      guard navigation.selection == id else { return }
+      reader.documentFailedToLoad()
     }
   }
 
@@ -533,10 +542,21 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?, animated: Bool) {
+  ///
+  /// An anchor the body does not hold scrolls nowhere: a document already open stays
+  /// where the reader is, and one just opened stays at its top (#276). In a document
+  /// already open, a place naming a bibliography entry shows it; see
+  /// `LinkDestination.landing(at:in:bibliography:)`.
+  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
     guard let section, let document = session.state.document else { return }
-    scrollTarget = ReaderScrollTarget(
-      anchor: document.anchor(forPlace: section), animated: animated)
+    switch LinkDestination.landing(at: section, in: document, bibliography: reader.groups) {
+    case .reference(let anchor) where revealingReferences:
+      reader.reveal(reference: anchor)
+    case .reference(let anchor), .jump(let anchor):
+      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+    case .document, .unhandled:
+      break
+    }
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.

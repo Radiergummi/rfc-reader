@@ -49,6 +49,9 @@ public struct QuickOpenResults: Equatable, Sendable {
   /// Held as the row, not its position: the rows change under it as hits arrive,
   /// and the reader's choice has to survive that.
   public private(set) var selected: Row?
+  /// Whether the reader moved the selection with the arrow keys. Only then is it
+  /// their choice to keep; otherwise it is the top row, whatever the top row is.
+  private var isSelectionMoved = false
   /// ↵ was pressed while a search for what is typed was still running: the search
   /// opens what it selects when it lands, the way the key press asked for.
   private var pendingActivation: LinkActivation?
@@ -118,7 +121,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     }
     let rows: [RFCLink]
     if let exact, !members.isEmpty {
-      rows = members.map { RFCLink(id: $0, section: exact.section) }
+      rows = members.map { RFCLink(id: $0, section: exact.section, anchor: exact.anchor) }
     } else {
       rows = exact.map { [$0] } ?? []
     }
@@ -130,6 +133,7 @@ public struct QuickOpenResults: Equatable, Sendable {
     self.registry = registryRows
     if isNew, let first = current.first {
       selected = first
+      isSelectionMoved = false
     } else {
       keepSelection()
     }
@@ -168,13 +172,19 @@ public struct QuickOpenResults: Equatable, Sendable {
     let rows = rows
     guard !rows.isEmpty else { return }
     let current = selected.flatMap { rows.firstIndex(of: $0) } ?? 0
-    selected = rows[min(max(current + offset, 0), rows.count - 1)]
+    let next = rows[min(max(current + offset, 0), rows.count - 1)]
+    // A press that stops at either end chooses nothing.
+    guard next != selected else { return }
+    selected = next
+    isSelectionMoved = true
   }
 
-  /// The selected row stays selected if it is still listed; otherwise the top one is.
+  /// A row the reader moved to stays selected if it is still listed; otherwise the
+  /// top one is.
   private mutating func keepSelection() {
     let rows = rows
-    if let selected, rows.contains(selected) { return }
+    if isSelectionMoved, let selected, rows.contains(selected) { return }
     selected = rows.first
+    isSelectionMoved = false
   }
 }

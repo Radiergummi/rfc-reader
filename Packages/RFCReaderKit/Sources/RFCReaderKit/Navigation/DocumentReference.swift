@@ -18,7 +18,10 @@ public enum DocumentReference {
     } else {
       return nil
     }
-    if let section, !section.isEmpty { link.section = section }
+    if let section, !section.isEmpty {
+      link.section = section
+      link.anchor = nil
+    }
     return link
   }
 }

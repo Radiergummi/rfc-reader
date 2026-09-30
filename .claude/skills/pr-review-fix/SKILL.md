@@ -1,6 +1,6 @@
 ---
 name: pr-review-fix
-description: Review every open pull request of this repository (or the numbers given) with a subagent each - code-review at level high, then simplify, fix what is clearly right, verify, commit signed and push back to the PR's branch - and bring the maintainer one list of the decisions that have no obvious answer. Use when asked to "review the open PRs", "review and fix PR N", or "/pr-review-fix [N...]".
+description: Review every open pull request of this repository (or the numbers given) with a subagent each - code-review at level high, then simplify, fix what is clearly right, verify, commit signed and push back to the PR's branch - and bring the maintainer one list of the decisions that have no obvious answer. A `gh stack` stack gets one subagent that works it bottom-up and rebases each fix up the stack. Use when asked to "review the open PRs", "review and fix PR N", or "/pr-review-fix [N...]".
 ---
 
 # Review and fix pull requests
@@ -16,6 +16,7 @@ git worktree list
 
 - Take the numbers you were given, or every open PR.
 - **Stacked PRs:** a PR whose `baseRefName` is another PR's branch is reviewed *after* its base, never at the same time. The base's fixes change the files the stacked PR builds on, and both runs on this repo that ignored this ended in a conflict (#389 on #379, #400 on #399).
+- **A `gh stack` stack** (branches `epic/…`, made by `work-issue` for an epic) goes to **one subagent for the whole stack**, which works it bottom-up and carries each fix up the stack itself. See [Stacks](#stacks). A chain of PRs that isn't a `gh stack` stack keeps the rule above, with one subagent per PR.
 - Drafts are reviewed like the rest, but their subagent reports what looks unfinished instead of finishing the feature.
 - Map each branch to its existing worktree under `.claude/worktrees/`. A PR without one gets `git worktree add .claude/worktrees/pr-N <branch>` from its subagent.
 
@@ -51,8 +52,31 @@ Report: each finding as fixed / rejected with reason / question; what simplify c
 
 - Append its questions to one scratchpad file, grouped by PR, with the commit pushed and the verification result. Relay a two- or three-sentence summary to the user; do not repeat the whole report.
 - Spot-check anything that would break a repository rule if the agent were wrong, e.g. that a "new fixture" it switched a test to is already committed on `main` (`git ls-tree -r --name-only origin/main Packages/RFCKit/Tests/RFCKitTests/Fixtures`).
-- After a base PR is pushed, check its stacked PR still merges: `git merge-tree --write-tree --name-only origin/BASE origin/BRANCH`. A conflict that is purely additive on both sides (two entries at one spot in `.gitignore`) you may resolve by merging the base into the stacked branch and keeping both. Anything else is a question.
+- After a base PR is pushed, check its stacked PR still merges (a `gh stack` stack needs none of this: its subagent rebases it): `git merge-tree --write-tree --name-only origin/BASE origin/BRANCH`. A conflict that is purely additive on both sides (two entries at one spot in `.gitignore`) you may resolve by merging the base into the stacked branch and keeping both. Anything else is a question.
 - **A rate limit stops an agent mid-work** with its changes uncommitted in the worktree. Resume the same agent with `SendMessage` to its id rather than starting a new one: it keeps its context and its unfinished changes.
+
+## Stacks
+
+A stack made with `gh stack` is reviewed by one subagent, in one worktree, bottom PR first. It is the same review as above, repeated per PR, with `gh stack` doing the cascading rebase that `git merge-tree` and a hand merge did before. Give it the prompt above with these changes to it:
+
+<prompt-changes>
+Workspace
+- The stack's worktree is `.claude/worktrees/stack-TOP`. Make it with `git worktree add --detach`, then run `gh stack checkout TOP` there to get every branch of the stack with its local tracking. TOP is the top PR's number.
+- Replace "Do not merge or rebase the base into the branch" and "No force-push" with the rules below. They apply to this stack's branches only.
+
+For each PR, bottom first
+1. `git switch BRANCH`, then steps 1–8 above. `code-review` on the PR number already reviews only the PR's own diff against the branch below it.
+2. When you pushed a fix, carry it up: `gh stack rebase --upstack`, then check `git log --format='%G? %h %s' origin/main..` from the top branch (no commit may show `N`), then `gh stack push`. That push is a force-with-lease of the stack's own branches, and it is allowed. If Secretive is locked, give the fallback key to the rebase through the environment: `GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=gpg.format GIT_CONFIG_VALUE_0=openpgp GIT_CONFIG_KEY_1=user.signingkey GIT_CONFIG_VALUE_1=8F4ED9558B0722C0 gh stack rebase --upstack`.
+3. A rebase conflict that is purely additive on both sides may be resolved, keeping both: resolve it, `git add`, then `gh stack rebase --continue`. Anything else: `gh stack rebase --abort`, stop, and report it as a question.
+
+Never
+- Use GitHub's "Rebase stack" button, or leave a rebase to GitHub. Commits made by a server-side rebase are unsigned, and this repository requires signed commits.
+- `gh stack merge`, `gh stack unstack`, or `gh stack sync` when it reports that the stack on GitHub diverged from yours. Report the divergence instead.
+
+Report per PR, bottom first, and say which rebases and pushes carried which fix up the stack.
+</prompt-changes>
+
+**A stack whose bottom PR merged while it waited.** GitHub rebases the next PR onto `main` itself when the one below merges, and those commits may be unsigned. Run `gh stack sync --prune` first, then the `%G?` check. If a commit shows `N`, re-sign from the new bottom: `git switch` to its branch, `git rebase --force-rebase origin/main`, then `gh stack rebase --upstack` and `gh stack push`.
 
 ## 4. Hand over
 

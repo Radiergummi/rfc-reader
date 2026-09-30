@@ -103,18 +103,22 @@ final class DocumentSession {
     }
   }
 
-  /// Fetches, and hands the document to `loaded` once it is the state's. Building is
-  /// `requestBuild`'s job, which the document arriving triggers.
+  /// Fetches, and hands the document to `loaded` once it is the state's, or says it
+  /// `failed`. Building is `requestBuild`'s job, which the document arriving
+  /// triggers.
   ///
   /// Once per session, plus Try Again after a failure: the view is made per document
   /// (`.id(selection)`), and appearing again keeps what it loaded.
   ///
-  /// The task holds the session weakly, and `loaded` must not capture the view: a
+  /// The task holds the session weakly, and neither closure may capture the view: a
   /// view's state holds this session, so either would keep it alive for as long as
   /// the fetch runs, and `deinit` could not cancel a fetch nobody waits for any more.
   /// A fetch that outlives its session is dropped, rather than writing an old
   /// document's details over the window's reader state.
-  func startLoad(from library: LibraryModel, loaded: @escaping (RFCDocument) -> Void) {
+  func startLoad(
+    from library: LibraryModel, loaded: @escaping (RFCDocument) -> Void,
+    failed: @escaping () -> Void
+  ) {
     load?.cancel()
     state.begin()
     trace("loading")
@@ -135,6 +139,7 @@ final class DocumentSession {
         guard let self, !Task.isCancelled else { return }
         trace("failed: \(error)")
         state.fail(error)
+        failed()
       }
     }
   }

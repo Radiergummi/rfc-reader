@@ -279,4 +279,58 @@ struct BuilderVerbatimTests {
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.displayedText(of: content, indent: 0) == content.text)
   }
+
+  /// 168 artwork blocks in 65 published RFCXML documents carry a literal tab, and
+  /// the verbatim style sets no tab stops, so each tab went to the next default
+  /// stop, a distance in points unrelated to the monospaced columns
+  /// around it, and the figure sheared (#31). The RFC Editor's own text rendering
+  /// expands them to eight-column stops, each line on its own.
+  @Test func `a tab in artwork is spaces to the next eighth column`() {
+    let content = Preformatted(kind: .artwork, text: "\t|\n  \t|\nabcdefgh\t|")
+    let builder = DocumentTextBuilder(style: style)
+    #expect(
+      builder.displayedText(of: content, indent: 0)
+        == "        |\n        |\nabcdefgh        |")
+  }
+
+  /// Unfolded first: a tab that opens a continuation is the author's and stays, and
+  /// it is expanded at its column in the rejoined line. Expanded first, it became
+  /// eight spaces that unfolding stripped as the fold's indent.
+  @Test func `a folded block's tabs are expanded where the unfolded line puts them`() {
+    let text = Self.header + "\n\nabc\\\n\tx"
+    let content = Preformatted(kind: .artwork, text: text)
+    let builder = DocumentTextBuilder(style: style)
+    #expect(builder.displayedText(of: content, indent: 0) == "abc     x")
+  }
+
+  /// A tab that ends a line draws nothing, so it is not counted: expanded, trailing
+  /// tabs made some of RFC 8902's figures 80 columns wide where what they show is
+  /// 66, and so drew them smaller.
+  @Test func `a tab that ends a line adds no width`() {
+    let content = Preformatted(kind: .artwork, text: "abc\t\nde  \t\t\n\tf")
+    let builder = DocumentTextBuilder(style: style)
+    #expect(builder.displayedText(of: content, indent: 0) == "abc\nde\n        f")
+  }
+
+  /// Scaled by the columns it is drawn in, not by its characters: fifteen tabs are
+  /// 120 columns.
+  @Test func `a block with tabs scales by its expanded width`() {
+    let builder = DocumentTextBuilder(style: style)
+    let tabbed = Preformatted(kind: .artwork, text: String(repeating: "\t", count: 15) + "|")
+    let spaced = String(repeating: " ", count: 120) + "|"
+    let text = builder.displayedText(of: tabbed, indent: 0)
+    #expect(text == spaced)
+    #expect(builder.monospaceScale(for: text, indent: 0) < 1)
+  }
+
+  /// What is shown changes; what the block is does not.
+  @Test func `the box keeps a tabbed block's tabs`() throws {
+    let content = Preformatted(kind: .artwork, text: "\t|", anchor: "tabbed")
+    let built = DocumentTextBuilder.build(document(content), style: style)
+    let offset = try #require(built.anchors.offset(of: "tabbed"))
+    let box = try #require(
+      built.text.attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox)
+    #expect(box.content.text == "\t|")
+    #expect(!built.text.string.contains("\t"))
+  }
 }

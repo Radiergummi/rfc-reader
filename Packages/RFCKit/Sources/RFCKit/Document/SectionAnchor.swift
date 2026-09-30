@@ -9,9 +9,11 @@ enum SectionAnchor {
   static let appendixPrefix = "appendix-"
 
   /// `4.2` → `section-4.2`, `A.1` → `appendix-A.1`. An appendix numbered like a
-  /// section is named by its anchor already, `appendix-1`, and stays as it is.
+  /// section is named by its anchor already, `appendix-1`, and stays as it is; so
+  /// does a section's anchor given as its place, `section-8.3`, which was written
+  /// out as `appendix-section-8.3`.
   static func anchor(forSectionNumber number: String) -> String {
-    if number.hasPrefix(appendixPrefix) { return number }
+    if number.hasPrefix(appendixPrefix) || number.hasPrefix(sectionPrefix) { return number }
     return number.first?.isLetter == true
       ? "\(appendixPrefix)\(number)" : "\(sectionPrefix)\(number)"
   }
@@ -26,12 +28,28 @@ enum SectionAnchor {
   /// `section-4.2` → `4.2`, `appendix-A.1` → `A.1`, `page-12` → nil. An appendix
   /// numbered like a section keeps its prefix, `appendix-1`, which is its anchor:
   /// read as `1`, it named section 1.
+  ///
+  /// An appendix letter is read in either case, `section-a.1` → `A.1`, as the prepped
+  /// XML's `pn` attributes spell it (#276). What follows the prefix has to be a
+  /// number: `section-foo` is nil, an anchor of its own.
   static func sectionNumber(fromAnchor anchor: String) -> String? {
     for prefix in [sectionPrefix, appendixPrefix] where anchor.hasPrefix(prefix) {
-      let number = String(anchor.dropFirst(prefix.count))
-      guard !number.isEmpty else { return nil }
+      var number = String(anchor.dropFirst(prefix.count))
+      guard isSectionNumber(number) else { return nil }
+      if let letter = number.first, letter.isLetter {
+        number = letter.uppercased() + number.dropFirst()
+      }
       return prefix == appendixPrefix && number.first?.isNumber == true ? anchor : number
     }
     return nil
+  }
+
+  /// Whether `place` is shaped like a section number rather than an anchor: it
+  /// starts with a digit, or is an appendix's single letter, alone or before a dot
+  /// (`A`, `A.1`).
+  private static func isSectionNumber(_ place: String) -> Bool {
+    guard let first = place.first else { return false }
+    let rest = place.dropFirst()
+    return first.isNumber || (first.isLetter && (rest.isEmpty || rest.first == "."))
   }
 }

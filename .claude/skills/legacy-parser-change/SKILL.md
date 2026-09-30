@@ -28,8 +28,6 @@ Watch the test fail before the fix. A test over a document that lacks the case i
 
 `make corpus CORPUS_LIMIT=` converts all legacy documents and writes `corpus/report.json`; run it on `origin/main`'s parser and on yours, keeping both reports.
 
-While `make corpus` is broken (#371), measure with a temporary, uncommitted release-build test in RFCKit over `corpus/text.noindex` (`swift test -c release --filter <it>`), and delete it before committing.
-
 Compare, at least:
 - headings per kind (numbered, unnumbered, appendix) and documents whose count changed;
 - **where the front matter ends**, per document;
