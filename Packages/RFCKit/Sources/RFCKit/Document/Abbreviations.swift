@@ -44,6 +44,9 @@ enum Abbreviations {
     }
     visit(document.header.abstract) { record($0, in: nil) }
     for section in document.allSections {
+      // The heading first, as the reader meets it, and defined in its own section:
+      // `3. Transport Layer Security (TLS)` over a body that uses `TLS` alone (#319).
+      record(expansions(in: section.title.plainText), in: section.anchor)
       visit(section.blocks) { record($0, in: section.anchor) }
     }
     return found
