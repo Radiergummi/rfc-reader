@@ -48,6 +48,10 @@ extension NSAttributedString.Key {
   /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
   /// which compares by value, so the runs of one block coalesce.
   public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
+  /// Which segment of a rendered block's Figure | Source control is on
+  /// (`FigureControl.Segment`'s raw value), on every character of the block, in a
+  /// build with live links only: paper has nothing to press.
+  public static let rfcFigureControl = NSAttributedString.Key("rfcFigureControl")
 }
 
 public enum RFCDecoration: String, Sendable {

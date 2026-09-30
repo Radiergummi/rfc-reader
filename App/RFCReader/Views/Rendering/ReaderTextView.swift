@@ -109,6 +109,13 @@ import RFCReaderKit
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
     /// Shows a rendered verbatim block as its source, or back, by ordinal.
     var toggleSource: (Int) -> Void = { _ in }
+    /// A click on a rendered block's Figure | Source control, from the coordinator;
+    /// answers whether it took the click.
+    var clickFigureControl: (NSEvent) -> Bool = { _ in false }
+    /// A move over the text, for which block's control to show; answers whether the
+    /// pointer is on a control.
+    var hoverFigureControl: (NSEvent) -> Bool = { _ in false }
+    var endFigureHover: () -> Void = {}
 
     /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
     /// and as Markdown, the HTML and the rich flavor as RTF (#186).
@@ -152,10 +159,20 @@ import RFCReaderKit
 
     override func mouseMoved(with event: NSEvent) {
       guard !isOverHeader(event) else {
+        endFigureHover()
         NSCursor.arrow.set()
         return
       }
+      if hoverFigureControl(event) {
+        NSCursor.pointingHand.set()
+        return
+      }
       super.mouseMoved(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+      endFigureHover()
+      super.mouseExited(with: event)
     }
 
     private func isOverHeader(_ event: NSEvent) -> Bool {
@@ -170,6 +187,7 @@ import RFCReaderKit
     /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
+      if clickFigureControl(event) { return }
       guard event.clickCount == 1, !event.modifierFlags.contains(.control),
         let (link, index) = referenceLink(event)
       else {

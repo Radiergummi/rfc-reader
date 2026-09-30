@@ -78,10 +78,16 @@ extension DocumentTextBuilder {
         lineHeightMultiple: lineHeight),
       range: lastLine)
     decorate(from: start, with: .artwork)
+    let controlled = shown != .plain && style.emitsLinks
+    let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(
       .rfcContentWidth,
-      value: max(labelWidth, widestLine(of: text, scale: scale)),
-      range: NSRange(location: start, length: output.length - start))
+      value: max(
+        labelWidth, widestLine(of: text, scale: scale), controlled ? FigureControl.width : 0),
+      range: block)
+    if controlled {
+      reserveFigureControl(over: block, showing: shown == .rendered ? .figure : .source)
+    }
   }
 
   /// Sets a decorated block's strokes on all of it, its ruler in the secondary
@@ -98,6 +104,23 @@ extension DocumentTextBuilder {
           range: NSRange(location: bodyStart + range.location, length: range.length))
       }
     }
+  }
+
+  /// Marks `block` as carrying the Figure | Source control, and sets its first line
+  /// below the strip the control is drawn in. A copy of that line's style, so the
+  /// spacing after a one-line block is kept; immutable, as every style the builder
+  /// hands over is.
+  func reserveFigureControl(over block: NSRange, showing segment: FigureControl.Segment) {
+    output.addAttribute(.rfcFigureControl, value: segment.rawValue, range: block)
+    let firstLine = output.mutableString.paragraphRange(
+      for: NSRange(location: block.location, length: 0))
+    guard
+      let style = output.attribute(.paragraphStyle, at: block.location, effectiveRange: nil)
+        as? NSParagraphStyle,
+      let reserved = style.mutableCopy() as? NSMutableParagraphStyle
+    else { return }
+    reserved.paragraphSpacingBefore = FigureControl.strip
+    output.addAttribute(.paragraphStyle, value: reserved.copy(), range: firstLine)
   }
 
   /// How wide a verbatim block's widest line is set: its columns at the monospaced

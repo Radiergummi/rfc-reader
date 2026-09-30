@@ -95,6 +95,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onToggleSource`.
   var onToggleSource: (Int) -> Void = { _ in }
+  /// The rendered block under the pointer, whose control the fragments draw.
+  nonisolated let figureHover = FigureHover()
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -847,6 +849,10 @@ final class RFCTextViewCoordinator: NSObject {
       if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
+      if let (control, segment) = figureControl(atContainerPoint: containerPoint) {
+        pressFigureControl(control, segment)
+        return
+      }
       if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
         return
       }
@@ -1156,6 +1162,6 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     textLayoutFragmentFor location: any NSTextLocation,
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment.make(for: textElement)
+    RFCTextLayoutFragment.make(for: textElement, hover: figureHover)
   }
 }
