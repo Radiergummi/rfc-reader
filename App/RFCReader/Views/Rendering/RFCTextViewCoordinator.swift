@@ -95,8 +95,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onSelectionChange: (Bool) -> Void = { _ in }
   /// See `RFCTextView.onToggleSource`.
   var onToggleSource: (Int) -> Void = { _ in }
-  /// The rendered block under the pointer, whose control the fragments draw.
-  nonisolated let figureHover = FigureHover()
+  /// The Figure | Source controls laid over the text view.
+  let figureControls = FigureControls()
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -269,6 +269,8 @@ final class RFCTextViewCoordinator: NSObject {
     reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
+    figureControls.blocks = FigureControl.blocks(in: built.text)
+    updateFigureControls()
   }
 
   /// Puts the place back at the top of the viewport and resumes tracking from
@@ -465,6 +467,8 @@ final class RFCTextViewCoordinator: NSObject {
         laidOutThrough = 0
       }
     }
+    // The container moved in the view, or the text in the container.
+    updateFigureControls()
   }
 
   // MARK: - Scrolling
@@ -804,6 +808,7 @@ final class RFCTextViewCoordinator: NSObject {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
+      updateFigureControls()
       followChrome(scrollView)
     }
   }
@@ -849,10 +854,6 @@ final class RFCTextViewCoordinator: NSObject {
       if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-      if let (control, segment) = figureControl(atContainerPoint: containerPoint) {
-        pressFigureControl(control, segment)
-        return
-      }
       if let offset = characterOffset(atContainerPoint: containerPoint), link(at: offset) != nil {
         return
       }
@@ -962,6 +963,8 @@ final class RFCTextViewCoordinator: NSObject {
     func viewportDidScroll(_ notification: Notification) {
       reportVisibleAnchor()
       hover.send(.scrolled)
+      // The text moved under a pointer that may not have.
+      updateFigureControls(fades: true)
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
@@ -992,6 +995,7 @@ final class RFCTextViewCoordinator: NSObject {
           content: NSHostingController(rootView: preview), anchor: rect)
       }
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
+      hover.pointerMoved = { [weak self] in self?.updateFigureControls(fades: true) }
     }
 
     /// Called from `dismantleNSView`.
@@ -1162,6 +1166,6 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     textLayoutFragmentFor location: any NSTextLocation,
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
-    RFCTextLayoutFragment.make(for: textElement, hover: figureHover)
+    RFCTextLayoutFragment.make(for: textElement)
   }
 }

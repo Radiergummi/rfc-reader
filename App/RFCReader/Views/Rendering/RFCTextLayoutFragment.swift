@@ -17,19 +17,9 @@ import RFCReaderKit
 nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// The fragment every layout manager of built text asks its delegate for: the
   /// reader's, and a print's (`DocumentPDF`), so the two cannot draw differently.
-  ///
-  /// - Parameter hover: which rendered block the pointer is over, on macOS, where
-  ///   a block's Figure | Source control shows only then; nil for a print.
-  static func make(for textElement: NSTextElement, hover: FigureHover? = nil)
-    -> NSTextLayoutFragment
-  {
-    let fragment = RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
-    fragment.figureHover = hover
-    return fragment
+  static func make(for textElement: NSTextElement) -> NSTextLayoutFragment {
+    RFCTextLayoutFragment(textElement: textElement, range: textElement.elementRange)
   }
-
-  /// Set once, as the fragment is made. See `make(for:hover:)`.
-  private var figureHover: FigureHover?
 
   static let cardPadding = FragmentGeometry.cardPadding
   static let rulePadding: CGFloat = 8
@@ -68,10 +58,6 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     // path, and antialiasing puts ink just outside it.
     if let strokes = StrokeGeometry.bounds(of: strokeSegments) {
       bounds = bounds.union(strokes.insetBy(dx: -1, dy: -1))
-    }
-    // Whether the control shows or not, so showing it on hover needs no new surface.
-    if let control = controlRect(at: .zero) {
-      bounds = bounds.union(control.insetBy(dx: -1, dy: -1))
     }
     return bounds
   }
@@ -173,85 +159,6 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     drawChips(at: point, in: context)
     drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
-    drawFigureControl(at: point, in: context)
-  }
-
-  // MARK: - Figure | Source
-
-  /// The block's control this fragment draws, when it opens a block that has one.
-  private var figureControl: FigureControl.Control? {
-    guard let text = textLayoutManager?.attributedText, let range = documentRange else {
-      return nil
-    }
-    return FigureControl.control(atFragment: range, in: text)
-  }
-
-  /// Where the control goes, in the space whose origin is `point`: the top-right
-  /// corner of this fragment's card.
-  private func controlRect(at point: CGPoint) -> CGRect? {
-    guard figureControl != nil, let span = decorationSpan else { return nil }
-    let card = placement(at: point, span: span).cardRect(
-      padding: Self.cardPadding, span: span)
-    return FigureControl.rect(inCard: card)
-  }
-
-  /// The two segments, the one showing filled. On macOS only while the pointer is
-  /// over the block, so a page of diagrams is not covered in controls; on iOS,
-  /// which has no hover, always.
-  private func drawFigureControl(at point: CGPoint, in context: CGContext) {
-    guard let control = figureControl, let rect = controlRect(at: point) else { return }
-    #if !canImport(UIKit)
-      guard figureHover?.current == control.ordinal else { return }
-    #endif
-    context.saveGState()
-    let outline = CGPath(
-      roundedRect: rect, cornerWidth: rect.height / 2, cornerHeight: rect.height / 2,
-      transform: nil)
-    context.addPath(outline)
-    context.setFillColor(RFCColors.cardFill.cgColor)
-    context.fillPath()
-    for segment in [FigureControl.Segment.figure, .source] {
-      let piece = FigureControl.rect(of: segment, in: rect)
-      let showing = segment == control.shown
-      if showing {
-        context.saveGState()
-        context.addPath(outline)
-        context.clip()
-        context.setFillColor(RFCColors.accent.withAlphaComponent(0.18).cgColor)
-        context.fill(piece)
-        context.restoreGState()
-      }
-      drawLabel(
-        FigureControl.label(of: segment), centeredIn: piece,
-        color: showing ? RFCColors.label : RFCColors.secondaryLabel, in: context)
-    }
-    context.addPath(outline)
-    context.setStrokeColor(RFCColors.stroke.cgColor)
-    context.setLineWidth(0.5)
-    context.strokePath()
-    context.restoreGState()
-  }
-
-  private func drawLabel(
-    _ label: String, centeredIn rect: CGRect, color: PlatformColor, in context: CGContext
-  ) {
-    let text = NSAttributedString(
-      string: label,
-      attributes: [
-        .font: PlatformFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: color,
-      ])
-    let size = text.size()
-    let origin = CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2)
-    #if canImport(UIKit)
-      UIGraphicsPushContext(context)
-      text.draw(at: origin)
-      UIGraphicsPopContext()
-    #else
-      let previous = NSGraphicsContext.current
-      NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
-      text.draw(at: origin)
-      NSGraphicsContext.current = previous
-    #endif
   }
 
   /// Opaque lines rather than translucent fills, so where two fragments' pieces of

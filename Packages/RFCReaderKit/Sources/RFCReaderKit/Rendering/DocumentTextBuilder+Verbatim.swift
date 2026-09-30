@@ -52,6 +52,16 @@ extension DocumentTextBuilder {
         output.attributedSubstring(from: NSRange(location: start, length: output.length - start)))
       : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
+    let controlled = shown != .plain && style.emitsLinks
+    let contentWidth = max(
+      labelWidth, widestLine(of: text, scale: scale), controlled ? FigureControl.width : 0)
+    // A rendered diagram's card sits in the middle of the column; source code and
+    // plain artwork keep their indent. Through the indent, so selection, find and
+    // strokes follow. The scale fitted the block at `indent`, which this never
+    // narrows.
+    let bodyIndent =
+      content.kind == .artwork && shown != .plain
+      ? max(indent, (style.measure - contentWidth) / 2) : indent
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
     append(
@@ -61,7 +71,7 @@ extension DocumentTextBuilder {
         .foregroundColor: bodyColor,
         .rfcVerbatim: box,
         .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
+          indent: bodyIndent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
       ])
     if let decorated {
       decorate(decorated, from: bodyStart)
@@ -74,17 +84,12 @@ extension DocumentTextBuilder {
     output.addAttribute(
       .paragraphStyle,
       value: paragraphStyle(
-        indent: indent, spacingAfter: style.paragraphSpacing, wraps: false,
+        indent: bodyIndent, spacingAfter: style.paragraphSpacing, wraps: false,
         lineHeightMultiple: lineHeight),
       range: lastLine)
     decorate(from: start, with: .artwork)
-    let controlled = shown != .plain && style.emitsLinks
     let block = NSRange(location: start, length: output.length - start)
-    output.addAttribute(
-      .rfcContentWidth,
-      value: max(
-        labelWidth, widestLine(of: text, scale: scale), controlled ? FigureControl.width : 0),
-      range: block)
+    output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
     if controlled {
       reserveFigureControl(over: block, showing: shown == .rendered ? .figure : .source)
     }

@@ -24,18 +24,62 @@ struct FigureControlTests {
     #expect(control.height == FigureControl.height)
   }
 
-  @Test func `its left half shows the figure and its right half the source`() {
-    let control = FigureControl.rect(inCard: card)
+  /// The size AppKit's small segmented control fits "Figure" and "Source" in, so
+  /// the native control fills the rect the card and its strip were made for.
+  @Test func `the control is the size of a small native segmented control`() {
+    #expect(FigureControl.width == 110)
+    #expect(FigureControl.height == 20)
+    #expect(FigureControl.height <= FigureControl.strip)
+  }
+
+  @Test func `the controlled blocks are found at their first characters`() throws {
+    let built = build()
+    let first = try Fixtures.offset(of: "    0 ", in: built.text)
+    let blockStart = try #require(built.text.extent(ofBox: .rfcVerbatim, at: first)).location
     #expect(
-      FigureControl.segment(at: CGPoint(x: control.minX + 2, y: control.midY), in: control)
-        == .figure)
-    #expect(
-      FigureControl.segment(at: CGPoint(x: control.maxX - 2, y: control.midY), in: control)
-        == .source)
-    #expect(
-      FigureControl.segment(at: CGPoint(x: control.minX - 2, y: control.midY), in: control) == nil)
-    #expect(
-      FigureControl.segment(at: CGPoint(x: control.midX, y: control.maxY + 2), in: control) == nil)
+      FigureControl.blocks(in: built.text) == [
+        FigureControl.Block(location: blockStart, control: .init(ordinal: 0, shown: .figure))
+      ])
+  }
+
+  @Test func `a point anywhere in a controlled block names that block`() throws {
+    let built = build()
+    let later = try Fixtures.offset(of: "   |     Type", in: built.text)
+    #expect(FigureControl.ordinal(at: later, in: built.text) == 0)
+    #expect(FigureControl.ordinal(at: built.text.length, in: built.text) == nil)
+  }
+
+  @Test func `a point in a block without a control names none`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+      style: ReadingStyle())
+    let first = try Fixtures.offset(of: "+--+", in: built.text)
+    #expect(FigureControl.ordinal(at: first, in: built.text) == nil)
+    #expect(FigureControl.blocks(in: built.text).isEmpty)
+  }
+
+  /// A rendered diagram's card sits in the middle of the column, whichever of its
+  /// presentations shows, so switching them moves nothing sideways.
+  @Test(arguments: [PresentationChoices.defaults, PresentationChoices(shownAsSource: [0])])
+  func `a rendered diagram's card is centered in the column`(choices: PresentationChoices) throws {
+    let style = ReadingStyle()
+    let built = build(style: style, choices: choices)
+    let first = try Fixtures.offset(of: "    0 ", in: built.text)
+    let span = try #require(
+      FragmentGeometry.decorationSpan(in: built.text, fragment: fragment(at: first, in: built.text))
+    )
+    let width = try #require(span.contentWidth)
+    #expect(abs(span.indent + width / 2 - style.measure / 2) < 0.5)
+  }
+
+  @Test func `a block with no rendering keeps its indent`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+      style: ReadingStyle())
+    let first = try Fixtures.offset(of: "+--+", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.headIndent == 0)
   }
 
   /// The strip the control sits in is spacing before the block's first line, so

@@ -1,45 +1,147 @@
 import RFCReaderKit
-import os
 
 #if canImport(UIKit)
   import UIKit
+
+  typealias PlatformSegmentedControl = UISegmentedControl
 #else
   import AppKit
+
+  typealias PlatformSegmentedControl = NSSegmentedControl
 #endif
 
-/// Which rendered block the pointer is over, for the fragments to draw its Figure |
-/// Source control (macOS; iOS always shows it). Read by fragments as they draw,
-/// which TextKit may do off the main thread, so behind a lock.
-nonisolated final class FigureHover: Sendable {
-  private let ordinal = OSAllocatedUnfairLock<Int?>(initialState: nil)
+/// The Figure | Source controls, native segmented controls laid over the text view
+/// in the strip the builder reserves above a rendered block's first line, where no
+/// text is. Subviews of the text view, so they scroll with it; placed again only
+/// when the text moves under them. A print or an export draws fragments alone, so
+/// never shows one.
+///
+/// On iOS every block whose first line is on screen shows its control; on macOS only
+/// the one the pointer is over, fading in and out, so a page of diagrams is not
+/// covered in controls.
+final class FigureControls {
+  /// The installed document's blocks that have a control.
+  var blocks: [FigureControl.Block] = []
+  /// The block the pointer is over, on macOS.
+  var hovered: Int?
+  /// Showing, by the ordinal of the block each belongs to.
+  private var placed: [Int: PlatformSegmentedControl] = [:]
+  private var spare: [PlatformSegmentedControl] = []
 
-  var current: Int? { ordinal.withLock { $0 } }
+  func frame(of ordinal: Int?) -> CGRect? {
+    ordinal.flatMap { placed[$0]?.frame }
+  }
 
-  /// Whether the hovered block changed.
-  func set(_ new: Int?) -> Bool {
-    ordinal.withLock { value in
-      guard value != new else { return false }
-      value = new
-      return true
+  /// Shows a control at each frame, in the text view's coordinates, and puts away
+  /// the rest.
+  func show(
+    _ wanted: [(control: FigureControl.Control, frame: CGRect)], over view: PlatformTextView,
+    target: AnyObject, action: Selector, fades: Bool
+  ) {
+    let ordinals = Set(wanted.map(\.control.ordinal))
+    for (ordinal, segmented) in placed where !ordinals.contains(ordinal) {
+      placed[ordinal] = nil
+      retire(segmented, fades: fades)
     }
+    for (control, frame) in wanted {
+      let segmented =
+        placed[control.ordinal]
+        ?? bringOut(over: view, target: target, action: action, fades: fades)
+      segmented.frame = frame
+      segmented.tag = control.ordinal
+      #if canImport(UIKit)
+        segmented.selectedSegmentIndex = control.shown == .figure ? 0 : 1
+      #else
+        segmented.selectedSegment = control.shown == .figure ? 0 : 1
+      #endif
+      placed[control.ordinal] = segmented
+    }
+  }
+
+  private func bringOut(
+    over view: PlatformTextView, target: AnyObject, action: Selector, fades: Bool
+  ) -> PlatformSegmentedControl {
+    let segmented = spare.popLast() ?? make(target: target, action: action)
+    if segmented.superview !== view { view.addSubview(segmented) }
+    segmented.isHidden = false
+    #if canImport(UIKit)
+      segmented.alpha = 1
+    #else
+      if fades {
+        NSAnimationContext.runAnimationGroup { _ in segmented.animator().alphaValue = 1 }
+      } else {
+        segmented.alphaValue = 1
+      }
+    #endif
+    return segmented
+  }
+
+  /// Hidden, and kept for the next block. A fade ends hidden only if nothing
+  /// brought the control out again meanwhile.
+  private func retire(_ segmented: PlatformSegmentedControl, fades: Bool) {
+    spare.append(segmented)
+    #if canImport(UIKit)
+      segmented.isHidden = true
+    #else
+      guard fades else {
+        segmented.alphaValue = 0
+        segmented.isHidden = true
+        return
+      }
+      NSAnimationContext.runAnimationGroup { _ in
+        segmented.animator().alphaValue = 0
+      } completionHandler: {
+        // AppKit runs it on the main thread.
+        MainActor.assumeIsolated {
+          if segmented.alphaValue == 0 { segmented.isHidden = true }
+        }
+      }
+    #endif
+  }
+
+  private func make(target: AnyObject, action: Selector) -> PlatformSegmentedControl {
+    let labels = [FigureControl.Segment.figure, .source].map(FigureControl.label(of:))
+    #if canImport(UIKit)
+      let segmented = UISegmentedControl(items: labels)
+      segmented.setTitleTextAttributes(
+        [.font: UIFont.systemFont(ofSize: 11, weight: .medium)], for: .normal)
+      segmented.addTarget(target, action: action, for: .valueChanged)
+    #else
+      let segmented = NSSegmentedControl(
+        labels: labels, trackingMode: .selectOne, target: target, action: action)
+      segmented.controlSize = .small
+      segmented.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
+    #endif
+    return segmented
   }
 }
 
 extension RFCTextViewCoordinator {
-  /// The control under a point in text-container coordinates, and the segment it
-  /// hits: where `FigureControl` says it is drawn in the card of the fragment the
-  /// point is in.
-  func figureControl(atContainerPoint point: CGPoint) -> (
-    control: FigureControl.Control, segment: FigureControl.Segment
-  )? {
-    guard let text = textView?.textStorage, let layout = textView?.textLayoutManager,
-      let fragment = layout.textLayoutFragment(for: point),
-      let range = layout.range(of: fragment.rangeInElement),
-      let control = FigureControl.control(atFragment: range, in: text),
-      let rect = Self.figureControlRect(of: fragment, range: range, in: text),
-      let segment = FigureControl.segment(at: point, in: rect)
-    else { return nil }
-    return (control, segment)
+  /// Lays the controls over the blocks that show one now: on iOS those whose first
+  /// line is on screen, on macOS the one the pointer is over. Called whenever the
+  /// text moves under them or the pointer moves over it.
+  func updateFigureControls(fades: Bool = false) {
+    guard let textView, let built, let layout = textView.textLayoutManager else { return }
+    #if !canImport(UIKit)
+      figureControls.hovered = textView.window.flatMap {
+        figureBlock(atWindowPoint: $0.mouseLocationOutsideOfEventStream)
+      }
+    #endif
+    let origin = containerOrigin(of: textView)
+    var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
+    for block in figureControls.blocks where showsFigureControl(of: block) {
+      guard
+        let location = layout.location(
+          layout.documentRange.location, offsetBy: block.location),
+        let fragment = layout.textLayoutFragment(for: location),
+        let range = layout.range(of: fragment.rangeInElement),
+        let rect = Self.figureControlRect(of: fragment, range: range, in: built.text)
+      else { continue }
+      wanted.append((block.control, rect.offsetBy(dx: origin.x, dy: origin.y)))
+    }
+    figureControls.show(
+      wanted, over: textView, target: self, action: #selector(pressedFigureControl(_:)),
+      fades: fades)
   }
 
   /// A block's control in text-container coordinates, from its first fragment.
@@ -58,85 +160,68 @@ extension RFCTextViewCoordinator {
       inCard: placement.cardRect(padding: FragmentGeometry.cardPadding, span: span))
   }
 
-  /// Shows the other presentation when `segment` is not the one on.
-  func pressFigureControl(_ control: FigureControl.Control, _ segment: FigureControl.Segment) {
-    guard segment != control.shown else { return }
-    onToggleSource(control.ordinal)
+  /// Shows the other presentation when the segment pressed is not the one on.
+  @objc func pressedFigureControl(_ sender: PlatformSegmentedControl) {
+    #if canImport(UIKit)
+      let pressed: FigureControl.Segment = sender.selectedSegmentIndex == 0 ? .figure : .source
+    #else
+      let pressed: FigureControl.Segment = sender.selectedSegment == 0 ? .figure : .source
+    #endif
+    guard let block = figureControls.blocks.first(where: { $0.control.ordinal == sender.tag }),
+      pressed != block.control.shown
+    else { return }
+    onToggleSource(block.control.ordinal)
   }
-}
 
-#if canImport(AppKit) && !canImport(UIKit)
-  extension RFCTextViewCoordinator {
-    private func containerPoint(ofWindowPoint point: NSPoint) -> CGPoint? {
-      guard let textView else { return nil }
+  private func containerOrigin(of textView: PlatformTextView) -> CGPoint {
+    #if canImport(UIKit)
+      CGPoint(x: textView.textContainerInset.left, y: textView.textContainerInset.top)
+    #else
+      textView.textContainerOrigin
+    #endif
+  }
+
+  #if canImport(UIKit)
+    /// Whether a block's first line is between the viewport's top and bottom.
+    private func showsFigureControl(of block: FigureControl.Block) -> Bool {
+      guard let textView, let layout = textView.textLayoutManager else { return false }
+      let top = max(0, textView.viewportTop)
+      guard
+        let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)),
+        let last = layout.textLayoutFragment(
+          for: CGPoint(x: 0, y: top + textView.viewportHeight))
+      else { return false }
+      return layout.offset(of: first.rangeInElement.location) <= block.location
+        && block.location < layout.offset(of: last.rangeInElement.endLocation)
+    }
+  #else
+    private func showsFigureControl(of block: FigureControl.Block) -> Bool {
+      block.control.ordinal == figureControls.hovered
+    }
+
+    /// The block with a control under a point in window coordinates: its lines, or
+    /// the control showing for it, which reaches above its first line.
+    private func figureBlock(atWindowPoint point: NSPoint) -> Int? {
+      guard let textView, let built, let layout = textView.textLayoutManager,
+        let window = textView.window,
+        // A window of another app over this one hides the pointer from it.
+        NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+          == window.windowNumber
+      else { return nil }
       let viewPoint = textView.convert(point, from: nil)
-      return CGPoint(
-        x: viewPoint.x - textView.textContainerOrigin.x,
-        y: viewPoint.y - textView.textContainerOrigin.y)
-    }
-
-    /// A click on a block's control, taken before `NSTextView` starts a selection.
-    /// Answers whether it took the click.
-    func clickFigureControl(_ event: NSEvent) -> Bool {
-      guard event.clickCount == 1, event.window === textView?.window,
-        let point = containerPoint(ofWindowPoint: event.locationInWindow),
-        let (control, segment) = figureControl(atContainerPoint: point)
-      else { return false }
-      pressFigureControl(control, segment)
-      return true
-    }
-
-    /// Notes which rendered block the pointer is over, and redraws the first line of
-    /// the one it left and the one it entered, where the control is drawn. Answers
-    /// whether the pointer is on a control, for the cursor.
-    func hoverFigureControl(_ event: NSEvent) -> Bool {
-      guard let textView, let text = textView.textStorage, let layout = textView.textLayoutManager,
-        let point = containerPoint(ofWindowPoint: event.locationInWindow)
-      else { return false }
-      var hovered: Int?
-      if let fragment = layout.textLayoutFragment(for: point),
-        let range = layout.range(of: fragment.rangeInElement), range.location < text.length,
-        text.attribute(.rfcFigureControl, at: range.location, effectiveRange: nil) != nil,
-        let box = text.attribute(.rfcVerbatim, at: range.location, effectiveRange: nil)
-          as? VerbatimBox
-      {
-        hovered = box.ordinal
+      guard textView.visibleRect.contains(viewPoint),
+        headerHost?.view.frame.contains(viewPoint) != true
+      else { return nil }
+      if figureControls.frame(of: figureControls.hovered)?.contains(viewPoint) == true {
+        return figureControls.hovered
       }
-      let previous = figureHover.current
-      if figureHover.set(hovered) {
-        for ordinal in [previous, hovered].compactMap(\.self) {
-          redrawFigureControl(ofBlock: ordinal, in: text)
-        }
-      }
-      return figureControl(atContainerPoint: point) != nil
+      let origin = textView.textContainerOrigin
+      guard
+        let fragment = layout.textLayoutFragment(
+          for: CGPoint(x: viewPoint.x - origin.x, y: viewPoint.y - origin.y))
+      else { return nil }
+      return FigureControl.ordinal(
+        at: layout.offset(of: fragment.rangeInElement.location), in: built.text)
     }
-
-    func endFigureHover() {
-      guard let text = textView?.textStorage, let previous = figureHover.current,
-        figureHover.set(nil)
-      else { return }
-      redrawFigureControl(ofBlock: previous, in: text)
-    }
-
-    /// Redraws the first line of the block numbered `ordinal`.
-    private func redrawFigureControl(ofBlock ordinal: Int, in text: NSAttributedString) {
-      guard let textView, let layout = textView.textLayoutManager else { return }
-      var first: NSRange?
-      text.enumerateAttribute(.rfcVerbatim, in: NSRange(location: 0, length: text.length)) {
-        value, range, stop in
-        guard (value as? VerbatimBox)?.ordinal == ordinal else { return }
-        first = (text.string as NSString).paragraphRange(
-          for: NSRange(location: range.location, length: 0))
-        stop.pointee = true
-      }
-      guard let first, let textRange = layout.textRange(for: first) else { return }
-      layout.invalidateRenderingAttributes(for: textRange)
-      if let fragment = layout.textLayoutFragment(for: textRange.location) {
-        let frame = fragment.renderingSurfaceBounds.offsetBy(
-          dx: fragment.layoutFragmentFrame.minX + textView.textContainerOrigin.x,
-          dy: fragment.layoutFragmentFrame.minY + textView.textContainerOrigin.y)
-        textView.setNeedsDisplay(frame)
-      }
-    }
-  }
-#endif
+  #endif
+}

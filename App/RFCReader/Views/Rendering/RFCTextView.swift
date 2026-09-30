@@ -309,15 +309,6 @@ struct ReaderInputs {
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
       }
-      textView.clickFigureControl = { [weak coordinator = context.coordinator] event in
-        coordinator?.clickFigureControl(event) ?? false
-      }
-      textView.hoverFigureControl = { [weak coordinator = context.coordinator] event in
-        coordinator?.hoverFigureControl(event) ?? false
-      }
-      textView.endFigureHover = { [weak coordinator = context.coordinator] in
-        coordinator?.endFigureHover()
-      }
 
       let host = NSHostingController(rootView: inputs.header)
       textView.addSubview(host.view)

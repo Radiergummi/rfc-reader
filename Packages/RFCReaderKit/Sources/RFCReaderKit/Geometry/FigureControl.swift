@@ -2,10 +2,10 @@ import CoreGraphics
 import Foundation
 
 /// The Figure | Source control in a rendered block's card: which of the block's
-/// presentations is showing, and the pointer's way to the other. Drawn by the layout
-/// fragment and hit-tested by the coordinator, as a reference chip is, so it is
-/// nothing in the storage and never a view. Where it goes and what a point on it
-/// means are answered here.
+/// presentations is showing, and the way to the other. A native segmented control
+/// the coordinator lays over the text view, in a strip the builder reserves above
+/// the block's first line, so it is nothing in the storage. Which blocks have one,
+/// and where it goes, are answered here.
 public enum FigureControl {
   public enum Segment: String, Sendable {
     case figure
@@ -19,9 +19,15 @@ public enum FigureControl {
     public let shown: Segment
   }
 
-  public static let height: CGFloat = 18
-  public static let segmentWidth: CGFloat = 54
-  public static var width: CGFloat { segmentWidth * 2 }
+  /// A block that has a control: where the block starts, and what its control shows.
+  public struct Block: Equatable, Sendable {
+    public let location: Int
+    public let control: Control
+  }
+
+  /// AppKit's small segmented control, fitted to the two labels.
+  public static let width: CGFloat = 110
+  public static let height: CGFloat = 20
   /// From the card's top and right edges: half the card's padding, where the
   /// card's own rounding leaves room.
   public static let inset: CGFloat = FragmentGeometry.cardPadding / 2
@@ -41,19 +47,6 @@ public enum FigureControl {
     CGRect(x: card.maxX - inset - width, y: card.minY + inset, width: width, height: height)
   }
 
-  /// Where one segment is drawn within `control`.
-  public static func rect(of segment: Segment, in control: CGRect) -> CGRect {
-    CGRect(
-      x: segment == .figure ? control.minX : control.minX + segmentWidth, y: control.minY,
-      width: segmentWidth, height: control.height)
-  }
-
-  /// The segment under `point`, or nil off the control.
-  public static func segment(at point: CGPoint, in control: CGRect) -> Segment? {
-    guard control.contains(point) else { return nil }
-    return point.x < control.minX + segmentWidth ? .figure : .source
-  }
-
   /// The control a fragment shows, when the fragment opens a block that has one.
   /// Only the first: the control sits in the strip above the block's first line.
   public static func control(atFragment fragment: NSRange, in text: NSAttributedString)
@@ -68,6 +61,29 @@ public enum FigureControl {
       text.extent(ofBox: .rfcVerbatim, at: fragment.location)?.location == fragment.location
     else { return nil }
     return Control(ordinal: box.ordinal, shown: shown)
+  }
+
+  /// Every block that has a control, in document order.
+  public static func blocks(in text: NSAttributedString) -> [Block] {
+    var blocks: [Block] = []
+    text.enumerateAttribute(
+      .rfcVerbatim, in: NSRange(location: 0, length: text.length),
+      options: .longestEffectiveRangeNotRequired
+    ) { value, range, _ in
+      guard value != nil, let control = control(atFragment: range, in: text) else { return }
+      blocks.append(Block(location: range.location, control: control))
+    }
+    return blocks
+  }
+
+  /// The block with a control that holds `location`, by ordinal: the one the
+  /// pointer is over.
+  public static func ordinal(at location: Int, in text: NSAttributedString) -> Int? {
+    guard location >= 0, location < text.length,
+      text.attribute(.rfcFigureControl, at: location, effectiveRange: nil) != nil
+    else { return nil }
+    return (text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox)?
+      .ordinal
   }
 
   public static func shown(atFragment fragment: NSRange, in text: NSAttributedString)
