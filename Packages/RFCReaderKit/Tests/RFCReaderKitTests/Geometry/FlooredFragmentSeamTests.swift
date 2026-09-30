@@ -35,8 +35,8 @@ struct FlooredFragmentSeamTests {
   /// at or above it, unless it is within 0.0001 of the pixel below.
   private func uiKitFloor(_ y: CGFloat, scale: CGFloat) -> CGFloat {
     let pixels = y * scale
-    let up = pixels.rounded(.up)
-    return (up - pixels < 0.0001 ? up : pixels.rounded(.down)) / scale
+    let above = pixels.rounded(.up)
+    return (above - pixels < 0.0001 ? above : pixels.rounded(.down)) / scale
   }
 
   /// Where UIKit puts a fragment's local origin on the canvas: its view's frame
@@ -60,33 +60,72 @@ struct FlooredFragmentSeamTests {
         containerWidth: 600,
         indent: 0
       )
+      let bottom = index != fragmentTops.count - 1
+      let met = placement.meetingFlooredNeighbor(
+        of: CGRect(x: 0, y: 0, width: 600, height: advance), bottom: bottom, scale: scale)
       return placement.snappingJoins(
-        of: CGRect(x: 0, y: 0, width: 600, height: advance),
+        of: met,
         top: index != 0,
-        bottom: index != fragmentTops.count - 1,
+        bottom: bottom,
         toDevice: CGAffineTransform(translationX: 0, y: origin).concatenating(canvas)
       )
       .offsetBy(dx: 0, dy: origin)
     }
   }
 
-  /// A card fragment's surface starts `cardPadding / 2` and a point of slack above
-  /// it; one whose glyphs reach higher starts higher still.
-  private let surfaceTops: [CGFloat] = [-6, -6, -7, -6]
-
-  @Test(arguments: [2, 3] as [CGFloat])
-  func `consecutive fragments meet with no gap and no overlap`(scale: CGFloat) {
-    let drawn = cards(scale: scale, surfaceTops: surfaceTops)
-    for (upper, lower) in zip(drawn, drawn.dropFirst()) {
-      #expect(abs(upper.maxY - lower.minY) < 1e-6, "a join apart at \(scale)x: \(upper.maxY) against \(lower.minY)")
+  /// The rendering surface's top for each fragment, as `renderingSurfaceBounds`
+  /// declares it: a card fragment's starts `cardPadding / 2` and a point of slack
+  /// above its frame, and one whose glyphs reach higher starts higher still, at
+  /// whatever fraction they reach. Every fraction in twentieths of a point is
+  /// tried, on the second and fourth fragment.
+  private var surfaceTopSets: [[CGFloat]] {
+    stride(from: 0.05, to: 1, by: 0.05).map { reach -> [CGFloat] in
+      [-6, -6 - reach, -6, -6 - reach / 2].map {
+        FragmentGeometry.startingOnAWholePoint(CGRect(x: 0, y: $0, width: 600, height: 40)).minY
+      }
     }
   }
 
   @Test(arguments: [2, 3] as [CGFloat])
+  func `consecutive fragments meet with no gap and no overlap`(scale: CGFloat) {
+    for surfaceTops in surfaceTopSets {
+      let drawn = cards(scale: scale, surfaceTops: surfaceTops)
+      for (upper, lower) in zip(drawn, drawn.dropFirst()) {
+        #expect(
+          abs(upper.maxY - lower.minY) < 1e-6,
+          "a join apart at \(scale)x, surfaces from \(surfaceTops): \(upper.maxY) against \(lower.minY)"
+        )
+      }
+    }
+  }
+
+  /// On NSTextView's exact placement and in a print, nothing is floored, and the
+  /// neighbor's origin is exactly a frame's height below.
+  @Test func `on whole pixels already, a join does not move`() {
+    let placement = FragmentGeometry.Placement(
+      origin: CGPoint(x: 0, y: 4), frame: CGRect(x: 0, y: 100, width: 600, height: 29.5),
+      containerWidth: 600, indent: 0
+    )
+    let rect = CGRect(x: 0, y: 4, width: 600, height: 29.5)
+    #expect(placement.meetingFlooredNeighbor(of: rect, bottom: true, scale: 2) == rect)
+    #expect(placement.meetingFlooredNeighbor(of: rect, bottom: false, scale: 3) == rect)
+  }
+
+  @Test func `a surface starts on a whole point, and ends where it did`() {
+    let surface = FragmentGeometry.startingOnAWholePoint(
+      CGRect(x: -10, y: -6.4, width: 620, height: 42.9))
+    #expect(surface.minY == -7)
+    #expect(abs(surface.maxY - 36.5) < 1e-9)
+    #expect(surface.minX == -10 && surface.width == 620)
+  }
+
+  @Test(arguments: [2, 3] as [CGFloat])
   func `every join lands on a whole device pixel`(scale: CGFloat) {
-    for card in cards(scale: scale, surfaceTops: surfaceTops).dropLast() {
-      let pixel = card.maxY * scale
-      #expect(abs(pixel - pixel.rounded()) < 1e-6, "a join inside a pixel at \(scale)x")
+    for surfaceTops in surfaceTopSets {
+      for card in cards(scale: scale, surfaceTops: surfaceTops).dropLast() {
+        let pixel = card.maxY * scale
+        #expect(abs(pixel - pixel.rounded()) < 1e-6, "a join inside a pixel at \(scale)x")
+      }
     }
   }
 }
