@@ -97,7 +97,11 @@ struct StatusBanner: View {
     .font(.subheadline)
   }
 
+  /// Hidden from accessibility: the row's text carries the meaning, as a `Label`'s
+  /// title does.
   private func symbol(_ name: String) -> some View {
-    Image(systemName: name).frame(width: symbolWidth)
+    Image(systemName: name)
+      .frame(width: symbolWidth)
+      .accessibilityHidden(true)
   }
 }
