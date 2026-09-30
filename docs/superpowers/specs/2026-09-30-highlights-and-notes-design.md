@@ -553,7 +553,8 @@ is deferred until the column exists and has been used.
   `[RFC 9110, Section 4.2](https://www.rfc-editor.org/rfc/rfc9110#section-4.2)`, with its notes
   under it. Section and block notes sit under their heading. Detached annotations come last,
   with their quotes. An ambiguous highlight is left out, but its notes are not: they come last
-  with the detached annotations, marked as not placed, with no citation to a position.
+  with the detached annotations, marked as not placed. Like a detached annotation, each
+  carries the highlight's quote text, but no citation to a position.
 - A note body is already Markdown. The export only rewrites its links: `rfc://` becomes an
   rfc-editor.org URL, since the file leaves the app, and `attachment:<uuid>` becomes a relative
   path into a folder written beside the file. Without attachments, the export is a single
