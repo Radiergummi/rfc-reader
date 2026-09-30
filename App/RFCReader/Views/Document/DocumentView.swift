@@ -517,6 +517,12 @@ struct DocumentView: View {
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
+    // A scan has no text to fetch (#207): its page is the index's.
+    guard PublishedOriginalPage.loadsText(id, formats: metadata?.formats) else {
+      session.skipLoad()
+      reader.isLoading = false
+      return
+    }
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
     session.startLoad(from: library) { [reader, library, navigation, modelContext, id] loaded in
       // Not over the next document's reader state; see `requestBuild`'s caller.
@@ -537,6 +543,7 @@ struct DocumentView: View {
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
+      reader.publishedOriginal = Self.publishedOriginal(id, text: loaded, in: library)
       // Last and apart, so the first build does not wait for it; and, like the
       // rest, not written over the next document's reader state.
       Task(name: "Extract requirements") { [reader, navigation, id] in
@@ -546,19 +553,28 @@ struct DocumentView: View {
       }
     } failed: { [reader, navigation, id] in
       // No header is coming, so the toolbar names the RFC that failed; unless it is
-      // a scan (`showsPublishedOriginal`), whose page shows the header.
+      // a scan (`publishedOriginal`), whose page shows the header.
       guard navigation.selection == id else { return }
       reader.documentFailedToLoad()
     }
   }
 
-  /// Whether the index says this RFC is only a scan, whose page shows its header
-  /// (#207); again when the index loads, which may be after the fetch failed.
+  /// Why this RFC is read as its original, if it is (#207): as the load starts, and
+  /// again when the index loads, which may be after the fetch ended.
   private func markPublishedOriginal() {
     // Not while fading out: the reader state is the selected document's.
     guard navigation.selection == id else { return }
-    reader.showsPublishedOriginal =
-      metadata.flatMap { PublishedOriginal(id, formats: $0.formats) } != nil
+    reader.publishedOriginal = Self.publishedOriginal(
+      id, text: session.state.document, in: library)
+  }
+
+  /// Static, so the load's callback can ask it without capturing the view.
+  private static func publishedOriginal(
+    _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
+  ) -> PublishedOriginalPage.Kind? {
+    library.metadata(id).flatMap {
+      PublishedOriginalPage.Kind(id, formats: $0.formats, text: document)
+    }
   }
 
   /// What the Info pane shows. Again whenever the index loads or refreshes: a document

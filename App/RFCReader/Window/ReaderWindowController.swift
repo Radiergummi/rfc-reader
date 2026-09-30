@@ -536,7 +536,8 @@
     /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
     /// chosen; a different paper picked in the panel itself is scaled to fit.
     func printDocument() {
-      guard !isPrinting, let id = navigation.selection, reader.hasDocument, let window else {
+      guard !isPrinting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      else {
         return
       }
       // The PDF's pages carry their own margins; AppKit's, left in, would shrink
@@ -583,7 +584,8 @@
     /// picks (#376), as a sheet on this window. A paged format is laid out for the
     /// paper Page Setup has chosen, as a print is.
     func exportDocument() {
-      guard !isExporting, let id = navigation.selection, reader.hasDocument, let window else {
+      guard !isExporting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      else {
         return
       }
       let panel = NSSavePanel()

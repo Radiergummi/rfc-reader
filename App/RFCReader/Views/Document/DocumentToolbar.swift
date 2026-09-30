@@ -119,7 +119,10 @@ import SwiftUI
             Button(format.name) { exportDocument(format) }
           }
         }
+        // Not for a document read as its PDF or PostScript original (#207).
+        .disabled(!reader.offersPrintAndExport)
         Button("Print…", systemImage: "printer") { printDocument() }
+          .disabled(!reader.offersPrintAndExport)
       } label: {
         Label("More", systemImage: "ellipsis")
       }

@@ -79,7 +79,10 @@ final class DocumentSession {
     originalTextLoad?.cancel()
   }
 
-  var hasStartedLoading: Bool { load != nil }
+  /// The index says the RFC is a scan, with no text to fetch (#207).
+  @ObservationIgnored private var skipsLoad = false
+
+  var hasStartedLoading: Bool { load != nil || skipsLoad }
   var hasStartedOriginalTextLoad: Bool { originalTextLoad != nil }
 
   /// Fetches the original text: once per session, the first time it is shown, plus
@@ -101,6 +104,15 @@ final class DocumentSession {
         originalTextFailure = LoadFailure(error: error)
       }
     }
+  }
+
+  /// Starts no fetch, for a scan, and counts as started: appearing again, which a
+  /// collapsed split view does spuriously, does not try the load after all.
+  func skipLoad() {
+    load?.cancel()
+    load = nil
+    skipsLoad = true
+    trace("load skipped, a scan")
   }
 
   /// Fetches, and hands the document to `loaded` once it is the state's, or says it

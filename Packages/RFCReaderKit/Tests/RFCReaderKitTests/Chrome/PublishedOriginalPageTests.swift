@@ -54,3 +54,49 @@ struct PublishedOriginalPageTests {
     #expect(FileFormat.postScript.displayName == "PostScript")
   }
 }
+
+/// What else changes for an RFC read as its original (#207): a scan has no text to
+/// fetch, and neither kind is printed or exported, since the text is not the RFC.
+@Suite("Published original: load, print and export")
+struct PublishedOriginalActionsTests {
+  private let pointer = RFCDocument(
+    header: DocumentHeader(title: ""),
+    sections: [
+      Section(
+        anchor: "section-1", title: "",
+        blocks: [.paragraph(Paragraph(text: "Published in another form, in a file."))])
+    ],
+    source: .text)
+
+  @Test func `the kind is the same in either mode`() {
+    #expect(PublishedOriginalPage.Kind(.rfc(8), formats: [.pdf], text: nil) == .scan)
+    #expect(
+      PublishedOriginalPage.Kind(.rfc(1119), formats: [.text, .postScript, .pdf], text: pointer)
+        == .pointer)
+    #expect(
+      PublishedOriginalPage.Kind(.rfc(1119), formats: [.text, .postScript], text: nil) == nil)
+  }
+
+  /// A scan has no text to fetch; an index that does not know the document yet, or
+  /// lists a text, leaves the load to find out.
+  @Test func `only a scan skips the load`() {
+    #expect(!PublishedOriginalPage.loadsText(.rfc(8), formats: [.pdf]))
+    #expect(PublishedOriginalPage.loadsText(.rfc(8), formats: nil))
+    #expect(PublishedOriginalPage.loadsText(.rfc(1119), formats: [.text, .postScript, .pdf]))
+  }
+
+  @Test func `a document read as its text is printed and exported`() {
+    #expect(PublishedOriginalPage.offersPrintAndExport(hasDocument: true, kind: nil))
+  }
+
+  @Test func `nothing is printed or exported without a document`() {
+    #expect(!PublishedOriginalPage.offersPrintAndExport(hasDocument: false, kind: nil))
+    #expect(!PublishedOriginalPage.offersPrintAndExport(hasDocument: false, kind: .scan))
+  }
+
+  /// The pointer loaded, but printing it would print the line that says where the
+  /// RFC is, not the RFC.
+  @Test func `a pointer is neither printed nor exported`() {
+    #expect(!PublishedOriginalPage.offersPrintAndExport(hasDocument: true, kind: .pointer))
+  }
+}
