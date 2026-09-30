@@ -178,16 +178,12 @@ struct CorpusBackedAppendixHeadingTests {
 
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedCatalogTests {
-  private func catalogs(in document: RFCDocument) -> [[DefinitionItem]] {
-    document.everyBlock.compactMap(\.definitionItems)
-  }
-
   /// RFC 1012's index of RFCs is a thousand `NN  - Author, "Title", ...` entries,
   /// each hung past its number. They were artwork, every reference in them unlinked;
   /// they are one catalog now, numbered as the document numbers them (#204).
   @Test func `the RFC index of RFC 1012 is a catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
-    let entries = try #require(catalogs(in: document).max { $0.count < $1.count })
+    let entries = try #require(document.definitionLists.max { $0.count < $1.count })
     #expect(entries.count > 900)
     #expect(entries.first?.term.plainText == "1")
     #expect(
@@ -201,7 +197,7 @@ struct CorpusBackedCatalogTests {
   @Test func `an entry's indented description joins the entry`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
     let entry = try #require(
-      catalogs(in: document).flatMap { $0 }.first { $0.term.plainText == "2352" })
+      document.definitionLists.flatMap { $0 }.first { $0.term.plainText == "2352" })
     #expect(entry.definition.count == 2)
   }
 
@@ -211,7 +207,7 @@ struct CorpusBackedCatalogTests {
   /// out as one list per entry or two.
   @Test func `a short description does not break the catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc2300"))
-    let lists = catalogs(in: document)
+    let lists = document.definitionLists
     #expect(lists.count < 20, "\(lists.count) catalogs")
     #expect(document.artworkText.allSatisfy { $0 != "A Draft Standard protocol." })
   }
@@ -221,7 +217,7 @@ struct CorpusBackedCatalogTests {
   /// second paragraph.
   @Test func `a caption centered under a legend stays out of it`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
-    let entries = catalogs(in: document).flatMap { $0 }
+    let entries = document.definitionLists.flatMap { $0 }
     #expect(!entries.isEmpty)
     #expect(entries.allSatisfy { $0.definition.count == 1 }, "an entry took a second paragraph")
   }
@@ -231,7 +227,7 @@ struct CorpusBackedCatalogTests {
   @Test func `right-aligned numbers stay one catalog`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1140"))
     let holding996 = try #require(
-      catalogs(in: document).first { $0.contains { $0.term.plainText == "996" } })
+      document.definitionLists.first { $0.contains { $0.term.plainText == "996" } })
     #expect(holding996.contains { $0.term.plainText == "1006" })
   }
 
@@ -239,11 +235,49 @@ struct CorpusBackedCatalogTests {
   /// caption. They are three catalogs, not one that runs its numbering again.
   @Test func `tables under their own captions are separate catalogs`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc206"))
-    for entries in catalogs(in: document) {
+    for entries in document.definitionLists {
       let terms = entries.compactMap { Int($0.term.plainText) }
       #expect(terms == terms.sorted(), "a catalog restarts its numbering: \(terms)")
       #expect(entries.allSatisfy { $0.definition.count == 1 })
     }
+  }
+}
+
+@Suite("Corpus-backed: hanging-indent definitions", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedHangingDefinitionTests {
+  /// RFC 6186 sets each SRV service label as xml2rfc sets a `<dl>` entry: the label,
+  /// two spaces, and its description hung three columns in. Each was artwork (#436).
+  @Test func `a hanging-indent entry is a definition, not artwork`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc6186"))
+    let terms = document.definitionLists.flatMap { $0 }.map(\.term.plainText)
+    #expect(terms.contains("submission:"))
+    #expect(terms.contains("_imap:"))
+    #expect(document.artworkText.allSatisfy { !$0.hasPrefix("submission:") })
+  }
+
+  /// A page break in RFC 5545 cuts the first parameter's `Description:` in the
+  /// middle of a sentence. The prose test that rejoins a paragraph's halves refuses
+  /// a hanging one, so the rest was the definition's second paragraph.
+  @Test func `a definition cut by a page break is one paragraph`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc5545"))
+    let description = try #require(
+      document.definitionLists.flatMap { $0 }.first { $0.term.plainText == "Description:" })
+    #expect(description.definition.count == 1)
+    #expect(description.definition.first?.paragraph?.plainText.contains("quoted-string") == true)
+  }
+
+  /// RFC 6614's terminology aligns each definition under its own text, and sets
+  /// the first, one line long, above the two that hang. One list of three.
+  @Test func `a one-line entry joins the hanging entries beside it`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc6614"))
+    let list = try #require(
+      document.definitionLists.first {
+        $0.contains { $0.term.plainText == "RADIUS/TLS Client:" }
+      })
+    #expect(
+      list.map(\.term.plainText) == [
+        "RADIUS/TLS node:", "RADIUS/TLS Client:", "RADIUS/TLS Server:",
+      ])
   }
 }
 
@@ -419,15 +453,26 @@ struct CorpusBackedOmittedBoilerplateTests {
     #expect(!document.allSections.contains { $0.titleText.hasPrefix("The following documents") })
   }
 
-  /// A refused line can continue a block rather than start one: RFC 7231's contents
-  /// has an entry wrapped to column 0 in the middle of a block. The omitted contents end
-  /// at that line, as they did when it was a heading, and the lines of its block
-  /// before it are the contents' still.
+  /// A refused line can continue a block rather than start one: RFC 2223 quotes a
+  /// `Status of this Memo` in its nroff source, and the sentence under it starts at
+  /// column 0 two lines into a block of requests. The omitted status ends at that line,
+  /// as it did when it was a heading, and the lines of its block before it are the
+  /// status's still.
   @Test func `a refused line inside a block ends the boilerplate at that line`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc2223"))
+    let text = document.paragraphs.map(\.plainText) + document.artworkText
+    #expect(text.contains { $0.hasPrefix("This memo") && $0.contains("avian carriers") })
+    #expect(!text.contains { $0.hasPrefix(".fi") && $0.contains("avian carriers") })
+  }
+
+  /// A contents entry takes no heading's place, so it ends no omitted contents: RFC
+  /// 7231's has one wrapped to column 0 behind a stray `ed` in the middle of a block,
+  /// which ended the contents there and put the rest of them in the body (#403).
+  @Test func `a contents entry at column zero does not end the contents`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc7231"))
     let text = document.paragraphs.map(\.plainText) + document.artworkText
     #expect(!text.contains { $0.contains("Payment Required ....") })
-    #expect(text.contains { $0.contains("Origination Date ....") })
+    #expect(!text.contains { $0.contains("Origination Date ....") })
   }
 }
 
@@ -496,6 +541,41 @@ struct CorpusBackedDefinedTermsTests {
       let defined = try #require(document.definedTerms[term])
       #expect(defined.anchor == anchor, "\(term)")
       #expect(!defined.definition.isEmpty, "\(term)")
+    }
+  }
+}
+
+/// What a converted citation points at: its entry's document, read from outside the
+/// entry's title, and the entry itself, kept through the XML (#424).
+@Suite("Corpus-backed: bibliography entries", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedBibliographyEntryTests {
+  /// RFC 8259 cites RFC 8174, whose title is about the keywords of RFC 2119, and lists
+  /// an erratum of RFC 7159 ahead of RFC 7159's own entry.
+  @Test func `a citation keeps its entry and its document through the XML`() throws {
+    let parsed = LegacyTextParser.parse(try CorpusText.text("rfc8259"))
+    let entries = parsed.referenceLists.flatMap(\.entries)
+    #expect(entries.first { $0.anchor == "RFC8174" }?.documentID == .rfc(8174))
+
+    let converted = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(parsed).utf8))
+    let targets = converted.everyCrossReference.map(\.target)
+    #expect(targets.contains(.document(.rfc(8174), section: nil, entry: "RFC8174")))
+    #expect(!targets.contains(.document(.rfc(2119), section: nil, entry: "RFC8174")))
+    // Each citation, paired with its conversion: one that resolved to an entry keeps
+    // it, and a bare "RFC 7159", which records none, converts to RFC 7159's own entry
+    // rather than the erratum listed ahead of it.
+    let citations = parsed.everyCrossReference.map(\.target)
+    try #require(citations.count == targets.count)
+    #expect(citations.contains(.document(.rfc(7159), section: nil, entry: "Err3915")))
+    #expect(citations.contains(.document(.rfc(7159), section: nil, entry: nil)))
+    for (citation, conversion) in zip(citations, targets) {
+      switch citation {
+      case .document(.rfc(7159), let section, nil):
+        #expect(conversion == .document(.rfc(7159), section: section, entry: "RFC7159"))
+      case .document(_, _, .some):
+        #expect(conversion == citation)
+      default:
+        continue
+      }
     }
   }
 }
