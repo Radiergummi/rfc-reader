@@ -15,9 +15,9 @@ import Testing
 struct QuoteCitationTests {
   private let anchors = AnchorIndex([
     .init(anchor: "abstract", offset: 0),
-    .init(anchor: "section-8", offset: 100, heading: "8. Content", number: "8"),
+    .init(anchor: "section-8", offset: 100, heading: "8. Content", place: "8"),
     .init(anchor: "figure-3", offset: 150),
-    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type", number: "8.3"),
+    .init(anchor: "section-8.3", offset: 200, heading: "8.3. Content-Type", place: "8.3"),
     .init(anchor: "acknowledgements", offset: 300, heading: "Acknowledgements"),
   ])
 
@@ -286,6 +286,28 @@ struct QuoteCitationTests {
       QuoteCitation.quote(
         of: NSRange(location: start, length: end - start), in: built, document: .rfc(9110)))
     #expect(quote.markdown.hasSuffix("(https://www.rfc-editor.org/rfc/rfc9110#section-2)"))
+  }
+
+  /// Quoted from an appendix numbered like a section, the citation names the appendix,
+  /// as the toolbar's Cite does, not section 1 (#429).
+  @Test func `a quote from a numbered appendix cites the appendix`() throws {
+    let built = DocumentTextBuilder.build(
+      RFCDocument(
+        header: DocumentHeader(title: "T"),
+        sections: [
+          Section(
+            anchor: "appendix-1", number: "1", title: "Tables",
+            blocks: [.paragraph(Paragraph(text: "Quoted."))], isAppendix: true)
+        ],
+        source: .xml),
+      style: ReadingStyle())
+    let start = try Fixtures.offset(of: "Quoted.", in: built.text)
+    let quote = try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: start, length: 7), in: built, document: .rfc(1163)))
+    #expect(
+      quote.markdown.hasSuffix(
+        "— [RFC 1163, Appendix 1](https://www.rfc-editor.org/rfc/rfc1163#appendix-1)"))
   }
 
   /// A figure's own fence line would close a fence of the same length, and the rest of

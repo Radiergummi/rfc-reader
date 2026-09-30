@@ -197,6 +197,26 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   public var id: String { anchor }
 
+  /// What a link or a citation names this section by, as `RFCLink.section` does: its
+  /// number, or for an appendix numbered like a section its anchor, `appendix-1`,
+  /// since the number alone names section 1 (#429). Nil when it has no number.
+  ///
+  /// Read from the anchor, the way `RFCLink` reads a fragment, rather than from
+  /// `isAppendix`: read back from RFCXML, a numbered appendix's subsection is in
+  /// `<back>` and so an appendix, but its anchor is a section's, `section-1.1`. Only
+  /// a number that starts with a digit is named by the anchor: a lettered appendix an
+  /// author anchored `appendix-1`, as RFC 9264 does, is still Appendix A.
+  public var place: String? {
+    guard let number else { return nil }
+    if number.first?.isNumber == true,
+      let fromAnchor = SectionAnchor.sectionNumber(fromAnchor: anchor),
+      PlaceName.isAppendixAnchor(fromAnchor)
+    {
+      return fromAnchor
+    }
+    return number
+  }
+
   public init(
     anchor: String,
     number: String? = nil,
@@ -651,12 +671,15 @@ public struct CrossReference: Sendable, Hashable, Codable {
 
   /// `section` of the document or entry called `name`, worded by `sectionFormat`.
   private func sectionLabel(_ section: String, of name: String) -> String {
-    let sectionLabel = Self.nonBreakingLabel("\(Self.sectionNoun(section))\u{00A0}\(section)")
+    let sectionLabel = PlaceName.spelledOut(section, separator: "\u{00A0}")
     switch sectionFormat {
     case .of: return "\(sectionLabel) of [\(name)]"
     case .comma: return "[\(name)], \(sectionLabel)"
     case .parens: return "[\(name)] (\(sectionLabel))"
-    case .bare: return section
+    // The number alone, unless it is an appendix's that a number alone would
+    // call a section's.
+    case .bare:
+      return PlaceName.isAppendixAnchor(section) ? sectionLabel : section
     }
   }
 
@@ -691,22 +714,13 @@ public struct CrossReference: Sendable, Hashable, Codable {
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
-    let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
+    let composed = section.map { "\(name)\u{00A0}\(PlaceName.abbreviated($0))" } ?? name
     return Display(text: composed, isChip: true)
   }
 
   /// The text a reader shows for this reference -- what `[Inline].plainText`
   /// flattens to, and what the reader draws.
   public var displayLabel: String { display.text }
-
-  /// "Appendix" for an appendix, `A` or `A.1`, as xml2rfc words it, and "Section"
-  /// for anything else. xml2rfc words a section that is neither numbered nor lettered,
-  /// such as a registry's named one, "Part"; the reader keeps "Section" for it.
-  static func sectionNoun(_ section: String) -> String {
-    guard let first = section.first, ("A"..."Z").contains(first) else { return "Section" }
-    let rest = section.dropFirst()
-    return rest.isEmpty || rest.first == "." ? "Appendix" : "Section"
-  }
 
   /// A label should never break between its word and its number, so "RFC 9110"
   /// and "Section 4.2" are joined with U+00A0.
