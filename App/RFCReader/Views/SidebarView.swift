@@ -43,7 +43,12 @@ struct SidebarView: View {
       // around it to give `.sidebar` placement a meaning. Measured — the window
       // contained no text field at all.
       .safeAreaInset(edge: .top) {
-        SidebarSearchField(navigation: navigation)
+        VStack(alignment: .leading, spacing: 6) {
+          SidebarSearchField(navigation: navigation, library: library)
+          // The field keeps the query as typed; the filters it sets are named
+          // under it, each removable (#21). `NSSearchField` draws no tokens.
+          SearchFilterChips(navigation: navigation)
+        }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
       }
@@ -70,7 +75,7 @@ struct SidebarView: View {
       }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
-      .searchable(text: Bindable(navigation).searchText, prompt: "Search")
+      .filterSearchable(navigation: navigation, prompt: "Search")
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
@@ -358,16 +363,20 @@ struct SidebarView: View {
   /// the dependency reaches no further than the field.
   private struct SidebarSearchField: NSViewRepresentable {
     let navigation: NavigationModel
+    /// Where completion finds the working groups to offer.
+    let library: LibraryModel
 
     func makeNSView(context: Context) -> NSSearchField {
       let field = NSSearchField()
       field.placeholderString = "Search"
       field.delegate = context.coordinator
+      field.suggestionsDelegate = context.coordinator
       return field
     }
 
     func updateNSView(_ field: NSSearchField, context: Context) {
       context.coordinator.navigation = navigation
+      context.coordinator.library = library
       // Only when it differs: assigning moves the insertion point to the end, which
       // mid-edit would jump the caret on every keystroke.
       if field.stringValue != navigation.searchText {
@@ -375,14 +384,54 @@ struct SidebarView: View {
       }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation) }
+    func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation, library: library) }
 
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
+    final class Coordinator: NSObject, NSSearchFieldDelegate, NSTextSuggestionsDelegate {
+      typealias SuggestionItemType = SearchQuery.Suggestion
+
       var navigation: NavigationModel
+      var library: LibraryModel
 
-      init(navigation: NavigationModel) {
+      init(navigation: NavigationModel, library: LibraryModel) {
         self.navigation = navigation
+        self.library = library
       }
+
+      // MARK: Completion (#21)
+
+      /// AppKit's own suggestions menu under the field: the qualifier being typed,
+      /// or its values. A qualifier the search does not know is shown dimmed, with
+      /// what becomes of it.
+      func textField(
+        _ textField: NSTextField,
+        provideUpdatedSuggestions responseHandler: @escaping (ItemResponse) -> Void
+      ) {
+        guard let index = library.index else { return responseHandler(ItemResponse()) }
+        let items = SearchQuery.suggestionsWhileTyping(for: textField.stringValue, in: index).map {
+          suggestion in
+          var item = Item(representedValue: suggestion, title: suggestion.word)
+          if suggestion.isUnknown {
+            var title = AttributedString(suggestion.word)
+            title.foregroundColor = .secondaryLabelColor
+            item.attributedTitle = title
+            item.secondaryTitle = "Searched as text"
+          }
+          return item
+        }
+        responseHandler(ItemResponse(items: items))
+      }
+
+      /// The field's text while a suggestion is highlighted: the query with it taken.
+      func textField(_ textField: NSTextField, textCompletionFor item: Item) -> String? {
+        item.representedValue.accepted
+      }
+
+      func textField(_ textField: NSTextField, didSelect item: Item) {
+        textField.stringValue = item.representedValue.accepted
+        navigation.searchText = textField.stringValue
+      }
+
+      // MARK: Editing
 
       /// Every edit, the clear button included, rather than `searchFieldDidEndSearching`
       /// or the field's action: the list filters as the reader types.

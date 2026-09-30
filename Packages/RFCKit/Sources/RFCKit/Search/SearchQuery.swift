@@ -393,8 +393,7 @@ public enum SearchQuery {
   /// except for a word just begun after a space. A list over the results at every
   /// space would hide them while the reader types; an empty field is where the
   /// vocabulary is learned, and is offered all of it.
-  public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion]
-  {
+  public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
     // A space inside an open quote is the value's, and the word is still being typed.
     let typing = words(in: query).last.map(query.hasSuffix) ?? query.isEmpty
     guard typing else { return [] }

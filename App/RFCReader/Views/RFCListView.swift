@@ -237,8 +237,8 @@ struct RFCListView: View {
       // under it whenever the list was short enough not to scroll.
       .navigationBarTitleDisplayMode(.inline)
       // Narrows what this list shows, as Notes' field does inside a folder (#345).
-      .searchable(
-        text: $navigation.searchText, prompt: "Search \(library.title(for: navigation.filter))"
+      .filterSearchable(
+        navigation: navigation, prompt: "Search \(library.title(for: navigation.filter))"
       )
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar {
