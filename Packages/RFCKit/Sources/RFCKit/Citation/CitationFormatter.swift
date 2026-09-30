@@ -59,11 +59,7 @@ public enum CitationFormatter {
 
   private static func sectionSuffix(_ section: String?) -> String? {
     guard let section, !section.isEmpty else { return nil }
-    // An appendix numbered like a section is named by its anchor (`RFCLink.section`).
-    if section.hasPrefix(SectionAnchor.appendixPrefix) {
-      return "Appendix \(section.dropFirst(SectionAnchor.appendixPrefix.count))"
-    }
-    return section.first?.isLetter == true ? "Appendix \(section)" : "Section \(section)"
+    return PlaceName.spelledOut(section)
   }
 
   private static func fullCitation(_ rfc: RFCMetadata, section: String?) -> String {
@@ -139,15 +135,21 @@ public enum CitationFormatter {
   /// out rather than escaped, because BibTeX counts a brace whether or not a
   /// backslash precedes it, so `\{` only works for braces that already pair up. A
   /// backslash of the text's own is spelled out too, so it can't start a command.
+  /// BibTeX accepts `_ $ # ^ ~`, but LaTeX reads them as markup when it typesets
+  /// the field (#242). `\^` and `\~` are accent commands, so those two are
+  /// spelled out as well. It goes by scalar, since a combining mark after one of
+  /// these makes a `Character` that no case matches.
   static func bibtexEscaped(_ text: String) -> String {
     var escaped = ""
-    for character in text {
-      switch character {
+    for scalar in text.unicodeScalars {
+      switch scalar {
       case "\\": escaped.append("\\textbackslash{}")
       case "{": escaped.append("\\textbraceleft{}")
       case "}": escaped.append("\\textbraceright{}")
-      case "%", "&": escaped.append("\\\(character)")
-      default: escaped.append(character)
+      case "%", "&", "_", "$", "#": escaped.append("\\\(scalar)")
+      case "^": escaped.append("\\textasciicircum{}")
+      case "~": escaped.append("\\textasciitilde{}")
+      default: escaped.unicodeScalars.append(scalar)
       }
     }
     return escaped

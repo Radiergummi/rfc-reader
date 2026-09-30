@@ -85,4 +85,17 @@ enum Fixtures {
   {
     DocumentTextBuilder(style: style).inlineRuns(inlines, base: [.font: style.bodyFont])
   }
+
+  /// A font as a failure message names it: its PostScript name, size and symbolic
+  /// traits, which tell a fallback face from a system face at the wrong size, and
+  /// its descriptor's attributes, which say whether anything set a size or a system
+  /// usage at all (#326).
+  static func describe(_ font: PlatformFont) -> String {
+    let traits = String(font.fontDescriptor.symbolicTraits.rawValue, radix: 16)
+    let attributes = font.fontDescriptor.fontAttributes
+      .map { "\($0.key.rawValue)=\($0.value)" }
+      .sorted()
+      .joined(separator: ", ")
+    return "\(font.fontName) \(font.pointSize) pt, traits 0x\(traits), descriptor [\(attributes)]"
+  }
 }

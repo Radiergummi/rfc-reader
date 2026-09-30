@@ -689,6 +689,26 @@
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
+      releaseWindowContent()
+    }
+
+    /// Empties a closing window, so that if something keeps the window itself, it
+    /// keeps a few hundred bytes and not a whole document.
+    ///
+    /// Something does, sometimes (#432): SwiftUI's focus bookkeeping for the menu
+    /// bar's `.commands` can hold a closed window whose first responder was the
+    /// sidebar's list, long after this controller is gone. Everything the window
+    /// showed — the split view controller, its hosted roots, the reader's text view
+    /// and its storage — hangs off `contentViewController`, and the toolbar and the
+    /// delegate point back at this controller.
+    ///
+    /// Not `WindowGroup`'s forbidden content replacement: the window is closing, it
+    /// is AppKit's, and nothing takes the content's place.
+    private func releaseWindowContent() {
+      guard let window else { return }
+      window.contentViewController = nil
+      window.toolbar = nil
+      window.delegate = nil
     }
 
     // MARK: - Tabs
