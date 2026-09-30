@@ -382,7 +382,14 @@ public enum LegacyTextParser {
           pendingBreak = true
           flushBlock()
         }
-      case .text(let string):
+      case .sectionHeader(let string)
+      where headsNearby(
+        string, at: index, in: lines, bodyIsIndented: bodyIsIndented,
+        colonNumbered: colonNumbered):
+        // The document heads the section itself, and this copy of its name is
+        // furniture like the rest.
+        continue
+      case .text(let string), .sectionHeader(let string):
         if string.isBlank {
           flushBlock()
         } else if let heading = Self.heading(
@@ -405,6 +412,61 @@ public enum LegacyTextParser {
     }
     flushBlock()
     return sections
+  }
+
+  /// Whether the document heads the section a running header's first sighting names,
+  /// nearby: with a heading of the same words, as `headingText` reads them, on the
+  /// header's own page or the page before it (#291). A section's running header first
+  /// appears on the page after the one it starts on, which carries the last
+  /// section's name: RFC 793 starts `2.  PHILOSOPHY` at the head of a page headed
+  /// `Introduction`, and first runs `Philosophy` on the next. Where the document heads
+  /// it, the first sighting is a second, empty heading beside the document's own;
+  /// where it doesn't, it is the only thing saying where the section starts (RFC
+  /// 770's `References`).
+  ///
+  /// A heading is one `rawSections` would emit, or a numbered one at any indent,
+  /// because RFC 793 centers `2.  PHILOSOPHY`. Local, and answered by the headings
+  /// themselves: asking whether any numbered heading anywhere in the document had the
+  /// words compared two normalizations that never agreed on a number, and let an
+  /// `Introduction` at one end of a document speak for a running header at the other
+  /// (#57).
+  static func headsNearby(
+    _ header: String, at index: Int, in lines: [Line], bodyIsIndented: Bool,
+    colonNumbered: Bool
+  ) -> Bool {
+    func isBreak(_ line: Line) -> Bool {
+      if case .pageBreak = line { true } else { false }
+    }
+    // Back over this page and the one before it, and on to the end of this one.
+    var start = index
+    while start > lines.startIndex, !isBreak(lines[start - 1]) { start -= 1 }
+    if start > lines.startIndex {
+      start -= 1
+      while start > lines.startIndex, !isBreak(lines[start - 1]) { start -= 1 }
+    }
+    var end = index + 1
+    while end < lines.endIndex, !isBreak(lines[end]) { end += 1 }
+
+    let title = headingText(header)
+    for candidate in start..<end where candidate != index {
+      guard case .text(let string) = lines[candidate] else { continue }
+      if let heading = Self.heading(
+        at: candidate, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+        startsBlock: candidate == lines.startIndex || isBlankOrEnd(lines, at: candidate - 1)),
+        heading.number != nil || !refusesUnnumberedHeading(heading.title),
+        headingText(heading.title) == title
+      {
+        return true
+      }
+      let indented = string.drop { $0 == " " }
+      if indented.first?.isNumber == true,
+        let match = indented.firstMatch(of: numberedHeadingPattern),
+        headingText(match.title) == title
+      {
+        return true
+      }
+    }
+    return false
   }
 
   /// `title` is the document's title as the RFC index gives it, where the caller has

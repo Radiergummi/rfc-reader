@@ -4,10 +4,19 @@ extension LegacyTextParser {
   enum Line: Sendable {
     case text(String)
     case pageBreak
+    /// The first sighting of a section's running header: page furniture that may be
+    /// the only thing saying where its section starts (RFC 770's `References`), or a
+    /// copy of a heading the document sets itself (RFC 793's `Philosophy`). Which one
+    /// is a structure decision, and `rawSections` makes it, by what the document
+    /// heads nearby (#291). Everywhere else it reads as the line of text it is.
+    case sectionHeader(String)
 
     /// The line's text, or nil for a page break.
     var string: String? {
-      if case .text(let string) = self { string } else { nil }
+      switch self {
+      case .text(let string), .sectionHeader(let string): string
+      case .pageBreak: nil
+      }
     }
   }
 
@@ -24,7 +33,7 @@ extension LegacyTextParser {
       switch line {
       case .pageBreak:
         breakOccurred = true
-      case .text(let string):
+      case .text(let string), .sectionHeader(let string):
         if string.trimmingCharacters(in: .whitespaces).isEmpty {
           pendingBlank += 1
         } else {
@@ -45,16 +54,25 @@ extension LegacyTextParser {
   ///
   /// For the corpus report: a dropped line leaves no trace in the block counts, so
   /// without this a rule that deletes the body's own lines looks like a clean run.
+  ///
+  /// The first sighting of a section's running header is not among them: whether it
+  /// goes is `rawSections`' to decide (#291).
   public static func recurringFurniture(in text: String) -> [String] {
     let lines = paginated(text)
-    return recurringFurniture(lines).sorted().compactMap { lines[$0].string }
+    return recurringFurniture(lines).dropped.sorted().compactMap { lines[$0].string }
   }
 
   static func depaginate(_ text: String) -> [Line] {
     let lines = paginated(text)
     let furniture = recurringFurniture(lines)
-    guard !furniture.isEmpty else { return lines }
-    return lines.enumerated().compactMap { furniture.contains($0.offset) ? nil : $0.element }
+    guard !furniture.dropped.isEmpty || !furniture.sectionHeaders.isEmpty else { return lines }
+    return lines.enumerated().compactMap { offset, line in
+      if furniture.dropped.contains(offset) { return nil }
+      if furniture.sectionHeaders.contains(offset), let string = line.string {
+        return .sectionHeader(string)
+      }
+      return line
+    }
   }
 
   private static func paginated(_ text: String) -> [Line] {
@@ -138,10 +156,12 @@ extension LegacyTextParser {
   /// `RFC 770 ... September 1980` -- where the body starts after the blank lines that
   /// follow the header, and RFC 6208's `Additional information:` at the head of five
   /// pages is the body's. In RFC 770 the first copy is the only thing that says
-  /// where its section starts, so the first copy stays, unless the document heads the section itself somewhere with
-  /// a numbered heading of the same words (`2.  PHILOSOPHY`), which sections start
-  /// at quite well without a second, empty one beside it.
-  private static func recurringFurniture(_ lines: [Line]) -> Set<Int> {
+  /// where its section starts, so it is not dropped here but returned apart, for
+  /// `rawSections` to keep unless the document heads that section itself nearby
+  /// (#291).
+  private static func recurringFurniture(_ lines: [Line]) -> (
+    dropped: Set<Int>, sectionHeaders: Set<Int>
+  ) {
     var pages: [Range<Int>] = []
     var start = 0
     for (index, line) in lines.enumerated() {
@@ -152,7 +172,7 @@ extension LegacyTextParser {
     }
     pages.append(start..<lines.count)
     let later = pages.dropFirst()
-    guard later.count >= 3 else { return [] }
+    guard later.count >= 3 else { return ([], []) }
 
     /// The edge's lines, whether a blank line sets them off from the rest of the
     /// page -- looking one line past a full edge, because RFC 793's header is three
@@ -221,7 +241,7 @@ extension LegacyTextParser {
         || (found.pages.count * 2 >= later.count
           && zip(found.pages, found.pages.dropFirst()).contains { $1 == $0 + 1 })
     }
-    guard !recurring.isEmpty else { return [] }
+    guard !recurring.isEmpty else { return ([], []) }
     // How often each recurring line is seen away from the edges, keying the body
     // only when something recurs and counting only what does.
     let candidates = Set(recurring.keys.map(\.key))
@@ -235,7 +255,7 @@ extension LegacyTextParser {
     }
 
     var furniture: Set<Int> = []
-    var statedHeadings: Set<String>?
+    var sectionHeaders: Set<Int> = []
     for (sighting, found) in recurring {
       guard found.setOff * 2 >= found.lines.count,
         elsewhere[sighting.key, default: 0] < found.pages.count
@@ -253,23 +273,10 @@ extension LegacyTextParser {
       guard sighting.side == .head, found.flush * 2 >= found.lines.count,
         gaps.allSatisfy({ $0 <= 2 })
       else { continue }
-      let titles = statedHeadings ?? numberedHeadingTitles(lines)
-      statedHeadings = titles
-      // Against the key, which has its numbers masked, where the titles do not:
-      // the two sides do not normalize alike, so a running header holding a
-      // number cannot match its own stated heading and its first copy survives.
-      // Both repairs lose content and are measured in #57 -- masking the titles
-      // too makes `Chapter 3` and `Chapter 4` one heading and drops a field's
-      // value in RFC 1570; comparing the unmasked line drops RFC 783's footnote
-      // marker and four others. Keeping a heading too many is the safe side of
-      // it, and which way it should fall is that issue's to answer.
-      if titles.contains(sighting.key.lowercased()) {
-        furniture.formUnion(found.lines)
-      } else {
-        furniture.formUnion(found.lines.dropFirst())
-      }
+      furniture.formUnion(found.lines.dropFirst())
+      if let first = found.lines.first { sectionHeaders.insert(first) }
     }
-    return furniture
+    return (furniture, sectionHeaders)
   }
 
   /// What two lines are compared as when asking whether they are the same piece of
@@ -285,30 +292,8 @@ extension LegacyTextParser {
 
   /// How a heading title reads for the purpose of comparing it: whitespace collapsed,
   /// lowercased, and numbers left alone, because in a heading a number is content.
-  private static func headingText<S: StringProtocol>(_ string: S) -> String {
+  static func headingText<S: StringProtocol>(_ string: S) -> String {
     string.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
-  }
-
-  /// The titles of the numbered headings: what a section running header is compared
-  /// against to learn whether the document already heads that section itself. At any
-  /// indent, because RFC 793 centers `2.  PHILOSOPHY`; numbered only, because RFC 770
-  /// centers an unnumbered `REFERENCES` that is no heading, and its running header is
-  /// all it has.
-  ///
-  /// `1:` counts here in every document, not only where `numbersHeadingsWithAColon`
-  /// says so: this runs while the page furniture is found, before the lines that fact is
-  /// judged on exist. A colon title taken wrongly can only drop a running header's first
-  /// copy along with the rest, and over the corpus none does.
-  private static func numberedHeadingTitles(_ lines: [Line]) -> Set<String> {
-    var titles: Set<String> = []
-    for case .text(let line) in lines {
-      let string = line.drop { $0 == " " }
-      guard string.first?.isNumber == true,
-        let match = string.firstMatch(of: numberedHeadingPattern)
-      else { continue }
-      titles.insert(headingText(match.title))
-    }
-    return titles
   }
 
   /// Resolves nroff overstrikes (`T\bT` for bold, `_\bT` for underline) and drops the
