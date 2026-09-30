@@ -112,9 +112,7 @@ extension RFCTextViewCoordinator {
     #endif
     let origin = containerOrigin(of: textView)
     var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
-    // None while a resize waits for its rebuild, which places them again: the
-    // frames they would be placed by belong to the old column (#546).
-    for block in figureControls.blocks where !columnAwaitsRebuild && showsFigureControl(of: block) {
+    for block in figureControls.blocks where showsFigureControls && showsFigureControl(of: block) {
       guard
         let location = layout.location(
           layout.documentRange.location, offsetBy: block.location),
@@ -126,6 +124,20 @@ extension RFCTextViewCoordinator {
     }
     figureControls.show(
       wanted, over: textView, target: self, action: #selector(pressedFigureControl(_:)))
+  }
+
+  /// None while a resize waits for its rebuild, which places them again: the
+  /// frames they would be placed by belong to the old column (#546). And on macOS
+  /// none during a live resize, which `endLiveResize()` places them again after:
+  /// the text is drawn from the text container's origin, which AppKit brings up to
+  /// date when it next lays the view out, so a button placed on every frame slides
+  /// against the text it belongs to.
+  private var showsFigureControls: Bool {
+    #if canImport(UIKit)
+      !columnAwaitsRebuild
+    #else
+      !columnAwaitsRebuild && textView?.inLiveResize == false
+    #endif
   }
 
   /// A block's button in text-container coordinates, from its first fragment.

@@ -133,6 +133,15 @@ import RFCReaderKit
       super.quickLook(with: event)
     }
 
+    /// Told when a live resize ends, for what is not placed during one: a rendered
+    /// block's Figure | Source button.
+    var liveResizeEnded: () -> Void = {}
+
+    override func viewDidEndLiveResize() {
+      super.viewDidEndLiveResize()
+      liveResizeEnded()
+    }
+
     /// The hosted header in the top inset. Named rather than found among the
     /// subviews, because TextKit 2 keeps its own fragment views there.
     weak var header: NSView?

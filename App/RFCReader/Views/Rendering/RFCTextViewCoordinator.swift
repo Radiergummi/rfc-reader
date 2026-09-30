@@ -1002,6 +1002,9 @@ final class RFCTextViewCoordinator: NSObject {
       }
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
       hover.pointerMoved = { [weak self] in self?.updateFigureControls() }
+      (textView as? ReaderTextView)?.liveResizeEnded = { [weak self] in
+        self?.updateFigureControls()
+      }
     }
 
     /// Called from `dismantleNSView`.
