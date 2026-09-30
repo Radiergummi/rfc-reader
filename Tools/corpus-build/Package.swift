@@ -9,6 +9,18 @@ let swiftSettings: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
+// The command line is built unoptimized by a Swift 6.4 compiler, in every build: its
+// compiler crashes while LLVM splits the commands' async `run`s into their coroutine
+// parts, and `@_optimize(none)` on them compiles but gives every document of a fetch
+// the ID 0 (#371). The work is RFCKit's and RFCCorpusKit's, which stay optimized. By
+// the compiler, not the platform, because the crash is the toolchain's; #490 tracks
+// dropping this once one fixes it.
+#if compiler(>=6.4)
+  let commandLineSettings = swiftSettings + [.unsafeFlags(["-Onone"])]
+#else
+  let commandLineSettings = swiftSettings
+#endif
+
 // Offline pipeline: fetches legacy plain-text RFCs, converts them to RFCXML v3 with
 // RFCKit's parsers, and writes a manifest of SHA-256 hashes for the data packs the app
 // downloads.
@@ -45,15 +57,7 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "Logging", package: "swift-log"),
       ],
-      // Unoptimized in a macOS release build: Swift 6.4's crashes in LLVM splitting
-      // the commands' async `run`s into their coroutine parts, and `@_optimize(none)`
-      // on them compiles but gives every document of a fetch the ID 0 (#371). The
-      // command line only orchestrates; the work is RFCKit's and RFCCorpusKit's,
-      // which stay optimized. CI's Linux toolchain is not affected. Drop this once a
-      // toolchain fixes it.
-      swiftSettings: swiftSettings + [
-        .unsafeFlags(["-Onone"], .when(platforms: [.macOS], configuration: .release))
-      ]
+      swiftSettings: commandLineSettings
     ),
     .testTarget(
       name: "RFCCorpusKitTests",
