@@ -232,7 +232,7 @@ struct DocumentView: View {
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
         text: session.originalText,
-        error: session.originalTextError,
+        failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
@@ -305,9 +305,10 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(id.displayName)", systemImage: "wifi.exclamationmark")
+        Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
+        Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
