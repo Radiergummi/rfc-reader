@@ -5,33 +5,39 @@
 /// scroll request that opened the document, and the reading position stored when it
 /// was last left, both name where the reader was when it opened. The place the
 /// reader has reached since is the one to return to.
-public enum ReaderArrival: Sendable, Equatable {
+///
+/// `Request` is the navigation's scroll request, which the reader carries out as it
+/// would any other.
+public enum ReaderArrival<Request> {
   /// Scroll to this anchor, unanimated.
   case place(String)
   /// Carry out the navigation's scroll request: a deep link, or a place in the
   /// history.
-  case request
-  /// Move nothing: a scroll is already waiting for the text view, or there is no
-  /// place to go to.
+  case request(Request)
+  /// Move nothing: there is no place to go to.
   case stay
 
   /// - Parameters:
+  ///   - pendingAnchor: where a scroll asked for while the text view was gone is
+  ///     going, such as a jump from the contents panel over the original text. It
+  ///     was asked for animated, over a text view that was not there; arriving, it
+  ///     is not a movement the reader sees.
   ///   - anchorLeft: where the reader was when the text view last went, or nil if
-  ///     it has not gone yet. Taken as it goes, not as it comes back: a text view
-  ///     reports the top of its text as it is made, before any restore.
-  ///   - hasPendingScroll: whether a scroll was asked for while the text view was
-  ///     gone, such as a jump from the contents panel over the original text. The
-  ///     text view carries it out as it is made.
-  ///   - hasRequest: whether the navigation holds a scroll request.
+  ///     it has not gone with a place yet. Taken as it goes, not as it comes back:
+  ///     a text view reports the top of its text as it is made, before any restore.
+  ///   - request: the navigation's scroll request, if it holds one.
   ///   - storedAnchor: the stored reading position's anchor, if the document holds
   ///     it. Read only when nothing before it decides.
   public static func onAppear(
-    anchorLeft: String?, hasPendingScroll: Bool, hasRequest: Bool,
+    pendingAnchor: String?, anchorLeft: String?, request: Request?,
     storedAnchor: @autoclosure () -> String?
   ) -> Self {
-    if hasPendingScroll { return .stay }
+    if let pendingAnchor { return .place(pendingAnchor) }
     if let anchorLeft { return .place(anchorLeft) }
-    if hasRequest { return .request }
+    if let request { return .request(request) }
     return storedAnchor().map(Self.place) ?? .stay
   }
 }
+
+extension ReaderArrival: Equatable where Request: Equatable {}
+extension ReaderArrival: Sendable where Request: Sendable {}

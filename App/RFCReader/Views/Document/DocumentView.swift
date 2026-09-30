@@ -79,7 +79,8 @@ struct DocumentView: View {
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
   /// Where the reader was when the text view last went — turning Original Text on
-  /// takes it away — so that it comes back there (#449). Nil until it has gone once.
+  /// takes it away — so that it comes back there (#449). Nil until it has gone with
+  /// a place, which it has once the text has shown.
   @State private var anchorLeft: String?
   @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
@@ -346,21 +347,18 @@ struct DocumentView: View {
         // Deep link or restored reading position — or, when the text view is made
         // again, where the reader was (#449).
         let arrival = ReaderArrival.onAppear(
-          anchorLeft: anchorLeft, hasPendingScroll: scrollTarget != nil,
-          hasRequest: navigation.scrollRequest != nil,
+          pendingAnchor: scrollTarget?.anchor, anchorLeft: anchorLeft,
+          request: navigation.scrollRequest,
           storedAnchor: storedPosition()?.anchor.flatMap {
             document.section(anchor: $0) != nil ? $0 : nil
           })
         switch arrival {
         case .place(let anchor):
           scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
-        case .request:
-          guard let request = navigation.scrollRequest else { break }
-          if request.isUnrecorded {
-            follow(request.section)
-          } else {
-            jump(toSection: request.section, animated: false)
-          }
+        case .request(let request) where request.isUnrecorded:
+          follow(request.section)
+        case .request(let request):
+          jump(toSection: request.section, animated: false)
         case .stay:
           break
         }
