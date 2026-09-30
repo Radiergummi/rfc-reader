@@ -110,13 +110,13 @@ extension Reference {
   /// The tag is what the row shows and the prose cites (`HTTP`, `1`), so it comes
   /// first. A tag that names a document is said as that document's name, which
   /// VoiceOver says as words rather than spelling the anchor out: `RFC0001` is `RFC
-  /// 1`. No document is named twice, so a series is left out once the tag or the
-  /// document's name has said it. Commas, not the row's middle dots, which can be
+  /// 1`. No document is named twice, so a series is left out once the tag, the
+  /// document's name or an earlier series has said it. Commas, not the row's middle dots, which can be
   /// read aloud. An entry the legacy parser could not structure is its own words,
   /// which hold its series and date already.
   public var accessibilityLabel: String {
     let tag = DocumentID(label: displayAnchor)
-    let said = Set([tag, documentID].compactMap { $0 })
+    var said = Set([tag, documentID].compactMap { $0 })
     var names = [tag?.displayName ?? displayAnchor]
     if let id = documentID, id != tag { names.append(id.displayName) }
     guard !title.isEmpty else {
@@ -128,7 +128,7 @@ extension Reference {
       .filter { $0.name != "DOI" }
       .compactMap { info -> String? in
         guard let id = info.documentID else { return "\(info.name) \(info.value)" }
-        return said.contains(id) ? nil : id.displayName
+        return said.insert(id).inserted ? id.displayName : nil
       }
     let parts = names + [title, authors] + series + [date?.formatted ?? ""]
     return parts.filter { !$0.isEmpty }.joined(separator: ", ")

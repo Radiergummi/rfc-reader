@@ -38,11 +38,11 @@ struct BibliographyTests {
   /// date included, so nothing is added to them.
   @Test func `an unstructured entry is spoken as its own words`() {
     let entry = Reference(
-      anchor: "RFC791", title: "", seriesInfo: [SeriesInfo(.rfc(791))],
-      rawText: "Postel, J., Internet Protocol, STD 5, RFC 791, September 1981.")
+      anchor: "RFC9999", title: "", seriesInfo: [SeriesInfo(.rfc(9999))],
+      rawText: "Doe, J., An Invented Protocol, STD 99, RFC 9999, January 2000.")
     #expect(
       entry.accessibilityLabel
-        == "RFC 791, Postel, J., Internet Protocol, STD 5, RFC 791, September 1981.")
+        == "RFC 9999, Doe, J., An Invented Protocol, STD 99, RFC 9999, January 2000.")
   }
 
   /// A tag that names a document in another series is spoken as that document's
@@ -63,6 +63,17 @@ struct BibliographyTests {
       anchor: "BCP14", title: "Key Words",
       seriesInfo: [
         SeriesInfo(name: "BCP", value: "14"), SeriesInfo(name: "rfc", value: "02119"),
+        SeriesInfo(name: "rfc", value: "08174"),
+      ])
+    #expect(entry.accessibilityLabel == "BCP 14, RFC 2119, Key Words, RFC 8174")
+  }
+
+  /// A source that names the same document twice among its series has it said once.
+  @Test func `a series the source repeats is spoken once`() {
+    let entry = Reference(
+      anchor: "BCP14", title: "Key Words",
+      seriesInfo: [
+        SeriesInfo(name: "BCP", value: "14"), SeriesInfo(.rfc(2119)), SeriesInfo(.rfc(8174)),
         SeriesInfo(name: "rfc", value: "08174"),
       ])
     #expect(entry.accessibilityLabel == "BCP 14, RFC 2119, Key Words, RFC 8174")
