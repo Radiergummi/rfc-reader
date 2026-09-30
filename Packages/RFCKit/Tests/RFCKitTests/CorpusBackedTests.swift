@@ -499,3 +499,31 @@ struct CorpusBackedDefinedTermsTests {
     }
   }
 }
+
+/// What a converted citation points at: its entry's document, read from outside the
+/// entry's title, and the entry itself, kept through the XML (#424).
+@Suite("Corpus-backed: bibliography entries", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedBibliographyEntryTests {
+  /// RFC 8259 cites RFC 8174, whose title is about the keywords of RFC 2119, and lists
+  /// an erratum of RFC 7159 ahead of RFC 7159's own entry.
+  @Test func `a citation keeps its entry and its document through the XML`() throws {
+    let parsed = LegacyTextParser.parse(try CorpusText.text("rfc8259"))
+    let entries = parsed.referenceLists.flatMap(\.entries)
+    #expect(entries.first { $0.anchor == "RFC8174" }?.documentID == .rfc(8174))
+
+    let converted = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(parsed).utf8))
+    let targets = converted.everyCrossReference.map(\.target)
+    #expect(targets.contains(.document(.rfc(8174), section: nil, entry: "RFC8174")))
+    #expect(!targets.contains(.document(.rfc(2119), section: nil, entry: "RFC8174")))
+    func citations(of entry: String, in document: RFCDocument) -> Int {
+      document.everyCrossReference.count {
+        guard case .document(_, _, entry) = $0.target else { return false }
+        return true
+      }
+    }
+    #expect(citations(of: "RFC7159", in: parsed) > 0)
+    // A bare "RFC 7159" in the prose records no entry, and converts to RFC 7159's own.
+    #expect(citations(of: "RFC7159", in: converted) > citations(of: "RFC7159", in: parsed))
+    #expect(citations(of: "Err3915", in: converted) == citations(of: "Err3915", in: parsed))
+  }
+}
