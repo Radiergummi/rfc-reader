@@ -94,4 +94,11 @@ struct DocumentActionsTests {
     let link = DocumentActions.sectionLink(id: id, section: nil)
     #expect(!link.contains("section"))
   }
+
+  /// The Bookmark button keeps its label, and says whether the document is
+  /// bookmarked in words VoiceOver reads, which the glyph alone never did (#278).
+  @Test func `the bookmark state is said in words`() {
+    #expect(DocumentActions.bookmarkState(isBookmarked: true) == "Bookmarked")
+    #expect(DocumentActions.bookmarkState(isBookmarked: false) == "Not bookmarked")
+  }
 }
