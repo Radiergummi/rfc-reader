@@ -31,4 +31,12 @@ struct OriginalTextLayoutTests {
       OriginalTextLayout.contentWidth(usedWidth: 534.09375, horizontalInsets: 48, viewWidth: 390)
         == 583)
   }
+
+  /// An iPad split view can be a fractional width: text that fits it must not
+  /// scroll sideways by the half point that rounding up would add.
+  @Test func `text that fits a fractional-width view keeps the view's width`() {
+    #expect(
+      OriginalTextLayout.contentWidth(usedWidth: 459.2, horizontalInsets: 48, viewWidth: 507.5)
+        == 507.5)
+  }
 }

@@ -17,7 +17,10 @@ public enum OriginalTextLayout {
   public static func contentWidth(
     usedWidth: CGFloat, horizontalInsets: CGFloat, viewWidth: CGFloat
   ) -> CGFloat {
-    // Up to a whole point: a fraction short of the last glyph clips it.
-    max(viewWidth, (usedWidth + horizontalInsets).rounded(.up))
+    let needed = usedWidth + horizontalInsets
+    // Compared before rounding, so text that fits a view a fraction of a point wide
+    // does not scroll sideways by that fraction; rounded up past it, since a
+    // fraction short of the last glyph clips it.
+    return needed <= viewWidth ? viewWidth : needed.rounded(.up)
   }
 }
