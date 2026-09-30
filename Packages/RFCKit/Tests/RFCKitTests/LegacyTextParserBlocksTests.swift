@@ -212,6 +212,25 @@ struct LegacyTextParserBlocksTests {
     let oneLine = try #require(LegacyTextParser.hangingDefinitions(["   Short:  One line only."]))
     #expect(oneLine.continuationColumn == nil)
     #expect(oneLine.entries.map(\.term) == ["Short:"])
+    // A one-line entry need not read as words; one that hangs does.
+    #expect(LegacyTextParser.hangingDefinitions(["   Field Name:  VALUE"]) != nil)
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Maintainer:  J. Doe",
+        "      <mailto:jdoe@example.org>",
+      ]) == nil)
+  }
+
+  /// A definition's next paragraph stands in the column its lines hang in; an
+  /// example set a column or two past it is the definition's artwork, and a line
+  /// back at the terms is not under the definition at all.
+  @Test func `a definition's next paragraph stands in its column, exactly`() {
+    let paragraph = ["      A second paragraph of the same", "      definition, in its column."]
+    #expect(LegacyTextParser.continuesHangingDefinition(paragraph, column: 6))
+    let example = ["        EXAMPLE:value/one"]
+    #expect(!LegacyTextParser.continuesHangingDefinition(example, column: 6))
+    let atTerms = ["   Back where the terms are."]
+    #expect(!LegacyTextParser.continuesHangingDefinition(atTerms, column: 6))
   }
 
   @Test func `lines that only look like hanging definitions are not`() {
@@ -251,6 +270,18 @@ struct LegacyTextParserBlocksTests {
         "   Part:  Text that is set at",
         "      one column and then",
         "        at another.",
+      ]) == nil)
+    // Terms aligned at their colons: the second is not the first one's text.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   n=1:  The first value.",
+        "     2:  The second value.",
+      ]) == nil)
+    // A sentence's end in the term: a bibliography entry, its title ending in a colon.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   [4] Writer, B. Some Title:  A subtitle that",
+        "       runs on under it.",
       ]) == nil)
     // A column gap in the definition is a table's.
     #expect(

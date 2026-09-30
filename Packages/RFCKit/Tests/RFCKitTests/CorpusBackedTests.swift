@@ -268,9 +268,13 @@ struct CorpusBackedHangingDefinitionTests {
   @Test func `a one-line entry joins the hanging entries beside it`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc6614"))
     let list = try #require(
-      definitionLists(in: document).first { $0.contains { $0.term.plainText == "RADIUS/TLS Client:" } })
+      definitionLists(in: document).first {
+        $0.contains { $0.term.plainText == "RADIUS/TLS Client:" }
+      })
     #expect(
-      list.map(\.term.plainText) == ["RADIUS/TLS node:", "RADIUS/TLS Client:", "RADIUS/TLS Server:"])
+      list.map(\.term.plainText) == [
+        "RADIUS/TLS node:", "RADIUS/TLS Client:", "RADIUS/TLS Server:",
+      ])
   }
 }
 
