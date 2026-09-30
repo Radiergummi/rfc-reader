@@ -262,6 +262,14 @@ struct SearchQueryTermTests {
     #expect(SearchQuery.removing(group, from: query) == "cache")
   }
 
+  /// The Mac field's caret is after the space the reader typed; removing a chip keeps
+  /// it, or the next keystroke would run into the last word.
+  @Test func `removing a term keeps the space the reader typed last`() throws {
+    let group = try #require(terms("wg:tls").first)
+    #expect(SearchQuery.removing(group, from: "wg:tls cache ") == "cache ")
+    #expect(SearchQuery.removing(group, from: "wg:tls ") == "")
+  }
+
   /// A chip that has gone from the query while the list catches up removes nothing.
   @Test func `removing a term the query no longer has leaves it`() throws {
     let group = try #require(terms("wg:tls").first)

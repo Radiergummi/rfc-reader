@@ -420,8 +420,14 @@ struct SidebarView: View {
         responseHandler(NSSuggestionItemResponse(items: items))
       }
 
-      // No inline completion while a suggestion is highlighted: AppKit's assumes it
-      // extends what was typed, and `is:b` completes to `status:bcp`.
+      /// No inline completion while a suggestion is highlighted: AppKit's assumes it
+      /// extends what was typed, and `is:b` completes to `status:bcp`. Said here
+      /// rather than left out, as the protocol has a default of its own.
+      func textField(
+        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<SearchQuery.Suggestion>
+      ) -> String? {
+        nil
+      }
 
       /// Taking a suggestion applies it at once, as Return does: a pick is not
       /// typing, and the list should not wait for a pause.

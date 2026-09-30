@@ -219,7 +219,9 @@ public enum SearchQuery {
       let isUnion = removed == .status || removed == .stream
       return isUnion && !terms(of: parsed.filters).contains(term)
     }
-    return kept.joined(separator: " ")
+    // The space the reader typed last stays, so the next keystroke begins a word.
+    let trailingSpace = wordBeingTyped(in: query) == nil && !kept.isEmpty ? " " : ""
+    return kept.joined(separator: " ") + trailingSpace
   }
 
   // MARK: - Tokens
@@ -239,9 +241,7 @@ public enum SearchQuery {
   /// stays in the text, or the field would take it back.
   public static func tokenized(_ query: String) -> Tokenized {
     let words = words(in: query)
-    // The last word is still being typed unless a space outside quotes follows it,
-    // as `suggestions(for:in:)` reads it.
-    let typing = words.last.map(query.hasSuffix) ?? false
+    let typing = wordBeingTyped(in: query) != nil
     var filtering: [String] = []
     var text: [String] = []
     for (offset, word) in words.enumerated() {
@@ -312,6 +312,14 @@ public enum SearchQuery {
     return words
   }
 
+  /// The last word of `query` while the reader is still typing it, or nil once a
+  /// space outside quotes follows it and a new word begins. It is the last word
+  /// `words(in:)` finds, so an open quote keeps its spaces: in `by:"Roy s` it is the
+  /// whole value, not `s`.
+  static func wordBeingTyped(in query: String) -> String? {
+    words(in: query).last.flatMap { query.hasSuffix($0) ? $0 : nil }
+  }
+
   /// Whether a quote typed after `word`, the part of a word before it, opens a quoted
   /// run: at the start of the word, or right after its key's colon.
   private static func opensQuote(after word: String) -> Bool {
@@ -374,11 +382,7 @@ public enum SearchQuery {
   /// `index`, statuses and streams from their vocabulary, `has:xml`. Authors and
   /// years are free-form, and get nothing.
   public static func suggestions(for query: String, in index: RFCIndex) -> [Suggestion] {
-    // The word being typed is the last one `words(in:)` finds, so an open quote
-    // keeps its spaces: in `by:"Roy s` it is the whole value, not `s`. A query that
-    // does not end with it ends with a space outside quotes, and a new word begins.
-    let last = words(in: query).last ?? ""
-    let word = query.hasSuffix(last) ? last : ""
+    let word = wordBeingTyped(in: query) ?? ""
     let head = String(query.dropLast(word.count))
     func offer(_ words: [String]) -> [Suggestion] {
       words.map { Suggestion(completion: head + $0, isUnknown: false) }
@@ -416,9 +420,7 @@ public enum SearchQuery {
   /// every filter taken as a token, or on clearing the field would hide them while
   /// the reader types.
   public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
-    // A space inside an open quote is the value's, and the word is still being typed.
-    let typing = words(in: query).last.map(query.hasSuffix) ?? false
-    guard typing else { return [] }
+    guard wordBeingTyped(in: query) != nil else { return [] }
     return suggestions(for: query, in: index)
   }
 
