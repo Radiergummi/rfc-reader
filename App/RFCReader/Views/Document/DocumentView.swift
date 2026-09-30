@@ -349,6 +349,8 @@ struct DocumentView: View {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
         }
       }
+    } else if let original = session.state.failure?.error as? PublishedOriginal {
+      originalOnly(original)
     } else if let failure = session.state.failure {
       ContentUnavailableView {
         Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
@@ -362,6 +364,37 @@ struct DocumentView: View {
     } else {
       ProgressView("Loading \(id.displayName)…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  /// An RFC that is its PDF or PostScript original (#207): the header the index
+  /// gives, and the original to open, rather than an error or a text that only says
+  /// where the original is.
+  private func originalOnly(_ original: PublishedOriginal) -> some View {
+    let name = original.format == .pdf ? "PDF" : "PostScript"
+    return ScrollView {
+      VStack(alignment: .leading, spacing: 24) {
+        DocumentHeaderView(
+          library: library, navigation: navigation,
+          identity: DocumentHeaderView.Identity(
+            header: DocumentHeader(id: id, title: metadata?.title ?? id.displayName),
+            metadata: metadata,
+            revisions: metadata.map { library.revisionsSummary(for: $0.id) }),
+          heading: heading)
+        ContentUnavailableView {
+          Label("Published as \(name)", systemImage: "doc.richtext")
+        } description: {
+          Text("The RFC Editor publishes \(id.displayName) only as a \(name) file.")
+        } actions: {
+          Link("Open the Original (\(name))", destination: original.url)
+            // The reader's own handler would read the file's URL as a link to this
+            // RFC, and open it here again.
+            .environment(\.openURL, OpenURLAction { _ in .systemAction })
+        }
+      }
+      .frame(maxWidth: column, alignment: .leading)
+      .padding(.vertical, 16)
+      .frame(maxWidth: .infinity)
     }
   }
 
