@@ -78,6 +78,9 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  /// Where the reader was when the text view last went — turning Original Text on
+  /// takes it away — so that it comes back there (#449). Nil until it has gone once.
+  @State private var anchorLeft: String?
   @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
@@ -340,15 +343,29 @@ struct DocumentView: View {
         .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
-        // Deep link or restored reading position.
-        if let request = navigation.scrollRequest, request.isUnrecorded {
-          follow(request.section)
-        } else if let request = navigation.scrollRequest {
-          jump(toSection: request.section, animated: false)
-        } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
-          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
+        // Deep link or restored reading position — or, when the text view is made
+        // again, where the reader was (#449).
+        let arrival = ReaderArrival.onAppear(
+          anchorLeft: anchorLeft, hasPendingScroll: scrollTarget != nil,
+          hasRequest: navigation.scrollRequest != nil,
+          storedAnchor: storedPosition()?.anchor.flatMap {
+            document.section(anchor: $0) != nil ? $0 : nil
+          })
+        switch arrival {
+        case .place(let anchor):
+          scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+        case .request:
+          guard let request = navigation.scrollRequest else { break }
+          if request.isUnrecorded {
+            follow(request.section)
+          } else {
+            jump(toSection: request.section, animated: false)
+          }
+        case .stay:
+          break
         }
       }
+      .onDisappear { anchorLeft = lastVisibleAnchor.anchor }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
         Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
