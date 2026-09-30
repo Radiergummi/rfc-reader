@@ -12,11 +12,11 @@ struct DocumentView: View {
   /// not inside this view any more.
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
+  // Read here, above the reader's own `openURL`, which follows links in the app:
+  // the toolbar and the failed load's link sit inside it, and reading it there
+  // opened rfc-editor.org's own page as the RFC it names (#450).
+  @Environment(\.openURL) private var systemOpenURL
   #if !os(macOS)
-    // Read here, above the reader's own `openURL`, which follows links in the app:
-    // the toolbar sits inside it, and reading it there opened rfc-editor.org's own
-    // page as the RFC it names.
-    @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
   #endif
@@ -357,7 +357,7 @@ struct DocumentView: View {
         Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
-        Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
+        Button("Open on rfc-editor.org") { systemOpenURL(RFCEditorEndpoints.infoPage(id)) }
       }
     } else {
       ProgressView("Loading \(id.displayName)…")
