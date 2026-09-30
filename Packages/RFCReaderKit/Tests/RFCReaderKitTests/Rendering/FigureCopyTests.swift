@@ -83,4 +83,17 @@ struct FigureCopyTests {
   @Test func `an unfolded figure is copied as it is`() {
     #expect(FigureCopy.pasteboardText(for: Self.diagram) == Self.diagram.text)
   }
+
+  @Test func `the box under a location carries the block's ordinal and how it is shown`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+")),
+        .preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: ReadingStyle())
+    let offset = try Fixtures.offset(of: "Value", in: built.text)
+    let box = try #require(FigureCopy.box(at: offset, in: built.text))
+    #expect(box.ordinal == 1)
+    #expect(box.shown == .rendered)
+    #expect(FigureCopy.box(in: NSRange(location: offset, length: 3), of: built.text) === box)
+  }
 }

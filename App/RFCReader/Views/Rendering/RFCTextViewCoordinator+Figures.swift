@@ -18,11 +18,21 @@
             reader.copyAsQuote()
           })
       }
-      if let figure = FigureCopy.figure(in: range, of: textView.textStorage) {
+      if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(
           UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
-            UIPasteboard.general.string = FigureCopy.pasteboardText(for: figure)
+            UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
           })
+        if box.shown != .plain {
+          let rendered = box.shown == .rendered
+          extra.append(
+            UIAction(
+              title: rendered ? "Show Source" : "Show Rendering",
+              image: UIImage(
+                systemName: rendered ? "chevron.left.forwardslash.chevron.right" : "square.grid.3x3"
+              )
+            ) { [weak self] _ in self?.onToggleSource(box.ordinal) })
+        }
       }
       return extra.isEmpty ? nil : UIMenu(children: suggestedActions + extra)
     }

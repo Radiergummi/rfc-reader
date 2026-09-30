@@ -20,6 +20,9 @@ struct BuildInputs: Equatable {
   let textSize: DynamicTypeSize
   let legibilityWeight: LegibilityWeight?
   let column: CGFloat?
+  /// The blocks shown as their source. Not part of `ReadingStyle`, which keys the
+  /// preview cache: a force-click preview shows every block rendered.
+  let choices: PresentationChoices
 
   var style: ReadingStyle? {
     column.map {
@@ -176,7 +179,7 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await DocumentView.build(document, style: style)
+      let rebuilt = await DocumentView.build(document, style: style, choices: inputs.choices)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs

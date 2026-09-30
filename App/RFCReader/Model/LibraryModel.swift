@@ -75,6 +75,21 @@ final class LibraryModel {
   /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
 
+  /// Which verbatim blocks the reader asked to see as their source, per document,
+  /// for the app's session. Here rather than in `DocumentSession`, which goes when
+  /// the reader goes back. Not persisted.
+  private(set) var shownAsSource: [DocumentID: Set<Int>] = [:]
+
+  func presentationChoices(for id: DocumentID) -> PresentationChoices {
+    PresentationChoices(shownAsSource: shownAsSource[id] ?? [])
+  }
+
+  func toggleSource(_ ordinal: Int, in id: DocumentID) {
+    if shownAsSource[id, default: []].remove(ordinal) == nil {
+      shownAsSource[id, default: []].insert(ordinal)
+    }
+  }
+
   /// Every collection and its members, fetched again on every save of the store and
   /// published only when it changed (#349). The sidebar, a collection's list, the
   /// Add to Collection menus, the Mac's menu bar and scripts all read it.

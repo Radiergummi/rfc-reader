@@ -93,6 +93,8 @@ final class RFCTextViewCoordinator: NSObject {
   }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
+  /// See `RFCTextView.onToggleSource`.
+  var onToggleSource: (Int) -> Void = { _ in }
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?

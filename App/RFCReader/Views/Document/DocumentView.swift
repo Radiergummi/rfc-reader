@@ -94,7 +94,8 @@ struct DocumentView: View {
     BuildInputs(
       hasDocument: session.state.document != nil, fontSize: fontSize,
       underlineLinks: underlineLinks,
-      textSize: textSize, legibilityWeight: legibilityWeight, column: column)
+      textSize: textSize, legibilityWeight: legibilityWeight, column: column,
+      choices: library.presentationChoices(for: id))
   }
 
   /// The reader, and on macOS only the reader.
@@ -271,6 +272,7 @@ struct DocumentView: View {
         onLink: openInApp,
         onToolbarTitle: { reader.updateToolbarTitle($0) },
         onSelectionChange: { reader.hasSelection = $0 },
+        onToggleSource: { library.toggleSource($0, in: id) },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -489,12 +491,14 @@ struct DocumentView: View {
   /// `DocumentSession.requestBuild` is what discards a canceled one.
   /// `DocumentPreview` builds through it too.
   @concurrent
-  static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
+  static func build(
+    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
+  ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      DocumentTextBuilder.build(document, style: style)
+      DocumentTextBuilder.build(document, style: style, choices: choices)
     }
   }
 

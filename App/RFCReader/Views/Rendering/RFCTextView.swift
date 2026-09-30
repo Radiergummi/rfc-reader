@@ -31,6 +31,7 @@ struct RFCTextView: View {
     onLink: @escaping (URL, LinkActivation) -> Bool,
     onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
+    onToggleSource: @escaping (Int) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -48,6 +49,7 @@ struct RFCTextView: View {
       onLink: onLink,
       onToolbarTitle: onToolbarTitle,
       onSelectionChange: onSelectionChange,
+      onToggleSource: onToggleSource,
       heading: heading,
       header: AnyView(header()),
       headerIdentity: headerIdentity
@@ -100,6 +102,8 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
+  /// Shows a rendered verbatim block as its source, or back, by ordinal.
+  let onToggleSource: (Int) -> Void
   /// Written by the header as it lays out; see `HeadingBox`.
   let heading: HeadingBox
   /// Erased on the way in rather than carried as a generic parameter: the only
@@ -121,6 +125,7 @@ struct ReaderInputs {
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
     coordinator.onSelectionChange = onSelectionChange
+    coordinator.onToggleSource = onToggleSource
     if coordinator.heading !== heading {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
@@ -261,6 +266,9 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.toggleSource = { [weak coordinator = context.coordinator] ordinal in
+        coordinator?.onToggleSource(ordinal)
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
