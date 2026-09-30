@@ -182,6 +182,10 @@ struct EmptyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @State private var results = QuickOpenResults()
+    /// Set by the first thing that closes the sheet. The search goes on through the
+    /// dismiss animation, and a ↵ it was holding must not open a second document
+    /// after Cancel or a tapped row.
+    @State private var isClosing = false
     @FocusState private var focused: Bool
 
     /// What is typed, less the spaces around it, which change nothing it finds.
@@ -208,6 +212,7 @@ struct EmptyDetailView: View {
             .onSubmit(openSelection)
             .keyboardType(.numbersAndPunctuation)
             .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
           if results.rows.isEmpty {
             status
           } else {
@@ -220,9 +225,10 @@ struct EmptyDetailView: View {
         }
         .navigationTitle("Go to RFC")
         .toolbar {
-          ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+          ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: close) }
           ToolbarItem(placement: .confirmationAction) {
-            Button("Open", action: openSelection).disabled(results.openable == nil)
+            Button("Open", action: openSelection)
+              .disabled(results.openable == nil && !results.isSearching)
           }
         }
       }
@@ -239,15 +245,20 @@ struct EmptyDetailView: View {
       var hasIndex: Bool
     }
 
-    /// What the typed text would take to resolve, while nothing is listed: the one
-    /// line under the field that turns a blind text box into something that tells
-    /// the reader whether it understood them.
+    /// Said while nothing is listed: what the field takes, or why nothing matches,
+    /// the one line under the field that turns a blind text box into something that
+    /// tells the reader whether it understood them. Not while a search is still
+    /// running, so it does not flash on every keystroke.
     @ViewBuilder
     private var status: some View {
-      if input.isEmpty {
+      if query.isEmpty {
         Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
       } else if !results.isSearching {
-        Text("Not something I recognize as an RFC.")
+        if library.index == nil {
+          Text("The RFC index is still loading.")
+        } else {
+          Text("Nothing in the index matches “\(query)”.")
+        }
       }
     }
 
@@ -317,7 +328,13 @@ struct EmptyDetailView: View {
     }
 
     private func open(_ link: RFCLink) {
+      guard !isClosing else { return }
       library.open(link, activation: .current, in: navigation)
+      close()
+    }
+
+    private func close() {
+      isClosing = true
       dismiss()
     }
   }
