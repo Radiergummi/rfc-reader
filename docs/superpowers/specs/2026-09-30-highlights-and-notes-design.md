@@ -178,9 +178,11 @@ one.
    suffix. A quote of fewer than 12 characters must match both.
 3. If exactly one candidate is found, the result is `.moved`. If several are found, the
    result is `.ambiguous`, as happens with repeated boilerplate or a repeated MUST sentence.
-   An ambiguous annotation is **drawn nowhere and never exported**: the text at its stored
+   An ambiguous highlight is **drawn nowhere and never exported**: the text at its stored
    position no longer matches, so drawing it there would mark an unrelated passage. It is
-   listed, flagged, in the Annotations tab, where the reader can re-place or delete it. The
+   listed, flagged, in the Annotations tab, where the reader can re-place or delete it. Its
+   notes are the reader's own words and never silently vanish: the Markdown export keeps
+   them, and only the PDF leaves them out (slices 5a and 5b). The
    code never guesses between candidates by nearness.
 4. If nothing is found, the result is `.detached`. **A detached annotation is never deleted.**
    It is kept and shown apart, as "this passage no longer exists in this document".
@@ -550,7 +552,8 @@ is deferred until the column exists and has been used.
 - Each highlight is a block quote with a citation link, such as
   `[RFC 9110, Section 4.2](https://www.rfc-editor.org/rfc/rfc9110#section-4.2)`, with its notes
   under it. Section and block notes sit under their heading. Detached annotations come last,
-  with their quotes. Ambiguous ones are left out.
+  with their quotes. An ambiguous highlight is left out, but its notes are not: they come last
+  with the detached annotations, marked as not placed, with no citation to a position.
 - A note body is already Markdown. The export only rewrites its links: `rfc://` becomes an
   rfc-editor.org URL, since the file leaves the app, and `attachment:<uuid>` becomes a relative
   path into a folder written beside the file. Without attachments, the export is a single
@@ -564,7 +567,7 @@ is deferred until the column exists and has been used.
   - each highlight becomes a `.highlight` or `.underline` markup annotation in its color, and
     its notes' Markdown becomes the annotation's contents;
   - a section note becomes a text annotation at its heading;
-  - an ambiguous highlight is left out.
+  - an ambiguous highlight is left out, and its notes with it.
 - **Annotations do not print.** `shouldPrint = false` is set explicitly on every annotation. This
   is decided: the annotations are for reading on screen in a PDF app, and a printout of the
   export is a clean copy. Print itself never adds annotations.
