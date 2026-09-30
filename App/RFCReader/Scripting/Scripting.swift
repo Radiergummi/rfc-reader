@@ -257,6 +257,9 @@
 
   /// `jump to section "4.2"`: resolved against the document the window shows, the
   /// way a section link in the prose is, by number or by anchor.
+  ///
+  /// The reader resolves it, in a later update, so the command waits for it: a
+  /// script's next command, such as `go back`, finds the jump in the history (#482).
   @objc(RFCJumpToSectionCommand)
   nonisolated final class RFCJumpToSectionCommand: RFCScriptCommand {
     @MainActor override func perform() {
@@ -268,7 +271,11 @@
         ScriptError.report("There is no RFC to jump in.", in: self)
         return
       }
-      window.navigation.jump(toSection: section)
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      window.navigation.jump(toSection: section) {
+        command.resumeExecution(withResult: nil)
+      }
     }
   }
 
