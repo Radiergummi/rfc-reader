@@ -27,7 +27,9 @@ struct BuilderHandoverTests {
 
     #expect(detached.text.string == onMain.text.string)
     #expect(detached.anchors == onMain.anchors)
-    #expect(Self.runs(of: detached.text) == Self.runs(of: onMain.text))
+    #expect(
+      Self.runs(of: detached.text) == Self.runs(of: onMain.text),
+      "\(Self.fontsWhereRunsDiffer(offMain: detached.text, onMain: onMain.text))")
   }
 
   /// No paragraph style can be mutated once it is in the text. Foundation uniques
@@ -149,6 +151,42 @@ struct BuilderHandoverTests {
       runs.append("\(range.location)+\(range.length):\(keys)")
     }
     return runs
+  }
+
+  /// Both builds' fonts where their runs first differ: at the start of the run and
+  /// where the shorter of the two ends. Under concurrent runs a build off the main
+  /// actor split a run that the one on it kept whole (#326), and the fonts on each
+  /// side of the split say which value compared unequal.
+  private static func fontsWhereRunsDiffer(
+    offMain: NSAttributedString, onMain: NSAttributedString
+  ) -> String {
+    let offMainRuns = runs(of: offMain)
+    let onMainRuns = runs(of: onMain)
+    guard
+      let index = offMainRuns.indices.first(where: {
+        $0 < onMainRuns.count && offMainRuns[$0] != onMainRuns[$0]
+      })
+    else { return "no run differs" }
+    let offMainRange = runRanges(of: offMain)[index]
+    let onMainRange = runRanges(of: onMain)[index]
+    let split = min(NSMaxRange(offMainRange), NSMaxRange(onMainRange))
+    let offsets = Set([offMainRange.location, split]).filter { $0 < offMain.length }.sorted()
+    return offsets.map { offset in
+      "at \(offset): off main \(font(in: offMain, at: offset)), on main \(font(in: onMain, at: offset))"
+    }.joined(separator: "; ")
+  }
+
+  private static func runRanges(of text: NSAttributedString) -> [NSRange] {
+    var ranges: [NSRange] = []
+    text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { _, range, _ in
+      ranges.append(range)
+    }
+    return ranges
+  }
+
+  private static func font(in text: NSAttributedString, at offset: Int) -> String {
+    let font = text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
+    return font.map(Fixtures.describe) ?? "no font"
   }
 
   private static func attachments(in text: NSAttributedString) -> Set<ObjectIdentifier> {

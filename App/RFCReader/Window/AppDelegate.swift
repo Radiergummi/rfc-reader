@@ -14,7 +14,7 @@
   final class AppDelegate: NSObject, NSApplicationDelegate, WindowOpening {
     private(set) static weak var shared: AppDelegate?
 
-    private var controllers: [ReaderWindowController] = []
+    private(set) var controllers: [ReaderWindowController] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
       Self.shared = self

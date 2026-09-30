@@ -24,10 +24,14 @@ final class NavigationModel: Identifiable {
   /// `onChange` watching the section alone would see no change and never scroll.
   struct ScrollRequest: Equatable {
     let section: String
-    /// A link to an anchor of the document on screen, which has no entry in the
-    /// history yet: the reader gives it one if its document holds the anchor, and
-    /// otherwise moves nothing (#276). Only the reader can tell, having the build.
+    /// A place in the document on screen, which has no entry in the history yet:
+    /// the reader gives it one if its document holds the place, and otherwise moves
+    /// nothing (#276). Only the reader can tell, having the build, and only it can
+    /// say that `4.2` and `section-4.2` are the same place (#482).
     var isUnrecorded = false
+    /// False for a jump the reader makes as its text appears: a document just
+    /// loaded opens at the place rather than animating there from its top.
+    var isAnimated = true
     private let issue = UUID()
   }
 
@@ -143,7 +147,21 @@ final class NavigationModel: Identifiable {
       }
     }
   }
-  private(set) var scrollRequest: ScrollRequest?
+  private(set) var scrollRequest: ScrollRequest? {
+    didSet {
+      // A jump waited on is done once the reader has recorded it, which replaces
+      // it with the request to scroll there, or once anything else replaces it
+      // before the reader got to it.
+      if let waiting = jumpWaiter, waiting.request != scrollRequest {
+        jumpWaiter = nil
+        waiting.done()
+      }
+    }
+  }
+
+  /// Whoever waits for the unrecorded jump requested last: a script, whose next
+  /// command must find the jump in the history (#482).
+  @ObservationIgnored private var jumpWaiter: (request: ScrollRequest, done: () -> Void)?
 
   var canGoBack: Bool { history.canGoBack }
   var canGoForward: Bool { history.canGoForward }
@@ -164,16 +182,17 @@ final class NavigationModel: Identifiable {
     if id.series != .rfc, let first = index?.series(id)?.members.first {
       id = first
     }
-    // An anchor of the document on screen may name nothing in its body, as the RFC
-    // Editor's `#page-12` doesn't, or an entry the reader shows rather than
-    // scrolls to. Handed to the reader unrecorded, it gets an entry in the history
-    // only where the reader finds it, and otherwise leaves the reader, and the
-    // place it will be left from, where they are (#276).
-    if link.section == nil, let anchor = link.anchor, id == selection {
-      scrollRequest = ScrollRequest(section: anchor, isUnrecorded: true)
-      return
+    // A place in the document on screen is a jump within it, which the reader
+    // resolves: an anchor may name nothing in its body, as the RFC Editor's
+    // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
+    // and only the reader can tell a section's number from its anchor (#482). An
+    // anchor leaves the list as it is.
+    if let place = link.place, id == selection {
+      jump(toSection: place)
+      guard link.section != nil else { return }
+    } else {
+      go(to: HistoryEntry(id: id, section: link.place))
     }
-    go(to: HistoryEntry(id: id, section: link.place))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
     sidebarSelection = .all
@@ -252,11 +271,36 @@ final class NavigationModel: Identifiable {
     go(to: HistoryEntry(id: id))
   }
 
-  /// A jump within the document already open — a section link in the prose, or a
-  /// row in the table of contents. Its own history entry, so Back undoes it.
-  func jump(toSection section: String) {
+  /// A jump within the document already open — a section link in the prose, a row
+  /// in the table of contents, or `jump to section`. Handed to the reader, which
+  /// records it through `recordJump(to:in:)` where its document holds the place.
+  /// `whenSettled` runs once it has, or once the reader has done what else it will
+  /// with the place: after the document loads, if it is still loading.
+  func jump(toSection section: String, whenSettled done: @escaping () -> Void = {}) {
+    guard selection != nil else {
+      done()
+      return
+    }
+    let request = ScrollRequest(section: section, isUnrecorded: true)
+    scrollRequest = request
+    jumpWaiter = (request, done)
+  }
+
+  /// The reader has done what it will with `request`, where that recorded nothing:
+  /// a bibliography entry shown, a place the document does not hold, or a document
+  /// that failed to load.
+  func settle(_ request: ScrollRequest) {
+    guard let waiting = jumpWaiter, waiting.request == request else { return }
+    jumpWaiter = nil
+    waiting.done()
+  }
+
+  /// A place the document on screen holds: its own history entry, so Back undoes
+  /// it, unless the reader is already there. Compared in `places`' spelling, so a
+  /// section's number and its anchor are one place (#482).
+  func recordJump(to section: String, in places: DocumentPlaces, animated: Bool = true) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section))
+    go(to: HistoryEntry(id: id, section: section), in: places, animated: animated)
   }
 
   func goBack() {
@@ -269,13 +313,15 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry) {
-    guard let place = history.go(to: place, leaving: visiblePosition) else { return }
-    arrive(at: place)
+  private func go(
+    to place: HistoryEntry, in places: DocumentPlaces? = nil, animated: Bool = true
+  ) {
+    guard let place = history.go(to: place, leaving: visiblePosition, in: places) else { return }
+    arrive(at: place, animated: animated)
   }
 
-  private func arrive(at place: HistoryEntry) {
-    scrollRequest = place.section.map { ScrollRequest(section: $0) }
+  private func arrive(at place: HistoryEntry, animated: Bool = true) {
+    scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
   }
 }
