@@ -24,9 +24,10 @@ final class NavigationModel: Identifiable {
   /// `onChange` watching the section alone would see no change and never scroll.
   struct ScrollRequest: Equatable {
     let section: String
-    /// A link to an anchor of the document on screen, which has no entry in the
-    /// history yet: the reader gives it one if its document holds the anchor, and
-    /// otherwise moves nothing (#276). Only the reader can tell, having the build.
+    /// A place in the document on screen, which has no entry in the history yet:
+    /// the reader gives it one if its document holds the place, and otherwise moves
+    /// nothing (#276). Only the reader can tell, having the build, and only it can
+    /// say that `4.2` and `section-4.2` are the same place (#482).
     var isUnrecorded = false
     private let issue = UUID()
   }
@@ -164,13 +165,11 @@ final class NavigationModel: Identifiable {
     if id.series != .rfc, let first = index?.series(id)?.members.first {
       id = first
     }
-    // An anchor of the document on screen may name nothing in its body, as the RFC
-    // Editor's `#page-12` doesn't, or an entry the reader shows rather than
-    // scrolls to. Handed to the reader unrecorded, it gets an entry in the history
-    // only where the reader finds it, and otherwise leaves the reader, and the
-    // place it will be left from, where they are (#276).
-    if link.section == nil, let anchor = link.anchor, id == selection {
-      scrollRequest = ScrollRequest(section: anchor, isUnrecorded: true)
+    // A place in the document on screen is a jump within it, which the reader
+    // resolves: an anchor may name nothing in its body, as the RFC Editor's
+    // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276).
+    if let place = link.place, id == selection {
+      jump(toSection: place)
       return
     }
     go(to: HistoryEntry(id: id, section: link.place))
@@ -252,11 +251,20 @@ final class NavigationModel: Identifiable {
     go(to: HistoryEntry(id: id))
   }
 
-  /// A jump within the document already open — a section link in the prose, or a
-  /// row in the table of contents. Its own history entry, so Back undoes it.
+  /// A jump within the document already open — a section link in the prose, a row
+  /// in the table of contents, or `jump to section`. Handed to the reader, which
+  /// records it through `jump(toSection:in:)` where its document holds the place.
   func jump(toSection section: String) {
+    guard selection != nil else { return }
+    scrollRequest = ScrollRequest(section: section, isUnrecorded: true)
+  }
+
+  /// A place `document`, the one on screen, holds: its own history entry, so Back
+  /// undoes it, unless the reader is already there. Resolved through the document,
+  /// so a section's number and its anchor are one place (#482).
+  func jump(toSection section: String, in document: RFCDocument) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section))
+    go(to: HistoryEntry(id: id, section: section), resolving: document.anchor(forPlace:))
   }
 
   func goBack() {
@@ -269,8 +277,10 @@ final class NavigationModel: Identifiable {
     arrive(at: place)
   }
 
-  private func go(to place: HistoryEntry) {
-    guard let place = history.go(to: place, leaving: visiblePosition) else { return }
+  private func go(to place: HistoryEntry, resolving anchor: (String) -> String = { $0 }) {
+    guard let place = history.go(to: place, leaving: visiblePosition, resolving: anchor) else {
+      return
+    }
     arrive(at: place)
   }
 

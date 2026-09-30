@@ -328,7 +328,8 @@ struct NavigationHistoryTests {
     history.go(to: place(9110, "4.2"), resolving: document.anchor(forPlace:))
     history.go(
       to: place(9110, "section-4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
-    history.go(to: place(9110, "4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
+    history.go(
+      to: place(9110, "4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
     #expect(history.goBack() == place(9110))
     #expect(!history.canGoBack)
   }
@@ -342,7 +343,8 @@ struct NavigationHistoryTests {
         == place(9110, "section-4.2"))
     #expect(
       history.go(
-        to: place(9110, "section-4.2"), leaving: "section-4.2", resolving: document.anchor(forPlace:))
+        to: place(9110, "section-4.2"), leaving: "section-4.2",
+        resolving: document.anchor(forPlace:))
         == place(9110, "section-4.2"))
     #expect(!history.canGoBack)
     #expect(history.current == place(9110, "section-4.2"))
