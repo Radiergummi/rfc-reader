@@ -427,6 +427,16 @@ public struct SeriesInfo: Hashable, Codable, Sendable {
   public init(_ id: DocumentID) {
     self.init(name: id.series.rawValue, value: String(id.number))
   }
+
+  /// The document the entry names, when its series is one of the RFC Editor's:
+  /// `RFC 9110`, and `rfc 09110` the same. Nil for a DOI or an Internet-Draft.
+  public var documentID: DocumentID? {
+    guard let series = DocumentID.Series(rawValue: name.uppercased()), let number = Int(value)
+    else {
+      return nil
+    }
+    return DocumentID(series: series, number: number)
+  }
 }
 
 public struct ReferenceList: Sendable, Hashable, Codable {
@@ -538,12 +548,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
 
   /// The RFC/BCP/STD this reference points at, when it is one.
   public var documentID: DocumentID? {
-    let ids = seriesInfo.compactMap { info -> DocumentID? in
-      guard let series = DocumentID.Series(rawValue: info.name.uppercased()),
-        let number = Int(info.value)
-      else { return nil }
-      return DocumentID(series: series, number: number)
-    }
+    let ids = seriesInfo.compactMap(\.documentID)
     // A BCP or STD reference usually also names its RFC; the RFC is the thing to open.
     return ids.first { $0.series == .rfc } ?? ids.first ?? DocumentID(label: anchor)
   }

@@ -43,6 +43,8 @@ struct RequirementsView: View {
           }
         }
         .listStyle(.sidebar)
+        // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+        .accessibilityLabel("Requirements")
         .overlay {
           if shown.isEmpty {
             ContentUnavailableView.search

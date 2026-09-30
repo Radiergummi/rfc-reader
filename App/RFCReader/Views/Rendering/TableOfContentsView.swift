@@ -25,5 +25,7 @@ struct TableOfContentsView: View {
       }
     }
     .listStyle(.sidebar)
+    // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+    .accessibilityLabel("Contents")
   }
 }
