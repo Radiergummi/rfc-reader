@@ -129,8 +129,15 @@ struct SidebarView: View {
         Button {
           showsStoreWarning = true
         } label: {
-          Label("Not saved in this session", systemImage: "exclamationmark.triangle")
-            .foregroundStyle(.secondary)
+          Label {
+            Text("Not saved in this session")
+          } icon: {
+            // On the icon itself, or `SidebarLabelStyle` draws it in the accent
+            // color on iOS, as it does the places: this is a status, not a place.
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.secondary)
+          }
+          .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         .help(AppData.storeWarning.message)
