@@ -1,5 +1,6 @@
 import Foundation
 import RFCKit
+import SwiftUI
 import Testing
 
 @testable import RFCReaderKit
@@ -118,5 +119,77 @@ struct BuilderListTests {
     #expect(
       paragraph.tabStops.contains { $0.location == paragraph.headIndent },
       "the marker's tab must land exactly on the wrapped-text column")
+  }
+
+  /// One step is the floor; a marker wider than that widens the list's column, by a
+  /// gap past the widest (#359), up to the limit, which keeps a nested list's text
+  /// from being squeezed at the accessibility sizes. A limit under one step is one step.
+  @Test func `a list's marker column is its widest marker and a gap, within its bounds`() {
+    func width(_ markers: [CGFloat], limit: CGFloat = 100) -> CGFloat {
+      DocumentTextBuilder.markerColumnWidth(markerWidths: markers, gap: 6, step: 24, limit: limit)
+    }
+    #expect(width([8, 12]) == 24)
+    #expect(width([8, 40, 30]) == 46)
+    #expect(width([]) == 24)
+    #expect(width([150]) == 100)
+    #expect(width([150], limit: 10) == 24)
+  }
+
+  /// A marker wider than one step ran past its tab stop, so the tab fell through to
+  /// the next default stop and the first line started right of the wrapped ones
+  /// (#359). "10000." is wider than a step at any text size; "1." is wider than the
+  /// step the column caps (#331) on an iPhone at the largest accessibility size.
+  @Test(arguments: [
+    (ReadingStyle(), 10_000, "10000."),
+    (ReadingStyle(bodySize: 17, measure: 345, textSize: .accessibility5), 1, "1."),
+  ])
+  func `a marker wider than one step still ends before the item's text`(
+    style: ReadingStyle, start: Int, firstMarker: String
+  ) throws {
+    let list = ListBlock(
+      style: .numbered(ListNumbering(type: "1", start: start)),
+      items: [ListItem(text: "first"), ListItem(text: "second")])
+    let built = DocumentTextBuilder.build(Fixtures.document(.list(list)), style: style)
+    let offset = try Fixtures.offset(of: "first", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    let markerWidth = DocumentTextBuilder(style: style).lineWidth(firstMarker, font: style.bodyFont)
+    #expect(style.indentStep < markerWidth)
+    #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > markerWidth)
+    #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
+  }
+
+  /// A nested list's indent is its parent's marker column, so a column bounded by a
+  /// share of the whole measure let five levels of wide markers at the largest
+  /// accessibility size on an iPhone take all of it and leave the text none, as the
+  /// indent steps did before #153 bounded them. Bounded by a share of the width left
+  /// after its indent, each level takes less than the one outside it.
+  @Test func `five nested lists of wide markers leave the text a width`() throws {
+    let style = ReadingStyle(bodySize: 17, measure: 345, textSize: .accessibility5)
+    let numbering = ListNumbering(prefix: "Requirement ", suffix: ":")
+    let levels = 1...5
+    var nested: [Block] = []
+    for level in levels.reversed() {
+      let item = ListItem(blocks: [.paragraph(Paragraph(text: "level \(level)"))] + nested)
+      nested = [.list(ListBlock(style: .numbered(numbering), items: [item]))]
+    }
+    let built = DocumentTextBuilder.build(Fixtures.document(nested[0]), style: style)
+
+    var textColumn: CGFloat = 0
+    for level in levels {
+      let offset = try Fixtures.offset(of: "level \(level)", in: built.text)
+      let paragraph = try #require(
+        built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+      let indent = paragraph.firstLineHeadIndent
+      let widthLeft = style.measure - indent
+      // The column is its indent plus its width, so it comes back off by a rounding.
+      let rounding: CGFloat = 0.001
+      #expect(
+        paragraph.headIndent - indent
+          <= max(style.indentStep, widthLeft * DocumentTextBuilder.markerColumnShare) + rounding,
+        "level \(level)'s marker column must stay within its share of the width left")
+      textColumn = paragraph.headIndent
+    }
+    #expect(style.measure - textColumn > 0, "the innermost item's text must have a width")
   }
 }
