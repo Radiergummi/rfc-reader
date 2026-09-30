@@ -73,19 +73,20 @@ extension LegacyTextParser {
   /// the document heading that section itself (#291).
   public static func recurringFurniture(in text: String) -> [String] {
     let lines = paginated(text)
-    let headed = headedSectionHeaders(in: depaginate(lines))
-    return recurringFurniture(lines).dropped.union(headed).sorted().compactMap {
-      lines[$0].string
-    }
+    let furniture = recurringFurniture(lines)
+    let headed = headedSectionHeaders(in: depaginate(lines, furniture: furniture))
+    return furniture.dropped.union(headed).sorted().compactMap { lines[$0].string }
   }
 
   static func depaginate(_ text: String) -> [Line] {
-    depaginate(paginated(text))
+    let lines = paginated(text)
+    return depaginate(lines, furniture: recurringFurniture(lines))
   }
 
-  private static func depaginate(_ lines: [Line]) -> [Line] {
-    let furniture = recurringFurniture(lines)
-    guard !furniture.dropped.isEmpty else { return lines }
+  private static func depaginate(
+    _ lines: [Line], furniture: (dropped: Set<Int>, sectionHeaders: Set<Int>)
+  ) -> [Line] {
+    guard !furniture.dropped.isEmpty || !furniture.sectionHeaders.isEmpty else { return lines }
     return lines.enumerated().compactMap { offset, line in
       if furniture.dropped.contains(offset) { return nil }
       if furniture.sectionHeaders.contains(offset), let string = line.string {
@@ -176,9 +177,9 @@ extension LegacyTextParser {
   /// `RFC 770 ... September 1980` -- where the body starts after the blank lines that
   /// follow the header, and RFC 6208's `Additional information:` at the head of five
   /// pages is the body's. In RFC 770 the first copy is the only thing that says
-  /// where its section starts, so it is not dropped here but returned apart, for
-  /// `rawSections` to keep unless the document heads that section itself nearby
-  /// (#291).
+  /// where its section starts, so it is not dropped here but returned apart, and
+  /// `Prelude.headedSectionHeaders` drops it where the document heads that section
+  /// itself nearby (#291).
   private static func recurringFurniture(_ lines: [Line]) -> (
     dropped: Set<Int>, sectionHeaders: Set<Int>
   ) {

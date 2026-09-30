@@ -177,10 +177,6 @@ public enum LegacyTextParser {
   /// which is the same drift one level up.
   static func prepared(_ text: String, title: String? = nil) -> Prepared {
     let prelude = Prelude(depaginate(text))
-    let (colonNumbered, proseIndent, front, bodyStart, body) = (
-      prelude.colonNumbered, prelude.proseIndent, prelude.front, prelude.bodyStart,
-      prelude.bodyIsIndented
-    )
     // A section running header's first sighting the document heads itself goes, now
     // that the headings it is judged by are known (#291). Only from the body, so
     // `bodyStart` still is where it was.
@@ -189,18 +185,19 @@ public enum LegacyTextParser {
       guard case .sectionHeader(_, let sighting) = line else { return true }
       return !headed.contains(sighting)
     }
-    var header = parseFrontMatter(front)
+    var header = parseFrontMatter(prelude.front)
     var sections = rawSections(
-      in: lines, from: bodyStart, bodyIsIndented: body, colonNumbered: colonNumbered)
+      in: lines, from: prelude.bodyStart, bodyIsIndented: prelude.bodyIsIndented,
+      colonNumbered: prelude.colonNumbered)
     if let title, !title.isEmpty {
       // The title page is the front matter's runs and the lead-in's blocks up to the
       // one that opens the body, which is where a title set over several runs leaves
       // the rest. Up to and including it, because the rest can pass for a paragraph:
       // RFC 806 sets it in two lines of capitals.
-      var titlePage = front.split(whereSeparator: \.isBlank).map(Array.init)
+      var titlePage = prelude.front.split(whereSeparator: \.isBlank).map(Array.init)
       if sections.first?.heading == nil {
         var leadIn = sections[0].blocks[...]
-        let opening = leadIn.firstIndex { opensBody($0.lines, proseIndent: proseIndent) }
+        let opening = leadIn.firstIndex { opensBody($0.lines, proseIndent: prelude.proseIndent) }
         if let opening {
           leadIn = leadIn[...opening]
         }
@@ -213,10 +210,10 @@ public enum LegacyTextParser {
     // report of blocks the parser dropped unread would count refusals it never made.
     if sections.first?.heading == nil {
       sections[0].blocks = leadInWithoutFrontMatter(
-        sections[0].blocks, title: header.title, proseIndent: proseIndent,
+        sections[0].blocks, title: header.title, proseIndent: prelude.proseIndent,
         number: header.id?.number)
     }
-    return Prepared(header: header, sections: sections, proseIndent: proseIndent)
+    return Prepared(header: header, sections: sections, proseIndent: prelude.proseIndent)
   }
 
   /// What `prepared` hands both entry points.
@@ -453,8 +450,8 @@ public enum LegacyTextParser {
     }
   }
 
-  /// The sightings of the section running headers `depaginate` found in `text` that
-  /// the document heads itself, and which neither the body nor the as-published
+  /// The sightings of the section running headers in the depaginated lines that the
+  /// document heads itself, and which neither the body nor the as-published
   /// view keeps.
   static func headedSectionHeaders(in depaginated: [Line]) -> Set<Int> {
     guard depaginated.contains(where: \.isSectionHeader) else { return [] }
@@ -462,24 +459,22 @@ public enum LegacyTextParser {
   }
 
   /// Whether the document heads the section the running header's first sighting at
-  /// `index` names,
-  /// nearby: with a heading of the same words, as `headingText` reads them, on the
-  /// header's own page or the two before it, in the body (#291). A section's running
-  /// header first appears on the page after the one it starts on, which carries the
-  /// last section's name, or two pages on where the headers alternate between facing
-  /// pages: RFC 793 starts `2.  PHILOSOPHY` at the head of a page headed
-  /// `Introduction`, and first runs `Philosophy` on the next. Where the document heads
-  /// it, the first sighting is a second, empty heading beside the document's own;
-  /// where it doesn't, it is the only thing saying where the section starts (RFC
-  /// 770's `References`).
+  /// `index` names, nearby: with a heading of the same words, as `headingText` reads
+  /// them, on the header's own page or the two before it, in the body (#291). A section's
+  /// running header first appears on the page after the one it starts on, which carries
+  /// the last section's name, or two pages on where the headers alternate between facing
+  /// pages: RFC 793 starts `2.  PHILOSOPHY` at the head of a page headed `Introduction`,
+  /// and first runs `Philosophy` on the next. Where the document heads it, the first
+  /// sighting is a second, empty heading beside the document's own; where it doesn't, it
+  /// is the only thing saying where the section starts (RFC 770's `References`).
   ///
-  /// A heading is one `rawSections` would emit, or a numbered one at any indent,
-  /// because RFC 793 centers `2.  PHILOSOPHY`. The header is read as a heading too,
-  /// so one that carries its section's number matches the heading that does. Local,
-  /// and answered by the headings themselves: asking whether any numbered heading
-  /// anywhere in the document had the words compared two normalizations that never
-  /// agreed on a number, and let an `Introduction` at one end of a document speak for
-  /// a running header at the other (#57).
+  /// A heading is one `rawSections` would emit, or a numbered one at any indent, because
+  /// RFC 793 centers `2.  PHILOSOPHY`. The header is read as a heading too, so one that
+  /// carries its section's number matches the heading that does, and only that one.
+  /// Local, and answered by the headings themselves: asking whether any numbered heading
+  /// anywhere in the document had the words compared two normalizations that never agreed
+  /// on a number, and let an `Introduction` at one end of a document speak for a running
+  /// header at the other (#57).
   static func headsNearby(
     at index: Int, in lines: [Line], from bodyStart: Int, bodyIsIndented: Bool,
     colonNumbered: Bool
@@ -499,7 +494,18 @@ public enum LegacyTextParser {
     while end < lines.endIndex, !isBreak(lines[end]) { end += 1 }
 
     let stated = header.trimmingCharacters(in: .whitespaces)
-    let title = headingText(heading(from: stated, colonNumbered: colonNumbered)?.title ?? stated)
+    let headerHeading = heading(from: stated, colonNumbered: colonNumbered)
+    let title = headingText(headerHeading?.title ?? stated)
+    // The same words, and the same number where both have one: `5.  Retry Handling`
+    // is not `4.  Retry Handling`. A header with no title, `Appendix B`, is told by
+    // its number alone, and never matches a heading that has no number either.
+    func names(_ heading: HeadingInfo) -> Bool {
+      guard headingText(heading.title) == title else { return false }
+      if let number = headerHeading?.number, let other = heading.number {
+        return number == other
+      }
+      return !title.isEmpty
+    }
     for candidate in start..<end {
       guard case .text(let string) = lines[candidate] else { continue }
       // Where `rawSections` starts a block: after a blank line or a page break, and
@@ -513,13 +519,13 @@ public enum LegacyTextParser {
         startsBlock: startsBlock),
         heading.number != nil || !refusesUnnumberedHeading(heading.title)
       {
-        if headingText(heading.title) == title { return true }
+        if names(heading) { return true }
         continue
       }
       let indented = string.drop { $0 == " " }
       if indented.first?.isNumber == true,
         let heading = Self.heading(from: String(indented), colonNumbered: colonNumbered),
-        heading.number != nil, headingText(heading.title) == title
+        heading.number != nil, names(heading)
       {
         return true
       }

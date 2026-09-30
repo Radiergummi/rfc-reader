@@ -183,9 +183,7 @@ struct SectionHeaderTests {
   }
 
   private func headsNearby(_ lines: [Line]) -> Bool {
-    let index = lines.firstIndex {
-      if case .sectionHeader = $0 { true } else { false }
-    }!
+    let index = lines.firstIndex(where: \.isSectionHeader)!
     return LegacyTextParser.headsNearby(
       at: index, in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)
   }
@@ -246,6 +244,26 @@ struct SectionHeaderTests {
       page(["4.  Retry Handling", "", "   A sender waits."])
       + page(header: "4.  Retry Handling", ["   The wait doubles each time."])
     #expect(headsNearby(lines))
+  }
+
+  /// A header numbered otherwise names another section, whatever its words.
+  @Test func `a header with another number does not match the heading`() {
+    let lines =
+      page(["4.  Retry Handling", "", "   A sender waits."])
+      + page(header: "5.  Retry Handling", ["   The wait doubles each time."])
+    #expect(!headsNearby(lines))
+  }
+
+  /// An appendix header with no title is told from another by its letter alone.
+  @Test func `a titleless appendix header matches only its own letter`() {
+    let other =
+      page(["APPENDIX A", "", "   The first list."])
+      + page(header: "Appendix B", ["   The second list."])
+    #expect(!headsNearby(other))
+    let own =
+      page(["APPENDIX B", "", "   The second list."])
+      + page(header: "Appendix B", ["   Its entries go on."])
+    #expect(headsNearby(own))
   }
 
   /// Where the headers alternate between facing pages, a section's name first runs
