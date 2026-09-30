@@ -9,22 +9,21 @@ import RFCKit
 
 extension DocumentTextBuilder {
   func appendList(_ list: ListBlock, indent: CGFloat) {
-    // Measured once for the list, as a grid table's columns are: every item then
-    // hangs its marker in the same column, however wide the widest one is.
-    let markerFont: [NSAttributedString.Key: Any] = [.font: style.bodyFont]
-    let markerWidths = list.items.indices.map { index in
-      NSAttributedString(string: Self.marker(for: list.style, at: index), attributes: markerFont)
-        .size().width
-    }
+    // Measured once for the list, as a grid table's columns are, and each distinct
+    // marker once: every item then hangs its marker in the same column.
+    let markers = list.items.indices.map { Self.marker(for: list.style, at: $0) }
+    let markerFont = style.bodyFont
+    let markerWidths = Set(markers).map { lineWidth($0, font: markerFont) }
     let markerColumn =
       indent
       + Self.markerColumnWidth(
-        markerWidths: markerWidths, gap: style.bodySize * 0.5, step: style.indentStep)
+        markerWidths: markerWidths, gap: style.bodySize * Self.markerGapShare,
+        step: style.indentStep, limit: style.measure * Self.markerColumnShare)
     // Every item of one list shares its indents and spacing, so both dictionaries
     // and the tab stop are built once for the list rather than once per item.
     let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
     let attributes: [NSAttributedString.Key: Any] = [
-      .font: style.bodyFont,
+      .font: markerFont,
       .foregroundColor: bodyColor,
       .paragraphStyle: paragraphStyle(
         indent: markerColumn,
@@ -41,7 +40,7 @@ extension DocumentTextBuilder {
 
     for (index, item) in list.items.enumerated() {
       mark(item.anchor)
-      let marker = Self.marker(for: list.style, at: index)
+      let marker = markers[index]
       let firstLine = NSMutableAttributedString(string: marker + "\t", attributes: markerAttributes)
 
       guard let first = item.blocks.first else {
@@ -82,12 +81,25 @@ extension DocumentTextBuilder {
   }
 
   /// How wide a list's marker column is: its widest marker and `gap`, never less than
-  /// `step`. One step was the column for every list, and a wider marker ran past its
-  /// tab stop (#359): "(iii)" at 17 pt, and since the step is capped by the column
-  /// (#331), even "1." at the accessibility sizes on an iPhone.
-  static func markerColumnWidth(markerWidths: [CGFloat], gap: CGFloat, step: CGFloat) -> CGFloat {
-    max(step, (markerWidths.max() ?? 0) + gap)
+  /// `step` and never more than `limit`. One step was the column for every list, and
+  /// a wider marker ran past its tab stop (#359): "(iii)" at 17 pt, and since the step
+  /// is capped by the column (#331), even "1." at the accessibility sizes on an
+  /// iPhone. The limit keeps what #331 capped the step for: a nested list's indent
+  /// is its parent's column, and a column without one gave a sliver of text to a list
+  /// of `Requirement 1:` markers three levels down at those sizes. A marker wider than
+  /// the limit runs past its stop, as every wide marker did before.
+  static func markerColumnWidth(
+    markerWidths: [CGFloat], gap: CGFloat, step: CGFloat, limit: CGFloat
+  ) -> CGFloat {
+    min(max(step, (markerWidths.max() ?? 0) + gap), max(step, limit))
   }
+
+  /// The space after a list's widest marker, in ems: the gap a tab leaves before the
+  /// item's text, as `columnGutter` is between a table's columns.
+  static let markerGapShare: CGFloat = 0.5
+
+  /// The most of the column a list's markers may take; see `markerColumnWidth`.
+  static let markerColumnShare: CGFloat = 0.2
 
   /// The marker the item at `index` is drawn with. A numbered list's is its
   /// `ListNumbering`'s, which the parsers read once from either source.

@@ -121,12 +121,17 @@ struct BuilderListTests {
   }
 
   /// One step is the floor; a marker wider than that widens the list's column, by a
-  /// gap past the widest (#359).
-  @Test func `a list's marker column is its widest marker and a gap, at least one step`() {
-    #expect(DocumentTextBuilder.markerColumnWidth(markerWidths: [8, 12], gap: 6, step: 24) == 24)
-    #expect(
-      DocumentTextBuilder.markerColumnWidth(markerWidths: [8, 40, 30], gap: 6, step: 24) == 46)
-    #expect(DocumentTextBuilder.markerColumnWidth(markerWidths: [], gap: 6, step: 24) == 24)
+  /// gap past the widest (#359), up to the limit, which keeps a nested list's text
+  /// from being squeezed at the accessibility sizes. A limit under one step is one step.
+  @Test func `a list's marker column is its widest marker and a gap, within its bounds`() {
+    func width(_ markers: [CGFloat], limit: CGFloat = 100) -> CGFloat {
+      DocumentTextBuilder.markerColumnWidth(markerWidths: markers, gap: 6, step: 24, limit: limit)
+    }
+    #expect(width([8, 12]) == 24)
+    #expect(width([8, 40, 30]) == 46)
+    #expect(width([]) == 24)
+    #expect(width([150]) == 100)
+    #expect(width([150], limit: 10) == 24)
   }
 
   /// A marker wider than one step ran past its tab stop, so the tab fell through to
@@ -140,8 +145,12 @@ struct BuilderListTests {
     let offset = try Fixtures.offset(of: "first", in: built.text)
     let paragraph = try #require(
       built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
-    let marker = NSAttributedString(string: "10000.", attributes: [.font: style.bodyFont])
-    #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > marker.size().width)
+    // As the builder measures it, not with `NSAttributedString.size()`, which has
+    // thrown under load.
+    let marker = CTLineCreateWithAttributedString(
+      NSAttributedString(string: "10000.", attributes: [.font: style.bodyFont]))
+    let markerWidth = CGFloat(CTLineGetTypographicBounds(marker, nil, nil, nil))
+    #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > markerWidth)
     #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
   }
 }
