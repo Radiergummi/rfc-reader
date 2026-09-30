@@ -103,7 +103,8 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks,
+      paragraphs: style.emitsLinks ? ParagraphMetrics.measure(builder.output) : [])
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.

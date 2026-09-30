@@ -19,7 +19,10 @@ final class LayoutFixture {
   init(text: NSAttributedString, width: CGFloat) {
     storage.install(text)
     storage.addTextLayoutManager(layout)
-    layout.textContainer = NSTextContainer(size: CGSize(width: width, height: 10_000_000))
+    let container = NSTextContainer(size: CGSize(width: width, height: 10_000_000))
+    // As the reader's text views set it: the column is the text's own width.
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
   }
 
   /// The built text of a committed fixture, at the reader's default style.
