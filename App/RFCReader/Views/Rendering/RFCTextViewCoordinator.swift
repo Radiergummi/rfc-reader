@@ -148,6 +148,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// after a flick: that tap clears the selection or stops the scroll, and is not
     /// one for the bars.
     private var tapIsNotForTheBars = false
+    /// Where that tap touched, in the text view's content. Taken when it begins,
+    /// because the tap is recognized only after a double tap has failed, and by
+    /// then a link it followed may have scrolled the text away from under it.
+    private var chromeTapPoint = CGPoint.zero
   #endif
 
   /// Where section tracking last put the reader, written the moment it is computed.
@@ -824,7 +828,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// a flick.
     @objc func tappedText(_ tap: UITapGestureRecognizer) {
       guard tap.state == .ended, !tapIsNotForTheBars, let textView else { return }
-      let point = tap.location(in: textView)
+      let point = chromeTapPoint
       let inset = textView.textContainerInset
       guard point.y >= inset.top else { return }
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
@@ -862,6 +866,7 @@ final class RFCTextViewCoordinator: NSObject {
     ) -> Bool {
       if gestureRecognizer === chromeTap, let textView {
         tapIsNotForTheBars = textView.selectedRange.length > 0 || textView.isDecelerating
+        chromeTapPoint = touch.location(in: textView)
       }
       return true
     }

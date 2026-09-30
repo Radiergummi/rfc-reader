@@ -239,6 +239,12 @@ struct ReaderInputs {
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, library: library, width: width)
     }
+
+    /// Brings the bars back if this reader had put them away: the next one, after a
+    /// load or a failure, starts with them showing and would not report otherwise.
+    static func dismantleUIView(_ textView: UITextView, coordinator: RFCTextViewCoordinator) {
+      coordinator.setChromeEnabled(false)
+    }
   }
 #else
   private struct Representable: NSViewRepresentable {
