@@ -72,7 +72,7 @@ struct StatusBanner: View {
 
   /// The title and the documents wrap beside the symbol, so a document updated by
   /// many others flows onto as many lines as it takes, indented under the title
-  /// (#439); an `HStack` squeezed every chip to one letter's width instead.
+  /// (#439).
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       Image(systemName: symbol).foregroundStyle(tint)
