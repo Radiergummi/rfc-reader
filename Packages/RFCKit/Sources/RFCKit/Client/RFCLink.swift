@@ -9,11 +9,20 @@ public struct RFCLink: Hashable, Sendable {
   /// number alone names section 1. A place is a number or an anchor, and
   /// `RFCDocument.anchor(forPlace:)` resolves either.
   public var section: String?
+  /// A fragment that names no section, kept as it came: an anchor the document may
+  /// define, such as an author's `sample-varint`, or one it doesn't, such as the RFC
+  /// Editor's `page-12` (#276). Only the reader reads it, to go there or to open at
+  /// the top; a citation names a section, and never this.
+  public var anchor: String?
 
-  public init(id: DocumentID, section: String? = nil) {
+  public init(id: DocumentID, section: String? = nil, anchor: String? = nil) {
     self.id = id
     self.section = section
+    self.anchor = anchor
   }
+
+  /// Where in the document the reader goes: the section, or else the anchor.
+  public var place: String? { section ?? anchor }
 
   /// The app's own URL scheme: `rfc://9110`, `rfc://9110#section-4.2`, `rfc://bcp14`.
   ///
@@ -27,7 +36,7 @@ public struct RFCLink: Hashable, Sendable {
     var components = URLComponents()
     components.scheme = Self.scheme
     components.host = id.series == .rfc ? String(id.number) : id.fileStem
-    components.fragment = section.map(SectionAnchor.fragment(forPlace:))
+    components.fragment = section.map(SectionAnchor.anchor(forSectionNumber:)) ?? anchor
     // Unwrapped because nothing here can fail: the host is a document ID's own
     // letters and digits, and the one caller-supplied part, the section, goes in
     // as a fragment, which `URLComponents` percent-encodes (#150).
@@ -44,29 +53,38 @@ public struct RFCLink: Hashable, Sendable {
     guard let section,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
-    components.fragment = SectionAnchor.fragment(forPlace: section)
+    components.fragment = SectionAnchor.anchor(forSectionNumber: section)
     return components.url ?? url
   }
 
   public var webURL: URL {
-    CitationFormatter.url(for: id, section: section)
+    guard section == nil, let anchor else {
+      return CitationFormatter.url(for: id, section: section)
+    }
+    // The document's page, which defines the anchor, rather than its info page.
+    let page = RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)")
+    guard var components = URLComponents(url: page, resolvingAgainstBaseURL: false) else {
+      return page
+    }
+    components.fragment = anchor
+    return components.url ?? page
   }
 
   public init?(url: URL) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
     // Decoded, which `url.fragment` is not: the builders percent-encode a section,
-    // and `section-4.2%20draft` has to come back as the section it was. A fragment
-    // that names no section is an anchor, and is the place as it is: the reader
-    // resolves one the document defines, and opens at the top for one it doesn't,
-    // rather than at the reading position (#276).
-    let fragmentSection = url.fragment(percentEncoded: false).flatMap { fragment in
-      fragment.isEmpty ? nil : SectionAnchor.sectionNumber(fromAnchor: fragment) ?? fragment
-    }
+    // and `section-4.2%20draft` has to come back as the section it was.
+    let fragment = url.fragment(percentEncoded: false) ?? ""
+    let fragmentSection = SectionAnchor.sectionNumber(fromAnchor: fragment)
+    // Any other fragment is an anchor, unless it starts with a digit: an XML ID
+    // cannot, and a bare `#4.2` is no section either (#276).
+    let fragmentAnchor =
+      fragmentSection == nil && fragment.first.map { !$0.isNumber } == true ? fragment : nil
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
       return
     }
 
@@ -81,14 +99,14 @@ public struct RFCLink: Hashable, Sendable {
       }
       let stem = (components[1] as NSString).deletingPathExtension
       guard let id = DocumentID(parsing: stem) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":
       // /doc/html/rfc9110, /doc/rfc9110/, /html/rfc9110
       guard let stem = components.last(where: { DocumentID(parsing: $0) != nil }) else {
         return nil
       }
       guard let id = DocumentID(parsing: stem) else { return nil }
-      self.init(id: id, section: fragmentSection)
+      self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     default:
       return nil
     }

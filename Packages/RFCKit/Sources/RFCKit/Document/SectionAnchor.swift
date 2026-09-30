@@ -9,9 +9,11 @@ enum SectionAnchor {
   static let appendixPrefix = "appendix-"
 
   /// `4.2` → `section-4.2`, `A.1` → `appendix-A.1`. An appendix numbered like a
-  /// section is named by its anchor already, `appendix-1`, and stays as it is.
+  /// section is named by its anchor already, `appendix-1`, and stays as it is; so
+  /// does a section's anchor given as its place, `section-8.3`, which was written
+  /// out as `appendix-section-8.3`.
   static func anchor(forSectionNumber number: String) -> String {
-    if number.hasPrefix(appendixPrefix) { return number }
+    if number.hasPrefix(appendixPrefix) || number.hasPrefix(sectionPrefix) { return number }
     return number.first?.isLetter == true
       ? "\(appendixPrefix)\(number)" : "\(sectionPrefix)\(number)"
   }
@@ -40,12 +42,6 @@ enum SectionAnchor {
       return prefix == appendixPrefix && number.first?.isNumber == true ? anchor : number
     }
     return nil
-  }
-
-  /// The fragment a link names a place by: a section number's anchor, and any other
-  /// place, an anchor already, as it is (#276).
-  static func fragment(forPlace place: String) -> String {
-    isSectionNumber(place) ? anchor(forSectionNumber: place) : place
   }
 
   /// Whether `place` is shaped like a section number rather than an anchor: it
