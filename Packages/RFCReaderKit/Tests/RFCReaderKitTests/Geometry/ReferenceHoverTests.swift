@@ -127,6 +127,26 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.restingDwellElapsed(target: first)).isEmpty)
   }
 
+  @Test func `hover previews turned off during a dwell show nothing when it ends`() {
+    var hover = ReferenceHover()
+    _ = hover.handle(.pointerMoved(location: here, target: first))
+    hover.previewsOnHover = false
+    #expect(hover.handle(.cardDwellElapsed(buttonPressed: false)).isEmpty)
+    hover = ReferenceHover()
+    _ = hover.handle(.scrolled)
+    hover.previewsOnHover = false
+    #expect(hover.handle(.restingDwellElapsed(target: first)).isEmpty)
+  }
+
+  @Test func `with hover previews off, a move looks at nothing unless a preview is up`() {
+    var hover = ReferenceHover()
+    hover.previewsOnHover = false
+    #expect(!hover.wantsTarget(at: here))
+    _ = hover.handle(.forceClickCard(first))
+    _ = hover.handle(.cardShown)
+    #expect(hover.wantsTarget(at: here))
+  }
+
   @Test func `with hover previews off, a force click still previews, and moving keeps it`() {
     var hover = ReferenceHover()
     hover.previewsOnHover = false

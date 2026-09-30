@@ -131,8 +131,10 @@ public struct ReferenceHover {
   /// under it. Not in a preview's reader, not while a document preview or a
   /// heading's backlinks are up, and not while the pointer is still where it
   /// followed a link: `handle` drops the target of such a move, so the controller
-  /// skips the hit test, which is a TextKit layout query on every mouse move.
+  /// skips the hit test, which is a TextKit layout query on every mouse move. Nor
+  /// with hover previews off and nothing up, when a move could only start a dwell.
   public func wantsTarget(at pointer: CGPoint) -> Bool {
+    guard previewsOnHover || presentation != nil else { return false }
     guard !isPreviewReader, presentation?.holdsThePointer != true else { return false }
     return pointer != linkClickPointer
   }
@@ -191,13 +193,13 @@ public struct ReferenceHover {
       guard case .card(let target) = dwell else { return [] }
       dwell = nil
       // A button still held is a click or a drag in progress, not a dwell.
-      guard !buttonPressed, hovered === target.box else { return [] }
+      guard previewsOnHover, !buttonPressed, hovered === target.box else { return [] }
       return [.showCard(target)]
 
     case .restingDwellElapsed(let target):
       guard dwell == .restingPointer else { return [] }
       dwell = nil
-      guard !isPreviewReader, let target else { return [] }
+      guard previewsOnHover, !isPreviewReader, let target else { return [] }
       hovered = target.box
       return [.showCard(target)]
 
