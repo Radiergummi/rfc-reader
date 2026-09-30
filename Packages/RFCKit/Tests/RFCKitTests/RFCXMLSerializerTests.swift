@@ -97,6 +97,21 @@ struct RFCXMLSerializerTests {
     #expect(annotations(reparsed) == annotations(original))
   }
 
+  /// "Section 4.9 of [FETCH]" keeps its section, its wording and its link (#473).
+  @Test func `a citation of a section of an entry outside the series survives a round trip`()
+    throws
+  {
+    let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
+    func citations(_ document: RFCDocument) -> [CrossReference] {
+      document.everyCrossReference.filter {
+        if case .entrySection = $0.target { return true }
+        return false
+      }
+    }
+    #expect(citations(original).count == 6)
+    #expect(citations(reparsed) == citations(original))
+  }
+
   @Test func `a paragraph indent survives a round trip`() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9601.xml")
     func indents(_ document: RFCDocument) -> [Int] {
