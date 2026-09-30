@@ -11,7 +11,9 @@ public enum PlaceName {
     if isAppendixAnchor(place) {
       return "Appendix\(separator)\(place.dropFirst(SectionAnchor.appendixPrefix.count))"
     }
-    let isLettered = place.first?.isLetter == true && SectionAnchor.isSectionNumber(place)
+    // xml2rfc takes only an ASCII capital for an appendix's letter (#473).
+    let isLettered =
+      place.first.map { ("A"..."Z").contains($0) } == true && SectionAnchor.isSectionNumber(place)
     return "\(isLettered ? "Appendix" : "Section")\(separator)\(place)"
   }
 

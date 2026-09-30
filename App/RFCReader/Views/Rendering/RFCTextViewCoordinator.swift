@@ -676,7 +676,8 @@ final class RFCTextViewCoordinator: NSObject {
     case .document:
       return ReferencePreview(
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
-    case .anchor(let anchor):
+    // A section of an entry outside the series previews the entry (#473).
+    case .anchor(let anchor), .entrySection(let anchor, _, _, _):
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
@@ -734,7 +735,8 @@ final class RFCTextViewCoordinator: NSObject {
       guard let library, let documentID,
         let (box, range) = reference(at: textItem.range.location),
         let url = link(at: range.location),
-        let target = LinkPreview.resolve(url, from: documentID, in: library.index)
+        let target = LinkPreview.resolve(
+          box.reference, linkedTo: url, from: documentID, in: library.index)
       else { return .init(menu: defaultMenu) }
       let host: UIHostingController<AnyView>
       switch target {
@@ -1044,7 +1046,8 @@ final class RFCTextViewCoordinator: NSObject {
         let target = reference(atWindowPoint: event.locationInWindow),
         let documentID,
         let url = link(at: target.range.location),
-        let resolved = LinkPreview.resolve(url, from: documentID, in: library?.index)
+        let resolved = LinkPreview.resolve(
+          target.box.reference, linkedTo: url, from: documentID, in: library?.index)
       else { return false }
       switch resolved {
       case .card:

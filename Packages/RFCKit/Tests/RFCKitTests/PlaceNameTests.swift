@@ -58,6 +58,16 @@ struct PlaceNameTests {
     #expect(PlaceName.spelledOut("Security Considerations") == "Section Security Considerations")
   }
 
+  /// xml2rfc takes only an ASCII capital, alone or before a dot, for an appendix's
+  /// letter; a named section, such as a registry's, stays a section (#473).
+  @Test(arguments: [
+    ("A", "Appendix A"), ("CBOR Tags", "Section CBOR Tags"), ("Abstract", "Section Abstract"),
+    ("\u{00C4}.1", "Section \u{00C4}.1"),
+  ])
+  func `only an ASCII capital letter is an appendix's`(place: String, spelledOut: String) {
+    #expect(PlaceName.spelledOut(place) == spelledOut)
+  }
+
   /// A section sign before a number that is an appendix's would name section 1.
   @Test func `only a place the section sign cannot name is spelled out when abbreviated`() {
     #expect(PlaceName.abbreviated("4.2") == "§\u{00A0}4.2")
