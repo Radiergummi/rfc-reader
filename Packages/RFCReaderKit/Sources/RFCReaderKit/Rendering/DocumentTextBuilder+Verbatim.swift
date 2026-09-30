@@ -90,8 +90,8 @@ extension DocumentTextBuilder {
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
-    if controlled {
-      reserveFigureControl(over: block, showing: shown == .rendered ? .figure : .source)
+    if controlled, let segment = box.segment {
+      reserveFigureControl(over: block, showing: segment)
     }
   }
 

@@ -119,6 +119,18 @@ public final class VerbatimBox: Sendable {
   }
 }
 
+extension VerbatimBox {
+  /// Which segment of its Figure | Source control is on, or nil for a block with no
+  /// rendering to switch to.
+  public var segment: FigureControl.Segment? {
+    switch shown {
+    case .plain: nil
+    case .rendered: .figure
+    case .source: .source
+    }
+  }
+}
+
 /// Boxes a decorated block's strokes, for the reason `VerbatimBox` boxes its block:
 /// one instance per block, so the attribute's extent is the block.
 public final class StrokeBox: Sendable {

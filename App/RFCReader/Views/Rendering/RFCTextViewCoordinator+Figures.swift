@@ -23,13 +23,12 @@
           UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
             UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
           })
-        if box.shown != .plain {
-          let shown: FigureControl.Segment = box.shown == .rendered ? .figure : .source
+        if let shown = box.segment, let onToggleSource {
           extra.append(
             UIAction(
               title: FigureControl.title(offeredFrom: shown),
               image: UIImage(systemName: FigureControl.symbol(offeredFrom: shown))
-            ) { [weak self] _ in self?.onToggleSource(box.ordinal) })
+            ) { _ in onToggleSource(box.ordinal) })
         }
       }
       return extra.isEmpty ? nil : UIMenu(children: suggestedActions + extra)

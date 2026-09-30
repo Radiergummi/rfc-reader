@@ -107,8 +107,9 @@ import RFCReaderKit
     var willTrackMouseDown: () -> Bool = { false }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
-    /// Shows a rendered verbatim block as its source, or back, by ordinal.
-    var toggleSource: (Int) -> Void = { _ in }
+    /// What shows a rendered verbatim block as its source, or back, by ordinal, or
+    /// nil where the reader cannot, as in a force-click preview.
+    var toggleSource: () -> ((Int) -> Void)? = { nil }
 
     /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
     /// and as Markdown, the HTML and the rich flavor as RTF (#186).
@@ -309,9 +310,9 @@ import RFCReaderKit
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
-        if let box, box.shown != .plain {
+        if let box, let shown = box.segment, toggleSource() != nil {
           let toggle = NSMenuItem(
-            title: FigureControl.title(offeredFrom: box.shown == .rendered ? .figure : .source),
+            title: FigureControl.title(offeredFrom: shown),
             action: #selector(toggleSourceItem(_:)), keyEquivalent: "")
           toggle.target = self
           toggle.tag = box.ordinal
@@ -322,7 +323,7 @@ import RFCReaderKit
     }
 
     @objc private func toggleSourceItem(_ sender: NSMenuItem) {
-      toggleSource(sender.tag)
+      toggleSource()?(sender.tag)
     }
 
     @objc private func copyFigure(_ sender: NSMenuItem) {

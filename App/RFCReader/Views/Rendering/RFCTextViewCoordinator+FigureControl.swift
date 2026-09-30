@@ -29,6 +29,9 @@ final class FigureControls {
   var hovered: Int?
   /// Showing, by the ordinal of the block each belongs to.
   private var placed: [Int: FigureButton] = [:]
+  /// What each showing button offers, so one the pointer merely moves over is not
+  /// given its symbol and tooltip again.
+  private var offered: [Int: FigureControl.Segment] = [:]
   private var spare: [FigureButton] = []
 
   func frame(of ordinal: Int?) -> CGRect? {
@@ -44,6 +47,7 @@ final class FigureControls {
     let ordinals = Set(wanted.map(\.control.ordinal))
     for (ordinal, button) in placed where !ordinals.contains(ordinal) {
       placed[ordinal] = nil
+      offered[ordinal] = nil
       button.isHidden = true
       spare.append(button)
     }
@@ -54,7 +58,10 @@ final class FigureControls {
       button.isHidden = false
       button.frame = frame
       button.tag = control.ordinal
-      offer(from: control.shown, on: button)
+      if offered[control.ordinal] != control.shown {
+        offer(from: control.shown, on: button)
+        offered[control.ordinal] = control.shown
+      }
       placed[control.ordinal] = button
     }
   }
@@ -112,7 +119,7 @@ extension RFCTextViewCoordinator {
     #endif
     let origin = containerOrigin(of: textView)
     var wanted: [(control: FigureControl.Control, frame: CGRect)] = []
-    for block in figureControls.blocks where showsFigureControls && showsFigureControl(of: block) {
+    for block in figureBlocksShowing() {
       guard
         let location = layout.location(
           layout.documentRange.location, offsetBy: block.location),
@@ -158,7 +165,7 @@ extension RFCTextViewCoordinator {
 
   /// Shows the block's other presentation.
   @objc func pressedFigureControl(_ sender: FigureButton) {
-    onToggleSource(sender.tag)
+    onToggleSource?(sender.tag)
   }
 
   private func containerOrigin(of textView: PlatformTextView) -> CGPoint {
@@ -172,24 +179,32 @@ extension RFCTextViewCoordinator {
     #endif
   }
 
+  /// The blocks whose button shows now: on iOS those whose first line is on screen,
+  /// on macOS the one the pointer is over. None where the reader cannot switch a
+  /// block, as in a force-click preview.
+  private func figureBlocksShowing() -> [FigureControl.Block] {
+    guard showsFigureControls, onToggleSource != nil else { return [] }
+    #if canImport(UIKit)
+      guard let visible = visibleOffsets() else { return [] }
+      return figureControls.blocks.filter { visible.contains($0.location) }
+    #else
+      return figureControls.blocks.filter { $0.control.ordinal == figureControls.hovered }
+    #endif
+  }
+
   #if canImport(UIKit)
-    /// Whether a block's first line is between the viewport's top and bottom.
-    private func showsFigureControl(of block: FigureControl.Block) -> Bool {
-      guard let textView, let layout = textView.textLayoutManager else { return false }
+    /// The offsets of the text between the viewport's top and bottom. Past the last
+    /// fragment, as at the end of a document, the bottom is the end of the text.
+    private func visibleOffsets() -> Range<Int>? {
+      guard let textView, let built, let layout = textView.textLayoutManager else { return nil }
       let top = max(0, textView.viewportTop)
-      guard
-        let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)),
-        let last = layout.textLayoutFragment(
-          for: CGPoint(x: 0, y: top + textView.viewportHeight))
-      else { return false }
-      return layout.offset(of: first.rangeInElement.location) <= block.location
-        && block.location < layout.offset(of: last.rangeInElement.endLocation)
+      guard let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return nil }
+      let end =
+        layout.textLayoutFragment(for: CGPoint(x: 0, y: top + textView.viewportHeight))
+        .map { layout.offset(of: $0.rangeInElement.endLocation) } ?? built.text.length
+      return layout.offset(of: first.rangeInElement.location)..<end
     }
   #else
-    private func showsFigureControl(of block: FigureControl.Block) -> Bool {
-      block.control.ordinal == figureControls.hovered
-    }
-
     /// The block with a button under a point in window coordinates: its lines, or
     /// the button showing for it, which reaches above its first line.
     private func figureBlock(atWindowPoint point: NSPoint) -> Int? {

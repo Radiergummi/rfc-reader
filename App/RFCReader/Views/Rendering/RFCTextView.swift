@@ -32,7 +32,7 @@ struct RFCTextView: View {
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
-    onToggleSource: @escaping (Int) -> Void = { _ in },
+    onToggleSource: ((Int) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
@@ -109,8 +109,9 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
-  /// Shows a rendered verbatim block as its source, or back, by ordinal.
-  let onToggleSource: (Int) -> Void
+  /// Shows a rendered verbatim block as its source, or back, by ordinal. Nil where
+  /// the reader cannot, as in a force-click preview: no block offers to switch.
+  let onToggleSource: ((Int) -> Void)?
   /// Whether reading on may hide the bars, and what to tell when it does or they
   /// come back; iOS only, see `ReaderChrome`.
   let hidesChrome: Bool
@@ -303,8 +304,8 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
-      textView.toggleSource = { [weak coordinator = context.coordinator] ordinal in
-        coordinator?.onToggleSource(ordinal)
+      textView.toggleSource = { [weak coordinator = context.coordinator] in
+        coordinator?.onToggleSource
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false

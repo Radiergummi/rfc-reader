@@ -72,12 +72,13 @@ public enum FigureControl {
     return Control(ordinal: box.ordinal, shown: shown)
   }
 
-  /// Every block that has a control, in document order.
+  /// Every block that has a control, in document order. Without
+  /// `.longestEffectiveRangeNotRequired`: each block's box is one instance, so the
+  /// walk visits each block once rather than every run a decorated block splits into.
   public static func blocks(in text: NSAttributedString) -> [Block] {
     var blocks: [Block] = []
     text.enumerateAttribute(
-      .rfcVerbatim, in: NSRange(location: 0, length: text.length),
-      options: .longestEffectiveRangeNotRequired
+      .rfcVerbatim, in: NSRange(location: 0, length: text.length)
     ) { value, range, _ in
       guard value != nil, let control = control(atFragment: range, in: text) else { return }
       blocks.append(Block(location: range.location, control: control))
@@ -93,11 +94,5 @@ public enum FigureControl {
     else { return nil }
     return (text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox)?
       .ordinal
-  }
-
-  public static func shown(atFragment fragment: NSRange, in text: NSAttributedString)
-    -> Segment?
-  {
-    control(atFragment: fragment, in: text)?.shown
   }
 }

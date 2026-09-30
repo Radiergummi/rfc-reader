@@ -97,7 +97,7 @@ struct FigureControlTests {
       built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
     #expect(paragraph.paragraphSpacingBefore == FigureControl.strip)
     #expect(
-      FigureControl.shown(atFragment: fragment(at: first, in: built.text), in: built.text)
+      FigureControl.control(atFragment: fragment(at: first, in: built.text), in: built.text)?.shown
         == .figure)
   }
 
@@ -105,14 +105,15 @@ struct FigureControlTests {
     let built = build()
     let later = try Fixtures.offset(of: "   |     Type", in: built.text)
     #expect(
-      FigureControl.shown(atFragment: fragment(at: later, in: built.text), in: built.text) == nil)
+      FigureControl.control(atFragment: fragment(at: later, in: built.text), in: built.text)?.shown
+        == nil)
   }
 
   @Test func `a block shown as its source shows the source segment`() throws {
     let built = build(choices: PresentationChoices(shownAsSource: [0]))
     let first = try Fixtures.offset(of: "    0 ", in: built.text)
     #expect(
-      FigureControl.shown(atFragment: fragment(at: first, in: built.text), in: built.text)
+      FigureControl.control(atFragment: fragment(at: first, in: built.text), in: built.text)?.shown
         == .source)
   }
 
@@ -125,7 +126,8 @@ struct FigureControlTests {
       built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
     #expect(paragraph.paragraphSpacingBefore == 0)
     #expect(
-      FigureControl.shown(atFragment: fragment(at: first, in: built.text), in: built.text) == nil)
+      FigureControl.control(atFragment: fragment(at: first, in: built.text), in: built.text)?.shown
+        == nil)
   }
 
   @Test func `a block with no rendering has no control`() throws {
@@ -134,7 +136,8 @@ struct FigureControlTests {
       style: ReadingStyle())
     let first = try Fixtures.offset(of: "+--+", in: built.text)
     #expect(
-      FigureControl.shown(atFragment: fragment(at: first, in: built.text), in: built.text) == nil)
+      FigureControl.control(atFragment: fragment(at: first, in: built.text), in: built.text)?.shown
+        == nil)
   }
 
   @Test func `a card is never narrower than its control`() throws {
