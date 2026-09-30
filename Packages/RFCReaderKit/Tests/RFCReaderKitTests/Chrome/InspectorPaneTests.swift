@@ -46,4 +46,21 @@ struct InspectorPaneTests {
     #expect(!InspectorPane.hasContent(.info, hasBody: false, isDescribed: false))
     #expect(!InspectorPane.hasContent(.navigation, hasBody: false, isDescribed: false))
   }
+
+  // MARK: What the navigation pane shows without the body (#325)
+
+  /// A load under way shows progress, as the requirements tab does while it
+  /// extracts, rather than saying the document has not loaded.
+  @Test func `while the body is loading, the lists show progress`() {
+    #expect(InspectorPane.navigationContent(hasBody: false, isLoading: true) == .loading)
+  }
+
+  /// A load that failed, or was offline, is over: nothing more is coming.
+  @Test func `once a load has failed, the lists say the document has not loaded`() {
+    #expect(InspectorPane.navigationContent(hasBody: false, isLoading: false) == .notLoaded)
+  }
+
+  @Test func `with the body, the lists show`() {
+    #expect(InspectorPane.navigationContent(hasBody: true, isLoading: false) == .lists)
+  }
 }

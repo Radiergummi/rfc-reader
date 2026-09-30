@@ -180,6 +180,11 @@ struct DocumentView: View {
           }
         #endif
       }
+      // Into the window's reader state, for the panel beside the reader (#325):
+      // how a load ends. `startLoad` says it began, after clearing that state.
+      .onChange(of: session.state.isLoading) { _, isLoading in
+        reader.isLoading = isLoading
+      }
       .onChange(of: buildInputs, initial: true) {
         // Captures the reader, not the view; see `DocumentSession.startLoad`.
         session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
@@ -405,6 +410,7 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    reader.isLoading = true
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()

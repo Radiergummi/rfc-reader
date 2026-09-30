@@ -43,6 +43,10 @@ final class ReaderState {
   /// Whether the document's body is here: what the toolbar title, printing and
   /// export need. The panel asks `canDescribe` instead.
   var hasDocument = false
+  /// Whether the body is still on its way, from `DocumentSession`'s load state:
+  /// without it, the navigation pane shows progress while this holds and says the
+  /// document has not loaded once it does not (#325).
+  var isLoading = false
 
   /// Whether there is anything to describe: the index's entry, which `DocumentView`
   /// derives as `info` the moment a document starts loading, or its body. The panel
@@ -119,6 +123,7 @@ final class ReaderState {
     currentAnchor = nil
     currentSection = nil
     hasDocument = false
+    isLoading = false
     hasSelection = false
     documentTitle = nil
     precedingDraft = nil
