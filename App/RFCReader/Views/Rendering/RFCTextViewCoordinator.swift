@@ -408,11 +408,10 @@ final class RFCTextViewCoordinator: NSObject {
     else { return }
     let columnChanged = column != laidOutColumn
     // Read before the inset moves: after it, the same offset names another line.
-    // Only a header that changed height on an unchanged column holds the line; a
-    // change of column restores the place below, or waits for its rebuild to.
-    let heldTop =
-      !columnChanged && laidOutHeaderHeight != nil && headerHeight != laidOutHeaderHeight
-      ? ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: textView.viewportTop) : nil
+    let heldTop = laidOutHeaderHeight.flatMap {
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: textView.viewportTop, from: $0, to: headerHeight, columnChanged: columnChanged)
+    }
     laidOutColumn = column
     laidOutGutter = gutter
     laidOutHeaderHeight = headerHeight

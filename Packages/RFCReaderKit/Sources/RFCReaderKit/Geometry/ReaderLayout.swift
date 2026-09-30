@@ -47,20 +47,29 @@ public enum ReaderLayout {
     measured < offered ? measured : 0
   }
 
-  /// The container y to put back at the viewport's top after the header above the
-  /// text changed height, given the viewport's top, in container coordinates,
-  /// before it did — or nil to leave the scroll offset where it is.
+  /// The container y to put at the viewport's top once the header above the text
+  /// has changed from `oldHeight` to `newHeight`, given the viewport's top, in
+  /// container coordinates, before it did — or nil when there is nothing to hold.
   ///
   /// The header is the text container's top inset, so a change of its height moves
   /// every line by the change while the scroll offset stays put. Metadata that
   /// arrives after a place was restored — the revisions banner, on a cold launch
   /// into a section — did exactly that, and left the end of the previous section
   /// showing above the place (#492). A line's container y does not move with the
-  /// inset, so holding it is putting the same y back at the top. A viewport whose
-  /// top is above the container is looking at the header, which belongs to no
-  /// line: there the header is left to change in place, as `ReadingPlaceTracker`
-  /// treats such a place as the very top.
-  public static func containerTopHeldThroughHeaderChange(viewportTop: CGFloat) -> CGFloat? {
-    viewportTop >= 0 ? viewportTop : nil
+  /// inset, so holding it is putting the same y back at the top.
+  ///
+  /// A viewport whose top is above the container is looking at the header, which
+  /// belongs to no line, as `ReadingPlaceTracker` has it: there the header keeps
+  /// its place on screen instead, and changes height in place — but a header that
+  /// shrinks past the viewport's top leaves it at the text's first line, not in it.
+  ///
+  /// Nil on a change of column, which re-wraps the storage under the offset:
+  /// the reader restores the place, or waits for its rebuild to.
+  public static func containerTopAfterHeaderChange(
+    viewportTop: CGFloat, from oldHeight: CGFloat, to newHeight: CGFloat, columnChanged: Bool
+  ) -> CGFloat? {
+    guard !columnChanged, newHeight != oldHeight else { return nil }
+    guard viewportTop < 0 else { return viewportTop }
+    return min(0, viewportTop + oldHeight - newHeight)
   }
 }

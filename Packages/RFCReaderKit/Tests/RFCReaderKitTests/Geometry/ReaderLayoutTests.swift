@@ -89,14 +89,42 @@ struct ReaderLayoutTests {
   /// previous section above the place. The line at the top is held instead: its
   /// y in the container is the same before and after, only the inset above it moved.
   @Test func `a header that changes height keeps the line at the top`() {
-    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: 14_200) == 14_200)
-    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: 0) == 0)
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: false) == 14_200)
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: 0, from: 289, to: 208, columnChanged: false) == 0)
   }
 
   /// Above the text is the header, which belongs to no line: a reader looking at it
-  /// sees it grow, as `ReadingPlaceTracker` restores such a place to the very top.
-  @Test func `a reader in the header sees it change height in place`() {
-    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: -208) == nil)
-    #expect(ReaderLayout.containerTopHeldThroughHeaderChange(viewportTop: -1) == nil)
+  /// keeps it where it is on screen, and sees it change height in place.
+  @Test func `a reader in the header keeps it where it is`() {
+    // At the very top, which stays the very top.
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: -208, from: 208, to: 289, columnChanged: false) == -289)
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: -50, from: 208, to: 289, columnChanged: false) == -131)
+  }
+
+  /// Held where it was, a viewport showing the header's last 10 pt would be 50 pt
+  /// into the text once the header lost 60, with its first lines scrolled past.
+  @Test func `a header that shrinks past the viewport's top leaves it at the text's start`() {
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: -10, from: 289, to: 229, columnChanged: false) == 0)
+  }
+
+  /// A change of column re-wraps the storage under the offset, and the place is
+  /// restored rather than held; an unchanged header has nothing to hold.
+  @Test func `only a change of header height on the same column is held`() {
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: true) == nil)
+    #expect(
+      ReaderLayout.containerTopAfterHeaderChange(
+        viewportTop: 14_200, from: 208, to: 208, columnChanged: false) == nil)
   }
 }
