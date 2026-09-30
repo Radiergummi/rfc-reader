@@ -18,7 +18,7 @@ struct BuilderCompletenessTests {
   /// own run means a block kind quietly became a hosted view, which is the hole
   /// in the storage this design exists to avoid; the chip's leading doc.text
   /// symbol is the one sanctioned exception, and only inside its own `.rfcChip` run.
-  @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])
+  @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml"])
   func `nothing becomes an attachment`(fixture: String) throws {
     let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
     let built = DocumentTextBuilder.build(document, style: style)

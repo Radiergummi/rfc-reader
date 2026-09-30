@@ -68,17 +68,37 @@ public final class DocumentTextBuilder {
   /// `referenceAnchors` is.
   var referenceKinds = ReferenceKinds([])
 
-  init(style: ReadingStyle) {
+  /// Which blocks the reader asked to see as their source.
+  let choices: PresentationChoices
+  /// Reviewed verdicts on artwork types, for `ArtworkClassifier`.
+  let hints: ArtworkHints
+  /// The document being built, for its hints. Set by `appendDocument`.
+  var documentID: DocumentID?
+  /// The ordinal the next verbatim block gets.
+  var nextVerbatimOrdinal = 0
+
+  /// The color of a character a decorated block draws over instead of showing.
+  public static let hiddenColor = PlatformColor.clear
+
+  init(
+    style: ReadingStyle, choices: PresentationChoices = .defaults,
+    hints: ArtworkHints = .bundled
+  ) {
     self.style = style
+    self.choices = choices
+    self.hints = hints
   }
 
   /// - Parameter title: a title block to open the text with. The reader has none —
   ///   its title is the header view above the text — but a printed page has nothing
   ///   above the text, so a print passes one (#375).
+  /// - Parameter choices: the blocks the reader asked to see as their source.
+  /// - Parameter hints: reviewed artwork types; tests pass their own.
   public static func build(
-    _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil
+    _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
   ) -> BuiltDocument {
-    let builder = DocumentTextBuilder(style: style)
+    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
     builder.reserveChipPadding()
@@ -162,6 +182,7 @@ extension DocumentTextBuilder {
   }
 
   func appendDocument(_ document: RFCDocument) {
+    documentID = document.header.id
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })

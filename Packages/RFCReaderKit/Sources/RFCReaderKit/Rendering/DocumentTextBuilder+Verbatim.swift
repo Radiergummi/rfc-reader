@@ -17,9 +17,22 @@ extension DocumentTextBuilder {
   /// narrower; the widest line anywhere is 129 columns, in RFC 2124.
   func appendVerbatim(_ content: Preformatted, indent: CGFloat) {
     mark(content.anchor)
+    let ordinal = nextVerbatimOrdinal
+    nextVerbatimOrdinal += 1
+    let classification = ArtworkClassifier.classify(content, in: documentID, hints: hints)
     let text = displayedText(of: content, indent: indent)
     let scale = monospaceScale(for: text, indent: indent)
-    let box = VerbatimBox(content)
+    // A rendition's ranges are into the block's own text, so a block shown other
+    // than as written (unfolded, #64) is not decorated.
+    let rendition =
+      text == content.text
+      ? ArtworkRenderers.render(
+        content, classification,
+        context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
+      : nil
+    let showsSource = choices.shownAsSource.contains(ordinal)
+    let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
+    let box = VerbatimBox(content, ordinal: ordinal, classification: classification, shown: shown)
 
     // Before the label, so the label is inside the card it names.
     let start = output.length
@@ -31,6 +44,7 @@ extension DocumentTextBuilder {
 
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
     let body = text.hasSuffix("\n") ? text : text + "\n"
+    let bodyStart = output.length
     append(
       body,
       [
@@ -40,6 +54,9 @@ extension DocumentTextBuilder {
         .paragraphStyle: paragraphStyle(
           indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
       ])
+    if shown == .rendered, case .decorated(let decorated)? = rendition {
+      decorate(decorated, from: bodyStart)
+    }
     // Every line ends a paragraph, so the spacing that separates the block from what
     // follows goes on its last line alone. On all of them, a figure read double
     // spaced (#31).
@@ -52,6 +69,23 @@ extension DocumentTextBuilder {
         lineHeightMultiple: lineHeight),
       range: lastLine)
     decorate(from: start, with: .artwork)
+  }
+
+  /// Sets a decorated block's strokes on all of it, its ruler in the secondary
+  /// color and its border characters in `hiddenColor`. The text is unchanged.
+  func decorate(_ decorated: DecoratedText, from bodyStart: Int) {
+    let body = NSRange(location: bodyStart, length: output.length - bodyStart)
+    output.addAttribute(.rfcStrokes, value: StrokeBox(decorated.strokes), range: body)
+    for range in decorated.secondary {
+      output.addAttribute(
+        .foregroundColor, value: RFCColors.secondaryLabel,
+        range: NSRange(location: bodyStart + range.location, length: range.length))
+    }
+    for range in decorated.hidden {
+      output.addAttribute(
+        .foregroundColor, value: Self.hiddenColor,
+        range: NSRange(location: bodyStart + range.location, length: range.length))
+    }
   }
 
   /// What a verbatim block shows: unfolded, without its header, where RFC 8792

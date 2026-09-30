@@ -30,6 +30,10 @@ extension NSAttributedString.Key {
   /// underlines nor recolours the run, which an exported PDF still turns into a
   /// link annotation (#376). The value is the URL the reader's `.link` would carry.
   public static let rfcLinkTarget = NSAttributedString.Key("rfcLinkTarget")
+  /// The strokes a decorated block draws over its text (`DecoratedText`), set on
+  /// every character of the block so each line's fragment finds them, and which of
+  /// the block's lines it holds, through the box's extent (`StrokeGeometry`).
+  public static let rfcStrokes = NSAttributedString.Key("rfcStrokes")
 }
 
 public enum RFCDecoration: String, Sendable {
@@ -60,10 +64,43 @@ extension RFCDecoration {
   }
 }
 
-/// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute.
+/// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
+/// what the build decided about it.
 public final class VerbatimBox: Sendable {
+  /// Whether the block is set as its source or rendered, and whether a rendering
+  /// exists to switch to: the context menu offers "Show Source" on a rendered
+  /// block and "Show Rendering" on one shown as source.
+  public enum Shown: Sendable, Equatable {
+    /// No presentation accepts the block.
+    case plain
+    case rendered
+    /// A presentation accepts it, and the reader asked for the source.
+    case source
+  }
+
   public let content: Preformatted
-  public init(_ content: Preformatted) { self.content = content }
+  /// Its place among the document's verbatim blocks, in the order the build sets
+  /// them: what a presentation choice is keyed by.
+  public let ordinal: Int
+  public let classification: ArtworkClassification
+  public let shown: Shown
+
+  public init(
+    _ content: Preformatted, ordinal: Int = 0,
+    classification: ArtworkClassification = .unclassified, shown: Shown = .plain
+  ) {
+    self.content = content
+    self.ordinal = ordinal
+    self.classification = classification
+    self.shown = shown
+  }
+}
+
+/// Boxes a decorated block's strokes, for the reason `VerbatimBox` boxes its block:
+/// one instance per block, so the attribute's extent is the block.
+public final class StrokeBox: Sendable {
+  public let strokes: [Stroke]
+  public init(_ strokes: [Stroke]) { self.strokes = strokes }
 }
 
 /// Boxes a `CrossReference` for the same reason.
