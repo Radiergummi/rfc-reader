@@ -33,6 +33,13 @@
     @objc var isBookmarked: Bool {
       get { LibraryModel.shared.bookmarkedDocuments.contains(id) }
       set {
+        // Applied, as the window applies it, but not kept: a script is told, rather
+        // than seeing a success that is gone at the next launch (#318). Told when
+        // the value is already the one asked for as well: in memory, a bookmark that
+        // is already there was made this session, and is no more kept than a new one.
+        if AppData.isStoredInMemory {
+          ScriptError.report(AppData.storeWarning.message)
+        }
         guard newValue != isBookmarked else { return }
         LibraryModel.shared.toggleBookmark(id)
       }

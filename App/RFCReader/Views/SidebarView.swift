@@ -17,6 +17,8 @@ struct SidebarView: View {
   @AppStorage("sidebar.collectionsExpanded") private var collectionsExpanded = true
   /// The collection whose deletion is being confirmed (#349).
   @State private var deleting: CollectionSnapshot.Entry?
+  /// The store warning, shown again from the sidebar's unsaved-session row (#318).
+  @State private var showsStoreWarning = false
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -90,6 +92,11 @@ struct SidebarView: View {
       .navigationBarTitleDisplayMode(.large)
     #endif
     .labelStyle(SidebarLabelStyle())
+    .alert(AppData.storeWarning.title, isPresented: $showsStoreWarning) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(AppData.storeWarning.message)
+    }
     .confirmationDialog(
       "Delete “\(deleting?.name ?? "")”?",
       isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -115,6 +122,26 @@ struct SidebarView: View {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
+      // While the store is in memory, and only then: the launch alert says so once,
+      // and a session can run for hours after it (#318). Here, where someone looks
+      // when they wonder where their bookmarks went.
+      if AppData.isStoredInMemory {
+        Button {
+          showsStoreWarning = true
+        } label: {
+          Label {
+            Text("Not saved in this session")
+          } icon: {
+            // On the icon itself, or `SidebarLabelStyle` draws it in the accent
+            // color on iOS, as it does the places: this is a status, not a place.
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.secondary)
+          }
+          .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(AppData.storeWarning.message)
+      }
     }
     if !library.collections.collections.isEmpty {
       group("Collections", isExpanded: $collectionsExpanded) {
