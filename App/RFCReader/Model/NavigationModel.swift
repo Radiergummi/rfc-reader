@@ -164,7 +164,7 @@ final class NavigationModel: Identifiable {
     // Editor's `#page-12` doesn't, or an entry the reader shows rather than
     // scrolls to. Asked for without an entry in the history, it leaves the reader,
     // and the place it will be left from, where they are (#276).
-    if let anchor = link.anchor, id == selection {
+    if link.section == nil, let anchor = link.anchor, id == selection {
       scrollRequest = ScrollRequest(section: anchor)
       return
     }

@@ -50,10 +50,16 @@ public struct RFCLink: Hashable, Sendable {
   /// `URL(string:)` refused wherever it contained a space or a reserved character
   /// (#150): `appURL` trapped, and the web builders silently dropped the section.
   static func url(_ url: URL, section: String?) -> URL {
-    guard let section,
+    Self.url(url, fragment: section.map(SectionAnchor.anchor(forSectionNumber:)))
+  }
+
+  /// `url` with `fragment` as its fragment, percent-encoded as `url(_:section:)`
+  /// says.
+  static func url(_ url: URL, fragment: String?) -> URL {
+    guard let fragment,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
-    components.fragment = SectionAnchor.anchor(forSectionNumber: section)
+    components.fragment = fragment
     return components.url ?? url
   }
 
@@ -62,12 +68,8 @@ public struct RFCLink: Hashable, Sendable {
       return CitationFormatter.url(for: id, section: section)
     }
     // The document's page, which defines the anchor, rather than its info page.
-    let page = RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)")
-    guard var components = URLComponents(url: page, resolvingAgainstBaseURL: false) else {
-      return page
-    }
-    components.fragment = anchor
-    return components.url ?? page
+    return Self.url(
+      RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), fragment: anchor)
   }
 
   public init?(url: URL) {
@@ -80,7 +82,7 @@ public struct RFCLink: Hashable, Sendable {
     // Any other fragment is an anchor, unless it starts with a digit: an XML ID
     // cannot, and a bare `#4.2` is no section either (#276).
     let fragmentAnchor =
-      fragmentSection == nil && fragment.first.map { !$0.isNumber } == true ? fragment : nil
+      fragmentSection == nil && fragment.first?.isNumber == false ? fragment : nil
 
     if scheme == Self.scheme {
       guard let id = DocumentID(parsing: host) else { return nil }
