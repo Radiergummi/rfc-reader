@@ -23,9 +23,10 @@ import SwiftUI
 
     @Environment(\.undoManager) private var undoManager
 
-    /// Share and More at the top; Contents and Cite leading the bottom bar, and
+    /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
-    /// Compose there (#342).
+    /// Compose there (#342). Cite is in More: on a phone it is rarely what the
+    /// reader is after.
     ///
     /// The inline title has the lowest priority in the top bar, which is why only
     /// two actions stay up there: five beside the back button left an iPhone's bar
@@ -56,8 +57,6 @@ import SwiftUI
           Label("Info", systemImage: "info.circle")
         }
         .keyboardShortcut("i", modifiers: .command)
-
-        citeMenu
       }
 
       ToolbarSpacer(.flexible, placement: .bottomBar)
@@ -82,14 +81,6 @@ import SwiftUI
       .keyboardShortcut("d", modifiers: .command)
     }
 
-    private var citeMenu: some View {
-      Menu {
-        MenuSections(sections: DocumentMenus.cite(), perform: perform)
-      } label: {
-        Label("Cite", systemImage: "quote.opening")
-      }
-    }
-
     /// A pane's button: opens the inspector on that pane, swaps an open one to it,
     /// or closes the one showing it, as on the Mac (`InspectorPane.pressing`).
     private func press(_ pane: InspectorPane) {
@@ -99,10 +90,15 @@ import SwiftUI
       withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
-    /// What is used least: the original text, the document's pages elsewhere, and
-    /// Export and Print, which are iOS's own: the formats listed, and the print sheet.
+    /// What is used least: citing, the original text, the document's pages
+    /// elsewhere, and Export and Print, which are iOS's own: the formats listed, and
+    /// the print sheet.
     private var moreMenu: some View {
       Menu {
+        Menu("Cite", systemImage: "quote.opening") {
+          MenuSections(sections: DocumentMenus.cite(), perform: perform)
+        }
+        Divider()
         MenuSections(
           sections: DocumentMenus.more(
             showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
