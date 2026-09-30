@@ -265,9 +265,7 @@ final class NavigationModel: Identifiable {
   }
 
   private func go(to place: HistoryEntry) {
-    let before = history.current
-    history.go(to: place, leaving: visiblePosition)
-    guard history.current != before else { return }
+    guard let place = history.go(to: place, leaving: visiblePosition) else { return }
     arrive(at: place)
   }
 
