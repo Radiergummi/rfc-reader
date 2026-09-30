@@ -417,8 +417,8 @@ public enum FragmentGeometry {
   /// moves an origin: an edge within 0.0001 of a pixel below counts as on it.
   static func flooredToPixel(_ y: CGFloat, scale: CGFloat) -> CGFloat {
     let pixels = y * scale
-    let above = pixels.rounded(.up)
-    return (above - pixels < 0.0001 ? above : pixels.rounded(.down)) / scale
+    let below = pixels.rounded(.up)
+    return (below - pixels < 0.0001 ? below : pixels.rounded(.down)) / scale
   }
 
   /// `bounds` grown upwards to start on a whole point, for a fragment's rendering

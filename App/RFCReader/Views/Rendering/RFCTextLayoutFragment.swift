@@ -34,6 +34,18 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   private let surface: Surface
 
+  /// Whether a UITextView draws the fragment, on the pixel at or above its top.
+  /// Both halves of #273's fix go by this, the whole-point rendering surface and
+  /// the bottom join that meets the floored fragment below, because either one
+  /// without the other leaves the seam.
+  private var isFlooredByUITextView: Bool {
+    #if canImport(UIKit)
+      surface == .textView
+    #else
+      false
+    #endif
+  }
+
   private init(textElement: NSTextElement, range: NSTextRange?, surface: Surface) {
     self.surface = surface
     super.init(textElement: textElement, range: range)
@@ -77,13 +89,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
-    #if canImport(UIKit)
-      // On a whole point, or a UITextView moves the fragment by the surface's own
-      // fraction too, and its card no longer meets its neighbors' (#273).
-      if decorationSpan != nil, surface == .textView {
-        bounds = FragmentGeometry.startingOnAWholePoint(bounds)
-      }
-    #endif
+    // On a whole point, or a UITextView moves the fragment by the surface's own
+    // fraction too, and its card no longer meets its neighbors' (#273).
+    if decorationSpan != nil, isFlooredByUITextView {
+      bounds = FragmentGeometry.startingOnAWholePoint(bounds)
+    }
     return bounds
   }
 
@@ -233,12 +243,10 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     in context: CGContext
   ) -> CGRect {
     var rect = rect
-    #if canImport(UIKit)
-      if surface == .textView {
-        rect = placement.meetingFlooredNeighbor(
-          of: rect, bottom: !span.isLast, scale: abs(context.userSpaceToDeviceSpaceTransform.d))
-      }
-    #endif
+    if isFlooredByUITextView {
+      rect = placement.meetingFlooredNeighbor(
+        of: rect, bottom: !span.isLast, scale: abs(context.userSpaceToDeviceSpaceTransform.d))
+    }
     return placement.snappingJoins(
       of: rect,
       top: !span.isFirst,

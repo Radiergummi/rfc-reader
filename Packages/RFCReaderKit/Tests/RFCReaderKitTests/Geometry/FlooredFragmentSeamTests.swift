@@ -35,8 +35,8 @@ struct FlooredFragmentSeamTests {
   /// at or above it, unless it is within 0.0001 of the pixel below.
   private func uiKitFloor(_ y: CGFloat, scale: CGFloat) -> CGFloat {
     let pixels = y * scale
-    let above = pixels.rounded(.up)
-    return (above - pixels < 0.0001 ? above : pixels.rounded(.down)) / scale
+    let below = pixels.rounded(.up)
+    return (below - pixels < 0.0001 ? below : pixels.rounded(.down)) / scale
   }
 
   /// Where UIKit puts a fragment's local origin on the canvas: its view's frame
