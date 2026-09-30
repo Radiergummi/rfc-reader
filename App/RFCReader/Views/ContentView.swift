@@ -263,14 +263,16 @@ struct EmptyDetailView: View {
     }
 
     private func row(for row: QuickOpenResults.Row) -> some View {
-      Button {
+      let title = QuickOpenResults.title(
+        library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
+      return Button {
         open(row.link)
       } label: {
         HStack(spacing: 12) {
           Text(row.link.id.displayName)
             .fontWeight(.semibold)
             .monospacedDigit()
-          Text(library.metadata(row.link.id)?.title ?? "Not in the index")
+          Text(title)
             .lineLimit(1)
             .foregroundStyle(.secondary)
           if let section = row.link.section {

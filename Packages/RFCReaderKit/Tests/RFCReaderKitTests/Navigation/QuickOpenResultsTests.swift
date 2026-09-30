@@ -253,6 +253,19 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link) == [RFCLink(id: Self.bcp14)])
   }
 
+  // MARK: - A row's title
+
+  /// `9110` typed before the index has loaded resolves exactly, but nothing knows
+  /// its title yet; saying it is not in the index would be wrong for a moment.
+  @Test func `a row with no title says the index is still loading until it has`() {
+    #expect(QuickOpenResults.title(nil, isIndexLoaded: false) == "The index is still loading")
+    #expect(QuickOpenResults.title(nil, isIndexLoaded: true) == "Not in the index")
+  }
+
+  @Test func `a row with a title shows it`() {
+    #expect(QuickOpenResults.title("HTTP Semantics", isIndexLoaded: true) == "HTTP Semantics")
+  }
+
   // MARK: - Return
 
   @Test func `return opens an openable selection at once`() {
