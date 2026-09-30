@@ -30,9 +30,16 @@ enum SectionAnchor {
   /// read as `1`, it named section 1.
   ///
   /// An appendix letter is read in either case, `section-a.1` → `A.1`, as the prepped
-  /// XML's `pn` attributes spell it (#276). What follows the prefix has to be a
-  /// number: `section-foo` is nil, an anchor of its own.
+  /// XML's `pn` attributes spell it (#276), and so is a top-level appendix's part
+  /// number, `section-appendix.a` → `A`. What follows the prefix has to be a number:
+  /// `section-foo` is nil, an anchor of its own, and so is a paragraph's part number,
+  /// `section-4.2-3`, which the paragraph goes by.
   static func sectionNumber(fromAnchor anchor: String) -> String? {
+    if case .appendix(let number) = PartNumber(anchor), number.first?.isLetter == true,
+      isSectionNumber(number)
+    {
+      return number
+    }
     for prefix in [sectionPrefix, appendixPrefix] where anchor.hasPrefix(prefix) {
       var number = String(anchor.dropFirst(prefix.count))
       guard isSectionNumber(number) else { return nil }
@@ -46,9 +53,9 @@ enum SectionAnchor {
 
   /// Whether `place` is shaped like a section number rather than an anchor: it
   /// starts with a digit, or is an appendix's single letter, alone or before a dot
-  /// (`A`, `A.1`).
+  /// (`A`, `A.1`), and no dash follows the number, as a paragraph's does (`4.2-3`).
   private static func isSectionNumber(_ place: String) -> Bool {
-    guard let first = place.first else { return false }
+    guard let first = place.first, !place.contains("-") else { return false }
     let rest = place.dropFirst()
     return first.isNumber || (first.isLetter && (rest.isEmpty || rest.first == "."))
   }

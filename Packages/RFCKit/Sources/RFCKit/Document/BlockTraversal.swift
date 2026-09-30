@@ -120,3 +120,19 @@ extension RFCDocument {
     return search(sections)
   }
 }
+
+extension Section {
+  /// True when nothing in this section, or anything below it, is prose: only
+  /// bibliography entries. The reader leaves such a section out of the body, heading
+  /// and all, for its references panel. A `References` section is usually empty
+  /// itself and carries `Normative` and `Informative` subsections, so this has to
+  /// recurse before it can say the whole tree is skippable.
+  public var holdsOnlyReferences: Bool {
+    guard !blocks.isEmpty || !subsections.isEmpty else { return false }
+    let blocksAreReferences = blocks.allSatisfy { block in
+      if case .references = block { return true }
+      return false
+    }
+    return blocksAreReferences && subsections.allSatisfy(\.holdsOnlyReferences)
+  }
+}

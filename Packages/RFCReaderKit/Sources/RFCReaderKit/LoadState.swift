@@ -111,4 +111,83 @@ public struct LoadFailure {
   }
 
   public var message: String { error.localizedDescription }
+
+  /// What was being loaded: the document, or its original text, which has a
+  /// not-found of its own.
+  public enum Subject: Sendable {
+    case document, originalText
+  }
+
+  /// What failed, as far as the reader can tell from the error.
+  public enum Kind: Sendable, Hashable, CaseIterable {
+    /// The device's own connection: nothing reached the network.
+    case offline
+    /// The RFC Editor has no such document.
+    case notFound
+    /// The server did not answer, answered with an error, or sent a web page where
+    /// the document should be.
+    case server
+    /// The document is there, and this reader cannot read it.
+    case unreadable
+    case other
+
+    public var symbol: String {
+      switch self {
+      case .offline: "wifi.exclamationmark"
+      case .notFound: "questionmark.folder"
+      case .server: "exclamationmark.icloud"
+      case .unreadable: "doc.badge.ellipsis"
+      case .other: "exclamationmark.triangle"
+      }
+    }
+
+    public func recoverySuggestion(for subject: Subject) -> String {
+      switch (self, subject) {
+      case (.offline, _):
+        "Check your internet connection, then try again."
+      case (.notFound, .document):
+        "The RFC Editor doesn't have this document."
+      case (.notFound, .originalText):
+        "This RFC has no plain-text version."
+      case (.server, _):
+        "The RFC Editor isn't responding right now. Try again later."
+      case (.unreadable, _):
+        "This document couldn't be read. It may open on rfc-editor.org."
+      case (.other, _):
+        "Try again, or open the document on rfc-editor.org."
+      }
+    }
+  }
+
+  public var kind: Kind {
+    switch error {
+    case let error as URLError:
+      switch error.code {
+      case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+        .internationalRoamingOff:
+        return .offline
+      case .timedOut, .cannotFindHost, .cannotConnectToHost:
+        return .server
+      default:
+        return .other
+      }
+    case let error as RFCEditorClient.ClientError:
+      switch error {
+      case .notFound:
+        return .notFound
+      case .httpStatus(let status, _) where status == 429 || (500..<600).contains(status):
+        return .server
+      case .decoding:
+        return .unreadable
+      case .httpStatus, .invalidResponse:
+        return .other
+      }
+    case RFCXMLParser.ParseError.notAnRFC(rootElement: "html"):
+      return .server
+    case is RFCXMLParser.ParseError:
+      return .unreadable
+    default:
+      return .other
+    }
+  }
 }

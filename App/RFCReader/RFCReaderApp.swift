@@ -145,11 +145,25 @@ struct DocumentCommands: Commands {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
     }
+    private var isBookmarked: Bool { active.controller?.isBookmarked == true }
+    private func toggleBookmark() { active.controller?.toggleBookmark() }
   #else
     @FocusedValue(\.openDocumentAction) private var openDocument
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
     @FocusedValue(\.navigationModel) private var navigation
+    /// The focused scene's reader, for the title a new bookmark is filed under.
+    @FocusedValue(\.readerState) private var reader
+    @State private var library = LibraryModel.shared
+
+    private var isBookmarked: Bool {
+      navigation?.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
+    }
+
+    private func toggleBookmark() {
+      guard let id = navigation?.selection else { return }
+      library.toggleBookmark(id, documentTitle: reader?.documentTitle)
+    }
   #endif
 
   var body: some Commands {
@@ -163,10 +177,12 @@ struct DocumentCommands: Commands {
           .disabled(navigation == nil)
       #endif
     }
-    #if os(macOS)
-      // The toolbar's buttons are AppKit's now, so their keyboard shortcuts have to
-      // be menu items: an `NSToolbarItem` carries no key equivalent of its own.
-      CommandGroup(after: .pasteboard) {
+    // The Mac's toolbar buttons are AppKit's, so their keyboard shortcuts have to be
+    // menu items: an `NSToolbarItem` carries no key equivalent of its own. ⌘D is one
+    // on the iPad too, rather than the toolbar button's, so its title in the menu bar
+    // and the hold-⌘ overlay can follow the action as the Mac's does (#278).
+    CommandGroup(after: .pasteboard) {
+      #if os(macOS)
         // Handed to the reader's text view (#186); see
         // `ReaderWindowController.copyAsQuote()`. Grayed out without a selection, as
         // Copy is; the original text is not the reader's, and has no quote to copy.
@@ -176,14 +192,16 @@ struct DocumentCommands: Commands {
         .keyboardShortcut("c", modifiers: [.command, .option, .shift])
         .disabled(
           !showsDocument || reader?.showOriginal == true || reader?.hasSelection != true)
-        Section {
-          // Says what it will do, as the toolbar's glyph does: both read the
-          // library's set of bookmarked documents, which the menu observes.
-          Button(active.controller?.isBookmarked == true ? "Remove Bookmark" : "Bookmark") {
-            active.controller?.toggleBookmark()
-          }
-          .keyboardShortcut("d", modifiers: .command)
-          .disabled(navigation?.selection == nil)
+      #endif
+      Section {
+        // Says what it will do, as the toolbar's glyph does: both read the
+        // library's set of bookmarked documents, which the menu observes.
+        Button(DocumentActions.bookmarkCommand(isBookmarked: isBookmarked)) {
+          toggleBookmark()
+        }
+        .keyboardShortcut("d", modifiers: .command)
+        .disabled(navigation?.selection == nil)
+        #if os(macOS)
           // The key window's undo manager, so Edit > Undo puts back a document
           // removed from here, as it does for a removal in the list (#349).
           if let navigation, let document = navigation.selection {
@@ -193,9 +211,9 @@ struct DocumentCommands: Commands {
                 undoManager: active.controller?.window?.undoManager)
             }
           }
-        }
+        #endif
       }
-    #endif
+    }
     #if os(macOS)
       // File > Export… (#376), where a Mac app keeps it: after Save, before Print.
       CommandGroup(replacing: .importExport) {
@@ -247,15 +265,16 @@ struct DocumentCommands: Commands {
           // (#157).
           Button("Contents") { active.controller?.press(.navigation) }
             .keyboardShortcut("i", modifiers: [.command, .option])
-            // As the toolbar's button is: opened with no document, the panel is an
-            // empty strip, and nothing closes it again until a document arrives.
-            // Not `showsDocument`: clearing the selection leaves `hasDocument` set
-            // and the panel open, and the chord has to be able to close it.
-            .disabled(reader?.hasDocument != true)
+            // As the toolbar's button is: on whatever the index describes, a
+            // document still loading or one that failed to included (#325), and
+            // nothing else, where the panel is an empty strip. Not `showsDocument`,
+            // which also needs a selection: the chord has to be able to close a
+            // panel that is still open.
+            .disabled(reader?.canDescribe != true)
           // ⌘I, Get Info in Finder and Preview.
           Button("Info") { active.controller?.press(.info) }
             .keyboardShortcut("i", modifiers: .command)
-            .disabled(reader?.hasDocument != true)
+            .disabled(reader?.canDescribe != true)
         #endif
         // Cmd+arrow, as Safari and Finder bind it.
         Button("Back") { navigation?.goBack() }
@@ -333,6 +352,10 @@ struct DocumentCommands: Commands {
     typealias Value = NavigationModel
   }
 
+  struct ReaderStateKey: FocusedValueKey {
+    typealias Value = ReaderState
+  }
+
   extension FocusedValues {
     var openDocumentAction: OpenDocumentActionKey.Value? {
       get { self[OpenDocumentActionKey.self] }
@@ -342,6 +365,11 @@ struct DocumentCommands: Commands {
     var navigationModel: NavigationModel? {
       get { self[NavigationModelKey.self] }
       set { self[NavigationModelKey.self] = newValue }
+    }
+
+    var readerState: ReaderState? {
+      get { self[ReaderStateKey.self] }
+      set { self[ReaderStateKey.self] = newValue }
     }
   }
 #endif

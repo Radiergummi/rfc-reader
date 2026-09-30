@@ -168,4 +168,28 @@ struct RFCLinkTests {
     #expect(link.anchor == "section-foo")
     #expect(link.appURL.absoluteString == "rfc://9000#section-foo")
   }
+
+  /// A paragraph's fragment is its prepped part number, `section-4.2-3`: the number
+  /// before the dash is its section's, and the whole fragment is the paragraph's anchor,
+  /// not section `4.2-3`.
+  @Test(arguments: ["section-4.2-3", "section-8.3-2", "appendix-A.1-4"])
+  func `a paragraph's fragment is an anchor, not a section`(fragment: String) throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://9000#\(fragment)")!))
+    #expect(link.section == nil)
+    #expect(link.anchor == fragment)
+    #expect(link.appURL.absoluteString == "rfc://9000#\(fragment)")
+  }
+
+  /// Prep spells a top-level appendix's part number `section-appendix.a`; it is the
+  /// same appendix as `appendix-A`.
+  @Test(
+    arguments: [
+      ("rfc://9000#section-appendix.a", "A"),
+      ("rfc://9000#section-appendix.b", "B"),
+      ("https://www.rfc-editor.org/rfc/rfc9000#section-appendix.c", "C"),
+    ])
+  func `a prepped appendix part number names the appendix`(input: String, section: String) throws {
+    let url = try #require(URL(string: input))
+    #expect(RFCLink(url: url)?.section == section)
+  }
 }

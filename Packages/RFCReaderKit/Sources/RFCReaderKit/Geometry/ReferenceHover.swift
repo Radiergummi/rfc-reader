@@ -42,6 +42,13 @@ public struct ReferenceHover {
     case card
     /// A document preview (#29), which the pointer is meant to travel into.
     case documentPreview
+    /// A heading's backlinks (#183), opened by a click on its chip, which the
+    /// pointer travels into as it does a document preview: its rows are buttons.
+    case backlinks
+
+    /// The pointer leaving the reference, or the text view, on its way there must
+    /// not close it, as it does a card.
+    var holdsThePointer: Bool { self != .card }
   }
 
   public enum Event {
@@ -70,10 +77,13 @@ public struct ReferenceHover {
     case cardShown
     /// The document preview the last `showDocumentPreview` asked for is on screen.
     case documentPreviewShown
+    /// A heading's backlinks are on screen, opened by the click on its chip.
+    case backlinksShown
     /// The popover closed by itself: Esc, a click elsewhere, the app going inactive.
     case popoverClosedItself
-    /// A click in a document preview, which follows the reference; `pointer` is
-    /// where it was, in screen coordinates.
+    /// A click in a document preview, which follows the reference, or on a row of
+    /// a heading's backlinks, which goes there; `pointer` is where it was, in
+    /// screen coordinates.
     case previewCommitted(pointer: CGPoint)
     /// A new document was installed, or the view is going away.
     case reset
@@ -113,12 +123,12 @@ public struct ReferenceHover {
   }
 
   /// Whether a move to `pointer`, in screen coordinates, would look at what is
-  /// under it. Not in a preview's reader, not while a document preview is up, and
-  /// not while the pointer is still where it followed a link: `handle` drops the
-  /// target of such a move, so the controller skips the hit test, which is a
-  /// TextKit layout query on every mouse move.
+  /// under it. Not in a preview's reader, not while a document preview or a
+  /// heading's backlinks are up, and not while the pointer is still where it
+  /// followed a link: `handle` drops the target of such a move, so the controller
+  /// skips the hit test, which is a TextKit layout query on every mouse move.
   public func wantsTarget(at pointer: CGPoint) -> Bool {
-    guard !isPreviewReader, presentation != .documentPreview else { return false }
+    guard !isPreviewReader, presentation?.holdsThePointer != true else { return false }
     return pointer != linkClickPointer
   }
 
@@ -134,7 +144,7 @@ public struct ReferenceHover {
 
     case .pointerExited:
       // The pointer leaves the text view on its way into a document preview.
-      guard presentation != .documentPreview else { return [] }
+      guard presentation?.holdsThePointer != true else { return [] }
       return cancel()
 
     case .mouseDown(let withControl):
@@ -221,6 +231,10 @@ public struct ReferenceHover {
       presentation = .documentPreview
       return []
 
+    case .backlinksShown:
+      presentation = .backlinks
+      return []
+
     case .popoverClosedItself:
       // The hover it belonged to is over too, or the same reference could not
       // preview again until the pointer left it.
@@ -242,9 +256,10 @@ public struct ReferenceHover {
   }
 
   private mutating func hover(over target: HoverTarget?) -> [Effect] {
-    // A preview previews nothing itself; and a document preview is to be read, so
-    // the pointer leaving the reference on its way there must not close it.
-    guard !isPreviewReader, presentation != .documentPreview else { return [] }
+    // A preview previews nothing itself; and a document preview is to be read, and
+    // backlinks chosen from, so the pointer leaving on its way there must not close
+    // them.
+    guard !isPreviewReader, presentation?.holdsThePointer != true else { return [] }
     guard let target else { return cancel() }
     guard target.box !== hovered else { return [] }
     var effects = cancel()

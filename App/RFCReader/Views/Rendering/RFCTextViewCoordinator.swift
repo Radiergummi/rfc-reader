@@ -491,13 +491,17 @@ final class RFCTextViewCoordinator: NSObject {
   private func scroll(toOffset offset: Int, animated: Bool = false) {
     guard let textView, let layout = textView.textLayoutManager else { return }
     // What a deep jump into a document still laying out costs: everything above the
-    // target, at once, on the main thread (#295). Free once the document is laid
-    // out.
-    signposter.withIntervalSignpost(
-      "Jump layout", id: signposter.makeSignpostID(),
-      "\(self.documentID?.displayName ?? "untitled", privacy: .public)"
-    ) {
-      ensureLayout(through: offset + Self.layoutSlice)
+    // target, at once, on the main thread (#295). Recorded only when there is any,
+    // by `ensureLayout(through:)`'s own condition, so a jump into text already laid
+    // out leaves no empty interval behind.
+    let layoutTarget = offset + Self.layoutSlice
+    if let built, min(layoutTarget, built.text.length) > laidOutThrough {
+      signposter.withIntervalSignpost(
+        "Jump layout", id: signposter.makeSignpostID(),
+        "\(self.documentID?.displayName ?? "untitled", privacy: .public)"
+      ) {
+        ensureLayout(through: layoutTarget)
+      }
     }
     guard let location = layout.location(atOffset: offset),
       let fragment = layout.textLayoutFragment(for: location)
@@ -698,7 +702,14 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
-      guard let url = link(at: textItem.range.location), let documentID,
+      let offset = textItem.range.location
+      // A backlink chip goes nowhere: it lists what refers to its section.
+      if backlinkChip(at: offset) != nil {
+        return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
+          self?.showBacklinks(at: offset)
+        }
+      }
+      guard let url = link(at: offset), let documentID,
         LinkDestination.resolve(url, from: documentID, activation: .here) != .unhandled
       else { return defaultAction }
       // An action, not the link followed here and nil returned: UIKit asks for the
@@ -720,6 +731,9 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
+      // A backlink chip's link is ours alone, and nothing in the default menu —
+      // Copy Link, Share — means anything for it.
+      if backlinkChip(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let library, let documentID,
@@ -898,6 +912,11 @@ final class RFCTextViewCoordinator: NSObject {
       let box = textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box
       let effects = hover.send(.clickedLink(reference: box, pointer: NSEvent.mouseLocation))
       guard !effects.contains(.swallowClick) else { return true }
+      // A backlink chip goes nowhere: it lists what refers to its section.
+      if backlinkChip(at: charIndex) != nil {
+        showBacklinks(at: charIndex)
+        return true
+      }
       guard let url = Self.url(fromLink: link) else { return false }
       // Read here rather than passed down from the view: by the time SwiftUI's
       // `openURL` sees the link, the click that carried the modifiers is gone.
@@ -914,6 +933,9 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
+      // A backlink chip's link is ours alone, and Copy Link would copy a URL
+      // nothing else can open; the rest of the menu stays.
+      if backlinkChip(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
       return menu
     }
 
@@ -1106,7 +1128,7 @@ final class RFCTextViewCoordinator: NSObject {
     /// popover's anchor. `enumerateTextSegments` folds a run that wraps across
     /// lines into the right set of rects on its own, the same as it does for
     /// selection rendering.
-    private func referenceRect(for range: NSRange) -> CGRect? {
+    func referenceRect(for range: NSRange) -> CGRect? {
       guard let layout = textView?.textLayoutManager,
         let textRange = layout.textRange(for: range)
       else { return nil }

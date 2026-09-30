@@ -434,6 +434,7 @@ final class LibraryModel {
     self.index = prepared.index
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
+    self.knownWorkingGroups = prepared.knownWorkingGroups
     self.indexCounts = prepared.counts
     listCache = RecentValues(capacity: Self.listCacheCapacity)
     hitCache = RecentValues(capacity: Self.listCacheCapacity)
@@ -515,6 +516,11 @@ final class LibraryModel {
   /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
+
+  /// Every working group the index names, lowercased, derived with the index for the
+  /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
+  /// them on every body pass (#21).
+  private(set) var knownWorkingGroups: Set<String> = []
 
   /// How many RFCs each filter the index decides lists, derived with the index for
   /// the same reason `topWorkingGroups` is (#344).
@@ -931,8 +937,7 @@ final class LibraryModel {
   }
 
   func originalText(for id: DocumentID) async throws -> String {
-    let text = try await store.originalText(
-      id, formats: index?[id]?.formats ?? [], client: client)
+    let text = try await store.originalText(id, client: client)
     await evictIfGrown()
     await refreshDownloadedNumbers()
     return text

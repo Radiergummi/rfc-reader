@@ -211,7 +211,7 @@
     private func observe() {
       let titles = Observations { [weak self] in self?.windowTitle }
       let listTitles = Observations { [weak self] in self?.listTitle }
-      let hasDocument = Observations { [weak self] in self?.reader.hasDocument }
+      let canDescribe = Observations { [weak self] in self?.reader.canDescribe }
       let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
       observations = [
         Task(name: "Observe window title") { [weak self] in
@@ -221,7 +221,7 @@
           for await title in listTitles { if let title { self?.apply(title) } }
         },
         Task(name: "Observe document") { [weak self] in
-          for await _ in hasDocument { self?.closePanelWithoutDocument() }
+          for await _ in canDescribe { self?.closePanelWithoutDocument() }
         },
         Task(name: "Observe Go to RFC") { [weak self] in
           for await _ in showsQuickOpen { self?.showOrHideQuickOpen() }
@@ -364,7 +364,7 @@
 
     /// Keeps the panel shut while there is nothing for it to describe: an inspector's
     /// glass over a tab with no document in it is a strip of nothing. `observe()`
-    /// applies it whenever `hasDocument` changes, and `AppDelegate` from outside for
+    /// applies it whenever `canDescribe` changes, and `AppDelegate` from outside for
     /// the one case observation cannot see: nothing about this window changed, its
     /// sibling's panel state was copied onto it.
     ///
@@ -378,7 +378,7 @@
     /// second later. `AppDelegate` makes it there, which is why nothing here has to
     /// watch for it afterwards.
     func closePanelWithoutDocument() {
-      guard !reader.hasDocument, !panelItem.isCollapsed else { return }
+      guard !reader.canDescribe, !panelItem.isCollapsed else { return }
       panelItem.isCollapsed = true
     }
 
@@ -459,11 +459,11 @@
     }
 
     /// Opens or closes the panel, the way the toolbar's toggle does — so only over
-    /// a document, which is what the toggle's validation allows. False when it
+    /// something to describe, which is what the toggle's validation allows. False when it
     /// refused to open.
     @discardableResult
     func setPanelOpen(_ open: Bool) -> Bool {
-      guard !open || reader.hasDocument else { return false }
+      guard !open || reader.canDescribe else { return false }
       if open != isPanelOpen { togglePanel() }
       return true
     }

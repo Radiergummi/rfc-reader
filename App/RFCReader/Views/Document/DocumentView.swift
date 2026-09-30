@@ -203,6 +203,11 @@ struct DocumentView: View {
           }
         #endif
       }
+      // Into the window's reader state, for the panel beside the reader (#325):
+      // how a load ends. `startLoad` says it began, after clearing that state.
+      .onChange(of: session.state.isLoading) { _, isLoading in
+        reader.isLoading = isLoading
+      }
       .onChange(of: buildInputs, initial: true) {
         // Captures the reader, not the view; see `DocumentSession.startLoad`.
         session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
@@ -218,7 +223,14 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section, animated: true, revealingReferences: true)
+        // Not while fading out over the next document's reader: the request is
+        // the selected document's.
+        guard navigation.selection == id, let request else { return }
+        if request.isUnrecorded {
+          follow(request.section)
+        } else {
+          jump(toSection: request.section, animated: true, revealingReferences: true)
+        }
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -255,7 +267,7 @@ struct DocumentView: View {
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
         text: session.originalText,
-        error: session.originalTextError,
+        failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
@@ -275,6 +287,8 @@ struct DocumentView: View {
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
         onVisibleAnchorChange: {
+          // Not while fading out: the reader state is the selected document's.
+          guard navigation.selection == id else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
           // section link need the number, and on macOS the toolbar is in the
@@ -295,7 +309,10 @@ struct DocumentView: View {
           reader.report(title: state, from: source)
         },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
-        onSelectionChange: { reader.hasSelection = $0 },
+        onSelectionChange: {
+          guard navigation.selection == id else { return }
+          reader.hasSelection = $0
+        },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
         heading: heading,
@@ -324,7 +341,9 @@ struct DocumentView: View {
       #endif
       .onAppear {
         // Deep link or restored reading position.
-        if let request = navigation.scrollRequest {
+        if let request = navigation.scrollRequest, request.isUnrecorded {
+          follow(request.section)
+        } else if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
         } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
@@ -332,9 +351,10 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(id.displayName)", systemImage: "wifi.exclamationmark")
+        Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
+        Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
@@ -441,6 +461,7 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    reader.isLoading = true
     // Its header is on its way until the reader reports, so the title stays out of
     // the toolbar rather than showing and then dropping (#281).
     reader.documentStartsLoading()
@@ -546,17 +567,41 @@ struct DocumentView: View {
   /// An anchor the body does not hold scrolls nowhere: a document already open stays
   /// where the reader is, and one just opened stays at its top (#276). In a document
   /// already open, a place naming a bibliography entry shows it; see
-  /// `LinkDestination.landing(at:in:bibliography:)`.
+  /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
   private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
-    guard let section, let document = session.state.document else { return }
-    switch LinkDestination.landing(at: section, in: document, bibliography: reader.groups) {
+    guard let section else { return }
+    switch landing(at: section) {
     case .reference(let anchor) where revealingReferences:
       reader.reveal(reference: anchor)
     case .reference(let anchor), .jump(let anchor):
       scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
-    case .document, .unhandled:
+    case .document, .unhandled, nil:
       break
     }
+  }
+
+  /// A link to a place in this document, which has no entry in the history yet: one
+  /// the document holds gets its entry, so Back returns from it, and scrolls through
+  /// it; an entry of the bibliography is shown; anything else moves nothing, and
+  /// leaves the history as it is.
+  private func follow(_ place: String) {
+    switch landing(at: place) {
+    case .jump:
+      navigation.jump(toSection: place)
+    case .reference(let anchor):
+      reader.reveal(reference: anchor)
+    case .document, .unhandled, nil:
+      break
+    }
+  }
+
+  /// Nil while there is no build to find the place in.
+  private func landing(at place: String) -> LinkDestination? {
+    guard let document = session.state.document, let built = session.state.built else {
+      return nil
+    }
+    return LinkDestination.landing(
+      at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
@@ -577,7 +622,7 @@ struct DocumentView: View {
   private func openInApp(_ url: URL, activation: LinkActivation) -> Bool {
     switch LinkDestination.resolve(url, from: id, activation: activation) {
     case .jump(let section):
-      navigation.jump(toSection: section)
+      follow(section)
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document(let link):

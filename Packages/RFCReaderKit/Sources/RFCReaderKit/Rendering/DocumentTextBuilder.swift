@@ -26,6 +26,10 @@ public final class DocumentTextBuilder {
   /// scroll to, and goes to its entry there.
   public static let referenceScheme = "rfc-reference"
 
+  /// The scheme of a heading's backlink chip (#183), naming the section: a click
+  /// lists the sections that refer to it rather than going anywhere.
+  public static let backlinksScheme = "rfc-backlinks"
+
   /// The style the *current* region is emitted in. A `var` because a region can be
   /// set quieter than the body around it — see `emitting(in:color:)`.
   private(set) var style: ReadingStyle
@@ -54,10 +58,16 @@ public final class DocumentTextBuilder {
   /// See the chip case in `run(_:base:)`.
   var nextChipID = 0
 
-  /// Rendering an SF Symbol is the expensive part and depends only on the point
-  /// size, of which a build sees one or two — but there is a chip per cross
+  /// Rendering an SF Symbol is the expensive part and depends only on which symbol
+  /// and the point size, of which a build sees a few — but there is a chip per cross
   /// reference, and RFCs are full of them.
-  var chipSymbols: [CGFloat: PlatformImage] = [:]
+  var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
+
+  /// A chip's symbol is one of two: a reference's, or a backlink chip's.
+  struct ChipSymbolKey: Hashable {
+    let name: String
+    let pointSize: CGFloat
+  }
 
   /// The anchors of the document's bibliography entries, which `url(for:)` links
   /// with `referenceScheme`. Collected before anything is emitted.
@@ -67,6 +77,11 @@ public final class DocumentTextBuilder {
   /// chip is informative. Collected before anything is emitted, as
   /// `referenceAnchors` is.
   var referenceKinds = ReferenceKinds([])
+
+  /// Which sections refer to each section, for the headings' chips. Collected before
+  /// anything is emitted, and left empty in a build with no live links: on paper
+  /// there is nothing to press.
+  var backlinks: [String: [Backlink]] = [:]
 
   init(style: ReadingStyle) {
     self.style = style
@@ -88,7 +103,7 @@ public final class DocumentTextBuilder {
     // nothing and cost a pass over the whole text. See `BuiltDocument`.
     return BuiltDocument(
       text: builder.output, anchors: AnchorIndex(builder.entries),
-      keepsWithNext: builder.keepsWithNext)
+      keepsWithNext: builder.keepsWithNext, backlinks: builder.backlinks)
   }
 
   /// Records where an anchor lands. Called immediately before the run it names.
@@ -172,6 +187,9 @@ extension DocumentTextBuilder {
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
+    if style.emitsLinks {
+      backlinks = Backlinks.within(document)
+    }
     appendAbstract(document.header.abstract)
     for section in document.sections {
       appendSection(section, depth: 1)
@@ -251,7 +269,7 @@ extension DocumentTextBuilder {
     // several screens of rows nobody reads in order. It lives in the inspector's
     // References tab instead — `DocumentInspector` in the app — and is skipped
     // here, heading and all, rather than left behind as an empty "9. References".
-    guard !Self.holdsOnlyReferences(section) else { return }
+    guard !section.holdsOnlyReferences else { return }
     mark(section.anchor, heading: section.displayTitle, number: section.number)
     keepsWithNext.insert(output.length)
     // Through the same inline path as prose, because a heading cites documents
@@ -261,24 +279,18 @@ extension DocumentTextBuilder {
     let attributes = headingAttributes(
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6)
     output.append(inlineRuns(section.displayTitleInlines, base: attributes))
-    append("\n", attributes)
+    if let citing = backlinks[section.anchor] {
+      output.append(backlinkChip(section.anchor, count: citing.count, base: attributes))
+      // Nor is the line break after the chip the heading's, or the heading's run
+      // would resume on it: a second stop in the headings rotor, on an empty line.
+      append("\n", Self.outsideHeading(attributes))
+    } else {
+      append("\n", attributes)
+    }
     appendBlocks(section.blocks, indent: 0)
     for subsection in section.subsections {
       appendSection(subsection, depth: depth + 1)
     }
-  }
-
-  /// True when nothing in this section, or anything below it, is prose: only
-  /// bibliography entries. A `References` section is usually empty itself and
-  /// carries `Normative` and `Informative` subsections, so this has to recurse
-  /// before it can say the whole tree is skippable.
-  static func holdsOnlyReferences(_ section: Section) -> Bool {
-    guard !section.blocks.isEmpty || !section.subsections.isEmpty else { return false }
-    let blocksAreReferences = section.blocks.allSatisfy { block in
-      if case .references = block { return true }
-      return false
-    }
-    return blocksAreReferences && section.subsections.allSatisfy(holdsOnlyReferences)
   }
 
   func appendBlocks(_ blocks: [Block], indent: CGFloat) {

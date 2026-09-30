@@ -143,6 +143,7 @@ import SwiftUI
         navigation.isShowingGoToSheet = true
       }
       .focusedSceneValue(\.navigationModel, navigation)
+      .focusedSceneValue(\.readerState, reader)
       // Outermost, and it has to be: an environment value reaches what is *inside*
       // the modifier that sets it, and a presentation is the content of the
       // modifier that presents it. Written on the split view, this covered the
@@ -172,7 +173,8 @@ struct EmptyDetailView: View {
 }
 
 #if !os(macOS)
-  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, or any RFC Editor / Datatracker URL.
+  /// Command-L style jump: accepts a number, `RFC 9110`, `BCP 14`, words from a title, or any RFC
+  /// Editor / Datatracker URL.
   ///
   /// iOS only. The Mac has `QuickOpenPalette`, because a form in a sheet is the right
   /// shape for a phone and the wrong one for ⌘L on a desktop (#26).
@@ -207,10 +209,9 @@ struct EmptyDetailView: View {
     var body: some View {
       NavigationStack {
         Form {
-          TextField("RFC number or link", text: text)
+          TextField("RFC number, title words, or link", text: text)
             .focused($focused)
             .onSubmit(openSelection)
-            .keyboardType(.numbersAndPunctuation)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
           if results.rows.isEmpty {
@@ -252,7 +253,7 @@ struct EmptyDetailView: View {
     @ViewBuilder
     private var status: some View {
       if query.isEmpty {
-        Text("A number, RFC 9110, BCP 14, or an rfc-editor.org link.")
+        Text("A number, RFC 9110, BCP 14, words like “http caching”, or an rfc-editor.org link.")
       } else if !results.isSearching {
         if library.index == nil {
           Text("The RFC index is still loading.")
@@ -263,14 +264,16 @@ struct EmptyDetailView: View {
     }
 
     private func row(for row: QuickOpenResults.Row) -> some View {
-      Button {
+      let title = QuickOpenResults.title(
+        library.metadata(row.link.id)?.title, isIndexLoaded: library.index != nil)
+      return Button {
         open(row.link)
       } label: {
         HStack(spacing: 12) {
           Text(row.link.id.displayName)
             .fontWeight(.semibold)
             .monospacedDigit()
-          Text(library.metadata(row.link.id)?.title ?? "Not in the index")
+          Text(title)
             .lineLimit(1)
             .foregroundStyle(.secondary)
           if let section = row.link.section {

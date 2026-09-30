@@ -88,28 +88,36 @@ struct LinkDestinationTests {
     ReferenceGroup(
       title: "Normative References", entries: [Reference(anchor: "RFC3986", title: "URI")])
   ]
+  /// What the build holds: the two sections, and a paragraph's anchor no section names.
+  private let anchors = AnchorIndex([
+    AnchorIndex.Entry(anchor: "section-1", offset: 0, heading: "1. Introduction"),
+    AnchorIndex.Entry(anchor: "section-1-2", offset: 40),
+    AnchorIndex.Entry(anchor: "sample-varint", offset: 80, heading: "A.1. Sample"),
+  ])
+
+  private func landing(at place: String) -> LinkDestination {
+    LinkDestination.landing(
+      at: place, in: document, bibliography: bibliography, anchors: anchors)
+  }
 
   @Test(arguments: [
     ("1", "section-1"), ("A.1", "sample-varint"), ("sample-varint", "sample-varint"),
+    ("section-1-2", "section-1-2"),
   ])
   func `a place lands on the anchor it resolves to`(place: String, anchor: String) {
-    #expect(
-      LinkDestination.landing(at: place, in: document, bibliography: bibliography) == .jump(anchor))
+    #expect(landing(at: place) == .jump(anchor))
   }
 
   /// The body leaves the bibliography out, so a place naming an entry shows it.
   @Test func `a place naming a bibliography entry reveals it`() {
-    #expect(
-      LinkDestination.landing(at: "RFC3986", in: document, bibliography: bibliography)
-        == .reference("RFC3986"))
+    #expect(landing(at: "RFC3986") == .reference("RFC3986"))
   }
 
-  /// One the document does not define is still a jump; the reader finds nothing to
-  /// scroll to, and stays where it is.
-  @Test func `a place the document does not define is a jump to nowhere`() {
-    #expect(
-      LinkDestination.landing(at: "page-12", in: document, bibliography: bibliography)
-        == .jump("page-12"))
+  /// One the build does not hold moves nothing, so it is no jump, and gets no entry
+  /// in the history to go back from.
+  @Test(arguments: ["page-12", "section-99"])
+  func `a place the document does not define lands nowhere`(place: String) {
+    #expect(landing(at: place) == .unhandled)
   }
 
   // MARK: - Not ours

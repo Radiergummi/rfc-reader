@@ -24,6 +24,10 @@ final class NavigationModel: Identifiable {
   /// `onChange` watching the section alone would see no change and never scroll.
   struct ScrollRequest: Equatable {
     let section: String
+    /// A link to an anchor of the document on screen, which has no entry in the
+    /// history yet: the reader gives it one if its document holds the anchor, and
+    /// otherwise moves nothing (#276). Only the reader can tell, having the build.
+    var isUnrecorded = false
     private let issue = UUID()
   }
 
@@ -162,10 +166,11 @@ final class NavigationModel: Identifiable {
     }
     // An anchor of the document on screen may name nothing in its body, as the RFC
     // Editor's `#page-12` doesn't, or an entry the reader shows rather than
-    // scrolls to. Asked for without an entry in the history, it leaves the reader,
-    // and the place it will be left from, where they are (#276).
+    // scrolls to. Handed to the reader unrecorded, it gets an entry in the history
+    // only where the reader finds it, and otherwise leaves the reader, and the
+    // place it will be left from, where they are (#276).
     if link.section == nil, let anchor = link.anchor, id == selection {
-      scrollRequest = ScrollRequest(section: anchor)
+      scrollRequest = ScrollRequest(section: anchor, isUnrecorded: true)
       return
     }
     go(to: HistoryEntry(id: id, section: link.place))
