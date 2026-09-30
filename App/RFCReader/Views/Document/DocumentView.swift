@@ -200,7 +200,14 @@ struct DocumentView: View {
       .onChange(of: library.indexState) { deriveInfo() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
-        jump(toSection: request?.section, animated: true)
+        // Not while fading out over the next document's reader: the request is
+        // the selected document's.
+        guard navigation.selection == id, let request else { return }
+        if request.isUnrecorded {
+          follow(request.section)
+        } else {
+          jump(toSection: request.section, animated: true, revealingReferences: true)
+        }
       }
       .onDisappear(perform: saveReadingPosition)
       .environment(\.openURL, OpenURLAction(handler: handleLink))
@@ -237,17 +244,13 @@ struct DocumentView: View {
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
         text: session.originalText,
-        error: session.originalTextError,
+        failure: session.originalTextFailure,
         fontSize: ReadingStyle(bodySize: fontSize, textSize: textSize).bodySize,
         tryAgain: { session.startOriginalTextLoad(from: library) }
       )
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
-      // No header to show the title here, so the toolbar shows it throughout.
-      // On `hasDocument` rather than on appearing: loading a document clears
-      // the title back to hidden after this view may already have appeared.
-      .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -261,6 +264,8 @@ struct DocumentView: View {
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
         onVisibleAnchorChange: {
+          // Not while fading out: the reader state is the selected document's.
+          guard navigation.selection == id else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
           // section link need the number, and on macOS the toolbar is in the
@@ -274,8 +279,17 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onToolbarTitle: { reader.updateToolbarTitle($0) },
-        onSelectionChange: { reader.hasSelection = $0 },
+        // Not while fading out over the next document's reader, as the load's
+        // and the build's callbacks guard: the title is the selected document's.
+        onToolbarTitle: { state, source in
+          guard navigation.selection == id else { return }
+          reader.report(title: state, from: source)
+        },
+        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
+        onSelectionChange: {
+          guard navigation.selection == id else { return }
+          reader.hasSelection = $0
+        },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, so it needs the environment handed to
@@ -300,7 +314,9 @@ struct DocumentView: View {
       #endif
       .onAppear {
         // Deep link or restored reading position.
-        if let request = navigation.scrollRequest {
+        if let request = navigation.scrollRequest, request.isUnrecorded {
+          follow(request.section)
+        } else if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
         } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
           scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
@@ -308,9 +324,10 @@ struct DocumentView: View {
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
-        Label("Couldn't load \(id.displayName)", systemImage: "wifi.exclamationmark")
+        Label("Couldn't load \(id.displayName)", systemImage: failure.kind.symbol)
       } description: {
         Text(failure.message)
+        Text(failure.kind.recoverySuggestion(for: .document))
       } actions: {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
@@ -411,6 +428,9 @@ struct DocumentView: View {
     reader.clear()
     reader.showOriginal = preferOriginalText
     reader.isLoading = true
+    // Its header is on its way until the reader reports, so the title stays out of
+    // the toolbar rather than showing and then dropping (#281).
+    reader.documentStartsLoading()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
@@ -441,6 +461,10 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
+    } failed: { [reader, navigation, id] in
+      // No header is coming, so the toolbar names the RFC that failed.
+      guard navigation.selection == id else { return }
+      reader.documentFailedToLoad()
     }
   }
 
@@ -505,10 +529,45 @@ struct DocumentView: View {
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
-  private func jump(toSection section: String?, animated: Bool) {
-    guard let section, let document = session.state.document else { return }
-    scrollTarget = ReaderScrollTarget(
-      anchor: document.anchor(forPlace: section), animated: animated)
+  ///
+  /// An anchor the body does not hold scrolls nowhere: a document already open stays
+  /// where the reader is, and one just opened stays at its top (#276). In a document
+  /// already open, a place naming a bibliography entry shows it; see
+  /// `LinkDestination.landing(at:in:bibliography:anchors:)`.
+  private func jump(toSection section: String?, animated: Bool, revealingReferences: Bool = false) {
+    guard let section else { return }
+    switch landing(at: section) {
+    case .reference(let anchor) where revealingReferences:
+      reader.reveal(reference: anchor)
+    case .reference(let anchor), .jump(let anchor):
+      scrollTarget = ReaderScrollTarget(anchor: anchor, animated: animated)
+    case .document, .unhandled, nil:
+      break
+    }
+  }
+
+  /// A link to a place in this document, which has no entry in the history yet: one
+  /// the document holds gets its entry, so Back returns from it, and scrolls through
+  /// it; an entry of the bibliography is shown; anything else moves nothing, and
+  /// leaves the history as it is.
+  private func follow(_ place: String) {
+    switch landing(at: place) {
+    case .jump:
+      navigation.jump(toSection: place)
+    case .reference(let anchor):
+      reader.reveal(reference: anchor)
+    case .document, .unhandled, nil:
+      break
+    }
+  }
+
+  /// Nil while there is no build to find the place in.
+  private func landing(at place: String) -> LinkDestination? {
+    guard let document = session.state.document, let built = session.state.built else {
+      return nil
+    }
+    return LinkDestination.landing(
+      at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
   }
 
   /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
@@ -529,7 +588,7 @@ struct DocumentView: View {
   private func openInApp(_ url: URL, activation: LinkActivation) -> Bool {
     switch LinkDestination.resolve(url, from: id, activation: activation) {
     case .jump(let section):
-      navigation.jump(toSection: section)
+      follow(section)
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document(let link):

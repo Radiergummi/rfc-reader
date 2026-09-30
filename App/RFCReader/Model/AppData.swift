@@ -20,8 +20,15 @@ enum AppData {
   /// The app then runs on a store in memory instead of crashing at launch: reading
   /// works, bookmarks and reading positions made this session are not kept, and
   /// nothing on disk is touched, so a later launch that can open it has everything
-  /// back. The window says so once; see `claimStoreWarning()`.
-  private static var isStoredInMemory = false
+  /// back. The window says so once; see `claimStoreWarning()`. The sidebar and the
+  /// scripting interface keep saying so after that (#318).
+  static var isStoredInMemory: Bool {
+    _ = container
+    return openedInMemory
+  }
+
+  /// Set once, where the container is made.
+  private static var openedInMemory = false
 
   /// Versioned and migrated, then merged to one row per document; see `UserData`.
   static let container: ModelContainer = {
@@ -31,7 +38,7 @@ enum AppData {
     } catch {
       dataLog.error(
         "the user data store did not open: \(String(describing: error), privacy: .public)")
-      isStoredInMemory = true
+      openedInMemory = true
       do {
         return try UserData.container(
           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
@@ -55,10 +62,10 @@ enum AppData {
   private static var hasShownStoreWarning = false
 
   /// Whether the caller should show `storeWarning`: true once per launch, and only
-  /// when the store fell back to memory. Opens the container first, so the answer
-  /// does not depend on something else having opened it already.
+  /// when the store fell back to memory. `isStoredInMemory` opens the container
+  /// first, so the answer does not depend on something else having opened it
+  /// already.
   static func claimStoreWarning() -> Bool {
-    _ = container
     guard isStoredInMemory, !hasShownStoreWarning else { return false }
     hasShownStoreWarning = true
     return true

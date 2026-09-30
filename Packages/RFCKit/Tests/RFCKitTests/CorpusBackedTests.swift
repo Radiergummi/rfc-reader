@@ -431,6 +431,24 @@ struct CorpusBackedOmittedBoilerplateTests {
   }
 }
 
+@Suite("Corpus-backed: page furniture", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedPageFurnitureTests {
+  /// RFC 798 heads each of its chapters itself, `III.` at column 0, and runs the
+  /// same words at the head of the chapter's later pages. The first of those copies
+  /// was kept, because the document-wide check read only a heading numbered in
+  /// digits (#57): each chapter's name stood twice, the second time as a stray
+  /// block. Answered on the pages around the copy now (#291), the chapter is named
+  /// once.
+  @Test(arguments: ["Encoding Algorithm", "the Data Header"])
+  func `a chapter headed by the document is not named again by its running header`(
+    words: String
+  ) throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc798"))
+    #expect(document.allSections.count { $0.titleText.contains(words) } == 1)
+    #expect(!document.artworkText.contains { $0.contains(words) })
+  }
+}
+
 @Suite("Corpus-backed: packet diagrams", .enabled(if: CorpusText.isAvailable))
 struct CorpusBackedPacketDiagramTests {
   /// RFC 791's IPv4 header, as the parser hands it over: every field, with its

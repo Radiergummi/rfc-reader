@@ -55,7 +55,7 @@ final class DocumentSession {
   /// The original text (`reader.showOriginal`), fetched the first time it is shown,
   /// and why it could not be.
   private(set) var originalText: String?
-  private(set) var originalTextError: String?
+  private(set) var originalTextFailure: LoadFailure?
 
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the
@@ -87,7 +87,7 @@ final class DocumentSession {
   /// gives.
   func startOriginalTextLoad(from library: LibraryModel) {
     originalTextLoad?.cancel()
-    originalTextError = nil
+    originalTextFailure = nil
     originalTextLoad = Task(name: "Load original text") { [weak self, id] in
       do {
         let text = try await library.originalText(for: id)
@@ -98,23 +98,27 @@ final class DocumentSession {
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
         trace("original text failed: \(error)")
-        originalTextError = error.localizedDescription
+        originalTextFailure = LoadFailure(error: error)
       }
     }
   }
 
-  /// Fetches, and hands the document to `loaded` once it is the state's. Building is
-  /// `requestBuild`'s job, which the document arriving triggers.
+  /// Fetches, and hands the document to `loaded` once it is the state's, or says it
+  /// `failed`. Building is `requestBuild`'s job, which the document arriving
+  /// triggers.
   ///
   /// Once per session, plus Try Again after a failure: the view is made per document
   /// (`.id(selection)`), and appearing again keeps what it loaded.
   ///
-  /// The task holds the session weakly, and `loaded` must not capture the view: a
+  /// The task holds the session weakly, and neither closure may capture the view: a
   /// view's state holds this session, so either would keep it alive for as long as
   /// the fetch runs, and `deinit` could not cancel a fetch nobody waits for any more.
   /// A fetch that outlives its session is dropped, rather than writing an old
   /// document's details over the window's reader state.
-  func startLoad(from library: LibraryModel, loaded: @escaping (RFCDocument) -> Void) {
+  func startLoad(
+    from library: LibraryModel, loaded: @escaping (RFCDocument) -> Void,
+    failed: @escaping () -> Void
+  ) {
     load?.cancel()
     state.begin()
     trace("loading")
@@ -135,6 +139,7 @@ final class DocumentSession {
         guard let self, !Task.isCancelled else { return }
         trace("failed: \(error)")
         state.fail(error)
+        failed()
       }
     }
   }

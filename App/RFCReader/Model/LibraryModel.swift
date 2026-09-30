@@ -26,7 +26,9 @@ nonisolated private let libraryLog = Logger(
     func openTab(inBackground: Bool)
     /// The window showing `scene`, made key and its tab selected.
     func bringForward(_ scene: NavigationModel)
-    /// The tab the menu acts on: the front tab of the window the user is looking at.
+    /// The tab the menu acts on, and the one `route(_:)` prefers: the front tab of
+    /// the reader window made key last, which it stays while the app is in the
+    /// background.
     var activeNavigation: NavigationModel? { get }
   }
 #endif
@@ -432,6 +434,7 @@ final class LibraryModel {
     self.index = prepared.index
     self.search = prepared.search
     self.topWorkingGroups = prepared.topWorkingGroups
+    self.knownWorkingGroups = prepared.knownWorkingGroups
     self.indexCounts = prepared.counts
     listCache = RecentValues(capacity: Self.listCacheCapacity)
     hitCache = RecentValues(capacity: Self.listCacheCapacity)
@@ -513,6 +516,11 @@ final class LibraryModel {
   /// body pass -- measured at 1.8 ms release, 6 ms debug, dozens of times a session.
   /// `PreparedIndex` counts them.
   private(set) var topWorkingGroups: [String] = []
+
+  /// Every working group the index names, lowercased, derived with the index for the
+  /// same reason `topWorkingGroups` is: the iOS search field tokenizes its text with
+  /// them on every body pass (#21).
+  private(set) var knownWorkingGroups: Set<String> = []
 
   /// How many RFCs each filter the index decides lists, derived with the index for
   /// the same reason `topWorkingGroups` is (#344).
@@ -681,6 +689,26 @@ final class LibraryModel {
     return await Self.suggestions(in: search, for: query, limit: limit)
   }
 
+  /// What the Go to RFC palette and sheet list under what was typed, once the reader
+  /// has paused: run per change of the query and canceled by the next, which is the
+  /// debounce, so only a pause long enough to outlast the sleep reaches the search.
+  ///
+  /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
+  ///   without searching, for a link, which names its document outright and which
+  ///   no title or abstract contains, and while the index is still loading.
+  func quickOpenHits(for query: String) async -> [DocumentID]? {
+    guard !query.isEmpty else { return nil }
+    if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
+    guard index != nil else { return [] }
+    do {
+      try await Task.sleep(for: .milliseconds(120))
+    } catch {
+      return nil
+    }
+    let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
+    return Task.isCancelled ? nil : hits
+  }
+
   @concurrent
   private static func suggestions(
     in search: IndexSearch, for query: String, limit: Int
@@ -732,8 +760,9 @@ final class LibraryModel {
     scenes.removeAll { $0.model == nil || $0.model === scene }
   }
 
-  /// Marks a scene as the one the reader is using, which is where an untargeted
-  /// link lands.
+  /// Makes a scene the most recently used, which is where an untargeted link lands
+  /// when no tab is preferred over it -- on macOS `route(_:)` prefers the tab of the
+  /// window that was key last.
   func activate(_ scene: NavigationModel) {
     guard scenes.first?.model !== scene else { return }
     promote(scene)
@@ -745,7 +774,9 @@ final class LibraryModel {
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
-  /// there is one, otherwise the most recently used tab.
+  /// there is one, otherwise the tab the reader is in -- on macOS the one whose
+  /// window was key last, which a tab opened in the background does not displace --
+  /// and failing that the most recently used tab.
   ///
   /// A link can arrive before any scene has registered -- a URL or the Open RFC
   /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
@@ -763,7 +794,15 @@ final class LibraryModel {
   func route(_ link: RFCLink) {
     scenes.removeAll { $0.model == nil }
     let open = scenes.compactMap(\.model)
-    guard let target = LinkRouting.target(for: link.id, in: open, showing: \.selection) else {
+    #if os(macOS)
+      let preferred = windows?.activeNavigation
+    #else
+      let preferred: NavigationModel? = nil
+    #endif
+    guard
+      let target = LinkRouting.target(
+        for: link.id, in: open, showing: \.selection, preferring: { $0 === preferred })
+    else {
       openInNewWindow(link)
       return
     }

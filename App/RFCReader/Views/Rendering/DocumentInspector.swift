@@ -325,6 +325,8 @@ struct ReferencesView: View {
           }
         }
         .listStyle(.sidebar)
+        // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+        .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
         // the list is new when the request arrives.
         .task(id: revealed) {
@@ -375,7 +377,9 @@ struct ReferenceRow: View {
           }
         #endif
       } else {
-        entryDescription
+        // Not a button, so the combined element needs a role of its own, or macOS
+        // exposes it as AXUnknown (#300).
+        entryDescription.accessibilityAddTraits(.isStaticText)
         // An entry that names no RFC opens nothing in the reader, so where it
         // lives is the one way on from it — and what a citation of it reveals the
         // row for.
@@ -436,5 +440,9 @@ struct ReferenceRow: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    // One stop, whether or not the entry names an RFC: its tag, title and byline
+    // were three for an entry that is no button (#300).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.accessibilityLabel)
   }
 }

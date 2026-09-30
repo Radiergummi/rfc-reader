@@ -56,6 +56,10 @@ struct LegacyTextParserPaginationTests {
     let repeated = Dictionary(grouping: unnumbered, by: \.self).filter { $0.value.count > 1 }.keys
     #expect(repeated.isEmpty, "unnumbered headings that repeat: \(repeated.sorted())")
     #expect(!unnumbered.contains("Philosophy"))
+    // Nor is its first copy in the as-published view, which drops what `parse` drops.
+    let published = LegacyTextParser.stripPagination(try Fixtures.string("rfc793.txt"))
+      .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+    #expect(!published.contains("Philosophy"))
 
     // With the header gone the page break is only a page break, and the sentence
     // across it is one paragraph again.
@@ -161,5 +165,126 @@ struct LegacyTextParserPaginationTests {
     #expect(LegacyTextParser.removingControlCharacters(underlined) == "RFC")
     #expect(LegacyTextParser.removingControlCharacters("a\u{00}\u{1B}b\tc\u{0C}") == "ab\tc\u{0C}")
     #expect(LegacyTextParser.removingControlCharacters("plain") == "plain")
+  }
+}
+
+/// A section running header's first sighting opens its section only where the
+/// document does not head that section itself nearby: on the header's page or the
+/// two before it (#291, #57). Hand-written lines in the shape of an RFC's pages.
+@Suite("Section running headers")
+struct SectionHeaderTests {
+  private typealias Line = LegacyTextParser.Line
+
+  /// A page: its header block, a blank line, then its body.
+  private func page(header: String? = nil, _ body: [String]) -> [Line] {
+    var lines: [Line] = []
+    if let header { lines += [.sectionHeader(header, sighting: 0), .text("")] }
+    return lines + body.map(Line.text) + [.text(""), .pageBreak]
+  }
+
+  private func headsNearby(_ lines: [Line]) -> Bool {
+    let index = lines.firstIndex(where: \.isSectionHeader)!
+    return LegacyTextParser.headsNearby(
+      at: index, in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)
+  }
+
+  /// The section starts at the head of one page, whose header still names the last
+  /// one, and its own name first runs on the next.
+  @Test func `a heading on the page before heads the section`() {
+    let lines =
+      page(["4.  Retry Handling", "", "   A sender waits before it sends again."])
+      + page(header: "Retry Handling", ["   The wait doubles each time."])
+    #expect(headsNearby(lines))
+  }
+
+  /// Centered, as some documents set their chapter headings: still the document's own.
+  @Test func `a centered numbered heading heads the section`() {
+    let lines =
+      page(["                     4.  RETRY HANDLING", "", "   A sender waits."])
+      + page(header: "Retry Handling", ["   The wait doubles each time."])
+    #expect(headsNearby(lines))
+  }
+
+  @Test func `a heading on the same page heads the section`() {
+    let lines = page(header: "Retry Handling", ["4.  Retry Handling", "", "   A sender waits."])
+    #expect(headsNearby(lines))
+  }
+
+  /// A number in the header is part of what it says, not a page number to mask:
+  /// compared as the heading reads, the two agree (#57).
+  @Test func `a header with a number in it matches its heading`() {
+    let lines =
+      page(["4.  Phase 2 Exchange", "", "   Its round follows the first."])
+      + page(header: "Phase 2 Exchange", ["   It carries the keys."])
+    #expect(headsNearby(lines))
+  }
+
+  /// The same words headed pages away speak for nothing here: this header is the
+  /// only thing saying where its section starts.
+  @Test func `a heading further away does not head the section`() {
+    let lines =
+      page(["2.  Retry Handling", "", "   Named here in passing."])
+      + page(["   Other matters."])
+      + page(["   More of them."])
+      + page(header: "Retry Handling", ["   The list of entries."])
+    #expect(!headsNearby(lines))
+  }
+
+  /// A heading of other words on the page is another section's.
+  @Test func `a heading of other words does not head the section`() {
+    let lines =
+      page(["4.  Timers", "", "   A sender keeps two."])
+      + page(header: "Retry Handling", ["   The wait doubles each time."])
+    #expect(!headsNearby(lines))
+  }
+
+  /// A header that carries its section's number is read as the heading it copies.
+  @Test func `a numbered header matches its numbered heading`() {
+    let lines =
+      page(["4.  Retry Handling", "", "   A sender waits."])
+      + page(header: "4.  Retry Handling", ["   The wait doubles each time."])
+    #expect(headsNearby(lines))
+  }
+
+  /// A header numbered otherwise names another section, whatever its words.
+  @Test func `a header with another number does not match the heading`() {
+    let lines =
+      page(["4.  Retry Handling", "", "   A sender waits."])
+      + page(header: "5.  Retry Handling", ["   The wait doubles each time."])
+    #expect(!headsNearby(lines))
+  }
+
+  /// An appendix header with no title is told from another by its letter alone.
+  @Test func `a titleless appendix header matches only its own letter`() {
+    let other =
+      page(["APPENDIX A", "", "   The first list."])
+      + page(header: "Appendix B", ["   The second list."])
+    #expect(!headsNearby(other))
+    let own =
+      page(["APPENDIX B", "", "   The second list."])
+      + page(header: "Appendix B", ["   Its entries go on."])
+    #expect(headsNearby(own))
+  }
+
+  /// Where the headers alternate between facing pages, a section's name first runs
+  /// two pages after the page it starts on.
+  @Test func `a heading two pages before heads the section`() {
+    let lines =
+      page(["4.  Retry Handling", "", "   A sender waits."])
+      + page(["   The wait doubles each time."])
+      + page(header: "Retry Handling", ["   It gives up after the fifth."])
+    #expect(headsNearby(lines))
+  }
+
+  /// The front matter's contents list the headings; none of its entries heads a
+  /// section of the body.
+  @Test func `a contents entry in the front matter does not head the section`() {
+    let contents = page(["   4.  Retry Handling"])
+    let lines = contents + page(header: "Retry Handling", ["   The wait doubles each time."])
+    let index = lines.firstIndex(where: \.isSectionHeader)!
+    #expect(
+      !LegacyTextParser.headsNearby(
+        at: index, in: lines, from: contents.count, bodyIsIndented: true,
+        colonNumbered: false))
   }
 }

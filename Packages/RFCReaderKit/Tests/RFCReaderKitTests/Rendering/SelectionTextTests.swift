@@ -4,6 +4,10 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if !canImport(UIKit) && canImport(AppKit)
+  import AppKit
+#endif
+
 @Suite("Selection text")
 struct SelectionTextTests {
   private func copied(_ inlines: [Inline]) -> String {
@@ -89,4 +93,23 @@ struct SelectionTextTests {
   @Test func `an empty selection copies nothing`() {
     #expect(SelectionText.plainText(of: NSAttributedString(string: "")) == "")
   }
+
+  #if !canImport(UIKit) && canImport(AppKit)
+    /// `NSTextView` asks for each flavor by its legacy name, which never equals the
+    /// modern constant: a copy that switched on `.string` alone rewrote nothing.
+    @Test func `a flavor is recognized by its legacy name as by its modern one`() {
+      let asked: [(String, SelectionText.Flavor?)] = [
+        ("NSStringPboardType", .plain),
+        ("public.utf8-plain-text", .plain),
+        ("NeXT Rich Text Format v1.0 pasteboard type", .rtf),
+        ("public.rtf", .rtf),
+        ("NeXT RTFD pasteboard type", .rtfd),
+        ("com.apple.flat-rtfd", .rtfd),
+        ("public.html", nil),
+      ]
+      for (name, flavor) in asked {
+        #expect(SelectionText.flavor(of: NSPasteboard.PasteboardType(name)) == flavor, "\(name)")
+      }
+    }
+  #endif
 }

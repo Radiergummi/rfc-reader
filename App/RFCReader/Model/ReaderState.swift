@@ -74,7 +74,37 @@ final class ReaderState {
 
   /// The 72-column original instead of the rendered document. Toolbar state, read
   /// by the reader.
-  var showOriginal = false
+  var showOriginal = false {
+    didSet { titleOwnership.showsOriginal = showOriginal }
+  }
+
+  /// Who says how far the title has come into the toolbar, and the one place its
+  /// state is pushed from (#281); see `ToolbarTitleOwnership`.
+  @ObservationIgnored private var titleOwnership = ToolbarTitleOwnership() {
+    didSet {
+      if titleOwnership.state != oldValue.state { updateToolbarTitle(titleOwnership.state) }
+    }
+  }
+
+  /// A document starts loading, and its header is on its way.
+  func documentStartsLoading() {
+    titleOwnership.beginLoading()
+  }
+
+  /// The document failed to load, and no header is coming.
+  func documentFailedToLoad() {
+    titleOwnership.failLoading()
+  }
+
+  /// The reader with a header on screen says where the title is, as it scrolls.
+  func report(title state: ToolbarTitleState, from reader: AnyObject) {
+    titleOwnership.report(state, from: ObjectIdentifier(reader))
+  }
+
+  /// That reader has gone away, and what it said goes with it.
+  func releaseTitle(from reader: AnyObject) {
+    titleOwnership.release(from: ObjectIdentifier(reader))
+  }
 
   /// Moves the document's title into the toolbar, from 0 to 1 as its heading
   /// scrolls away, and names the section being read under it; see
@@ -83,7 +113,11 @@ final class ReaderState {
   /// A callback, not a property the toolbar observes: it is called on every
   /// scroll tick the title moves in, and observation delivers a change a run-loop
   /// turn later, which leaves a title coupled to the scroll trailing behind it.
-  @ObservationIgnored var updateToolbarTitle: (ToolbarTitleState) -> Void = { _ in }
+  ///
+  /// Told the state at once when installed: only a change is pushed after that.
+  @ObservationIgnored var updateToolbarTitle: (ToolbarTitleState) -> Void = { _ in } {
+    didSet { updateToolbarTitle(titleOwnership.state) }
+  }
 
   /// A request to show one bibliography entry in the panel.
   ///
@@ -112,9 +146,7 @@ final class ReaderState {
   }
 
   func clear() {
-    // The next document starts at its top, under its own header, until the reader
-    // reports otherwise.
-    updateToolbarTitle(.hidden)
+    titleOwnership.close()
     sections = []
     groups = []
     requirements = nil

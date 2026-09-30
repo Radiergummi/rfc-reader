@@ -1,8 +1,9 @@
+import RFCReaderKit
 import SwiftUI
 
 struct OriginalTextView: View {
   let text: String?
-  let error: String?
+  let failure: LoadFailure?
   let fontSize: Double
   let tryAgain: () -> Void
 
@@ -21,11 +22,12 @@ struct OriginalTextView: View {
             .padding(24)
         }
       #endif
-    } else if let error {
+    } else if let failure {
       ContentUnavailableView {
-        Label("Couldn't load the original text", systemImage: "wifi.exclamationmark")
+        Label("Couldn't load the original text", systemImage: failure.kind.symbol)
       } description: {
-        Text(error)
+        Text(failure.message)
+        Text(failure.kind.recoverySuggestion(for: .originalText))
       } actions: {
         Button("Try Again", action: tryAgain)
       }

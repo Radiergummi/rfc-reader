@@ -46,8 +46,8 @@ public enum LinkPreview: Equatable, Sendable {
     }
     guard let link = RFCLink(url: url) else { return nil }
     if link.id.series != .rfc, let first = index?.series(link.id)?.members.first {
-      return .document(first, place: link.section)
+      return .document(first, place: link.place)
     }
-    return .document(link.id, place: link.section)
+    return .document(link.id, place: link.place)
   }
 }

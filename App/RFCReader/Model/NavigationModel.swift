@@ -24,6 +24,10 @@ final class NavigationModel: Identifiable {
   /// `onChange` watching the section alone would see no change and never scroll.
   struct ScrollRequest: Equatable {
     let section: String
+    /// A link to an anchor of the document on screen, which has no entry in the
+    /// history yet: the reader gives it one if its document holds the anchor, and
+    /// otherwise moves nothing (#276). Only the reader can tell, having the build.
+    var isUnrecorded = false
     private let issue = UUID()
   }
 
@@ -160,7 +164,16 @@ final class NavigationModel: Identifiable {
     if id.series != .rfc, let first = index?.series(id)?.members.first {
       id = first
     }
-    go(to: HistoryEntry(id: id, section: link.section))
+    // An anchor of the document on screen may name nothing in its body, as the RFC
+    // Editor's `#page-12` doesn't, or an entry the reader shows rather than
+    // scrolls to. Handed to the reader unrecorded, it gets an entry in the history
+    // only where the reader finds it, and otherwise leaves the reader, and the
+    // place it will be left from, where they are (#276).
+    if link.section == nil, let anchor = link.anchor, id == selection {
+      scrollRequest = ScrollRequest(section: anchor, isUnrecorded: true)
+      return
+    }
+    go(to: HistoryEntry(id: id, section: link.place))
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
     sidebarSelection = .all
@@ -257,9 +270,7 @@ final class NavigationModel: Identifiable {
   }
 
   private func go(to place: HistoryEntry) {
-    let before = history.current
-    history.go(to: place, leaving: visiblePosition)
-    guard history.current != before else { return }
+    guard let place = history.go(to: place, leaving: visiblePosition) else { return }
     arrive(at: place)
   }
 

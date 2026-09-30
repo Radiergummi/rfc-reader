@@ -34,11 +34,46 @@ public struct BuiltDocument: @unchecked Sendable {
   /// ends on one (`PrintPagination`). Recorded by the builder as it emits them,
   /// so a new kind of heading is kept with its text where it is written.
   public let keepsWithNext: Set<Int>
+  /// Which sections refer to each section, as the headings' chips count them;
+  /// empty in a build with no live links, which draws no chips.
+  public let backlinks: [String: [Backlink]]
 
-  public init(text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = []) {
+  public init(
+    text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
+    backlinks: [String: [Backlink]] = [:]
+  ) {
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext
+    self.backlinks = backlinks
+  }
+
+  /// What a heading's backlink chip lists (#183): the sections that refer to the
+  /// one at `anchor`, in document order, each by its heading as the reader draws it.
+  public func backlinks(of anchor: String) -> [BacklinkEntry] {
+    (backlinks[anchor] ?? []).compactMap { backlink in
+      guard let section = backlink.section else {
+        return BacklinkEntry(
+          anchor: DocumentTextBuilder.abstractAnchor, heading: "Abstract", count: backlink.count)
+      }
+      guard let heading = anchors.heading(of: section) else { return nil }
+      return BacklinkEntry(anchor: section, heading: heading, count: backlink.count)
+    }
+  }
+}
+
+/// A section that refers to another, as a backlink chip lists it.
+public struct BacklinkEntry: Sendable, Hashable {
+  /// Where following the entry scrolls to.
+  public let anchor: String
+  public let heading: String
+  /// How many times the section refers there.
+  public let count: Int
+
+  public init(anchor: String, heading: String, count: Int) {
+    self.anchor = anchor
+    self.heading = heading
+    self.count = count
   }
 }
 

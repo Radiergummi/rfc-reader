@@ -65,6 +65,12 @@ public struct RFCDocument: Sendable, Hashable, Codable {
   /// section bodies missed a document cited there alone (#127). So does a reference's
   /// annotation, which is prose too. Captions are plain strings in the model and
   /// cannot cite.
+  ///
+  /// Never the document's own number, which the abstract and the headings are the
+  /// likeliest to name ("This document, RFC 9110, …"): what it cites are other
+  /// documents, and a citation graph built on this would otherwise carry a self-edge
+  /// (#279). A series the document belongs to, such as RFC 9110's "STD 97", is still
+  /// listed: the header knows the document's number, not its series.
   public var referencedDocuments: [DocumentID] {
     var seen: Set<DocumentID> = []
     for inline in proseInlines {
@@ -74,6 +80,9 @@ public struct RFCDocument: Sendable, Hashable, Codable {
     }
     for case .references(let list) in blocks {
       seen.formUnion(list.entries.compactMap(\.documentID))
+    }
+    if let id = header.id {
+      seen.remove(id)
     }
     return seen.sorted()
   }
@@ -427,6 +436,16 @@ public struct SeriesInfo: Hashable, Codable, Sendable {
   public init(_ id: DocumentID) {
     self.init(name: id.series.rawValue, value: String(id.number))
   }
+
+  /// The document the entry names, when its series is one of the RFC Editor's:
+  /// `RFC 9110`, and `rfc 09110` the same. Nil for a DOI or an Internet-Draft.
+  public var documentID: DocumentID? {
+    guard let series = DocumentID.Series(rawValue: name.uppercased()), let number = Int(value)
+    else {
+      return nil
+    }
+    return DocumentID(series: series, number: number)
+  }
 }
 
 public struct ReferenceList: Sendable, Hashable, Codable {
@@ -538,12 +557,7 @@ public struct Reference: Sendable, Identifiable, Hashable, Codable {
 
   /// The RFC/BCP/STD this reference points at, when it is one.
   public var documentID: DocumentID? {
-    let ids = seriesInfo.compactMap { info -> DocumentID? in
-      guard let series = DocumentID.Series(rawValue: info.name.uppercased()),
-        let number = Int(info.value)
-      else { return nil }
-      return DocumentID(series: series, number: number)
-    }
+    let ids = seriesInfo.compactMap(\.documentID)
     // A BCP or STD reference usually also names its RFC; the RFC is the thing to open.
     return ids.first { $0.series == .rfc } ?? ids.first ?? DocumentID(label: anchor)
   }

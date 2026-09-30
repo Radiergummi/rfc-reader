@@ -64,11 +64,34 @@ extension DocumentTextBuilder {
   /// can be far longer than the 129 columns fit-to-measure scaling was measured
   /// against, and a fold the header explains reads better than type too small to
   /// read. The header has to stay with the folds, since it is what explains them.
+  ///
+  /// Either way its tabs are spaces to the next eighth column, as the RFC Editor's
+  /// text rendering sets them: the verbatim style has no tab stops, and a default
+  /// stop is a distance in points, not in the block's columns, so a tabbed figure
+  /// sheared (#31). The box keeps the tabs; this is only what is drawn and measured.
+  ///
+  /// Unfolded before the tabs are expanded: a tab at the start of a continuation is
+  /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
+  /// column in the rejoined line, not in the folded one.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    guard let unfolded = FoldedLines.unfold(content.text),
+    guard
+      let unfolded = FoldedLines.unfold(content.text).map(Self.expandingTabsTrimmingTabbedLines),
       monospaceScale(for: unfolded, indent: indent) == 1
-    else { return content.text }
+    else { return Self.expandingTabsTrimmingTabbedLines(content.text) }
     return unfolded
+  }
+
+  /// Tabs expanded, and a line that had one loses its trailing white space: a tab
+  /// that ends a line draws nothing, and expanded it would count up to eight
+  /// columns towards the block's width, and so its scale.
+  private static func expandingTabsTrimmingTabbedLines(_ text: String) -> String {
+    guard text.utf8.contains(9) else { return text }
+    return text.split(separator: "\n", omittingEmptySubsequences: false)
+      .map { line in
+        guard line.utf8.contains(9) else { return String(line) }
+        return String(line).expandingTabs().trimmingTrailingWhitespace()
+      }
+      .joined(separator: "\n")
   }
 
   /// 1 when the block already fits, otherwise the factor that makes its widest line

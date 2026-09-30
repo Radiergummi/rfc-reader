@@ -152,8 +152,15 @@
       send(.documentPreviewShown)
     }
 
-    /// Shared by the card and the document preview, so the two popovers are
-    /// anchored and dismissed the same way. False when there is no text view to
+    /// A heading's backlinks (#183), opened by the click on its chip, which has
+    /// already ended whatever was timing or showing.
+    func showBacklinks(_ list: Popover) {
+      guard present(list) else { return }
+      send(.backlinksShown)
+    }
+
+    /// Shared by the card, the document preview and the backlinks, so the popovers
+    /// are anchored and dismissed the same way. False when there is no text view to
     /// anchor to.
     private func present(_ content: Popover) -> Bool {
       guard let textView else { return false }

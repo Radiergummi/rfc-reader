@@ -27,7 +27,8 @@ import RFCKit
 public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
-  public static func plainText(of attributed: NSAttributedString) -> String {
+  public static func plainText(of selection: NSAttributedString) -> String {
+    let attributed = withoutBacklinkChips(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -44,6 +45,24 @@ public enum SelectionText {
     return result
   }
 
+  /// A heading's backlink chip counts what refers to the section (#183): the
+  /// reader's, not the document's words, so a copied heading is the heading alone,
+  /// in the rich flavors as in the plain one.
+  public static func withoutBacklinkChips(of selection: NSAttributedString) -> NSAttributedString {
+    var chips: [NSRange] = []
+    selection.enumerateAttribute(
+      .rfcBacklinks, in: NSRange(location: 0, length: selection.length)
+    ) { value, range, _ in
+      if value != nil { chips.append(range) }
+    }
+    guard !chips.isEmpty else { return selection }
+    let result = NSMutableAttributedString(attributedString: selection)
+    for chip in chips.reversed() {
+      result.deleteCharacters(in: chip)
+    }
+    return result
+  }
+
   /// A label with its typesetting taken back out.
   ///
   /// The non-breaking spaces are there to stop a reference wrapping mid-label in a
@@ -54,3 +73,32 @@ public enum SelectionText {
     reference.label.replacingOccurrences(of: "\u{00A0}", with: " ")
   }
 }
+
+#if !canImport(UIKit) && canImport(AppKit)
+  extension SelectionText {
+    /// The flavors of a copy the reader writes itself rather than leaving to AppKit.
+    public enum Flavor: Sendable, Equatable {
+      case plain
+      case rtf
+      case rtfd
+    }
+
+    /// The flavor a pasteboard type asks for, or nil for one the reader leaves to
+    /// AppKit. `NSTextView` asks `writeSelection(to:type:)` for the legacy names --
+    /// `NSStringPboardType` and the two `NeXT` ones -- which never equal `.string`,
+    /// `.rtf` or `.rtfd`, measured on macOS 27. A pasteboard written under the
+    /// legacy name reads back under the modern one.
+    public static func flavor(of type: NSPasteboard.PasteboardType) -> Flavor? {
+      switch type.rawValue {
+      case NSPasteboard.PasteboardType.string.rawValue, "NSStringPboardType":
+        .plain
+      case NSPasteboard.PasteboardType.rtf.rawValue, "NeXT Rich Text Format v1.0 pasteboard type":
+        .rtf
+      case NSPasteboard.PasteboardType.rtfd.rawValue, "NeXT RTFD pasteboard type":
+        .rtfd
+      default:
+        nil
+      }
+    }
+  }
+#endif

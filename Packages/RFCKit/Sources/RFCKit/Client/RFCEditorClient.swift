@@ -112,13 +112,26 @@ public enum IndexFetch: Sendable, Hashable {
 /// share, and a method that parses is `@concurrent`: a large document is parsed off
 /// the caller's actor, and two fetches parse side by side rather than in turn.
 public struct RFCEditorClient: Sendable {
-  public enum ClientError: Error, Sendable {
+  public enum ClientError: Error, LocalizedError, Sendable {
     case invalidResponse(URL)
     case httpStatus(Int, URL)
     case notFound(DocumentID)
     /// What was being read, and why it could not be: the parser's own error, kept
     /// rather than turned into words.
     case decoding(context: String, underlying: any Error)
+
+    /// What went wrong, in words: the app shows `localizedDescription`, which for an
+    /// error that says nothing is its type's name and a number (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .invalidResponse(let url):
+        "The response from \(url.host() ?? "the server") could not be read."
+      case .httpStatus(let status, let url):
+        "\(url.host() ?? "The server") answered with HTTP \(status)."
+      case .notFound(let id): "\(id.displayName) is not published at the RFC Editor."
+      case .decoding(let context, let underlying): "\(context): \(underlying.localizedDescription)"
+      }
+    }
   }
 
   private let transport: any HTTPTransport
@@ -152,6 +165,18 @@ public struct RFCEditorClient: Sendable {
     public let xmlParseFailure: (any Error)?
   }
 
+  /// Whether the plain text is all there is: formats are given, and XML is not among
+  /// them. With none given, or an empty list, the XML is tried first.
+  ///
+  /// Then Original Text and the document are the same `.txt`, which the app fetches
+  /// once for both (#324).
+  public static func textIsTheDocument(availableFormats: [FileFormat]?) -> Bool {
+    guard let availableFormats, !availableFormats.isEmpty else {
+      return false
+    }
+    return !availableFormats.contains(.xml)
+  }
+
   /// The XML where the index lists it, the plain text otherwise (#125).
   ///
   /// The text is fetched only when there is no XML: a 404 for it. A canceled
@@ -164,7 +189,7 @@ public struct RFCEditorClient: Sendable {
     async throws -> FetchedDocument
   {
     var xmlParseFailure: (any Error)?
-    if availableFormats?.contains(.xml) ?? true {
+    if !Self.textIsTheDocument(availableFormats: availableFormats) {
       do {
         let data = try await fetchDocumentData(id, format: .xml)
         do {
@@ -301,8 +326,15 @@ public struct RecentRFC: Sendable, Hashable, Identifiable {
 }
 
 public enum RecentFeedParser {
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case malformed(XMLSyntaxError)
+
+    /// The syntax error's own words, which the app shows (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .malformed(let error): error.errorDescription
+      }
+    }
   }
 
   private static let titlePattern = Pattern(#/^RFC\s*(?<number>\d+):\s*(?<title>.+)$/#)

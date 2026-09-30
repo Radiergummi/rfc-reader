@@ -107,6 +107,39 @@ struct QuickOpenResultsTests {
     #expect(results.selected?.link.id == .rfc(4))
   }
 
+  /// Only a row the reader moved to is theirs to keep. A selection nobody moved is
+  /// the top row, and stays the top row as the hits change: otherwise ↵ opens a row
+  /// further down, which iOS, with no highlight, does not even show.
+  @Test func `a selection nobody moved follows the top row as the hits change`() {
+    var results = QuickOpenResults()
+    results.show(query: "a", exact: nil)
+    results.show(hits: [.rfc(1), .rfc(2), .rfc(3)], for: "a")
+    results.show(query: "ab", exact: nil)
+    results.show(hits: [.rfc(4), .rfc(5), .rfc(1)], for: "ab")
+    #expect(results.selected?.link.id == .rfc(4))
+  }
+
+  /// ↑ on the top row goes nowhere, so it chooses nothing either.
+  @Test func `an arrow press that stops at the end moves nothing to keep`() {
+    var results = QuickOpenResults()
+    results.show(query: "a", exact: nil)
+    results.show(hits: [.rfc(1), .rfc(2), .rfc(3)], for: "a")
+    results.moveSelection(by: -1)
+    results.show(query: "ab", exact: nil)
+    results.show(hits: [.rfc(4), .rfc(5), .rfc(1)], for: "ab")
+    #expect(results.selected?.link.id == .rfc(4))
+  }
+
+  @Test func `return during a search nobody moved in opens the top row it finds`() {
+    var results = QuickOpenResults()
+    results.show(query: "a", exact: nil)
+    results.show(hits: [.rfc(1), .rfc(2)], for: "a")
+    results.show(query: "ab", exact: nil)
+    #expect(results.activate(.here) == nil)
+    let opening = results.show(hits: [.rfc(4), .rfc(1)], for: "ab")
+    #expect(opening?.link.id == .rfc(4))
+  }
+
   /// A new exact resolution is what the reader just typed, so it takes the
   /// selection even from a row they had moved to.
   @Test func `a new exact resolution takes the selection`() {
@@ -203,11 +236,34 @@ struct QuickOpenResultsTests {
     #expect(results.rows.map(\.link.id) == [.rfc(2119), .rfc(8174), .rfc(7322)])
   }
 
+  /// A fragment that names no section is the place each member row opens at, as a
+  /// section is (#276).
+  @Test func `a member row keeps the links anchor`() {
+    var results = QuickOpenResults()
+    results.show(
+      query: "rfc://bcp14#sample", exact: RFCLink(id: Self.bcp14, anchor: "sample"),
+      members: [.rfc(2119)])
+    #expect(results.rows.map(\.link) == [RFCLink(id: .rfc(2119), anchor: "sample")])
+  }
+
   /// Before the index has loaded there are no members to list.
   @Test func `a series with no known members is listed as itself`() {
     var results = QuickOpenResults()
     results.show(query: "BCP 14", exact: RFCLink(id: Self.bcp14), members: [])
     #expect(results.rows.map(\.link) == [RFCLink(id: Self.bcp14)])
+  }
+
+  // MARK: - A row's title
+
+  /// `9110` typed before the index has loaded resolves exactly, but nothing knows
+  /// its title yet; saying it is not in the index would be wrong for a moment.
+  @Test func `a row with no title says the index is still loading until it has`() {
+    #expect(QuickOpenResults.title(nil, isIndexLoaded: false) == "The index is still loading")
+    #expect(QuickOpenResults.title(nil, isIndexLoaded: true) == "Not in the index")
+  }
+
+  @Test func `a row with a title shows it`() {
+    #expect(QuickOpenResults.title("HTTP Semantics", isIndexLoaded: true) == "HTTP Semantics")
   }
 
   // MARK: - Return

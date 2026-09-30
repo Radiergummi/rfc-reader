@@ -68,6 +68,8 @@ public enum SearchQuery {
     let name: String
     let longSpellings: [String]
     let statuses: Set<PublicationStatus>
+    /// What its term is labeled.
+    let label: String
 
     /// Every spelling it is read by: its name, then its long spellings.
     var spellings: [String] { [name] + longSpellings }
@@ -78,18 +80,26 @@ public enum SearchQuery {
     static let all: [StatusValue] = [
       StatusValue(
         name: "std", longSpellings: ["standard", "standards"],
-        statuses: [.internetStandard, .draftStandard, .proposedStandard]),
-      StatusValue(name: "bcp", longSpellings: [], statuses: [.bestCurrentPractice]),
-      StatusValue(name: "info", longSpellings: ["informational"], statuses: [.informational]),
-      StatusValue(name: "exp", longSpellings: ["experimental"], statuses: [.experimental]),
-      StatusValue(name: "historic", longSpellings: [], statuses: [.historic]),
-      StatusValue(name: "current", longSpellings: [], statuses: []),
+        statuses: [.internetStandard, .draftStandard, .proposedStandard],
+        label: "Standards Track"),
+      StatusValue(name: "bcp", longSpellings: [], status: .bestCurrentPractice),
+      StatusValue(name: "info", longSpellings: ["informational"], status: .informational),
+      StatusValue(name: "exp", longSpellings: ["experimental"], status: .experimental),
+      StatusValue(name: "historic", longSpellings: [], status: .historic),
+      StatusValue(name: "current", longSpellings: [], statuses: [], label: "Not Obsoleted"),
     ]
 
-    init(name: String, longSpellings: [String], statuses: Set<PublicationStatus>) {
+    /// A value standing for one status, labeled with that status's name.
+    init(name: String, longSpellings: [String], status: PublicationStatus) {
+      self.init(
+        name: name, longSpellings: longSpellings, statuses: [status], label: status.displayName)
+    }
+
+    init(name: String, longSpellings: [String], statuses: Set<PublicationStatus>, label: String) {
       self.name = name
       self.longSpellings = longSpellings
       self.statuses = statuses
+      self.label = label
     }
 
     init?(spelling: some StringProtocol) {
@@ -138,36 +148,143 @@ public enum SearchQuery {
   /// in a fixed order, then the free text. `parseQuery` reads it back to the same
   /// filters and text.
   public static func format(text: String, filters: SearchFilters) -> String {
-    func word(_ qualifier: Qualifier, _ value: String) -> String { "\(qualifier.name):\(value)" }
-    var words: [String] = []
-    if let group = filters.workingGroup { words.append(word(.workingGroup, written(group))) }
-    words += statusWords(filters.statuses).map { word(.status, $0) }
-    if filters.excludeObsolete, let current = StatusValue.all.first(where: \.excludesObsolete) {
-      words.append(word(.status, current.name))
-    }
-    if let author = filters.author { words.append(word(.author, written(author))) }
-    words += PublicationStream.allCases.filter(filters.streams.contains).map {
-      word(.stream, spelling(of: $0))
-    }
-    if let years = filters.yearRange {
-      words.append(
-        word(
-          .year,
-          years.lowerBound == years.upperBound
-            ? "\(years.lowerBound)" : "\(years.lowerBound)-\(years.upperBound)"))
-    }
-    if filters.requiresXML { words.append(word(.has, xmlValue)) }
+    var words = terms(of: filters).map(\.word)
     let text = text.trimmingCharacters(in: .whitespaces)
     if !text.isEmpty { words.append(text) }
     return words.joined(separator: " ")
   }
 
-  /// The `status:` values, in `StatusValue.all` order, whose statuses together make
-  /// up `statuses`. `parseQuery` only ever produces unions of these groups.
-  private static func statusWords(_ statuses: Set<PublicationStatus>) -> [String] {
-    StatusValue.all.compactMap { value in
-      value.excludesObsolete || !value.statuses.isSubset(of: statuses) ? nil : value.name
+  // MARK: - Terms
+
+  /// One active filter: a chip under the Mac's search field, a token in the iOS one.
+  public struct Term: Sendable, Hashable, Identifiable {
+    /// The filter as a word of the query, in the canonical form.
+    public var word: String
+    /// The filter named for a reader rather than in the query's syntax.
+    public var label: String
+
+    public var id: String { word }
+  }
+
+  /// The terms of `filters`: one per word of the canonical form, in its order.
+  public static func terms(of filters: SearchFilters) -> [Term] {
+    func term(_ qualifier: Qualifier, _ value: String, label: String) -> Term {
+      Term(word: "\(qualifier.name):\(value)", label: label)
     }
+    var terms: [Term] = []
+    if let group = filters.workingGroup {
+      terms.append(term(.workingGroup, written(group), label: "WG: \(group)"))
+    }
+    // The `status:` values whose statuses together make up the filter's, in
+    // `StatusValue.all` order: `parseQuery` only ever produces unions of them.
+    terms += StatusValue.all.filter { value in
+      !value.excludesObsolete && value.statuses.isSubset(of: filters.statuses)
+    }
+    .map { term(.status, $0.name, label: $0.label) }
+    if filters.excludeObsolete, let current = StatusValue.all.first(where: \.excludesObsolete) {
+      terms.append(term(.status, current.name, label: current.label))
+    }
+    if let author = filters.author {
+      terms.append(term(.author, written(author), label: "Author: \(author)"))
+    }
+    terms += PublicationStream.allCases.filter(filters.streams.contains).map {
+      term(.stream, spelling(of: $0), label: "Stream: \($0.displayName)")
+    }
+    if let years = filters.yearRange {
+      terms.append(
+        years.lowerBound == years.upperBound
+          ? term(.year, "\(years.lowerBound)", label: "Year: \(years.lowerBound)")
+          : term(
+            .year, "\(years.lowerBound)-\(years.upperBound)",
+            label: "Year: \(years.lowerBound)–\(years.upperBound)"))
+    }
+    if filters.requiresXML { terms.append(term(.has, xmlValue, label: "Has XML")) }
+    return terms
+  }
+
+  /// `query` without `term`: a chip removed. The words that set its filter are taken
+  /// out, and every other word is left as the reader typed it, a word `parseQuery`
+  /// ignores included.
+  ///
+  /// A working group, an author, a year and `has:` hold one value, the last word's,
+  /// so every word naming one goes, or an earlier one would take over. A status or a
+  /// stream is a union, so only the words naming this one go.
+  public static func removing(_ term: Term, from query: String) -> String {
+    let removed = qualifier(in: term.word).flatMap { Qualifier(spelling: $0.key) }
+    let kept = words(in: query).filter { word in
+      let parsed = IndexSearch.parseQuery(word)
+      guard parsed.text.isEmpty, !parsed.filters.isEmpty,
+        let key = qualifier(in: word)?.key, Qualifier(spelling: key) == removed
+      else { return true }
+      let isUnion = removed == .status || removed == .stream
+      return isUnion && !terms(of: parsed.filters).contains(term)
+    }
+    // The space the reader typed last stays, so the next keystroke begins a word.
+    let trailingSpace = wordBeingTyped(in: query) == nil && !kept.isEmpty ? " " : ""
+    return kept.joined(separator: " ") + trailingSpace
+  }
+
+  // MARK: - Tokens
+
+  /// A query as the iOS search field shows it: its finished filters as tokens, and
+  /// the rest as the text being edited.
+  public struct Tokenized: Sendable, Hashable {
+    public var terms: [Term]
+    public var text: String
+  }
+
+  /// `query` split into tokens and text.
+  ///
+  /// A filter becomes a token once the reader has finished typing it, so `wg:t` is
+  /// not a token before `wg:tls` can be typed. The word at the end is still being
+  /// typed until a space follows it; a word typed in front of the text is finished
+  /// only by what it says, so a working group becomes a token only once it is one of
+  /// `workingGroups`, as a status does only once it is a status. A word that filters
+  /// nothing stays text, as `parseQuery` searches it as text. The space the reader
+  /// has just typed stays in the text, or the field would take it back.
+  ///
+  /// - Parameter workingGroups: The working groups a token may name, lowercased, as
+  ///   `knownWorkingGroups(in:)` gives them.
+  public static func tokenized(_ query: String, workingGroups: Set<String>) -> Tokenized {
+    let words = words(in: query)
+    let typing = wordBeingTyped(in: query) != nil
+    var filtering: [String] = []
+    var text: [String] = []
+    for (offset, word) in words.enumerated() {
+      let parsed = IndexSearch.parseQuery(word)
+      let isTyped = typing && offset == words.count - 1
+      let namesKnownGroup = parsed.filters.workingGroup.map(workingGroups.contains) ?? true
+      if !isTyped, parsed.text.isEmpty, !parsed.filters.isEmpty, namesKnownGroup {
+        filtering.append(word)
+      } else {
+        text.append(word)
+      }
+    }
+    let filters = IndexSearch.parseQuery(filtering.joined(separator: " ")).filters
+    let trailingSpace = !typing && !text.isEmpty ? " " : ""
+    return Tokenized(
+      terms: terms(of: filters), text: text.joined(separator: " ") + trailingSpace)
+  }
+
+  /// `query` with the text the iOS field shows replaced by `text`, as typed, and its
+  /// tokens kept.
+  public static func replacingText(
+    in query: String, with text: String, workingGroups: Set<String>
+  ) -> String {
+    joined(terms: tokenized(query, workingGroups: workingGroups).terms, text: text)
+  }
+
+  /// `query` with its tokens replaced by `terms`, a token removed, and its text kept.
+  public static func replacingTerms(
+    in query: String, with terms: [Term], workingGroups: Set<String>
+  ) -> String {
+    joined(terms: terms, text: tokenized(query, workingGroups: workingGroups).text)
+  }
+
+  /// Tokens and text put back together into the one search text: each token's word
+  /// with a space after it, so it reads back as finished, then the text as typed.
+  static func joined(terms: [Term], text: String) -> String {
+    terms.map { "\($0.word) " }.joined() + text
   }
 
   // MARK: - Words
@@ -204,6 +321,14 @@ public enum SearchQuery {
     }
     if !word.isEmpty { words.append(word) }
     return words
+  }
+
+  /// The last word of `query` while the reader is still typing it, or nil once a
+  /// space outside quotes follows it and a new word begins. It is the last word
+  /// `words(in:)` finds, so an open quote keeps its spaces: in `by:"Roy s` it is the
+  /// whole value, not `s`.
+  static func wordBeingTyped(in query: String) -> String? {
+    words(in: query).last.flatMap { query.hasSuffix($0) ? $0 : nil }
   }
 
   /// Whether a quote typed after `word`, the part of a word before it, opens a quoted
@@ -249,6 +374,16 @@ public enum SearchQuery {
     public var completion: String
     /// A qualifier `parseQuery` does not know: the word is searched for as text.
     public var isUnknown: Bool
+
+    /// The word completed: what the suggestion list shows.
+    public var word: String { SearchQuery.words(in: completion).last ?? "" }
+
+    /// The field's text once the suggestion is taken. A completed filter ends with a
+    /// space, so the next word begins, and on iOS the filter becomes a token; a
+    /// qualifier waits for its value.
+    public var accepted: String {
+      isUnknown || word.hasSuffix(":") ? completion : completion + " "
+    }
   }
 
   /// Completions for the last word of `query`, the one being typed.
@@ -258,11 +393,7 @@ public enum SearchQuery {
   /// `index`, statuses and streams from their vocabulary, `has:xml`. Authors and
   /// years are free-form, and get nothing.
   public static func suggestions(for query: String, in index: RFCIndex) -> [Suggestion] {
-    // The word being typed is the last one `words(in:)` finds, so an open quote
-    // keeps its spaces: in `by:"Roy s` it is the whole value, not `s`. A query that
-    // does not end with it ends with a space outside quotes, and a new word begins.
-    let last = words(in: query).last ?? ""
-    let word = query.hasSuffix(last) ? last : ""
+    let word = wordBeingTyped(in: query) ?? ""
     let head = String(query.dropLast(word.count))
     func offer(_ words: [String]) -> [Suggestion] {
       words.map { Suggestion(completion: head + $0, isUnknown: false) }
@@ -295,6 +426,15 @@ public enum SearchQuery {
     return offer(matching.map { "\(qualifier.name):\(written($0))" })
   }
 
+  /// The completions a search field shows as the reader types: `suggestions(for:in:)`,
+  /// only once a word has been begun. A list over the results at every space, after
+  /// every filter taken as a token, or on clearing the field would hide them while
+  /// the reader types.
+  public static func suggestionsWhileTyping(for query: String, in index: RFCIndex) -> [Suggestion] {
+    guard wordBeingTyped(in: query) != nil else { return [] }
+    return suggestions(for: query, in: index)
+  }
+
   /// Every working group the index names, lowercased as `parseQuery` matches them,
   /// most documents first. One with a space in its name is offered in quotes, as
   /// `written` writes it.
@@ -311,6 +451,12 @@ public enum SearchQuery {
       .map(\.key)
     return groups.filter { $0 != individualSubmissions }
       + groups.filter { $0 == individualSubmissions }
+  }
+
+  /// Every working group the index names, lowercased as `parseQuery` matches them:
+  /// the ones a `wg:` token may name in `tokenized(_:workingGroups:)`.
+  public static func knownWorkingGroups(in index: RFCIndex) -> Set<String> {
+    Set(index.rfcs.compactMap { $0.workingGroup?.lowercased() })
   }
 
   /// The working group the index files individual submissions under.

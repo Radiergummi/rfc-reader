@@ -269,6 +269,48 @@ struct NavigationHistoryTests {
     #expect(!history.canGoBack)
   }
 
+  /// The entry records where the tab was sent, not where the reader has scrolled
+  /// since, so going to it again is a scroll back there, without a second entry
+  /// (#287).
+  @Test func `going to the section already current arrives there again`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-4.2"))
+    #expect(
+      history.go(to: place(9110, "section-4.2"), leaving: "section-9") == place(9110, "section-4.2")
+    )
+    #expect(history.current == place(9110, "section-4.2"))
+    #expect(history.goBack() == place(9110))
+    #expect(!history.canGoBack)
+  }
+
+  /// A row names no section, so it asks for nothing to scroll to in the document
+  /// already open.
+  @Test func `going to the document already open without a section goes nowhere`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    #expect(history.go(to: place(9110)) == nil)
+  }
+
+  /// A link to the hidden place shows it and scrolls to its section; its row, which
+  /// names none, shows it where it was.
+  @Test func `going to the hidden place scrolls only when it names a section`() {
+    var history = NavigationHistory()
+    history.go(to: place(9110))
+    history.go(to: place(9110, "section-15.5"))
+    history.hide()
+    #expect(history.go(to: place(9110, "section-15.5")) == place(9110, "section-15.5"))
+    history.hide()
+    #expect(history.go(to: place(9110)) == nil)
+    #expect(history.shown == place(9110, "section-15.5"))
+  }
+
+  @Test func `going somewhere new arrives there`() {
+    var history = NavigationHistory()
+    #expect(history.go(to: place(9110)) == place(9110))
+    #expect(history.go(to: place(9110, "section-4.2")) == place(9110, "section-4.2"))
+  }
+
   @Test func `the stack survives a long walk`() {
     var history = NavigationHistory()
     for number in 1...10 { history.go(to: place(number)) }
