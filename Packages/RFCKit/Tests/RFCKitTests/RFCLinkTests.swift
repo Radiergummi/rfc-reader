@@ -96,18 +96,53 @@ struct RFCLinkTests {
     #expect(document.anchor(forPlace: "1") == "section-1")
   }
 
-  /// The prefix is the convention, not decoration: an unprefixed fragment is not a
-  /// section, and `#page-12` stays unrecognized rather than becoming one. Both
-  /// schemes are strict about it.
+  /// A fragment that names no section is an anchor, kept as it is: the reader resolves
+  /// one the document defines, such as an author's anchor, and opens at the top for
+  /// one it doesn't, like the RFC Editor's `#page-12`, rather than at the reading
+  /// position (#276).
   @Test(
     arguments: [
-      "rfc://9110#4.2",
-      "rfc://9110#page-12",
-      "https://www.rfc-editor.org/rfc/rfc9110#4.2",
-      "https://www.rfc-editor.org/rfc/rfc9110#page-12",
+      "rfc://9000#sample-varint",
+      "https://www.rfc-editor.org/rfc/rfc9000.html#sample-varint",
+      "https://datatracker.ietf.org/doc/html/rfc9000#sample-varint",
     ])
-  func `an unprefixed or unrelated fragment is not a section`(input: String) throws {
+  func `a fragment that names no section is kept as an anchor`(input: String) throws {
     let url = try #require(URL(string: input))
-    #expect(RFCLink(url: url) == RFCLink(id: .rfc(9110)))
+    #expect(RFCLink(url: url) == RFCLink(id: .rfc(9000), section: "sample-varint"))
+  }
+
+  @Test func `a page fragment is kept, so the document opens at the top`() throws {
+    let link = try #require(RFCLink(url: URL(string: "https://www.rfc-editor.org/rfc/rfc9110#page-12")!))
+    #expect(link.section == "page-12")
+  }
+
+  /// An anchor goes back out as the fragment it came in as, not as a section's.
+  @Test func `an anchor round trips as itself`() throws {
+    let link = RFCLink(id: .rfc(9000), section: "sample-varint")
+    #expect(link.appURL.absoluteString == "rfc://9000#sample-varint")
+    #expect(link.webURL.absoluteString == "https://www.rfc-editor.org/rfc/rfc9000#sample-varint")
+    #expect(RFCLink(url: link.appURL) == link)
+  }
+
+  /// The prepped XML's `pn` attributes spell an appendix `section-a.1`; it is the
+  /// same appendix as `appendix-A.1`.
+  @Test(
+    arguments: [
+      ("rfc://9000#section-a.1", "A.1"),
+      ("rfc://9000#appendix-a.1", "A.1"),
+      ("rfc://9000#appendix-b", "B"),
+      ("https://www.rfc-editor.org/rfc/rfc9000#section-a", "A"),
+    ])
+  func `a lower-case appendix letter names the appendix`(input: String, section: String) throws {
+    let url = try #require(URL(string: input))
+    #expect(RFCLink(url: url)?.section == section)
+  }
+
+  /// Only a single letter is an appendix's: past the prefix, `foo` is no number, and
+  /// the whole fragment is the anchor, not `FOO` or `foo`.
+  @Test func `a prefixed fragment that is no number stays whole`() throws {
+    let link = try #require(RFCLink(url: URL(string: "rfc://9000#section-foo")!))
+    #expect(link.section == "section-foo")
+    #expect(link.appURL.absoluteString == "rfc://9000#section-foo")
   }
 }
