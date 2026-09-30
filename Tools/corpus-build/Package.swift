@@ -45,7 +45,15 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "Logging", package: "swift-log"),
       ],
-      swiftSettings: swiftSettings
+      // Unoptimized in a macOS release build: Swift 6.4's crashes in LLVM splitting
+      // the commands' async `run`s into their coroutine parts, and `@_optimize(none)`
+      // on them compiles but gives every document of a fetch the ID 0 (#371). The
+      // command line only orchestrates; the work is RFCKit's and RFCCorpusKit's,
+      // which stay optimized. CI's Linux toolchain is not affected. Drop this once a
+      // toolchain fixes it.
+      swiftSettings: swiftSettings + [
+        .unsafeFlags(["-Onone"], .when(platforms: [.macOS], configuration: .release))
+      ]
     ),
     .testTarget(
       name: "RFCCorpusKitTests",
