@@ -24,6 +24,9 @@ import os
 /// reads this instead: it is written the moment the anchor is computed.
 final class VisibleAnchorBox {
   var anchor: String?
+  /// The reader's line, as a place that survives a rebuild: what the reading
+  /// position saves (#322). Nil at the top of the document, and on the old path.
+  var place: ReadingPlace?
 }
 
 /// Where the header's heading ends, in the hosted header's own coordinates, as
@@ -504,17 +507,22 @@ final class RFCTextViewCoordinator: NSObject {
   /// fragment that has not been laid out has no frame to scroll to. So the jump
   /// pays for its own target: everything above it is laid out first, which is what
   /// makes its y the real one.
-  func scroll(to anchor: String, animated: Bool) {
+  /// `extra` characters past the anchor, as a saved reading position has it; a
+  /// stale one stays inside the anchor's block (`ReadingPlace.documentOffset`).
+  func scroll(to anchor: String, offset extra: Int = 0, animated: Bool) {
     // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
     defer { Task { self.onScrollHandled() } }
-    guard let offset = built?.anchors.offset(of: anchor) else { return }
+    guard let built,
+      let offset = ReadingPlace(anchor: anchor, offset: extra).documentOffset(
+        in: built.anchors, length: built.text.length)
+    else { return }
     #if canImport(UIKit)
       chrome.jumped()
       reportChrome()
     #endif
     // Set here as well as by tracking, which does not run while a resize waits
     // for its rebuild: a jump in that window is where the rebuild must land.
-    tracker.jumped(to: ReadingPlace(anchor: anchor, offset: 0))
+    tracker.jumped(to: ReadingPlace(anchor: anchor, offset: extra))
     scroll(toOffset: offset, animated: animated)
   }
 
@@ -564,6 +572,7 @@ final class RFCTextViewCoordinator: NSObject {
     let offset: Int
     if ReaderLayoutEngine.isEnabled {
       offset = engine.userScrolled() ?? 0
+      lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
     } else {
       let top = max(0, textView.viewportTop)
       guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }

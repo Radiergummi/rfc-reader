@@ -345,8 +345,12 @@ struct DocumentView: View {
           follow(request.section)
         } else if let request = navigation.scrollRequest {
           jump(toSection: request.section, animated: false)
-        } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
-          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
+        } else if let saved = storedPosition()?.place, let anchor = saved.anchor,
+          built.anchors.offset(of: anchor) != nil
+        {
+          // Any anchor, not only a section's: a place is saved at the nearest
+          // anchor of any kind (`ReadingPlace`), a paragraph's as often as not.
+          scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false, offset: saved.offset)
         }
       }
     } else if let failure = session.state.failure {
@@ -638,11 +642,10 @@ struct DocumentView: View {
     // to load, or was left before it did — and saving no place would erase the one
     // stored, and list a document that never opened as read.
     guard let anchor = lastVisibleAnchor.anchor else { return }
-    // The anchor alone for now: the reader reports the section on screen, not the
-    // offset within it, so a place is saved at the anchor itself (#152).
     do {
       try ReadingPositionStore.save(
-        ReadingPlace(anchor: anchor, offset: 0), for: id, in: modelContext)
+        lastVisibleAnchor.place ?? ReadingPlace(anchor: anchor, offset: 0), for: id,
+        in: modelContext)
     } catch {
       readerLog.error(
         "saving the position failed: \(String(describing: error), privacy: .public)")
