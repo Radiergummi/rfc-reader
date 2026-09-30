@@ -61,26 +61,27 @@ extension DocumentTextBuilder {
     if isPlainText {
       return lineWidth(NSAttributedString(string: cell.plainText, attributes: base))
     }
-    let runs = inlineRuns(cell, base: base)
-    return lineWidth(runs) + chipAllowance(in: runs)
+    // Kerned as `build` kerns the whole text, so the cell is measured with its
+    // chips' padding. A cell's own runs are the context that needs: the character
+    // before a chip that opens a cell is the row's newline, which the pass skips,
+    // or its tab, whose kern the layout ignores.
+    let runs = NSMutableAttributedString(attributedString: inlineRuns(cell, base: base))
+    Self.reserveChipPadding(in: runs)
+    return lineWidth(runs) + chipSymbolWidth(in: runs)
   }
 
-  /// What `lineWidth(_:)` leaves out of a chip, which is drawn wider than CoreText
-  /// measures it (#488): its symbol, an attachment that measures nothing, as wide
-  /// as the bounds `chipSymbolRun` gives it; and the padding kern on either side of
-  /// it, which `reserveChipPadding` adds only once the build is done.
-  private func chipAllowance(in runs: NSAttributedString) -> CGFloat {
-    let whole = NSRange(location: 0, length: runs.length)
-    var allowance: CGFloat = 0
-    runs.enumerateAttribute(.attachment, in: whole) { value, _, _ in
-      if let attachment = value as? NSTextAttachment { allowance += attachment.bounds.width }
+  /// The width of the chips' symbols in `runs`: an attachment, which `lineWidth(_:)`
+  /// measures as nothing, drawn as wide as the bounds `chipSymbolRun` gives it.
+  private func chipSymbolWidth(in runs: NSAttributedString) -> CGFloat {
+    var width: CGFloat = 0
+    runs.enumerateAttribute(.attachment, in: NSRange(location: 0, length: runs.length)) {
+      value, range, _ in
+      guard let attachment = value as? NSTextAttachment,
+        runs.attribute(.rfcChip, at: range.location, effectiveRange: nil) != nil
+      else { return }
+      width += attachment.bounds.width
     }
-    // The default options give the longest effective range, which is the whole
-    // chip, as in `reserveChipPadding`.
-    runs.enumerateAttribute(.rfcChip, in: whole) { value, _, _ in
-      if value != nil { allowance += 2 * FragmentGeometry.chipPadding }
-    }
-    return allowance
+    return width
   }
 
   /// A grid's header row and data row attributes in `paragraphStyle`: only the font
