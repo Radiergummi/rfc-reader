@@ -10,12 +10,18 @@ import Testing
 struct LoadFailureTests {
   private let url = URL(string: "https://www.rfc-editor.org/rfc/rfc9110.xml")!
 
+  /// Only the device's own connection: a host that does not answer is the server's.
   @Test(arguments: [
-    URLError.Code.notConnectedToInternet, .networkConnectionLost, .timedOut,
-    .cannotFindHost, .cannotConnectToHost, .dataNotAllowed,
+    URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+    .internationalRoamingOff,
   ])
   func `a lost connection is offline`(code: URLError.Code) {
     #expect(LoadFailure(error: URLError(code)).kind == .offline)
+  }
+
+  @Test(arguments: [URLError.Code.timedOut, .cannotFindHost, .cannotConnectToHost])
+  func `a host that does not answer is the server's`(code: URLError.Code) {
+    #expect(LoadFailure(error: URLError(code)).kind == .server)
   }
 
   @Test func `a document the RFC Editor does not have is not found`() {
@@ -23,7 +29,7 @@ struct LoadFailureTests {
     #expect(LoadFailure(error: error).kind == .notFound)
   }
 
-  @Test(arguments: [500, 502, 503, 504])
+  @Test(arguments: [429, 500, 502, 503, 504])
   func `a server error is the server's`(status: Int) {
     let error = RFCEditorClient.ClientError.httpStatus(status, url)
     #expect(LoadFailure(error: error).kind == .server)
@@ -39,9 +45,16 @@ struct LoadFailureTests {
     let syntax = XMLSyntaxError(line: 1, column: 2, message: "unexpected end")
     #expect(LoadFailure(error: RFCXMLParser.ParseError.malformed(syntax)).kind == .unreadable)
     #expect(
-      LoadFailure(error: RFCXMLParser.ParseError.notAnRFC(rootElement: "html")).kind == .unreadable)
+      LoadFailure(error: RFCXMLParser.ParseError.notAnRFC(rootElement: "reference")).kind
+        == .unreadable)
     let decoding = RFCEditorClient.ClientError.decoding(context: "rfc9110.xml", underlying: syntax)
     #expect(LoadFailure(error: decoding).kind == .unreadable)
+  }
+
+  /// An HTML page where the XML should be is an error page, or a captive portal's.
+  @Test func `a web page instead of the document is the server's`() {
+    let error = RFCXMLParser.ParseError.notAnRFC(rootElement: "html")
+    #expect(LoadFailure(error: error).kind == .server)
   }
 
   @Test func `anything else is a failure of its own`() {
@@ -58,6 +71,16 @@ struct LoadFailureTests {
     #expect(Set(kinds.map(\.symbol)).count == kinds.count)
     #expect(kinds.filter { $0.symbol.hasPrefix("wifi") } == [.offline])
     #expect(kinds.allSatisfy { PlatformImage(systemName: $0.symbol) != nil })
-    #expect(kinds.allSatisfy { !$0.recoverySuggestion.isEmpty })
+    #expect(kinds.allSatisfy { !$0.recoverySuggestion(for: .document).isEmpty })
+  }
+
+  /// The original text is missing when the RFC has no plain-text version, which is
+  /// not the RFC Editor lacking the document; any other failure reads the same.
+  @Test func `the original text has its own not found`() {
+    for kind in LoadFailure.Kind.allCases {
+      let document = kind.recoverySuggestion(for: .document)
+      let originalText = kind.recoverySuggestion(for: .originalText)
+      #expect((document == originalText) == (kind != .notFound))
+    }
   }
 }

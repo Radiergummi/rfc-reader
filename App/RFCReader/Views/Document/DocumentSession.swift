@@ -55,7 +55,7 @@ final class DocumentSession {
   /// The original text (`reader.showOriginal`), fetched the first time it is shown,
   /// and why it could not be.
   private(set) var originalText: String?
-  private(set) var originalTextError: String?
+  private(set) var originalTextFailure: LoadFailure?
 
   @ObservationIgnored private var load: Task<Void, Never>?
   /// The original text's fetch, held for the reason `load` is: a `.task` on the
@@ -87,7 +87,7 @@ final class DocumentSession {
   /// gives.
   func startOriginalTextLoad(from library: LibraryModel) {
     originalTextLoad?.cancel()
-    originalTextError = nil
+    originalTextFailure = nil
     originalTextLoad = Task(name: "Load original text") { [weak self, id] in
       do {
         let text = try await library.originalText(for: id)
@@ -98,7 +98,7 @@ final class DocumentSession {
         // fetch, and neither wants an error on screen.
         guard let self, !Task.isCancelled else { return }
         trace("original text failed: \(error)")
-        originalTextError = error.localizedDescription
+        originalTextFailure = LoadFailure(error: error)
       }
     }
   }
