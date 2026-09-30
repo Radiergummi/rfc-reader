@@ -248,6 +248,83 @@ struct RFCXMLSerializerTests {
     #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
   }
 
+  /// A citation is written against the entry it resolved to, not the first entry that
+  /// names the same document: an erratum listed ahead of the RFC it corrects took
+  /// that RFC's citations, 887 of them in 569 converted documents (#424).
+  @Test func `a citation is written against the entry it resolved to`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(99999), title: "Test"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Intro",
+          blocks: [
+            .paragraph(
+              Paragraph([
+                .text("See "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "Err1"), text: "[Err1]")),
+                .text(", "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]"
+                  )),
+                .text(" and "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: nil), text: "RFC 7159")),
+                .text("."),
+              ]))
+          ]),
+        Section(
+          anchor: "section-2", number: "2", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References",
+                entries: [
+                  Reference(
+                    anchor: "Err1", title: "Erratum",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                  Reference(
+                    anchor: "RFC7159", title: "The Format",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                ]))
+          ]),
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("<xref target=\"Err1\">[Err1]</xref>"), "\(xml)")
+    #expect(xml.contains("<xref target=\"RFC7159\">[RFC7159]</xref>"), "\(xml)")
+    // A bare mention records no entry, and goes to the one anchored under its document.
+    #expect(xml.contains("<xref target=\"RFC7159\">RFC 7159</xref>"), "\(xml)")
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(
+      reparsed.everyCrossReference.map(\.target) == [
+        .document(.rfc(7159), section: nil, entry: "Err1"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
+      ])
+  }
+
+  /// A citation of a `<referencegroup>`'s member records the group as its entry, and
+  /// the group names another document (BCP 14, not RFC 8174): written against the
+  /// group, it read back as the group's document, or as no document at all.
+  @Test func `a group member's citation keeps its document through a round trip`() throws {
+    for name in ["rfc9290.xml", "rfc9682.xml", "rfc9783.xml"] {
+      let original = try RFCXMLParser.parse(try Fixtures.data(name))
+      let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+      func documents(_ document: RFCDocument) -> [DocumentID] {
+        document.everyCrossReference.compactMap {
+          guard case .document(let id, _, _) = $0.target else { return nil }
+          return id
+        }
+      }
+      #expect(documents(reparsed) == documents(original), "\(name)")
+    }
+  }
+
   @Test func `artwork is preserved byte for byte`() throws {
     let art = "  +---+\n  | a |  <-- & <\n  +---+"
     let document = RFCDocument(
