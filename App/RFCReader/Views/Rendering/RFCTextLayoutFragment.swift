@@ -54,6 +54,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
+    // A point of slack all round: a stroke is a line a point wide, centered on its
+    // path, and antialiasing puts ink just outside it.
+    if let strokes = StrokeGeometry.bounds(of: strokeSegments) {
+      bounds = bounds.union(strokes.insetBy(dx: -1, dy: -1))
+    }
     return bounds
   }
 
@@ -79,7 +84,25 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   override func invalidateLayout() {
     cachedDecorationSpan = nil
     cachedChipRects = nil
+    cachedStrokeSegments = nil
     super.invalidateLayout()
+  }
+
+  /// The segments of its block's strokes this fragment draws, cached for the reason
+  /// the decoration span is, at the origin.
+  private var cachedStrokeSegments: [StrokeGeometry.Segment]?
+
+  private var strokeSegments: [StrokeGeometry.Segment] {
+    if let cachedStrokeSegments { return cachedStrokeSegments }
+    guard let text = textLayoutManager?.attributedText, let range = documentRange,
+      let (strokes, line) = StrokeGeometry.line(of: range, in: text),
+      let lineFragment = textLineFragments.first,
+      let font = text.attribute(.font, at: range.location, effectiveRange: nil) as? PlatformFont
+    else { return [] }
+    let segments = StrokeGeometry.segments(
+      strokes, line: line, in: lineFragment, font: font, origin: .zero)
+    cachedStrokeSegments = segments
+    return segments
   }
 
   private var decorationSpan: FragmentGeometry.DecorationSpan? {
@@ -129,7 +152,42 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
       context.restoreGState()
     }
     drawChips(at: point, in: context)
+    drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
+  }
+
+  /// Opaque lines rather than translucent fills, so where two fragments' pieces of
+  /// one stroke meet at a shared edge they compose, and #31's seams cannot recur.
+  private func drawStrokes(at point: CGPoint, in context: CGContext) {
+    let segments = strokeSegments
+    guard !segments.isEmpty else { return }
+    context.saveGState()
+    // Per draw, so a change of appearance or print's light appearance is picked up.
+    context.setStrokeColor(RFCColors.stroke.cgColor)
+    context.setLineWidth(1)
+    context.setLineCap(.butt)
+    for segment in segments {
+      let start = CGPoint(x: segment.start.x + point.x, y: segment.start.y + point.y)
+      let end = CGPoint(x: segment.end.x + point.x, y: segment.end.y + point.y)
+      switch segment.style {
+      case .solid:
+        context.setLineDash(phase: 0, lengths: [])
+        context.strokeLineSegments(between: [start, end])
+      case .dashed:
+        context.setLineDash(phase: 0, lengths: [3, 2])
+        context.strokeLineSegments(between: [start, end])
+      case .double:
+        context.setLineDash(phase: 0, lengths: [])
+        let across = start.y == end.y ? CGVector(dx: 0, dy: 1) : CGVector(dx: 1, dy: 0)
+        for side in [-1.0, 1.0] {
+          context.strokeLineSegments(between: [
+            CGPoint(x: start.x + across.dx * side, y: start.y + across.dy * side),
+            CGPoint(x: end.x + across.dx * side, y: end.y + across.dy * side),
+          ])
+        }
+      }
+    }
+    context.restoreGState()
   }
 
   private func drawChips(at point: CGPoint, in context: CGContext) {

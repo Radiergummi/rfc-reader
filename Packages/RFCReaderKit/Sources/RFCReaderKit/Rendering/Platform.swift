@@ -96,6 +96,10 @@ public enum RFCColors {
       .separatorColor
     #endif
   }
+
+  /// The lines a decorated block draws over its text: the label color, a step
+  /// back, so a grid reads as structure and its field names as the content.
+  public static var stroke: PlatformColor { secondaryLabel }
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.
