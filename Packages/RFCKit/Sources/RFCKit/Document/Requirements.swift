@@ -54,13 +54,18 @@ public struct Requirement: Sendable, Hashable {
 /// items, definitions, table cells and asides, not artwork, source code,
 /// quotations or the references. The paragraph declaring the key words is not a requirement.
 public enum Requirements {
+  /// BCP 14 and the two documents it consists of.
+  static let bcp14: Set<DocumentID> = [
+    .rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14),
+  ]
+
   public static func extract(from document: RFCDocument) -> [Requirement] {
-    let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
     // A part of BCP 14 need not cite itself, and could not: a document is never among
     // the documents it references.
     let isPartOfBCP14 = document.header.id.map(bcp14.contains) ?? false
-    let citesBCP14 = !Set(document.referencedDocuments).isDisjoint(with: bcp14)
-    guard isPartOfBCP14 || citesBCP14 else { return [] }
+    guard isPartOfBCP14 || !Set(document.referencedDocuments).isDisjoint(with: bcp14) else {
+      return []
+    }
     let isHeuristic = document.source == .text
     var found: [Requirement] = []
     for section in document.allSections {

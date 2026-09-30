@@ -106,8 +106,7 @@ struct RequirementsTests {
   /// it cites no other part of BCP 14 to say so (#279).
   @Test func `a document that is part of BCP 14 has requirements`() throws {
     let document = try Fixtures.document("rfc2119.txt")
-    let bcp14: Set<DocumentID> = [.rfc(2119), .rfc(8174), DocumentID(series: .bcp, number: 14)]
-    #expect(Set(document.referencedDocuments).isDisjoint(with: bcp14))
+    #expect(Set(document.referencedDocuments).isDisjoint(with: Requirements.bcp14))
     #expect(!Requirements.extract(from: document).isEmpty)
   }
 
