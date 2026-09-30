@@ -33,7 +33,7 @@ public enum RFCXMLParser {
     // `<middle>` (RFC 2511's `9. References`, ahead of its appendices), or in a
     // chapter, and a citation into it is as much a link as one into the back.
     let back = root.first("back")
-    let builder = Builder(referenceTargets: Builder.referenceTargets(in: root))
+    let builder = Builder(referencesIn: root)
 
     let header = builder.parseHeader(root)
     var sections: [Section] = []
@@ -87,13 +87,17 @@ public enum RFCXMLParser {
 
   /// The terms primary index entries define; see `Builder.primaryIndexTerms(in:)`.
   static func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
-    Builder(referenceTargets: Builder.referenceTargets(in: root)).primaryIndexTerms(in: root)
+    Builder(referencesIn: root).primaryIndexTerms(in: root)
   }
 
   private struct Builder {
     /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes and the entry
     /// a citation of it resolves to.
     let referenceTargets: [String: CitedEntry]
+
+    /// The anchor of every entry in a references section, in a series or not: a
+    /// citation of any of them is bracketed, "[66]", the way the RFC Editor renders it.
+    let referenceAnchors: Set<String>
 
     /// Authored XML marks most of its citations with `<xref>`, but prose still
     /// says "RFC 3986" in the middle of a sentence, and nothing in the schema
@@ -106,8 +110,10 @@ public enum RFCXMLParser {
     /// inventing links the source declined to make.
     let linker: InlineLinker
 
-    init(referenceTargets: [String: CitedEntry]) {
+    init(referencesIn root: XMLTree.Element) {
+      let (referenceTargets, referenceAnchors) = Self.references(in: root)
       self.referenceTargets = referenceTargets
+      self.referenceAnchors = referenceAnchors
       self.linker = InlineLinker(
         sectionNumbers: [],
         referenceTargets: referenceTargets.mapValues {
@@ -116,21 +122,30 @@ public enum RFCXMLParser {
       )
     }
 
-    /// Every reference anchor below `element`, which has to be read before the
-    /// body so a cross reference in it resolves to a document.
-    static func referenceTargets(in element: XMLTree.Element) -> [String: CitedEntry] {
+    /// Every reference anchor below `element`, and the ones among them that denote a
+    /// document, which have to be read before the body so a cross reference in it
+    /// resolves to a document.
+    static func references(
+      in element: XMLTree.Element
+    ) -> (targets: [String: CitedEntry], anchors: Set<String>) {
       var targets: [String: CitedEntry] = [:]
+      var anchors: Set<String> = []
       func walk(_ element: XMLTree.Element, group: String?) {
         for child in element.elements {
           switch child.name {
           case "reference":
-            if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
+            guard let anchor = child["anchor"] else { break }
+            anchors.insert(anchor)
+            if let id = parseEntryMetadata(child).documentID {
               targets[anchor] = CitedEntry(id: id, entry: group ?? anchor)
             }
           case "referencegroup":
             let anchor = child["anchor"]
-            if let anchor, let id = DocumentID(label: anchor) {
-              targets[anchor] = CitedEntry(id: id, entry: anchor)
+            if let anchor {
+              anchors.insert(anchor)
+              if let id = DocumentID(label: anchor) {
+                targets[anchor] = CitedEntry(id: id, entry: anchor)
+              }
             }
             walk(child, group: anchor)
           case "middle", "back", "section", "references":
@@ -141,7 +156,7 @@ public enum RFCXMLParser {
         }
       }
       walk(element, group: nil)
-      return targets
+      return (targets, anchors)
     }
 
     // MARK: Header
@@ -365,7 +380,7 @@ public enum RFCXMLParser {
     }
 
     /// Everything about an entry that is not prose. Static because
-    /// `referenceTargets(in:)` needs it before there is a builder to link prose
+    /// `references(in:)` needs it before there is a builder to link prose
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
@@ -830,6 +845,13 @@ public enum RFCXMLParser {
         return CrossReference(target: target, sectionFormat: sectionFormat)
       }
 
+      // Only a citation of the whole entry: with a section, `derivedContent` is the
+      // entry's tag standing in for "Section 2.3.3 of [RATS-AR4SI]" (#473).
+      if innerText.isEmpty, format == "default", section == nil,
+        referenceAnchors.contains(targetAnchor)
+      {
+        return CrossReference(target: .anchor(targetAnchor), text: "[\(derived ?? targetAnchor)]")
+      }
       let text = innerText.isEmpty ? derived : innerText
       return CrossReference(target: .anchor(targetAnchor), text: text)
     }
