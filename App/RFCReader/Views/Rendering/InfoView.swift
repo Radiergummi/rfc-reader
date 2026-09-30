@@ -87,7 +87,7 @@ private struct StandingBox: View {
         .foregroundStyle(color)
       Text(summary)
         .font(.infoCaption)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
     }
     .padding(.horizontal, 10)
