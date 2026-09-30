@@ -63,9 +63,12 @@ enum XMLDriver {
   /// (NSXMLParserErrorDomain error 76.)". Darwin keeps libxml2's own words in the
   /// error's `userInfo`, swift-corelibs-foundation keeps none, so the code is what
   /// both have, and it is read the same on both. libxml2's words stand in for a code
-  /// this does not name, and the code itself for one that has neither.
-  static func message(for error: any Error) -> String {
+  /// this does not name, and the code itself for one that has neither. libxml2 says
+  /// 5 for input that ends early whether or not a root has opened, so the caller
+  /// says which.
+  static func message(for error: any Error, rootOpened: Bool) -> String {
     let error = error as NSError
+    if error.code == 5, !rootOpened { return "the document ended before its root element opened" }
     if let text = description(ofLibxml2Error: error.code) { return text }
     if let text = error.userInfo["NSXMLParserErrorMessage"] as? String {
       let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -98,7 +101,6 @@ enum XMLDriver {
     case 76: "an end tag that does not match the element it closes"
     case 77: "a tag that is not finished"
     case 85: "elements that are not properly nested"
-    case 86: "content after the root element"
     default: nil
     }
   }
@@ -126,7 +128,8 @@ enum XMLDriver {
         line: parser.lineNumber, column: parser.columnNumber,
         message: "the root element is <\(root.name)>, not <\(name)>")
     }
-    if let failure = delegate.failure { throw failure }
+    // As in `run`: an empty document is said as one on both platforms.
+    if let failure = delegate.failure, !data.isEmpty { throw failure }
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber, message: "empty document")
   }
@@ -150,7 +153,7 @@ enum XMLDriver {
       guard root == nil, failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
-        message: XMLDriver.message(for: parseError))
+        message: XMLDriver.message(for: parseError, rootOpened: false))
     }
   }
 
@@ -194,7 +197,7 @@ enum XMLDriver {
       guard failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
-        message: XMLDriver.message(for: parseError))
+        message: XMLDriver.message(for: parseError, rootOpened: depth > 0 || rootClosed))
     }
   }
 }

@@ -56,15 +56,37 @@ struct XMLDriverTests {
     let error = try #require(throws: XMLSyntaxError.self) {
       _ = try XMLDriver.rootAttributes(of: Data("404 Not Found".utf8), named: "rfc")
     }
-    #expect(error.message != "empty document")
-    #expect(!error.message.contains("ErrorDomain"))
+    #expect(error.message == "no XML element where the document starts")
+  }
+
+  /// The root's reader says an empty document is one, as `run` does, on both
+  /// platforms.
+  @Test func `the root of an empty document says it is empty`() throws {
+    let error = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: Data(), named: "rfc")
+    }
+    #expect(error.message == "empty document")
+  }
+
+  /// libxml2 reports the same code, 5, for a document cut short in its prolog as for
+  /// one cut short inside its root; the message tells them apart.
+  @Test func `a document that ends in its prolog says no root opened`() throws {
+    let prolog = Data("<?xml version=\"1.0\"?>\n<!-- a comment -->".utf8)
+    let tree = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLTree.parse(prolog)
+    }
+    let root = try #require(throws: XMLSyntaxError.self) {
+      _ = try XMLDriver.rootAttributes(of: prolog, named: "rfc")
+    }
+    #expect(tree.message == "the document ended before its root element opened")
+    #expect(root.message == "the document ended before its root element opened")
   }
 
   /// A code the driver does not name keeps its number, which is still something to
   /// go on in a bug report.
   @Test func `an error the driver does not name keeps its code`() {
     let error = NSError(domain: "NSXMLParserErrorDomain", code: 99_999)
-    #expect(XMLDriver.message(for: error) == "malformed XML (error 99999)")
+    #expect(XMLDriver.message(for: error, rootOpened: true) == "malformed XML (error 99999)")
   }
 
   /// Every error that wraps the syntax error says what it says: the app shows
