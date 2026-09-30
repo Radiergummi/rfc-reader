@@ -396,7 +396,7 @@ The header, a hosting controller inside the text view, has no safe area (`safeAr
 
 ## Known gaps and the next technical steps
 
-- Legacy text: definition lists with hanging indents (e.g. the cache directives in RFC 2616 §14.9.1) render as preformatted blocks; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
+- Legacy text: a definition list set as xml2rfc sets one, `Term:  definition` with the rest hung under it, is read as one (#436), but a term on a line of its own with its definition under it (e.g. the cache directives in RFC 2616 §14.9.1) still renders as a preformatted block; nested lists are flattened; multi-author front matter picks up only authors that sit on their own line.
 - Search covers the index's metadata only, in memory: 3.6 ms per query over all 9,842 entries, measured in a release build. Full-text search over document bodies is the decision above, not yet built (#37); metadata search moves into its database when it lands.
 - SVG artwork (`<artwork type="svg">`) is skipped in favor of the ASCII alternative.
 - No Spotlight indexing or iCloud sync yet. Errata and the Datatracker are pages the Info pane links to, not data the app fetches.
