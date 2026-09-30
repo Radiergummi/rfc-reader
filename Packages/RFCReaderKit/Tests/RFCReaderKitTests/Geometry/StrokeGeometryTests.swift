@@ -32,15 +32,28 @@ struct StrokeGeometryTests {
       start: CGPoint(x: start.0, y: start.1), end: CGPoint(x: end.0, y: end.1), style: .solid)
   }
 
-  @Test func `a field line draws only the verticals the whole height of the line`() {
-    #expect(segments(line: 3) == [segment((38, 100), (38, 120)), segment((294, 100), (294, 120))])
+  /// Half a point past the line's box at each edge the stroke runs on across, so
+  /// neighboring lines' pieces overlap rather than each antialiasing half a pixel:
+  /// the stroke color is opaque, so the overlap does not show and no seam can.
+  @Test func `a field line draws only the verticals past both edges of the line`() {
+    #expect(
+      segments(line: 3) == [segment((38, 99.5), (38, 120.5)), segment((294, 99.5), (294, 120.5))])
+  }
+
+  @Test func `a stroke ends exactly where it ends and overlaps only where it runs on`() {
+    // Line 6 is the bottom border: the verticals arrive from above and end at its
+    // middle.
+    #expect(
+      segments(line: 6).filter { $0.start.x == $0.end.x } == [
+        segment((38, 99.5), (38, 110)), segment((294, 99.5), (294, 110)),
+      ])
   }
 
   @Test func `a border line draws its rule through the middle and the verticals below it`() {
     #expect(
       segments(line: 2) == [
-        segment((38, 110), (294, 110)), segment((38, 110), (38, 120)),
-        segment((294, 110), (294, 120)),
+        segment((38, 110), (294, 110)), segment((38, 110), (38, 120.5)),
+        segment((294, 110), (294, 120.5)),
       ])
   }
 

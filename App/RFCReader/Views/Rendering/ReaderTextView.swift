@@ -203,11 +203,27 @@ import RFCReaderKit
     /// rewritten -- that is the one a terminal, a mail body or a code editor reads,
     /// and the one the chip's characters are wrong for. The rich flavors stay
     /// AppKit's, because a rich target receives the attachment as an image, which is
-    /// the chip's symbol and is what it looks like on screen.
+    /// the chip's symbol and is what it looks like on screen -- except across a
+    /// rendered diagram, whose borders are characters in a clear color that the
+    /// strokes stand in for, and the strokes do not travel (`SelectionText.richText`).
     override func writeSelection(
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
     ) -> Bool {
+      if type == .rtf || type == .rtfd {
+        let selection = attributedString().attributedSubstring(from: selectedRange())
+        guard SelectionText.hidesCharacters(selection) else {
+          return super.writeSelection(to: pboard, type: type)
+        }
+        let rich = SelectionText.richText(of: selection)
+        let whole = NSRange(location: 0, length: rich.length)
+        let data =
+          type == .rtf
+          ? rich.rtf(from: whole, documentAttributes: [:])
+          : rich.rtfd(from: whole, documentAttributes: [:])
+        guard let data else { return false }
+        return pboard.setData(data, forType: type)
+      }
       guard type == .string else { return super.writeSelection(to: pboard, type: type) }
       let selection = attributedString().attributedSubstring(from: selectedRange())
       pboard.setString(SelectionText.plainText(of: selection), forType: .string)

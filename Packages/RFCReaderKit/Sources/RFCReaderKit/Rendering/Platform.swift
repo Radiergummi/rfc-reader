@@ -97,9 +97,24 @@ public enum RFCColors {
     #endif
   }
 
-  /// The lines a decorated block draws over its text: the label color, a step
-  /// back, so a grid reads as structure and its field names as the content.
-  public static var stroke: PlatformColor { secondaryLabel }
+  /// The lines a decorated block draws over its text: a step back from the label
+  /// color, so a grid reads as structure and its field names as the content. Opaque,
+  /// where the secondary label color is not: a stroke is drawn in pieces, one per
+  /// line's fragment, and translucent pieces meeting on a fractional pixel draw a
+  /// lighter band at every line, #31's seam again, and a darker patch wherever a
+  /// rule and a delimiter overlap at a corner.
+  public static var stroke: PlatformColor {
+    #if canImport(UIKit)
+      UIColor { traits in
+        UIColor(white: traits.userInterfaceStyle == .dark ? 0.6 : 0.45, alpha: 1)
+      }
+    #else
+      NSColor(name: nil) { appearance in
+        NSColor(
+          white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0.6 : 0.45, alpha: 1)
+      }
+    #endif
+  }
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.

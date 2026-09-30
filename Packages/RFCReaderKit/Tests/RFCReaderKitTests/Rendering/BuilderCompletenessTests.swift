@@ -20,7 +20,9 @@ struct BuilderCompletenessTests {
   /// symbol is the one sanctioned exception, and only inside its own `.rfcChip` run.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml"])
   func `nothing becomes an attachment`(fixture: String) throws {
-    let document = fixture.hasSuffix(".xml") ? try Fixtures.rfc8999() : try Fixtures.rfc2119()
+    let document = try Fixtures.document(named: fixture)
+    let number = try #require(Int(fixture.dropFirst(3).prefix(while: \.isNumber)))
+    #expect(document.header.id == .rfc(number), "the guard reads the fixture it names")
     let built = DocumentTextBuilder.build(document, style: style)
     // Walked as UTF-16, which is what `attribute(at:)` is indexed by; a
     // Character walk agrees only while the text stays in the BMP, and this

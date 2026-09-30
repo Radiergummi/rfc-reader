@@ -65,6 +65,13 @@ public enum StrokeGeometry {
     var advance: CGFloat
   }
 
+  /// How far a vertical stroke reaches past a line's edge into the next line's, in
+  /// points. Where two lines' pieces of one stroke meet on a fractional pixel, each
+  /// would antialias half of it and the two compose lighter than the stroke: #31's
+  /// seam. Overlapping them, in an opaque color, covers that pixel twice instead,
+  /// which does not show.
+  static let overlap: CGFloat = 0.5
+
   /// The pure core, over a line's box.
   static func segments(_ strokes: [Stroke], line: Int, in box: LineBox) -> [Segment] {
     let first = 2 * line
@@ -84,10 +91,14 @@ public enum StrokeGeometry {
         let lower = max(stroke.start.y, first)
         let upper = min(stroke.end.y, last)
         guard lower < upper else { continue }
+        // Past the line's edge where the stroke runs on into the next line.
+        let above = stroke.start.y < first ? overlap : 0
+        let below = stroke.end.y > last ? overlap : 0
         result.append(
           Segment(
-            start: CGPoint(x: xPosition(stroke.start.x), y: yPosition(lower)),
-            end: CGPoint(x: xPosition(stroke.start.x), y: yPosition(upper)), style: stroke.style))
+            start: CGPoint(x: xPosition(stroke.start.x), y: yPosition(lower) - above),
+            end: CGPoint(x: xPosition(stroke.start.x), y: yPosition(upper) + below),
+            style: stroke.style))
       }
     }
     return result

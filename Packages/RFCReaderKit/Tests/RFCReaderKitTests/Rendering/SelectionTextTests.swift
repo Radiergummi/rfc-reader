@@ -4,6 +4,12 @@ import Testing
 
 @testable import RFCReaderKit
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 @Suite("Selection text")
 struct SelectionTextTests {
   private func copied(_ inlines: [Inline]) -> String {
@@ -88,5 +94,23 @@ struct SelectionTextTests {
 
   @Test func `an empty selection copies nothing`() {
     #expect(SelectionText.plainText(of: NSAttributedString(string: "")) == "")
+  }
+
+  /// A rich paste of a rendered diagram would otherwise carry its grid as characters
+  /// in a clear color: the field names pasted, every border invisible.
+  @Test func `a rich copy shows the borders a rendered diagram hides`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: ReadingStyle())
+    let rich = SelectionText.richText(of: built.text)
+    #expect(rich.string == built.text.string)
+    var hidden = 0
+    rich.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: rich.length)) {
+      value, _, _ in
+      if let color = value as? PlatformColor, color == DocumentTextBuilder.hiddenColor {
+        hidden += 1
+      }
+    }
+    #expect(hidden == 0)
   }
 }
