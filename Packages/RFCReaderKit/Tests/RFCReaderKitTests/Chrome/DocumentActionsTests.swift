@@ -93,7 +93,8 @@ struct DocumentActionsTests {
   /// Read inside an appendix numbered like a section, the place being read is the
   /// appendix's, not section 1's: the reader passes the section's `place` (#429).
   @Test func `a numbered appendix is cited and linked as an appendix`() {
-    let appendix = Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
+    let appendix = Section(
+      anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
     let citation = DocumentActions.citation(
       metadata(title: "HTTP Semantics"), section: appendix.place, style: .short)
     #expect(citation == "RFC 9110, Appendix 1")

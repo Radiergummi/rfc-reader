@@ -197,6 +197,15 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   public var id: String { anchor }
 
+  /// What a link or a citation names this section by, as `RFCLink.section` does: its
+  /// number, or for an appendix numbered like a section its anchor, `appendix-1`,
+  /// since the number alone names section 1 (#429). Nil when it has no number.
+  public var place: String? {
+    guard let number else { return nil }
+    return isAppendix && number.first?.isNumber == true
+      ? SectionAnchor.anchor(forAppendixNumber: number) : number
+  }
+
   public init(
     anchor: String,
     number: String? = nil,
@@ -634,7 +643,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
     case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
-      let sectionLabel = Self.nonBreakingLabel("Section \(section)")
+      let sectionLabel = Self.nonBreakingLabel(PlaceName.spelledOut(section))
       switch sectionFormat {
       case .of: return "\(sectionLabel) of [\(name)]"
       case .comma: return "[\(name)], \(sectionLabel)"
@@ -675,7 +684,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
-    let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
+    let composed = section.map { "\(name)\u{00A0}\(PlaceName.abbreviated($0))" } ?? name
     return Display(text: composed, isChip: true)
   }
 

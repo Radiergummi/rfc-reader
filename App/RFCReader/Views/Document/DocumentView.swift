@@ -291,12 +291,12 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
-          // section link need the number, and on macOS the toolbar is in the
+          // section link need the place, and on macOS the toolbar is in the
           // window rather than in this view. Through the map rather than
           // `document.section(anchor:)`, which searches the section tree
           // depth first — 305 sections on RFC 9110 — and this runs on every
           // section crossing while scrolling.
-          reader.currentSection = session.sectionNumbers[$0]
+          reader.currentSection = session.sectionPlaces[$0]
           // Recorded on the history entry when navigating away, so coming
           // back returns here rather than to the top of the document.
           navigation.visiblePosition = $0

@@ -12,14 +12,16 @@ struct PlaceNameTests {
   }
 
   @Test func `a lettered appendix's place is its number`() {
-    let appendix = Section(anchor: "appendix-A.1", number: "A.1", title: "Grammar", isAppendix: true)
+    let appendix = Section(
+      anchor: "appendix-A.1", number: "A.1", title: "Grammar", isAppendix: true)
     #expect(appendix.place == "A.1")
   }
 
   /// The number alone names section 1, so the place is the appendix's anchor, the
   /// way `RFCLink` names it.
   @Test func `an appendix numbered like a section is placed by its anchor`() {
-    let appendix = Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
+    let appendix = Section(
+      anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true)
     #expect(appendix.place == "appendix-1")
   }
 
