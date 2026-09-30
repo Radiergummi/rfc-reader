@@ -239,17 +239,19 @@ struct DocumentCommands: Commands {
       // View > Bigger, Smaller and Actual Size (#153), the reader's own size on top
       // of the system's. A setting of the app's rather than the window's, as the
       // Settings slider it steps is, so it needs no reader to act on.
-      Section {
-        Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
-          .keyboardShortcut("+", modifiers: .command)
-          .disabled(fontSize >= ReaderPreferences.fontSizes.upperBound)
-        Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
-          .keyboardShortcut("-", modifiers: .command)
-          .disabled(fontSize <= ReaderPreferences.fontSizes.lowerBound)
-        Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
-          .keyboardShortcut("0", modifiers: .command)
-          .disabled(fontSize == ReaderPreferences.defaultFontSize)
-      }
+      //
+      // Not in a `Section`: the group draws a separator before itself and a section
+      // one at each end, so a section opening the group drew two lines -- measured,
+      // as in the `.sidebar` group below.
+      Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
+        .keyboardShortcut("+", modifiers: .command)
+        .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
+      Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
+        .keyboardShortcut("-", modifiers: .command)
+        .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
+      Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
+        .keyboardShortcut("0", modifiers: .command)
+        .disabled(fontSize == ReaderPreferences.defaultFontSize)
       #if os(macOS)
         // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
         // list's view options before.

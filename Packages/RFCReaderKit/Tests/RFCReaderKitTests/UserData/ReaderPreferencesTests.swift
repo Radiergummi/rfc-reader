@@ -25,13 +25,18 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.fontSizes.contains(ReaderPreferences.defaultFontSize))
   }
 
-  @Test func `bigger and smaller step by one point`() {
-    #expect(ReaderPreferences.fontSize(steppingUp: 17) == 18)
-    #expect(ReaderPreferences.fontSize(steppingDown: 17) == 16)
+  @Test func `bigger and smaller step by one step`() {
+    let size = ReaderPreferences.defaultFontSize
+    let step = ReaderPreferences.fontSizeStep
+    #expect(ReaderPreferences.fontSize(steppingUp: size) == size + step)
+    #expect(ReaderPreferences.fontSize(steppingDown: size) == size - step)
   }
 
   @Test func `stepping stops at the ends of the range`() {
     let sizes = ReaderPreferences.fontSizes
+    let step = ReaderPreferences.fontSizeStep
+    #expect(ReaderPreferences.fontSize(steppingUp: sizes.upperBound - step) == sizes.upperBound)
+    #expect(ReaderPreferences.fontSize(steppingDown: sizes.lowerBound + step) == sizes.lowerBound)
     #expect(ReaderPreferences.fontSize(steppingUp: sizes.upperBound) == sizes.upperBound)
     #expect(ReaderPreferences.fontSize(steppingDown: sizes.lowerBound) == sizes.lowerBound)
   }

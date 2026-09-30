@@ -191,7 +191,7 @@ import SwiftUI
             Label("Smaller", systemImage: "textformat.size.smaller")
               .frame(maxWidth: .infinity)
           }
-          .disabled(fontSize <= ReaderPreferences.fontSizes.lowerBound)
+          .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
 
           Button {
             fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
@@ -199,9 +199,16 @@ import SwiftUI
             Label("Bigger", systemImage: "textformat.size.larger")
               .frame(maxWidth: .infinity)
           }
-          .disabled(fontSize >= ReaderPreferences.fontSizes.upperBound)
+          .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
         }
         .labelStyle(.iconOnly)
+        // The size the step reached, which the glyphs alone never tell VoiceOver:
+        // relative to the system's, as that is what the reader's own size is.
+        .accessibilityValue(
+          Text(
+            fontSize / ReaderPreferences.defaultFontSize,
+            format: .percent.precision(.fractionLength(0)))
+        )
         .buttonStyle(.bordered)
         .controlSize(.large)
 
