@@ -41,13 +41,10 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    let referenceAnchors = Self.referenceAnchors(in: document)
-    var entryAnchors: Set<String> = []
-    for case .references(let list) in document.blocks {
-      entryAnchors.formUnion(list.entries.map(\.anchor))
-    }
+    let (referenceAnchors, entryDocuments) = Self.referenceAnchors(in: document)
     var context = Context(
-      referenceAnchors: referenceAnchors, entryAnchors: entryAnchors, sections: document.sections)
+      referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
+      sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -490,8 +487,10 @@ public struct RFCXMLSerializer: Sendable {
     case .document(let id, let section, let entry):
       // The entry the citation resolved to, where it names one: the first entry naming
       // the same document may be another -- an erratum listed ahead of the RFC it
-      // corrects, a second entry under another label (#424).
-      let resolved = entry.flatMap { context.entryAnchors.contains($0) ? $0 : nil }
+      // corrects, a second entry under another label (#424). Only an entry of the cited
+      // document, though: a `<referencegroup>`'s member records the group, and written
+      // against the group's anchor it would read back as the group's document.
+      let resolved = entry.flatMap { context.entryDocuments[$0] == id ? $0 : nil }
       if let anchor = resolved ?? context.referenceAnchors[id] {
         var attributes = " target=\"\(Writer.escapeAttribute(anchor))\""
         // The source's own wording, not a fixed "of": it decides how the label
@@ -514,8 +513,8 @@ public struct RFCXMLSerializer: Sendable {
 
   private struct Context {
     var referenceAnchors: [DocumentID: String]
-    /// Every entry's anchor, so a citation's own entry is written only where it is declared.
-    var entryAnchors: Set<String>
+    /// The document each entry names, by the entry's anchor.
+    var entryDocuments: [String: DocumentID]
     var warnings: [String] = []
     /// Every references section, the back's own among them, in document order, which
     /// the back writes ahead of its sections (#315).
@@ -528,9 +527,12 @@ public struct RFCXMLSerializer: Sendable {
     /// `pn` then declared the ID the lifted list's anchor declared too.
     private var partNumbers: [String: String] = [:]
 
-    init(referenceAnchors: [DocumentID: String], entryAnchors: Set<String>, sections: [Section]) {
+    init(
+      referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
+      sections: [Section]
+    ) {
       self.referenceAnchors = referenceAnchors
-      self.entryAnchors = entryAnchors
+      self.entryDocuments = entryDocuments
       var claimed: Set<String> = []
       func claim(_ sections: [Section]) {
         for section in sections {
@@ -561,14 +563,29 @@ public struct RFCXMLSerializer: Sendable {
     }
   }
 
-  private static func referenceAnchors(in document: RFCDocument) -> [DocumentID: String] {
+  /// The entry a citation of each document falls back to, and the document each entry
+  /// names. The fallback is the first entry naming the document, unless a later one is
+  /// anchored under the document itself: RFC 8259 lists an erratum of RFC 7159 ahead of
+  /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
+  private static func referenceAnchors(
+    in document: RFCDocument
+  ) -> (byDocument: [DocumentID: String], documents: [String: DocumentID]) {
     var anchors: [DocumentID: String] = [:]
+    var documents: [String: DocumentID] = [:]
     for case .references(let list) in document.blocks {
       for reference in list.entries {
-        if let id = reference.documentID, anchors[id] == nil { anchors[id] = reference.anchor }
+        guard let id = reference.documentID else { continue }
+        if let first = anchors[id] {
+          if DocumentID(label: first) != id, DocumentID(label: reference.anchor) == id {
+            anchors[id] = reference.anchor
+          }
+        } else {
+          anchors[id] = reference.anchor
+        }
+        if documents[reference.anchor] == nil { documents[reference.anchor] = id }
       }
     }
-    return anchors
+    return (anchors, documents)
   }
 
   static func isReferences(_ section: Section) -> Bool {

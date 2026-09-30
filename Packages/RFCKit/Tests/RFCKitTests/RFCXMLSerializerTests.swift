@@ -254,6 +254,23 @@ struct RFCXMLSerializerTests {
       ])
   }
 
+  /// A citation of a `<referencegroup>`'s member records the group as its entry, and
+  /// the group names another document (BCP 14, not RFC 8174): written against the
+  /// group, it read back as the group's document, or as no document at all.
+  @Test func `a group member's citation keeps its document through a round trip`() throws {
+    for name in ["rfc9290.xml", "rfc9682.xml", "rfc9783.xml"] {
+      let original = try RFCXMLParser.parse(try Fixtures.data(name))
+      let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+      func documents(_ document: RFCDocument) -> [DocumentID] {
+        document.everyCrossReference.compactMap {
+          guard case .document(let id, _, _) = $0.target else { return nil }
+          return id
+        }
+      }
+      #expect(documents(reparsed) == documents(original), "\(name)")
+    }
+  }
+
   @Test func `artwork is preserved byte for byte`() throws {
     let art = "  +---+\n  | a |  <-- & <\n  +---+"
     let document = RFCDocument(
