@@ -243,6 +243,10 @@ struct DocumentCommands: Commands {
       // Not in a `Section`: the group draws a separator before itself and a section
       // one at each end, so a section opening the group drew two lines -- measured,
       // as in the `.sidebar` group below.
+      //
+      // ⌘= is Bigger too, and not here: on the Mac, SwiftUI left a hidden item out
+      // of the menu, shortcut and all -- measured. `ReaderWindow` answers it on the
+      // Mac, an invisible button in `ContentView` on the iPad.
       Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
         .keyboardShortcut("+", modifiers: .command)
         .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)

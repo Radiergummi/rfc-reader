@@ -1,3 +1,5 @@
+import Foundation
+
 /// The reader's settings as user defaults hold them: each key and its default, once.
 ///
 /// The reader, the document preview and Settings each declare their own
@@ -23,6 +25,14 @@ public enum ReaderPreferences {
   /// The size after View ▸ Smaller: a step down, and never past the range.
   public static func fontSize(steppingDown size: Double) -> Double {
     clamped(size - fontSizeStep)
+  }
+
+  /// View ▸ Bigger, for a caller with no `@AppStorage` of its own to step: the Mac
+  /// reader window's ⌘=. What `@AppStorage` reads when nothing is stored is the
+  /// default, so that is where a first step starts.
+  public static func stepFontSizeUp(in defaults: UserDefaults = .standard) {
+    let size = defaults.object(forKey: fontSizeKey) as? Double ?? defaultFontSize
+    defaults.set(fontSize(steppingUp: size), forKey: fontSizeKey)
   }
 
   private static func clamped(_ size: Double) -> Double {

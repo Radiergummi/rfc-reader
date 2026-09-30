@@ -51,4 +51,22 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.fontSize(steppingDown: sizes.upperBound + 10) == sizes.upperBound)
     #expect(ReaderPreferences.fontSize(steppingUp: sizes.lowerBound - 10) == sizes.lowerBound)
   }
+
+  /// ⌘= on the Mac, which has no `@AppStorage` to step, steps what it holds.
+  @Test func `stepping up in user defaults steps the stored size`() throws {
+    let suite = "ReaderPreferencesTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    ReaderPreferences.stepFontSizeUp(in: defaults)
+    #expect(
+      defaults.double(forKey: ReaderPreferences.fontSizeKey)
+        == ReaderPreferences.defaultFontSize + ReaderPreferences.fontSizeStep)
+
+    defaults.set(ReaderPreferences.fontSizes.upperBound, forKey: ReaderPreferences.fontSizeKey)
+    ReaderPreferences.stepFontSizeUp(in: defaults)
+    #expect(
+      defaults.double(forKey: ReaderPreferences.fontSizeKey)
+        == ReaderPreferences.fontSizes.upperBound)
+  }
 }
