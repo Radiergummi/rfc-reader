@@ -61,10 +61,12 @@ struct InfoView: View {
       if let summary = info.statusSummary {
         StandingBox(
           title: info.status.displayName, summary: summary,
-          color: StatusBadge.color(for: info.status))
+          color: StatusBadge.color(for: info.status), fill: StatusBadge.fill(for: info.status))
       }
       if let summary = info.obsoleteSummary {
-        StandingBox(title: "Obsolete", summary: summary, color: .red)
+        StandingBox(
+          title: "Obsolete", summary: summary,
+          color: StatusBadge.obsoleteColor, fill: StatusBadge.obsoleteFill)
       }
     }
   }
@@ -76,6 +78,7 @@ private struct StandingBox: View {
   let title: String
   let summary: String
   let color: Color
+  let fill: Color
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
@@ -84,13 +87,13 @@ private struct StandingBox: View {
         .foregroundStyle(color)
       Text(summary)
         .font(.infoCaption)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
     }
     .padding(.horizontal, 10)
     .padding(.vertical, 8)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(color.opacity(0.12), in: .rect(cornerRadius: 8))
+    .background(fill, in: .rect(cornerRadius: 8))
     .accessibilityElement(children: .combine)
   }
 }

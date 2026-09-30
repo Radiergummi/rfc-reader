@@ -116,7 +116,7 @@ public enum StrokeGeometry {
 
   /// One column of a monospaced font, measured as the builder measures it.
   static func advance(of font: PlatformFont) -> CGFloat {
-    DocumentTextBuilder.lineWidth("0", font: font)
+    DocumentTextBuilder.lineWidth(NSAttributedString(string: "0", attributes: [.font: font]))
   }
 
 }

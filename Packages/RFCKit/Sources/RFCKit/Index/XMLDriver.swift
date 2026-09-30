@@ -46,13 +46,79 @@ enum XMLDriver {
     parser.shouldResolveExternalEntities = false
     _ = parser.parse()
     if delegate.rootClosed { return }
-    if let failure = delegate.failure { throw failure }
+    if let failure = delegate.failure, !isBlank(data) { throw failure }
+    // Not `parserError`: the error left there once `parse()` gives up is a generic
+    // one, 111, and the one for an empty document is 1, an internal error.
     throw XMLSyntaxError(
       line: parser.lineNumber, column: parser.columnNumber,
-      message: parser.parserError?.localizedDescription
-        ?? (delegate.depth == 0
-          ? "empty document" : "the document ended before its root element closed")
-    )
+      message: delegate.depth == 0
+        ? noRootMessage(for: data) : "the document ended before its root element closed")
+  }
+
+  /// An empty document is said as one on both platforms, and only a blank one is:
+  /// libxml2 may report a blank document as text with no element in it, and Darwin
+  /// reports nothing at all for input shorter than four bytes, blank or not.
+  private static func isBlank(_ data: Data) -> Bool {
+    data.allSatisfy { byte in byte == 0x20 || byte == 0x09 || byte == 0x0A || byte == 0x0D }
+  }
+
+  /// What a document that ended with no root opened, and no error reported, says.
+  private static func noRootMessage(for data: Data) -> String {
+    isBlank(data) ? "empty document" : "no XML element where the document starts"
+  }
+
+  /// What went wrong, in words (#320). Neither platform's error says so itself: its
+  /// description is its domain and code, "The operation couldn't be completed.
+  /// (NSXMLParserErrorDomain error 76.)". Darwin keeps libxml2's own words in the
+  /// error's `userInfo`, swift-corelibs-foundation keeps none, so the code is what
+  /// both have, and it is read the same on both. libxml2's words stand in for a code
+  /// this does not name, and the code itself for one that has neither. libxml2 says
+  /// 5 for input that ends early whether or not a root has opened, so the caller
+  /// says which.
+  static func message(for error: any Error, rootOpened: Bool) -> String {
+    let error = error as NSError
+    if error.code == 5, !rootOpened { return "the document ended before its root element opened" }
+    if let text = description(ofLibxml2Error: error.code) { return text }
+    if let text = error.userInfo["NSXMLParserErrorMessage"] as? String {
+      let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !trimmed.isEmpty { return trimmed }
+    }
+    return "malformed XML (error \(error.code))"
+  }
+
+  /// The errors a document fetched in place of an RFC, or cut short, runs into, by
+  /// libxml2's `xmlParserErrors` number, which both platforms report as the error's
+  /// code. Not through `XMLParser.ErrorCode`: Darwin's cases carry libxml2's numbers,
+  /// but swift-corelibs-foundation numbers its own from 0, so the same code names
+  /// another case there.
+  private static func description(ofLibxml2Error code: Int) -> String? {
+    switch code {
+    case 3: "no root element where the document starts"
+    // What libxml2 reports for text that is no XML at all; a blank document is the
+    // driver's own "empty document".
+    case 4: "no XML element where the document starts"
+    case 5: "the document ended before its root element closed"
+    case 9: "a character XML does not allow"
+    case 23: "an entity reference without its closing ;"
+    case 26: "an entity that is not declared"
+    case 32: "an encoding that is not supported"
+    case 38: "a < inside an attribute value"
+    case 39: "an attribute value without its opening quote"
+    case 40: "an attribute value without its closing quote"
+    case 41: "an attribute without a value"
+    case 42: "an attribute given twice"
+    case 45: "a comment that is not closed"
+    case 64: "an XML declaration that is not at the start"
+    case 65: "a space missing where XML requires one"
+    // Most often a bare & that starts no entity reference.
+    case 68: "a name missing where XML requires one"
+    case 72: "a tag without its opening <"
+    case 73: "a tag without its closing >"
+    case 76: "an end tag that does not match the element it closes"
+    case 77: "a tag that is not finished"
+    case 85: "elements that are not properly nested"
+    default: nil
+    }
   }
 
   /// The root element's attributes, and nothing after them. A draft's header
@@ -78,9 +144,9 @@ enum XMLDriver {
         line: parser.lineNumber, column: parser.columnNumber,
         message: "the root element is <\(root.name)>, not <\(name)>")
     }
+    if let failure = delegate.failure, !isBlank(data) { throw failure }
     throw XMLSyntaxError(
-      line: parser.lineNumber, column: parser.columnNumber,
-      message: parser.parserError?.localizedDescription ?? "empty document")
+      line: parser.lineNumber, column: parser.columnNumber, message: noRootMessage(for: data))
   }
 
   private final class RootDelegate: NSObject, XMLParserDelegate {
@@ -92,6 +158,17 @@ enum XMLDriver {
     ) {
       root = (elementName, attributeDict)
       parser.abortParsing()
+    }
+
+    /// What went wrong before a root was found: a plain-text error page, a broken
+    /// prolog. Not the error aborting reports, which comes after the root.
+    private(set) var failure: XMLSyntaxError?
+
+    func parser(_ parser: XMLParser, parseErrorOccurred parseError: any Error) {
+      guard root == nil, failure == nil else { return }
+      failure = XMLSyntaxError(
+        line: parser.lineNumber, column: parser.columnNumber,
+        message: XMLDriver.message(for: parseError, rootOpened: false))
     }
   }
 
@@ -135,7 +212,7 @@ enum XMLDriver {
       guard failure == nil else { return }
       failure = XMLSyntaxError(
         line: parser.lineNumber, column: parser.columnNumber,
-        message: parseError.localizedDescription)
+        message: XMLDriver.message(for: parseError, rootOpened: depth > 0))
     }
   }
 }

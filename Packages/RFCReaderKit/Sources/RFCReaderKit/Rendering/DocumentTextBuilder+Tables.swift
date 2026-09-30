@@ -29,20 +29,50 @@ extension DocumentTextBuilder {
 
   func naturalColumnWidths(_ table: RFCKit.Table) -> [CGFloat] {
     // Measure what appendGridTable renders: header rows in bold, data rows in
-    // the regular weight. Bold glyphs are wider, and the header is frequently
-    // the widest content in its column, so measuring both in the regular font
-    // under-measures and lets a tab stop fall through to defaultTabInterval.
-    let rows: [(cells: [[Inline]], font: PlatformFont)] =
-      table.header.map { ($0.cells, style.boldBodyFont) }
-      + table.rows.map { ($0.cells, style.bodyFont) }
+    // the regular weight, and each cell through the runs it is set in, so strong
+    // text is measured bold in a data cell and heavy in a header (#360). Bold
+    // glyphs are wider, and the header is frequently the widest content in its
+    // column, so measuring less than is drawn lets a tab stop fall through to
+    // defaultTabInterval.
+    let (header, data) = gridRowAttributes(.default)
+    let rows: [(cells: [[Inline]], base: [NSAttributedString.Key: Any])] =
+      table.header.map { ($0.cells, header) } + table.rows.map { ($0.cells, data) }
     let columns = rows.map { $0.cells.count }.max() ?? 0
     guard columns > 0 else { return [] }
     return (0..<columns).map { column in
       rows.compactMap { row -> CGFloat? in
         guard row.cells.count > column else { return nil }
-        return Self.lineWidth(row.cells[column].plainText, font: row.font)
+        return cellWidth(row.cells[column], base: row.base)
       }.max() ?? 0
     }
+  }
+
+  /// A cell's width as it is set. Plain text is measured as a string in the row's
+  /// attributes, which is what nearly every cell is; only a cell with formatting has
+  /// its runs built to be measured, so a registry's plain columns are not built
+  /// twice. A reference column is: each of its chips is built to be measured and
+  /// again to be set, and still measures narrower than it is drawn (#488).
+  /// Building runs numbers a chip, so measuring advances `nextChipID`; the
+  /// numbers only have to differ between neighbors, so the gap is harmless.
+  private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
+    let isPlainText = cell.allSatisfy { inline in
+      if case .text = inline { true } else { false }
+    }
+    if isPlainText {
+      return lineWidth(NSAttributedString(string: cell.plainText, attributes: base))
+    }
+    return lineWidth(inlineRuns(cell, base: base))
+  }
+
+  /// A grid's header row and data row attributes in `paragraphStyle`: only the font
+  /// differs, and the measuring and the setting share this so the two cannot drift.
+  private func gridRowAttributes(_ paragraphStyle: NSParagraphStyle) -> (
+    header: [NSAttributedString.Key: Any], data: [NSAttributedString.Key: Any]
+  ) {
+    let data = bodyAttributes(paragraphStyle)
+    var header = data
+    header[.font] = style.boldBodyFont
+    return (header, data)
   }
 
   func appendTable(_ table: RFCKit.Table, indent: CGFloat) {
@@ -70,9 +100,7 @@ extension DocumentTextBuilder {
     // Only the font differs between a header row and a data row, and nothing in
     // either varies down the table, so both are built once here rather than per
     // row.
-    let dataAttributes = bodyAttributes(rowStyle)
-    var headerAttributes = dataAttributes
-    headerAttributes[.font] = style.boldBodyFont
+    let (headerAttributes, dataAttributes) = gridRowAttributes(rowStyle)
 
     for (index, row) in (table.header + table.rows).enumerated() {
       let attributes = index < table.header.count ? headerAttributes : dataAttributes

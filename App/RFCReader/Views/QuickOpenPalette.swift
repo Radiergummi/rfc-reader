@@ -123,6 +123,8 @@
     private func row(for row: QuickOpenResults.Row) -> some View {
       let link = row.link
       let isSelected = row == results.selected
+      let title = QuickOpenResults.title(
+        library.metadata(link.id)?.title, isIndexLoaded: library.index != nil)
       return HStack(spacing: 12) {
         if let entry = row.entry {
           // What was looked up, then where it is defined: "HTTP status 425 · Too
@@ -146,7 +148,7 @@
             .fontWeight(.semibold)
             .monospacedDigit()
             .frame(width: 84, alignment: .leading)
-          Text(library.metadata(link.id)?.title ?? "Not in the index")
+          Text(title)
             .lineLimit(1)
             .truncationMode(.tail)
             .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
@@ -194,28 +196,10 @@
         isObsolete: { library.metadata($0)?.isObsolete ?? false })
     }
 
-    /// Runs per change of the query and is canceled by the next, which is the debounce:
-    /// only a pause long enough to outlast the sleep reaches the search.
     private func search(_ query: String) async {
-      guard !query.isEmpty else { return }
-      // A link names its document outright, and no title or abstract contains one:
-      // scanning the index for it would take the whole scan to find nothing.
-      if query.contains("://"), DocumentReference.link(from: query) != nil {
-        finish(with: [], for: query)
-        return
+      if let hits = await library.quickOpenHits(for: query) {
+        finish(with: hits, for: query)
       }
-      guard library.index != nil else {
-        finish(with: [], for: query)
-        return
-      }
-      do {
-        try await Task.sleep(for: .milliseconds(120))
-      } catch {
-        return
-      }
-      let hits = await library.suggestions(for: query, limit: QuickOpenResults.limit)
-      guard !Task.isCancelled else { return }
-      finish(with: hits, for: query)
     }
 
     private func finish(with hits: [DocumentID], for query: String) {

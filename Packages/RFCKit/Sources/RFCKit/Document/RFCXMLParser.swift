@@ -6,9 +6,17 @@ import Foundation
 /// `derivedContent` on cross references, which this parser leans on for stable
 /// anchors and display text instead of re-implementing the numbering rules.
 public enum RFCXMLParser {
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case notAnRFC(rootElement: String)
     case malformed(XMLSyntaxError)
+
+    /// The syntax error's own words, which the app shows (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .notAnRFC(let root): "Not an RFC: the document's root element is <\(root)>."
+      case .malformed(let error): error.errorDescription
+      }
+    }
   }
 
   public static func parse(_ data: Data) throws(ParseError) -> RFCDocument {
@@ -21,11 +29,12 @@ public enum RFCXMLParser {
     guard root.name == "rfc" else { throw .notAnRFC(rootElement: root.name) }
 
     // References first, so cross references in the body resolve to RFC numbers.
-    // Every list, not only the back's: a converted legacy document can hold one in
-    // `<middle>` (RFC 2511's `9. References`, ahead of its appendices), or in a
-    // chapter, and a citation into it is as much a link as one into the back.
+    // Every list, not only the back's: XML from elsewhere, and legacy conversions
+    // made before #315 lifted every bibliography into `<back>`, can hold one in
+    // `<middle>` or in a chapter, and a citation into it is as much a link as one
+    // into the back.
     let back = root.first("back")
-    let builder = Builder(referenceTargets: Builder.referenceTargets(in: root))
+    let builder = Builder(referencesIn: root)
 
     let header = builder.parseHeader(root)
     var sections: [Section] = []
@@ -79,13 +88,39 @@ public enum RFCXMLParser {
 
   /// The terms primary index entries define; see `Builder.primaryIndexTerms(in:)`.
   static func primaryIndexTerms(in root: XMLTree.Element) -> [DefinedTerm] {
-    Builder(referenceTargets: Builder.referenceTargets(in: root)).primaryIndexTerms(in: root)
+    Builder(referencesIn: root).primaryIndexTerms(in: root)
+  }
+
+  /// Every `<xref>` below `root`, in document order, resolved the way the parser
+  /// resolves it. Resolving one is a pure function of the element and the reference
+  /// lists, so the rules are tested over hand-written trees where no committed
+  /// fixture has the shape.
+  static func crossReferences(in root: XMLTree.Element) -> [CrossReference] {
+    let builder = Builder(referencesIn: root)
+    var result: [CrossReference] = []
+    func walk(_ element: XMLTree.Element) {
+      for child in element.elements {
+        if child.name == "xref" {
+          result.append(builder.parseCrossReference(child))
+        } else {
+          walk(child)
+        }
+      }
+    }
+    walk(root)
+    return result
   }
 
   private struct Builder {
     /// Reference anchor (e.g. `QUIC-TRANSPORT`) to the RFC it denotes and the entry
     /// a citation of it resolves to.
     let referenceTargets: [String: CitedEntry]
+
+    /// The anchor of every entry in a references section, in a series or not, to the
+    /// anchor of the bibliography entry it is listed under: itself, or its
+    /// `<referencegroup>`'s. A citation of any of them is bracketed, "[66]", the way
+    /// the RFC Editor renders it.
+    let referenceEntries: [String: String]
 
     /// Authored XML marks most of its citations with `<xref>`, but prose still
     /// says "RFC 3986" in the middle of a sentence, and nothing in the schema
@@ -98,8 +133,10 @@ public enum RFCXMLParser {
     /// inventing links the source declined to make.
     let linker: InlineLinker
 
-    init(referenceTargets: [String: CitedEntry]) {
+    init(referencesIn root: XMLTree.Element) {
+      let (referenceTargets, referenceEntries) = Self.references(in: root)
       self.referenceTargets = referenceTargets
+      self.referenceEntries = referenceEntries
       self.linker = InlineLinker(
         sectionNumbers: [],
         referenceTargets: referenceTargets.mapValues {
@@ -108,21 +145,30 @@ public enum RFCXMLParser {
       )
     }
 
-    /// Every reference anchor below `element`, which has to be read before the
+    /// Every reference anchor below `element` with the entry it is listed under, and
+    /// the ones among them that denote a document, which have to be read before the
     /// body so a cross reference in it resolves to a document.
-    static func referenceTargets(in element: XMLTree.Element) -> [String: CitedEntry] {
+    static func references(
+      in element: XMLTree.Element
+    ) -> (targets: [String: CitedEntry], entries: [String: String]) {
       var targets: [String: CitedEntry] = [:]
+      var entries: [String: String] = [:]
       func walk(_ element: XMLTree.Element, group: String?) {
         for child in element.elements {
           switch child.name {
           case "reference":
-            if let anchor = child["anchor"], let id = parseEntryMetadata(child).documentID {
+            guard let anchor = child["anchor"] else { break }
+            entries[anchor] = group ?? anchor
+            if let id = parseEntryMetadata(child).documentID {
               targets[anchor] = CitedEntry(id: id, entry: group ?? anchor)
             }
           case "referencegroup":
             let anchor = child["anchor"]
-            if let anchor, let id = DocumentID(label: anchor) {
-              targets[anchor] = CitedEntry(id: id, entry: anchor)
+            if let anchor {
+              entries[anchor] = anchor
+              if let id = DocumentID(label: anchor) {
+                targets[anchor] = CitedEntry(id: id, entry: anchor)
+              }
             }
             walk(child, group: anchor)
           case "middle", "back", "section", "references":
@@ -133,7 +179,7 @@ public enum RFCXMLParser {
         }
       }
       walk(element, group: nil)
-      return targets
+      return (targets, entries)
     }
 
     // MARK: Header
@@ -257,8 +303,9 @@ public enum RFCXMLParser {
         case "section":
           count += 1
           return parseSection(child, appendix: appendix, position: childPosition(count))
-        // Not valid RFCXML, but our serializer emits it for a references subsection
-        // whose siblings are ordinary sections; keep it as a subsection.
+        // Not valid RFCXML, but legacy conversions made before #315 have it, a
+        // references subsection whose siblings are ordinary sections; keep it as a
+        // subsection.
         case "references":
           count += 1
           return parseReferencesSection(child, position: childPosition(count))
@@ -357,7 +404,7 @@ public enum RFCXMLParser {
     }
 
     /// Everything about an entry that is not prose. Static because
-    /// `referenceTargets(in:)` needs it before there is a builder to link prose
+    /// `references(in:)` needs it before there is a builder to link prose
     /// with; the annotation, which is prose, is read by the instance method.
     static func parseEntryMetadata(_ element: XMLTree.Element) -> Reference {
       let front = element.first("front")
@@ -788,7 +835,7 @@ public enum RFCXMLParser {
       }
     }
 
-    private func parseCrossReference(_ element: XMLTree.Element) -> CrossReference {
+    func parseCrossReference(_ element: XMLTree.Element) -> CrossReference {
       let targetAnchor = element["target"] ?? ""
       let section = element["section"]
       let innerText = element.normalizedText
@@ -807,6 +854,14 @@ public enum RFCXMLParser {
         if !innerText.isEmpty, !CrossReference.isCanonicalTag(innerText, for: id) {
           return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
         }
+        // `none` asks for the element's own text and nothing else, which may be none
+        // at all; `title` for the entry's title, which is not a tag to bracket.
+        if format == "none" {
+          return CrossReference(target: target, text: innerText, sectionFormat: sectionFormat)
+        }
+        if format == "title", let derived {
+          return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
+        }
         // "RFC9110" is the canonical number; anything else is a tag the author
         // chose ("QUIC-TRANSPORT") and is the name the document uses
         // throughout, so it survives verbatim, brackets and all.
@@ -814,16 +869,30 @@ public enum RFCXMLParser {
         if !CrossReference.isCanonicalTag(raw, for: id) {
           return CrossReference(target: target, text: "[\(raw)]", sectionFormat: sectionFormat)
         }
-        // `counter` and `title` ask for something the target cannot supply --
-        // a number, a heading -- so the tooling's own rendering is the label.
-        if format == "counter" || format == "title", let derived {
+        // `counter` asks for something the target cannot supply -- a number -- so
+        // the tooling's own rendering is the label.
+        if format == "counter", let derived {
           return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
         }
         return CrossReference(target: target, sectionFormat: sectionFormat)
       }
 
+      // A member of a `<referencegroup>` has no entry of its own in the bibliography;
+      // the group's is the one to link to.
+      let entry = referenceEntries[targetAnchor]
+      let target = CrossReference.Target.anchor(entry ?? targetAnchor)
+      // Empty or not, the element's own text is all `none` shows (xml2rfc renders an
+      // empty one as nothing), never the anchor.
+      if format == "none" {
+        return CrossReference(target: target, text: innerText)
+      }
+      // Only a citation of the whole entry: with a section, `derivedContent` is the
+      // entry's tag standing in for "Section 2.3.3 of [RATS-AR4SI]" (#473).
+      if innerText.isEmpty, format == "default", section == nil, entry != nil {
+        return CrossReference(target: target, text: "[\(derived ?? targetAnchor)]")
+      }
       let text = innerText.isEmpty ? derived : innerText
-      return CrossReference(target: .anchor(targetAnchor), text: text)
+      return CrossReference(target: target, text: text)
     }
 
     /// Collapses whitespace the way HTML rendering would: runs become one space,

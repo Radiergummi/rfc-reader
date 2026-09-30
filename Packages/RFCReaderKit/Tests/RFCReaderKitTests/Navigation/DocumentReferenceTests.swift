@@ -31,6 +31,14 @@ struct DocumentReferenceTests {
     #expect(DocumentReference.link(from: "9110", section: "") == RFCLink(id: .rfc(9110)))
   }
 
+  /// It wins over an anchor the link carries too, which would otherwise be where a
+  /// link to the document on screen scrolls (#276).
+  @Test func `a given section wins over the links anchor`() {
+    #expect(
+      DocumentReference.link(from: "rfc://9110#sample", section: "4.2")
+        == RFCLink(id: .rfc(9110), section: "4.2"))
+  }
+
   @Test func `anything else is nothing`() {
     #expect(DocumentReference.link(from: "hypertext") == nil)
     #expect(DocumentReference.link(from: "") == nil)

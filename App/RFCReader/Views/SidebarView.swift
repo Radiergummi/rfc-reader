@@ -17,6 +17,8 @@ struct SidebarView: View {
   @AppStorage("sidebar.collectionsExpanded") private var collectionsExpanded = true
   /// The collection whose deletion is being confirmed (#349).
   @State private var deleting: CollectionSnapshot.Entry?
+  /// The store warning, shown again from the sidebar's unsaved-session row (#318).
+  @State private var showsStoreWarning = false
 
   var body: some View {
     List(selection: Bindable(navigation).sidebarSelection) {
@@ -43,7 +45,12 @@ struct SidebarView: View {
       // around it to give `.sidebar` placement a meaning. Measured — the window
       // contained no text field at all.
       .safeAreaInset(edge: .top) {
-        SidebarSearchField(navigation: navigation)
+        VStack(alignment: .leading, spacing: 6) {
+          SidebarSearchField(navigation: navigation, library: library)
+          // The field keeps the query as typed; the filters it sets are named
+          // under it, each removable (#21). `NSSearchField` draws no tokens.
+          SearchFilterChips(navigation: navigation)
+        }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
       }
@@ -70,7 +77,7 @@ struct SidebarView: View {
       }
       // The list has a field of its own as well, which narrows the filter it
       // shows; this one searches the library (#345). Both bind the one text.
-      .searchable(text: Bindable(navigation).searchText, prompt: "Search")
+      .filterSearchable(navigation: navigation, prompt: "Search")
       .onSubmit(of: .search) { navigation.applySearchWithoutPause() }
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
@@ -90,6 +97,11 @@ struct SidebarView: View {
       .navigationBarTitleDisplayMode(.large)
     #endif
     .labelStyle(SidebarLabelStyle())
+    .alert(AppData.storeWarning.title, isPresented: $showsStoreWarning) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(AppData.storeWarning.message)
+    }
     .confirmationDialog(
       "Delete “\(deleting?.name ?? "")”?",
       isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -115,6 +127,26 @@ struct SidebarView: View {
       row(.bookmarks)
       row(.recent)
       row(.downloaded)
+      // While the store is in memory, and only then: the launch alert says so once,
+      // and a session can run for hours after it (#318). Here, where someone looks
+      // when they wonder where their bookmarks went.
+      if AppData.isStoredInMemory {
+        Button {
+          showsStoreWarning = true
+        } label: {
+          Label {
+            Text("Not saved in this session")
+          } icon: {
+            // On the icon itself, or `SidebarLabelStyle` draws it in the accent
+            // color on iOS, as it does the places: this is a status, not a place.
+            Image(systemName: "exclamationmark.triangle")
+              .foregroundStyle(.secondary)
+          }
+          .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(AppData.storeWarning.message)
+      }
     }
     if !library.collections.collections.isEmpty {
       group("Collections", isExpanded: $collectionsExpanded) {
@@ -358,16 +390,20 @@ struct SidebarView: View {
   /// the dependency reaches no further than the field.
   private struct SidebarSearchField: NSViewRepresentable {
     let navigation: NavigationModel
+    /// Where completion finds the working groups to offer.
+    let library: LibraryModel
 
     func makeNSView(context: Context) -> NSSearchField {
       let field = NSSearchField()
       field.placeholderString = "Search"
       field.delegate = context.coordinator
+      field.suggestionsDelegate = context.coordinator
       return field
     }
 
     func updateNSView(_ field: NSSearchField, context: Context) {
       context.coordinator.navigation = navigation
+      context.coordinator.library = library
       // Only when it differs: assigning moves the insertion point to the end, which
       // mid-edit would jump the caret on every keystroke.
       if field.stringValue != navigation.searchText {
@@ -375,14 +411,62 @@ struct SidebarView: View {
       }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation) }
+    func makeCoordinator() -> Coordinator { Coordinator(navigation: navigation, library: library) }
 
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
+    final class Coordinator: NSObject, NSSearchFieldDelegate, NSTextSuggestionsDelegate {
       var navigation: NavigationModel
+      var library: LibraryModel
 
-      init(navigation: NavigationModel) {
+      init(navigation: NavigationModel, library: LibraryModel) {
         self.navigation = navigation
+        self.library = library
       }
+
+      // MARK: Completion (#21)
+
+      /// AppKit's own suggestions menu under the field: the qualifier being typed,
+      /// or its values. A qualifier the search does not know is shown dimmed, with
+      /// what becomes of it.
+      func textField(
+        _ textField: NSTextField,
+        provideUpdatedSuggestions responseHandler:
+          @escaping (NSSuggestionItemResponse<SearchQuery.Suggestion>) -> Void
+      ) {
+        guard let index = library.index else { return responseHandler(NSSuggestionItemResponse()) }
+        let items = SearchQuery.suggestionsWhileTyping(for: textField.stringValue, in: index).map {
+          suggestion in
+          var item = NSSuggestionItem(representedValue: suggestion, title: suggestion.word)
+          if suggestion.isUnknown {
+            var title = AttributedString(suggestion.word)
+            title.foregroundColor = .secondaryLabelColor
+            item.attributedTitle = title
+            item.secondaryTitle = "Searched as text"
+          }
+          return item
+        }
+        responseHandler(NSSuggestionItemResponse(items: items))
+      }
+
+      /// No inline completion while a suggestion is highlighted: AppKit's assumes it
+      /// extends what was typed, and `is:b` completes to `status:bcp`. Said here
+      /// rather than left out, as the protocol has a default of its own.
+      func textField(
+        _ textField: NSTextField, textCompletionFor item: NSSuggestionItem<SearchQuery.Suggestion>
+      ) -> String? {
+        nil
+      }
+
+      /// Taking a suggestion applies it at once, as Return does: a pick is not
+      /// typing, and the list should not wait for a pause.
+      func textField(
+        _ textField: NSTextField, didSelect item: NSSuggestionItem<SearchQuery.Suggestion>
+      ) {
+        textField.stringValue = item.representedValue.accepted
+        navigation.searchText = textField.stringValue
+        navigation.applySearchWithoutPause()
+      }
+
+      // MARK: Editing
 
       /// Every edit, the clear button included, rather than `searchFieldDidEndSearching`
       /// or the field's action: the list filters as the reader types.

@@ -187,7 +187,8 @@ struct AccessibleReadingTests {
   }
 
   /// Over a whole real document, every character is either read as text or stands
-  /// under a diagram's label: nothing is skipped, nothing is read twice.
+  /// under a label, a diagram's or a backlink chip's (#183): nothing is skipped,
+  /// nothing is read twice.
   ///
   /// RFC 793 has ten drawings: its layering and header diagrams, the sequence
   /// spaces, the state diagram. RFC 8999's artworks are packet notation, RFC 5234's
@@ -209,14 +210,20 @@ struct AccessibleReadingTests {
       #expect(covered.isDisjoint(with: span))
       covered.formUnion(span)
     }
-    var diagramCharacters = IndexSet()
+    var unread = IndexSet()
     text.enumerateAttribute(.rfcVerbatim, in: whole(text)) { value, range, _ in
       guard let box = value as? VerbatimBox, AccessibleReading.isDiagram(box) else { return }
-      diagramCharacters.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
+      unread.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
     }
-    // Only diagrams go unread, and all of them are under a label.
-    #expect(covered.union(diagramCharacters).count == text.length)
-    #expect(labels == diagrams)
+    var chips = 0
+    text.enumerateAttribute(.rfcSpoken, in: whole(text)) { value, range, _ in
+      guard value != nil else { return }
+      chips += 1
+      unread.formUnion(IndexSet(integersIn: range.location..<NSMaxRange(range)))
+    }
+    // Only diagrams and chips go unread, and all of them are under a label.
+    #expect(covered.union(unread).count == text.length)
+    #expect(labels == diagrams + chips)
   }
 
   /// Guard level: what makes a block of artwork a drawing, over hand-written lines

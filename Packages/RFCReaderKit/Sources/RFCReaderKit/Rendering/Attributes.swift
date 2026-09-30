@@ -20,6 +20,16 @@ extension NSAttributedString.Key {
   /// drawn with a lighter tint than a normative one (#184). A `String`, so adjacent
   /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
+  /// Set on a heading's backlink chip and the space before it (#183): the anchor of
+  /// the section the chip lists the backlinks of. A `String`, so the runs merge. A
+  /// copied selection leaves these runs out (`SelectionText`): they are the reader's,
+  /// not the document's words.
+  public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// What VoiceOver says in place of a run's characters, where the text view lets it
+  /// (`AccessibleReading`): a heading's backlink chip (#183), which would otherwise
+  /// read as its arrow and a bare number. A `String`, carried by every character of
+  /// the chip and nothing else.
+  public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
   /// (`AccessibleReading.rotorLabel`). Never read aloud with the diagram, because
@@ -146,5 +156,25 @@ extension NSAttributedString {
       let range = extent(ofBox: .rfcReference, at: offset)
     else { return nil }
     return (box, range)
+  }
+
+  /// The heading's backlink chip at this character offset (#183), the space before
+  /// it included: the section it lists the backlinks of, and the chip's own extent,
+  /// without that space -- what its list is anchored to. A heading can wrap at the
+  /// space, which would anchor the list to the end of the line above.
+  public func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+    // Looked at before the extent is asked for: a longest range of nothing reaches
+    // out to the next chip or the end of the document, and this is asked of every
+    // click on a link and every context menu.
+    guard offset >= 0, offset < length,
+      let anchor = attribute(.rfcBacklinks, at: offset, effectiveRange: nil) as? String
+    else { return nil }
+    var run = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcBacklinks, at: offset, longestEffectiveRange: &run,
+      in: NSRange(location: 0, length: length))
+    var chip = run
+    _ = attribute(.rfcChip, at: NSMaxRange(run) - 1, longestEffectiveRange: &chip, in: run)
+    return (anchor, chip)
   }
 }

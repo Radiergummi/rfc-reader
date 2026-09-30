@@ -402,7 +402,7 @@ struct BuilderTitleTests {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: ReadingStyle(), title: title)
     let text = built.text.string as NSString
-    for section in document.allSections where !DocumentTextBuilder.holdsOnlyReferences(section) {
+    for section in document.allSections where !section.holdsOnlyReferences {
       let offset = try #require(built.anchors.offset(of: section.anchor))
       let length = min((section.displayTitle as NSString).length, text.length - offset)
       #expect(

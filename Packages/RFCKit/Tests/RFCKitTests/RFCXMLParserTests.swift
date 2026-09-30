@@ -113,6 +113,39 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// The schema puts `<references>` in `<back>` only, but XML from elsewhere, and
+  /// legacy conversions made before #315, can hold one in `<middle>` or in a chapter.
+  /// A citation into it still resolves, and the one in a chapter reads back as that
+  /// chapter's subsection.
+  @Test func `a reference list outside the back is read`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Misplaced</title></front>
+        <middle>
+          <section anchor="intro"><name>Intro</name>
+            <t>See <xref target="A"/> and <xref target="B"/>.</t>
+            <references anchor="intro-refs"><name>Chapter References</name>
+              <reference anchor="A"><front><title>A</title></front>
+                <seriesInfo name="RFC" value="1111"/></reference>
+            </references>
+          </section>
+          <references anchor="refs"><name>References</name>
+            <reference anchor="B"><front><title>B</title></front>
+              <seriesInfo name="RFC" value="2222"/></reference>
+          </references>
+        </middle>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let cited = document.everyCrossReference.compactMap { xref -> DocumentID? in
+      if case .document(let id, _, _) = xref.target { id } else { nil }
+    }
+    #expect(cited == [.rfc(1111), .rfc(2222)])
+    let intro = try #require(document.section(anchor: "intro"))
+    #expect(intro.subsections.map(\.anchor) == ["intro-refs"])
+  }
+
   @Test func `blocks and inlines`() throws {
     let document = try Self.document()
     let notation = try #require(document.section(number: "4"))
@@ -381,6 +414,91 @@ struct RFCXMLParserTests {
     let entries = try Self.entries(in: "rfc8761.xml")
     #expect(entries.first?.anchor == "BT2020-2")
     #expect(entries.map(\.displayAnchor) == entries.indices.map { String($0 + 1) })
+  }
+
+  /// RFC 8761 cites a draft and a codec specification, neither in a series, by the
+  /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
+  /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
+  @Test func `a citation of an entry outside the series keeps its brackets`() throws {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml")).everyCrossReference
+    let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
+    #expect(draft.label == "[14]")
+    let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
+    #expect(codec.label == "[6]")
+    let table = try #require(xrefs.first { $0.target == .anchor("codec-levels") })
+    #expect(table.label == "Table 7")
+  }
+
+  /// A citation of a section of such an entry is not the entry's tag: RFC 9783's
+  /// "Section 2.3.3 of [RATS-AR4SI]", RFC 9290's registry "CBOR Tags". Bracketing its
+  /// `derivedContent` would put a second tag where the section belongs; wording the
+  /// section is #473's. In document order: RFC 9783 cites the whole entry, then a
+  /// section of it; RFC 9290 cites the registry's section, then the whole registry.
+  @Test(arguments: [
+    ("rfc9783.xml", "I-D.ietf-rats-ar4si", ["[RATS-AR4SI]", "RATS-AR4SI"]),
+    ("rfc9290.xml", "IANA.cbor-tags", ["IANA.cbor-tags", "[IANA.cbor-tags]"]),
+  ])
+  func `a citation of a section of an entry outside the series is not bracketed`(
+    fixture: String, target: String, labels: [String]
+  ) throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let xrefs = document.everyCrossReference.filter { $0.target == .anchor(target) }
+    #expect(xrefs.map(\.label) == labels)
+  }
+
+  /// RFC 9220 cites RFC 8441 with `format="title"`, whose `derivedContent` is the
+  /// entry's title. A title is not a tag, so it reads as the title, not in brackets.
+  @Test func `a citation by title reads as the title, unbracketed`() throws {
+    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml")).everyCrossReference
+    let labels = xrefs.filter { $0.target == .document(.rfc(8441), section: nil, entry: "RFC8441") }
+      .map(\.label)
+    #expect(labels.contains("Bootstrapping WebSockets with HTTP/2"))
+    #expect(!labels.contains("[Bootstrapping WebSockets with HTTP/2]"))
+  }
+
+  /// `format="none"` asks for the element's own text and nothing else: a citation of
+  /// a tagged entry is not bracketed, and an empty one shows nothing, as xml2rfc
+  /// renders it, rather than its anchor. No committed fixture has either outside a
+  /// table of contents, so the tree is hand-written, in RFCXML's shape, quoted from none.
+  @Test func `a citation formatted as none shows only its own text`() throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGETS" format="none" derivedContent="">the widget
+        protocol</xref>, <xref target="WIDGETS" format="none" derivedContent=""/>,
+        <xref target="RFC9999" format="none" derivedContent="">RFC 9999</xref> and
+        <xref target="gadgets" format="none" derivedContent=""/>.</t>
+      </section>
+      <section anchor="gadgets"><name>Gadgets</name><t>Gadgets.</t></section></middle>
+      <back><references><name>References</name>
+        <reference anchor="WIDGETS"><front><title>Widgets</title></front>
+          <seriesInfo name="RFC" value="9998"/></reference>
+        <reference anchor="RFC9999"><front><title>Gadgets</title></front>
+          <seriesInfo name="RFC" value="9999"/></reference>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(xrefs.map(\.label) == ["the widget protocol", "", "RFC 9999", ""])
+  }
+
+  /// A `<referencegroup>` is one entry in the bibliography, and its members have none
+  /// of their own, so a citation of a member outside the series links to the group's
+  /// entry, as a member in the series already does. Hand-written, as no committed
+  /// fixture groups an entry outside the series; in RFCXML's shape, quoted from none.
+  @Test func `a citation of a group member outside the series links to the group`() throws {
+    let xml = """
+      <rfc><middle><section anchor="intro"><name>Introduction</name>
+        <t>See <xref target="WIDGET-1" format="default" derivedContent="WIDGET-1"/>.</t>
+      </section></middle>
+      <back><references><name>References</name>
+        <referencegroup anchor="WIDGETS">
+          <reference anchor="WIDGET-1"><front><title>Widgets, part 1</title></front></reference>
+          <reference anchor="WIDGET-2"><front><title>Widgets, part 2</title></front></reference>
+        </referencegroup>
+      </references></back></rfc>
+      """
+    let xrefs = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(xrefs.map(\.target) == [.anchor("WIDGETS")])
+    #expect(xrefs.map(\.label) == ["[WIDGET-1]"])
   }
 
   /// RFC 7991 allows more than one `<tbody>`, and RFC 9911 gives each group of

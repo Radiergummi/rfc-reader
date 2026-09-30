@@ -23,7 +23,7 @@ extension LegacyTextParser {
   /// and every line would otherwise become an unnumbered heading.
   static func bodyIsIndented(_ body: ArraySlice<Line>) -> Bool {
     var counts: [Int: Int] = [:]
-    for case .text(let string) in body where !string.isBlank {
+    for string in body.lazy.compactMap(\.string) where !string.isBlank {
       counts[string.leadingSpaceCount, default: 0] += 1
     }
     guard !counts.isEmpty else { return true }
@@ -56,17 +56,17 @@ extension LegacyTextParser {
   static func heading(
     at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool, startsBlock: Bool
   ) -> HeadingInfo? {
-    guard case .text(let string) = lines[index], string.startsAtColumnZero else { return nil }
+    guard let string = lines[index].string, string.startsAtColumnZero else { return nil }
     guard bodyIsIndented || (startsBlock && isBlankOrEnd(lines, at: index + 1)) else { return nil }
     return heading(from: string, colonNumbered: colonNumbered)
   }
 
-  private static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
+  static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {
     guard lines.indices.contains(index) else { return true }
     switch lines[index] {
     case .pageBreak:
       return true
-    case .text(let string):
+    case .text(let string), .sectionHeader(let string, _):
       return string.isBlank
     }
   }
@@ -80,7 +80,7 @@ extension LegacyTextParser {
     var content = 0
     var isolated = 0
     for (index, line) in lines.enumerated() {
-      guard case .text(let string) = line, !string.isBlank else { continue }
+      guard let string = line.string, !string.isBlank else { continue }
       content += 1
       if isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1) { isolated += 1 }
     }

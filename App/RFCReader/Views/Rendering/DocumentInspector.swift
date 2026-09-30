@@ -33,6 +33,12 @@ struct DocumentInspector: View {
   let groups: [ReferenceGroup]
   let requirements: [Requirement]?
   let info: DocumentInfo?
+  /// Whether the body is here. Without it, a document the index describes still has
+  /// its Info, and the navigation pane's lists say why they are empty (#325).
+  let hasBody: Bool
+  /// Whether the body is on its way, so the lists show progress rather than say it
+  /// has not loaded.
+  let isLoading: Bool
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
@@ -88,13 +94,33 @@ struct DocumentInspector: View {
 
   @ViewBuilder
   private var selectedTab: some View {
+    switch InspectorPane.navigationContent(hasBody: hasBody, isLoading: isLoading) {
+    case .lists:
+      loadedTab
+    case .loading:
+      // As the requirements tab shows its own extraction.
+      ProgressView()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .notLoaded:
+      // An empty list beside a failure reads as a second failure; this says why.
+      ContentUnavailableView(
+        "No \(tab.title)", systemImage: "doc.text.magnifyingglass",
+        description: Text("\(document?.displayName ?? "The document") hasn't loaded."))
+    }
+  }
+
+  @ViewBuilder
+  private var loadedTab: some View {
     switch tab {
     case .contents:
       // Opened at the section being read rather than at the top: from §15 of a long
       // RFC, the top of the list is a long way from where the reader is.
       ScrollViewReader { proxy in
         TableOfContentsView(sections: sections, current: current, select: selectSection)
-          .task {
+          // Again when a place first arrives, not on every crossing: a panel left
+          // open from the previous document shows this list before the new one
+          // has reported where it is (#325).
+          .task(id: current != nil) {
             // A turn later, once the list has rows to scroll to: a timing guess,
             // since `List` offers no initial scroll position to declare instead.
             await Task.yield()
@@ -150,12 +176,16 @@ struct PanelHost: View {
 
   var body: some View {
     @Bindable var reader = reader
-    if reader.hasDocument {
+    // On what the index describes, not only the body: a document still loading, or
+    // one that failed to or was offline, has its Info (#325).
+    if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
         groups: reader.groups,
         requirements: reader.requirements,
         info: reader.info,
+        hasBody: reader.hasDocument,
+        isLoading: reader.isLoading,
         document: navigation.selection,
         library: library,
         pane: reader.pane,
@@ -295,6 +325,8 @@ struct ReferencesView: View {
           }
         }
         .listStyle(.sidebar)
+        // A sidebar list is announced as "Sidebar", which is the window's own (#300).
+        .accessibilityLabel("References")
         // Initial as well: a citation usually switches the panel to this tab, and
         // the list is new when the request arrives.
         .task(id: revealed) {
@@ -345,7 +377,9 @@ struct ReferenceRow: View {
           }
         #endif
       } else {
-        entryDescription
+        // Not a button, so the combined element needs a role of its own, or macOS
+        // exposes it as AXUnknown (#300).
+        entryDescription.accessibilityAddTraits(.isStaticText)
         // An entry that names no RFC opens nothing in the reader, so where it
         // lives is the one way on from it — and what a citation of it reveals the
         // row for.
@@ -406,5 +440,9 @@ struct ReferenceRow: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    // One stop, whether or not the entry names an RFC: its tag, title and byline
+    // were three for an entry that is no button (#300).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.accessibilityLabel)
   }
 }

@@ -96,6 +96,25 @@ struct SelectionTextTests {
     #expect(SelectionText.plainText(of: NSAttributedString(string: "")) == "")
   }
 
+  #if !canImport(UIKit) && canImport(AppKit)
+    /// `NSTextView` asks for each flavor by its legacy name, which never equals the
+    /// modern constant: a copy that switched on `.string` alone rewrote nothing.
+    @Test func `a flavor is recognized by its legacy name as by its modern one`() {
+      let asked: [(String, SelectionText.Flavor?)] = [
+        ("NSStringPboardType", .plain),
+        ("public.utf8-plain-text", .plain),
+        ("NeXT Rich Text Format v1.0 pasteboard type", .rtf),
+        ("public.rtf", .rtf),
+        ("NeXT RTFD pasteboard type", .rtfd),
+        ("com.apple.flat-rtfd", .rtfd),
+        ("public.html", nil),
+      ]
+      for (name, flavor) in asked {
+        #expect(SelectionText.flavor(of: NSPasteboard.PasteboardType(name)) == flavor, "\(name)")
+      }
+    }
+  #endif
+
   /// A rich paste of a rendered diagram would otherwise carry its grid as characters
   /// in a clear color: the field names pasted, every border invisible.
   @Test func `a rich copy shows the borders a rendered diagram hides`() throws {

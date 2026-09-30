@@ -40,9 +40,25 @@ public enum LinkDestination: Equatable, Sendable {
     // A section of the document already on screen scrolls rather than re-opening
     // what is already open. Only when following in place: asked for a tab, a
     // section reference names something openable, unlike an anchor.
-    if activation == .here, link.id == currentDocument, let section = link.section {
+    if activation == .here, link.id == currentDocument, let section = link.place {
       return .jump(section)
     }
     return .document(link)
+  }
+
+  /// Where a jump to `place` in the document already open lands: the anchor it
+  /// resolves to, or the bibliography entry it names, as `#RFC9110` does in the RFC
+  /// Editor's HTML, which the body leaves out (#276). A document just opened only
+  /// scrolls, and stays at its top for an entry.
+  ///
+  /// `.unhandled` when the build holds no such anchor, as it holds no `#page-12`: the
+  /// jump would move nothing, so it is no jump, and gets no entry in the history.
+  public static func landing(
+    at place: String, in document: RFCDocument, bibliography: [ReferenceGroup],
+    anchors: AnchorIndex
+  ) -> LinkDestination {
+    let anchor = document.anchor(forPlace: place)
+    if bibliography.entry(anchor: anchor) != nil { return .reference(anchor) }
+    return anchors.offset(of: anchor) != nil ? .jump(anchor) : .unhandled
   }
 }

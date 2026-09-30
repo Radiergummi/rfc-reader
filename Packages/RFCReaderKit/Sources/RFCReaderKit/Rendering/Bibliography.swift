@@ -103,6 +103,37 @@ extension [ReferenceGroup] {
 }
 
 extension Reference {
+  /// What VoiceOver says for the entry's row, as one stop (#300): its tag, the
+  /// document's name, then its title, its authors, any other series it names, and
+  /// its date, with commas between.
+  ///
+  /// The tag is what the row shows and the prose cites (`HTTP`, `1`), so it comes
+  /// first. A tag that names a document is said as that document's name, which
+  /// VoiceOver says as words rather than spelling the anchor out: `RFC0001` is `RFC
+  /// 1`. No document is named twice, so a series is left out once the tag, the
+  /// document's name or an earlier series has said it. Commas, not the row's middle dots, which can be
+  /// read aloud. An entry the legacy parser could not structure is its own words,
+  /// which hold its series and date already.
+  public var accessibilityLabel: String {
+    let tag = DocumentID(label: displayAnchor)
+    var said = Set([tag, documentID].compactMap { $0 })
+    var names = [tag?.displayName ?? displayAnchor]
+    if let id = documentID, id != tag { names.append(id.displayName) }
+    guard !title.isEmpty else {
+      return (names + [rawText ?? ""]).filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+    let authors = authors.map(\.displayName).joined(separator: ", ")
+    let series =
+      seriesInfo
+      .filter { $0.name != "DOI" }
+      .compactMap { info -> String? in
+        guard let id = info.documentID else { return "\(info.name) \(info.value)" }
+        return said.insert(id).inserted ? id.displayName : nil
+      }
+    let parts = names + [title, authors] + series + [date?.formatted ?? ""]
+    return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+  }
+
   /// The entry's `<annotation>`, for the panel to show under its provenance line,
   /// or nil when it has none. External links stay links, since the usual annotation
   /// is the commit a living standard was cited at and a snapshot nobody can open is

@@ -69,6 +69,57 @@ struct LinkDestinationTests {
     #expect(asked == .document(RFCLink(id: current, section: "4.2")))
   }
 
+  /// A link's fragment that names no section is still a place in this document
+  /// (#276).
+  @Test func `an anchor fragment of this document jumps within it`() {
+    #expect(resolve("rfc://9110#sample-varint") == .jump("sample-varint"))
+  }
+
+  // MARK: - Landing
+
+  private let document = RFCDocument(
+    header: DocumentHeader(title: "T"),
+    sections: [
+      RFCKit.Section(anchor: "section-1", number: "1", title: "Introduction"),
+      RFCKit.Section(anchor: "sample-varint", number: "A.1", title: "Sample", isAppendix: true),
+    ],
+    source: .xml)
+  private let bibliography = [
+    ReferenceGroup(
+      title: "Normative References", entries: [Reference(anchor: "RFC3986", title: "URI")])
+  ]
+  /// What the build holds: the two sections, and a paragraph's anchor no section names.
+  private let anchors = AnchorIndex([
+    AnchorIndex.Entry(anchor: "section-1", offset: 0, heading: "1. Introduction"),
+    AnchorIndex.Entry(anchor: "section-1-2", offset: 40),
+    AnchorIndex.Entry(anchor: "sample-varint", offset: 80, heading: "A.1. Sample"),
+  ])
+
+  private func landing(at place: String) -> LinkDestination {
+    LinkDestination.landing(
+      at: place, in: document, bibliography: bibliography, anchors: anchors)
+  }
+
+  @Test(arguments: [
+    ("1", "section-1"), ("A.1", "sample-varint"), ("sample-varint", "sample-varint"),
+    ("section-1-2", "section-1-2"),
+  ])
+  func `a place lands on the anchor it resolves to`(place: String, anchor: String) {
+    #expect(landing(at: place) == .jump(anchor))
+  }
+
+  /// The body leaves the bibliography out, so a place naming an entry shows it.
+  @Test func `a place naming a bibliography entry reveals it`() {
+    #expect(landing(at: "RFC3986") == .reference("RFC3986"))
+  }
+
+  /// One the build does not hold moves nothing, so it is no jump, and gets no entry
+  /// in the history to go back from.
+  @Test(arguments: ["page-12", "section-99"])
+  func `a place the document does not define lands nowhere`(place: String) {
+    #expect(landing(at: place) == .unhandled)
+  }
+
   // MARK: - Not ours
 
   @Test(

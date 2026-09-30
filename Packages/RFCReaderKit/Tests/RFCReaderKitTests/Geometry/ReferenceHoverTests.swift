@@ -226,6 +226,31 @@ struct ReferenceHoverTests {
     #expect(hover.handle(.scrolled).isEmpty)
   }
 
+  // MARK: - A heading's backlinks
+
+  /// A backlink chip's list on screen, opened by a click on the chip, which is not
+  /// a reference.
+  private func showingBacklinks() -> ReferenceHover {
+    var hover = ReferenceHover()
+    _ = hover.handle(.clickedLink(reference: nil, pointer: here))
+    _ = hover.handle(.backlinksShown)
+    return hover
+  }
+
+  @Test func `the pointer traveling into a heading's backlinks does not close them`() {
+    var hover = showingBacklinks()
+    #expect(!hover.wantsTarget(at: elsewhere))
+    #expect(hover.handle(.pointerMoved(location: elsewhere, target: first)).isEmpty)
+    #expect(hover.handle(.pointerExited).isEmpty)
+    #expect(hover.presentation == .backlinks)
+  }
+
+  @Test func `choosing a backlink closes the list, and previews nothing the jump lands on`() {
+    var hover = showingBacklinks()
+    #expect(hover.handle(.previewCommitted(pointer: elsewhere)) == [.closePopover])
+    #expect(hover.handle(.scrolled).isEmpty)
+  }
+
   // MARK: - A preview's own reader
 
   @Test func `a preview's reader previews nothing itself`() {

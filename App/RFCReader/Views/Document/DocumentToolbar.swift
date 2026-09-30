@@ -20,12 +20,18 @@ import SwiftUI
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
     let exportDocument: (ExportFormat) -> Void
     let printDocument: () -> Void
+    /// False while reading on has put the bars away (`ReaderChrome`). The bottom
+    /// bar goes by losing its items, which dissolve in place, rather than by
+    /// `.toolbarVisibility`, which slides it off the screen; the top bar cannot, as
+    /// hiding its back button would also turn off swiping back.
+    let showsBottomBar: Bool
 
     @Environment(\.undoManager) private var undoManager
 
-    /// Share and More at the top; Contents and Cite leading the bottom bar, and
+    /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
-    /// Compose there (#342).
+    /// Compose there (#342). Cite is in More: on a phone it is rarely what the
+    /// reader is after.
     ///
     /// The inline title has the lowest priority in the top bar, which is why only
     /// two actions stay up there: five beside the back button left an iPhone's bar
@@ -41,53 +47,47 @@ import SwiftUI
         moreMenu
       }
 
-      ToolbarItemGroup(placement: .bottomBar) {
-        Button {
-          press(.navigation)
-        } label: {
-          Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+      if showsBottomBar {
+        ToolbarItemGroup(placement: .bottomBar) {
+          Button {
+            press(.navigation)
+          } label: {
+            Label("Contents", systemImage: "list.bullet.rectangle.portrait")
+          }
+          // The same chord as the Mac's (#157).
+          .keyboardShortcut("i", modifiers: [.command, .option])
+
+          Button {
+            press(.info)
+          } label: {
+            Label("Info", systemImage: "info.circle")
+          }
+          .keyboardShortcut("i", modifiers: .command)
         }
-        // The same chord as the Mac's (#157).
-        .keyboardShortcut("i", modifiers: [.command, .option])
 
-        Button {
-          press(.info)
-        } label: {
-          Label("Info", systemImage: "info.circle")
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+
+        ToolbarItem(placement: .bottomBar) {
+          bookmarkButton
         }
-        .keyboardShortcut("i", modifiers: .command)
-
-        citeMenu
-      }
-
-      ToolbarSpacer(.flexible, placement: .bottomBar)
-
-      ToolbarItem(placement: .bottomBar) {
-        bookmarkButton
       }
     }
 
     private var bookmarkButton: some View {
-      // A tap bookmarks, as before; a long press adds to a collection (#349).
+      // A tap bookmarks, as before; a long press adds to a collection (#349). ⌘D is
+      // not this button's but `DocumentCommands`', whose title says what it will do
+      // (#278).
       Menu {
         AddToCollectionItems(
           document: id, library: library, navigation: navigation, undoManager: undoManager)
       } label: {
-        Label(
-          isBookmarked ? "Remove Bookmark" : "Bookmark",
-          systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
+        Label("Bookmark", systemImage: isBookmarked ? "bookmark.fill" : "bookmark")
       } primaryAction: {
         toggleBookmark()
       }
-      .keyboardShortcut("d", modifiers: .command)
-    }
-
-    private var citeMenu: some View {
-      Menu {
-        MenuSections(sections: DocumentMenus.cite(), perform: perform)
-      } label: {
-        Label("Cite", systemImage: "quote.opening")
-      }
+      // A fixed label, and the state as its value, which the glyph alone never told
+      // VoiceOver (#278).
+      .accessibilityValue(DocumentActions.bookmarkState(isBookmarked: isBookmarked))
     }
 
     /// A pane's button: opens the inspector on that pane, swaps an open one to it,
@@ -99,10 +99,15 @@ import SwiftUI
       withAnimation(.snappy) { showsInspector = result.isOpen }
     }
 
-    /// What is used least: the original text, the document's pages elsewhere, and
-    /// Export and Print, which are iOS's own: the formats listed, and the print sheet.
+    /// What is used least: citing, the original text, the document's pages
+    /// elsewhere, and Export and Print, which are iOS's own: the formats listed, and
+    /// the print sheet.
     private var moreMenu: some View {
       Menu {
+        Menu("Cite", systemImage: "quote.opening") {
+          MenuSections(sections: DocumentMenus.cite(), perform: perform)
+        }
+        Divider()
         MenuSections(
           sections: DocumentMenus.more(
             showsOriginal: reader.showOriginal, errata: metadata?.errataURL,

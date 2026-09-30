@@ -36,14 +36,31 @@ public struct Abbreviation: Sendable, Hashable, Codable {
 enum Abbreviations {
   static func defined(in document: RFCDocument) -> [String: Abbreviation] {
     var found: [String: Abbreviation] = [:]
-    func record(_ pairs: [(short: String, long: String)], in anchor: String?) {
-      for pair in pairs where found[pair.short] == nil {
+    // A heading's expansion set all in capitals, as legacy headings often are, says
+    // nothing of the author's casing, so the next one in mixed case replaces it,
+    // from the body or a later heading: `RECIPIENT (RCPT)`.
+    var inCapitals: Set<String> = []
+    func record(
+      _ pairs: [(short: String, long: String)], in anchor: String?, isHeading: Bool = false
+    ) {
+      for pair in pairs {
+        let capitals = isAllCapitals(pair.long)
+        guard found[pair.short] == nil || (inCapitals.contains(pair.short) && !capitals)
+        else { continue }
         found[pair.short] = Abbreviation(
           short: pair.short, expansion: pair.long, sectionAnchor: anchor)
+        if isHeading, capitals {
+          inCapitals.insert(pair.short)
+        } else {
+          inCapitals.remove(pair.short)
+        }
       }
     }
     visit(document.header.abstract) { record($0, in: nil) }
     for section in document.allSections {
+      // The heading first, as the reader meets it, and defined in its own section:
+      // `3. Transport Layer Security (TLS)` over a body that uses `TLS` alone (#319).
+      record(expansions(in: section.titleText), in: section.anchor, isHeading: true)
       visit(section.blocks) { record($0, in: section.anchor) }
     }
     return found
@@ -274,6 +291,11 @@ enum Abbreviations {
       .map { $0.trimmingCharacters(in: .punctuationCharacters) }
       .filter { !$0.isEmpty && !functionWords.contains($0.lowercased()) }
       .count
+  }
+
+  /// Whether every letter of `text` is a capital.
+  private static func isAllCapitals(_ text: String) -> Bool {
+    !text.contains(where: \.isLowercase)
   }
 
   private static func letters(in short: String) -> Int {

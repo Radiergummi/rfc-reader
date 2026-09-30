@@ -7,8 +7,15 @@ import Foundation
 /// on `XMLDriver`, the tree's own driver, so the two share the rule about errors
 /// reported after the root closes (#133).
 public enum RFCIndexParser {
-  public enum ParseError: Error, Sendable, Equatable {
+  public enum ParseError: Error, LocalizedError, Sendable, Equatable {
     case malformed(XMLSyntaxError)
+
+    /// The syntax error's own words, which the app shows (#320).
+    public var errorDescription: String? {
+      switch self {
+      case .malformed(let error): error.errorDescription
+      }
+    }
   }
 
   public static func parse(_ data: Data) throws(ParseError) -> RFCIndex {
