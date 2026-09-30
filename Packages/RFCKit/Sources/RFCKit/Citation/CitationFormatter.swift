@@ -139,6 +139,9 @@ public enum CitationFormatter {
   /// out rather than escaped, because BibTeX counts a brace whether or not a
   /// backslash precedes it, so `\{` only works for braces that already pair up. A
   /// backslash of the text's own is spelled out too, so it can't start a command.
+  /// BibTeX accepts `_ $ # ^ ~`, but LaTeX reads them as markup when it typesets
+  /// the field (#242). `\^` and `\~` are accent commands, so those two are
+  /// spelled out as well.
   static func bibtexEscaped(_ text: String) -> String {
     var escaped = ""
     for character in text {
@@ -146,7 +149,9 @@ public enum CitationFormatter {
       case "\\": escaped.append("\\textbackslash{}")
       case "{": escaped.append("\\textbraceleft{}")
       case "}": escaped.append("\\textbraceright{}")
-      case "%", "&": escaped.append("\\\(character)")
+      case "%", "&", "_", "$", "#": escaped.append("\\\(character)")
+      case "^": escaped.append("\\textasciicircum{}")
+      case "~": escaped.append("\\textasciitilde{}")
       default: escaped.append(character)
       }
     }
