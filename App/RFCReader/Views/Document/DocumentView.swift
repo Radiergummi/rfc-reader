@@ -239,10 +239,6 @@ struct DocumentView: View {
       .onAppear {
         if !session.hasStartedOriginalTextLoad { session.startOriginalTextLoad(from: library) }
       }
-      // No header to show the title here, so the toolbar shows it throughout.
-      // On `hasDocument` rather than on appearing: loading a document clears
-      // the title back to hidden after this view may already have appeared.
-      .onChange(of: reader.hasDocument, initial: true) { reader.updateToolbarTitle(.shown) }
     } else if let document = session.state.document, let built = session.state.built {
       let headerIdentity = DocumentHeaderView.Identity(
         header: document.header, metadata: metadata,
@@ -269,7 +265,13 @@ struct DocumentView: View {
           navigation.visiblePosition = $0
         },
         onLink: openInApp,
-        onToolbarTitle: { reader.updateToolbarTitle($0) },
+        // Not while fading out over the next document's reader, as the load's
+        // and the build's callbacks guard: the title is the selected document's.
+        onToolbarTitle: { state, source in
+          guard navigation.selection == id else { return }
+          reader.report(title: state, from: source)
+        },
+        onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
         onSelectionChange: { reader.hasSelection = $0 },
         heading: heading,
         headerIdentity: headerIdentity,
@@ -405,6 +407,9 @@ struct DocumentView: View {
     // this one; `install()` reports the real anchor a moment later.
     reader.clear()
     reader.showOriginal = preferOriginalText
+    // Its header is on its way until the reader reports, so the title stays out of
+    // the toolbar rather than showing and then dropping (#281).
+    reader.documentStartsLoading()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
@@ -435,6 +440,10 @@ struct DocumentView: View {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
+    } failed: { [reader, navigation, id] in
+      // No header is coming, so the toolbar names the RFC that failed.
+      guard navigation.selection == id else { return }
+      reader.documentFailedToLoad()
     }
   }
 

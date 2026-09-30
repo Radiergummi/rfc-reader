@@ -29,7 +29,8 @@ struct RFCTextView: View {
     onScrollHandled: @escaping () -> Void,
     onVisibleAnchorChange: @escaping (String) -> Void,
     onLink: @escaping (URL, LinkActivation) -> Bool,
-    onToolbarTitle: @escaping (ToolbarTitleState) -> Void,
+    onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
+    onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
@@ -47,6 +48,7 @@ struct RFCTextView: View {
       onVisibleAnchorChange: onVisibleAnchorChange,
       onLink: onLink,
       onToolbarTitle: onToolbarTitle,
+      onToolbarTitleReleased: onToolbarTitleReleased,
       onSelectionChange: onSelectionChange,
       heading: heading,
       header: AnyView(header()),
@@ -95,7 +97,8 @@ struct ReaderInputs {
   let onScrollHandled: () -> Void
   let onVisibleAnchorChange: (String) -> Void
   let onLink: (URL, LinkActivation) -> Bool
-  let onToolbarTitle: (ToolbarTitleState) -> Void
+  let onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void
+  let onToolbarTitleReleased: (_ reader: AnyObject) -> Void
   /// Whether the reader has a selection, which grays out Edit ▸ Copy as Quote without
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
@@ -120,6 +123,7 @@ struct ReaderInputs {
     coordinator.documentID = documentID
     coordinator.commitsOnClick = commitsOnClick
     coordinator.onToolbarTitle = onToolbarTitle
+    coordinator.onToolbarTitleReleased = onToolbarTitleReleased
     coordinator.onSelectionChange = onSelectionChange
     if coordinator.heading !== heading {
       coordinator.heading = heading
