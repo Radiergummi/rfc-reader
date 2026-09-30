@@ -91,17 +91,20 @@ import SwiftUI
 
     private var text: Binding<String> {
       Binding {
-        SearchQuery.tokenized(navigation.searchText).text
+        SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups).text
       } set: { text in
-        navigation.searchText = SearchQuery.replacingText(in: navigation.searchText, with: text)
+        navigation.searchText = SearchQuery.replacingText(
+          in: navigation.searchText, with: text, workingGroups: library.knownWorkingGroups)
       }
     }
 
     private var tokens: Binding<[SearchQuery.Term]> {
       Binding {
-        SearchQuery.tokenized(navigation.searchText).terms
+        SearchQuery.tokenized(navigation.searchText, workingGroups: library.knownWorkingGroups)
+          .terms
       } set: { terms in
-        navigation.searchText = SearchQuery.replacingTerms(in: navigation.searchText, with: terms)
+        navigation.searchText = SearchQuery.replacingTerms(
+          in: navigation.searchText, with: terms, workingGroups: library.knownWorkingGroups)
       }
     }
   }

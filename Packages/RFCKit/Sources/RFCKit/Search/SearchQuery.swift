@@ -236,10 +236,16 @@ public enum SearchQuery {
   /// `query` split into tokens and text.
   ///
   /// A filter becomes a token once the reader has finished typing it, so `wg:t` is
-  /// not a token before `wg:tls` can be typed. A word that filters nothing stays
-  /// text, as `parseQuery` searches it as text. The space the reader has just typed
-  /// stays in the text, or the field would take it back.
-  public static func tokenized(_ query: String) -> Tokenized {
+  /// not a token before `wg:tls` can be typed. The word at the end is still being
+  /// typed until a space follows it; a word typed in front of the text is finished
+  /// only by what it says, so a working group becomes a token only once it is one of
+  /// `workingGroups`, as a status does only once it is a status. A word that filters
+  /// nothing stays text, as `parseQuery` searches it as text. The space the reader
+  /// has just typed stays in the text, or the field would take it back.
+  ///
+  /// - Parameter workingGroups: The working groups a token may name, lowercased, as
+  ///   `knownWorkingGroups(in:)` gives them.
+  public static func tokenized(_ query: String, workingGroups: Set<String>) -> Tokenized {
     let words = words(in: query)
     let typing = wordBeingTyped(in: query) != nil
     var filtering: [String] = []
@@ -247,7 +253,8 @@ public enum SearchQuery {
     for (offset, word) in words.enumerated() {
       let parsed = IndexSearch.parseQuery(word)
       let isTyped = typing && offset == words.count - 1
-      if !isTyped, parsed.text.isEmpty, !parsed.filters.isEmpty {
+      let namesKnownGroup = parsed.filters.workingGroup.map(workingGroups.contains) ?? true
+      if !isTyped, parsed.text.isEmpty, !parsed.filters.isEmpty, namesKnownGroup {
         filtering.append(word)
       } else {
         text.append(word)
@@ -261,13 +268,17 @@ public enum SearchQuery {
 
   /// `query` with the text the iOS field shows replaced by `text`, as typed, and its
   /// tokens kept.
-  public static func replacingText(in query: String, with text: String) -> String {
-    joined(terms: tokenized(query).terms, text: text)
+  public static func replacingText(
+    in query: String, with text: String, workingGroups: Set<String>
+  ) -> String {
+    joined(terms: tokenized(query, workingGroups: workingGroups).terms, text: text)
   }
 
   /// `query` with its tokens replaced by `terms`, a token removed, and its text kept.
-  public static func replacingTerms(in query: String, with terms: [Term]) -> String {
-    joined(terms: terms, text: tokenized(query).text)
+  public static func replacingTerms(
+    in query: String, with terms: [Term], workingGroups: Set<String>
+  ) -> String {
+    joined(terms: terms, text: tokenized(query, workingGroups: workingGroups).text)
   }
 
   /// Tokens and text put back together into the one search text: each token's word
@@ -440,6 +451,12 @@ public enum SearchQuery {
       .map(\.key)
     return groups.filter { $0 != individualSubmissions }
       + groups.filter { $0 == individualSubmissions }
+  }
+
+  /// Every working group the index names, lowercased as `parseQuery` matches them:
+  /// the ones a `wg:` token may name in `tokenized(_:workingGroups:)`.
+  public static func knownWorkingGroups(in index: RFCIndex) -> Set<String> {
+    Set(index.rfcs.compactMap { $0.workingGroup?.lowercased() })
   }
 
   /// The working group the index files individual submissions under.

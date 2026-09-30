@@ -213,8 +213,19 @@ struct SearchQueryTests {
 /// field, tokens in the iOS one.
 @Suite("Search query terms")
 struct SearchQueryTermTests {
+  /// The working groups a `wg:` token may name: those of the sample index.
+  private let workingGroups: Set<String>
+
+  init() throws {
+    workingGroups = SearchQuery.knownWorkingGroups(in: try Fixtures.sampleIndex())
+  }
+
   private func terms(_ query: String) -> [SearchQuery.Term] {
     SearchQuery.terms(of: IndexSearch.parseQuery(query).filters)
+  }
+
+  private func tokenized(_ query: String) -> SearchQuery.Tokenized {
+    SearchQuery.tokenized(query, workingGroups: workingGroups)
   }
 
   /// One term per word of the canonical form, in its order, each named for a
@@ -280,14 +291,18 @@ struct SearchQueryTermTests {
 
   /// What the reader types in the iOS field replaces the text and keeps the tokens.
   @Test func `new text keeps the tokens`() {
-    #expect(SearchQuery.replacingText(in: "wg:tls cache", with: "caching ") == "wg:tls caching ")
+    #expect(
+      SearchQuery.replacingText(
+        in: "wg:tls cache", with: "caching ", workingGroups: workingGroups) == "wg:tls caching ")
   }
 
   /// A token removed from the iOS field leaves the text as it was.
   @Test func `new tokens keep the text`() {
     let query = "wg:tls is:bcp cache "
-    let kept = SearchQuery.tokenized(query).terms.filter { $0.word != "wg:tls" }
-    #expect(SearchQuery.replacingTerms(in: query, with: kept) == "status:bcp cache ")
+    let kept = tokenized(query).terms.filter { $0.word != "wg:tls" }
+    #expect(
+      SearchQuery.replacingTerms(in: query, with: kept, workingGroups: workingGroups)
+        == "status:bcp cache ")
   }
 
   // MARK: - Tokens
@@ -295,40 +310,53 @@ struct SearchQueryTermTests {
   /// A filter the reader has finished typing becomes a token; the word still being
   /// typed stays text, or `wg:t` would be a token before `wg:tls` could be typed.
   @Test func `a finished filter becomes a token and the word being typed stays text`() {
-    let tokenized = SearchQuery.tokenized("cache wg:tls status:b")
-    #expect(tokenized.terms.map(\.word) == ["wg:tls"])
-    #expect(tokenized.text == "cache status:b")
+    let split = tokenized("cache wg:tls status:b")
+    #expect(split.terms.map(\.word) == ["wg:tls"])
+    #expect(split.text == "cache status:b")
+  }
+
+  /// A filter typed in front of the text is not the word being typed, so `wg:t` would
+  /// be a token after its first letter, before `wg:tls` could be typed. A working
+  /// group becomes a token only once it names one the index knows, as a status only
+  /// once it is a status.
+  @Test func `a working group the index does not know stays text`() {
+    let typing = tokenized("wg:t cache")
+    #expect(typing.terms.isEmpty)
+    #expect(typing.text == "wg:t cache")
+    let typed = tokenized("wg:tls cache")
+    #expect(typed.terms.map(\.word) == ["wg:tls"])
+    #expect(typed.text == "cache")
   }
 
   /// The space the reader has just typed is kept, or the field would take it back.
   @Test func `a trailing space stays in the text`() {
-    #expect(SearchQuery.tokenized("cache ").text == "cache ")
-    #expect(SearchQuery.tokenized("wg:tls ").text == "")
-    #expect(SearchQuery.tokenized("wg:tls ").terms.map(\.word) == ["wg:tls"])
+    #expect(tokenized("cache ").text == "cache ")
+    #expect(tokenized("wg:tls ").text == "")
+    #expect(tokenized("wg:tls ").terms.map(\.word) == ["wg:tls"])
   }
 
   /// A word with a colon that filters nothing is searched as text, so it stays text.
   @Test func `a word that filters nothing stays text`() {
-    let tokenized = SearchQuery.tokenized("color:red status:stnd cache ")
-    #expect(tokenized.terms.isEmpty)
-    #expect(tokenized.text == "color:red status:stnd cache ")
+    let split = tokenized("color:red status:stnd cache ")
+    #expect(split.terms.isEmpty)
+    #expect(split.text == "color:red status:stnd cache ")
   }
 
   /// A second working group replaces the first, as `parseQuery` reads the last one.
   @Test func `a later working group replaces the token of an earlier one`() {
-    let tokenized = SearchQuery.tokenized(
+    let split = tokenized(
       SearchQuery.joined(terms: terms("wg:tls"), text: "wg:quic "))
-    #expect(tokenized.terms.map(\.word) == ["wg:quic"])
+    #expect(split.terms.map(\.word) == ["wg:quic"])
   }
 
   /// The one search text is what the list filters on; tokens and text are a view of
   /// it, and put back together they are the same query.
   @Test(arguments: ["", "cache", "cache ", "wg:tls status:b", "wg:tls is:bcp cache "])
   func `tokens and text join back to the query they came from`(query: String) {
-    let tokenized = SearchQuery.tokenized(query)
-    let joined = SearchQuery.joined(terms: tokenized.terms, text: tokenized.text)
+    let split = tokenized(query)
+    let joined = SearchQuery.joined(terms: split.terms, text: split.text)
     #expect(IndexSearch.parseQuery(joined) == IndexSearch.parseQuery(query))
-    #expect(SearchQuery.tokenized(joined) == tokenized)
+    #expect(tokenized(joined) == split)
   }
 
   // MARK: - Taking a suggestion

@@ -43,6 +43,19 @@ struct PreparedIndexTests {
       ])
   }
 
+  /// Every working group, not only the top twelve, lowercased as `parseQuery` matches
+  /// them: the ones the iOS search field's `wg:` token may name (#21).
+  @Test func `every working group is known, lowercased`() {
+    var rfcs = [rfc(1, group: "HTTPBIS"), rfc(2, group: "tls")]
+    rfcs += (0..<14).map { rfc(100 + $0, group: "group\($0)") }
+    rfcs.append(rfc(200))
+
+    let prepared = PreparedIndex(index: RFCIndex(rfcs: rfcs))
+
+    #expect(prepared.knownWorkingGroups.count == 16)
+    #expect(prepared.knownWorkingGroups.isSuperset(of: ["httpbis", "tls", "group13"]))
+  }
+
   /// The sidebar's counts (#344), for every filter the index alone decides.
   @Test func `every filter the index decides is counted`() {
     let index = RFCIndex(rfcs: [

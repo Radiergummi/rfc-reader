@@ -15,6 +15,9 @@ public struct PreparedIndex: Sendable {
   /// The working groups with the most RFCs, most first and equal counts by name, for
   /// the sidebar.
   public let topWorkingGroups: [String]
+  /// Every working group the index names, lowercased: the ones the iOS search
+  /// field's `wg:` token may name (#21).
+  public let knownWorkingGroups: Set<String>
   /// How many RFCs each filter the index decides lists, for the sidebar's rows
   /// (#344). A filter nothing is in has no entry.
   public let counts: [LibraryFilter: Int]
@@ -23,6 +26,7 @@ public struct PreparedIndex: Sendable {
     self.index = index
     self.search = IndexSearch(index: index)
     self.topWorkingGroups = Self.workingGroups(in: index)
+    self.knownWorkingGroups = SearchQuery.knownWorkingGroups(in: index)
     self.counts = Self.counts(in: index)
   }
 
