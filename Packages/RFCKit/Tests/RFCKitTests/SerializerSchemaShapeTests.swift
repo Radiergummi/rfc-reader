@@ -112,6 +112,7 @@ struct SerializerSchemaShapeTests {
     chapter.blocks = [.paragraph(Paragraph([.text("Prose.")]))]
     chapter.subsections = [Self.bibliography("1.3", entries: ["B"])]
     var appendix = Self.appendix("A")
+    appendix.blocks = [.paragraph(Paragraph([.text("More prose.")]))]
     appendix.subsections = [Self.bibliography("A.2", entries: ["C"])]
     let rfc = try Self.serialized([chapter, Self.bibliography("2"), appendix])
 
@@ -121,9 +122,27 @@ struct SerializerSchemaShapeTests {
     let back = try #require(rfc.first("back"))
     #expect(back.elements.map(\.name) == ["references", "references", "references", "section"])
     #expect(
-      back.all("references").map { $0["pn"] } == ["section-2", "section-1.3", "appendix-A.2"])
+      back.all("references").map { $0["pn"] } == ["section-2", "section-1.3", "section-A.2"])
     #expect(back.all("references")[1].first("name")?.text == "References 1.3")
     #expect(Self.descendants("references", of: try #require(back.first("section"))).isEmpty)
+  }
+
+  /// A lifted bibliography is written after the sections that follow it, and a later
+  /// section numbered like it took its part number first: that `pn` then declared
+  /// the ID the lifted list's anchor declared as well. Part numbers go to the first
+  /// section in the document, however it is written.
+  @Test func `a lifted bibliography keeps its part number from a later section of its number`()
+    throws
+  {
+    var later = Self.chapter("11")
+    later.anchor = "section-11-2"
+    let rfc = try Self.serialized([
+      Self.chapter("1"), Self.bibliography("11", entries: ["B"]), later,
+      Self.bibliography("12", entries: ["C"]),
+    ])
+    let ids = Self.declaredIDs(in: rfc)
+    #expect(ids.count == Set(ids).count, "\(ids)")
+    #expect(rfc.first("back")?.all("references").map { $0["pn"] } == ["section-12", "section-11"])
   }
 
   /// A list holding entries beside nested lists is the one shape the schema refuses

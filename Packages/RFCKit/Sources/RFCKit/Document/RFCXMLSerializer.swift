@@ -42,7 +42,7 @@ public struct RFCXMLSerializer: Sendable {
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
     let referenceAnchors = Self.referenceAnchors(in: document)
-    var context = Context(referenceAnchors: referenceAnchors)
+    var context = Context(referenceAnchors: referenceAnchors, sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -92,11 +92,21 @@ public struct RFCXMLSerializer: Sendable {
     }
     writer.close("middle")
 
-    if backStart < document.sections.count {
+    // The back is its own references, then every bibliography lifted from elsewhere,
+    // then its sections, which the schema requires in that order. Its sections are
+    // written apart and first, so what they lift can still go ahead of them.
+    let back = document.sections[backStart...]
+    let ownReferences = back.prefix(while: Self.isReferences)
+    var sections = Writer(depth: writer.depth + 1)
+    for section in back.dropFirst(ownReferences.count) {
+      writeTopLevel(section, writer: &sections, context: &context)
+    }
+    if !back.isEmpty || !context.lifted.isEmpty {
       writer.open("back")
-      for section in document.sections[backStart...] {
-        writeTopLevel(section, writer: &writer, context: &context)
+      for section in ownReferences + context.lifted {
+        writeReferences(section, writer: &writer, context: &context)
       }
+      writer.append(sections)
       writer.close("back")
     }
     writer.close("rfc")
@@ -213,21 +223,22 @@ public struct RFCXMLSerializer: Sendable {
 
   // MARK: - Sections
 
-  /// A chapter, in `<middle>` or `<back>`. A references section is `<references>`
-  /// wherever it sits: one ahead of the back (RFC 2511's `9. References`, before its
-  /// appendices and theirs) is no more valid in `<middle>` than inside a `<section>`,
-  /// but written as a section it would wrap its list in a second, unnumbered
-  /// `<references>`, and read back as a section holding a subsection it never had.
+  /// A chapter, in `<middle>` or among the back's sections. A references section
+  /// there is lifted into the back's references, keeping its anchor, number and name
+  /// (#315): the schema has room for `<references>` nowhere else. One ahead of the
+  /// back (RFC 2511's `9. References`, before its appendices and theirs) written as a
+  /// section would wrap its list in a second, unnumbered `<references>`, and read back
+  /// as a section holding a subsection it never had.
   private func writeTopLevel(_ section: Section, writer: inout Writer, context: inout Context) {
     if Self.isReferences(section) {
-      writeReferences(section, writer: &writer, context: &context)
+      context.lifted.append(section)
     } else {
       writeSection(section, writer: &writer, context: &context)
     }
   }
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
-    let partNumber = Self.claimedPartNumber(of: section, context: &context)
+    let partNumber = context.partNumber(of: section)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
@@ -239,43 +250,41 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("section", attributes)
     writer.line("<name>\(inlineXML(title, context: &context))</name>")
     for block in section.blocks { writeBlock(block, writer: &writer, context: &context) }
+    // A bibliography under a section, a subsection of References or one under an
+    // appendix, goes to the back, and the section keeps the rest (#315).
     for subsection in section.subsections {
-      if Self.isReferences(subsection) {
-        writeReferences(subsection, writer: &writer, context: &context)
-      } else {
-        writeSection(subsection, writer: &writer, context: &context)
-      }
+      writeTopLevel(subsection, writer: &writer, context: &context)
     }
     writer.close("section")
   }
 
-  /// The section's `pn`, or nil when it has no number or another section claimed that
-  /// one first. Two sections numbered alike (RFC 1 has two appendices A) would share a
-  /// `pn`, which is an ID. The second is written unnumbered, its number in its name, so
-  /// it reads the same and names nothing twice (#65).
-  private static func claimedPartNumber(of section: Section, context: inout Context) -> String? {
-    guard let number = section.number else { return nil }
-    let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix).attribute
-    return context.claim(partNumber) ? partNumber : nil
-  }
-
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
-    let partNumber = Self.claimedPartNumber(of: section, context: &context)
+    let partNumber = context.partNumber(of: section)
     let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
     writer.line("<name>\(inlineXML(title, context: &context))</name>")
+    var entries: [Reference] = []
     for block in section.blocks {
       guard case .references(let list) = block else {
         context.warnings.append(
           "dropped non-reference block in references section \(section.anchor)")
         continue
       }
-      for reference in list.entries {
-        writeReference(reference, writer: &writer, context: &context)
-      }
+      entries += list.entries
     }
+    // A list holding entries beside lists of its own may not hold them directly:
+    // they go in a list of their own, named after it (#315).
+    let wrapsEntries = !entries.isEmpty && !section.subsections.isEmpty
+    if wrapsEntries {
+      writer.open("references", [("anchor", "refs-\(context.nextAutoAnchor())")])
+      writer.line("<name>\(inlineXML(section.title, context: &context))</name>")
+    }
+    for reference in entries {
+      writeReference(reference, writer: &writer, context: &context)
+    }
+    if wrapsEntries { writer.close("references") }
     for subsection in section.subsections {
       writeReferences(subsection, writer: &writer, context: &context)
     }
@@ -494,16 +503,40 @@ public struct RFCXMLSerializer: Sendable {
   private struct Context {
     var referenceAnchors: [DocumentID: String]
     var warnings: [String] = []
+    /// The references sections found outside the back, in document order, which the
+    /// back writes after its own (#315).
+    var lifted: [Section] = []
     private var autoAnchor = 0
-    private var claimedPartNumbers: Set<String> = []
+    /// Each numbered section's `pn`, by its anchor, claimed in document order: the
+    /// first of two sections numbered alike takes it, however the two are written.
+    /// A bibliography lifted into the back is written after sections that follow it
+    /// (#315), and claiming in writing order gave its number to the later one, whose
+    /// `pn` then declared the ID the lifted list's anchor declared too.
+    private var partNumbers: [String: String] = [:]
 
-    /// Whether `partNumber` is still free, taking it if it is.
-    mutating func claim(_ partNumber: String) -> Bool {
-      claimedPartNumbers.insert(partNumber).inserted
+    init(referenceAnchors: [DocumentID: String], sections: [Section]) {
+      self.referenceAnchors = referenceAnchors
+      var claimed: Set<String> = []
+      func claim(_ sections: [Section]) {
+        for section in sections {
+          if let number = section.number, partNumbers[section.anchor] == nil {
+            let partNumber = PartNumber(sectionNumber: number, isAppendix: section.isAppendix)
+              .attribute
+            if claimed.insert(partNumber).inserted { partNumbers[section.anchor] = partNumber }
+          }
+          claim(section.subsections)
+        }
+      }
+      claim(sections)
     }
 
-    init(referenceAnchors: [DocumentID: String]) {
-      self.referenceAnchors = referenceAnchors
+    /// The section's `pn`, or nil when it has no number or an earlier section claimed
+    /// that one. Two sections numbered alike (RFC 1 has two appendices A) would share
+    /// a `pn`, which is an ID. The second is written unnumbered, its number in its
+    /// name, so it reads the same and names nothing twice (#65). Given once: a second
+    /// section of the same anchor gets none.
+    mutating func partNumber(of section: Section) -> String? {
+      partNumbers.removeValue(forKey: section.anchor)
     }
 
     mutating func nextAutoAnchor() -> Int {
@@ -541,7 +574,16 @@ public struct RFCXMLSerializer: Sendable {
 
   private struct Writer {
     private(set) var output = ""
-    private var depth = 0
+    private(set) var depth: Int
+
+    /// Starting `depth` levels in, for what is written apart and appended there.
+    init(depth: Int = 0) {
+      self.depth = depth
+    }
+
+    mutating func append(_ other: Writer) {
+      output += other.output
+    }
 
     mutating func raw(_ string: String) {
       output += string
