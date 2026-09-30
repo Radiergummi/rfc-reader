@@ -368,6 +368,8 @@ public enum LegacyTextParser {
     var pendingBreak = false
     // The numbers headings have taken, which a centered heading may not take again.
     var numbers: Set<String> = []
+    let centered = centeredHeadings(
+      in: lines, from: bodyStart, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered)
 
     func flushBlock() {
       if !current.isEmpty {
@@ -407,13 +409,12 @@ public enum LegacyTextParser {
             sections.append(RawSection(heading: heading))
             if let number = heading.number { numbers.insert(number) }
           }
-        } else if let heading = centeredHeading(
-          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-          taken: numbers)
+        } else if let heading = centered[index], let number = heading.number,
+          !numbers.contains(number)
         {
           flushBlock()
           sections.append(RawSection(heading: heading))
-          if let number = heading.number { numbers.insert(number) }
+          numbers.insert(number)
         } else {
           current.append(string)
         }

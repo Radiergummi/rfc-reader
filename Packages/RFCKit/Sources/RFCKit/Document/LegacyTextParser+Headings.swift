@@ -62,44 +62,69 @@ extension LegacyTextParser {
   }
 
   /// A contents entry's end: a leader of four dots or more, run on or spaced, then a
-  /// page number in arabic or lower-case roman numerals. Four, because a range in a
-  /// title is three, `0...255`.
-  private static let contentsEntryPattern = Pattern(#/(?:\.\s?){4,}\s*(?:\d+|[ivx]+)$/#)
+  /// page number. Four, because a range in a title is three, `0...255`.
+  private static let contentsEntryPattern = Pattern(#/(?:\.\s?){4,}\s*(?<page>\d+|[ivx]+)$/#)
 
   /// A contents entry, `2.  Overview ........ 5`, which reads as a heading at column
   /// 0 and never is one: RFC 791, 793 and the specifications set like them list their
   /// contents there, and each entry opened a section of its own (#403). `rawSections`
   /// asks this and `heading(from:)` does not, because the front matter's end is
-  /// judged by that one, and it ends at such a listing.
+  /// judged by that one, and it ends at such a listing. Stricter than the lead-in's
+  /// `isContentsEntries`, which takes two dots: this one refuses a heading, and a
+  /// title may hold a range, `1..5`.
   static func isContentsEntry(_ line: String) -> Bool {
-    line.trimmingCharacters(in: .whitespaces).firstMatch(of: contentsEntryPattern) != nil
+    guard let match = line.trimmingCharacters(in: .whitespaces).firstMatch(of: contentsEntryPattern)
+    else { return false }
+    return match.page.allSatisfy(\.isNumber) || isRomanPageNumber(match.page)
   }
 
-  /// A numbered heading set centered, which RFC 791, 793 and the specifications set
-  /// like them do for a chapter: `1.  INTRODUCTION` on a line of its own, and its
-  /// subsections at column 0 (#403). Off column 0 a numbered line is otherwise a list
-  /// item, so it is a heading only where the next heading is its first subsection, and
-  /// while no heading has taken its number, `taken`: a list of one-line items set a
-  /// blank line apart, under a heading of that number, stays a list.
-  static func centeredHeading(
-    at index: Int, in lines: [Line], bodyIsIndented: Bool, colonNumbered: Bool,
-    taken: Set<String>
-  ) -> HeadingInfo? {
-    guard let string = lines[index].string, !string.startsAtColumnZero,
-      isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
-      let heading = heading(from: string, colonNumbered: colonNumbered),
-      let number = heading.number, !taken.contains(number)
-    else { return nil }
-    let next = lines.indices[(index + 1)...].lazy.compactMap { next -> HeadingInfo? in
-      guard let string = lines[next].string, !isContentsEntry(string),
-        let heading = Self.heading(
-          at: next, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-          startsBlock: isBlankOrEnd(lines, at: next - 1)),
-        heading.number != nil || !refusesUnnumberedHeading(heading.title)
-      else { return nil }
-      return heading
-    }.first
-    return next?.number == "\(number).1" ? heading : nil
+  /// The numbered headings set off column 0, by line:
+  /// RFC 791, 793 and the specifications set like them center a chapter's heading,
+  /// `1.  INTRODUCTION`, on a line of its own, and set its subsections at column 0
+  /// (#403). Off column 0 a numbered line is otherwise a list item, so it is a
+  /// heading only where the next heading is its first subsection, and no nearer line
+  /// of the same shape has its number: of a diagram's numbered rows and a chapter's
+  /// heading, the heading is the one just above `4.1`. `rawSections` refuses one
+  /// whose number a heading has already taken, so a list of one-line items under a
+  /// heading of that number stays a list.
+  ///
+  /// One pass from the end, carrying the next heading down, because asking each line
+  /// for the heading after it scanned the section for every one of them: RFC 1122's
+  /// 266 indented numbered lines made its parse four times slower. A column-0 line is
+  /// the next heading where `rawSections` would open a section at it. It asks whether
+  /// the line starts a block, and that is whether the line above is blank: a heading
+  /// directly above would need a blank line under it in a body at column 0, and in an
+  /// indented body the position is not asked.
+  static func centeredHeadings(
+    in lines: [Line], from start: Int, bodyIsIndented: Bool, colonNumbered: Bool
+  ) -> [Int: HeadingInfo] {
+    var headings: [Int: HeadingInfo] = [:]
+    var next: (index: Int, number: String?)?
+    var nearestOfNumber: [String: Int] = [:]
+    for index in lines.indices[start...].reversed() {
+      guard let string = lines[index].string, !string.isBlank else { continue }
+      if string.startsAtColumnZero {
+        if let heading = Self.heading(
+          at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
+          startsBlock: isBlankOrEnd(lines, at: index - 1)),
+          heading.number != nil || !refusesUnnumberedHeading(heading.title),
+          !isContentsEntry(string)
+        {
+          next = (index, heading.number)
+        }
+        continue
+      }
+      guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
+        let heading = heading(from: string, colonNumbered: colonNumbered),
+        let number = heading.number, !isContentsEntry(string)
+      else { continue }
+      let nearest = nearestOfNumber[number, default: .max]
+      if let next, next.number == "\(number).1", nearest > next.index {
+        headings[index] = heading
+      }
+      nearestOfNumber[number] = index
+    }
+    return headings
   }
 
   static func isBlankOrEnd(_ lines: [Line], at index: Int) -> Bool {

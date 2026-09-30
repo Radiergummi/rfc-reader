@@ -347,25 +347,30 @@ struct LegacyTextParserHeadingsTests {
   }
 
   /// A numbered line on its own is a centered heading only where the next heading is
-  /// its first subsection, and only while no heading has taken its number: a list of
-  /// one-line items set a blank line apart stays a list.
+  /// its first subsection, and no nearer line of its shape has its number.
   @Test func `a numbered line is a centered heading only before its first subsection`() {
     let lines: [LegacyTextParser.Line] = [
       .text(""), .text("                         2.  WIDGET RULES"), .text(""),
       .text("   The text."), .text(""), .text("2.1.  Widget Sizes"), .text(""),
     ]
-    func heading(_ lines: [LegacyTextParser.Line], taken: Set<String> = []) -> String? {
-      LegacyTextParser.centeredHeading(
-        at: 1, in: lines, bodyIsIndented: true, colonNumbered: false, taken: taken)?.title
+    func heading(_ lines: [LegacyTextParser.Line], at index: Int = 1) -> String? {
+      LegacyTextParser.centeredHeadings(
+        in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)[index]?.title
     }
     #expect(heading(lines) == "WIDGET RULES")
-    #expect(heading(lines, taken: ["2"]) == nil)
     var nextIsNotItsSubsection = lines
     nextIsNotItsSubsection[5] = .text("3.1.  Widget Sizes")
     #expect(heading(nextIsNotItsSubsection) == nil)
     var notOnItsOwn = lines
     notOnItsOwn[2] = .text("   The text.")
     #expect(heading(notOnItsOwn) == nil)
+    var aContentsEntry = lines
+    aContentsEntry[1] = .text("   2.  WIDGET RULES ................ 4")
+    #expect(heading(aContentsEntry) == nil)
+    var aNearerOne = lines
+    aNearerOne[3] = .text("                         2.  WIDGET RULES")
+    #expect(heading(aNearerOne) == nil, "a row of the same number sits nearer")
+    #expect(heading(aNearerOne, at: 3) == "WIDGET RULES")
   }
 
   // MARK: Unnumbered headings (#201)
