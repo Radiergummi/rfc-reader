@@ -24,4 +24,26 @@ struct InspectorPaneTests {
     #expect(!result.isOpen)
     #expect(result.pane == .navigation)
   }
+
+  // MARK: What a pane has to show (#325)
+
+  /// A document the index describes has its Info while its body is still loading,
+  /// or failed to load, or was offline; its contents and references come with the
+  /// body.
+  @Test func `with only the index, Info has content and the lists have none`() {
+    #expect(InspectorPane.hasContent(.info, hasBody: false, isDescribed: true))
+    #expect(!InspectorPane.hasContent(.navigation, hasBody: false, isDescribed: true))
+  }
+
+  @Test func `with the body, every pane has content`() {
+    #expect(InspectorPane.hasContent(.info, hasBody: true, isDescribed: true))
+    #expect(InspectorPane.hasContent(.navigation, hasBody: true, isDescribed: true))
+  }
+
+  /// A document the index does not know has no Info to show until its body says
+  /// what it is.
+  @Test func `with neither, no pane has content`() {
+    #expect(!InspectorPane.hasContent(.info, hasBody: false, isDescribed: false))
+    #expect(!InspectorPane.hasContent(.navigation, hasBody: false, isDescribed: false))
+  }
 }
