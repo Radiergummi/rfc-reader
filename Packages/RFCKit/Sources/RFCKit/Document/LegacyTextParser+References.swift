@@ -108,9 +108,9 @@ extension LegacyTextParser {
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
     // `Request for Comments 796`, `Request For Comments 990` and `RFC #189` only when an
     // entry has none: once a bare `[1]` stopped naming RFC 1, an entry spelled so named
-    // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
-    // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
-    // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
+    // nothing at all. Not in one pattern, though: a title the entry does not quote is
+    // still read, and names RFCs too, so a hyphenated `RFC-822` in it would be found
+    // ahead of the entry's own `RFC 1495`. `RFCs 1021-1024` is a range, and names none.
     if let match = seriesText.firstMatch(of: referenceRFCPattern)
       ?? seriesText.firstMatch(of: referenceOlderRFCPattern)
     {
