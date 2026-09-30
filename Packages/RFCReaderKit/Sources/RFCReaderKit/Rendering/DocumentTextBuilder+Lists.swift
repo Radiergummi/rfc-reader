@@ -95,7 +95,7 @@ extension DocumentTextBuilder {
   }
 
   /// The space after a list's widest marker, in ems: the gap a tab leaves before the
-  /// item's text, as `columnGutter` is between a table's columns.
+  /// item's text. It grows with the text, unlike a table's fixed `columnGutter`.
   static let markerGapShare: CGFloat = 0.5
 
   /// The most of the column a list's markers may take; see `markerColumnWidth`.

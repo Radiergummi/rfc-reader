@@ -153,11 +153,7 @@ struct BuilderListTests {
     let offset = try Fixtures.offset(of: "first", in: built.text)
     let paragraph = try #require(
       built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
-    // As the builder measures it, not with `NSAttributedString.size()`, which has
-    // thrown under load.
-    let marker = CTLineCreateWithAttributedString(
-      NSAttributedString(string: firstMarker, attributes: [.font: style.bodyFont]))
-    let markerWidth = CGFloat(CTLineGetTypographicBounds(marker, nil, nil, nil))
+    let markerWidth = DocumentTextBuilder(style: style).lineWidth(firstMarker, font: style.bodyFont)
     #expect(style.indentStep < markerWidth)
     #expect(paragraph.headIndent - paragraph.firstLineHeadIndent > markerWidth)
     #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
