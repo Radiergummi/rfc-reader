@@ -303,6 +303,15 @@ struct BuilderVerbatimTests {
     #expect(builder.displayedText(of: content, indent: 0) == "abc     x")
   }
 
+  /// A tab that ends a line draws nothing, so it is not counted: expanded, trailing
+  /// tabs made some of RFC 8902's figures 80 columns wide where what they show is
+  /// 66, and so drew them smaller.
+  @Test func `a tab that ends a line adds no width`() {
+    let content = Preformatted(kind: .artwork, text: "abc\t\nde  \t\t\n\tf")
+    let builder = DocumentTextBuilder(style: style)
+    #expect(builder.displayedText(of: content, indent: 0) == "abc\nde\n        f")
+  }
+
   /// Scaled by the columns it is drawn in, not by its characters: fifteen tabs are
   /// 120 columns.
   @Test func `a block with tabs scales by its expanded width`() {

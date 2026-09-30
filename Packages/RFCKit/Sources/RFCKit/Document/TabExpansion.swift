@@ -6,15 +6,14 @@ extension String {
   /// what the RFC Editor's text rendering still does with a tab in RFCXML artwork.
   ///
   /// Each line counts from its own column 0, so a whole block can be expanded at
-  /// once. Two callers rely on it: `LegacyTextParser`, a line at a time, before any
-  /// heuristic counts an indent (#40); and the reader, a whole artwork block at a
-  /// time, before it is drawn and scaled (#31).
+  /// once. `LegacyTextParser` expands before any heuristic counts an indent (#40),
+  /// and the reader before an RFCXML figure is drawn and scaled (#31).
   public func expandingTabs() -> String {
     // Over UTF-8: this runs on every line of every document, and `contains` over
     // Characters is an order of magnitude dearer for a test that almost always fails.
     guard utf8.contains(9) else { return self }
     var result = ""
-    result.reserveCapacity(count + 8)
+    result.reserveCapacity(utf8.count + 8)
     var column = 0
     for character in self {
       if character == "\t" {

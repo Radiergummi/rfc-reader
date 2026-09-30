@@ -79,10 +79,25 @@ extension DocumentTextBuilder {
   /// the author's, which `FoldedLines` keeps, and a tab later in one sits at its
   /// column in the rejoined line, not in the folded one.
   func displayedText(of content: Preformatted, indent: CGFloat) -> String {
-    guard let unfolded = FoldedLines.unfold(content.text)?.expandingTabs(),
+    guard let unfolded = FoldedLines.unfold(content.text).map(Self.expandingTabs),
       monospaceScale(for: unfolded, indent: indent) == 1
-    else { return content.text.expandingTabs() }
+    else { return Self.expandingTabs(content.text) }
     return unfolded
+  }
+
+  /// Tabs expanded, and a line that had one loses its trailing white space: a tab
+  /// that ends a line draws nothing, and expanded it would count up to eight
+  /// columns towards the block's width, and so its scale.
+  private static func expandingTabs(_ text: String) -> String {
+    guard text.utf8.contains(9) else { return text }
+    return text.split(separator: "\n", omittingEmptySubsequences: false)
+      .map { line in
+        guard line.utf8.contains(9) else { return String(line) }
+        var expanded = Substring(String(line).expandingTabs())
+        while let last = expanded.last, last.isWhitespace { expanded.removeLast() }
+        return String(expanded)
+      }
+      .joined(separator: "\n")
   }
 
   /// 1 when the block already fits, otherwise the factor that makes its widest line
