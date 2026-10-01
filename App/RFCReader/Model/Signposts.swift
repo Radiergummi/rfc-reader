@@ -12,13 +12,12 @@ import os
 /// Each interval carries the document it is about, as public metadata, so a trace
 /// over several opens can tell them apart. "Lay out document" is the exception to
 /// reading an interval as time the interface waited: it spans every slice of the
-/// layout, and the frames drawn between them, so it says when the document was
-/// complete, not how long the main thread was held. "Jump layout" is the part of it
-/// a jump holds the main thread for, laying out everything above its target at
-/// once, and is recorded only for a jump that has any to lay out, so one into text
-/// already laid out leaves no row; it falls inside "Lay out document", so the two
-/// don't add up, and a jump near the end finishes the layout and ends that interval
-/// before its own.
+/// background completion, and the frames drawn between them, so it says when the
+/// document was complete, not how long the main thread was held. "Settle" is what a
+/// jump, an install or a change of column holds the main thread for, laying out
+/// everything above the reader's line at once (`PinRecipe.settle`); next to nothing
+/// once completion has passed the line. It falls inside "Lay out document", so the
+/// two don't add up.
 nonisolated let signposter = OSSignposter(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader",
   category: .pointsOfInterest

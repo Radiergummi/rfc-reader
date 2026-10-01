@@ -6,8 +6,8 @@ import Foundation
 /// A scroll the reader makes records the line at the top. A move the engine makes —
 /// a pin, a slice landing, a correction of the height — happens between
 /// `beginEngineMove()` and `endEngineMove()`, and the scrolls it causes record
-/// nothing. That one rule replaces `ReadingPlaceTracker`'s pausing around a
-/// rebuild: the engine never records its own moves, so there is nothing to pause.
+/// nothing. The engine never records its own moves, so nothing has to pause
+/// tracking around a rebuild.
 ///
 /// Nor the platform's settling of them, which arrives after the move has ended:
 /// AppKit and UIKit align a scroll offset to the display's pixels on passes of

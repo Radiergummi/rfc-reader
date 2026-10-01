@@ -223,7 +223,7 @@ struct ReaderInputs {
         coordinator?.quote(of: range)
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
-        guard ReaderLayoutEngine.isEnabled, let coordinator else { return false }
+        guard let coordinator else { return false }
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
@@ -309,7 +309,7 @@ struct ReaderInputs {
         coordinator?.quote(of: range)
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
-        guard ReaderLayoutEngine.isEnabled, let coordinator else { return false }
+        guard let coordinator else { return false }
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed

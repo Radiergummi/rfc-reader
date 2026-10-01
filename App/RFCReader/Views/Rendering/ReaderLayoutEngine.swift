@@ -1,4 +1,6 @@
+import RFCKit
 import RFCReaderKit
+import os
 
 #if canImport(UIKit)
   import UIKit
@@ -15,13 +17,11 @@ import RFCReaderKit
 /// new column that follows it settles. Only calls into the text view live here; the
 /// arithmetic is RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
-  /// On with the launch argument `-ReaderViewportLayout YES`, until the old path
-  /// is removed.
-  static var isEnabled: Bool { UserDefaults.standard.bool(forKey: "ReaderViewportLayout") }
-
   weak var textView: PlatformTextView?
   private(set) var keeper = AnchorKeeper()
   private(set) var built: BuiltDocument?
+  /// What the signposts name; see `Signposts`.
+  private var documentName = "untitled"
 
   // MARK: - PinSurface
 
@@ -46,7 +46,8 @@ final class ReaderLayoutEngine: PinSurface {
   // MARK: - Changes of geometry
 
   /// A new storage is in: carries the place across and puts it back.
-  func installed(_ built: BuiltDocument) {
+  func installed(_ built: BuiltDocument, document: DocumentID?) {
+    documentName = document?.displayName ?? "untitled"
     let carried = self.built.map { keeper.carried(in: $0.anchors) }
     self.built = built
     if let carried { keeper.restore(carried, in: built.anchors, length: built.text.length) }
@@ -67,7 +68,13 @@ final class ReaderLayoutEngine: PinSurface {
   /// Puts the place back at the top of the viewport, everything above it laid out
   /// first (`PinRecipe.settle`).
   func settle() {
-    move { anchor, layout in PinRecipe.settle(anchor, in: layout, on: self) }
+    move { anchor, layout in
+      signposter.withIntervalSignpost(
+        "Settle", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)"
+      ) {
+        PinRecipe.settle(anchor, in: layout, on: self)
+      }
+    }
   }
 
   /// Puts the place back at the top of the viewport where it is laid out now: after
@@ -147,14 +154,20 @@ final class ReaderLayoutEngine: PinSurface {
 
   private var planner = SlicePlanner(length: 0)
   private var completion: Task<Void, Never>?
+  /// The signpost interval of the completion running now; see `Signposts`.
+  private var completionInterval: OSSignpostIntervalState?
 
   /// Lays the document out from its start in the background, a slice per idle turn,
   /// so the scroller's height is exact. It moves nothing on screen: what is above the
   /// place is laid out already, and the scroll view keeps the place where it is as
   /// the rest arrives. Paused through a live resize, whose every step re-wraps it.
   private func startCompletion() {
-    completion?.cancel()
+    stop()
     planner = SlicePlanner(length: built?.text.length ?? 0)
+    // An ID of its own, because several text views lay out at once: every window
+    // and tab, and a force-click preview.
+    completionInterval = signposter.beginInterval(
+      "Lay out document", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     completion = Task { [weak self] in
       while let self, !self.planner.isComplete {
         try? await Task.sleep(for: .milliseconds(self.isInLiveResize ? 50 : 4))
@@ -162,12 +175,27 @@ final class ReaderLayoutEngine: PinSurface {
         guard !self.isInLiveResize else { continue }
         self.layOutSlice()
       }
+      self?.endCompletionInterval()
     }
   }
 
   func stop() {
     completion?.cancel()
     completion = nil
+    endCompletionInterval()
+  }
+
+  /// Ends the interval `startCompletion()` began: when the last slice lands, or when
+  /// a newer completion or the text view going replaces it, so a trace shows a
+  /// completion that stopped ending where it stopped. `deinit` covers the last way.
+  private func endCompletionInterval() {
+    guard let completionInterval else { return }
+    signposter.endInterval("Lay out document", completionInterval)
+    self.completionInterval = nil
+  }
+
+  deinit {
+    if let completionInterval { signposter.endInterval("Lay out document", completionInterval) }
   }
 
   private var isInLiveResize: Bool {

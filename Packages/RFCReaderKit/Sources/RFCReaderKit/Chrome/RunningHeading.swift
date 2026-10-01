@@ -11,7 +11,7 @@ import CoreGraphics
 /// reverse without being told which way the reader is going.
 ///
 /// Deliberately not the section tracking that feeds the contents' highlight and
-/// the reading position (`ReadingPlaceTracker`): that one counts the abstract as
+/// the reading position (`AnchorKeeper`): that one counts the abstract as
 /// section one and switches as a heading reaches the top, where this names no
 /// section over the abstract and switches as a heading's last line passes.
 public enum RunningHeading {

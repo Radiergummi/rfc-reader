@@ -66,40 +66,6 @@ struct ReadingPlaceTests {
     #expect(ReadingPlace(anchor: "gone", offset: 3).documentOffset(in: index, length: 500) == nil)
   }
 
-  @Test func `keeps the place while its line is still at the top`() {
-    let previous = ReadingPlace(anchor: "section-1-1", offset: 120)
-    // The line holding offset 250 after a restore at another column, starting
-    // earlier than the place does.
-    let line = NSRange(location: 230, length: 60)
-    #expect(ReadingPlace.tracking(previous, topLine: line, in: index, length: 500) == previous)
-  }
-
-  @Test func `moves to the lines start once the reader reaches another line`() {
-    let previous = ReadingPlace(anchor: "section-1-1", offset: 120)
-    let next = NSRange(location: 290, length: 60)
-    #expect(
-      ReadingPlace.tracking(previous, topLine: next, in: index, length: 500)
-        == ReadingPlace(anchor: "section-1-1", offset: 160))
-    #expect(
-      ReadingPlace.tracking(nil, topLine: next, in: index, length: 500)
-        == ReadingPlace(anchor: "section-1-1", offset: 160))
-  }
-
-  /// Resizing back and forth — a live resize, rebuilding each time it pauses —
-  /// comes back to the line it started on, however the two columns wrap.
-  @Test func `does not walk back across rebuilds at alternating columns`() {
-    var place = ReadingPlace(anchor: "section-1-1", offset: 120)
-    // At the narrow column the line holding 250 starts at 232; at the wide one,
-    // at 241 — both earlier than the place itself.
-    for line in [
-      NSRange(location: 232, length: 50), NSRange(location: 241, length: 70),
-      NSRange(location: 232, length: 50),
-    ] {
-      place = ReadingPlace.tracking(place, topLine: line, in: index, length: 500)
-    }
-    #expect(place == ReadingPlace(anchor: "section-1-1", offset: 120))
-  }
-
   /// The property the reader relies on: the same text is at the top before and
   /// after a resize rebuilds the document at another measure. A table ahead of
   /// the needle grids at the wide measure and stacks at the narrow one, so the

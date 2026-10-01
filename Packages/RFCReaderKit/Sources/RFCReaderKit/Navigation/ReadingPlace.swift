@@ -43,31 +43,11 @@ public struct ReadingPlace: Sendable, Equatable {
     let end = index.firstOffset(after: start) ?? length
     return max(start, min(start + offset, end - 1))
   }
-
-  /// The place to record when `topLine` is the line at the top of the viewport:
-  /// `previous`, while that line still holds it, and otherwise the line's start.
-  ///
-  /// A restore puts the line *holding* a place at the top, and that line starts
-  /// earlier than the place whenever the new column wraps somewhere else. Recording
-  /// the line's start again would walk the place back a little on every rebuild —
-  /// and a live resize rebuilds many times. Only reaching another line moves it.
-  public static func tracking(
-    _ previous: Self?, topLine: NSRange, in index: AnchorIndex, length: Int
-  ) -> Self {
-    if let previous,
-      let offset = previous.documentOffset(in: index, length: length),
-      offset == topLine.location || NSLocationInRange(offset, topLine)
-    {
-      return previous
-    }
-    return ReadingPlace(at: topLine.location, in: index)
-  }
 }
 
 extension AnchorIndex {
   /// The first anchor's offset strictly after `offset`: where the block starting
-  /// there ends. A binary search, like `anchor(at:)`, because tracking runs it on
-  /// every scroll report.
+  /// there ends. A binary search, like `anchor(at:)`.
   fileprivate func firstOffset(after offset: Int) -> Int? {
     let after = entries.partitioningIndex { $0.offset > offset }
     return after < entries.endIndex ? entries[after].offset : nil
