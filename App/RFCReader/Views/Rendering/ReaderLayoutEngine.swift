@@ -72,7 +72,7 @@ final class ReaderLayoutEngine: PinSurface {
       signposter.withIntervalSignpost(
         "Settle", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)"
       ) {
-        PinRecipe.settle(anchor, in: layout, on: self)
+        _ = PinRecipe.settle(anchor, in: layout, on: self)
       }
     }
   }
