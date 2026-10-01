@@ -58,6 +58,26 @@ public enum PinRecipe {
     return passes
   }
 
+  /// Lays out the document from its start through `anchor`'s paragraph, then pins
+  /// it. The line is then where the layout of the whole document puts it, so laying
+  /// out what follows never moves it. A pin alone leaves it where TextKit estimated
+  /// it, and the viewport in coordinates that the layout from the start later
+  /// replaces: on an iPhone, that moved the text under the reader 73,000 characters
+  /// of RFC 5661. Laying out to the middle of that document costs about 0.35 s there.
+  @MainActor
+  @discardableResult
+  public static func settle(
+    _ anchor: ReaderAnchor, in layout: NSTextLayoutManager, on surface: some PinSurface
+  ) -> Int {
+    guard let location = layout.location(atOffset: anchor.characterOffset),
+      let paragraph = layout.textLayoutFragment(for: location),
+      let above = NSTextRange(
+        location: layout.documentRange.location, end: paragraph.rangeInElement.endLocation)
+    else { return 0 }
+    layout.ensureLayout(for: above)
+    return pin(anchor, in: layout, on: surface)
+  }
+
   /// The anchor at the viewport's top, `top` in container coordinates, read from the
   /// fragments laid out from `start` on: the viewport's own, never a point lookup,
   /// which can answer with a stale fragment. Nil when nothing is laid out there, and

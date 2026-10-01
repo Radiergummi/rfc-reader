@@ -7,9 +7,13 @@ import RFCReaderKit
 #endif
 
 /// The reader's geometry under viewport layout: the text view is a `PinSurface`,
-/// the reader's place is an `AnchorKeeper`, and every change of geometry ends in
-/// one `PinRecipe.pin`. Only calls into the text view live here; the arithmetic is
-/// RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
+/// the reader's place is an `AnchorKeeper`, and every change of geometry settles the
+/// place (`PinRecipe.settle`). Everything above it is then laid out, so it is where
+/// the layout of the whole document puts it, and the platform's own scroll view
+/// keeps it there while the rest is laid out. Only a live resize on the Mac, which
+/// cannot afford that on every step, pins on estimates instead, and settles once it
+/// ends. Only calls into the text view live here; the arithmetic is RFCReaderKit's.
+/// See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   /// On with the launch argument `-ReaderViewportLayout YES`, until the old path
   /// is removed.
@@ -36,23 +40,44 @@ final class ReaderLayoutEngine: PinSurface {
 
   // MARK: - Changes of geometry
 
-  /// A new storage is in: carries the place across and pins it.
+  /// A new storage is in: carries the place across and puts it back.
   func installed(_ built: BuiltDocument) {
     let carried = self.built.map { keeper.carried(in: $0.anchors) }
     self.built = built
     if let carried { keeper.restore(carried, in: built.anchors, length: built.text.length) }
-    pin()
+    putBack()
     startCompletion()
   }
 
   func columnChanged() {
-    pin()
+    putBack()
     startCompletion()
   }
 
-  /// Puts the place back at the top of the viewport. The engine's own move: the
-  /// scrolls it causes record nothing.
+  /// A live resize ended: the place it pinned on estimates is settled.
+  func liveResizeEnded() {
+    settle()
+  }
+
+  /// Settles the place, or pins it on estimates during a live resize.
+  private func putBack() {
+    if isInLiveResize { pin() } else { settle() }
+  }
+
+  /// Puts the place back at the top of the viewport, everything above it laid out
+  /// first (`PinRecipe.settle`).
+  func settle() {
+    move { anchor, layout in PinRecipe.settle(anchor, in: layout, on: self) }
+  }
+
+  /// Puts the place back at the top of the viewport where it is laid out now: after
+  /// a change that moved the container but re-wrapped nothing, or on estimates.
   func pin() {
+    move { anchor, layout in PinRecipe.pin(anchor, in: layout, on: self) }
+  }
+
+  /// The engine's own move: the scrolls it causes record nothing.
+  private func move(_ line: (ReaderAnchor, NSTextLayoutManager) -> Void) {
     guard let layout = textView?.textLayoutManager else { return }
     keeper.beginEngineMove()
     defer { keeper.endEngineMove(top: containerTop) }
@@ -61,13 +86,13 @@ final class ReaderLayoutEngine: PinSurface {
       textView?.scroll(toY: 0)
       layOutViewport()
     case .line(let anchor):
-      PinRecipe.pin(anchor, in: layout, on: self)
+      line(anchor, layout)
     }
   }
 
   func jump(toOffset offset: Int) {
     keeper.jumped(to: ReaderAnchor(characterOffset: offset))
-    pin()
+    settle()
   }
 
   /// A scroll happened; if the reader made it, it moves their place. Answers the
@@ -76,8 +101,6 @@ final class ReaderLayoutEngine: PinSurface {
   @discardableResult
   func userScrolled() -> Int? {
     guard let textView, let layout = textView.textLayoutManager else { return nil }
-    if !keeper.isEngineMoving { lastUserScroll = .now }
-    noticeDroppedLayout(in: layout)
     let top = textView.viewportTop
     guard top >= 0 else {
       keeper.userScrolledAboveText()
@@ -124,36 +147,22 @@ final class ReaderLayoutEngine: PinSurface {
 
   private var planner = SlicePlanner(length: 0)
   private var completion: Task<Void, Never>?
-  /// When the reader last scrolled, for pausing completion while they do.
-  private var lastUserScroll = ContinuousClock.now - .seconds(1)
-  /// TextKit's height once completion laid the document out; nil until it has.
-  private var laidOutHeight: CGFloat?
 
-  /// Lays the document out from its start in the background, a slice per idle turn.
+  /// Lays the document out from its start in the background, a slice per idle turn,
+  /// so the scroller's height is exact. It moves nothing on screen: what is above the
+  /// place is laid out already, and the scroll view keeps the place where it is as
+  /// the rest arrives. Paused through a live resize, whose every step re-wraps it.
   private func startCompletion() {
     completion?.cancel()
-    laidOutHeight = nil
     planner = SlicePlanner(length: built?.text.length ?? 0)
     completion = Task { [weak self] in
       while let self, !self.planner.isComplete {
-        try? await Task.sleep(for: .milliseconds(self.isInteracting ? 50 : 4))
+        try? await Task.sleep(for: .milliseconds(self.isInLiveResize ? 50 : 4))
         guard !Task.isCancelled else { return }
-        guard !self.isInteracting else { continue }
+        guard !self.isInLiveResize else { continue }
         self.layOutSlice()
       }
-      self?.laidOutHeight = self?.textView?.textLayoutManager?.usageBoundsForTextContainer.height
     }
-  }
-
-  /// TextKit drops the layout of the whole document on its own now and then (see
-  /// `SlicePlanner.layoutWasDropped`), on the old path as well; laid out again, its
-  /// positions and the scroller's height are exact again.
-  private func noticeDroppedLayout(in layout: NSTextLayoutManager) {
-    guard let laidOutHeight,
-      SlicePlanner.layoutWasDropped(
-        laidOut: laidOutHeight, now: layout.usageBoundsForTextContainer.height)
-    else { return }
-    startCompletion()
   }
 
   func stop() {
@@ -161,12 +170,11 @@ final class ReaderLayoutEngine: PinSurface {
     completion = nil
   }
 
-  private var isInteracting: Bool {
-    guard let textView else { return false }
+  private var isInLiveResize: Bool {
     #if canImport(UIKit)
-      return textView.isTracking || textView.isDecelerating
+      return false
     #else
-      return textView.inLiveResize || ContinuousClock.now - lastUserScroll < .milliseconds(150)
+      return textView?.inLiveResize ?? false
     #endif
   }
 
@@ -175,6 +183,5 @@ final class ReaderLayoutEngine: PinSurface {
       let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
     else { return }
     layout.ensureLayout(for: range)
-    pin()
   }
 }

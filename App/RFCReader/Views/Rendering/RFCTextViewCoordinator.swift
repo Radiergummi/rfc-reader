@@ -57,6 +57,10 @@ final class RFCTextViewCoordinator: NSObject {
     didSet {
       engine.textView = textView
       #if !canImport(UIKit)
+        (textView as? ReaderTextView)?.liveResizeEnded = { [weak self] in
+          guard ReaderLayoutEngine.isEnabled else { return }
+          self?.engine.liveResizeEnded()
+        }
         setUpHover()
       #endif
       setUpAccessibilityRotors()

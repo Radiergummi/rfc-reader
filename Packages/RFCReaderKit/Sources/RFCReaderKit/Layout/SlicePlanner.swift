@@ -21,15 +21,6 @@ public struct SlicePlanner: Sendable, Equatable {
     laidOutThrough = 0
   }
 
-  /// Whether TextKit dropped the layout of a document it had laid out at `laidOut`
-  /// points, now that it reports `now`. It does so on its own, with no invalidation
-  /// asked for, and every position below the viewport is an estimate again: on an
-  /// iPhone, RFC 5661 went from 836,956 to 739,555 pt. A fragment laid out again a
-  /// little taller is not a drop.
-  public static func layoutWasDropped(laidOut: CGFloat, now: CGFloat) -> Bool {
-    abs(now - laidOut) > laidOut * 0.02
-  }
-
   /// The next slice, or nil once the document is laid out. The caller lays out from
   /// the document's start through the slice's end.
   public mutating func nextSlice() -> NSRange? {

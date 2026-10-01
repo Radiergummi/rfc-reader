@@ -103,6 +103,23 @@ struct PinRecipeTests {
         from: stale.rangeInElement.location) == nil)
   }
 
+  /// A settled line is where the layout of the whole document puts it, so laying out
+  /// the rest never moves it. A pin alone leaves it where TextKit estimated it: on an
+  /// iPhone, completion then moved the text under the reader 73,000 characters.
+  @Test func `a settled line is where the whole document's layout puts it`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = Surface(layout: fixture.layout)
+    let target = try #require(built.anchors.sections.entries.last).offset
+    PinRecipe.settle(ReaderAnchor(characterOffset: target), in: fixture.layout, on: surface)
+    let settled = surface.containerTop
+    fixture.layout.ensureLayout(for: fixture.layout.documentRange)
+    let location = try #require(fixture.layout.location(atOffset: target))
+    let fragment = try #require(fixture.layout.textLayoutFragment(for: location))
+    #expect(abs(fragment.layoutFragmentFrame.minY - settled) < 1)
+    #expect(try #require(surface.anchor()).anchor.characterOffset == target)
+  }
+
   @Test func `pinning an empty document does nothing`() {
     let fixture = LayoutFixture(text: NSAttributedString(), width: 712)
     let surface = Surface(layout: fixture.layout)
