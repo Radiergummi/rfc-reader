@@ -88,7 +88,7 @@ public struct CollectionSnapshot: Equatable, Sendable {
   }
 
   /// The store's collections, now. Only the fields a snapshot reads: this runs
-  /// on every save, and most of those record a reading position.
+  /// on every save of a collection or an item (`UserDataMirrors`, #603).
   @MainActor
   public static func fetch(in context: ModelContext) -> CollectionSnapshot {
     var collectionFetch = FetchDescriptor<DocumentCollection>()
