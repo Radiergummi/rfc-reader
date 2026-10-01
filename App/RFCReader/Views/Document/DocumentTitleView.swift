@@ -15,6 +15,7 @@
     let title: String
     let subtitle: String
     let reader: ReaderState
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     func makeUIView(context: Context) -> DocumentTitleView {
       let view = DocumentTitleView()
@@ -25,6 +26,7 @@
     }
 
     func updateUIView(_ view: DocumentTitleView, context: Context) {
+      view.isCompact = verticalSizeClass == .compact
       view.show(title, subtitle: subtitle)
     }
 
@@ -40,12 +42,12 @@
   }
 
   final class DocumentTitleView: UIView {
-    private let title = DocumentTitleView.label(.systemFont(ofSize: 17, weight: .semibold), .label)
+    private let title = DocumentTitleView.label(.label)
     /// The subtitle's line, clipped to itself: a section's heading hands over to
     /// the next inside it, one rising out as the other rises in.
     private let subtitleLine = UIView()
-    private let outgoing = DocumentTitleView.label(.systemFont(ofSize: 13), .secondaryLabel)
-    private let incoming = DocumentTitleView.label(.systemFont(ofSize: 13), .secondaryLabel)
+    private let outgoing = DocumentTitleView.label(.secondaryLabel)
+    private let incoming = DocumentTitleView.label(.secondaryLabel)
     /// Title over subtitle, which the reveal moves as one.
     private let content = UIView()
 
@@ -54,10 +56,21 @@
     /// page and the abstract.
     private var documentTitle = ""
 
-    /// One line of each, measured once: the type is fixed, as the bar's own title
-    /// is, and a line's height does not depend on what it says.
-    private let titleHeight: CGFloat
-    private let subtitleHeight: CGFloat
+    /// One line of each, measured when the type changes: it is fixed, as the bar's
+    /// own title is, but for the bar's size, and a line's height does not depend
+    /// on what it says.
+    private var titleHeight: CGFloat = 0
+    private var subtitleHeight: CGFloat = 0
+
+    /// The bar is compact in an iPhone's landscape, about 32 pt where the type set
+    /// for the regular bar takes 37: the smaller type keeps both lines inside it.
+    var isCompact = false {
+      didSet {
+        guard isCompact != oldValue else { return }
+        applyFonts()
+        setNeedsLayout()
+      }
+    }
 
     var lineHeights: CGFloat { titleHeight + subtitleHeight }
 
@@ -67,9 +80,8 @@
     }
 
     init() {
-      titleHeight = ceil(title.font.lineHeight)
-      subtitleHeight = ceil(outgoing.font.lineHeight)
       super.init(frame: .zero)
+      applyFonts()
       // Everything is placed by frame, not by constraints: it moves on every
       // scroll tick, and a frame set inside a view whose own size does not change
       // dirties nothing outside it.
@@ -124,6 +136,15 @@
       placeHandOver()
     }
 
+    private func applyFonts() {
+      title.font = .systemFont(ofSize: isCompact ? 15 : 17, weight: .semibold)
+      let subtitleFont = UIFont.systemFont(ofSize: isCompact ? 11 : 13)
+      outgoing.font = subtitleFont
+      incoming.font = subtitleFont
+      titleHeight = ceil(title.font.lineHeight)
+      subtitleHeight = ceil(subtitleFont.lineHeight)
+    }
+
     /// Each label only when its words change: a label assigned the same string
     /// redraws for nothing.
     private func applyText() {
@@ -160,9 +181,8 @@
       incoming.isHidden = handOver == 0
     }
 
-    private static func label(_ font: UIFont, _ color: UIColor) -> UILabel {
+    private static func label(_ color: UIColor) -> UILabel {
       let label = UILabel()
-      label.font = font
       label.textColor = color
       label.textAlignment = .center
       label.lineBreakMode = .byTruncatingTail

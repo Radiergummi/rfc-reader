@@ -258,6 +258,10 @@ struct ReaderInputs {
     /// load or a failure, starts with them showing and would not report otherwise.
     static func dismantleUIView(_ textView: UITextView, coordinator: RFCTextViewCoordinator) {
       coordinator.setChromeEnabled(false)
+      // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
+      // a reader made afresh, on the way back from the original text, has not
+      // reported yet.
+      coordinator.onToolbarTitleReleased(coordinator)
     }
   }
 #else
