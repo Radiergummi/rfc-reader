@@ -165,4 +165,16 @@ struct GroupsFileTests {
     #expect(GroupsFile.mayPublish(file(200), replacing: file(500), allowShrink: true))
     #expect(GroupsFile.mayPublish(file(1), replacing: nil, allowShrink: false))
   }
+
+  /// A previous file of another version is no baseline: once the format's version is
+  /// bumped, the published copy is the old one, and refusing it would fail every run
+  /// until someone stepped in.
+  @Test func `a previous file of another version is no baseline`() throws {
+    let current = WorkingGroups(generatedAt: Date(timeIntervalSince1970: 1_790_000_000), groups: [])
+    #expect(try GroupsFile.baseline(current.encoded()) == current)
+    let json = String(decoding: try current.encoded(), as: UTF8.self)
+      .replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 2")
+    #expect(try GroupsFile.baseline(Data(json.utf8)) == nil)
+    #expect(throws: (any Error).self) { try GroupsFile.baseline(Data("{}".utf8)) }
+  }
 }

@@ -73,8 +73,8 @@ struct GroupsCommand: AsyncParsableCommand {
 
     let file = GroupsFile.build(
       groups: groups, named: named, chairs: chairs, people: people, generatedAt: startedAt)
-    let before = try previous.map {
-      try WorkingGroups.decode(Data(contentsOf: URL(fileURLWithPath: $0)))
+    let before = try previous.flatMap {
+      try GroupsFile.baseline(Data(contentsOf: URL(fileURLWithPath: $0)))
     }
     guard GroupsFile.mayPublish(file, replacing: before, allowShrink: allowShrink) else {
       Self.logger.error(

@@ -53,6 +53,17 @@ public enum GroupsFile {
     return next.groups.count * 2 >= previous.groups.count
   }
 
+  /// The previously published file, as the shrink guard's baseline; nil when it is of
+  /// another version, which the run after a bump of the format finds published. Any
+  /// other failure to read it fails the run.
+  public static func baseline(_ data: Data) throws -> WorkingGroups? {
+    do {
+      return try WorkingGroups.decode(data)
+    } catch is WorkingGroups.VersionError {
+      return nil
+    }
+  }
+
   /// False when more than half the chairs could not be named: datatracker failing
   /// mid-run, which would publish every active group as chaired by nobody. A few
   /// failures leave those chairs out for a day.
