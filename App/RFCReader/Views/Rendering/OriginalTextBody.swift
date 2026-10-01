@@ -103,10 +103,11 @@ struct OriginalTextBody {
       textView.isDirectionalLockEnabled = true
       textView.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
       // Not wrapping: the container is unbounded across, and the content grows to
-      // what is laid out in it.
+      // what is laid out in it. Unbounded down too, or every touch selects on the
+      // first line (`OriginalTextLayout.containerSize`).
       textView.textContainer.lineFragmentPadding = 0
       textView.textContainer.widthTracksTextView = false
-      textView.textContainer.size = CGSize(width: CGFloat.greatestFiniteMagnitude, height: 0)
+      textView.textContainer.size = OriginalTextLayout.containerSize
       return textView
     }
 
@@ -135,9 +136,9 @@ struct OriginalTextBody {
       super.layoutSubviews()
       // UIKit narrows the container to the frame although it does not track the
       // view's width: on an iPhone the lines wrapped at 345 pt until this put the
-      // unbounded width back (#240).
-      if textContainer.size.width != Self.unbounded {
-        textContainer.size = CGSize(width: Self.unbounded, height: 0)
+      // unbounded width back (#240). The height is put back unbounded with it.
+      if textContainer.size != OriginalTextLayout.containerSize {
+        textContainer.size = OriginalTextLayout.containerSize
       }
       if contentSize.width != laidOutWidth { contentSize = super.contentSize }
     }
@@ -152,8 +153,6 @@ struct OriginalTextBody {
       }
       Clipboard.copy(selected)
     }
-
-    private static let unbounded = CGFloat.greatestFiniteMagnitude
 
     private var laidOutWidth: CGFloat {
       OriginalTextLayout.contentWidth(

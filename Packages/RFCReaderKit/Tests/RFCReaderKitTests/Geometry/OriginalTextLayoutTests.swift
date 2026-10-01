@@ -39,4 +39,12 @@ struct OriginalTextLayoutTests {
       OriginalTextLayout.contentWidth(usedWidth: 459.2, horizontalInsets: 48, viewWidth: 507.5)
         == 507.5)
   }
+
+  /// UIKit clamps a touch into the text container before it finds the character
+  /// under it, so a container with no height put every touch on the first line
+  /// (#240).
+  @Test func `the container is unbounded down as well as across`() {
+    #expect(OriginalTextLayout.containerSize.width == .greatestFiniteMagnitude)
+    #expect(OriginalTextLayout.containerSize.height == .greatestFiniteMagnitude)
+  }
 }
