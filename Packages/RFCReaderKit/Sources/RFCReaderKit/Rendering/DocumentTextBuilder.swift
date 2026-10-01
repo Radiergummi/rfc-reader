@@ -116,6 +116,7 @@ public final class DocumentTextBuilder {
     let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
+    builder.setDecoratedLinesOnWholePoints()
     reserveChipPadding(in: builder.output)
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
