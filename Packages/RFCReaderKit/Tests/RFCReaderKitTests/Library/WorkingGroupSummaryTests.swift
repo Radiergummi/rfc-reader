@@ -17,10 +17,12 @@ struct WorkingGroupSummaryTests {
     acronym: "urnbis", name: "Uniform Resource Names, Revised", type: "wg", state: "conclude",
     area: "Applications and Real-Time", chairs: [], listArchive: nil, charter: nil)
 
-  private func rfc(_ number: Int, year: Int, group: String) -> RFCMetadata {
+  private func rfc(
+    _ number: Int, year: Int, group: String, obsoletedBy: [DocumentID] = []
+  ) -> RFCMetadata {
     RFCMetadata(
       id: .rfc(number), title: "RFC \(number)", date: PublicationDate(year: year, month: 1),
-      workingGroup: group)
+      obsoletedBy: obsoletedBy, workingGroup: group)
   }
 
   @Test func `an active group is named, placed and chaired`() {
@@ -91,5 +93,42 @@ struct WorkingGroupSummaryTests {
     var group = httpbis
     group.name = "IAB"
     #expect(WorkingGroupSummary(acronym: "iab", group: group, rfcs: []).acronym == nil)
+  }
+
+  /// The count is every RFC of the group, whatever the list's Show Obsolete hides, and
+  /// says how many of them are obsolete only when some are.
+  @Test func `a group with no obsolete RFCs counts them and nothing more`() {
+    let summary = WorkingGroupSummary(
+      acronym: "httpbis", group: httpbis,
+      rfcs: [rfc(9110, year: 2022, group: "httpbis"), rfc(9111, year: 2022, group: "httpbis")])
+    #expect(summary.publications == "2 RFCs, 2022")
+  }
+
+  @Test func `a group with some obsolete RFCs says how many`() {
+    let summary = WorkingGroupSummary(
+      acronym: "httpbis", group: httpbis,
+      rfcs: [
+        rfc(9110, year: 2022, group: "httpbis"),
+        rfc(7230, year: 2014, group: "httpbis", obsoletedBy: [.rfc(9110)]),
+        rfc(2616, year: 1999, group: "httpbis", obsoletedBy: [.rfc(7230)]),
+      ])
+    #expect(summary.publications == "3 RFCs, 2 obsolete, 1999–2022")
+  }
+
+  @Test func `a group whose RFCs are all obsolete says so`() {
+    let summary = WorkingGroupSummary(
+      acronym: "urnbis", group: urnbis,
+      rfcs: [
+        rfc(2141, year: 1997, group: "urnbis", obsoletedBy: [.rfc(8141)]),
+        rfc(3406, year: 2002, group: "urnbis", obsoletedBy: [.rfc(8141)]),
+      ])
+    #expect(summary.publications == "2 RFCs, all obsolete, 1997–2002")
+  }
+
+  @Test func `a group whose one RFC is obsolete says it is`() {
+    let summary = WorkingGroupSummary(
+      acronym: "urnbis", group: urnbis,
+      rfcs: [rfc(2141, year: 1997, group: "urnbis", obsoletedBy: [.rfc(8141)])])
+    #expect(summary.publications == "1 RFC, obsolete, 1997")
   }
 }
