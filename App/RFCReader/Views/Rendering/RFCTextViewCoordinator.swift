@@ -434,6 +434,15 @@ final class RFCTextViewCoordinator: NSObject {
     laidOutColumn = column
     laidOutGutter = gutter
     laidOutHeaderHeight = headerHeight
+    // Before the inset moves, too: the write moves the viewport's top, and a scroll
+    // it reports must neither record the line there over the carried place nor
+    // move the bars.
+    if headerChange == .restorePlace {
+      tracker.restoring()
+    }
+    #if canImport(UIKit)
+      isHoldingPlace = headerChange != nil
+    #endif
 
     #if canImport(UIKit)
       textView.textContainerInset = UIEdgeInsets(
@@ -445,18 +454,14 @@ final class RFCTextViewCoordinator: NSObject {
       textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
     #endif
     headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
-    if let headerChange {
-      #if canImport(UIKit)
-        isHoldingPlace = true
-        defer { isHoldingPlace = false }
-      #endif
-      switch headerChange {
-      case .restorePlace:
-        tracker.restoring()
-        restorePlace()
-      case .hold(let containerTop): scrollContainerTopTo(containerTop, animated: false)
-      }
+    switch headerChange {
+    case .restorePlace: restorePlace()
+    case .hold(let containerTop): scrollContainerTopTo(containerTop, animated: false)
+    case nil: break
     }
+    #if canImport(UIKit)
+      isHoldingPlace = false
+    #endif
 
     // The container is the column, set here and nowhere else. Tracking the text
     // view's width instead re-wrapped the storage on *every* resize: the frame
@@ -871,8 +876,10 @@ final class RFCTextViewCoordinator: NSObject {
       let touching = scrollView.isTracking || scrollView.isDragging
       if touching {
         // A drag that began without telling the delegate starts here, undecided
-        // until it moves again.
-        if drag == nil {
+        // until it moves again. So does one still undecided when the header's hold
+        // moves the text under it: that is not the finger, and decided by it, the
+        // whole pan would count as the indicator's.
+        if drag == nil || (isHoldingPlace && drag?.kind == nil) {
           drag = ReaderChrome.Drag(offset: offset, finger: finger)
         }
         drag?.moved(offset: offset, finger: finger)
