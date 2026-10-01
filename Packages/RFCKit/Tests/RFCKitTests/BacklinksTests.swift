@@ -30,7 +30,7 @@ struct BacklinksTests {
   /// backlink like an xref: RFC 1245 refers to Section 3.1 from 3.2 and 3.4, and to
   /// Section 3.2 from 3.5 and 3.6.
   @Test func `a legacy section reference is a backlink`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1245.txt"))
+    let document = try Fixtures.document("rfc1245.txt")
     let backlinks = Backlinks.within(document)
     #expect(
       backlinks["section-3.1"] == [

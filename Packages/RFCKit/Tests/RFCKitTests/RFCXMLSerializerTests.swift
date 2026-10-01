@@ -122,7 +122,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `round trips legacy text`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     let xml = RFCXMLSerializer(
       options: .init(
         generatorComment: "test",
@@ -140,7 +140,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `canonical labels survive legacy round trip`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     let xml = RFCXMLSerializer().serialize(parsed)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
 
@@ -236,10 +236,8 @@ struct RFCXMLSerializerTests {
     let xml = RFCXMLSerializer().serialize(document)
     #expect(xml.contains("&amp; &lt;tags&gt;."))
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected paragraph")
-      return
-    }
+    let paragraph = try #require(
+      reparsed.sections.first?.blocks.first?.paragraph, "expected paragraph")
     #expect(
       paragraph.inlines.contains(
         .crossReference(
@@ -406,9 +404,9 @@ struct RFCXMLSerializerCorpusFindingsTests {
       #expect(authors(reparsed) == authors(parsed))
     }
     // The two cases this pins: a header naming no author, and entries naming none.
-    #expect(LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).header.authors.isEmpty)
+    #expect(try Fixtures.document("rfc1.txt").header.authors.isEmpty)
     #expect(
-      LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).allSections.contains { section in
+      try Fixtures.document("rfc5234.txt").allSections.contains { section in
         section.blocks.contains {
           if case .references(let list) = $0 {
             list.entries.contains { $0.authors.isEmpty }
@@ -423,7 +421,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// written as `<references>`, and its `pn` names it an appendix. Read back, it was a
   /// numbered section that was not one (#201).
   @Test func `a references appendix round trips as an appendix`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let parsed = try Fixtures.document("rfc2049.txt")
     let appendix = try #require(parsed.section(anchor: "appendix-C"))
     #expect(appendix.isAppendix)
     #expect(appendix.blocks.contains { if case .references = $0 { true } else { false } })
@@ -438,7 +436,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// anchor is the part number for every numbered section, so it is written once, as the
   /// `pn` the published series always carries, and read back from there.
   @Test func `an anchor that is the part number is written once`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     #expect(parsed.allSections.contains { $0.anchor == "section-1" })
     let xml = RFCXMLSerializer().serialize(parsed)
     // Per tag, whichever order the two attributes come in.
@@ -469,10 +467,8 @@ struct RFCXMLSerializerCorpusFindingsTests {
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(reparsed.header.title == "Title")
-    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected paragraph")
-      return
-    }
+    let paragraph = try #require(
+      reparsed.sections.first?.blocks.first?.paragraph, "expected paragraph")
     #expect(
       paragraph.plainText == "ab c", "tab survives escaping and is collapsed like other whitespace")
   }

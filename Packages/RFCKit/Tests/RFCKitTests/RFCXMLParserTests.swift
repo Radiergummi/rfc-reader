@@ -184,10 +184,7 @@ struct RFCXMLParserTests {
   @Test func `cross references resolve to RFCs`() throws {
     let document = try Self.document()
     let fixed = try #require(document.section(number: "2"))
-    guard case .paragraph(let paragraph)? = fixed.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(fixed.blocks.first?.paragraph, "expected a paragraph")
     let xrefs = paragraph.inlines.compactMap(\.crossReference)
     let transport = try #require(xrefs.first)
     #expect(transport.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT"))
@@ -259,10 +256,7 @@ struct RFCXMLParserTests {
       """
     let document = try RFCXMLParser.parse(Data(xml.utf8))
     let intro = try #require(document.section(anchor: "intro"))
-    guard case .paragraph(let paragraph)? = intro.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(intro.blocks.first?.paragraph, "expected a paragraph")
     let xref = try #require(
       paragraph.inlines.compactMap(\.crossReference).first)
     #expect(xref.text == nil, "the whole phrasing is ours to compose")
@@ -286,10 +280,7 @@ struct RFCXMLParserTests {
       """
     let document = try RFCXMLParser.parse(Data(xml.utf8))
     let intro = try #require(document.section(anchor: "intro"))
-    guard case .paragraph(let paragraph)? = intro.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(intro.blocks.first?.paragraph, "expected a paragraph")
     #expect(paragraph.plainText == "RFC\u{00A0}9110 wraps as one unit.")
   }
 
@@ -339,10 +330,8 @@ struct RFCXMLParserTests {
     #expect(references.number == "8")
     #expect(
       references.subsections.map(\.titleText) == ["Normative References", "Informative References"])
-    guard case .references(let normative)? = references.subsections[0].blocks.first else {
-      Issue.record("expected a reference list")
-      return
-    }
+    let normative = try #require(
+      references.subsections[0].blocks.first?.references, "expected a reference list")
     #expect(normative.entries.map(\.anchor) == ["RFC2119", "RFC8174"])
     let bcp = normative.entries[0]
     #expect(bcp.title == "Key words for use in RFCs to Indicate Requirement Levels")

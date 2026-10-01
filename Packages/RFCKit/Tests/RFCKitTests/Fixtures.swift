@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import RFCKit
@@ -12,10 +13,20 @@ enum Fixtures {
 
   /// The fixture parsed as its format is: RFCXML for `.xml`, legacy text otherwise,
   /// decoded as every reader of the format decodes it.
+  ///
+  /// Parsed once per test run and kept (#144): about eighty tests read some forty
+  /// fixtures, and a parse is a pure function of the file. Two tests asking at once
+  /// may both parse it; either result is the same document.
   static func document(_ name: String) throws -> RFCDocument {
+    if let parsed = parsed.withLock({ $0[name] }) { return parsed }
     let data = try data(name)
-    return name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+    let document =
+      name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+    parsed.withLock { $0[name] = document }
+    return document
   }
+
+  private static let parsed = Mutex<[String: RFCDocument]>([:])
 
   /// The fixture's text, legacy text decoded as every reader of it decodes it.
   static func string(_ name: String) throws -> String {

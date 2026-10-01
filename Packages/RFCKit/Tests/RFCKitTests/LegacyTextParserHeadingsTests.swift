@@ -7,7 +7,7 @@ import Testing
 @Suite("Legacy text parser: headings")
 struct LegacyTextParserHeadingsTests {
   @Test func `unnumbered headings`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
+    let document = try Fixtures.document("rfc1149.txt")
     let titles = document.sections.map(\.titleText)
     #expect(
       titles == [
@@ -19,7 +19,7 @@ struct LegacyTextParserHeadingsTests {
   }
 
   @Test func `numbered sections nest`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     #expect(document.sections.map(\.number) == ["1", "2", "3", "4", "5", "6", "A", "B", nil])
     #expect(document.sections.last?.titleText == "Authors' Addresses")
     let operators = try #require(document.section(number: "3"))
@@ -37,7 +37,7 @@ struct LegacyTextParserHeadingsTests {
   /// them across the corpus, "Changes from RFC 3066" among them -- could not carry
   /// the link even in principle. RFC 21 heads a section "Revisions to NWG/RFC 11".
   @Test func `headings carry their cross references`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc21.txt"))
+    let document = try Fixtures.document("rfc21.txt")
     let heading = try #require(document.allSections.first { $0.titleText.contains("Revisions to") })
     let targets = heading.title.compactMap(\.crossReference?.target)
     #expect(targets == [.document(.rfc(11), section: nil)])
@@ -58,7 +58,7 @@ struct LegacyTextParserHeadingsTests {
   /// heading. The first full corpus run turned it into 262 sections; documents of this
   /// shape reached 10,000 (RFC 1142).
   @Test func `unindented body does not turn every line into a heading`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1245.txt"))
+    let document = try Fixtures.document("rfc1245.txt")
     #expect(document.header.id == .rfc(1245))
     #expect(document.header.title == "OSPF protocol analysis")
 
@@ -74,10 +74,7 @@ struct LegacyTextParserHeadingsTests {
     #expect(!titles.contains { $0.hasPrefix("This report") })
 
     // The abstract is still recognized, and its paragraphs stay whole.
-    guard case .paragraph(let abstract)? = document.header.abstract.first else {
-      Issue.record("abstract missing")
-      return
-    }
+    let abstract = try #require(document.header.abstract.first?.paragraph, "abstract missing")
     #expect(abstract.plainText.hasPrefix("This is the first"))
     #expect(abstract.plainText.hasSuffix("Interior Gateway Protocol)."))
   }
@@ -88,7 +85,7 @@ struct LegacyTextParserHeadingsTests {
   /// per line at column 0 against a body indented three, 395 lines each way: the tie
   /// used to resolve to an indented body and every row became a section.
   @Test func `a column zero table is not a stack of headings`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+    let document = try Fixtures.document("rfc1540.txt")
     let titles = document.allSections.map(\.titleText)
     #expect(!titles.contains { $0.hasPrefix("IP ") || $0.hasPrefix("TCP ") })
     #expect(document.allSections.count < 60, "\(document.allSections.count) sections")
@@ -105,7 +102,7 @@ struct LegacyTextParserHeadingsTests {
   /// but the rule held anywhere in a document, and refused about 120 real headings with
   /// those two, RFC 796's only one among them: `Internet to Local Net Address Mappings`.
   @Test func `a heading may start with a word the front matter uses`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
+    let document = try Fixtures.document("rfc796.txt")
     let mappings = try #require(
       document.allSections.first { $0.titleText == "Internet to Local Net Address Mappings" })
     #expect(mappings.blocks.count > 10, "\(mappings.blocks.count) blocks")
@@ -117,7 +114,7 @@ struct LegacyTextParserHeadingsTests {
   /// not know, so the body came out as one untitled run: no table of contents, and
   /// `Section 2.2.8` resolving to nothing (#71). RFC 2743 and 2130 are set the same way.
   @Test func `headings numbered with a colon are headings`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2078.txt"))
+    let document = try Fixtures.document("rfc2078.txt")
     #expect(document.allSections.filter { $0.number != nil && !$0.isAppendix }.count == 76)
     #expect(document.section(number: "2.4.12")?.titleText == "GSS_Release_OID call")
     #expect(document.section(number: "2.2.8")?.anchor == "section-2.2.8")
@@ -129,7 +126,7 @@ struct LegacyTextParserHeadingsTests {
   /// 705 lists its commands as `1.  BEGIN Command` and describes each again under `1:
   /// BEGIN   4b`, and the colon form read the descriptions as seven more sections 1-7.
   @Test func `a colon number repeating a heading number is not a heading`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc705.txt"))
+    let document = try Fixtures.document("rfc705.txt")
     let numbered = document.allSections.filter { $0.number != nil }
     #expect(
       numbered.map(\.titleText)
@@ -296,7 +293,7 @@ struct LegacyTextParserHeadingsTests {
   /// appendix pattern did not read: they were unnumbered sections titled with the whole
   /// line. They are appendices, lettered, and anchored where a link to one lands (#201).
   @Test func `appendices set off with dashes are appendices`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let document = try Fixtures.document("rfc2049.txt")
     let appendix = try #require(document.section(anchor: "appendix-A"))
     #expect(appendix.isAppendix)
     #expect(appendix.number == "A")
@@ -360,7 +357,7 @@ struct LegacyTextParserHeadingsTests {
   /// A column-0 table row that ends in a gap and a number is no heading: RFC 391's
   /// rows each opened a section, named for its host and its figures.
   @Test func `a table row ending in a number column opens no section`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc391.txt"))
+    let document = try Fixtures.document("rfc391.txt")
     #expect(!document.allSections.contains { $0.titleText.contains("HOST") })
   }
 
@@ -368,7 +365,7 @@ struct LegacyTextParserHeadingsTests {
   /// 1, 2 and 3 over the listing, with its sub-entries inside them as artwork, and a
   /// `REFERENCES ..... 85` section that took the preface for a bibliography.
   @Test func `a column zero contents listing opens no sections`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     #expect(!document.allSections.contains { $0.titleText.contains("....") })
     #expect(!document.artworkText.contains { $0.contains("Motivation ....") })
     #expect(document.nestedParagraphs.contains { $0.plainText.contains("nine earlier editions") })
@@ -379,7 +376,7 @@ struct LegacyTextParserHeadingsTests {
   /// a list of one item; it is a heading, because the next heading is its first
   /// subsection.
   @Test func `a centered chapter heading heads its chapter`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let introduction = try #require(document.section(number: "1"))
     #expect(introduction.titleText == "INTRODUCTION")
     #expect(introduction.subsections.first?.number == "1.1")
@@ -494,7 +491,7 @@ struct LegacyTextParserHeadingsTests {
 
   /// Through `parse`: a MIB set at column 0 opens no sections.
   @Test func `MIB lines at column 0 open no sections`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+    let document = try Fixtures.document("rfc2013.txt")
     let titles = document.allSections.map(\.title.plainText)
     #expect(!titles.contains("UDP-MIB DEFINITIONS ::= BEGIN"))
     #expect(!titles.contains("udpMIB MODULE-IDENTITY"))
@@ -502,12 +499,12 @@ struct LegacyTextParserHeadingsTests {
   }
 
   @Test func `ASN.1 definitions at column 0 open no sections`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2511.txt"))
+    let document = try Fixtures.document("rfc2511.txt")
     #expect(!document.allSections.contains { $0.title.plainText.contains("::=") })
   }
 
   @Test func `wrapped prose at column 0 opens no sections`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let titles = document.allSections.map(\.title.plainText)
     #expect(!titles.contains { $0.first?.isLowercase == true })
     #expect(titles.contains("OPEN Call"))

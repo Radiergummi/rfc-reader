@@ -38,10 +38,8 @@ struct ModelValueTests {
       changed.sections[section].blocks.lastIndex { block in
         if case .paragraph = block { true } else { false }
       })
-    guard case .paragraph(var contents) = changed.sections[section].blocks[paragraph] else {
-      Issue.record("not a paragraph")
-      return
-    }
+    var contents = try #require(
+      changed.sections[section].blocks[paragraph].paragraph, "not a paragraph")
     contents.indent += 1
     changed.sections[section].blocks[paragraph] = .paragraph(contents)
     #expect(changed != document)

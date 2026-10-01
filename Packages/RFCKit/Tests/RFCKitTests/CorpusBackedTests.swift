@@ -65,10 +65,9 @@ struct CorpusBackedPageJoinTests {
         guard case .paragraph(let paragraph) = $0 else { return false }
         return paragraph.plainText.hasSuffix("they send")
       })
-    guard case .list(let list)? = blocks.dropFirst(sentence + 1).first else {
-      Issue.record("expected the list of packet types after the sentence")
-      return
-    }
+    let list = try #require(
+      blocks.dropFirst(sentence + 1).first?.list,
+      "expected the list of packet types after the sentence")
     let items = list.items.compactMap { item -> String? in
       guard case .paragraph(let text)? = item.blocks.first else { return nil }
       return text.plainText

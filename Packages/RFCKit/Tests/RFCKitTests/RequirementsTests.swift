@@ -205,7 +205,7 @@ struct RequirementsTests {
   /// A document that never invokes BCP 14 states no requirements, however it
   /// capitalizes its words.
   @Test func `a document that does not cite BCP 14 has no requirements`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     #expect(!document.referencedDocuments.contains(.rfc(2119)))
     #expect(Requirements.extract(from: document).isEmpty)
   }

@@ -92,7 +92,7 @@ struct PublishedOriginalTests {
   }
 
   @Test func `a short RFC is its text, whatever else is published`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc1149.txt"))
+    let document = try Fixtures.document("rfc1149.txt")
     #expect(PublishedOriginal(.rfc(1149), formats: pointerFormats, text: document) == nil)
   }
 }

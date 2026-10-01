@@ -7,7 +7,7 @@ import Testing
 @Suite("Legacy text parser: front matter")
 struct LegacyTextParserFrontMatterTests {
   @Test func `front matter`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
+    let document = try Fixtures.document("rfc1149.txt")
     #expect(document.source == .text)
     #expect(document.header.id == .rfc(1149))
     #expect(
@@ -15,7 +15,7 @@ struct LegacyTextParserFrontMatterTests {
     #expect(document.header.authors == [Author(name: "D. Waitzman")])
     #expect(document.header.date == PublicationDate(year: 1990, month: 4))
 
-    let abnf = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let abnf = try Fixtures.document("rfc5234.txt")
     #expect(abnf.header.id == .rfc(5234))
     #expect(abnf.header.title == "Augmented BNF for Syntax Specifications: ABNF")
     #expect(abnf.header.obsoletes == [.rfc(4234)])
@@ -28,13 +28,10 @@ struct LegacyTextParserFrontMatterTests {
   }
 
   @Test func `abstract moves to header`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2119.txt"))
+    let document = try Fixtures.document("rfc2119.txt")
     #expect(!document.sections.contains { $0.titleText == "Abstract" })
     #expect(!document.sections.contains { $0.titleText.hasPrefix("Status of") })
-    guard case .paragraph(let paragraph)? = document.header.abstract.first else {
-      Issue.record("abstract missing")
-      return
-    }
+    let paragraph = try #require(document.header.abstract.first?.paragraph, "abstract missing")
     #expect(paragraph.plainText.hasPrefix("In many standards track"))
   }
 
@@ -83,14 +80,14 @@ struct LegacyTextParserFrontMatterTests {
   /// margin, and the second was taken for a heading that ended the front matter, leaving
   /// the first line in it.
   @Test func `the front matter ends at the first paragraph`() throws {
-    let addresses = LegacyTextParser.parse(try Fixtures.string("rfc796.txt"))
+    let addresses = try Fixtures.document("rfc796.txt")
     #expect(
       addresses.paragraphs.contains {
         $0.plainText.hasPrefix("This memo describes")
       })
     #expect(addresses.header.id == .rfc(796))
 
-    let remoteJobs = LegacyTextParser.parse(try Fixtures.string("rfc105.txt"))
+    let remoteJobs = try Fixtures.document("rfc105.txt")
     #expect(
       remoteJobs.paragraphs.contains {
         $0.plainText.hasPrefix("In the discussions")
@@ -106,7 +103,7 @@ struct LegacyTextParserFrontMatterTests {
   /// body after them stays.
   @Test func `the title pages leftovers are not the lead in`() throws {
     #expect(
-      LegacyTextParser.parse(try Fixtures.string("rfc757.txt")).leadIn.isEmpty,
+      try Fixtures.document("rfc757.txt").leadIn.isEmpty,
       "a phone number alone is not a lead-in")
 
     let procedureCallTitle = [
@@ -335,7 +332,7 @@ struct LegacyTextParserFrontMatterTests {
   /// neither was left in the body. The catalogs -- RFC 1292, 1632, 2116 -- give every
   /// entry one, and lost each entry's to the header the same way (#72).
   @Test func `only the first abstract is the documents`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2371.txt"))
+    let document = try Fixtures.document("rfc2371.txt")
     let abstract = document.header.abstract.compactMap(\.paragraph?.plainText)
     #expect(
       abstract.first?.hasPrefix("In many applications") == true)
@@ -361,7 +358,7 @@ struct LegacyTextParserFrontMatterTests {
   /// title instead: the number was never reached, and the header itself became the
   /// title. Twenty documents open with a date, a title or a report number this way.
   @Test func `the header is the run that states the number`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc609.txt"))
+    let document = try Fixtures.document("rfc609.txt")
     #expect(document.header.id == .rfc(609))
     #expect(document.header.title == "Statement of Upcoming Move of NIC/NLS Services")
   }
@@ -371,7 +368,7 @@ struct LegacyTextParserFrontMatterTests {
   /// and the body was empty (#60). A numbered heading at column 0 ends the title run,
   /// unless it is the run's first line.
   @Test func `a numbered heading ends the title`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc651.txt"))
+    let document = try Fixtures.document("rfc651.txt")
     #expect(document.header.title == "Revised Telnet Status Option")
     #expect(document.section(number: "1")?.titleText == "Command name and code")
     #expect(document.section(number: "4")?.titleText == "Motivation for the option")
@@ -382,7 +379,7 @@ struct LegacyTextParserFrontMatterTests {
   /// fallback puts it, after the second run -- which was counted from the stamp, and
   /// fell before the number line. The runs are counted from the header (#60, #51).
   @Test func `the title is counted from the header`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc873.txt"))
+    let document = try Fixtures.document("rfc873.txt")
     #expect(document.header.id == .rfc(873))
     #expect(document.header.title == "THE ILLUSION OF VENDOR SUPPORT")
   }

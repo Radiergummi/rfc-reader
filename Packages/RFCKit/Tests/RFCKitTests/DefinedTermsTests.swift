@@ -223,7 +223,7 @@ struct DefinedTermsTests {
 
   /// RFC 2013 §2 is titled Definitions and holds a MIB module, no definition list.
   @Test func `a definitions section without a definition list defines nothing`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+    let document = try Fixtures.document("rfc2013.txt")
     #expect(document.definedTerms.isEmpty)
   }
 
@@ -252,10 +252,8 @@ struct DefinedTermsTests {
     #expect(
       terms.map(\.anchor) == ["widget-def", "gadgets"], "its element's anchor, or the section's")
     let definition = try #require(terms.first?.definition.first)
-    guard case .paragraph(let paragraph) = definition else {
-      Issue.record("the definition is the paragraph the entry sits in")
-      return
-    }
+    let paragraph = try #require(
+      definition.paragraph, "the definition is the paragraph the entry sits in")
     #expect(paragraph.plainText.hasPrefix("A widget is the unit"))
   }
 

@@ -49,7 +49,7 @@ struct ReferenceKindTests {
   }
 
   @Test func `a legacy document's split references have their kinds`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     #expect(Self.kinds(in: document) == [.normative, .informative])
   }
 
@@ -59,7 +59,7 @@ struct ReferenceKindTests {
   /// RFC 1041, not RFC 793: the only list RFC 793 had was its contents entry
   /// `REFERENCES ..... 85` read as a section, whose entries were page numbers (#403).
   @Test func `a single list of references has no kind`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+    let document = try Fixtures.document("rfc1041.txt")
     #expect(Self.kinds(in: document) == [.unknown])
   }
 
@@ -92,7 +92,7 @@ struct ReferenceKindTests {
   }
 
   @Test func `a legacy citation records the entry it resolved to`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let entry = try #require(Self.entries(in: document).first { $0.documentID == .rfc(733) })
     #expect(
       Self.targets(in: document).contains(.document(.rfc(733), section: nil, entry: entry.anchor)))

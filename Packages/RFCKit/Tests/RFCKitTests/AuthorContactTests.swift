@@ -78,10 +78,9 @@ struct AuthorContactTests {
     let section = try #require(
       try Fixtures.document("rfc9682.xml").section(anchor: "authors-addresses"))
     #expect(section.blocks.count == 1)
-    guard case .paragraph(let paragraph) = section.blocks.first else {
-      Issue.record("expected a paragraph, got \(String(describing: section.blocks.first))")
-      return
-    }
+    let paragraph = try #require(
+      section.blocks.first?.paragraph,
+      "expected a paragraph, got \(String(describing: section.blocks.first))")
     let lines = paragraph.inlines.split(separator: .lineBreak).map { Array($0).plainText }
     #expect(
       lines == [
