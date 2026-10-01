@@ -159,6 +159,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// header's height: that scroll is the header's, not the reader's, even when it
     /// lands during a drag, and moves no bars.
     private var isHoldingPlace = false
+    /// The finger's drag on the text, from the moment it begins until the scroll
+    /// it started stops: a pan moves the bars, a drag of the scroll indicator does
+    /// not (`ReaderChrome.Drag`).
+    private var drag: ReaderChrome.Drag?
   #endif
 
   /// Where section tracking last put the reader, written the moment it is computed.
@@ -833,6 +837,22 @@ final class RFCTextViewCoordinator: NSObject {
       reportVisibleAnchor()
       followChrome(scrollView)
     }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+      drag = ReaderChrome.Drag(
+        offset: scrollView.contentOffset.y,
+        finger: scrollView.panGestureRecognizer.translation(in: scrollView).y)
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+      if !decelerate {
+        drag = nil
+      }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+      drag = nil
+    }
   }
 
   // MARK: - The bars on iPhone
@@ -846,14 +866,25 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     private func followChrome(_ scrollView: UIScrollView) {
+      let offset = scrollView.contentOffset.y
+      let finger = scrollView.panGestureRecognizer.translation(in: scrollView).y
+      let touching = scrollView.isTracking || scrollView.isDragging
+      if touching {
+        // A drag that began without telling the delegate starts here, undecided
+        // until it moves again.
+        if drag == nil {
+          drag = ReaderChrome.Drag(offset: offset, finger: finger)
+        }
+        drag?.moved(offset: offset, finger: finger)
+      }
       let insets = scrollView.adjustedContentInset
       chrome.scrolled(
         ReaderChrome.Scroll(
-          offset: scrollView.contentOffset.y, topInset: insets.top, bottomInset: insets.bottom,
+          offset: offset, topInset: insets.top, bottomInset: insets.bottom,
           contentHeight: scrollView.contentSize.height,
           viewportHeight: scrollView.bounds.height,
-          isUserDriven: !isHoldingPlace
-            && (scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating)))
+          isUserDriven: !isHoldingPlace && drag?.kind == .pan
+            && (touching || scrollView.isDecelerating)))
       reportChrome()
     }
 

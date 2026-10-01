@@ -18,7 +18,8 @@ public struct ReaderChrome: Equatable, Sendable {
     public var distanceFromTop: CGFloat
     /// How far the document can still scroll down; zero or less at its end.
     public var distanceToEnd: CGFloat
-    /// Whether a finger moved it: dragging, or the deceleration after one.
+    /// Whether a finger panned it: a pan, or the deceleration after one. Not a
+    /// drag of the scroll indicator; see `Drag`.
     public var isUserDriven: Bool
 
     public init(
@@ -43,6 +44,44 @@ public struct ReaderChrome: Equatable, Sendable {
         distanceToEnd: contentHeight + bottomInset - viewportHeight - offset,
         isUserDriven: isUserDriven)
     }
+  }
+
+  /// One drag on the text view, from the finger coming down to it lifting, told
+  /// apart by how the text moves against the finger.
+  ///
+  /// A pan moves the text with the finger, which moves the offset against it. A
+  /// drag of the scroll indicator moves the offset the way the finger goes, and
+  /// much further, because the indicator stands for the whole document: down it
+  /// and back up, it hid and showed the bars as fast as the finger turned. It is
+  /// one interaction that neither hides nor shows them, so only a pan is
+  /// `Scroll.isUserDriven`. Anything that moves the text while the finger stays is
+  /// not the finger either. Decided once, by the first movement, so a pan that
+  /// wobbles at its end stays a pan.
+  public struct Drag: Equatable, Sendable {
+    /// Nil until the text first moves.
+    public private(set) var kind: DragKind?
+    private let startOffset: CGFloat
+    private let startFinger: CGFloat
+
+    /// `offset` is the content offset, growing down the document; `finger` is the
+    /// pan's translation, growing down the screen.
+    public init(offset: CGFloat, finger: CGFloat) {
+      startOffset = offset
+      startFinger = finger
+    }
+
+    public mutating func moved(offset: CGFloat, finger: CGFloat) {
+      guard kind == nil else { return }
+      let textMoved = offset - startOffset
+      guard textMoved != 0 else { return }
+      kind = textMoved * (finger - startFinger) < 0 ? .pan : .indicator
+    }
+  }
+
+  /// What a `Drag` turned out to be.
+  public enum DragKind: Equatable, Sendable {
+    case pan
+    case indicator
   }
 
   /// How far a scroll down runs before the bars go: a nudge to settle a line is
