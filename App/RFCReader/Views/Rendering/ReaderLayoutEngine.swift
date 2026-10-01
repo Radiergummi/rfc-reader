@@ -157,10 +157,15 @@ final class ReaderLayoutEngine: PinSurface {
   /// The signpost interval of the completion running now; see `Signposts`.
   private var completionInterval: OSSignpostIntervalState?
 
-  /// Lays the document out from its start in the background, a slice per idle turn,
-  /// so the scroller's height is exact. It moves nothing on screen: what is above the
-  /// place is laid out already, and the scroll view keeps the place where it is as
-  /// the rest arrives. Paused through a live resize, whose every step re-wraps it.
+  /// How long one turn of the main actor lays out before it lets the run loop draw
+  /// and take input: a slice is 3–5 ms, so a turn is one or two slices.
+  private static let turnBudget = Duration.milliseconds(4)
+
+  /// Lays the document out from its start in the background, a turn's budget at a
+  /// time, so the scroller's height is exact. It moves nothing on screen: what is
+  /// above the place is laid out already, and the scroll view keeps the place where
+  /// it is as the rest arrives. Paused through a live resize, whose every step
+  /// re-wraps it, until the window says the resize ended.
   private func startCompletion() {
     stop()
     planner = SlicePlanner(length: built?.text.length ?? 0)
@@ -170,10 +175,17 @@ final class ReaderLayoutEngine: PinSurface {
       "Lay out document", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     completion = Task { [weak self] in
       while let self, !self.planner.isComplete {
-        try? await Task.sleep(for: .milliseconds(self.isInLiveResize ? 50 : 4))
+        await Task.yield()
         guard !Task.isCancelled else { return }
-        guard !self.isInLiveResize else { continue }
-        self.layOutSlice()
+        if self.isInLiveResize {
+          await self.liveResizeEnded()
+          continue
+        }
+        let clock = ContinuousClock()
+        let turnStart = clock.now
+        while !self.planner.isComplete, clock.now - turnStart < Self.turnBudget {
+          self.layOutSlice()
+        }
       }
       self?.endCompletionInterval()
     }
@@ -203,6 +215,18 @@ final class ReaderLayoutEngine: PinSurface {
       return false
     #else
       return textView?.inLiveResize ?? false
+    #endif
+  }
+
+  /// Returns when the text view's window ends its live resize, or the completion is
+  /// canceled. Called only while one is under way, with no suspension since the
+  /// check, so the end cannot have been posted already.
+  private func liveResizeEnded() async {
+    #if !canImport(UIKit)
+      guard let window = textView?.window else { return }
+      let ends = NotificationCenter.default.notifications(
+        named: NSWindow.didEndLiveResizeNotification, object: window)
+      for await _ in ends { break }
     #endif
   }
 
