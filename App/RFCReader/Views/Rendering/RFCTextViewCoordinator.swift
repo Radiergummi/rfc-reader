@@ -853,7 +853,8 @@ final class RFCTextViewCoordinator: NSObject {
           contentHeight: scrollView.contentSize.height,
           viewportHeight: scrollView.bounds.height,
           isUserDriven: scrollView.isTracking || scrollView.isDragging
-            || scrollView.isDecelerating))
+            || scrollView.isDecelerating,
+          isFlinging: scrollView.isDecelerating && !scrollView.isTracking))
       reportChrome()
     }
 

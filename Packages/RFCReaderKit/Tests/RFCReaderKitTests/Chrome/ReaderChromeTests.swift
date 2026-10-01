@@ -16,16 +16,16 @@ struct ReaderChromeTests {
     }()
     var offset: CGFloat = 0
 
-    mutating func scroll(to offset: CGFloat, byFinger: Bool = true) {
+    mutating func scroll(to offset: CGFloat, byFinger: Bool = true, flinging: Bool = false) {
       self.offset = offset
       chrome.scrolled(
         ReaderChrome.Scroll(
           position: offset, distanceFromTop: offset, distanceToEnd: 10_000 - offset,
-          isUserDriven: byFinger))
+          isUserDriven: byFinger, isFlinging: flinging))
     }
 
-    mutating func scroll(by distance: CGFloat, byFinger: Bool = true) {
-      scroll(to: offset + distance, byFinger: byFinger)
+    mutating func scroll(by distance: CGFloat, byFinger: Bool = true, flinging: Bool = false) {
+      scroll(to: offset + distance, byFinger: byFinger, flinging: flinging)
     }
 
     /// Into the document, well past where the bars may go, without hiding them.
@@ -131,6 +131,36 @@ struct ReaderChromeTests {
         position: reader.offset, distanceFromTop: reader.offset - 54,
         distanceToEnd: 10_000 - reader.offset, isUserDriven: true))
     #expect(reader.chrome.isHidden)
+  }
+
+  /// A fling cannot turn by itself. What moves against it is the scroll view keeping
+  /// the text in place as TextKit corrects its estimates — on an iPhone, flinging up
+  /// RFC 5661 hid and showed the bars in rapid succession.
+  @Test func `a fling up corrected downward does not hide the bars`() {
+    var reader = Reader.reading()
+    reader.scroll(by: -30)
+    reader.scroll(by: -40, flinging: true)
+    reader.scroll(by: 300, flinging: true)
+    #expect(!reader.chrome.isHidden)
+    reader.scroll(by: -40, flinging: true)
+    #expect(!reader.chrome.isHidden)
+  }
+
+  @Test func `a fling down corrected upward does not show the bars`() {
+    var reader = Reader.reading()
+    reader.scroll(by: 50)
+    #expect(reader.chrome.isHidden)
+    reader.scroll(by: 80, flinging: true)
+    reader.scroll(by: -300, flinging: true)
+    #expect(reader.chrome.isHidden)
+  }
+
+  /// A finger can turn, so while it drags a turn is still the reader's.
+  @Test func `a drag that turns back still shows them`() {
+    var reader = Reader.reading()
+    reader.scroll(by: 50)
+    reader.scroll(by: -30)
+    #expect(!reader.chrome.isHidden)
   }
 
   @Test func `a tap brings hidden bars back and puts shown ones away`() {
