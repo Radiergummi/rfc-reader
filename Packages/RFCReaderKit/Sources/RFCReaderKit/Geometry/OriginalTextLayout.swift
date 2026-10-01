@@ -9,12 +9,18 @@ import CoreGraphics
 /// line and the insets on either side of it, never narrower than the view, so text
 /// that fits does not scroll sideways.
 public enum OriginalTextLayout {
-  /// The text container's size: unbounded across, so lines never wrap, and
-  /// unbounded down. UIKit clamps a touch into the container before it looks for
-  /// the character under it, so a container of no height put every selection on
-  /// the first line (#240).
+  /// The text container's size: unbounded down, and wider than any line, so lines
+  /// never wrap (#240).
+  ///
+  /// The height is unbounded because UIKit clamps a touch into the container
+  /// before it looks for the character under it, and a container of no height put
+  /// every selection on the first line. The width is not, because a `UITextView`
+  /// takes a container 10,000,000 points wide or more as having no width and cuts
+  /// the selection's highlight at the view's own width: past the right edge of an
+  /// iPhone a selection had no highlight, and its end handle stayed at that edge.
+  /// A million points is still some 40,000 columns at the largest text size.
   public static let containerSize = CGSize(
-    width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    width: 1_000_000, height: CGFloat.greatestFiniteMagnitude)
 
   /// - Parameters:
   ///   - usedWidth: the right edge of the laid-out text in the container, its

@@ -102,9 +102,10 @@ struct OriginalTextBody {
       // reading down would otherwise also drift sideways.
       textView.isDirectionalLockEnabled = true
       textView.textContainerInset = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
-      // Not wrapping: the container is unbounded across, and the content grows to
-      // what is laid out in it. Unbounded down too, or every touch selects on the
-      // first line (`OriginalTextLayout.containerSize`).
+      // Not wrapping: the container is wider than any line, and the content grows
+      // to what is laid out in it. Unbounded down, or every touch selects on the
+      // first line; not unbounded across, or a selection past the view's width has
+      // no highlight (`OriginalTextLayout.containerSize`).
       textView.textContainer.lineFragmentPadding = 0
       textView.textContainer.widthTracksTextView = false
       textView.textContainer.size = OriginalTextLayout.containerSize
@@ -144,7 +145,7 @@ struct OriginalTextBody {
       super.layoutSubviews()
       // UIKit narrows the container to the frame although it does not track the
       // view's width: on an iPhone the lines wrapped at 345 pt until this put the
-      // unbounded width back (#240). The height is put back unbounded with it.
+      // container's width back (#240). The height is put back unbounded with it.
       if textContainer.size != OriginalTextLayout.containerSize {
         textContainer.size = OriginalTextLayout.containerSize
       }

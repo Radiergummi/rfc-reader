@@ -43,9 +43,22 @@ struct OriginalTextLayoutTests {
   /// UIKit clamps a touch into the text container before it finds the character
   /// under it, so a container with no height put every touch on the first line
   /// (#240).
-  @Test func `the container is unbounded down as well as across`() {
-    #expect(OriginalTextLayout.containerSize.width == .greatestFiniteMagnitude)
+  @Test func `the container is unbounded down`() {
     #expect(OriginalTextLayout.containerSize.height == .greatestFiniteMagnitude)
+  }
+
+  /// A `UITextView` takes a container 10,000,000 points wide or more as having no
+  /// width and cuts its selection at the view's width instead, so past the right
+  /// edge of an iPhone a selection had no highlight and its end handle stayed
+  /// behind (#240).
+  @Test func `the container is narrower than what UIKit takes as no width`() {
+    #expect(OriginalTextLayout.containerSize.width < 10_000_000)
+  }
+
+  /// A thousand columns at a 24 pt advance, far past any published line at the
+  /// largest text size: lines still never wrap.
+  @Test func `the container is wider than any line`() {
+    #expect(OriginalTextLayout.containerSize.width > 1_000 * 24)
   }
 
   /// A larger text size widens the content by its ratio, and the place in the
