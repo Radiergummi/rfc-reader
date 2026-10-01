@@ -62,6 +62,20 @@ struct StrokeGeometryTests {
     #expect(segments(line: 7).isEmpty)
   }
 
+  /// TextKit asks every fragment in the viewport for its rendering bounds, the empty
+  /// one at the end of the text and a stale one from before an install included,
+  /// and the reader asks this for its strokes. Reading the attribute at a location
+  /// past the text raised `NSRangeException`, and AppKit ended the app with it (#620).
+  @Test func `a fragment at or past the end of the text has no strokes`() {
+    let document = Fixtures.document(
+      .preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable)))
+    let text = DocumentTextBuilder.build(document, style: ReadingStyle(measure: 600)).text
+
+    #expect(StrokeGeometry.line(of: NSRange(location: text.length, length: 0), in: text) == nil)
+    #expect(
+      StrokeGeometry.line(of: NSRange(location: text.length + 40, length: 12), in: text) == nil)
+  }
+
   /// Built, laid out and measured as the reader does: in a block quote, so the
   /// block is indented, and at a column narrow enough that it is scaled down.
   @Test func `strokes land on the centers of the characters they hide`() throws {
