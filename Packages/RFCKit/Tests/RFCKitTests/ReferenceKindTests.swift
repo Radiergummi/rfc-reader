@@ -55,8 +55,11 @@ struct ReferenceKindTests {
 
   /// Before about RFC 2200 a document has one list, and whether a reference in it is
   /// normative is simply not said.
+  ///
+  /// RFC 1041, not RFC 793: the only list RFC 793 had was its contents entry
+  /// `REFERENCES ..... 85` read as a section, whose entries were page numbers (#403).
   @Test func `a single list of references has no kind`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
     #expect(Self.kinds(in: document) == [.unknown])
   }
 
