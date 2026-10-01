@@ -13,6 +13,9 @@ struct StatusBadge: View {
       .background(Self.fill(for: status), in: Capsule())
       .foregroundStyle(Self.color(for: status))
       .accessibilityLabel(status.displayName)
+      // What it means, on a list row as anywhere: a row is selected by a click, so
+      // the explanation is a tooltip there rather than a popover (#362).
+      .help(Glossary.entry(for: .status(status)).summary)
   }
 
   /// The status's text color, shared with the Info pane's status box: one that
