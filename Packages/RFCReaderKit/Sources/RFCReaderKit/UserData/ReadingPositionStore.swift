@@ -55,8 +55,8 @@ public enum ReadingPositionStore {
   }
 
   /// How many of the documents `recentlyRead` lists are RFCs: the Recently Read
-  /// count, which the library refreshes on every save of the store, so only the keys
-  /// are fetched, unsorted.
+  /// count, which the library refreshes on every save of a reading position, so only
+  /// the keys are fetched, unsorted.
   public static func recentlyReadRFCCount(in context: ModelContext) throws -> Int {
     var descriptor = FetchDescriptor<ReadingPosition>()
     descriptor.propertiesToFetch = [\.documentKey]
