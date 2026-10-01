@@ -17,9 +17,27 @@ extension DocumentTextBuilder {
   /// narrower; the widest line anywhere is 129 columns, in RFC 2124.
   func appendVerbatim(_ content: Preformatted, indent: CGFloat) {
     mark(content.anchor)
+    let ordinal = nextVerbatimOrdinal
+    nextVerbatimOrdinal += 1
+    let classification = ArtworkClassifier.classify(content, in: documentID, hints: hints)
     let text = displayedText(of: content, indent: indent)
     let scale = monospaceScale(for: text, indent: indent)
-    let box = VerbatimBox(content)
+    // A rendition's ranges are into the block's own text, so a block shown other
+    // than as written (unfolded, #64) is not decorated.
+    let rendition =
+      text == content.text
+      ? ArtworkRenderers.render(
+        content, classification,
+        context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
+      : nil
+    let showsSource =
+      choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
+    let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
+    let decorated: DecoratedText? =
+      if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
+    let box = VerbatimBox(
+      content, ordinal: ordinal, classification: classification, shown: shown,
+      spokenLabel: decorated?.spokenLabel)
 
     // Before the label, so the label is inside the card it names.
     let start = output.length
@@ -29,8 +47,22 @@ extension DocumentTextBuilder {
       append(type.uppercased() + "\n", label)
     }
 
+    let labelWidth =
+      output.length > start
+      ? lineWidth(
+        output.attributedSubstring(from: NSRange(location: start, length: output.length - start)))
+      : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
+    let contentWidth = max(labelWidth, widestLine(of: text, scale: scale))
+    // A rendered diagram's card sits in the middle of the column; source code and
+    // plain artwork keep their indent. Through the indent, so selection, find and
+    // strokes follow. The scale fitted the block at `indent`, which this never
+    // narrows.
+    let bodyIndent =
+      content.kind == .artwork && shown != .plain
+      ? max(indent, (style.measure - contentWidth) / 2) : indent
     let body = text.hasSuffix("\n") ? text : text + "\n"
+    let bodyStart = output.length
     append(
       body,
       [
@@ -38,8 +70,16 @@ extension DocumentTextBuilder {
         .foregroundColor: bodyColor,
         .rfcVerbatim: box,
         .paragraphStyle: paragraphStyle(
-          indent: indent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
+          indent: bodyIndent, spacingAfter: 0, wraps: false, lineHeightMultiple: lineHeight),
       ])
+    if let decorated {
+      decorate(decorated, from: bodyStart)
+    }
+    if shown != .plain, style.emitsLinks {
+      output.addAttribute(
+        .rfcFigureItem, value: FigureMenu.itemTag(of: box),
+        range: NSRange(location: bodyStart, length: output.length - bodyStart))
+    }
     // Every line ends a paragraph, so the spacing that separates the block from what
     // follows goes on its last line alone. On all of them, a figure read double
     // spaced (#31).
@@ -48,10 +88,43 @@ extension DocumentTextBuilder {
     output.addAttribute(
       .paragraphStyle,
       value: paragraphStyle(
-        indent: indent, spacingAfter: style.paragraphSpacing, wraps: false,
+        indent: bodyIndent, spacingAfter: style.paragraphSpacing, wraps: false,
         lineHeightMultiple: lineHeight),
       range: lastLine)
     decorate(from: start, with: .artwork)
+    let block = NSRange(location: start, length: output.length - start)
+    output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+  }
+
+  /// Sets a decorated block's strokes on all of it, its ruler in the secondary
+  /// color and its border characters in `hiddenColor`. The text is unchanged.
+  func decorate(_ decorated: DecoratedText, from bodyStart: Int) {
+    let body = NSRange(location: bodyStart, length: output.length - bodyStart)
+    output.addAttribute(.rfcStrokes, value: StrokeBox(decorated.strokes), range: body)
+    for (ranges, color) in [
+      (decorated.secondary, RFCColors.secondaryLabel), (decorated.hidden, Self.hiddenColor),
+    ] {
+      for range in ranges {
+        output.addAttribute(
+          .foregroundColor, value: color,
+          range: NSRange(location: bodyStart + range.location, length: range.length))
+      }
+    }
+  }
+
+  /// How wide a verbatim block's widest line is set. An ASCII line is its columns at
+  /// the monospaced advance, scaled as the block is: the count `monospaceScale`
+  /// fits. Any other line is measured, since the font sets a wide character two
+  /// columns wide and takes one it lacks from a fallback font, and a card the
+  /// columns alone measured would end inside the line.
+  func widestLine(of text: String, scale: CGFloat) -> CGFloat {
+    let font = style.monospacedFont(scale: scale)
+    let widths = text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+      line.allSatisfy(\.isASCII)
+        ? CGFloat(line.count) * monospaceAdvance * scale
+        : lineWidth(NSAttributedString(string: String(line), attributes: [.font: font]))
+    }
+    return widths.max() ?? 0
   }
 
   /// What a verbatim block shows: unfolded, without its header, where RFC 8792

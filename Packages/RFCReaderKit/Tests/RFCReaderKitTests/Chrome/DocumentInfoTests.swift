@@ -97,16 +97,33 @@ struct DocumentInfoTests {
       info(rich).facts == [
         DocumentInfo.Fact(value: "2022", label: "Published"),
         DocumentInfo.Fact(value: "194", label: "Pages"),
-        DocumentInfo.Fact(value: "IETF", label: "Stream"),
-        DocumentInfo.Fact(value: "httpbis", label: "Group"),
+        DocumentInfo.Fact(value: "IETF", label: "Stream", term: .stream(.ietf)),
+        DocumentInfo.Fact(value: "httpbis", label: "Group", term: .process(.workingGroup)),
       ])
+  }
+
+  /// A label the glossary explains opens its entry (#362): the stream and the group in
+  /// the strip, each relationship, and a series the document is part of.
+  @Test func `a label the glossary explains carries its term`() {
+    let relationships = section("Relationships", of: rich)?.rows ?? []
+    #expect(
+      relationships.map(\.term) == [
+        .process(.obsoletes), .process(.updates), .series(.std),
+      ])
+  }
+
+  @Test func `a status summary is its glossary entry's`() {
+    #expect(
+      info(rich).statusSummary == Glossary.entry(for: .status(.internetStandard)).summary)
   }
 
   /// A fact is a word or two in a quarter of a narrow panel.
   @Test func `the independent stream is short enough for the strip`() {
     var metadata = bare
     metadata.stream = .independent
-    #expect(info(metadata).facts.contains(DocumentInfo.Fact(value: "Independent", label: "Stream")))
+    #expect(
+      info(metadata).facts.contains(
+        DocumentInfo.Fact(value: "Independent", label: "Stream", term: .stream(.independent))))
   }
 
   @Test func `the sections come in a fixed order`() {

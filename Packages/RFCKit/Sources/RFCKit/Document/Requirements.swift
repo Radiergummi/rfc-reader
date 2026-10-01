@@ -99,8 +99,8 @@ public enum Requirements {
         record(paragraph.plainText, paragraph.anchor ?? outer)
       case .list(let list):
         for item in list.items { visit(item.blocks, around: item.anchor ?? outer, record) }
-      case .definitionList(let items):
-        for item in items {
+      case .definitionList(let list):
+        for item in list.items {
           record(item.term.plainText, item.anchor ?? outer)
           visit(item.definition, around: item.definitionAnchor ?? item.anchor ?? outer, record)
         }

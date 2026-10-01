@@ -25,17 +25,23 @@ nonisolated extension DocumentPDF {
     -> Data
   {
     let document = try await library.document(for: id)
-    return await renderExport(document, metadata: library.metadata(id), paperSize: paperSize)
+    return await renderExport(
+      document, metadata: library.metadata(id),
+      choices: library.presentationChoices(
+        for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
+      paperSize: paperSize)
   }
 
   @concurrent
-  static func renderExport(_ document: RFCDocument, metadata: RFCMetadata?, paperSize: CGSize)
-    async -> Data
-  {
+  static func renderExport(
+    _ document: RFCDocument, metadata: RFCMetadata?, choices: PresentationChoices,
+    paperSize: CGSize
+  ) async -> Data {
     let layout = PrintLayout(paperSize: paperSize)
     let furniture = PrintFurniture(header: document.header, metadata: metadata)
     return buildAndLayOut(
-      document, style: layout.exportStyle, furniture: furniture, layout: layout
+      Printed(document: document, choices: choices), style: layout.exportStyle,
+      furniture: furniture, layout: layout
     ) { built, laidOut in
       let pages = pdf(laidOut, layout: layout, furniture: furniture)
       let outline = PDFExport.outline(of: document, built: built)

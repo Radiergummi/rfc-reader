@@ -15,8 +15,9 @@ struct RFCXMLSerializerTests {
         "L\(list.items.count):"
           + list.items.map { $0.blocks.map(blockKind).joined(separator: "|") }.joined(
             separator: "||")
-      case .definitionList(let items):
-        "D\(items.count):" + items.map { $0.term.plainText }.joined(separator: "|")
+      case .definitionList(let list):
+        "D\(list.items.count)\(list.isCompact ? "c" : "")\(list.hangsTerms ? "h" : ""):"
+          + list.items.map { $0.term.plainText }.joined(separator: "|")
       case .preformatted(let artwork): "A:" + artwork.text
       case .figure(let figure):
         "F:\(figure.title, default: "")" + figure.blocks.map(blockKind).joined(separator: "|")
@@ -79,6 +80,40 @@ struct RFCXMLSerializerTests {
     let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
     #expect(original.header.precedingDraft != nil)
     #expect(reparsed.header.precedingDraft == original.header.precedingDraft)
+  }
+
+  /// How each definition list in `document`, at any depth, asks to be set.
+  static func definitionListShapes(_ document: RFCDocument) -> [String] {
+    document.everyBlock.flattened.compactMap(\.definitionList).map {
+      "\($0.isCompact ? "compact" : "normal") \($0.hangsTerms ? "hanging" : "newline")"
+    }
+  }
+
+  /// RFC 9290 sets its terms on their own lines and RFC 9985 hangs them, some of
+  /// both compact (#352).
+  @Test(arguments: ["rfc9290.xml", "rfc9985.xml"])
+  func `a definition list's newline and spacing survive a round trip`(name: String) throws {
+    let (original, reparsed) = try Self.roundTrip(name)
+    #expect(Set(Self.definitionListShapes(original)).count > 1)
+    #expect(Self.definitionListShapes(reparsed) == Self.definitionListShapes(original))
+  }
+
+  /// The converter's documents: a legacy list that hangs no term says so, since
+  /// RFCXML would otherwise hang it (RFC 21's), and a catalog says it is compact and
+  /// hangs (RFC 1540's).
+  @Test(arguments: [
+    ("rfc21.txt", #"<dl newline="true">"#),
+    ("rfc1540.txt", #"<dl newline="false" spacing="compact">"#),
+  ])
+  func `a converted definition list states how its terms are set`(name: String, tag: String)
+    throws
+  {
+    let original = LegacyTextParser.parse(try Fixtures.string(name))
+    let xml = RFCXMLSerializer().serialize(original)
+    #expect(xml.contains(tag))
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(!Self.definitionListShapes(original).isEmpty)
+    #expect(Self.definitionListShapes(reparsed) == Self.definitionListShapes(original))
   }
 
   @Test func `a reference annotation survives a round trip`() throws {

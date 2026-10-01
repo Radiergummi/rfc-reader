@@ -71,15 +71,22 @@ public enum RFCColors {
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
   /// so it tints whatever the page is rather than assuming its color.
   private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
+    byAppearance(light: (white: 0, alpha: light), dark: (white: 1, alpha: dark))
+  }
+
+  /// A gray for each appearance, resolved when it is drawn.
+  private static func byAppearance(
+    light: (white: CGFloat, alpha: CGFloat), dark: (white: CGFloat, alpha: CGFloat)
+  ) -> PlatformColor {
     #if canImport(UIKit)
       UIColor { traits in
-        traits.userInterfaceStyle == .dark
-          ? UIColor(white: 1, alpha: dark) : UIColor(white: 0, alpha: light)
+        let gray = traits.userInterfaceStyle == .dark ? dark : light
+        return UIColor(white: gray.white, alpha: gray.alpha)
       }
     #else
       NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-          ? NSColor(white: 1, alpha: dark) : NSColor(white: 0, alpha: light)
+        let gray = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        return NSColor(white: gray.white, alpha: gray.alpha)
       }
     #endif
   }
@@ -96,6 +103,16 @@ public enum RFCColors {
       .separatorColor
     #endif
   }
+
+  /// The lines a decorated block draws over its text: a step back from the label
+  /// color, so a grid reads as structure and its field names as the content. Opaque,
+  /// where the secondary label color is not: a stroke is drawn in pieces, one per
+  /// line's fragment, and translucent pieces meeting on a fractional pixel draw a
+  /// lighter band at every line, #31's seam again, and a darker patch wherever a
+  /// rule and a delimiter overlap at a corner.
+  public static let stroke = byAppearance(
+    light: (white: 0.45, alpha: 1), dark: (white: 0.6, alpha: 1))
+
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.

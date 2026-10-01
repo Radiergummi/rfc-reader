@@ -163,6 +163,16 @@ public struct RFCEditorClient: Sendable {
     /// Why the XML was not used, when it was there but did not parse: a parser bug
     /// worth knowing about, and not the same thing as there being no XML.
     public let xmlParseFailure: (any Error)?
+
+    /// Public for a stand-in fetcher, which returns one of these as the client does.
+    public init(
+      data: Data, format: FileFormat, document: RFCDocument, xmlParseFailure: (any Error)?
+    ) {
+      self.data = data
+      self.format = format
+      self.document = document
+      self.xmlParseFailure = xmlParseFailure
+    }
   }
 
   /// Whether the plain text is all there is: formats are given, and XML is not among

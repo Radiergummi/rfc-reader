@@ -651,6 +651,40 @@ struct RFCXMLParserTests {
     #expect(paragraphs.filter { $0.indent != 0 }.count == 1)
   }
 
+  /// A `<dl>` keeps how RFCXML asks for it to be set (#352): `newline="false"` hangs
+  /// each term beside its definition, `spacing="compact"` drops the space between
+  /// items. The prepped XML states both on every list, in every combination of the two.
+  @Test(arguments: [
+    ("rfc8761.xml", "2.1", "normal newline"),
+    ("rfc8761.xml", "2.2", "normal hanging"),
+    ("rfc9290.xml", "3.1.1", "compact newline"),
+    ("rfc9985.xml", "9.1", "compact hanging"),
+  ])
+  func `a definition list keeps its newline and spacing`(
+    fixture: String, section: String, shape: String
+  ) throws {
+    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let list = try #require(
+      document.section(number: section)?.blocks.compactMap(\.definitionList).first)
+    #expect(
+      "\(list.isCompact ? "compact" : "normal") \(list.hangsTerms ? "hanging" : "newline")" == shape
+    )
+  }
+
+  /// One that says neither keeps its terms on their own lines, as the converter's
+  /// documents from before #352 need: RFCXML's own default would hang them.
+  /// RFC 9985 with its `<dl>`s' attributes taken out at run time, as those documents
+  /// write them.
+  @Test func `a definition list that says nothing sets its terms on their own lines`() throws {
+    let xml = String(decoding: try Fixtures.data("rfc9985.xml"), as: UTF8.self)
+      .replacing(#" newline="false""#, with: "")
+      .replacing(#" spacing="compact""#, with: "")
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let lists = document.everyBlock.flattened.compactMap(\.definitionList)
+    #expect(!lists.isEmpty)
+    #expect(lists.allSatisfy { !$0.hangsTerms && !$0.isCompact })
+  }
+
   @Test func `rejects non RFC documents`() {
     #expect(throws: RFCXMLParser.ParseError.self) {
       try RFCXMLParser.parse(Data("<html><body/></html>".utf8))

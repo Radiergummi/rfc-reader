@@ -97,7 +97,7 @@ public enum AccessibleReading {
         return
       }
       if piece.location == diagram.location {
-        pieces.append(.label(label))
+        pieces.append(.label(label(for: box)))
       }
       // The builder ends every verbatim block with a line break.
       let last = NSMaxRange(diagram) - 1
@@ -108,11 +108,19 @@ public enum AccessibleReading {
     return pieces
   }
 
+  /// What a diagram is said as: what its rendering says it holds, such as a packet
+  /// diagram's fields, or else `label`.
+  public static func label(for box: VerbatimBox) -> String {
+    box.spokenLabel ?? label
+  }
+
   /// Whether a verbatim block is said as a label rather than read: artwork that is
   /// a drawing. Legacy documents set every block that is not prose as artwork —
   /// grammars, message examples, tables — and those read perfectly well as words.
+  /// A block its rendering says something about is a diagram whatever it draws
+  /// with; only one with no rendering to say is left to the drawing-share guess.
   public static func isDiagram(_ box: VerbatimBox) -> Bool {
-    box.content.kind == .artwork && looksLikeDrawing(box.content.text)
+    box.spokenLabel != nil || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
   }
 
   /// A drawing is mostly lines, boxes and arrows: at least this share of the

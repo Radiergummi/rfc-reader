@@ -305,4 +305,39 @@ struct AccessibleReadingTests {
     #expect(!AccessibleReading.isDiagram(box))
   }
 
+  @Test func `a rendered packet diagram is said as its fields`() {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: ReadingStyle())
+    let pieces = AccessibleReading.pieces(
+      of: NSRange(location: 0, length: built.text.length), in: built.text)
+    #expect(
+      pieces.first(where: Self.isLabel)
+        == .label(
+          "Packet diagram, 16 bits a row: Type, 8 bits; Length, 8 bits; Value, variable length"))
+  }
+
+  @Test func `a packet diagram shown as source is said as a diagram`() {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: ReadingStyle(), choices: PresentationChoices(chosen: [.ordinal(0): .text]))
+    let pieces = AccessibleReading.pieces(
+      of: NSRange(location: 0, length: built.text.length), in: built.text)
+    #expect(pieces.first(where: Self.isLabel) == .label(AccessibleReading.label))
+  }
+
+  /// The document's heading comes before the diagram, as text.
+  private static func isLabel(_ piece: AccessibleReading.Piece) -> Bool {
+    if case .label = piece { return true }
+    return false
+  }
+
+  /// Whether a block is said as a diagram is its rendering's to say where it has
+  /// one, and the drawing-share heuristic's only where it has none.
+  @Test func `a rendered block with a spoken label is a diagram whatever it draws with`() {
+    let box = VerbatimBox(
+      Preformatted(kind: .artwork, text: "mostly words and few lines"), shown: .rendered,
+      spokenLabel: "Packet diagram")
+    #expect(AccessibleReading.isDiagram(box))
+  }
 }

@@ -51,7 +51,7 @@ struct BuilderListTests {
   @Test func `definition terms are bold and definitions are indented`() throws {
     let item = DefinitionItem(
       term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))])
-    let document = Fixtures.document(.definitionList([item]))
+    let document = Fixtures.document(.definitionList(DefinitionList([item])))
     let built = DocumentTextBuilder.build(document, style: style)
     let offset = try Fixtures.offset(of: "MUST", in: built.text)
     let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
@@ -80,7 +80,8 @@ struct BuilderListTests {
       DefinitionItem(
         term: [.text("SHOULD")], definition: [.paragraph(Paragraph(text: "recommended"))]),
     ]
-    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(items)), style: style)
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.definitionList(DefinitionList(items))), style: style)
 
     let definition = try #require(built.anchors.offset(of: "must-definition"))
     #expect(try Fixtures.offset(of: "absolute requirement", in: built.text) == definition)
@@ -89,6 +90,89 @@ struct BuilderListTests {
     let term = try Fixtures.offset(of: "SHALL", in: built.text)
     #expect(empty == term + "SHALL".utf16.count)
     #expect(try Fixtures.offset(of: "SHOULD", in: built.text) > empty)
+  }
+
+  private static func definition(_ term: String, _ text: String) -> DefinitionItem {
+    DefinitionItem(term: [.text(term)], definition: [.paragraph(Paragraph(text: text))])
+  }
+
+  /// RFCXML's `newline="false"`: the term in a gutter beside its definition, as a
+  /// list item's marker hangs, in one paragraph with it (#352).
+  @Test func `a hanging term is set beside its definition`() throws {
+    let list = DefinitionList(
+      [Self.definition("0", "Reserved"), Self.definition("1", "First Value")], hangsTerms: true)
+    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(list)), style: style)
+    #expect(built.text.string.contains("0\tReserved\n1\tFirst Value\n"))
+
+    let term = try Fixtures.offset(of: "0\t", in: built.text)
+    let font = built.text.attribute(.font, at: term, effectiveRange: nil) as? PlatformFont
+    #expect(font?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true)
+
+    let offset = try Fixtures.offset(of: "Reserved", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.firstLineHeadIndent < paragraph.headIndent)
+    #expect(paragraph.tabStops.contains { $0.location == paragraph.headIndent })
+  }
+
+  /// A term wider than the gutter's cap is set on its own line, as every term was,
+  /// and only that one: the others still hang, in a gutter as wide as they need.
+  @Test func `a term too wide for the gutter falls back to its own line`() throws {
+    let long = "A term far too long to stand beside anything in a third of a column"
+    let list = DefinitionList(
+      [Self.definition("0", "Reserved"), Self.definition(long, "Its meaning")], hangsTerms: true)
+    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(list)), style: style)
+    #expect(built.text.string.contains("0\tReserved\n"))
+    #expect(built.text.string.contains(long + "\nIts meaning\n"))
+
+    let offset = try Fixtures.offset(of: "Reserved", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.headIndent - paragraph.firstLineHeadIndent < style.measure / 3)
+    // Its definition starts at the gutter, where the hanging ones' wrapped lines do.
+    let fallback = try Fixtures.offset(of: "Its meaning", in: built.text)
+    let fallbackParagraph = try #require(
+      built.text.attribute(.paragraphStyle, at: fallback, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(fallbackParagraph.headIndent == paragraph.headIndent)
+    #expect(fallbackParagraph.firstLineHeadIndent == paragraph.headIndent)
+  }
+
+  /// A list that does not hang its terms sets each on its own line, as before #352.
+  @Test func `a definition list that does not hang sets its terms on their own lines`() {
+    let list = DefinitionList([Self.definition("0", "Reserved")])
+    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(list)), style: style)
+    #expect(built.text.string.contains("0\nReserved\n"))
+  }
+
+  /// RFCXML's `spacing="compact"`: the items closer together than a normal list's,
+  /// hanging or not.
+  @Test(arguments: [false, true])
+  func `a compact definition list sets its items closer`(hangsTerms: Bool) throws {
+    func spacing(compact: Bool) throws -> CGFloat {
+      let list = DefinitionList(
+        [Self.definition("0", "Reserved"), Self.definition("1", "First Value")],
+        isCompact: compact, hangsTerms: hangsTerms)
+      let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(list)), style: style)
+      let offset = try Fixtures.offset(of: "Reserved", in: built.text)
+      let paragraph = try #require(
+        built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
+      return paragraph.paragraphSpacing
+    }
+    #expect(try spacing(compact: true) < spacing(compact: false))
+  }
+
+  /// The gutter is the widest term that fits the limit, and a gap; never less than one
+  /// step. A term past the limit does not widen it: that term is set on its own line.
+  @Test func `a definition list's gutter is its widest fitting term and a gap`() {
+    func width(_ terms: [CGFloat], limit: CGFloat = 100) -> CGFloat {
+      DocumentTextBuilder.termGutterWidth(termWidths: terms, gap: 6, step: 24, limit: limit)
+    }
+    #expect(width([8, 12]) == 24)
+    #expect(width([8, 40, 30]) == 46)
+    #expect(width([]) == 24)
+    #expect(width([40, 150]) == 46)
+    #expect(width([150]) == 24)
+    #expect(width([10], limit: 10) == 24)
   }
 
   /// A prepped `<li><t pn="section-2-3.1">` is set on the item's first line, beside

@@ -23,6 +23,8 @@ struct DocumentView: View {
   @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
     ReaderPreferences.defaultUnderlineLinks
   @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
+  @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
+    ReaderPreferences.defaultDrawDiagrams
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -116,7 +118,8 @@ struct DocumentView: View {
     BuildInputs(
       hasDocument: session.state.document != nil, fontSize: fontSize,
       underlineLinks: underlineLinks,
-      textSize: textSize, legibilityWeight: legibilityWeight, column: column)
+      textSize: textSize, legibilityWeight: legibilityWeight, column: column,
+      choices: library.presentationChoices(for: id, drawsDiagrams: drawDiagrams))
   }
 
   /// The reader, and on macOS only the reader.
@@ -137,11 +140,19 @@ struct DocumentView: View {
     content
       .navigationTitle(id.displayName)
       #if !os(macOS)
-        // The designation as the title, and what it is called beneath it.
-        .navigationSubtitle(
-          DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
-        )
         .navigationBarTitleDisplayMode(.inline)
+        // The designation over what it is called, in the bar once the header has
+        // scrolled away. The navigation title stays, for the back button and the
+        // app switcher.
+        .toolbar {
+          ToolbarItem(placement: .principal) {
+            DocumentTitle(
+              title: id.displayName,
+              subtitle: DocumentActions.subtitle(
+                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
+              reader: reader)
+          }
+        }
         .toolbar {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
@@ -335,6 +346,7 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.hasSelection = $0
         },
+        onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
         heading: heading,
@@ -674,12 +686,14 @@ struct DocumentView: View {
   /// `DocumentSession.requestBuild` is what discards a canceled one.
   /// `DocumentPreview` builds through it too.
   @concurrent
-  static func build(_ document: RFCDocument, style: ReadingStyle) async -> BuiltDocument {
+  static func build(
+    _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
+  ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
     return signposter.withIntervalSignpost(
       "Build document", id: signposter.makeSignpostID(), "\(name, privacy: .public)"
     ) {
-      DocumentTextBuilder.build(document, style: style)
+      DocumentTextBuilder.build(document, style: style, choices: choices)
     }
   }
 

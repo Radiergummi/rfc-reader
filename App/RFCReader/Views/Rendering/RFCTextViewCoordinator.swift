@@ -100,6 +100,8 @@ final class RFCTextViewCoordinator: NSObject {
   }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
+  /// See `RFCTextView.onChoosePresentation`.
+  var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -350,62 +352,65 @@ final class RFCTextViewCoordinator: NSObject {
     Task { self.onVisibleAnchorChange(anchor) }
   }
 
-  /// macOS only: iOS has no toolbar title for this to drive, so it neither
-  /// measures nor reports there.
   func updateToolbarTitle() {
-    #if !canImport(UIKit)
-      guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
-        return
-      }
-      let edge = textView.unobscuredTop
-      let state = ToolbarTitleState(
-        reveal: ToolbarTitleReveal.progress(
-          headingBottom: header.frame.minY + bottom,
-          visibleTop: edge,
-          distance: Self.headingLineHeight
-        ),
-        runningHeading: runningHeading(
-          atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
+    guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
+      return
+    }
+    let edge = textView.unobscuredTop
+    let state = ToolbarTitleState(
+      reveal: ToolbarTitleReveal.progress(
+        headingBottom: header.frame.minY + bottom,
+        visibleTop: edge,
+        distance: headingLineHeight
+      ),
+      runningHeading: runningHeading(
+        atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
+    )
+    // Steady for almost all of a document; only a change is news.
+    guard state != lastToolbarTitle else { return }
+    lastToolbarTitle = state
+    onToolbarTitle(state, self)
+  }
+
+  /// The section the toolbar's subtitle names, from the paragraph under the
+  /// toolbar's edge — `edge` is in container coordinates.
+  private func runningHeading(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
+    -> RunningHeading.State
+  {
+    // Above the container is the header, which belongs to no section.
+    guard edge >= 0, let layout,
+      let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
+    else { return .steady(nil) }
+    let frame = fragment.layoutFragmentFrame
+    return RunningHeading.state(
+      in: sectionIndex,
+      topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
+      crossing: RunningHeading.crossing(
+        edge: edge,
+        fragmentTop: frame.minY,
+        fragmentHeight: frame.height,
+        lastLine: fragment.textLineFragments.last?.typographicBounds
       )
-      // Steady for almost all of a document; only a change is news.
-      guard state != lastToolbarTitle else { return }
-      lastToolbarTitle = state
-      onToolbarTitle(state, self)
+    )
+  }
+
+  /// The height of one line of the header's heading, which is set in the large
+  /// title style (`DocumentHeaderView`): the distance the reveal runs over.
+  private var headingLineHeight: CGFloat {
+    #if canImport(UIKit)
+      // Per tick, against the view's traits: Dynamic Type changes the style's size
+      // while the app runs. UIKit caches the font for a trait collection.
+      let font = UIFont.preferredFont(
+        forTextStyle: .largeTitle, compatibleWith: textView?.traitCollection)
+    #else
+      let font = Self.largeTitle
     #endif
+    return ceil(font.ascender - font.descender + font.leading)
   }
 
   #if !canImport(UIKit)
-    /// The section the toolbar's subtitle names, from the paragraph under the
-    /// toolbar's edge — `edge` is in container coordinates.
-    private func runningHeading(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
-      -> RunningHeading.State
-    {
-      // Above the container is the header, which belongs to no section.
-      guard edge >= 0, let layout,
-        let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
-      else { return .steady(nil) }
-      let frame = fragment.layoutFragmentFrame
-      return RunningHeading.state(
-        in: sectionIndex,
-        topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
-        crossing: RunningHeading.crossing(
-          edge: edge,
-          fragmentTop: frame.minY,
-          fragmentHeight: frame.height,
-          lastLine: fragment.textLineFragments.last?.typographicBounds
-        )
-      )
-    }
-  #endif
-
-  #if !canImport(UIKit)
-    /// The height of one line of the header's heading, which is set in the large
-    /// title style (`DocumentHeaderView`): the distance the reveal runs over. Once,
-    /// not per scroll tick — macOS text styles do not change size at run time.
-    private static let headingLineHeight: CGFloat = {
-      let font = NSFont.preferredFont(forTextStyle: .largeTitle)
-      return ceil(font.ascender - font.descender + font.leading)
-    }()
+    /// Once, not per scroll tick: macOS text styles do not change size at run time.
+    private static let largeTitle = NSFont.preferredFont(forTextStyle: .largeTitle)
   #endif
 
   /// Hit-tests a point in text-container coordinates down to a character offset,
@@ -488,6 +493,10 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
+      // A figure is an item for its long press alone: a tap on it is a tap on text,
+      // which `chromeTap` takes for the bars. Not nil: for an item with no primary
+      // action UIKit opens the menu on a tap, and that took the tap from the bars.
+      if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
       // A backlink chip goes nowhere: it lists what refers to its section.
       if backlinkChip(at: offset) != nil {
@@ -517,6 +526,7 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
+      if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
       // A backlink chip's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
       if backlinkChip(at: textItem.range.location) != nil { return nil }

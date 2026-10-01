@@ -125,6 +125,11 @@ import RFCReaderKit
     }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
+    /// What shows a rendered verbatim block as its text, or back, or nil where the
+    /// reader cannot, as in a force-click preview.
+    var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
+      nil
+    }
 
     /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
     /// and as Markdown, the HTML and the rich flavor as RTF (#186).
@@ -249,10 +254,12 @@ import RFCReaderKit
     /// mail body or a code editor reads, and the one the chip's characters are wrong
     /// for. The rich flavors stay AppKit's, because a rich target receives the
     /// attachment as an image, which is the chip's symbol and is what it looks like
-    /// on screen. A heading's backlink
-    /// chip is the exception (#183): it is the reader's, not the document's, so a
-    /// selection holding one writes its RTF and RTFD without it. A selection of
-    /// several ranges stays AppKit's to join, chip and all.
+    /// on screen. Two exceptions. A heading's backlink chip (#183) is the reader's,
+    /// not the document's, so a selection holding one writes its RTF and RTFD without
+    /// it. A rendered diagram's borders are characters in a clear color that its
+    /// strokes stand in for, and the strokes do not travel, so they are written in
+    /// the text color (`SelectionText.richText`). A selection of several ranges stays
+    /// AppKit's to join, chip and all.
     override func writeSelection(
       to pboard: NSPasteboard,
       type: NSPasteboard.PasteboardType
@@ -264,10 +271,14 @@ import RFCReaderKit
         return pboard.setString(SelectionText.plainText(of: selection), forType: type)
       case .rtf, .rtfd:
         let selection = attributedString().attributedSubstring(from: selectedRange())
-        let copied = SelectionText.withoutBacklinkChips(of: selection)
-        guard selectedRanges.count == 1, copied.length != selection.length else {
+        let withoutChips = SelectionText.withoutBacklinkChips(of: selection)
+        let revealed = SelectionText.richText(of: withoutChips)
+        guard selectedRanges.count == 1,
+          revealed != nil || withoutChips.length != selection.length
+        else {
           return super.writeSelection(to: pboard, type: type)
         }
+        let copied = revealed ?? withoutChips
         let whole = NSRange(location: 0, length: copied.length)
         let data =
           flavor == .rtf
@@ -288,8 +299,9 @@ import RFCReaderKit
       let standard = super.menu(for: event)
       let text = attributedString()
       let clicked = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
-      let figure =
-        FigureCopy.figure(at: clicked, in: text) ?? FigureCopy.figure(in: selectedRange(), of: text)
+      let box =
+        FigureCopy.box(at: clicked, in: text) ?? FigureCopy.box(in: selectedRange(), of: text)
+      let figure = box?.content
       let quotes = selectedRange().length > 0
       guard figure != nil || quotes else { return standard }
       // A copy, so the items are never left behind in a menu AppKit hands out again.
@@ -310,8 +322,24 @@ import RFCReaderKit
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
+        if let box, let shown = box.presentation, choosePresentation() != nil {
+          let toggle = NSMenuItem(
+            title: FigureMenu.title(offeredFrom: shown),
+            action: #selector(choosePresentationItem(_:)), keyEquivalent: "")
+          toggle.target = self
+          toggle.representedObject = (box.presentationKey, FigureMenu.offered(from: shown))
+          result.insertItem(toggle, at: 1)
+        }
       }
       return result
+    }
+
+    @objc private func choosePresentationItem(_ sender: NSMenuItem) {
+      guard
+        let (key, presentation) = sender.representedObject
+          as? (PresentationKey, PresentationChoices.Presentation)
+      else { return }
+      choosePresentation()?(key, presentation)
     }
 
     @objc private func copyFigure(_ sender: NSMenuItem) {

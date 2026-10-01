@@ -60,12 +60,12 @@ struct InfoView: View {
       }
       if let summary = info.statusSummary {
         StandingBox(
-          title: info.status.displayName, summary: summary,
+          title: info.status.displayName, summary: summary, term: .status(info.status),
           color: StatusBadge.color(for: info.status), fill: StatusBadge.fill(for: info.status))
       }
       if let summary = info.obsoleteSummary {
         StandingBox(
-          title: "Obsolete", summary: summary,
+          title: "Obsolete", summary: summary, term: .process(.obsoletes),
           color: StatusBadge.obsoleteColor, fill: StatusBadge.obsoleteFill)
       }
     }
@@ -73,18 +73,22 @@ struct InfoView: View {
 }
 
 /// A status, named in full and explained in a sentence, in its tint: what the
-/// list's short badge stands for, where there is room to say it.
+/// list's short badge stands for, where there is room to say it. The name opens the
+/// rest of the explanation (#362).
 private struct StandingBox: View {
   let title: String
   let summary: String
+  let term: Glossary.Term
   let color: Color
   let fill: Color
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(title)
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(color)
+      GlossaryButton(term: term, presentation: .here) {
+        Text(title)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(color)
+      }
       Text(summary)
         .font(.infoCaption)
         .foregroundStyle(.primary)
@@ -109,23 +113,33 @@ private struct FactStrip: View {
         if index > 0 {
           Divider().frame(height: 28)
         }
-        VStack(spacing: 2) {
-          Text(fact.value)
-            .font(.infoFact)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-          Text(fact.label)
-            .font(.infoFactCaption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+        if let term = fact.term {
+          // The stream or the group: the fact opens what it names, from anywhere in
+          // its quarter of the strip (#362).
+          GlossaryButton(term: term, presentation: .here) { factView(fact) }
+        } else {
+          factView(fact)
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
       }
     }
     .padding(.vertical, 10)
     .background(.fill.quaternary, in: .rect(cornerRadius: 10))
+  }
+
+  private func factView(_ fact: DocumentInfo.Fact) -> some View {
+    VStack(spacing: 2) {
+      Text(fact.value)
+        .font(.infoFact)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+      Text(fact.label)
+        .font(.infoFactCaption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -178,7 +192,7 @@ private struct SectionRows: View {
     switch row.value {
     case .documents(let documents):
       VStack(alignment: .leading, spacing: 4) {
-        caption(row.label)
+        caption(row.label, term: row.term)
         // A list, not a sentence: "obsoletes RFC 2616, 7230, 7231, 7232" is several
         // documents, each one to open.
         WrappingRowLayout(spacing: 6) {
@@ -189,7 +203,7 @@ private struct SectionRows: View {
       }
     case .drafts(let lines):
       VStack(alignment: .leading, spacing: 4) {
-        caption(row.label)
+        caption(row.label, term: row.term)
         ForEach(lines) { line in
           DraftLink(line: line) {
             VStack(alignment: .leading, spacing: 1) {
@@ -206,7 +220,7 @@ private struct SectionRows: View {
       AuthorChips(authors: authors)
     case .keywords(let keywords):
       VStack(alignment: .leading, spacing: 4) {
-        caption(row.label)
+        caption(row.label, term: row.term)
         WrappingRowLayout(spacing: 6) {
           ForEach(Array(keywords.enumerated()), id: \.offset) { _, keyword in
             KeywordTag(keyword: keyword) { search(keyword) }
@@ -215,7 +229,7 @@ private struct SectionRows: View {
       }
     case .text(let text):
       VStack(alignment: .leading, spacing: 1) {
-        caption(row.label)
+        caption(row.label, term: row.term)
         Text(text)
           .textSelection(.enabled)
           .fixedSize(horizontal: false, vertical: true)
@@ -226,13 +240,23 @@ private struct SectionRows: View {
     }
   }
 
+  /// A row's caption; one the glossary explains, a relationship or a draft, opens its
+  /// entry (#362).
   @ViewBuilder
-  private func caption(_ label: String) -> some View {
+  private func caption(_ label: String, term: Glossary.Term?) -> some View {
     if !label.isEmpty {
-      Text(label)
-        .font(.infoCaption)
-        .foregroundStyle(.secondary)
+      if let term {
+        GlossaryButton(term: term, presentation: .here) { captionText(label) }
+      } else {
+        captionText(label)
+      }
     }
+  }
+
+  private func captionText(_ label: String) -> some View {
+    Text(label)
+      .font(.infoCaption)
+      .foregroundStyle(.secondary)
   }
 }
 
@@ -329,7 +353,7 @@ private struct LinkRow: View {
           Button("Download") { save(document, format) }
         }
       #endif
-      .task(id: outcome) { await settle() }
+      .resets($outcome, to: nil, after: .seconds(1.5))
     case .copyable(let text):
       Button {
         Clipboard.copy(text)
@@ -340,7 +364,7 @@ private struct LinkRow: View {
       .buttonStyle(.plain)
       .focusEffectDisabled()
       .help("Copy \(row.label)")
-      .task(id: outcome) { await settle() }
+      .resets($outcome, to: nil, after: .seconds(1.5))
     default:
       content(detail: nil, trailing: nil)
     }
@@ -352,13 +376,6 @@ private struct LinkRow: View {
     case .failed: "exclamationmark.triangle"
     case nil: nil
     }
-  }
-
-  /// The check or the warning stands for a moment, then the row's own icon returns.
-  private func settle() async {
-    guard outcome != nil else { return }
-    try? await Task.sleep(for: .seconds(1.5))
-    outcome = nil
   }
 
   private func open(_ url: URL, saving file: (DocumentID, FileFormat)) {
@@ -468,11 +485,7 @@ private struct OfflineSection: View {
     .task(id: isKept) {
       size = isKept ? await library.downloadedSize(document) : nil
     }
-    .task(id: downloadFailed) {
-      guard downloadFailed else { return }
-      try? await Task.sleep(for: .seconds(1.5))
-      downloadFailed = false
-    }
+    .resets($downloadFailed, to: false, after: .seconds(1.5))
   }
 
   private var symbol: String {

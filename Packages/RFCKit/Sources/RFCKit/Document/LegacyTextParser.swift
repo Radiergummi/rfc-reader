@@ -397,7 +397,7 @@ public enum LegacyTextParser {
           flushBlock()
         } else if let heading = Self.heading(
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
-          startsBlock: current.isEmpty), !isContentsEntry(string)
+          startsBlock: current.isEmpty), !isContentsEntry(at: index, in: lines)
         {
           if heading.number == nil, refusesUnnumberedHeading(heading.title) {
             let last = sections.count - 1

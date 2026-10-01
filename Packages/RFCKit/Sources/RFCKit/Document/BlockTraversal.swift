@@ -11,7 +11,7 @@ extension Block {
   public var nestedBlocks: [Block] {
     switch self {
     case .list(let list): list.items.flatMap(\.blocks)
-    case .definitionList(let items): items.flatMap(\.definition)
+    case .definitionList(let list): list.items.flatMap(\.definition)
     case .figure(let figure): figure.blocks
     case .blockQuote(let inner), .aside(let inner): inner
     case .paragraph, .preformatted, .table, .references: []
@@ -25,7 +25,7 @@ extension Block {
   public var proseRuns: [[Inline]] {
     switch self {
     case .paragraph(let paragraph): [paragraph.inlines]
-    case .definitionList(let items): items.map(\.term)
+    case .definitionList(let list): list.items.map(\.term)
     case .table(let table): (table.header + table.rows).flatMap(\.cells)
     case .references(let list): list.entries.map(\.annotation)
     case .list, .preformatted, .figure, .blockQuote, .aside: []
@@ -39,7 +39,7 @@ extension Block {
       switch self {
       case .paragraph(let paragraph): [paragraph.anchor]
       case .list(let list): list.items.map(\.anchor)
-      case .definitionList(let items): items.flatMap { [$0.anchor, $0.definitionAnchor] }
+      case .definitionList(let list): list.items.flatMap { [$0.anchor, $0.definitionAnchor] }
       case .preformatted(let content): [content.anchor]
       case .figure(let figure): [figure.anchor]
       case .table(let table): [table.anchor] + (table.header + table.rows).map(\.anchor)

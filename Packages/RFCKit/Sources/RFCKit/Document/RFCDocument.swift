@@ -274,7 +274,7 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 public enum Block: Sendable, Hashable, Codable {
   case paragraph(Paragraph)
   case list(ListBlock)
-  case definitionList([DefinitionItem])
+  case definitionList(DefinitionList)
   case preformatted(Preformatted)
   case figure(Figure)
   case table(Table)
@@ -336,6 +336,26 @@ public struct ListItem: Sendable, Hashable, Codable {
 
   public init(text: String) {
     self.init(blocks: [.paragraph(Paragraph(text: text))])
+  }
+}
+
+/// A `<dl>`: its items, and how RFCXML asks for them to be set.
+public struct DefinitionList: Sendable, Hashable, Codable {
+  public var items: [DefinitionItem]
+  /// RFCXML's `spacing="compact"`: no space between the items.
+  public var isCompact: Bool
+  /// RFCXML's `newline="false"`: each term hangs beside the first line of its
+  /// definition, as a list item's marker does, rather than standing on a line of
+  /// its own. RFCXML's default is `false`, but the prepped XML states it on every
+  /// `<dl>` and the converter's documents written before #352 never did, so a list
+  /// that does not say keeps its terms on their own lines, as every list was set
+  /// before.
+  public var hangsTerms: Bool
+
+  public init(_ items: [DefinitionItem], isCompact: Bool = false, hangsTerms: Bool = false) {
+    self.items = items
+    self.isCompact = isCompact
+    self.hangsTerms = hangsTerms
   }
 }
 

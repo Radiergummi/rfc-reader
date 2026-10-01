@@ -387,6 +387,7 @@ struct RFCRow: View {
         HStack(spacing: 6) {
           if showsStatus {
             StatusBadge(status: rfc.currentStatus)
+              .glossaryTooltip(.status(rfc.currentStatus))
           }
           if rfc.isObsolete {
             Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
@@ -424,6 +425,7 @@ struct RFCRow: View {
           .lineLimit(1)
           if showsStatus {
             StatusBadge(status: rfc.currentStatus)
+              .glossaryTooltip(.status(rfc.currentStatus))
           }
           if isBookmarked {
             Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
