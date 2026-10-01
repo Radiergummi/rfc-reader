@@ -42,6 +42,14 @@
         controller.navigation.isShowingGoToSheet = true
         return true
       }
+      // ⌘= enlarges the text as View ▸ Bigger's ⌘+ does (#153), answered here for
+      // the same reason; see `BiggerShortcut`.
+      if BiggerShortcut.matches(
+        characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags)
+      {
+        ReaderPreferences.stepFontSizeUp()
+        return true
+      }
       return super.performKeyEquivalent(with: event)
     }
 
