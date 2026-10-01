@@ -32,10 +32,14 @@ public enum StrokeGeometry {
 
   /// The strokes of the block a fragment belongs to, and which of the block's lines
   /// it is: the newlines between the block's start and the fragment's.
+  ///
+  /// Nil for a fragment that starts at or past the end of the text, as
+  /// `FragmentGeometry.decorationSpan` is: TextKit asks the empty fragment after the
+  /// last line for its bounds too, and an attribute read there raises (#620).
   public static func line(of fragment: NSRange, in text: NSAttributedString) -> (
     strokes: [Stroke], line: Int
   )? {
-    guard
+    guard fragment.location >= 0, fragment.location < text.length,
       let box = text.attribute(.rfcStrokes, at: fragment.location, effectiveRange: nil)
         as? StrokeBox,
       let block = text.extent(ofBox: .rfcStrokes, at: fragment.location)
