@@ -3,7 +3,8 @@ name: Revisions
 # Scans datatracker daily for adopted drafts that intend to obsolete or update an RFC,
 # and publishes revisions.json on the `revisions` release, where the app fetches it
 # (docs/superpowers/specs/2026-09-29-rfc-revisions-design.md). The scan record beside
-# it lets the next run read only what changed.
+# it lets the next run read only what changed. groups.json, the groups the RFC index
+# names as datatracker describes them, is published beside it (#363).
 on:
   schedule:
     - cron: "17 5 * * *"
@@ -76,3 +77,24 @@ jobs:
               --notes "Adopted drafts revising an RFC, refreshed daily by the revisions workflow."
           fi
           gh release upload revisions out/revisions.json out/revisions-scan.json --clobber
+
+      # The groups the index names, for the app's working-group card (#363). After the
+      # revisions are published, so a failure here costs only this file a day. The last
+      # published copy is the shrink guard's baseline, as the scan is the revisions'; the
+      # release exists by now, so a failure to ask fails the run.
+      - name: Download the previous groups
+        run: |
+          assets=$(gh release view revisions --json assets --jq '.assets[].name')
+          if printf '%s\n' "$assets" | grep -qx groups.json; then
+            gh release download revisions --pattern groups.json --dir previous-groups
+            echo "PREVIOUS_GROUPS=--previous previous-groups/groups.json" >> "$GITHUB_ENV"
+          fi
+
+      # Unquoted on purpose, as in Scan.
+      - name: Describe groups
+        run: |
+          # shellcheck disable=SC2086
+          Tools/corpus-build/.build/release/corpus-build groups --out out $PREVIOUS_GROUPS $ALLOW_SHRINK
+
+      - name: Publish groups
+        run: gh release upload revisions out/groups.json --clobber

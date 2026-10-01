@@ -19,7 +19,6 @@ struct RevisionsCommand: AsyncParsableCommand {
   )
 
   private static let logger = Logger(command: "revisions")
-  private static let pause = Duration.milliseconds(250)
 
   @Option(help: "The previous run's revisions-scan.json. Without it, every adopted draft is read.")
   var scan: String?
@@ -116,32 +115,13 @@ struct RevisionsCommand: AsyncParsableCommand {
     }
   }
 
-  /// Every page, following `meta.next` until there is none. A failure on any page fails
-  /// the run: a partial listing would drop every draft on the missing pages.
   private static func pages<Page: Datatracker.Page>(
     from first: URL, as type: Page.Type
   ) async throws -> [Page] {
-    var pages: [Page] = []
-    var url: URL? = first
-    while let current = url {
-      let page = try Datatracker.decoder().decode(Page.self, from: try await fetch(current))
-      pages.append(page)
-      url = Datatracker.next(page.meta.next)
-    }
-    return pages
+    try await DatatrackerFetch.pages(from: first, as: type)
   }
 
-  /// Through the transport `fetch` uses too: this tool's User-Agent, and a bounded
-  /// retry of what can pass.
-  private static let transport = RetryingTransport(
-    URLSessionTransport(userAgent: RetryingTransport.userAgent))
-
   private static func fetch(_ url: URL) async throws -> Data {
-    try await Task.sleep(for: pause)
-    let (data, response) = try await transport.response(for: URLRequest(url: url))
-    guard (200..<300).contains(response.statusCode) else {
-      throw RFCEditorClient.ClientError.httpStatus(response.statusCode, url)
-    }
-    return data
+    try await DatatrackerFetch.fetch(url)
   }
 }
