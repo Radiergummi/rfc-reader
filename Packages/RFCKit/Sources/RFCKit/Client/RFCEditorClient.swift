@@ -261,6 +261,14 @@ public struct RFCEditorClient: Sendable {
     return (try RFCRevisions.decode(data), data)
   }
 
+  /// `groups.json` (#363), decoded, and the bytes it came as, which the caller keeps.
+  /// A plain GET, for the reason `fetchRevisions()` gives.
+  @concurrent
+  public func fetchWorkingGroups() async throws -> (groups: WorkingGroups, data: Data) {
+    let data = try await fetch(RFCEditorEndpoints.workingGroups)
+    return (try WorkingGroups.decode(data), data)
+  }
+
   @concurrent
   public func fetchRecent() async throws -> [RecentRFC] {
     let data = try await fetch(RFCEditorEndpoints.recentFeed)

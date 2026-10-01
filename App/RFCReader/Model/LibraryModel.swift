@@ -56,7 +56,12 @@ final class LibraryModel {
     }
   }
 
-  private(set) var index: RFCIndex?
+  private(set) var index: RFCIndex? {
+    didSet { groupRFCs = [:] }
+  }
+  /// Each working group's RFCs, worked out once per index for its card (#363): the
+  /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
+  @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
@@ -66,6 +71,11 @@ final class LibraryModel {
   /// When this launch last fetched it; nil until it has.
   @ObservationIgnored private var revisionsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingRevisions = false
+  /// `groups.json`: the groups the index names, for a working group's card (#363).
+  /// Nil until the cached copy or a fetch has arrived.
+  private(set) var workingGroups: WorkingGroups?
+  @ObservationIgnored private var workingGroupsFetchedAt: Date?
+  @ObservationIgnored private var isRefreshingWorkingGroups = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// Every bookmarked document, fetched again on every save of a bookmark: one set
@@ -143,6 +153,7 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
+        Task(name: "Refresh working groups") { await self.refreshWorkingGroups() }
         self.recheckSpotlight()
       }
     }
@@ -296,6 +307,7 @@ final class LibraryModel {
       settleIndex()
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
+    Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -544,6 +556,48 @@ final class LibraryModel {
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
     RevisionsSummary(revisions, for: id, now: .now)
+  }
+
+  // MARK: - Working groups
+
+  /// As `refreshRevisions()` does for its file, and when it does: the cached copy
+  /// first, so a card works offline, then a fetch once a day. A failure keeps the
+  /// cached copy and is logged, not shown.
+  func refreshWorkingGroups() async {
+    guard !isRefreshingWorkingGroups else { return }
+    isRefreshingWorkingGroups = true
+    defer { isRefreshingWorkingGroups = false }
+    if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
+      workingGroups = cached
+    }
+    if let fetchedAt = workingGroupsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
+      return
+    }
+    do {
+      let fetched = try await client.fetchWorkingGroups()
+      try await store.storeWorkingGroups(fetched.data)
+      workingGroupsFetchedAt = .now
+      if fetched.groups != workingGroups { workingGroups = fetched.groups }
+    } catch {
+      libraryLog.error(
+        "fetching working groups failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// What a working group's card says: the group as the file describes it, if it
+  /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
+  /// whatever the list's options hide: the card describes the group, not the list.
+  func workingGroupSummary(_ acronym: String) -> WorkingGroupSummary {
+    let rfcs: [RFCMetadata]
+    if let cached = groupRFCs[acronym] {
+      rfcs = cached
+    } else {
+      let filter = LibraryFilter.workingGroup(acronym)
+      rfcs = index?.rfcs.filter { filter.includes($0) == true } ?? []
+      groupRFCs[acronym] = rfcs
+    }
+    return WorkingGroupSummary(
+      acronym: acronym, group: workingGroups?.group(acronym), rfcs: rfcs)
   }
 
   // MARK: - Lists
