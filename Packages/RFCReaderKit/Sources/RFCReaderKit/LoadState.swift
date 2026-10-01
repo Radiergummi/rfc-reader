@@ -69,19 +69,45 @@ public struct LoadState {
   /// How long a build waits before it starts.
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
-  /// the largest documents in the library — so a new column for a document already
-  /// on screen waits that long to settle, and the next change cancels it: the
-  /// window's edge being dragged is a new column on every frame.
+  /// the largest documents in the library — so a column still being dragged for a
+  /// document already on screen waits that long to settle, and the next change
+  /// cancels it: the window's edge being dragged is a new column on every frame.
   ///
   /// Nothing else waits. The first build has nothing on screen to disturb, and the
-  /// column is already known, so it is built once and built right. A restyle — the
-  /// text size, links underlined — comes a step at a time: View ▸ Bigger and
-  /// Smaller (#153) waited out the whole delay before starting a build of about
-  /// 120 ms, measured on RFC 9110, so each step took most of a second to show. The
-  /// Settings slider builds on each tick now too, off the main actor, and a tick
-  /// that comes before the build under way is done replaces it.
-  public func buildDelay(changingColumn: Bool) -> Duration {
-    built != nil && changingColumn ? .milliseconds(650) : .zero
+  /// column is already known, so it is built once and built right. A column that
+  /// changed in one step — a rotation — has nothing to settle either: waiting for
+  /// it left artwork at the old column's width for a second after the text had
+  /// reflowed. A restyle — the text size, links underlined — comes a step at a
+  /// time: View ▸ Bigger and Smaller (#153) waited out the whole delay before
+  /// starting a build of about 120 ms, measured on RFC 9110, so each step took most
+  /// of a second to show. The Settings slider builds on each tick now too, off the
+  /// main actor, and a tick that comes before the build under way is done replaces
+  /// it.
+  public func buildDelay(for change: ColumnChange) -> Duration {
+    built != nil && change == .live ? .milliseconds(650) : .zero
+  }
+}
+
+/// How the column a build is for differs from the one on screen.
+public enum ColumnChange: Equatable, Sendable {
+  /// The same column: the build is a restyle.
+  case none
+  /// A new column in one step, such as a rotation, or the first column there is.
+  case discrete
+  /// A new column while a resize is under way, such as a window edge being
+  /// dragged, which will be another column a frame from now.
+  case live
+
+  /// `isLive` is whether a resize is under way that has not ended: the Mac's live
+  /// resize, or on iOS anything but a size transition that is not interactive.
+  public init(from built: CGFloat?, to column: CGFloat?, isLive: Bool) {
+    if column == built {
+      self = .none
+    } else if built == nil || !isLive {
+      self = .discrete
+    } else {
+      self = .live
+    }
   }
 }
 

@@ -146,9 +146,11 @@ final class DocumentSession {
 
   /// Builds for `inputs`, as `BuildRequest` decides, and hands the build and its
   /// document to `built` once it is the state's. `built` must not capture the view,
-  /// for the reason `startLoad` gives.
+  /// for the reason `startLoad` gives. `resizeIsLive` is whether a new column comes
+  /// from a resize still under way; see `ReaderResize`.
   func requestBuild(
-    for inputs: BuildInputs, built: @escaping (BuiltDocument, RFCDocument) -> Void
+    for inputs: BuildInputs, resizeIsLive: Bool,
+    built: @escaping (BuiltDocument, RFCDocument) -> Void
   ) {
     switch BuildRequest.decide(inputs, built: builtInputs, building: buildingFor) {
     case .keep:
@@ -171,7 +173,8 @@ final class DocumentSession {
       return
     }
     buildingFor = inputs
-    let delay = state.buildDelay(changingColumn: inputs.column != builtInputs?.column)
+    let delay = state.buildDelay(
+      for: ColumnChange(from: builtInputs?.column, to: inputs.column, isLive: resizeIsLive))
     trace("building")
     build = Task(name: "Build document") { [weak self] in
       if delay > .zero {

@@ -84,17 +84,27 @@ struct LoadStateTests {
   @Test func `the first build of a document runs at once`() {
     var state = LoadState()
     state.finish(document)
-    #expect(state.buildDelay(changingColumn: true) == .zero)
-    #expect(state.buildDelay(changingColumn: false) == .zero)
+    #expect(state.buildDelay(for: .live) == .zero)
+    #expect(state.buildDelay(for: .discrete) == .zero)
+    #expect(state.buildDelay(for: .none) == .zero)
   }
 
   /// A rebuild costs the whole document again, so a window edge being dragged
   /// waits for the column to settle.
-  @Test func `a new column for a document on screen waits for the change to settle`() {
+  @Test func `a column still being dragged waits for the change to settle`() {
     var state = LoadState()
     state.finish(document)
     state.install(built())
-    #expect(state.buildDelay(changingColumn: true) == .milliseconds(650))
+    #expect(state.buildDelay(for: .live) == .milliseconds(650))
+  }
+
+  /// A rotation is one change with nothing to settle: waiting for it left artwork
+  /// at the old column's width for a second after the text had reflowed.
+  @Test func `a column that changed in one step builds at once`() {
+    var state = LoadState()
+    state.finish(document)
+    state.install(built())
+    #expect(state.buildDelay(for: .discrete) == .zero)
   }
 
   /// View ▸ Bigger and Smaller (#153) are a step at a time, and a step that
@@ -103,7 +113,24 @@ struct LoadStateTests {
     var state = LoadState()
     state.finish(document)
     state.install(built())
-    #expect(state.buildDelay(changingColumn: false) == .zero)
+    #expect(state.buildDelay(for: .none) == .zero)
+  }
+
+  // MARK: - How the column changed
+
+  @Test func `the same column is no change, live or not`() {
+    #expect(ColumnChange(from: 400, to: 400, isLive: true) == .none)
+    #expect(ColumnChange(from: 400, to: 400, isLive: false) == .none)
+  }
+
+  @Test func `a new column is live only while a resize is under way`() {
+    #expect(ColumnChange(from: 400, to: 640, isLive: true) == .live)
+    #expect(ColumnChange(from: 400, to: 640, isLive: false) == .discrete)
+  }
+
+  /// Nothing on screen was built for a column yet, so there is nothing to settle.
+  @Test func `the first column is a change in one step`() {
+    #expect(ColumnChange(from: nil, to: 400, isLive: true) == .discrete)
   }
 
   // MARK: - Whether a build runs
