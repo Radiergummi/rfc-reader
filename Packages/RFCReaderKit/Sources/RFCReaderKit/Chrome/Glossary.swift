@@ -67,7 +67,7 @@ public enum Glossary {
           A Proposed Standard reaches it after significant implementation and successful \
           operational experience, and is then also given an STD number.
           """,
-        related: [.status(.proposedStandard), .series(.std)])
+        related: [.status(.proposedStandard), .status(.draftStandard), .series(.std)])
     case .draftStandard:
       Entry(
         title: status.displayName,
@@ -112,7 +112,7 @@ public enum Glossary {
           An Informational RFC can come from any stream and need not reflect any community \
           consensus.
           """,
-        related: [.status(.experimental), .stream(.independent)])
+        related: [.status(.experimental), .stream(.independent), .series(.fyi)])
     case .experimental:
       Entry(
         title: status.displayName,
@@ -154,7 +154,10 @@ public enum Glossary {
         detail: """
           It is the only stream that publishes standards and Best Current Practices.
           """,
-        related: [.process(.workingGroup), .process(.internetDraft), .status(.proposedStandard)])
+        related: [
+          .process(.workingGroup), .process(.internetDraft), .status(.proposedStandard),
+          .stream(.iab),
+        ])
     case .irtf:
       Entry(
         title: "IRTF Stream",
@@ -223,7 +226,7 @@ public enum Glossary {
           An RFC never changes once published: a correction is recorded as an erratum, and a \
           revision is a new RFC.
           """,
-        related: [.process(.errata), .process(.obsoletes), .process(.updates)])
+        related: [.process(.errata), .process(.obsoletes), .process(.updates), .stream(.editorial)])
     case .std:
       Entry(
         title: "STD Series",

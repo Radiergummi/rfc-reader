@@ -88,7 +88,7 @@ struct StatusBanner: View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       self.symbol(symbol).foregroundStyle(tint)
       WrappingRowLayout(spacing: 6) {
-        GlossaryButton(term: .process(term), navigation: navigation) {
+        GlossaryButton(term: .process(term), presentation: .scene(navigation)) {
           Text(title).fontWeight(.medium)
         }
         ForEach(ids, id: \.self) { id in

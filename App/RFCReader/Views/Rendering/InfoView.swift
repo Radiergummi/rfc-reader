@@ -84,7 +84,7 @@ private struct StandingBox: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      GlossaryButton(term: term) {
+      GlossaryButton(term: term, presentation: .here) {
         Text(title)
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(color)
@@ -114,9 +114,9 @@ private struct FactStrip: View {
           Divider().frame(height: 28)
         }
         if let term = fact.term {
-          // The stream or the group: the fact opens what it names (#362).
-          GlossaryButton(term: term) { factView(fact) }
-            .frame(maxWidth: .infinity)
+          // The stream or the group: the fact opens what it names, from anywhere in
+          // its quarter of the strip (#362).
+          GlossaryButton(term: term, presentation: .here) { factView(fact) }
         } else {
           factView(fact)
         }
@@ -246,7 +246,7 @@ private struct SectionRows: View {
   private func caption(_ label: String, term: Glossary.Term?) -> some View {
     if !label.isEmpty {
       if let term {
-        GlossaryButton(term: term) { captionText(label) }
+        GlossaryButton(term: term, presentation: .here) { captionText(label) }
       } else {
         captionText(label)
       }

@@ -70,10 +70,10 @@ struct DocumentHeaderView: View {
         }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {
-          GlossaryButton(term: .status(metadata.currentStatus), navigation: navigation) {
+          GlossaryButton(term: .status(metadata.currentStatus), presentation: .scene(navigation)) {
             StatusBadge(status: metadata.currentStatus)
           }
-          GlossaryButton(term: .stream(metadata.stream), navigation: navigation) {
+          GlossaryButton(term: .stream(metadata.stream), presentation: .scene(navigation)) {
             Text(metadata.stream.displayName)
           }
         }

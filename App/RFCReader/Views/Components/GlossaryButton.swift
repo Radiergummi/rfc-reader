@@ -1,46 +1,66 @@
 import RFCReaderKit
 import SwiftUI
 
-/// A label that opens its glossary entry (#362): a popover on macOS, a sheet on iOS.
+/// Where a glossary entry is presented from.
 ///
-/// The label looks as it did; on macOS its summary is also its tooltip. A view
-/// hosted outside the view-controller hierarchy cannot present on iOS -- the reader
-/// header's `UIHostingController` is a subview of the text view, not a child
-/// controller -- so there the button hands the term to `NavigationModel`, and
-/// `ReaderScene`, which is in the window, presents it.
+/// A view hosted outside the view-controller hierarchy cannot present on iOS: the
+/// reader header's `UIHostingController` is a subview of the text view, not a child
+/// controller. Such a view hands the term to its tab's `NavigationModel`, and
+/// `ReaderScene`, which is in the window, presents it. Required of every button, so
+/// a hosted view that forgets is a compile error rather than a tap that does nothing,
+/// as `StatusBanner` takes its models as properties for the compiler to check.
+enum GlossaryPresentation {
+  /// By the button itself: a view in the window.
+  case here
+  /// By the tab's scene, on iOS; by the button on macOS, where a popover anchors to
+  /// any view in a window.
+  case scene(NavigationModel)
+}
+
+/// A label that opens its glossary entry (#362): a popover on macOS, a sheet on iOS.
+/// The label looks as it did; its summary is also its tooltip.
 struct GlossaryButton<Label: View>: View {
   let term: Glossary.Term
-  /// Where an iOS sheet is presented from: here, or by the scene.
-  var navigation: NavigationModel?
+  let presentation: GlossaryPresentation
   @ViewBuilder let label: Label
 
   @State private var isPresented = false
 
   var body: some View {
-    Button(action: present) { label }
-      .buttonStyle(.plain)
-      .help(Glossary.entry(for: term).summary)
-      .accessibilityHint("Explains \(Glossary.entry(for: term).title)")
-      #if os(macOS)
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-          GlossaryCard(term: term)
-          .frame(width: GlossaryCard.width)
-        }
-      #else
-        .sheet(isPresented: $isPresented) {
-          GlossarySheet(term: term)
-        }
-      #endif
+    Button(action: present) {
+      label.contentShape(.rect)
+    }
+    .buttonStyle(.plain)
+    .glossaryTooltip(term)
+    .accessibilityHint("Explains \(Glossary.entry(for: term).title)")
+    #if os(macOS)
+      .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+        GlossaryCard(term: term)
+        .frame(width: GlossaryCard.width)
+      }
+    #else
+      .sheet(isPresented: $isPresented) {
+        GlossarySheet(term: term)
+      }
+    #endif
   }
 
   private func present() {
     #if os(iOS)
-      if let navigation {
+      if case .scene(let navigation) = presentation {
         navigation.glossaryTerm = term
         return
       }
     #endif
     isPresented = true
+  }
+}
+
+extension View {
+  /// A term's summary as this view's tooltip: on its own, all a list row gets, since a
+  /// row is selected by a click and a popover inside it would fight that (#362).
+  func glossaryTooltip(_ term: Glossary.Term) -> some View {
+    help(Glossary.entry(for: term).summary)
   }
 }
 

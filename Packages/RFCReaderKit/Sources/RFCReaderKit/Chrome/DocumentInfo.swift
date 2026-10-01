@@ -36,7 +36,7 @@ public struct DocumentInfo: Equatable, Sendable {
   }
 
   /// What the status means, in a sentence, for the header; nil when the index
-  /// does not know it. The glossary entry's first sentence, which the box opens.
+  /// does not know it. The glossary entry's summary, which its title opens.
   public var statusSummary: String? {
     status == .unknown ? nil : Glossary.entry(for: .status(status)).summary
   }
@@ -65,7 +65,7 @@ public struct DocumentInfo: Equatable, Sendable {
     public let value: Value
     /// An SF Symbol, for a link row.
     public let symbol: String?
-    /// What the label names, for a relationship, a draft or errata: the label opens
+    /// What the label names, for a relationship, a draft or a series: the label opens
     /// its entry (#362).
     public let term: Glossary.Term?
 

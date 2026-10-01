@@ -29,9 +29,12 @@ struct ReaderScene: ViewModifier {
       .sheet(item: $navigation.collectionEditor) { mode in
         CollectionEditorSheet(mode: mode)
       }
-      .sheet(item: $navigation.glossaryTerm) { term in
-        GlossarySheet(term: term)
-      }
+      #if os(iOS)
+        // For the reader header, which cannot present on iOS; see `GlossaryPresentation`.
+        .sheet(item: $navigation.glossaryTerm) { term in
+          GlossarySheet(term: term)
+        }
+      #endif
   }
 }
 
