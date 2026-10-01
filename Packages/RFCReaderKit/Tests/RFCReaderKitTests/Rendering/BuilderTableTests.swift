@@ -96,6 +96,72 @@ struct BuilderTableTests {
     }
   }
 
+  /// A reference chip is measured as it is drawn: its symbol is an attachment, which
+  /// CoreText measures as nothing, and the padding kern around it is added only once
+  /// the build is done. Measured as its label alone, the column was too narrow for it,
+  /// the chip ran past its tab stop, and the next cell fell through to
+  /// `defaultTabInterval` (#488). A chip opens a cell in the first column, after a
+  /// newline, and in the second, after a tab, and neither has room made before it;
+  /// the first column's second chip does, in the space between the two.
+  @Test func `a chip cell is measured as wide as it is drawn`() throws {
+    let chip = Inline.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [RFCKit.Table.Row(cells: [[chip, .text(" "), chip], [chip], [.text("next")]])])
+    #expect(shape(table) == .grid)
+    let widths = DocumentTextBuilder(style: ReadingStyle()).naturalColumnWidths(table)
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    // The row is the paragraph that holds the document's only tabs.
+    let rowStart = (built.text.string as NSString).paragraphRange(
+      for: NSRange(location: try Fixtures.offset(of: "\t", in: built.text), length: 0)
+    ).location
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: rowStart, effectiveRange: nil) as? NSParagraphStyle)
+    let stops = paragraph.tabStops.map(\.location)
+    try #require(stops.count == 2)
+
+    let storage = NSTextContentStorage()
+    storage.install(built.text)
+    let layout = NSTextLayoutManager()
+    storage.addTextLayoutManager(layout)
+    let container = NSTextContainer(size: CGSize(width: 10_000, height: 100_000))
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
+    layout.ensureLayout(for: layout.documentRange)
+    defer { withExtendedLifetime(storage) {} }
+
+    let location = try #require(layout.location(atOffset: rowStart))
+    let fragment = try #require(layout.textLayoutFragment(for: location))
+    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+    let line = try #require(fragment.textLineFragments.first)
+    func x(_ offset: Int) -> CGFloat {
+      line.typographicBounds.minX + line.locationForCharacter(at: offset - fragmentStart).x
+    }
+    let tabs = (rowStart..<built.text.length).filter {
+      (built.text.string as NSString).character(at: $0) == 0x09
+    }
+    try #require(tabs.count == 2)
+    // The layout would ignore it, and a layout that honored it would draw the chip
+    // past a stop its cell is measured from.
+    #expect(
+      built.text.attribute(.kern, at: tabs[0], effectiveRange: nil) == nil,
+      "the tab before a chip is not kerned")
+
+    // What a column is measured at against the extent its cell is drawn at: never
+    // less, and less than a chip's padding more. TextKit ends the cell about half a
+    // padding short of CoreText's width for the same kerned runs, which errs wide;
+    // counting padding before a chip that opens a cell would be a whole padding more.
+    let drawn = [x(tabs[0]) - x(rowStart), x(tabs[1]) - stops[0]]
+    for column in 0..<2 {
+      let excess = widths[column] - drawn[column]
+      #expect(excess >= 0, "column \(column) is measured \(-excess) pt narrower than drawn")
+      #expect(
+        excess < FragmentGeometry.chipPadding,
+        "column \(column) is measured \(excess) pt wider than drawn")
+    }
+    #expect(abs(x(tabs[1] + 1) - stops[1]) < 0.5, "the next cell starts at its tab stop")
+  }
+
   @Test func `grid rows are tab separated and carry tab stops`() throws {
     let built = DocumentTextBuilder.build(document(narrow), style: ReadingStyle())
     #expect(built.text.string.contains("GET\tyes\tyes"))

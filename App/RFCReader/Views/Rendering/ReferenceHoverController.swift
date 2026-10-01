@@ -83,6 +83,7 @@
     /// preview, swallowing a click — are returned.
     @discardableResult
     func send(_ event: ReferenceHover.Event) -> [ReferenceHover.Effect] {
+      readVoiceOver()
       let effects = state.handle(event)
       for effect in effects {
         switch effect {
@@ -117,9 +118,18 @@
     @objc(mouseMoved:)
     private func mouseMoved(with event: NSEvent) {
       let location = NSEvent.mouseLocation
+      // Before `wantsTarget`, which asks it too: a move right after VoiceOver is
+      // turned off must hit-test.
+      readVoiceOver()
       let hit = state.wantsTarget(at: location) ? target(event.locationInWindow) : nil
       send(.pointerMoved(location: location, target: hit))
       pointerMoved()
+    }
+
+    /// Read per event rather than observed: it is a property read, and so follows
+    /// VoiceOver being turned on or off mid-document.
+    private func readVoiceOver() {
+      state.previewsOnHover = !NSWorkspace.shared.isVoiceOverEnabled
     }
 
     @objc(mouseExited:)

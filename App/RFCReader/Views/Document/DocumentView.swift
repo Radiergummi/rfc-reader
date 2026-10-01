@@ -13,10 +13,6 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
-    // Read here, above the reader's own `openURL`, which follows links in the app:
-    // the toolbar sits inside it, and reading it there opened rfc-editor.org's own
-    // page as the RFC it names.
-    @Environment(\.openURL) private var systemOpenURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
   #endif
@@ -78,6 +74,10 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  /// Where the reader was when the text view last went — turning Original Text on
+  /// takes it away — so that it comes back there (#449). Nil until it has gone with
+  /// a place, which it has once the text has shown.
+  @State private var placeLeft: ReaderPlaceLeft?
   @State private var heading = HeadingBox()
   /// The pane's full width — the whole of it, panel or no panel — and nil until the
   /// geometry reader has run.
@@ -140,7 +140,7 @@ struct DocumentView: View {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
             reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
-            openURL: systemOpenURL, showsInspector: $showsInspector,
+            showsInspector: $showsInspector,
             exportDocument: exportDocument(as:), printDocument: printDocument,
             showsBottomBar: !barsHidden)
         }
@@ -228,13 +228,12 @@ struct DocumentView: View {
         // the selected document's.
         guard navigation.selection == id, let request else { return }
         if request.isUnrecorded {
-          follow(request.section)
+          follow(request, animated: true)
         } else {
-          jump(toSection: request.section, animated: true, revealingReferences: true)
+          jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
         }
       }
       .onDisappear(perform: saveReadingPosition)
-      .environment(\.openURL, OpenURLAction(handler: handleLink))
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
@@ -292,12 +291,12 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
-          // section link need the number, and on macOS the toolbar is in the
+          // section link need the place, and on macOS the toolbar is in the
           // window rather than in this view. Through the map rather than
           // `document.section(anchor:)`, which searches the section tree
           // depth first — 305 sections on RFC 9110 — and this runs on every
           // section crossing while scrolling.
-          reader.currentSection = session.sectionNumbers[$0]
+          reader.currentSection = session.sectionPlaces[$0]
           // Recorded on the history entry when navigating away, so coming
           // back returns here rather than to the top of the document.
           navigation.visiblePosition = $0
@@ -342,14 +341,28 @@ struct DocumentView: View {
         .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
-        // Deep link or restored reading position.
-        if let request = navigation.scrollRequest, request.isUnrecorded {
-          follow(request.section)
-        } else if let request = navigation.scrollRequest {
+        // Deep link or restored reading position — or, when the text view is made
+        // again, where the reader was (#449).
+        let arrival = ReaderArrival.onAppear(
+          pendingAnchor: scrollTarget?.anchor, placeLeft: placeLeft,
+          request: navigation.scrollRequest,
+          storedAnchor: storedPosition()?.anchor.flatMap {
+            document.section(anchor: $0) != nil ? $0 : nil
+          })
+        switch arrival {
+        case .place(let anchor):
+          scrollTarget = ReaderScrollTarget(anchor: anchor, animated: false)
+        case .request(let request) where request.isUnrecorded:
+          follow(request, animated: false)
+        case .request(let request):
           jump(toSection: request.section, animated: false)
-        } else if let saved = storedPosition()?.anchor, document.section(anchor: saved) != nil {
-          scrollTarget = ReaderScrollTarget(anchor: saved, animated: false)
+        case .stay:
+          break
         }
+      }
+      .onDisappear {
+        placeLeft =
+          lastVisibleAnchor.isAheadOfSections ? .top : lastVisibleAnchor.anchor.map { .section($0) }
       }
     } else if let failure = session.state.failure {
       ContentUnavailableView {
@@ -431,7 +444,7 @@ struct DocumentView: View {
       horizontalSizeClass == .compact ? navigation.returnOffer : nil
     }
 
-    /// "Back to §4.2" after following a link within the document (#254). In a
+    /// "Back to § 4.2" after following a link within the document (#254). In a
     /// single column there is no back/forward pair, and the system back button
     /// leaves the document.
     @ViewBuilder
@@ -501,6 +514,8 @@ struct DocumentView: View {
       // No header is coming, so the toolbar names the RFC that failed.
       guard navigation.selection == id else { return }
       reader.documentFailedToLoad()
+      // A jump waiting for the text is not coming.
+      if let request = navigation.scrollRequest { navigation.settle(request) }
     }
   }
 
@@ -587,15 +602,32 @@ struct DocumentView: View {
   /// A link to a place in this document, which has no entry in the history yet: one
   /// the document holds gets its entry, so Back returns from it, and scrolls through
   /// it; an entry of the bibliography is shown; anything else moves nothing, and
-  /// leaves the history as it is.
-  private func follow(_ place: String) {
+  /// leaves the history as it is. False while there is no build to look in.
+  @discardableResult
+  private func follow(_ place: String, animated: Bool = true) -> Bool {
+    // Not while fading out over the next document's reader: the place is the
+    // selected document's.
+    guard navigation.selection == id, let document = session.state.document,
+      let built = session.state.built
+    else { return false }
     switch landing(at: place) {
-    case .jump:
-      navigation.jump(toSection: place)
+    case .jump(let anchor):
+      navigation.recordJump(
+        to: anchor, in: DocumentPlaces(document: document, anchors: built.anchors),
+        animated: animated)
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document, .unhandled, nil:
       break
+    }
+    return true
+  }
+
+  /// A place handed over unrecorded, settled once followed. Without a build it
+  /// waits for the text to appear, and is followed there, unanimated.
+  private func follow(_ request: NavigationModel.ScrollRequest, animated: Bool) {
+    if follow(request.section, animated: animated) {
+      navigation.settle(request)
     }
   }
 
@@ -608,18 +640,14 @@ struct DocumentView: View {
       at: place, in: document, bibliography: reader.groups, anchors: built.anchors)
   }
 
-  /// Cross references arrive as URLs from the attributed text; anything else goes to the system.
+  /// Cross references arrive as URLs from the attributed text, through the text
+  /// view's delegate, which reads the click's modifiers; it falls back to its own
+  /// action, the system's, when this returns false.
   ///
-  /// No modifiers here: SwiftUI's `openURL` carries no event, so a Cmd-click that
-  /// arrives this way follows the link in place. The text view's own delegate reads
-  /// the modifiers and is the path a click on a reference actually takes.
-  private func handleLink(_ url: URL) -> OpenURLAction.Result {
-    openInApp(url, activation: .here) ? .handled : .systemAction
-  }
-
-  /// The same decision as `handleLink`, as a `Bool`: the text view's delegate wants
-  /// to know whether to fall back to its own action, and `OpenURLAction.Result` is
-  /// not `Equatable`.
+  /// The reader sets no `openURL` of its own: everything else under it that opens a
+  /// URL — the failed load's link, the iOS toolbar and panel — is a page on the web,
+  /// and an override here read rfc-editor.org's pages as the RFCs they name, and
+  /// reopened the document instead of the browser (#450).
   ///
   /// Where the click goes is decided in `LinkDestination`, which is testable; this
   /// is only the one effect per answer.

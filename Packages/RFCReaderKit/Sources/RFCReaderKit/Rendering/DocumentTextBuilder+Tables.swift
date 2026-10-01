@@ -51,9 +51,9 @@ extension DocumentTextBuilder {
   /// attributes, which is what nearly every cell is; only a cell with formatting has
   /// its runs built to be measured, so a registry's plain columns are not built
   /// twice. A reference column is: each of its chips is built to be measured and
-  /// again to be set, and still measures narrower than it is drawn (#488).
-  /// Building runs numbers a chip, so measuring advances `nextChipID`; the
-  /// numbers only have to differ between neighbors, so the gap is harmless.
+  /// again to be set. Building runs numbers a chip, so measuring advances
+  /// `nextChipID`; the numbers only have to differ between neighbors, so the gap is
+  /// harmless.
   private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
     let isPlainText = cell.allSatisfy { inline in
       if case .text = inline { true } else { false }
@@ -61,7 +61,25 @@ extension DocumentTextBuilder {
     if isPlainText {
       return lineWidth(NSAttributedString(string: cell.plainText, attributes: base))
     }
-    return lineWidth(inlineRuns(cell, base: base))
+    // Kerned as `build` kerns the whole text, so the cell is measured with its
+    // chips' padding. A cell's own runs are the context that needs: the character
+    // before a chip that opens a cell is the row's newline or its tab, which the
+    // pass skips.
+    let runs = NSMutableAttributedString(attributedString: inlineRuns(cell, base: base))
+    Self.reserveChipPadding(in: runs)
+    return lineWidth(runs) + chipSymbolWidth(in: runs)
+  }
+
+  /// The width of the chips' symbols in `runs`: an attachment, which `lineWidth(_:)`
+  /// measures as nothing, drawn as wide as the bounds `chipSymbolRun` gives it. A
+  /// chip's symbol is the only attachment inline runs make.
+  private func chipSymbolWidth(in runs: NSAttributedString) -> CGFloat {
+    var width: CGFloat = 0
+    runs.enumerateAttribute(.attachment, in: NSRange(location: 0, length: runs.length)) {
+      value, _, _ in
+      if let attachment = value as? NSTextAttachment { width += attachment.bounds.width }
+    }
+    return width
   }
 
   /// A grid's header row and data row attributes in `paragraphStyle`: only the font

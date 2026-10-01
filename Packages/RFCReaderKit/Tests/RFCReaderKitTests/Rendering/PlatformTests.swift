@@ -69,7 +69,8 @@ struct PlatformTests {
     let base = PlatformFont.systemFont(ofSize: 17)
     let bold = base.adding(traits: RFCTraits.bold)
     #expect(bold.pointSize == base.pointSize)
-    #expect(bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold))
+    #expect(
+      bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(Fixtures.describe(bold))")
   }
 
   @Test func `traits are distinct and non empty`() {

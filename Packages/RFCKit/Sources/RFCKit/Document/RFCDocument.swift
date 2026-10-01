@@ -197,6 +197,26 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   public var id: String { anchor }
 
+  /// What a link or a citation names this section by, as `RFCLink.section` does: its
+  /// number, or for an appendix numbered like a section its anchor, `appendix-1`,
+  /// since the number alone names section 1 (#429). Nil when it has no number.
+  ///
+  /// Read from the anchor, the way `RFCLink` reads a fragment, rather than from
+  /// `isAppendix`: read back from RFCXML, a numbered appendix's subsection is in
+  /// `<back>` and so an appendix, but its anchor is a section's, `section-1.1`. Only
+  /// a number that starts with a digit is named by the anchor: a lettered appendix an
+  /// author anchored `appendix-1`, as RFC 9264 does, is still Appendix A.
+  public var place: String? {
+    guard let number else { return nil }
+    if number.first?.isNumber == true,
+      let fromAnchor = SectionAnchor.sectionNumber(fromAnchor: anchor),
+      PlaceName.isAppendixAnchor(fromAnchor)
+    {
+      return fromAnchor
+    }
+    return number
+  }
+
   public init(
     anchor: String,
     number: String? = nil,
@@ -576,6 +596,15 @@ public struct CrossReference: Sendable, Hashable, Codable {
     /// entry. Nil for a mention nothing in the bibliography matched, such as a bare
     /// "RFC 3986" in prose.
     case document(DocumentID, section: String?, entry: String? = nil)
+    /// A section of a bibliography entry outside the series: "Section 4.9 of
+    /// [FETCH]" (#473).
+    ///
+    /// `entry` is the anchor of the entry, as `.anchor` would name it, and what a
+    /// preview shows; `tag` is the name the document gives the entry (RFCXML's
+    /// `derivedContent`), which the label is worded around. `url` is the section's
+    /// own page (`derivedLink`), which a click opens, as the RFC Editor's rendering
+    /// does; without one, a click opens the entry.
+    case entrySection(entry: String, tag: String, section: String, url: URL?)
   }
 
   /// How the source asked a section reference to be worded.
@@ -634,13 +663,23 @@ public struct CrossReference: Sendable, Hashable, Codable {
     case .document(let id, let section, _):
       let name = Self.nonBreakingLabel(id.displayName)
       guard let section else { return "[\(name)]" }
-      let sectionLabel = Self.nonBreakingLabel("Section \(section)")
-      switch sectionFormat {
-      case .of: return "\(sectionLabel) of [\(name)]"
-      case .comma: return "[\(name)], \(sectionLabel)"
-      case .parens: return "[\(name)] (\(sectionLabel))"
-      case .bare: return section
-      }
+      return sectionLabel(section, of: name)
+    case .entrySection(_, let tag, let section, _):
+      return sectionLabel(section, of: Self.nonBreakingLabel(tag))
+    }
+  }
+
+  /// `section` of the document or entry called `name`, worded by `sectionFormat`.
+  private func sectionLabel(_ section: String, of name: String) -> String {
+    let sectionLabel = PlaceName.spelledOut(section, separator: "\u{00A0}")
+    switch sectionFormat {
+    case .of: return "\(sectionLabel) of [\(name)]"
+    case .comma: return "[\(name)], \(sectionLabel)"
+    case .parens: return "[\(name)] (\(sectionLabel))"
+    // The number alone, unless it is an appendix's that a number alone would
+    // call a section's.
+    case .bare:
+      return PlaceName.isAppendixAnchor(section) ? sectionLabel : section
     }
   }
 
@@ -675,7 +714,7 @@ public struct CrossReference: Sendable, Hashable, Codable {
     // One reference to one place, so it reads as one chip: the section is a suffix
     // of the document it is in, not a sentence with the document buried in the
     // middle of it. Nothing in it may break across a line.
-    let composed = section.map { "\(name)\u{00A0}§\u{00A0}\($0)" } ?? name
+    let composed = section.map { "\(name)\u{00A0}\(PlaceName.abbreviated($0))" } ?? name
     return Display(text: composed, isChip: true)
   }
 

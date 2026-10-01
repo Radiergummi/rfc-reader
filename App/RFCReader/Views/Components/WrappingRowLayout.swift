@@ -6,8 +6,8 @@ import SwiftUI
 /// own size, which does not depend on the width, so a layout pass measures a child
 /// again only when it is wider than the line.
 ///
-/// For chips and tags: the Info pane's related documents and keywords (#25), and
-/// the header's authors (#19).
+/// For chips and tags: the Info pane's related documents and keywords (#25), the
+/// header's authors (#19), and the status banner's documents (#439).
 struct WrappingRowLayout: Layout {
   let spacing: CGFloat
 
