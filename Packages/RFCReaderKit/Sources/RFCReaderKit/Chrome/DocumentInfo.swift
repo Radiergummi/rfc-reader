@@ -24,11 +24,22 @@ public struct DocumentInfo: Equatable, Sendable {
   public struct Fact: Equatable, Sendable {
     public let value: String
     public let label: String
+    /// What the fact names, for a stream or a working group: the strip opens its
+    /// entry (#362).
+    public let term: Glossary.Term?
+
+    public init(value: String, label: String, term: Glossary.Term? = nil) {
+      self.value = value
+      self.label = label
+      self.term = term
+    }
   }
 
   /// What the status means, in a sentence, for the header; nil when the index
-  /// does not know it.
-  public var statusSummary: String? { Self.summary(of: status) }
+  /// does not know it. The glossary entry's first sentence, which the box opens.
+  public var statusSummary: String? {
+    status == .unknown ? nil : Glossary.entry(for: .status(status)).summary
+  }
 
   /// The header's second box, for a document a later one replaces.
   public var obsoleteSummary: String? {
@@ -54,11 +65,15 @@ public struct DocumentInfo: Equatable, Sendable {
     public let value: Value
     /// An SF Symbol, for a link row.
     public let symbol: String?
+    /// What the label names, for a relationship, a draft or errata: the label opens
+    /// its entry (#362).
+    public let term: Glossary.Term?
 
-    public init(label: String, value: Value, symbol: String? = nil) {
+    public init(label: String, value: Value, symbol: String? = nil, term: Glossary.Term? = nil) {
       self.label = label
       self.value = value
       self.symbol = symbol
+      self.term = term
     }
   }
 
@@ -117,10 +132,10 @@ public struct DocumentInfo: Equatable, Sendable {
     }
     // "Independent Submission" does not fit a quarter of the panel.
     let stream = metadata.stream == .independent ? "Independent" : metadata.stream.displayName
-    facts.append(Fact(value: stream, label: "Stream"))
+    facts.append(Fact(value: stream, label: "Stream", term: .stream(metadata.stream)))
     if let group = metadata.namedWorkingGroup {
       // "Working Group" is wider than a quarter of the panel.
-      facts.append(Fact(value: group, label: "Group"))
+      facts.append(Fact(value: group, label: "Group", term: .process(.workingGroup)))
     }
     return facts
   }
@@ -137,25 +152,31 @@ public struct DocumentInfo: Equatable, Sendable {
     _ metadata: RFCMetadata, index: RFCIndex?, revisions: RevisionsSummary?
   ) -> [Row] {
     var rows: [Row] = []
-    for (label, documents) in [
-      ("Obsoletes", metadata.obsoletes),
-      ("Obsoleted by", metadata.obsoletedBy),
-      ("Updates", metadata.updates),
-      ("Updated by", metadata.updatedBy),
+    for (label, documents, term) in [
+      ("Obsoletes", metadata.obsoletes, Glossary.ProcessTerm.obsoletes),
+      ("Obsoleted by", metadata.obsoletedBy, .obsoletes),
+      ("Updates", metadata.updates, .updates),
+      ("Updated by", metadata.updatedBy, .updates),
     ] where !documents.isEmpty {
-      rows.append(Row(label: label, value: .documents(documents)))
+      rows.append(Row(label: label, value: .documents(documents), term: .process(term)))
     }
     for relation in [RevisionRelation.obsoletes, .updates] {
       let lines = revisions?.inspectorLines(relation) ?? []
       if !lines.isEmpty {
-        rows.append(Row(label: RevisionsSummary.relationLabel(relation), value: .drafts(lines)))
+        rows.append(
+          Row(
+            label: RevisionsSummary.relationLabel(relation), value: .drafts(lines),
+            term: .process(.internetDraft)))
       }
     }
     for series in metadata.isAlso {
       let others =
         index?.series(series)?.members.filter { $0 != metadata.id } ?? []
       if !others.isEmpty {
-        rows.append(Row(label: "Part of \(series.displayName)", value: .documents(others)))
+        rows.append(
+          Row(
+            label: "Part of \(series.displayName)", value: .documents(others),
+            term: .series(series.series)))
       }
     }
     return rows
@@ -212,28 +233,6 @@ public struct DocumentInfo: Equatable, Sendable {
       rows.append(Row(label: "Keywords", value: .keywords(metadata.keywords)))
     }
     return rows
-  }
-
-  /// The status in a sentence: the name alone is jargon to most readers.
-  private static func summary(of status: PublicationStatus) -> String? {
-    switch status {
-    case .internetStandard:
-      "The IETF's highest maturity level: a stable standard, widely implemented and deployed."
-    case .draftStandard:
-      "A standard at a maturity level the IETF has since retired, between Proposed and Internet Standard."
-    case .proposedStandard:
-      "A standard the IETF has approved. Most of the Internet's standards remain at this level."
-    case .bestCurrentPractice:
-      "Guidance the IETF recommends, for operating the Internet or for its own processes."
-    case .informational:
-      "Published for information. Not a standard, and not a recommendation."
-    case .experimental:
-      "Published for experimentation and evaluation. Not a standard."
-    case .historic:
-      "Superseded or no longer in use, kept for the record."
-    case .unknown:
-      nil
-    }
   }
 
   /// An area's name for the short code the index records it by, or the code in
