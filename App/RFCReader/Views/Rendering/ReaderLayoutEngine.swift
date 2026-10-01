@@ -11,9 +11,9 @@ import RFCReaderKit
 /// place (`PinRecipe.settle`). Everything above it is then laid out, so it is where
 /// the layout of the whole document puts it, and the platform's own scroll view
 /// keeps it there while the rest is laid out. Only a live resize on the Mac, which
-/// cannot afford that on every step, pins on estimates instead, and settles once it
-/// ends. Only calls into the text view live here; the arithmetic is RFCReaderKit's.
-/// See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
+/// cannot afford that on every step, pins on estimates instead; the rebuild for the
+/// new column that follows it settles. Only calls into the text view live here; the
+/// arithmetic is RFCReaderKit's. See `docs/superpowers/specs/2026-09-30-reader-layout-engine-design.md`.
 final class ReaderLayoutEngine: PinSurface {
   /// On with the launch argument `-ReaderViewportLayout YES`, until the old path
   /// is removed.
@@ -52,11 +52,6 @@ final class ReaderLayoutEngine: PinSurface {
   func columnChanged() {
     putBack()
     startCompletion()
-  }
-
-  /// A live resize ended: the place it pinned on estimates is settled.
-  func liveResizeEnded() {
-    settle()
   }
 
   /// Settles the place, or pins it on estimates during a live resize.

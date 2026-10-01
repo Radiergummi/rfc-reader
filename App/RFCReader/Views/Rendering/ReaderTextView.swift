@@ -114,14 +114,6 @@ import RFCReaderKit
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
     var willTrackMouseDown: () -> Bool = { false }
-    /// Told as a live resize ends, after which the reader's place is settled rather
-    /// than pinned on estimates.
-    var liveResizeEnded: () -> Void = {}
-
-    override func viewDidEndLiveResize() {
-      super.viewDidEndLiveResize()
-      liveResizeEnded()
-    }
 
     /// A find match or a VoiceOver rotor stop far from the viewport lands on an
     /// estimate under viewport layout; the engine puts it there exactly instead.
