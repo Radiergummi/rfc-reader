@@ -334,19 +334,37 @@
       let title = NSMenuItem()
       title.isHidden = true
       menu.addItem(title)
-      let sections: DocumentMenus.Sections
       switch menu {
       case citeMenu:
-        sections = DocumentMenus.cite()
+        add(DocumentMenus.cite(), to: menu)
       case moreMenu:
-        sections = DocumentMenus.more(
-          showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
-          precedingDraft: reader.precedingDraft)
+        add(
+          DocumentMenus.more(
+            showsOriginal: reader.showOriginal, errata: metadata?.errataURL,
+            precedingDraft: reader.precedingDraft),
+          to: menu)
       case collectionMenu:
-        sections = DocumentMenus.addToCollection(id, in: library.collections)
+        add(DocumentMenus.addToCollection(id, in: library.collections), to: menu)
       default:
         return
       }
+      // Export and Print are the Mac's own: a chooser and the print panel, where
+      // iOS lists the formats and presents its print sheet.
+      if menu === moreMenu {
+        menu.addItem(.separator())
+        let exportItem = NSMenuItem(
+          title: "Export…", action: #selector(exportDocument), keyEquivalent: "")
+        exportItem.target = self
+        menu.addItem(exportItem)
+        let printItem = NSMenuItem(
+          title: "Print…", action: #selector(printDocument), keyEquivalent: "")
+        printItem.target = self
+        menu.addItem(printItem)
+      }
+    }
+
+    /// Each item carries its action, which `performMenuAction` carries out.
+    private func add<Action>(_ sections: DocumentMenus.Sections<Action>, to menu: NSMenu) {
       for (index, items) in sections.enumerated() {
         if index > 0 { menu.addItem(.separator()) }
         for entry in items {
@@ -361,19 +379,6 @@
           }
           menu.addItem(item)
         }
-      }
-      // Export and Print are the Mac's own: a chooser and the print panel, where
-      // iOS lists the formats and presents its print sheet.
-      if menu === moreMenu {
-        menu.addItem(.separator())
-        let exportItem = NSMenuItem(
-          title: "Export…", action: #selector(exportDocument), keyEquivalent: "")
-        exportItem.target = self
-        menu.addItem(exportItem)
-        let printItem = NSMenuItem(
-          title: "Print…", action: #selector(printDocument), keyEquivalent: "")
-        printItem.target = self
-        menu.addItem(printItem)
       }
     }
 
@@ -416,29 +421,19 @@
 
     /// What an item of Cite, More or Add to Collection does.
     @objc private func performMenuAction(_ sender: NSMenuItem) {
-      guard let id, let action = sender.representedObject as? DocumentMenus.Action else { return }
-      switch action {
-      case .copyCitation(let style):
-        guard let metadata else { return }
-        Clipboard.copy(
-          DocumentActions.citation(metadata, section: reader.currentSection, style: style))
-      case .copySectionLink:
-        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-      case .toggleOriginalText:
-        reader.showOriginal.toggle()
-      case .openInfoPage:
-        NSWorkspace.shared.open(RFCEditorEndpoints.infoPage(id))
-      case .openErrata(let url), .openPrecedingDraft(let url):
-        NSWorkspace.shared.open(url)
-      case .openDatatracker:
-        NSWorkspace.shared.open(RFCEditorEndpoints.datatracker(id))
-      case .toggleCollection(let collection):
-        library.editCollections {
-          try CollectionStore.toggle(
-            id, in: collection, undoManager: controller.window?.undoManager, in: $0)
-        }
-      case .newCollection:
-        navigation.collectionEditor = .create(adding: id)
+      guard let id else { return }
+      switch sender.representedObject {
+      case let action as DocumentMenus.Action:
+        DocumentActionPerformer(
+          id: id, metadata: metadata, reader: reader, open: { NSWorkspace.shared.open($0) }
+        ).perform(action)
+      case let action as DocumentMenus.CollectionAction:
+        CollectionActionPerformer(
+          document: id, library: library, navigation: navigation,
+          undoManager: controller.window?.undoManager
+        ).perform(action)
+      default:
+        break
       }
     }
 

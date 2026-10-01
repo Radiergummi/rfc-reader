@@ -131,16 +131,9 @@ import SwiftUI
     /// What an item of Cite or More does. Add to Collection's are
     /// `AddToCollectionItems`' own.
     private func perform(_ action: DocumentMenus.Action) {
-      switch action {
-      case .copyCitation(let style): copyCitation(style)
-      case .copySectionLink:
-        Clipboard.copy(DocumentActions.sectionLink(id: id, section: reader.currentSection))
-      case .toggleOriginalText: reader.showOriginal.toggle()
-      case .openInfoPage: openURL(RFCEditorEndpoints.infoPage(id))
-      case .openErrata(let url), .openPrecedingDraft(let url): openURL(url)
-      case .openDatatracker: openURL(RFCEditorEndpoints.datatracker(id))
-      case .toggleCollection, .newCollection: break
-      }
+      DocumentActionPerformer(
+        id: id, metadata: metadata, reader: reader, open: { openURL($0) }
+      ).perform(action)
     }
 
     private func shareLink(_ metadata: RFCMetadata) -> some View {
@@ -151,12 +144,6 @@ import SwiftUI
 
     private func toggleBookmark() {
       library.toggleBookmark(id, documentTitle: reader.documentTitle)
-    }
-
-    private func copyCitation(_ style: CitationStyle) {
-      guard let metadata else { return }
-      Clipboard.copy(
-        DocumentActions.citation(metadata, section: reader.currentSection, style: style))
     }
   }
 
