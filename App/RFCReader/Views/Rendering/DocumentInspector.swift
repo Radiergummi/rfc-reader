@@ -346,10 +346,8 @@ struct ReferencesView: View {
           await Task.yield()
           withAnimation { proxy.scrollTo(revealed.anchor, anchor: .center) }
           highlighted = revealed.anchor
-          try? await Task.sleep(for: .seconds(1.5))
-          guard !Task.isCancelled else { return }
-          withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
         }
+        .resets($highlighted, to: nil, after: .seconds(1.5), animation: .easeOut(duration: 0.6))
       }
     }
   }
