@@ -55,7 +55,11 @@ struct BuilderListTests {
     let built = DocumentTextBuilder.build(document, style: style)
     let offset = try Fixtures.offset(of: "MUST", in: built.text)
     let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
-    #expect(font?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true)
+    // The font itself in the message: this failed twice under concurrent runs with
+    // a 12 pt font that was not bold (#326), and which font it was decides the fix.
+    #expect(
+      font?.fontDescriptor.symbolicTraits.contains(RFCTraits.bold) == true,
+      "\(font.map(Fixtures.describe) ?? "no font")")
 
     let definitionOffset = try Fixtures.offset(of: "absolute requirement", in: built.text)
     let paragraph =

@@ -177,6 +177,188 @@ struct LegacyTextParserBlocksTests {
     #expect(!LegacyTextParser.continuesCatalogEntry(atNumber, numberIndent: 6, textColumn: 13))
   }
 
+  /// xml2rfc sets a `<dl>` entry as its term, two spaces and the definition, with
+  /// the rest of the definition hung three columns in (#436). The lines here are
+  /// written in that shape, not quoted.
+  @Test func `a hanging-indent definition is split into its term and its text`() throws {
+    let entry = try #require(
+      LegacyTextParser.hangingDefinitions([
+        "   Widget:  A part that is set on the term's line and",
+        "      goes on under it, three columns in.",
+      ]))
+    #expect(entry.indent == 3)
+    #expect(entry.continuationColumn == 6)
+    #expect(entry.entries.map(\.term) == ["Widget:"])
+    #expect(
+      entry.entries.map(\.text) == [
+        "A part that is set on the term's line and goes on under it, three columns in."
+      ])
+  }
+
+  /// A term short enough for the hang sets its definition in the hang's column, and
+  /// the lines under it stand there too; with no blank line between them, several
+  /// entries arrive as one block.
+  @Test func `aligned and compact hanging definitions are split per term`() throws {
+    let aligned = try #require(
+      LegacyTextParser.hangingDefinitions([
+        "   Gadget Name:  A part whose text keeps to its",
+        "                 own column under the term.",
+        "   Other Name:   Another part, the same column.",
+      ]))
+    #expect(aligned.continuationColumn == 17)
+    #expect(aligned.entries.map(\.term) == ["Gadget Name:", "Other Name:"])
+    #expect(aligned.entries.last?.text == "Another part, the same column.")
+
+    let oneLine = try #require(LegacyTextParser.hangingDefinitions(["   Short:  One line only."]))
+    #expect(oneLine.continuationColumn == nil)
+    #expect(oneLine.entries.map(\.term) == ["Short:"])
+    // A one-line entry need not read as words; one that hangs does.
+    #expect(LegacyTextParser.hangingDefinitions(["   Field Name:  VALUE"]) != nil)
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Maintainer:  J. Doe",
+        "      <mailto:jdoe@example.org>",
+      ]) == nil)
+  }
+
+  /// A definition's next paragraph stands in the column its lines hang in; an
+  /// example set a column or two past it is the definition's artwork, and a line
+  /// back at the terms is not under the definition at all.
+  @Test func `a definition's next paragraph stands in its column, exactly`() {
+    let paragraph = ["      A second paragraph of the same", "      definition, in its column."]
+    #expect(LegacyTextParser.continuesHangingDefinition(paragraph, column: 6))
+    let example = ["        EXAMPLE:value/one"]
+    #expect(!LegacyTextParser.continuesHangingDefinition(example, column: 6))
+    let atTerms = ["   Back where the terms are."]
+    #expect(!LegacyTextParser.continuesHangingDefinition(atTerms, column: 6))
+  }
+
+  /// A page break cuts a hanging definition as it cuts any paragraph, in its first
+  /// paragraph or in one after it. The halves are joined as lines, before linking,
+  /// so a compound word broken at its hyphen is one word again and a cross reference
+  /// that runs over the break is still linked.
+  @Test func `a definition cut by a page break is rejoined as lines`() throws {
+    let linker = InlineLinker(sectionNumbers: ["3.2"], referenceTargets: [:])
+    let endOfPage = LegacyTextParser.RawBlock(
+      lines: [
+        "   Widget:  A part that is carried over a point-",
+        "      to-point link, as set out in Section",
+      ],
+      followedByPageBreak: true)
+    let nextPage = LegacyTextParser.RawBlock(lines: ["      3.2 and in the rest of the text."])
+    let first = try #require(
+      LegacyTextParser.blocks(from: [endOfPage, nextPage], proseIndent: 6, linker: linker)
+        .first?.definitionItems?.first)
+    let paragraph = try #require(first.definition.first?.paragraph)
+    #expect(first.definition.count == 1)
+    #expect(paragraph.plainText.contains("point-to-point"))
+    #expect(paragraph.inlines.contains { $0.crossReference != nil })
+
+    let definition = LegacyTextParser.RawBlock(lines: [
+      "   Widget:  A part that is set on the term's line and",
+      "      goes on under it.",
+    ])
+    let secondParagraph = LegacyTextParser.RawBlock(
+      lines: ["      Its second paragraph runs to the foot of the media-"],
+      followedByPageBreak: true)
+    let rest = LegacyTextParser.RawBlock(lines: ["      independent page, and ends there."])
+    let second = try #require(
+      LegacyTextParser.blocks(
+        from: [definition, secondParagraph, rest], proseIndent: 6, linker: linker
+      ).first?.definitionItems?.first)
+    #expect(second.definition.count == 2)
+    #expect(second.definition.last?.paragraph?.plainText.contains("media-independent") == true)
+  }
+
+  /// A definition that ends a sentence at the foot of a page is not continued by the
+  /// paragraph at the top of the next.
+  @Test func `a finished definition is not joined across a page`() {
+    let finished = LegacyTextParser.RawBlock(lines: [
+      "   Widget:  A part whose definition ends",
+      "      at the foot of the page.",
+    ])
+    let nextParagraph = LegacyTextParser.RawBlock(lines: [
+      "      A second paragraph of the same definition."
+    ])
+    #expect(
+      !LegacyTextParser.continuesDefinitionAcrossPage(finished, nextParagraph, hangColumn: nil))
+    let restOfSentence = LegacyTextParser.RawBlock(lines: ["      and its end."])
+    #expect(
+      LegacyTextParser.continuesDefinitionAcrossPage(finished, restOfSentence, hangColumn: nil))
+  }
+
+  /// A catalog entry whose title has a colon and two spaces in it takes a hanging
+  /// definition's shape too, but it is the catalog's: its term is its number.
+  @Test func `a catalog entry with a colon in its title stays the catalog's`() throws {
+    let catalog = LegacyTextParser.RawBlock(lines: [
+      "   2063 - Flow Counting:  The part that sets out how the",
+      "          counters are kept and read.",
+    ])
+    let blocks = LegacyTextParser.blocks(
+      from: [catalog], proseIndent: 6,
+      linker: InlineLinker(sectionNumbers: [], referenceTargets: [:]))
+    let items = try #require(blocks.first?.definitionItems)
+    #expect(items.map(\.term.plainText) == ["2063"])
+  }
+
+  @Test func `lines that only look like hanging definitions are not`() {
+    // An exchange in a protocol trace: the arrow is a drawing's.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   A->B:  HELLO part/1",
+        "      Part-Name: first",
+      ]) == nil)
+    // One space after the colon: a label, not xml2rfc's term.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Label: some text that runs on and",
+        "      is indented under it.",
+      ]) == nil)
+    // A sentence, then two spaces: no term ends in a full stop.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   It ends here.  Then it goes on",
+        "      under it.",
+      ]) == nil)
+    // Hung past where the definition starts.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set",
+        "                  far past it.",
+      ]) == nil)
+    // Back at the margin.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set",
+        "back at the margin.",
+      ]) == nil)
+    // Hung at two different columns.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  Text that is set at",
+        "      one column and then",
+        "        at another.",
+      ]) == nil)
+    // Terms aligned at their colons: the second is not the first one's text.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   n=1:  The first value.",
+        "     2:  The second value.",
+      ]) == nil)
+    // A sentence's end in the term: a bibliography entry, its title ending in a colon.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   [4] Writer, B. Some Title:  A subtitle that",
+        "       runs on under it.",
+      ]) == nil)
+    // A column gap in the definition is a table's.
+    #expect(
+      LegacyTextParser.hangingDefinitions([
+        "   Part:  first     second",
+        "      third     fourth",
+      ]) == nil)
+  }
+
   /// RFC 757 is typeset justified: every line is padded with extra spaces between words
   /// to reach a common right margin. Those runs of spaces are what tells prose from
   /// artwork everywhere else, so all 60-odd of its paragraphs were preformatted blocks.
