@@ -36,6 +36,8 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
+  /// Whether a new column comes from a resize still under way; see `ReaderResize`.
+  @State private var resize = ReaderResize()
 
   init(id: DocumentID) {
     self.id = id
@@ -215,7 +217,8 @@ struct DocumentView: View {
       }
       .onChange(of: buildInputs, initial: true) {
         // Captures the reader, not the view; see `DocumentSession.startLoad`.
-        session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
+        session.requestBuild(for: buildInputs, resizeIsLive: resize.isLive) {
+          [reader, navigation, id] built, document in
           // A replaced reader lives on through its fade (`ReaderHost`), and its
           // rebuild must not list its sections under the next document.
           guard navigation.selection == id else { return }
@@ -264,6 +267,12 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+      #else
+        // Which size changes are a rotation, so their new column builds at once.
+        .background {
+          SizeTransitionObserver(resize: resize)
+          .accessibilityHidden(true)
+        }
       #endif
   }
 
