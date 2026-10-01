@@ -185,6 +185,20 @@ struct CorpusBackedAppendixHeadingTests {
     #expect(document.section(anchor: "appendix-A") != nil)
     #expect(document.section(anchor: "appendix-A-2") == nil)
   }
+
+  /// RFC 707 sets its body's headings with a page number at the margin, as a contents
+  /// entry is set without a leader. Each stands between paragraphs, so each is a
+  /// heading: the four appendices are there, and the references.
+  @Test func `a heading with its page number at the margin is no contents entry`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc707"))
+    for (letter, word) in [("A", "DATA"), ("B", "TRANSMISSION"), ("C", "ENCODING"), ("D", "LOOK")] {
+      #expect(
+        document.allSections.contains {
+          $0.isAppendix && $0.number == letter && $0.titleText.contains(word)
+        })
+    }
+    #expect(document.allSections.contains { $0.titleText.hasPrefix("REFERENCES") })
+  }
 }
 
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))

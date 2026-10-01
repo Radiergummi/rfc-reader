@@ -319,17 +319,42 @@ struct LegacyTextParserHeadingsTests {
     #expect(!LegacyTextParser.isContentsEntry("Wait for it ......"))
   }
 
-  /// #427: three spaced dots are a leader, which a range never is, and so is a gap
-  /// before a page number set in a column of its own. A title that is itself a
-  /// number, a status code or a year, has no word before the gap, and stays a heading.
-  @Test func `a short spaced leader or a page column makes a contents entry`() {
+  /// #427: three spaced dots are a leader, which a range never is.
+  @Test func `a short spaced leader makes a contents entry`() {
     #expect(LegacyTextParser.isContentsEntry("Appendix B.  Widget Migration Notes  . . . 14"))
-    #expect(LegacyTextParser.isContentsEntry("C   Widget Registry and Frob Allocation         21"))
-    #expect(LegacyTextParser.isContentsEntry("APPENDIX D                                     vii"))
-    #expect(!LegacyTextParser.isContentsEntry("4.2  Values 0...255"))
-    #expect(!LegacyTextParser.isContentsEntry("12.4.  299"))
-    #expect(!LegacyTextParser.isContentsEntry("B.3.  1983"))
-    #expect(!LegacyTextParser.isContentsEntry("Widget Overview 5"))
+    #expect(!LegacyTextParser.isContentsEntry("Widget Notes . . 14"))
+  }
+
+  /// #427: a page number in a column of its own, with no leader, is an entry in a run
+  /// of entries, blank lines between them or not.
+  @Test func `a page column in a run of entries makes a contents entry`() {
+    let listing: [String?] = [
+      "A   Widget Registry and Frob Allocation         21",
+      "B   Frob Tables                                 23",
+      "",
+      "APPENDIX D                                     vii",
+    ]
+    for index in [0, 1, 3] {
+      #expect(LegacyTextParser.isContentsEntry(at: index, in: listing))
+    }
+  }
+
+  /// A heading that carries its page number at the margin and stands between
+  /// paragraphs is no entry, and neither is a heading whose title is a number, a
+  /// status code or a year, which has no word before the gap.
+  @Test func `a page column alone or after no word is no contents entry`() {
+    let body: [String?] = [
+      "   the frob is then handed to the widget layer.",
+      "",
+      "APPENDIX C:  WIDGET FORMATS                           12",
+      "",
+      "   Each widget carries its own frob count.",
+    ]
+    #expect(!LegacyTextParser.isContentsEntry(at: 2, in: body))
+    let numbered: [String?] = ["12.4.  299", "", "B.3.  1983", "Widget Overview 5"]
+    for index in [0, 2, 3] {
+      #expect(!LegacyTextParser.isContentsEntry(at: index, in: numbered))
+    }
   }
 
   /// A column-0 table row that ends in a gap and a number is no heading: RFC 391's

@@ -73,30 +73,56 @@ extension LegacyTextParser {
   /// `isContentsEntries`, which takes two dots: this one refuses a heading, and a
   /// title may hold a range, `1..5`.
   ///
-  /// An entry ends in a leader of four dots, three spaced, or none at all and a page
-  /// number set off in a column of its own. An entry taken for a heading claims its
-  /// heading's anchor, and the heading itself is renamed `appendix-A-2` (#427).
+  /// The leader is four dots, or three spaced, which no range is. RFC 5735's appendix
+  /// entry has three, and took the appendix's anchor (#427): an entry taken for a
+  /// heading claims its heading's anchor, and the heading is renamed `appendix-A-2`.
   static func isContentsEntry(_ line: String) -> Bool {
-    for pattern in [contentsEntryPattern, spacedLeaderPattern, pageColumnPattern] {
+    for pattern in [contentsEntryPattern, spacedLeaderPattern] {
       if let match = line.firstMatch(of: pattern), isPageNumber(match.page) { return true }
     }
     return false
   }
 
-  /// A spaced leader of three dots, `Title  . . . 10`, too short for
-  /// `contentsEntryPattern`, and no range, which is never spaced. RFC 5735's appendix
-  /// entry is set so, and took the appendix's anchor (#427).
   private static let spacedLeaderPattern = Pattern(#/\s(?:\.\s){3,}\s*(?<page>\d+|[ivx]+)\s*$/#)
 
-  /// A page number set in a column of its own, with no leader: a word, a gap of two
-  /// spaces or more, the number, `A   Summary of Widgets          14`. RFC 1001, 1076,
-  /// 1276 and 1305 list their contents so, and an entry opened a section that took the
-  /// heading's anchor (#427). The word is what makes it an entry: a heading whose
-  /// whole title is a number, RFC 4975's `10.1.  200` and RFC 4844's `A.1.  1992`,
-  /// has none, being a number and a status code or a year. A column-0 table row that
-  /// ends in a figure is refused with them, and was no heading either: each of RFC
-  /// 391's traffic rows opened a section.
+  /// `isContentsEntry`, or an entry with no leader: a page number in a column of its
+  /// own, after a word and a gap of two spaces or more, where the nearest line above
+  /// or below, past blank lines, is an entry too (#427).
+  ///
+  /// RFC 1001, 1076, 1276 and 1305 list their contents so, and each entry opened a
+  /// section that took its heading's anchor. The neighbor is what makes it an entry,
+  /// because a listing is a run of them: RFC 707 sets its body's headings so too, the
+  /// page number at the margin of each, and they stand alone between paragraphs. The
+  /// word keeps a heading whose whole title is a number, RFC 4975's `10.1.  200` and
+  /// RFC 4844's `A.1.  1992`. A column-0 table whose rows end in a figure is refused
+  /// with the listings, and its rows were no headings either: each of RFC 391's
+  /// traffic rows opened a section.
+  static func isContentsEntry<Lines: RandomAccessCollection<String?>>(
+    at index: Int, in lines: Lines
+  ) -> Bool where Lines.Index == Int {
+    guard let line = lines[index] else { return false }
+    if isContentsEntry(line) { return true }
+    guard endsInPageColumn(line) else { return false }
+    return [-1, 1].contains { step in
+      var neighbor = index + step
+      while lines.indices.contains(neighbor), lines[neighbor]?.isBlank ?? true {
+        neighbor += step
+      }
+      guard lines.indices.contains(neighbor), let string = lines[neighbor] else { return false }
+      return isContentsEntry(string) || endsInPageColumn(string)
+    }
+  }
+
+  static func isContentsEntry(at index: Int, in lines: [Line]) -> Bool {
+    isContentsEntry(at: index, in: lines.lazy.map(\.string))
+  }
+
   private static let pageColumnPattern = Pattern(#/\p{L}{2}.*\S {2,}(?<page>\d+|[ivx]+)\s*$/#)
+
+  private static func endsInPageColumn(_ line: String) -> Bool {
+    guard let match = line.firstMatch(of: pageColumnPattern) else { return false }
+    return isPageNumber(match.page)
+  }
 
   /// The numbered headings set off column 0, by line:
   /// RFC 791, 793 and the specifications set like them center a chapter's heading,
@@ -128,7 +154,7 @@ extension LegacyTextParser {
           at: index, in: lines, bodyIsIndented: bodyIsIndented, colonNumbered: colonNumbered,
           startsBlock: isBlankOrEnd(lines, at: index - 1)),
           heading.number != nil || !refusesUnnumberedHeading(heading.title),
-          !isContentsEntry(string)
+          !isContentsEntry(at: index, in: lines)
         {
           next = (index, heading.number)
         }
@@ -136,7 +162,7 @@ extension LegacyTextParser {
       }
       guard isBlankOrEnd(lines, at: index - 1), isBlankOrEnd(lines, at: index + 1),
         let heading = heading(from: string, colonNumbered: colonNumbered),
-        let number = heading.number, !isContentsEntry(string)
+        let number = heading.number, !isContentsEntry(at: index, in: lines)
       else { continue }
       let nearest = nearestOfNumber[number, default: .max]
       if let next, next.number == "\(number).1", nearest > next.index {
