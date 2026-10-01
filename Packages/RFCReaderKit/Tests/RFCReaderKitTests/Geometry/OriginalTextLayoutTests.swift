@@ -47,4 +47,34 @@ struct OriginalTextLayoutTests {
     #expect(OriginalTextLayout.containerSize.width == .greatestFiniteMagnitude)
     #expect(OriginalTextLayout.containerSize.height == .greatestFiniteMagnitude)
   }
+
+  /// A larger text size widens the content by its ratio, and the place in the
+  /// line that was at the view's left edge stays there.
+  @Test func `a sideways offset scales with the content width`() {
+    #expect(
+      OriginalTextLayout.horizontalOffset(
+        150, scaledFrom: 600, to: 720, viewWidth: 390) == 180)
+  }
+
+  /// Scrolled to the end of the lines, then made smaller: the offset cannot run
+  /// past the new end.
+  @Test func `a scaled offset stops at the end of the content`() {
+    #expect(
+      OriginalTextLayout.horizontalOffset(
+        236, scaledFrom: 626, to: 500, viewWidth: 390) == 110)
+  }
+
+  /// Text that now fits the view has nothing to scroll to sideways.
+  @Test func `a scaled offset is zero when the content fits the view`() {
+    #expect(
+      OriginalTextLayout.horizontalOffset(
+        200, scaledFrom: 626, to: 390, viewWidth: 390) == 0)
+  }
+
+  /// Nothing was laid out before, so there is no position to keep.
+  @Test func `an offset into no content stays at the start`() {
+    #expect(
+      OriginalTextLayout.horizontalOffset(
+        0, scaledFrom: 0, to: 626, viewWidth: 390) == 0)
+  }
 }

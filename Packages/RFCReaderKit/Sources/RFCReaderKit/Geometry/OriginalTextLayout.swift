@@ -30,4 +30,23 @@ public enum OriginalTextLayout {
     // fraction short of the last glyph clips it.
     return needed <= viewWidth ? viewWidth : needed.rounded(.up)
   }
+
+  /// Where a view scrolled sideways is scrolled to once its content has changed
+  /// width, as it does when the text size changes: the same place in the lines,
+  /// scaled to the new width, and no further than the content scrolls.
+  ///
+  /// - Parameters:
+  ///   - offset: the horizontal content offset before the change.
+  ///   - previousContentWidth: the content width before the change.
+  ///   - contentWidth: the content width after it.
+  ///   - viewWidth: the width of the view's bounds.
+  public static func horizontalOffset(
+    _ offset: CGFloat, scaledFrom previousContentWidth: CGFloat, to contentWidth: CGFloat,
+    viewWidth: CGFloat
+  ) -> CGFloat {
+    guard previousContentWidth > 0 else { return 0 }
+    let scaled = offset * contentWidth / previousContentWidth
+    let furthest = max(0, contentWidth - viewWidth)
+    return min(max(0, scaled), furthest)
+  }
 }

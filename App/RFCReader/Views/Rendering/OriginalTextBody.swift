@@ -112,11 +112,19 @@ struct OriginalTextBody {
     }
 
     func updateUIView(_ textView: SidewaysTextView, context: Context) {
-      if let shown = context.coordinator.shown, shown == (text, fontSize) { return }
+      let previous = context.coordinator.shown
+      if let previous, previous == (text, fontSize) { return }
+      let offset = textView.contentOffset.x
+      let previousContentWidth = textView.contentSize.width
       // Through the text storage, never the content storage's `attributedString`,
       // which silently discards the backing store; see `NSTextContentStorage.install(_:)`.
       textView.textStorage.setAttributedString(attributed)
       context.coordinator.shown = (text, fontSize)
+      // A new text size: UIKit scrolls back to the start of the lines, so this
+      // puts the reader back where they were across them.
+      if previous?.text == text {
+        textView.restoreHorizontalOffset(offset, scaledFrom: previousContentWidth)
+      }
     }
   }
 
@@ -141,6 +149,16 @@ struct OriginalTextBody {
         textContainer.size = OriginalTextLayout.containerSize
       }
       if contentSize.width != laidOutWidth { contentSize = super.contentSize }
+    }
+
+    /// Scrolls sideways to where `offset` was in content `previousContentWidth`
+    /// wide, once the text in the view has been replaced.
+    func restoreHorizontalOffset(_ offset: CGFloat, scaledFrom previousContentWidth: CGFloat) {
+      // Lays out what is in view, which is what the content width is measured from.
+      layoutIfNeeded()
+      contentOffset.x = OriginalTextLayout.horizontalOffset(
+        offset, scaledFrom: previousContentWidth, to: contentSize.width,
+        viewWidth: bounds.width)
     }
 
     /// Plain text, so Copy puts only the string on the pasteboard, as on macOS: as
