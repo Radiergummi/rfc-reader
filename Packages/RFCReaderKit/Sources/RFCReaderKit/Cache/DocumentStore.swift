@@ -309,7 +309,7 @@ public actor DocumentStore {
     }
   }
 
-  public func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+  public func document(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws -> RFCDocument
   {
     let signpostID = signposter.makeSignpostID()
@@ -413,7 +413,7 @@ public actor DocumentStore {
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
   /// text only when there is no XML (#125). Off the actor, parse included, so the
   /// store answers other calls meanwhile.
-  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws -> RFCEditorClient.FetchedDocument
   {
     let interval = signposter.beginInterval(
@@ -513,7 +513,7 @@ public actor DocumentStore {
     return victims
   }
 
-  public func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
+  public func originalText(_ id: DocumentID, client: any DocumentFetching) async throws -> String {
     if let data = try? Data(contentsOf: fileURL(id, format: .text)) {
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
@@ -525,7 +525,7 @@ public actor DocumentStore {
   /// and written by the one told to keep it, with no suspension between, so a
   /// removal cannot slip in before the write, and the others find it on disk once
   /// they have it (#116).
-  private func text(_ id: DocumentID, client: RFCEditorClient) async throws -> Data {
+  private func text(_ id: DocumentID, client: any DocumentFetching) async throws -> Data {
     let (data, isKept) = try await texts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
     }
