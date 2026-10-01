@@ -96,14 +96,8 @@ final class RFCTextViewCoordinator: NSObject {
   }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
-  /// See `RFCTextView.onToggleSource`.
-  var onToggleSource: ((PresentationKey) -> Void)?
-  /// The Figure | Source buttons laid over the text view.
-  let figureControls = FigureControls()
-  /// Whether the column changed under a storage built for another, whose layout
-  /// was thrown away until the rebuild installs: what is on screen until then has
-  /// no fragment frames to place anything by.
-  var columnAwaitsRebuild = false
+  /// See `RFCTextView.onChoosePresentation`.
+  var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -276,9 +270,6 @@ final class RFCTextViewCoordinator: NSObject {
     reportSelection()
     beginLayout()
     if laidOutColumn != nil { restorePlace(fallback: fallback) }
-    columnAwaitsRebuild = false
-    figureControls.blocks = FigureControl.blocks(in: built.text)
-    updateFigureControls()
   }
 
   /// Puts the place back at the top of the viewport and resumes tracking from
@@ -465,8 +456,7 @@ final class RFCTextViewCoordinator: NSObject {
       #else
         textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
       #endif
-      columnAwaitsRebuild = !tracker.columnChanged(to: column)
-      if !columnAwaitsRebuild {
+      if tracker.columnChanged(to: column) {
         beginLayout()
         restorePlace()
       } else {
@@ -476,8 +466,6 @@ final class RFCTextViewCoordinator: NSObject {
         laidOutThrough = 0
       }
     }
-    // The container moved in the view, or the text in the container.
-    updateFigureControls()
   }
 
   // MARK: - Scrolling
@@ -717,6 +705,8 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
+      // A figure is an item for its long press alone: a tap on it is a tap on text.
+      if case .tag = textItem.content { return nil }
       let offset = textItem.range.location
       // A backlink chip goes nowhere: it lists what refers to its section.
       if backlinkChip(at: offset) != nil {
@@ -746,6 +736,7 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
+      if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
       // A backlink chip's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
       if backlinkChip(at: textItem.range.location) != nil { return nil }
@@ -816,7 +807,6 @@ final class RFCTextViewCoordinator: NSObject {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
-      updateFigureControls()
       followChrome(scrollView)
     }
   }
@@ -971,8 +961,6 @@ final class RFCTextViewCoordinator: NSObject {
     func viewportDidScroll(_ notification: Notification) {
       reportVisibleAnchor()
       hover.send(.scrolled)
-      // The text moved under a pointer that may not have.
-      updateFigureControls()
     }
 
     /// The next click is a click of its own, not the tail of a force click, and it
@@ -1003,10 +991,6 @@ final class RFCTextViewCoordinator: NSObject {
           content: NSHostingController(rootView: preview), anchor: rect)
       }
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
-      hover.pointerMoved = { [weak self] in self?.updateFigureControls() }
-      (textView as? ReaderTextView)?.liveResizeEnded = { [weak self] in
-        self?.updateFigureControls()
-      }
     }
 
     /// Called from `dismantleNSView`.

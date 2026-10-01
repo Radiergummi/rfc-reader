@@ -32,7 +32,7 @@ struct RFCTextView: View {
     onToolbarTitle: @escaping (ToolbarTitleState, _ reader: AnyObject) -> Void,
     onToolbarTitleReleased: @escaping (_ reader: AnyObject) -> Void,
     onSelectionChange: @escaping (Bool) -> Void = { _ in },
-    onToggleSource: ((PresentationKey) -> Void)? = nil,
+    onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     heading: HeadingBox,
@@ -53,7 +53,7 @@ struct RFCTextView: View {
       onToolbarTitle: onToolbarTitle,
       onToolbarTitleReleased: onToolbarTitleReleased,
       onSelectionChange: onSelectionChange,
-      onToggleSource: onToggleSource,
+      onChoosePresentation: onChoosePresentation,
       hidesChrome: hidesChrome,
       onChromeHidden: onChromeHidden,
       heading: heading,
@@ -109,9 +109,9 @@ struct ReaderInputs {
   /// one, as Copy is (#186). Reported on macOS only; see
   /// `RFCTextViewCoordinator.reportSelection()`.
   let onSelectionChange: (Bool) -> Void
-  /// Shows a rendered verbatim block as its source, or back. Nil where the reader
-  /// cannot, as in a force-click preview: no block offers to switch.
-  let onToggleSource: ((PresentationKey) -> Void)?
+  /// Shows a rendered verbatim block as its text, or back, from its menu. Nil where
+  /// the reader cannot, as in a force-click preview: no block offers to switch.
+  let onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
   /// Whether reading on may hide the bars, and what to tell when it does or they
   /// come back; iOS only, see `ReaderChrome`.
   let hidesChrome: Bool
@@ -138,7 +138,7 @@ struct ReaderInputs {
     coordinator.onToolbarTitle = onToolbarTitle
     coordinator.onToolbarTitleReleased = onToolbarTitleReleased
     coordinator.onSelectionChange = onSelectionChange
-    coordinator.onToggleSource = onToggleSource
+    coordinator.onChoosePresentation = onChoosePresentation
     #if canImport(UIKit)
       coordinator.onChromeHidden = onChromeHidden
       coordinator.setChromeEnabled(hidesChrome)
@@ -304,8 +304,8 @@ struct ReaderInputs {
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }
-      textView.toggleSource = { [weak coordinator = context.coordinator] in
-        coordinator?.onToggleSource
+      textView.choosePresentation = { [weak coordinator = context.coordinator] in
+        coordinator?.onChoosePresentation
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false

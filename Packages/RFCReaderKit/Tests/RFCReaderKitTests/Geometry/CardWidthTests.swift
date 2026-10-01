@@ -74,4 +74,30 @@ struct CardWidthTests {
     }
     #expect(checked, "RFC 8761 has tables")
   }
+
+  /// A rendered diagram's card sits in the middle of the column, whichever of its
+  /// presentations shows, so switching them moves nothing sideways.
+  @Test(arguments: [PresentationChoices.defaults, PresentationChoices(preferred: .text)])
+  func `a rendered diagram's card is centered in the column`(choices: PresentationChoices) throws {
+    let style = ReadingStyle()
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: style, choices: choices)
+    let first = try Fixtures.offset(of: "    0 ", in: built.text)
+    let fragment = (built.text.string as NSString).paragraphRange(
+      for: NSRange(location: first, length: 0))
+    let span = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: fragment))
+    let width = try #require(span.contentWidth)
+    #expect(abs(span.indent + width / 2 - style.measure / 2) < 0.5)
+  }
+
+  @Test func `a block with no rendering keeps its indent`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+      style: ReadingStyle())
+    let first = try Fixtures.offset(of: "+--+", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.headIndent == 0)
+  }
 }

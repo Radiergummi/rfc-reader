@@ -23,13 +23,7 @@
           UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
             UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
           })
-        if let shown = box.segment, let onToggleSource {
-          extra.append(
-            UIAction(
-              title: FigureControl.title(offeredFrom: shown),
-              image: UIImage(systemName: FigureControl.symbol(offeredFrom: shown))
-            ) { _ in onToggleSource(box.presentationKey) })
-        }
+        if let action = presentationAction(for: box) { extra.append(action) }
       }
       return extra.isEmpty ? nil : UIMenu(children: suggestedActions + extra)
     }

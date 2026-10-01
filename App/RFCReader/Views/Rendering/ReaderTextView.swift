@@ -107,9 +107,11 @@ import RFCReaderKit
     var willTrackMouseDown: () -> Bool = { false }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
-    /// What shows a rendered verbatim block as its source, or back, or nil where the
+    /// What shows a rendered verbatim block as its text, or back, or nil where the
     /// reader cannot, as in a force-click preview.
-    var toggleSource: () -> ((PresentationKey) -> Void)? = { nil }
+    var choosePresentation: () -> ((PresentationKey, PresentationChoices.Presentation) -> Void)? = {
+      nil
+    }
 
     /// Edit ▸ Copy as Quote (⌥⇧⌘C), and the context menu's: the Markdown as plain text
     /// and as Markdown, the HTML and the rich flavor as RTF (#186).
@@ -134,27 +136,17 @@ import RFCReaderKit
       super.quickLook(with: event)
     }
 
-    /// Told when a live resize ends, for what is not placed during one: a rendered
-    /// block's Figure | Source button.
-    var liveResizeEnded: () -> Void = {}
-
-    override func viewDidEndLiveResize() {
-      super.viewDidEndLiveResize()
-      liveResizeEnded()
-    }
-
     /// The hosted header in the top inset. Named rather than found among the
     /// subviews, because TextKit 2 keeps its own fragment views there.
     weak var header: NSView?
 
     /// The text view sets the I-beam over its whole bounds — over the header's
     /// author chips too, which are buttons, and its title, which cannot be selected.
-    /// Over the header the pointer is the arrow, and over a rendered block's Figure |
-    /// Source button. Both overrides are needed: a cursor
+    /// Over the header the pointer is the arrow. Both overrides are needed: a cursor
     /// update the hosting view does not handle arrives here through the responder
     /// chain, and every move resets it.
     override func cursorUpdate(with event: NSEvent) {
-      guard !isOverControl(event) else {
+      guard !isOverHeader(event) else {
         NSCursor.arrow.set()
         return
       }
@@ -162,20 +154,16 @@ import RFCReaderKit
     }
 
     override func mouseMoved(with event: NSEvent) {
-      guard !isOverControl(event) else {
+      guard !isOverHeader(event) else {
         NSCursor.arrow.set()
         return
       }
       super.mouseMoved(with: event)
     }
 
-    /// Over the header, or a Figure | Source button showing.
-    private func isOverControl(_ event: NSEvent) -> Bool {
-      let point = convert(event.locationInWindow, from: nil)
-      if header?.frame.contains(point) == true { return true }
-      return subviews.contains { view in
-        view is FigureButton && !view.isHidden && view.frame.contains(point)
-      }
+    private func isOverHeader(_ event: NSEvent) -> Bool {
+      guard let header else { return false }
+      return header.frame.contains(convert(event.locationInWindow, from: nil))
     }
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
@@ -310,21 +298,24 @@ import RFCReaderKit
           result.insertItem(.separator(), at: 0)
         }
         result.insertItem(item, at: 0)
-        if let box, let shown = box.segment, toggleSource() != nil {
+        if let box, let shown = box.presentation, choosePresentation() != nil {
           let toggle = NSMenuItem(
-            title: FigureControl.title(offeredFrom: shown),
-            action: #selector(toggleSourceItem(_:)), keyEquivalent: "")
+            title: FigureMenu.title(offeredFrom: shown),
+            action: #selector(choosePresentationItem(_:)), keyEquivalent: "")
           toggle.target = self
-          toggle.representedObject = box.presentationKey
+          toggle.representedObject = (box.presentationKey, FigureMenu.offered(from: shown))
           result.insertItem(toggle, at: 1)
         }
       }
       return result
     }
 
-    @objc private func toggleSourceItem(_ sender: NSMenuItem) {
-      guard let key = sender.representedObject as? PresentationKey else { return }
-      toggleSource()?(key)
+    @objc private func choosePresentationItem(_ sender: NSMenuItem) {
+      guard
+        let (key, presentation) = sender.representedObject
+          as? (PresentationKey, PresentationChoices.Presentation)
+      else { return }
+      choosePresentation()?(key, presentation)
     }
 
     @objc private func copyFigure(_ sender: NSMenuItem) {

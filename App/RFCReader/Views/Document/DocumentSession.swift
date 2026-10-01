@@ -20,11 +20,12 @@ struct BuildInputs: Equatable {
   let textSize: DynamicTypeSize
   let legibilityWeight: LegibilityWeight?
   let column: CGFloat?
-  /// The blocks shown as their source. Not part of `ReadingStyle`, which keys the
+  /// How the blocks with a rendering are shown: the preference, and the reader's
+  /// choices from a block's menu. Not part of `ReadingStyle`, which keys the
   /// preview cache: a force-click preview shows every block rendered.
   let choices: PresentationChoices
 
-  /// Whether these are `other` with only the blocks shown as source changed.
+  /// Whether these are `other` with only how blocks are shown changed.
   func differsOnlyInChoices(from other: BuildInputs?) -> Bool {
     guard let other, other.choices != choices else { return false }
     return BuildInputs(
@@ -183,7 +184,8 @@ final class DocumentSession {
       return
     }
     buildingFor = inputs
-    // Only the blocks shown as source changed: a menu choice, with nothing to settle.
+    // Only how blocks are shown changed: a choice from a menu or a setting, with
+    // nothing to settle.
     let delay = state.buildDelay(settling: !inputs.differsOnlyInChoices(from: builtInputs))
     trace("building")
     build = Task(name: "Build document") { [weak self] in

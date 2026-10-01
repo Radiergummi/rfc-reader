@@ -320,7 +320,7 @@ struct AccessibleReadingTests {
   @Test func `a packet diagram shown as source is said as a diagram`() {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
-      style: ReadingStyle(), choices: PresentationChoices(shownAsSource: [.ordinal(0)]))
+      style: ReadingStyle(), choices: PresentationChoices(chosen: [.ordinal(0): .text]))
     let pieces = AccessibleReading.pieces(
       of: NSRange(location: 0, length: built.text.length), in: built.text)
     #expect(pieces.first(where: Self.isLabel) == .label(AccessibleReading.label))

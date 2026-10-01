@@ -79,7 +79,7 @@ public struct LoadState {
   }
 
   /// The same, for a change that may still be `settling`: a slider or a window edge
-  /// is, a choice made once from a menu (Show Source) is not, and builds at once.
+  /// is, a choice made once from a menu (Show as Text) is not, and builds at once.
   public func buildDelay(settling: Bool) -> Duration {
     built == nil || !settling ? .zero : .milliseconds(650)
   }

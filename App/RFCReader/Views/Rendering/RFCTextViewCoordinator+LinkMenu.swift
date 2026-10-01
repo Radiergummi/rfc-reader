@@ -55,21 +55,26 @@
       like action: UIAction, link: LinkCopy, from textView: UITextView, at range: NSRange
     ) -> UIAction {
       UIAction(title: action.title, image: action.image) { [weak textView] _ in
-        guard let textView, var presenter = textView.window?.rootViewController else { return }
-        while let presented = presenter.presentedViewController { presenter = presented }
-        let sheet = UIActivityViewController(
-          activityItems: [SharedLink(link)], applicationActivities: nil)
-        // A popover on iPad, pointing at the reference.
-        sheet.popoverPresentationController?.sourceView = textView
-        if let start = textView.position(
-          from: textView.beginningOfDocument, offset: range.location),
-          let end = textView.position(from: start, offset: range.length),
-          let textRange = textView.textRange(from: start, to: end)
-        {
-          sheet.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
-        }
-        presenter.present(sheet, animated: true)
+        guard let textView else { return }
+        Self.share([SharedLink(link)], from: textView, at: range)
       }
+    }
+
+    /// The share sheet for `items`, over whatever is presented: a popover on iPad,
+    /// pointing at `range`'s first line.
+    static func share(_ items: [Any], from textView: UITextView, at range: NSRange) {
+      guard var presenter = textView.window?.rootViewController else { return }
+      while let presented = presenter.presentedViewController { presenter = presented }
+      let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+      sheet.popoverPresentationController?.sourceView = textView
+      if let start = textView.position(
+        from: textView.beginningOfDocument, offset: range.location),
+        let end = textView.position(from: start, offset: range.length),
+        let textRange = textView.textRange(from: start, to: end)
+      {
+        sheet.popoverPresentationController?.sourceRect = textView.firstRect(for: textRange)
+      }
+      presenter.present(sheet, animated: true)
     }
   }
 

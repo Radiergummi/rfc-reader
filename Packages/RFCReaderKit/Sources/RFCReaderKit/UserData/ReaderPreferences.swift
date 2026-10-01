@@ -1,3 +1,5 @@
+import Foundation
+
 /// The reader's settings as user defaults hold them: each key and its default, once.
 ///
 /// The reader, the document preview and Settings each declare their own
@@ -19,4 +21,15 @@ public enum ReaderPreferences {
   /// Open documents in the original text rendering rather than the reader's.
   public static let preferOriginalTextKey = "preferOriginalText"
   public static let defaultPreferOriginalText = false
+
+  /// Draw a diagram the reader can render, or show it as the text it was drawn
+  /// with. A choice made in a figure's own menu overrides it for that figure.
+  public static let drawDiagramsKey = "drawDiagrams"
+  public static let defaultDrawDiagrams = true
+
+  /// The preference, for what reads it outside a view and so has no `@AppStorage`:
+  /// a print and an export.
+  public static func drawsDiagrams(in defaults: UserDefaults) -> Bool {
+    defaults.object(forKey: drawDiagramsKey) as? Bool ?? defaultDrawDiagrams
+  }
 }

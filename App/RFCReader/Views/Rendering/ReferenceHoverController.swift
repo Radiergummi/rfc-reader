@@ -44,9 +44,6 @@
     var card: (HoverTarget) -> Popover? = { _ in nil }
     /// The document a reference names, previewed (#29), or nil when it has none.
     var documentPreview: (HoverTarget) -> Popover? = { _ in nil }
-    /// Every move of the pointer over the text view and its leaving it, for what
-    /// else follows the pointer: a rendered block's Figure | Source control.
-    var pointerMoved: () -> Void = {}
 
     // MARK: - Setup
 
@@ -123,7 +120,6 @@
       readVoiceOver()
       let hit = state.wantsTarget(at: location) ? target(event.locationInWindow) : nil
       send(.pointerMoved(location: location, target: hit))
-      pointerMoved()
     }
 
     /// Read per event rather than observed: it is a property read, and so follows
@@ -135,7 +131,6 @@
     @objc(mouseExited:)
     private func mouseExited(with event: NSEvent) {
       send(.pointerExited)
-      pointerMoved()
     }
 
     private func startDwell(_ dwell: ReferenceHover.Dwell) {

@@ -23,6 +23,8 @@ struct DocumentView: View {
   @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
     ReaderPreferences.defaultUnderlineLinks
   @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
+  @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
+    ReaderPreferences.defaultDrawDiagrams
   /// The system's text size, which the reader follows (#153). The Mac has no
   /// Dynamic Type, and reports the default size.
   @Environment(\.dynamicTypeSize) private var textSize
@@ -110,7 +112,7 @@ struct DocumentView: View {
       hasDocument: session.state.document != nil, fontSize: fontSize,
       underlineLinks: underlineLinks,
       textSize: textSize, legibilityWeight: legibilityWeight, column: column,
-      choices: library.presentationChoices(for: id))
+      choices: library.presentationChoices(for: id, drawsDiagrams: drawDiagrams))
   }
 
   /// The reader, and on macOS only the reader.
@@ -313,7 +315,7 @@ struct DocumentView: View {
           guard navigation.selection == id else { return }
           reader.hasSelection = $0
         },
-        onToggleSource: { library.toggleSource($0, in: id) },
+        onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
         heading: heading,

@@ -30,8 +30,8 @@ extension DocumentTextBuilder {
         content, classification,
         context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
       : nil
-    let showsSource = choices.shownAsSource.contains(
-      PresentationKey(anchor: content.anchor, ordinal: ordinal))
+    let showsSource =
+      choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
     let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
@@ -53,9 +53,7 @@ extension DocumentTextBuilder {
         output.attributedSubstring(from: NSRange(location: start, length: output.length - start)))
       : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
-    let controlled = shown != .plain && style.emitsLinks
-    let contentWidth = max(
-      labelWidth, widestLine(of: text, scale: scale), controlled ? FigureControl.width : 0)
+    let contentWidth = max(labelWidth, widestLine(of: text, scale: scale))
     // A rendered diagram's card sits in the middle of the column; source code and
     // plain artwork keep their indent. Through the indent, so selection, find and
     // strokes follow. The scale fitted the block at `indent`, which this never
@@ -77,6 +75,11 @@ extension DocumentTextBuilder {
     if let decorated {
       decorate(decorated, from: bodyStart)
     }
+    if shown != .plain, style.emitsLinks {
+      output.addAttribute(
+        .rfcFigureItem, value: FigureMenu.itemTag(of: box),
+        range: NSRange(location: bodyStart, length: output.length - bodyStart))
+    }
     // Every line ends a paragraph, so the spacing that separates the block from what
     // follows goes on its last line alone. On all of them, a figure read double
     // spaced (#31).
@@ -91,9 +94,6 @@ extension DocumentTextBuilder {
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
-    if controlled, let segment = box.segment {
-      reserveFigureControl(over: block, showing: segment)
-    }
   }
 
   /// Sets a decorated block's strokes on all of it, its ruler in the secondary
@@ -110,23 +110,6 @@ extension DocumentTextBuilder {
           range: NSRange(location: bodyStart + range.location, length: range.length))
       }
     }
-  }
-
-  /// Marks `block` as carrying the Figure | Source control, and sets its first line
-  /// below the strip the control is drawn in. A copy of that line's style, so the
-  /// spacing after a one-line block is kept; immutable, as every style the builder
-  /// hands over is.
-  func reserveFigureControl(over block: NSRange, showing segment: FigureControl.Segment) {
-    output.addAttribute(.rfcFigureControl, value: segment.rawValue, range: block)
-    let firstLine = output.mutableString.paragraphRange(
-      for: NSRange(location: block.location, length: 0))
-    guard
-      let style = output.attribute(.paragraphStyle, at: block.location, effectiveRange: nil)
-        as? NSParagraphStyle,
-      let reserved = style.mutableCopy() as? NSMutableParagraphStyle
-    else { return }
-    reserved.paragraphSpacingBefore = FigureControl.strip
-    output.addAttribute(.paragraphStyle, value: reserved.copy(), range: firstLine)
   }
 
   /// How wide a verbatim block's widest line is set: its columns at the monospaced

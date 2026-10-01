@@ -4,9 +4,9 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// A Show Source choice is keyed by the block's anchor, so it names the same block
+/// A choice of a block's presentation is keyed by its anchor, so it names the same block
 /// in every build of a document; only a block without one falls back to its ordinal.
-@Suite("Presentation choices: keys")
+@Suite("Presentation choices")
 struct PresentationKeyTests {
   private func boxes(in text: NSAttributedString) -> [VerbatimBox] {
     var result: [VerbatimBox] = []
@@ -61,8 +61,38 @@ struct PresentationKeyTests {
     let anchor = try #require(first.content.anchor)
     let source = DocumentTextBuilder.build(
       document, style: ReadingStyle(),
-      choices: PresentationChoices(shownAsSource: [.anchor(anchor)]))
+      choices: PresentationChoices(chosen: [.anchor(anchor): .text]))
     let block = try #require(boxes(in: source.text).first { $0.content.anchor == anchor })
     #expect(block.shown == .source)
+  }
+
+  /// The reader's preference for every document: a block with a rendering is shown
+  /// as its text unless the reader chose otherwise for it.
+  @Test func `a document that prefers text shows every rendered block as its text`() throws {
+    let document = try Fixtures.document(named: "rfc9197.xml")
+    let built = DocumentTextBuilder.build(
+      document, style: ReadingStyle(), choices: PresentationChoices(preferred: .text))
+    let shown = boxes(in: built.text).map(\.shown)
+    #expect(shown.contains(.source))
+    #expect(!shown.contains(.rendered))
+  }
+
+  @Test func `a block chosen as a figure is drawn where the document prefers text`() throws {
+    let document = try Fixtures.document(named: "rfc9197.xml")
+    let rendered = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let first = try #require(boxes(in: rendered.text).first { $0.shown == .rendered })
+    let built = DocumentTextBuilder.build(
+      document, style: ReadingStyle(),
+      choices: PresentationChoices(preferred: .text, chosen: [first.presentationKey: .figure]))
+    let shown = Dictionary(
+      uniqueKeysWithValues: boxes(in: built.text).map { ($0.presentationKey, $0.shown) })
+    #expect(shown[first.presentationKey] == .rendered)
+    #expect(shown.values.filter { $0 == .rendered }.count == 1)
+  }
+
+  @Test func `the preference reads as a presentation`() {
+    #expect(PresentationChoices(drawsDiagrams: true).preferred == .figure)
+    #expect(PresentationChoices(drawsDiagrams: false).preferred == .text)
+    #expect(PresentationChoices.defaults.preferred == .figure)
   }
 }

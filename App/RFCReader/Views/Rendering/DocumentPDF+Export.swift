@@ -26,7 +26,9 @@ nonisolated extension DocumentPDF {
   {
     let document = try await library.document(for: id)
     return await renderExport(
-      document, metadata: library.metadata(id), choices: library.presentationChoices(for: id),
+      document, metadata: library.metadata(id),
+      choices: library.presentationChoices(
+        for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard)),
       paperSize: paperSize)
   }
 

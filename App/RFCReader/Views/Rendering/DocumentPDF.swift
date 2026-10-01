@@ -50,7 +50,10 @@ nonisolated enum DocumentPDF {
     } else {
       let document = try await library.document(for: id)
       content = .document(
-        Printed(document: document, choices: library.presentationChoices(for: id)),
+        Printed(
+          document: document,
+          choices: library.presentationChoices(
+            for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
         PrintFurniture(header: document.header, metadata: library.metadata(id)))
     }
     return await render(content, paperSize: paperSize)

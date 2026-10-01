@@ -70,7 +70,7 @@ struct BuilderRendererTests {
     let first = try #require(blocks(in: rendered.text).first { $0.box.shown == .rendered })
     let source = DocumentTextBuilder.build(
       document, style: style,
-      choices: PresentationChoices(shownAsSource: [first.box.presentationKey]))
+      choices: PresentationChoices(chosen: [first.box.presentationKey: .text]))
     #expect(source.text.string == rendered.text.string)
     let block = try #require(blocks(in: source.text).first { $0.box.ordinal == first.box.ordinal })
     #expect(block.box.shown == .source)

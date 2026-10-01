@@ -20,7 +20,7 @@ public enum FigureCopy {
   }
 
   /// The box of the figure whose run holds `location`, with what the build decided
-  /// about it: the context menu's "Show Source" needs its ordinal and how it is shown.
+  /// about it: its menu's "Show as Text" needs its ordinal and how it is shown.
   public static func box(at location: Int, in text: NSAttributedString) -> VerbatimBox? {
     guard location >= 0, location < text.length else { return nil }
     return text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox

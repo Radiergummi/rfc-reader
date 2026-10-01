@@ -1,6 +1,10 @@
 import Foundation
 import RFCKit
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 extension NSAttributedString.Key {
   /// The cross reference a run stands for: hit testing, preview, chip drawing.
   public static let rfcReference = NSAttributedString.Key("rfcReference")
@@ -48,10 +52,19 @@ extension NSAttributedString.Key {
   /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
   /// which compares by value, so the runs of one block coalesce.
   public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
-  /// Which segment of a rendered block's Figure | Source control is on
-  /// (`FigureControl.Segment`'s raw value), on every character of the block, in a
-  /// build with live links only: paper has nothing to press.
-  public static let rfcFigureControl = NSAttributedString.Key("rfcFigureControl")
+  /// Makes a block with a rendering one item for a long press, which shows the
+  /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
+  /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
+  /// text item tag, which is what makes the press reach the text view's delegate;
+  /// on macOS, where the context menu finds the block by its box, it is only marked.
+  /// The value is the block's `FigureMenu.itemTag(of:)`.
+  public static let rfcFigureItem: NSAttributedString.Key = {
+    #if canImport(UIKit)
+      .textItemTag
+    #else
+      NSAttributedString.Key("rfcFigureItem")
+    #endif
+  }()
 }
 
 public enum RFCDecoration: String, Sendable {
@@ -86,8 +99,8 @@ extension RFCDecoration {
 /// what the build decided about it.
 public final class VerbatimBox: Sendable {
   /// Whether the block is set as its source or rendered, and whether a rendering
-  /// exists to switch to: the context menu offers "Show Source" on a rendered
-  /// block and "Show Rendering" on one shown as source.
+  /// exists to switch to: its menu offers "Show as Text" on a rendered block and
+  /// "Show as Figure" on one shown as its source.
   public enum Shown: Sendable, Equatable {
     /// No presentation accepts the block.
     case plain
@@ -125,13 +138,12 @@ extension VerbatimBox {
     PresentationKey(anchor: content.anchor, ordinal: ordinal)
   }
 
-  /// Which segment of its Figure | Source control is on, or nil for a block with no
-  /// rendering to switch to.
-  public var segment: FigureControl.Segment? {
+  /// How it is shown, or nil for a block with no rendering to switch to.
+  public var presentation: PresentationChoices.Presentation? {
     switch shown {
     case .plain: nil
     case .rendered: .figure
-    case .source: .source
+    case .source: .text
     }
   }
 }
