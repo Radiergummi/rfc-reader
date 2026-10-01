@@ -636,20 +636,19 @@ final class RFCTextViewCoordinator: NSObject {
     private func followChrome(_ scrollView: UIScrollView) {
       let offset = scrollView.contentOffset.y
       let finger = scrollView.panGestureRecognizer.translation(in: scrollView).y
-      let touching = scrollView.isTracking || scrollView.isDragging
-      // A pin the engine makes during a drag — the header changing height — is not
-      // the finger's, and moves no bars.
-      let engineMoving = engine.keeper.isEngineMoving
-      drag = .following(
-        drag, offset: offset, finger: finger, touching: touching, engineMoving: engineMoving)
+      // Not `isDragging`, which can stay set while a flick decelerates: the finger
+      // is off the glass then, and the flick's drag is still the one scrolling.
+      let touching = scrollView.isTracking
+      drag = .following(drag, offset: offset, finger: finger, touching: touching)
       let insets = scrollView.adjustedContentInset
       chrome.scrolled(
         ReaderChrome.Scroll(
           offset: offset, topInset: insets.top, bottomInset: insets.bottom,
           contentHeight: scrollView.contentSize.height,
           viewportHeight: scrollView.bounds.height,
-          isUserDriven: !engineMoving && drag?.kind == .pan
-            && (touching || scrollView.isDecelerating),
+          isUserDriven: drag?.isUserDriven(
+            touching: touching, decelerating: scrollView.isDecelerating,
+            engineMoving: engine.keeper.isEngineMoving) ?? false,
           isFlinging: scrollView.isDecelerating && !scrollView.isTracking))
       reportChrome()
     }

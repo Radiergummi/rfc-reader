@@ -31,11 +31,25 @@ struct ReaderChromeDragTests {
     #expect(drag.kind == .indicator)
   }
 
-  /// Whatever moves the text while the finger stays, it is not the finger.
-  @Test func `text that moves under a still finger is not a pan`() {
+  /// Whatever moves the text while the finger stays — the engine's pin after the
+  /// header changed height, an inset clamping the offset, the offset applied before
+  /// the pan's translation catches up — it is not the finger, and decides nothing.
+  /// The drag is measured from there on, so the finger's own movement decides it.
+  @Test func `text that moves under a still finger decides nothing`() {
     var drag = ReaderChrome.Drag(offset: 1_000, finger: 0)
     drag.moved(offset: 4_000, finger: 0)
-    #expect(drag.kind == .indicator)
+    #expect(drag.kind == nil)
+    drag.moved(offset: 4_040, finger: -40)
+    #expect(drag.kind == .pan)
+  }
+
+  /// Measured from where the text was moved to, not where the drag began: from the
+  /// start, 1,081 to 1,061 would read as the text moving down the document.
+  @Test func `a pan after the text moved under the finger is a pan`() {
+    var drag = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    drag.moved(offset: 1_081, finger: 0)
+    drag.moved(offset: 1_061, finger: 20)
+    #expect(drag.kind == .pan)
   }
 
   @Test func `nothing is decided until the text moves`() {
@@ -62,11 +76,11 @@ struct ReaderChromeDragTests {
   /// text moves again, and decided by the movement after.
   @Test func `a touch with no drag starts one`() {
     let started = ReaderChrome.Drag.following(
-      nil, offset: 1_000, finger: 0, touching: true, engineMoving: false)
+      nil, offset: 1_000, finger: 0, touching: true)
     #expect(started != nil)
     #expect(started?.kind == nil)
     let moved = ReaderChrome.Drag.following(
-      started, offset: 9_000, finger: 40, touching: true, engineMoving: false)
+      started, offset: 9_000, finger: 40, touching: true)
     #expect(moved?.kind == .indicator)
   }
 
@@ -78,9 +92,9 @@ struct ReaderChromeDragTests {
     flick.moved(offset: 1_040, finger: -40)
     flick.lifted()
     let next = ReaderChrome.Drag.following(
-      flick, offset: 5_000, finger: 0, touching: true, engineMoving: false)
+      flick, offset: 5_000, finger: 0, touching: true)
     let moved = ReaderChrome.Drag.following(
-      next, offset: 9_000, finger: 40, touching: true, engineMoving: false)
+      next, offset: 9_000, finger: 40, touching: true)
     #expect(moved?.kind == .indicator)
   }
 
@@ -91,25 +105,24 @@ struct ReaderChromeDragTests {
     flick.moved(offset: 1_040, finger: -40)
     flick.lifted()
     let decelerating = ReaderChrome.Drag.following(
-      flick, offset: 1_400, finger: -40, touching: false, engineMoving: false)
+      flick, offset: 1_400, finger: -40, touching: false)
     #expect(decelerating?.kind == .pan)
   }
 
-  /// The layout engine's own move — the pin after the header changes height — moves
-  /// the text under a finger that has not moved it yet: that is not the finger, and decided by it, the whole pan would count as the
-  /// indicator's. A drag already decided stays decided.
-  @Test func `an engine move restarts an undecided drag, not a decided one`() {
-    let undecided = ReaderChrome.Drag(offset: 1_000, finger: 0)
-    let held = ReaderChrome.Drag.following(
-      undecided, offset: 1_081, finger: 0, touching: true, engineMoving: true)
-    let panned = ReaderChrome.Drag.following(
-      held, offset: 1_121, finger: -40, touching: true, engineMoving: false)
-    #expect(panned?.kind == .pan)
-
+  /// Only a pan moves the bars, while the finger is on the glass or the scroll it
+  /// flung decelerates, and never during a scroll the layout engine makes.
+  @Test func `only a pan the finger makes is user driven`() {
     var pan = ReaderChrome.Drag(offset: 1_000, finger: 0)
     pan.moved(offset: 1_040, finger: -40)
-    let stillPan = ReaderChrome.Drag.following(
-      pan, offset: 1_121, finger: -40, touching: true, engineMoving: true)
-    #expect(stillPan?.kind == .pan)
+    var indicator = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    indicator.moved(offset: 9_000, finger: 40)
+    let undecided = ReaderChrome.Drag(offset: 1_000, finger: 0)
+
+    #expect(pan.isUserDriven(touching: true, decelerating: false, engineMoving: false))
+    #expect(pan.isUserDriven(touching: false, decelerating: true, engineMoving: false))
+    #expect(!pan.isUserDriven(touching: false, decelerating: false, engineMoving: false))
+    #expect(!pan.isUserDriven(touching: true, decelerating: false, engineMoving: true))
+    #expect(!indicator.isUserDriven(touching: true, decelerating: false, engineMoving: false))
+    #expect(!undecided.isUserDriven(touching: true, decelerating: false, engineMoving: false))
   }
 }

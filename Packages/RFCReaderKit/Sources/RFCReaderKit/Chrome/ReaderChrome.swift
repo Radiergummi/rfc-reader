@@ -58,13 +58,12 @@ public struct ReaderChrome: Equatable, Sendable {
   /// much further, because the indicator stands for the whole document: down it
   /// and back up, it hid and showed the bars as fast as the finger turned. It is
   /// one interaction that neither hides nor shows them, so only a pan is
-  /// `Scroll.isUserDriven`. Anything that moves the text while the finger stays is
-  /// not the finger either. Decided once, by the first movement, so a pan that
-  /// wobbles at its end stays a pan.
+  /// `Scroll.isUserDriven`. Decided once, by the first movement of both the text
+  /// and the finger, so a pan that wobbles at its end stays a pan.
   public struct Drag: Equatable, Sendable {
-    /// Nil until the text first moves.
+    /// Nil until the text and the finger first move together.
     public private(set) var kind: DragKind?
-    private let startOffset: CGFloat
+    private var startOffset: CGFloat
     private let startFinger: CGFloat
     private var isLifted = false
 
@@ -75,11 +74,20 @@ public struct ReaderChrome: Equatable, Sendable {
       startFinger = finger
     }
 
+    /// Text that moves while the finger stays is not the finger's — the layout
+    /// engine's pin after the header changed height, an inset clamping the offset,
+    /// an offset applied before the pan's translation catches up — and decides
+    /// nothing: the drag is measured from where it was moved to.
     public mutating func moved(offset: CGFloat, finger: CGFloat) {
       guard kind == nil else { return }
       let textMoved = offset - startOffset
       guard textMoved != 0 else { return }
-      kind = textMoved * (finger - startFinger) < 0 ? .pan : .indicator
+      let fingerMoved = finger - startFinger
+      guard fingerMoved != 0 else {
+        startOffset = offset
+        return
+      }
+      kind = textMoved * fingerMoved < 0 ? .pan : .indicator
     }
 
     /// The finger came off the text with the scroll still decelerating, which is
@@ -91,21 +99,24 @@ public struct ReaderChrome: Equatable, Sendable {
       isLifted = true
     }
 
+    /// Whether a scroll in this drag is the reader's to hide or show the bars by:
+    /// a pan, with the finger down or the scroll it flung decelerating, and not a
+    /// scroll the layout engine makes during it.
+    public func isUserDriven(touching: Bool, decelerating: Bool, engineMoving: Bool) -> Bool {
+      kind == .pan && !engineMoving && (touching || decelerating)
+    }
+
     /// The drag a scroll belongs to, given `drag`, the one before it.
     ///
     /// With a finger down (`touching`), a scroll with no drag, or only a lifted
-    /// one, starts a drag, undecided until the text moves again. So does one
-    /// still undecided when the layout engine's own move (`engineMoving`) — a pin
-    /// after the header changed height — moves the text under the finger: that is
-    /// not the finger, and decided by it, the whole pan would count as the
-    /// indicator's. Without a finger, the drag is left as it is: a deceleration is
-    /// still the pan's.
+    /// one, starts a drag, undecided until the text moves again. Without a finger,
+    /// the drag is left as it is: a deceleration is still the pan's.
     public static func following(
-      _ drag: Drag?, offset: CGFloat, finger: CGFloat, touching: Bool, engineMoving: Bool
+      _ drag: Drag?, offset: CGFloat, finger: CGFloat, touching: Bool
     ) -> Drag? {
       guard touching else { return drag }
       var current = drag ?? Drag(offset: offset, finger: finger)
-      if current.isLifted || (engineMoving && current.kind == nil) {
+      if current.isLifted {
         current = Drag(offset: offset, finger: finger)
       }
       current.moved(offset: offset, finger: finger)
