@@ -70,6 +70,18 @@ struct WorkingGroupSummaryTests {
       WorkingGroupSummary(acronym: "x", group: group, rfcs: []).facts == ["Newkind", "Paused"])
   }
 
+  /// Datatracker allows a group with no type or state, which the file records as
+  /// "unknown": that says nothing, so the card leaves both out.
+  @Test func `a group with no type or state shows neither`() {
+    var group = httpbis
+    group.type = "unknown"
+    group.state = "unknown"
+    #expect(
+      WorkingGroupSummary(acronym: "x", group: group, rfcs: []).facts == [
+        "Web and Internet Transport"
+      ])
+  }
+
   @Test func `a group with no RFCs in the index says nothing about publications`() {
     #expect(WorkingGroupSummary(acronym: "x", group: httpbis, rfcs: []).publications == nil)
   }

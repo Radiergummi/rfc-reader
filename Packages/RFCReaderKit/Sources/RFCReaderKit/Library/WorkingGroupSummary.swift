@@ -60,8 +60,8 @@ public struct WorkingGroupSummary: Sendable, Equatable {
   }
 
   /// Datatracker's name for a group type, for the slugs the index's groups have; any
-  /// other, capitalized.
-  private static func typeName(_ slug: String) -> String {
+  /// other, capitalized. "unknown", a group datatracker gives no type, is left out.
+  private static func typeName(_ slug: String) -> String? {
     switch slug {
     case "wg": "Working Group"
     case "rg": "Research Group"
@@ -73,6 +73,7 @@ public struct WorkingGroupSummary: Sendable, Equatable {
     case "iab": "IAB"
     case "irtf": "IRTF"
     case "ise": "Independent Submissions"
+    case "unknown": nil
     default: slug.capitalized
     }
   }
