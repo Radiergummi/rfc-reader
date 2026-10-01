@@ -26,6 +26,15 @@ struct RFCListView: View {
     if case .collection(let identifier) = navigation.filter { identifier } else { nil }
   }
 
+  /// The working group whose card heads the list (#363): while its RFCs are listed
+  /// unsearched.
+  private var workingGroupCardAcronym: String? {
+    guard case .workingGroup(let acronym) = navigation.filter,
+      navigation.appliedQuery.isUnsearchedQuery
+    else { return nil }
+    return acronym
+  }
+
   /// A drag in the visible rows, resolved by their documents rather than their
   /// offsets: the rows on screen may hide obsolete documents or be only the first
   /// pages (`CollectionOrder.neighbors`).
@@ -120,9 +129,7 @@ struct RFCListView: View {
     List(selection: $navigation.selection) {
       // A working group's card, above its RFCs while they are listed unsearched
       // (#363). Not a row: nothing to select.
-      if case .workingGroup(let acronym) = navigation.filter,
-        navigation.appliedQuery.isUnsearchedQuery
-      {
+      if let acronym = workingGroupCardAcronym {
         WorkingGroupCard(summary: library.workingGroupSummary(acronym))
           .listRowSeparator(.hidden)
           .selectionDisabled()
@@ -182,7 +189,8 @@ struct RFCListView: View {
           } actions: {
             Button("Add RFCs…") { addingTo = PickerTarget(id: collection) }
           }
-        } else if isUnsearched {
+        } else if isUnsearched, workingGroupCardAcronym == nil {
+          // Not over a working group's card, which says what the group has.
           ContentUnavailableView(
             "No \(library.title(for: navigation.filter))",
             systemImage: navigation.filter.systemImage)
