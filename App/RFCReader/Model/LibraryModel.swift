@@ -68,7 +68,7 @@ final class LibraryModel {
   @ObservationIgnored private var isRefreshingRevisions = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
-  /// Every bookmarked document, fetched again on every save of the store: one set
+  /// Every bookmarked document, fetched again on every save of a bookmark: one set
   /// for the toolbars and scripts alike, which ask about the document on screen, so
   /// BCP 14 is not answered for by RFC 14 (#152).
   private(set) var bookmarkedDocuments: Set<DocumentID> = []
@@ -77,9 +77,10 @@ final class LibraryModel {
   /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
 
-  /// Every collection and its members, fetched again on every save of the store and
-  /// published only when it changed (#349). The sidebar, a collection's list, the
-  /// Add to Collection menus, the Mac's menu bar and scripts all read it.
+  /// Every collection and its members, fetched again on every save of a collection or
+  /// an item (#603) and published only when it changed (#349). The sidebar, a
+  /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts
+  /// all read it.
   private(set) var collections = CollectionSnapshot.empty
   @ObservationIgnored private var storeSaves: (any NSObjectProtocol)?
 
@@ -89,21 +90,21 @@ final class LibraryModel {
   private(set) var downloadedNumbers: Set<Int> = []
 
   /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
-  /// of `recentlyReadNumbers()`, kept current on every save rather than by a live
-  /// query of every reading position in the view.
+  /// of `recentlyReadNumbers()`, kept current on every save of a reading position
+  /// rather than by a live query of every reading position in the view.
   private(set) var recentlyReadCount = 0
 
   private init() {
-    refreshBookmarks()
-    refreshCollections()
-    refreshRecentlyReadCount()
+    refresh(.all)
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
-    ) { [weak self] _ in
+    ) { [weak self] notification in
+      // Only the mirrors fed by what the save changed: most saves record a reading
+      // position, and the collections are every row of two entities (#603). Read
+      // before the hop, as the notification is not `Sendable` and the names are.
+      let changed = UserDataMirrors.changedEntityNames(in: notification.userInfo)
       MainActor.assumeIsolated {
-        self?.refreshBookmarks()
-        self?.refreshCollections()
-        self?.refreshRecentlyReadCount()
+        self?.refresh(UserDataMirrors.changed(byEntities: changed))
       }
     }
     // On activation, not `scenePhase`: on macOS the reader's roots are hosted, outside
@@ -122,6 +123,12 @@ final class LibraryModel {
         self.recheckSpotlight()
       }
     }
+  }
+
+  private func refresh(_ mirrors: UserDataMirrors) {
+    if mirrors.contains(.bookmarks) { refreshBookmarks() }
+    if mirrors.contains(.collections) { refreshCollections() }
+    if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
   }
 
   private func refreshRecentlyReadCount() {
