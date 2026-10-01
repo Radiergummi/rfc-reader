@@ -163,7 +163,7 @@ struct RFCListView: View {
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      if limit >= rows.count, !(rows.isEmpty && library.indexState.isReady) {
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil) {
         IndexStatusView()
           .frame(maxWidth: .infinity)
           .padding(.vertical, 8)
