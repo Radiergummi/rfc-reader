@@ -7,7 +7,7 @@ import Testing
 /// What a document's Cite, More and Add to Collection menus hold.
 @Suite("Document menus")
 struct DocumentMenusTests {
-  private func titles(_ sections: DocumentMenus.Sections) -> [[String]] {
+  private func titles<Action>(_ sections: DocumentMenus.Sections<Action>) -> [[String]] {
     sections.map { $0.map(\.title) }
   }
 
@@ -80,5 +80,47 @@ struct DocumentMenusTests {
     let menu = DocumentMenus.addToCollection(.rfc(9110), in: snapshot)
     #expect(menu[0].map(\.icon) == [.init("folder", color: .blue), .init("folder", color: .green)])
     #expect(menu[1].map(\.icon) == [nil])
+  }
+}
+
+/// What each of Cite's and More's actions does, which both platforms carry out the
+/// same way (#600).
+@Suite("Document menu effects")
+struct DocumentMenuEffectsTests {
+  private let metadata = Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022)
+  private let errata = URL(string: "https://www.rfc-editor.org/errata/rfc9110")!
+
+  private func effect(_ action: DocumentMenus.Action) -> DocumentMenus.Effect? {
+    action.effect(for: .rfc(9110), metadata: metadata, section: "4.2")
+  }
+
+  @Test(arguments: CitationStyle.allCases)
+  func `a citation copies the citation of the section being read`(style: CitationStyle) {
+    #expect(
+      effect(.copyCitation(style))
+        == .copy(DocumentActions.citation(metadata, section: "4.2", style: style)))
+  }
+
+  @Test func `a citation without the document's metadata does nothing`() {
+    #expect(
+      DocumentMenus.Action.copyCitation(.short)
+        .effect(for: .rfc(9110), metadata: nil, section: nil) == nil)
+  }
+
+  @Test func `the section link copies the link to where the reader is`() {
+    #expect(
+      effect(.copySectionLink)
+        == .copy(DocumentActions.sectionLink(id: .rfc(9110), section: "4.2")))
+  }
+
+  @Test func `the pages elsewhere open`() {
+    #expect(effect(.openInfoPage) == .open(RFCEditorEndpoints.infoPage(.rfc(9110))))
+    #expect(effect(.openDatatracker) == .open(RFCEditorEndpoints.datatracker(.rfc(9110))))
+    #expect(effect(.openErrata(errata)) == .open(errata))
+    #expect(effect(.openPrecedingDraft(errata)) == .open(errata))
+  }
+
+  @Test func `original text toggles`() {
+    #expect(effect(.toggleOriginalText) == .toggleOriginalText)
   }
 }

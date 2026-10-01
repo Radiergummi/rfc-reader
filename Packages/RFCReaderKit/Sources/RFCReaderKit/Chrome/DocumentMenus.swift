@@ -5,9 +5,10 @@ import RFCKit
 ///
 /// Both platforms show them — iOS as SwiftUI menus in the reader's toolbar, macOS
 /// as `NSMenu`s on the window's toolbar items — and each wrote its own copy, which
-/// had to agree item for item. This is the one list; each renderer walks it and
-/// does the actions its own way.
+/// had to agree item for item. This is the one list; each renderer walks it, and
+/// what an action does is `Action.effect`, which each platform carries out (#600).
 public enum DocumentMenus {
+  /// What an item of Cite or More does.
   public enum Action: Hashable, Sendable {
     case copyCitation(CitationStyle)
     case copySectionLink
@@ -16,9 +17,21 @@ public enum DocumentMenus {
     case openErrata(URL)
     case openDatatracker
     case openPrecedingDraft(URL)
+  }
+
+  /// What an item of Add to Collection does: a menu of its own, offered from the
+  /// list's rows and the menu bar as well as the reader (#349).
+  public enum CollectionAction: Hashable, Sendable {
     /// Adds the document to the collection, or takes it out.
     case toggleCollection(UUID)
     case newCollection
+  }
+
+  /// What an `Action` comes to, on either platform.
+  public enum Effect: Equatable, Sendable {
+    case copy(String)
+    case open(URL)
+    case toggleOriginalText
   }
 
   /// An item's symbol, and the color it is drawn in where it has one of its own —
@@ -37,14 +50,14 @@ public enum DocumentMenus {
     }
   }
 
-  public struct Item: Hashable, Sendable {
+  public struct Item<Performed: Hashable & Sendable>: Hashable, Sendable {
     public let title: String
-    public let action: Action
+    public let action: Performed
     /// On or off for an item that is a toggle, nil for one that is not.
     public let isOn: Bool?
     public let icon: Icon?
 
-    public init(_ title: String, _ action: Action, isOn: Bool? = nil, icon: Icon? = nil) {
+    public init(_ title: String, _ action: Performed, isOn: Bool? = nil, icon: Icon? = nil) {
       self.title = title
       self.action = action
       self.isOn = isOn
@@ -53,10 +66,10 @@ public enum DocumentMenus {
   }
 
   /// A menu's items in sections, which a renderer separates.
-  public typealias Sections = [[Item]]
+  public typealias Sections<Performed: Hashable & Sendable> = [[Item<Performed>]]
 
   /// Every citation style, then the link to where the reader is.
-  public static func cite() -> Sections {
+  public static func cite() -> Sections<Action> {
     [
       CitationStyle.allCases.map { Item($0.displayName, .copyCitation($0)) },
       [Item("Copy Link to Current Section", .copySectionLink)],
@@ -65,8 +78,10 @@ public enum DocumentMenus {
 
   /// What is used least: the original text, and the document's pages elsewhere —
   /// errata and the preceding draft only where the document has them.
-  public static func more(showsOriginal: Bool, errata: URL?, precedingDraft: URL?) -> Sections {
-    var pages = [Item("Open on rfc-editor.org", .openInfoPage)]
+  public static func more(
+    showsOriginal: Bool, errata: URL?, precedingDraft: URL?
+  ) -> Sections<Action> {
+    var pages: [Item<Action>] = [Item("Open on rfc-editor.org", .openInfoPage)]
     if let errata { pages.append(Item("Errata", .openErrata(errata))) }
     pages.append(Item("Datatracker", .openDatatracker))
     if let precedingDraft {
@@ -80,15 +95,33 @@ public enum DocumentMenus {
   /// With no document, New Collection alone: there is nothing to add or check.
   public static func addToCollection(
     _ document: DocumentID?, in snapshot: CollectionSnapshot
-  ) -> Sections {
-    let create = [Item("New Collection…", .newCollection)]
+  ) -> Sections<CollectionAction> {
+    let create: [Item<CollectionAction>] = [Item("New Collection…", .newCollection)]
     guard let document else { return [create] }
     let containing = snapshot.collections(containing: document)
-    let collections = snapshot.collections.map {
+    let collections = snapshot.collections.map { collection -> Item<CollectionAction> in
       Item(
-        $0.name, .toggleCollection($0.id), isOn: containing.contains($0.id),
-        icon: Icon("folder", color: $0.color))
+        collection.name, .toggleCollection(collection.id), isOn: containing.contains(collection.id),
+        icon: Icon("folder", color: collection.color))
     }
     return collections.isEmpty ? [create] : [collections, create]
+  }
+}
+
+extension DocumentMenus.Action {
+  /// What this does for `id`, read at `section`: nil for a citation without the
+  /// document's metadata, which there is nothing to cite from.
+  public func effect(
+    for id: DocumentID, metadata: RFCMetadata?, section: String?
+  ) -> DocumentMenus.Effect? {
+    switch self {
+    case .copyCitation(let style):
+      metadata.map { .copy(DocumentActions.citation($0, section: section, style: style)) }
+    case .copySectionLink: .copy(DocumentActions.sectionLink(id: id, section: section))
+    case .toggleOriginalText: .toggleOriginalText
+    case .openInfoPage: .open(RFCEditorEndpoints.infoPage(id))
+    case .openErrata(let url), .openPrecedingDraft(let url): .open(url)
+    case .openDatatracker: .open(RFCEditorEndpoints.datatracker(id))
+    }
   }
 }
