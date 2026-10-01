@@ -18,8 +18,8 @@ struct ModelValueTests {
   /// equal documents, with equal hashes.
   @Test(arguments: try Fixtures.documents())
   func `parsing the same source twice gives equal documents`(fixture: String) throws {
-    let first = try Fixtures.document(fixture)
-    let second = try Fixtures.document(fixture)
+    let first = try Fixtures.parse(fixture)
+    let second = try Fixtures.parse(fixture)
     #expect(first == second)
     #expect(first.hashValue == second.hashValue)
   }

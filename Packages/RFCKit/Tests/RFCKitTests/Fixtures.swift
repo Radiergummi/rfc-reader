@@ -19,11 +19,16 @@ enum Fixtures {
   /// may both parse it; either result is the same document.
   static func document(_ name: String) throws -> RFCDocument {
     if let parsed = parsed.withLock({ $0[name] }) { return parsed }
-    let data = try data(name)
-    let document =
-      name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
+    let document = try parse(name)
     parsed.withLock { $0[name] = document }
     return document
+  }
+
+  /// The fixture parsed now, not taken from what `document(_:)` keeps: for a test of
+  /// parsing itself, such as that two parses agree.
+  static func parse(_ name: String) throws -> RFCDocument {
+    let data = try data(name)
+    return name.hasSuffix(".xml") ? try RFCXMLParser.parse(data) : LegacyTextParser.parse(data)
   }
 
   private static let parsed = Mutex<[String: RFCDocument]>([:])
