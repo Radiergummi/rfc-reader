@@ -75,6 +75,8 @@ struct RFCTextView: View {
 struct ReaderScrollTarget: Equatable {
   let anchor: String
   let animated: Bool
+  /// Characters past the anchor: a saved reading position's line (#322).
+  var offset: Int = 0
 }
 
 /// Everything the reader is given, and the one place it is handed to the shared
@@ -159,7 +161,8 @@ struct ReaderInputs {
       coordinator.install(built)
     }
     if let scrollTarget {
-      coordinator.scroll(to: scrollTarget.anchor, animated: scrollTarget.animated)
+      coordinator.scroll(
+        to: scrollTarget.anchor, offset: scrollTarget.offset, animated: scrollTarget.animated)
     }
   }
 }
@@ -182,6 +185,7 @@ struct ReaderInputs {
       insets.right = 0
       return insets
     }
+
   }
 #endif
 
@@ -217,6 +221,12 @@ struct ReaderInputs {
       textView.delegate = context.coordinator
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.revealRange = { [weak coordinator = context.coordinator] range in
+        guard let coordinator else { return false }
+        let revealed = coordinator.engine.reveal(range)
+        if revealed { coordinator.reportVisibleAnchor() }
+        return revealed
       }
 
       let host = UIHostingController(rootView: context.coordinator.hostedHeader(inputs.header))
@@ -297,6 +307,12 @@ struct ReaderInputs {
       }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
+      }
+      textView.revealRange = { [weak coordinator = context.coordinator] range in
+        guard let coordinator else { return false }
+        let revealed = coordinator.engine.reveal(range)
+        if revealed { coordinator.reportVisibleAnchor() }
+        return revealed
       }
       textView.willTrackMouseDown = { [weak coordinator = context.coordinator] in
         coordinator?.mouseDownInText() ?? false
