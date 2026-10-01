@@ -118,6 +118,15 @@ struct RFCListView: View {
         ? nil
         : { offsets in offsets.map { visible[$0].id }.forEach(remove) })
     List(selection: $navigation.selection) {
+      // A working group's card, above its RFCs while they are listed unsearched
+      // (#363). Not a row: nothing to select.
+      if case .workingGroup(let acronym) = navigation.filter,
+        navigation.appliedQuery.isUnsearchedQuery
+      {
+        WorkingGroupCard(summary: library.workingGroupSummary(acronym))
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
       #if os(macOS)
         unsectioned
       #else

@@ -202,6 +202,20 @@ actor DocumentStore {
     try data.write(to: revisionsURL, options: .atomic)
   }
 
+  // MARK: - Working groups
+
+  private var workingGroupsURL: URL { directory.appending(path: "groups.json") }
+
+  /// The last good `groups.json` (#363), as `cachedRevisions()` keeps its file.
+  func cachedWorkingGroups() -> WorkingGroups? {
+    guard let data = try? Data(contentsOf: workingGroupsURL) else { return nil }
+    return try? WorkingGroups.decode(data)
+  }
+
+  func storeWorkingGroups(_ data: Data) throws {
+    try data.write(to: workingGroupsURL, options: .atomic)
+  }
+
   // MARK: - Registries
 
   /// The IANA registries the Go to RFC palette looks values up in (#175), one file
