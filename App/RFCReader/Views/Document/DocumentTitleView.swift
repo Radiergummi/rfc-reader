@@ -31,13 +31,15 @@
     }
 
     /// All the width the bar offers its middle, so a running heading changing
-    /// from one section to the next never resizes the item.
+    /// from one section to the next never resizes the item. A proposal of no width
+    /// or of unlimited width, which asks how wide the item would like to be, gets
+    /// the text's own width: the item has no use for more, and an infinite width
+    /// would end up in its labels' frames.
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: DocumentTitleView, context: Context)
       -> CGSize?
     {
-      CGSize(
-        width: proposal.width ?? uiView.fittingWidth,
-        height: uiView.lineHeights)
+      let offered = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+      return CGSize(width: offered ?? uiView.fittingWidth, height: uiView.lineHeights)
     }
   }
 
