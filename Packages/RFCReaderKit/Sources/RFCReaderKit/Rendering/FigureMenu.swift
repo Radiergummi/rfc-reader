@@ -35,4 +35,12 @@ public enum FigureMenu {
   public static func itemTag(of box: VerbatimBox) -> String {
     "figure-\(box.ordinal)"
   }
+
+  /// The whole of the item a long press at `location` is for, or nil where there
+  /// is none. Not the item UIKit hands over, whose range is the storage run under
+  /// the finger: a drawn diagram's colors cut its body into runs a line or less
+  /// long.
+  public static func itemRange(at location: Int, in text: NSAttributedString) -> NSRange? {
+    text.extent(ofBox: .rfcFigureItem, at: location)
+  }
 }

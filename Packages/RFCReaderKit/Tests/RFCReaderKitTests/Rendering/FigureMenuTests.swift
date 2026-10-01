@@ -35,6 +35,28 @@ struct FigureMenuTests {
     #expect(extent == built.text.extent(ofBox: .rfcVerbatim, at: first))
   }
 
+  /// UIKit hands the long press a text item no longer than the storage run under
+  /// the finger, and a drawn diagram's grid and ruler colors cut its body into
+  /// runs a line or less long: the lifted figure was the line pressed. The menu
+  /// lifts the item's whole extent instead.
+  @Test func `a press anywhere on a drawn block is for the whole block`() throws {
+    let built = build()
+    let field = try Fixtures.offset(of: "Length", in: built.text)
+    var run = NSRange()
+    _ = built.text.attribute(.rfcFigureItem, at: field, effectiveRange: &run)
+    let whole = try #require(built.text.extent(ofBox: .rfcVerbatim, at: field))
+    #expect(run != whole)
+    #expect(FigureMenu.itemRange(at: field, in: built.text) == whole)
+  }
+
+  @Test func `a press outside a block is for no item`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
+      style: ReadingStyle())
+    let first = try Fixtures.offset(of: "+--+", in: built.text)
+    #expect(FigureMenu.itemRange(at: first, in: built.text) == nil)
+  }
+
   /// So a block shown as its text can be switched back from its menu.
   @Test func `a block shown as its text is still an item`() throws {
     let built = build(choices: PresentationChoices(preferred: .text))

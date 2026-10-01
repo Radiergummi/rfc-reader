@@ -24,7 +24,10 @@
     func figureMenu(for textItem: UITextItem, in textView: UITextView)
       -> UITextItem.MenuConfiguration?
     {
-      let range = textItem.range
+      // The whole block, not the item's range: that is the run under the finger.
+      let range =
+        FigureMenu.itemRange(at: textItem.range.location, in: textView.textStorage)
+        ?? textItem.range
       guard let box = FigureCopy.box(at: range.location, in: textView.textStorage) else {
         return nil
       }

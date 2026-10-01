@@ -705,8 +705,10 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
-      // A figure is an item for its long press alone: a tap on it is a tap on text.
-      if case .tag = textItem.content { return nil }
+      // A figure is an item for its long press alone: a tap on it is a tap on text,
+      // which `chromeTap` takes for the bars. Not nil: for an item with no primary
+      // action UIKit opens the menu on a tap, and that took the tap from the bars.
+      if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
       // A backlink chip goes nowhere: it lists what refers to its section.
       if backlinkChip(at: offset) != nil {
