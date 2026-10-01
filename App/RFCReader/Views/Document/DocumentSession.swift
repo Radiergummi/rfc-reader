@@ -201,7 +201,7 @@ final class DocumentSession {
       guard !Task.isCancelled else { return }
       // Off the main actor: this is string assembly and text measurement, and
       // blocking the main thread for it is what made the font-size slider stutter.
-      let rebuilt = await DocumentView.build(document, style: style, choices: inputs.choices)
+      let rebuilt = await Self.build(document, style: style, choices: inputs.choices)
       guard let self, !Task.isCancelled else { return }
       state.install(rebuilt)
       builtInputs = inputs
