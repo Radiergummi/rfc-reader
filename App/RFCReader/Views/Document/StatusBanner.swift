@@ -18,6 +18,11 @@ struct StatusBanner: View {
   let revisionLines: [RevisionsSummary.Line]
   let moreRevisions: String?
 
+  /// Every row's symbol gets this width, so each row's text, and the document
+  /// rows' wrapped lines under it, start at the same x. The widest symbol is about
+  /// 1.3 times the font's size; this fits the subheadline on both platforms.
+  @ScaledMetric(relativeTo: .subheadline) private var symbolWidth = 20.0
+
   var body: some View {
     if metadata.isObsolete || !metadata.updatedBy.isEmpty || metadata.hasErrata
       || !revisionLines.isEmpty
@@ -34,7 +39,10 @@ struct StatusBanner: View {
         }
         if metadata.hasErrata, let url = metadata.errataURL {
           Link(destination: url) {
-            Label("This RFC has errata", systemImage: "pencil.and.list.clipboard")
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+              symbol("pencil.and.list.clipboard")
+              Text("This RFC has errata")
+            }
           }
           .font(.subheadline)
         }
@@ -63,23 +71,37 @@ struct StatusBanner: View {
     let detail = Text(line.detail).foregroundStyle(.secondary)
     return DraftLink(line: line) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Image(systemName: "doc.badge.clock").foregroundStyle(.secondary)
+        symbol("doc.badge.clock").foregroundStyle(.secondary)
         Text("\(relation) \(title) \(detail)")
       }
     }
     .font(.subheadline)
   }
 
+  /// The title and the documents wrap beside the symbol, so a document updated by
+  /// many others flows onto as many lines as it takes, indented under the title
+  /// (#439).
   private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Image(systemName: symbol).foregroundStyle(tint)
-      Text(title).fontWeight(.medium)
-      ForEach(ids, id: \.self) { id in
-        Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
-          .buttonStyle(.plain)
-          .foregroundStyle(.tint)
+      self.symbol(symbol).foregroundStyle(tint)
+      WrappingRowLayout(spacing: 6) {
+        Text(title).fontWeight(.medium)
+        ForEach(ids, id: \.self) { id in
+          Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .lineLimit(1)
+        }
       }
     }
     .font(.subheadline)
+  }
+
+  /// Hidden from accessibility: the row's text carries the meaning, as a `Label`'s
+  /// title does.
+  private func symbol(_ name: String) -> some View {
+    Image(systemName: name)
+      .frame(width: symbolWidth)
+      .accessibilityHidden(true)
   }
 }

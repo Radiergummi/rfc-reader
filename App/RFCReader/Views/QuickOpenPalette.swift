@@ -155,7 +155,7 @@
           Spacer(minLength: 0)
         }
         if let section = link.section {
-          Text("§ \(section)")
+          Text(PlaceName.abbreviated(section))
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }

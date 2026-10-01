@@ -61,7 +61,18 @@
   extension AppDelegate {
     /// The application's elements that live here rather than on `NSApplication`.
     func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {
-      key == "rfcs"
+      key == "rfcs" || key == "orderedWindows"
+    }
+
+    /// The application's `windows`, less any reader window that has closed but is
+    /// still alive (#432). Closing empties such a window, so a script would see an
+    /// invisible window that answers nothing. Open means still registered here, not
+    /// still having a controller: a print or export under way keeps the controller
+    /// of a window that has closed.
+    @objc var orderedWindows: [NSWindow] {
+      NSApp.orderedWindows.filter { window in
+        !(window is ReaderWindow) || controllers.contains { $0.window === window }
+      }
     }
 
     /// Every RFC, for `every rfc`. `count of rfcs` and `rfc 5` go through the two
@@ -246,6 +257,9 @@
 
   /// `jump to section "4.2"`: resolved against the document the window shows, the
   /// way a section link in the prose is, by number or by anchor.
+  ///
+  /// The reader resolves it, in a later update, so the command waits for it: a
+  /// script's next command, such as `go back`, finds the jump in the history (#482).
   @objc(RFCJumpToSectionCommand)
   nonisolated final class RFCJumpToSectionCommand: RFCScriptCommand {
     @MainActor override func perform() {
@@ -257,7 +271,11 @@
         ScriptError.report("There is no RFC to jump in.", in: self)
         return
       }
-      window.navigation.jump(toSection: section)
+      suspendExecution()
+      nonisolated(unsafe) let command = self
+      window.navigation.jump(toSection: section) {
+        command.resumeExecution(withResult: nil)
+      }
     }
   }
 

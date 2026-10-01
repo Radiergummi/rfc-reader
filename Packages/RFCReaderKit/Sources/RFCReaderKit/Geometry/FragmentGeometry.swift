@@ -459,11 +459,8 @@ public enum FragmentGeometry {
   }
 
   /// The line at the top of the viewport, `top` and `fragmentTop` both in container
-  /// coordinates: what the reader records as its place.
-  ///
-  /// Read a point below the top, so a line put exactly there by `scrollTarget` is
-  /// read back as that line even once the scroll view has rounded the offset down
-  /// to a pixel, rather than as the line above it.
+  /// coordinates: what the reader records as its place. Read at
+  /// `readBackY(atViewportTop:)`.
   public static func topLine(
     atViewportTop top: CGFloat,
     fragmentTop: CGFloat,
@@ -472,7 +469,19 @@ public enum FragmentGeometry {
     fragmentEnd: Int
   ) -> NSRange {
     let fragment = NSRange(location: fragmentStart, length: fragmentEnd - fragmentStart)
-    return lineRange(at: top - fragmentTop + readBackSlack, in: lines, fragment: fragment)
+    return lineRange(at: readBackY(atViewportTop: top) - fragmentTop, in: lines, fragment: fragment)
+  }
+
+  /// Where to read what is at the top of the viewport, in the coordinates `top` is
+  /// in: both the fragment hit-tested there and the line within it.
+  ///
+  /// A point below the top, so that what `scrollTarget` put exactly there is read
+  /// back as itself even once the scroll view has rounded the offset down to a
+  /// pixel, rather than as the line or the paragraph above it. Hit-testing the
+  /// fragment at the top itself made a section's heading, put at the top by a
+  /// jump, read as the end of the section before (#299).
+  static func readBackY(atViewportTop top: CGFloat) -> CGFloat {
+    top + readBackSlack
   }
 
   private static let readBackSlack: CGFloat = 1
@@ -486,5 +495,28 @@ public enum FragmentGeometry {
   /// hand-trace and every single-line fixture looked right while this was wrong.
   private static func elementIndex(of documentOffset: Int, fragmentStart: Int) -> Int {
     documentOffset - fragmentStart
+  }
+}
+
+extension NSTextLayoutManager {
+  /// What is at the top of the viewport, `top` in container coordinates: the start
+  /// of the paragraph there, which names the section, and the line within it the
+  /// reader records as its place.
+  ///
+  /// Both are read at the same point, `FragmentGeometry.readBackY(atViewportTop:)`.
+  /// Reading the paragraph at the top itself and the line a point below it is what
+  /// made a heading put at the top by a jump read as the section before (#299).
+  public func readingPlace(atViewportTop top: CGFloat) -> (fragmentStart: Int, line: NSRange)? {
+    let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
+    guard let fragment = textLayoutFragment(for: point) else { return nil }
+    let fragmentStart = offset(of: fragment.rangeInElement.location)
+    let line = FragmentGeometry.topLine(
+      atViewportTop: top,
+      fragmentTop: fragment.layoutFragmentFrame.minY,
+      in: fragment.textLineFragments,
+      fragmentStart: fragmentStart,
+      fragmentEnd: offset(of: fragment.rangeInElement.endLocation)
+    )
+    return (fragmentStart, line)
   }
 }

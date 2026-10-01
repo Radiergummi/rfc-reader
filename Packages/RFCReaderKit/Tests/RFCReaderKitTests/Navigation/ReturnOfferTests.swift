@@ -13,6 +13,7 @@ struct ReturnOfferTests {
         anchor: "section-4", number: "4", title: "Semantics",
         subsections: [Section(anchor: "section-4.2", number: "4.2", title: "Methods")]),
       Section(anchor: "appendix-A.1", number: "A.1", title: "Grammar", isAppendix: true),
+      Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true),
     ],
     source: .xml)
 
@@ -23,13 +24,18 @@ struct ReturnOfferTests {
 
   /// What the history usually records: the anchor the reader had scrolled to.
   @Test func `an anchor is named by its section number`() {
-    #expect(title("section-4.2") == "Back to §4.2")
-    #expect(title("appendix-A.1") == "Back to §A.1")
+    #expect(title("section-4.2") == "Back to §\u{00A0}4.2")
+    #expect(title("appendix-A.1") == "Back to §\u{00A0}A.1")
+  }
+
+  /// An appendix numbered like a section is no §1, which names section 1 (#429).
+  @Test func `a numbered appendix is named as an appendix`() {
+    #expect(title("appendix-1") == "Back to Appendix\u{00A0}1")
   }
 
   /// A deep link or a section link can record the number itself.
   @Test func `a section number is named as it is`() {
-    #expect(title("4.2") == "Back to §4.2")
+    #expect(title("4.2") == "Back to §\u{00A0}4.2")
   }
 
   /// Resolved the way a jump resolves it, through `anchor(forPlace:)`: a number
@@ -44,7 +50,7 @@ struct ReturnOfferTests {
       ],
       source: .xml)
     #expect(tricky.anchor(forPlace: "4.2") == "section-4.2")
-    #expect(title("4.2", in: tricky) == "Back to §4.2")
+    #expect(title("4.2", in: tricky) == "Back to §\u{00A0}4.2")
   }
 
   @Test func `no place yet is the top`() {

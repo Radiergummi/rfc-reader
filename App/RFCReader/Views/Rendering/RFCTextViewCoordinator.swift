@@ -24,6 +24,9 @@ import os
 /// reads this instead: it is written the moment the anchor is computed.
 final class VisibleAnchorBox {
   var anchor: String?
+  /// Whether the top of the viewport is ahead of section one, which `anchor`
+  /// reports as section one.
+  var isAheadOfSections = false
 }
 
 /// Where the header's heading ends, in the hosted header's own coordinates, as
@@ -535,7 +538,8 @@ final class RFCTextViewCoordinator: NSObject {
     reportVisibleAnchor()
   }
 
-  /// Hit-tests the top of the visible rect. Deliberately not
+  /// Reads the top of the visible rect, through `readingPlace(atViewportTop:)`,
+  /// which reads it one point down (#299). Deliberately not
   /// `textViewportLayoutController.viewportRange`: that range is larger than the
   /// visible rect, so its start names a section already scrolled past.
   func reportVisibleAnchor() {
@@ -544,24 +548,20 @@ final class RFCTextViewCoordinator: NSObject {
     updateToolbarTitle()
     guard let textView,
       let built,
-      let layout = textView.textLayoutManager
+      let place = textView.textLayoutManager?.readingPlace(
+        atViewportTop: max(0, textView.viewportTop))
     else { return }
-    let top = max(0, textView.viewportTop)
-    guard let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: top)) else { return }
-    let offset = layout.offset(of: fragment.rangeInElement.location)
-    let line = FragmentGeometry.topLine(
-      atViewportTop: top,
-      fragmentTop: fragment.layoutFragmentFrame.minY,
-      in: fragment.textLineFragments,
-      fragmentStart: offset,
-      fragmentEnd: layout.offset(of: fragment.rangeInElement.endLocation)
-    )
     tracker.report(
-      viewportTop: textView.viewportTop, line: line, in: built.anchors, length: built.text.length)
+      viewportTop: textView.viewportTop, line: place.line, in: built.anchors,
+      length: built.text.length)
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
-    guard let anchor = sectionIndex.anchor(at: offset) ?? sectionIndex.entries.first?.anchor,
+    // The box tells the two apart for the one that must not scroll there: the
+    // reader's text made again, which starts at the top (#449).
+    let section = sectionIndex.anchor(at: place.fragmentStart)
+    lastVisibleAnchor?.isAheadOfSections = section == nil
+    guard let anchor = section ?? sectionIndex.entries.first?.anchor,
       anchor != lastReportedAnchor
     else { return }
     lastReportedAnchor = anchor
@@ -703,7 +703,8 @@ final class RFCTextViewCoordinator: NSObject {
     case .document:
       return ReferencePreview(
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
-    case .anchor(let anchor):
+    // A section of an entry outside the series previews the entry (#473).
+    case .anchor(let anchor), .entrySection(let anchor, _, _, _):
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
@@ -761,7 +762,8 @@ final class RFCTextViewCoordinator: NSObject {
       guard let library, let documentID,
         let (box, range) = reference(at: textItem.range.location),
         let url = link(at: range.location),
-        let target = LinkPreview.resolve(url, from: documentID, in: library.index)
+        let target = LinkPreview.resolve(
+          box.reference, linkedTo: url, from: documentID, in: library.index)
       else { return .init(menu: defaultMenu) }
       let host: UIHostingController<AnyView>
       switch target {
@@ -1071,7 +1073,8 @@ final class RFCTextViewCoordinator: NSObject {
         let target = reference(atWindowPoint: event.locationInWindow),
         let documentID,
         let url = link(at: target.range.location),
-        let resolved = LinkPreview.resolve(url, from: documentID, in: library?.index)
+        let resolved = LinkPreview.resolve(
+          target.box.reference, linkedTo: url, from: documentID, in: library?.index)
       else { return false }
       switch resolved {
       case .card:
