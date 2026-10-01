@@ -60,6 +60,26 @@ struct CardWidthTests {
     }
   }
 
+  /// A character the monospaced font sets wider than a column, or lacks and takes
+  /// from a fallback font, still ends inside the card: the card is as wide as the
+  /// line is set, not as its characters count.
+  @Test func `a line with a wide character ends inside its card`() throws {
+    let wide = "key = \u{4E2D}\u{6587}\u{6587}\u{4E2D}\u{6587}\u{6587}"
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "x = 1\n" + wide))),
+      style: ReadingStyle())
+    let location = try Fixtures.offset(of: "key = ", in: built.text)
+    let font = try #require(
+      built.text.attribute(.font, at: location, effectiveRange: nil) as? PlatformFont)
+    let laidOut = DocumentTextBuilder.lineWidth(
+      NSAttributedString(string: wide, attributes: [.font: font]))
+    let fragment = (built.text.string as NSString).paragraphRange(
+      for: NSRange(location: location, length: 0))
+    let span = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: fragment))
+    let width = try #require(span.contentWidth)
+    #expect(width >= laidOut - 0.5, "\(width) against \(laidOut)")
+  }
+
   @Test func `a table's card spans the column`() throws {
     let built = DocumentTextBuilder.build(
       try Fixtures.document(named: "rfc8761.xml"), style: ReadingStyle())

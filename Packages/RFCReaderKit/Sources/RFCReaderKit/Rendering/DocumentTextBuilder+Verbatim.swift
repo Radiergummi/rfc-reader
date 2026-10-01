@@ -112,12 +112,19 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// How wide a verbatim block's widest line is set: its columns at the monospaced
-  /// advance, scaled as the block is. The same count `monospaceScale` fits.
+  /// How wide a verbatim block's widest line is set. An ASCII line is its columns at
+  /// the monospaced advance, scaled as the block is: the count `monospaceScale`
+  /// fits. Any other line is measured, since the font sets a wide character two
+  /// columns wide and takes one it lacks from a fallback font, and a card the
+  /// columns alone measured would end inside the line.
   func widestLine(of text: String, scale: CGFloat) -> CGFloat {
-    let columns =
-      text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
-    return CGFloat(columns) * monospaceAdvance * scale
+    let font = style.monospacedFont(scale: scale)
+    let widths = text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+      line.allSatisfy(\.isASCII)
+        ? CGFloat(line.count) * monospaceAdvance * scale
+        : lineWidth(NSAttributedString(string: String(line), attributes: [.font: font]))
+    }
+    return widths.max() ?? 0
   }
 
   /// What a verbatim block shows: unfolded, without its header, where RFC 8792
