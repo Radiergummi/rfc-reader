@@ -11,8 +11,8 @@ public enum ReaderPreferences {
   /// The reader's body size, as it reads at the system's default text size.
   public static let fontSizeKey = "readingFontSize"
   public static let defaultFontSize = 17.0
-  /// Where the Settings slider, View ▸ Bigger and Smaller, and the iOS text-size
-  /// popover let the size go (#153).
+  /// Where the Settings slider, View ▸ Bigger and Smaller, and the iOS Aa
+  /// menu let the size go (#153).
   public static let fontSizes = 12.0...28.0
   /// One step of the slider, and of Bigger and Smaller.
   public static let fontSizeStep = 1.0
@@ -25,6 +25,13 @@ public enum ReaderPreferences {
   /// The size after View ▸ Smaller: a step down, and never past the range.
   public static func fontSize(steppingDown size: Double) -> Double {
     clamped(size - fontSizeStep)
+  }
+
+  /// `size` as a share of the default, to the nearest whole percent: what the iOS
+  /// Aa menu shows between its small and large "A", as Safari's page menu does.
+  /// The default size is "100%", in the reader's own language's notation.
+  public static func percentage(of size: Double, locale: Locale = .current) -> String {
+    (size / defaultFontSize).formatted(.percent.precision(.fractionLength(0)).locale(locale))
   }
 
   /// View ▸ Bigger, for a caller with no `@AppStorage` of its own to step: the Mac

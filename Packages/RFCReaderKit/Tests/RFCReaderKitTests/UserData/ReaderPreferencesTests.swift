@@ -34,7 +34,7 @@ struct ReaderPreferencesTests {
 
   // MARK: - Stepping
 
-  // View ▸ Bigger and Smaller, and the iOS text-size popover (#153), step
+  // View ▸ Bigger and Smaller, and the iOS Aa menu (#153), step
   // within the same range as the Settings slider.
 
   @Test func `the default size is inside the range`() {
@@ -63,6 +63,32 @@ struct ReaderPreferencesTests {
     let sizes = ReaderPreferences.fontSizes
     #expect(ReaderPreferences.fontSize(steppingDown: sizes.upperBound + 10) == sizes.upperBound)
     #expect(ReaderPreferences.fontSize(steppingUp: sizes.lowerBound - 10) == sizes.lowerBound)
+  }
+
+  // MARK: - The size as a percentage
+
+  // The iOS Aa menu shows the size between its small and large "A", as Safari's
+  // page menu does.
+
+  @Test func `the default size reads as one hundred percent`() {
+    let english = Locale(identifier: "en_US")
+    let size = ReaderPreferences.defaultFontSize
+    #expect(ReaderPreferences.percentage(of: size, locale: english) == "100%")
+  }
+
+  @Test func `the percentage is of the default size, to the nearest whole percent`() {
+    let english = Locale(identifier: "en_US")
+    // 18 of 17 points is 105.9 percent.
+    #expect(ReaderPreferences.percentage(of: 18, locale: english) == "106%")
+    #expect(ReaderPreferences.percentage(of: 34, locale: english) == "200%")
+  }
+
+  /// The sign is set as the reader's language sets it, with the space German puts
+  /// before it.
+  @Test func `the percentage follows the locale`() {
+    let german = Locale(identifier: "de_DE")
+    let size = ReaderPreferences.defaultFontSize
+    #expect(ReaderPreferences.percentage(of: size, locale: german) == "100\u{00A0}%")
   }
 
   /// ⌘= on the Mac, which has no `@AppStorage` to step, steps what it holds.
