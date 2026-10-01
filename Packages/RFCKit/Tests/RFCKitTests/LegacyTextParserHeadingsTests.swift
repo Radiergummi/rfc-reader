@@ -319,6 +319,26 @@ struct LegacyTextParserHeadingsTests {
     #expect(!LegacyTextParser.isContentsEntry("Wait for it ......"))
   }
 
+  /// #427: three spaced dots are a leader, which a range never is, and so is a gap
+  /// before a page number set in a column of its own. A title that is itself a
+  /// number, a status code or a year, has no word before the gap, and stays a heading.
+  @Test func `a short spaced leader or a page column makes a contents entry`() {
+    #expect(LegacyTextParser.isContentsEntry("Appendix B.  Widget Migration Notes  . . . 14"))
+    #expect(LegacyTextParser.isContentsEntry("C   Widget Registry and Frob Allocation         21"))
+    #expect(LegacyTextParser.isContentsEntry("APPENDIX D                                     vii"))
+    #expect(!LegacyTextParser.isContentsEntry("4.2  Values 0...255"))
+    #expect(!LegacyTextParser.isContentsEntry("12.4.  299"))
+    #expect(!LegacyTextParser.isContentsEntry("B.3.  1983"))
+    #expect(!LegacyTextParser.isContentsEntry("Widget Overview 5"))
+  }
+
+  /// A column-0 table row that ends in a gap and a number is no heading: RFC 391's
+  /// rows each opened a section, named for its host and its figures.
+  @Test func `a table row ending in a number column opens no section`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc391.txt"))
+    #expect(!document.allSections.contains { $0.titleText.contains("HOST") })
+  }
+
   /// A column-0 contents listing is not a stack of headings: RFC 793's opened sections
   /// 1, 2 and 3 over the listing, with its sub-entries inside them as artwork, and a
   /// `REFERENCES ..... 85` section that took the preface for a bibliography.

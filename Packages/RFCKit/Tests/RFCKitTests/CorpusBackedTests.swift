@@ -174,6 +174,17 @@ struct CorpusBackedAppendixHeadingTests {
     }
     #expect(!targets.contains("section-2"))
   }
+
+  /// A contents entry with a short spaced leader (RFC 5735) or a page number in a
+  /// column of its own (RFC 1276) took its appendix's anchor, and the appendix was
+  /// renamed `appendix-A-2`, so a link to Appendix A opened the contents (#427).
+  @Test(arguments: ["rfc5735", "rfc1276"])
+  func `an appendix keeps its anchor from its contents entry`(stem: String) throws {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    #expect(document.allSections.count { $0.isAppendix && $0.number == "A" } == 1)
+    #expect(document.section(anchor: "appendix-A") != nil)
+    #expect(document.section(anchor: "appendix-A-2") == nil)
+  }
 }
 
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))

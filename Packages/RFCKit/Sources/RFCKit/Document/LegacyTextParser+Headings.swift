@@ -72,10 +72,31 @@ extension LegacyTextParser {
   /// judged by that one, and it ends at such a listing. Stricter than the lead-in's
   /// `isContentsEntries`, which takes two dots: this one refuses a heading, and a
   /// title may hold a range, `1..5`.
+  ///
+  /// An entry ends in a leader of four dots, three spaced, or none at all and a page
+  /// number set off in a column of its own. An entry taken for a heading claims its
+  /// heading's anchor, and the heading itself is renamed `appendix-A-2` (#427).
   static func isContentsEntry(_ line: String) -> Bool {
-    guard let match = line.firstMatch(of: contentsEntryPattern) else { return false }
-    return isPageNumber(match.page)
+    for pattern in [contentsEntryPattern, spacedLeaderPattern, pageColumnPattern] {
+      if let match = line.firstMatch(of: pattern), isPageNumber(match.page) { return true }
+    }
+    return false
   }
+
+  /// A spaced leader of three dots, `Title  . . . 10`, too short for
+  /// `contentsEntryPattern`, and no range, which is never spaced. RFC 5735's appendix
+  /// entry is set so, and took the appendix's anchor (#427).
+  private static let spacedLeaderPattern = Pattern(#/\s(?:\.\s){3,}\s*(?<page>\d+|[ivx]+)\s*$/#)
+
+  /// A page number set in a column of its own, with no leader: a word, a gap of two
+  /// spaces or more, the number, `A   Summary of Widgets          14`. RFC 1001, 1076,
+  /// 1276 and 1305 list their contents so, and an entry opened a section that took the
+  /// heading's anchor (#427). The word is what makes it an entry: a heading whose
+  /// whole title is a number, RFC 4975's `10.1.  200` and RFC 4844's `A.1.  1992`,
+  /// has none, being a number and a status code or a year. A column-0 table row that
+  /// ends in a figure is refused with them, and was no heading either: each of RFC
+  /// 391's traffic rows opened a section.
+  private static let pageColumnPattern = Pattern(#/\p{L}{2}.*\S {2,}(?<page>\d+|[ivx]+)\s*$/#)
 
   /// The numbered headings set off column 0, by line:
   /// RFC 791, 793 and the specifications set like them center a chapter's heading,

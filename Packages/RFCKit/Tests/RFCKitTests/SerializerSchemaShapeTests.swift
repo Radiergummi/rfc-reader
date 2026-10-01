@@ -204,14 +204,18 @@ struct SerializerSchemaShapeTests {
     #expect(titles(reparsed) == titles(document))
   }
 
-  /// RFC 391's abstract holds its statistics table as artwork, which `<abstract>`
-  /// may not. It is written as the body's first section instead, whole.
+  /// An abstract that holds artwork, as RFC 391's statistics table once did, may not
+  /// be written as `<abstract>`. It is written as the body's first section instead,
+  /// whole. A model built here, because the parser no longer reads RFC 391's abstract
+  /// so: the table's rows were headings that cut it short (#427).
   @Test func `an abstract holding artwork becomes the first section`() throws {
-    let (document, rfc) = try Self.converted("rfc391.txt")
-    #expect(
-      document.header.abstract.contains {
-        if case .preformatted = $0 { true } else { false }
-      })
+    var header = DocumentHeader(title: "T")
+    header.abstract = [
+      .paragraph(Paragraph([.text("Attached are the figures.")])),
+      .preformatted(Preformatted(kind: .artwork, text: "WIDGET  HOST 1   1200")),
+    ]
+    let document = RFCDocument(header: header, sections: [Self.chapter("1")], source: .text)
+    let rfc = try XMLTree.parse(Data(RFCXMLSerializer().serialize(document).utf8))
     #expect(rfc.first("front")?.first("abstract") == nil)
     let first = try #require(rfc.first("middle")?.first("section"))
     #expect(first["anchor"] == "abstract")
