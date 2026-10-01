@@ -154,12 +154,13 @@ import RFCReaderKit
     weak var header: NSView?
 
     /// The text view sets the I-beam over its whole bounds — over the header's
-    /// author chips too, which are buttons, and its title, which cannot be selected.
-    /// Over the header the pointer is the arrow. Both overrides are needed: a cursor
-    /// update the hosting view does not handle arrives here through the responder
-    /// chain, and every move resets it.
+    /// author chips too, which are buttons, and its title, which cannot be selected,
+    /// and under the overlay scroller, which lies over the text. Over either the
+    /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
+    /// view does not handle arrives here through the responder chain, and every move
+    /// resets it.
     override func cursorUpdate(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
       }
@@ -167,16 +168,21 @@ import RFCReaderKit
     }
 
     override func mouseMoved(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
       }
       super.mouseMoved(with: event)
     }
 
-    private func isOverHeader(_ event: NSEvent) -> Bool {
-      guard let header else { return false }
-      return header.frame.contains(convert(event.locationInWindow, from: nil))
+    private func wantsArrow(_ event: NSEvent) -> Bool {
+      if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
+        return true
+      }
+      guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
+        !scroller.isHidden
+      else { return false }
+      return scroller.frame.contains(scrollView.convert(event.locationInWindow, from: nil))
     }
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its
