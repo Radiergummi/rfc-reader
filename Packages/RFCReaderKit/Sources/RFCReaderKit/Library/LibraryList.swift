@@ -47,6 +47,30 @@ public struct LibraryList: Hashable, Sendable {
     self.members = members
   }
 
+  /// The list `filter` shows, reading only the inputs it lists from. The others are
+  /// never evaluated, so a caller whose reads are observed is not asked to list
+  /// again for a change it does not show: every tab searched again for a bookmark
+  /// toggled.
+  public static func reading(
+    filter: LibraryFilter, query: String, options: ListOptions,
+    bookmarked: @autoclosure () -> Set<Int>, recentlyRead: @autoclosure () -> [Int],
+    downloaded: @autoclosure () -> Set<Int>, members: (UUID) -> [Int]
+  ) -> LibraryList {
+    var collection: [Int] {
+      guard case .collection(let identifier) = filter else { return [] }
+      return members(identifier)
+    }
+    return LibraryList(
+      filter: filter,
+      query: query,
+      bookmarked: filter == .bookmarks ? bookmarked() : [],
+      recentlyRead: filter == .recent ? recentlyRead() : [],
+      downloaded: filter == .downloaded ? downloaded() : [],
+      options: options,
+      members: collection
+    )
+  }
+
   /// The rows, as the options show them. `search` is the index's own; without one,
   /// a query finds nothing more than the filter already lists. `hits` are its hits
   /// for `query`, best first, when they were searched ahead, off the main actor
