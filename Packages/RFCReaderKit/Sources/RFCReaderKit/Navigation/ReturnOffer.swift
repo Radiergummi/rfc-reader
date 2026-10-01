@@ -2,9 +2,10 @@ import RFCKit
 
 /// What the offer to return from a jump within a document says (#254).
 public enum ReturnOffer {
-  /// "Back to §4.2" for a numbered section, "Back to Top" before the reader had
-  /// scrolled anywhere, and plain "Back" for a place without a number, such as the
-  /// abstract, or in a document not yet loaded.
+  /// "Back to § 4.2" for a numbered section, "Back to Appendix 1" for an appendix
+  /// numbered like one (#429), "Back to Top" before the reader had scrolled
+  /// anywhere, and plain "Back" for a place without a number, such as the abstract,
+  /// or in a document not yet loaded.
   ///
   /// A place's section is whatever the history recorded: usually the anchor the
   /// reader had scrolled to, but a deep link or a section link can record the
@@ -13,8 +14,8 @@ public enum ReturnOffer {
   public static func title(for place: HistoryEntry, in document: RFCDocument?) -> String {
     guard let section = place.section else { return "Back to Top" }
     guard let document,
-      let number = document.section(anchor: document.anchor(forPlace: section))?.number
+      let sectionPlace = document.section(anchor: document.anchor(forPlace: section))?.place
     else { return "Back" }
-    return "Back to §\(number)"
+    return "Back to \(PlaceName.abbreviated(sectionPlace))"
   }
 }

@@ -35,7 +35,8 @@ final class ReaderState {
 
   /// The anchor the reader is looking at: the contents' highlight.
   var currentAnchor: String?
-  /// The same place as a section number, for the citation and the section link.
+  /// The same place as a section's `place` — its number, or `appendix-1` for an
+  /// appendix numbered like a section (#429) — for the citation and the section link.
   /// Resolved by `DocumentView`, which has the document — rather than handing the
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?

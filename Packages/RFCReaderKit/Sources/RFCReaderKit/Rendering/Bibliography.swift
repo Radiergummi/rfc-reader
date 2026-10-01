@@ -66,7 +66,7 @@ public struct ReferenceKinds: Sendable {
   /// list says.
   public func kind(of target: CrossReference.Target) -> ReferenceList.Kind {
     switch target {
-    case .anchor(let anchor):
+    case .anchor(let anchor), .entrySection(let anchor, _, _, _):
       byAnchor[anchor] ?? .unknown
     case .document(let id, _, let entry):
       entry.flatMap { byAnchor[$0] } ?? byDocument[id] ?? .unknown

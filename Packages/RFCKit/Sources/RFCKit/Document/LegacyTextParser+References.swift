@@ -96,27 +96,34 @@ extension LegacyTextParser {
   private static let referenceURLPattern = Pattern(#/https?:\/\/[^\s>,]+/#)
 
   private static func reference(anchor label: String, text: String) -> Reference {
+    let titleMatch = text.firstMatch(of: referenceTitlePattern)
+    let title = titleMatch.map { String($0.1) } ?? ""
+    // What the entry says outside its title, which is where its own series info is. A
+    // title names other documents -- RFC 8174's is about the keywords of RFC 2119 --
+    // and read from the whole entry, the title's number came first: RFC 8174's entry
+    // became RFC 2119, and every citation of it a chip for RFC 2119 (#424).
+    var seriesText = text
+    if let titleMatch { seriesText.replaceSubrange(titleMatch.range, with: " ") }
     var seriesInfo: [SeriesInfo] = []
     // `RFC 1495` first, and the older half of the series' `RFC-854`, `RFC- 826` and
     // `Request for Comments 796`, `Request For Comments 990` and `RFC #189` only when an
     // entry has none: once a bare `[1]` stopped naming RFC 1, an entry spelled so named
-    // nothing at all. Not in one pattern, though, because a title names RFCs too -- RFC
-    // 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495 -- and
-    // the first match would be the title's. `RFCs 1021-1024` is a range, and names none.
-    if let match = text.firstMatch(of: referenceRFCPattern)
-      ?? text.firstMatch(of: referenceOlderRFCPattern)
+    // nothing at all. Not in one pattern, though: a title the entry does not quote is
+    // still read, and names RFCs too, so a hyphenated `RFC-822` in it would be found
+    // ahead of the entry's own `RFC 1495`. `RFCs 1021-1024` is a range, and names none.
+    if let match = seriesText.firstMatch(of: referenceRFCPattern)
+      ?? seriesText.firstMatch(of: referenceOlderRFCPattern)
     {
       seriesInfo.append(SeriesInfo(name: "RFC", value: String(match.1)))
     } else if let id = DocumentID(label: label) {
       seriesInfo.append(SeriesInfo(id))
     }
-    if let match = text.firstMatch(of: referenceBCPPattern) {
+    if let match = seriesText.firstMatch(of: referenceBCPPattern) {
       seriesInfo.append(SeriesInfo(name: "BCP", value: String(match.1)))
     }
-    if let match = text.firstMatch(of: referenceSTDPattern) {
+    if let match = seriesText.firstMatch(of: referenceSTDPattern) {
       seriesInfo.append(SeriesInfo(name: "STD", value: String(match.1)))
     }
-    let title = text.firstMatch(of: referenceTitlePattern).map { String($0.1) } ?? ""
     let date = text.firstMatch(of: monthYearPattern).map {
       PublicationDate(year: Int($0.2) ?? 0, month: PublicationDate.month(from: String($0.1)))
     }
