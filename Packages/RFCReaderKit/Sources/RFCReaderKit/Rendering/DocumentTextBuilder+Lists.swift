@@ -21,7 +21,7 @@ extension DocumentTextBuilder {
         step: style.indentStep, limit: (style.measure - indent) * Self.markerColumnShare)
     // Every item of one list shares its indents and spacing, so both dictionaries
     // and the tab stop are built once for the list rather than once per item.
-    let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
+    let spacing = itemSpacing(isCompact: list.isCompact)
     let attributes: [NSAttributedString.Key: Any] = [
       .font: markerFont,
       .foregroundColor: bodyColor,
@@ -61,7 +61,7 @@ extension DocumentTextBuilder {
   }
 
   func appendDefinitionList(_ list: DefinitionList, indent: CGFloat) {
-    let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
+    let spacing = itemSpacing(isCompact: list.isCompact)
     let termAttributes: [NSAttributedString.Key: Any] = [
       .font: style.boldBodyFont,
       .foregroundColor: bodyColor,
@@ -107,6 +107,12 @@ extension DocumentTextBuilder {
         appendBlocks(item.definition, indent: definitionIndent)
       }
     }
+  }
+
+  /// The space after a list's item, or a definition list's: a paragraph's, or in a
+  /// compact list (RFCXML's `spacing="compact"`) about a third of it.
+  func itemSpacing(isCompact: Bool) -> CGFloat {
+    isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
   }
 
   /// A hanging list's gutter, which of its terms hang there, and the attributes those
