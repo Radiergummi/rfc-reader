@@ -161,65 +161,59 @@ import SwiftUI
   }
 
   /// The reader's own text size on iOS, which has no Settings scene to put the
-  /// slider in (#153): "Aa" opens a popover to step it, as Books does. Its own view
-  /// for the popover's state, which `ToolbarContent` cannot hold. The keyboard's
-  /// ⌘+, ⌘− and ⌘0 are `DocumentCommands`'.
+  /// slider in (#153), and how diagrams are shown: "Aa" opens a menu, as Safari's
+  /// page menu does. Its first row is a small "A", the size as a percentage of the
+  /// system's, and a large "A", and stays open while the size is stepped; below it
+  /// are Use System Size and Draw diagrams. The platform's own menu rather than a
+  /// popover: a compact control group is the small-element row of a `UIMenu`. The
+  /// keyboard's ⌘+, ⌘− and ⌘0 are `DocumentCommands`'.
   private struct TextSizeButton: View {
     @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
       .defaultFontSize
-    @State private var isShowingControls = false
+    @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
+      ReaderPreferences.defaultDrawDiagrams
 
     var body: some View {
-      Button {
-        isShowingControls = true
-      } label: {
-        Label("Text Size", systemImage: "textformat.size")
-      }
-      .popover(isPresented: $isShowingControls) {
-        controls
-          // A popover on an iPhone too: a sheet would cover the text whose size is
-          // being chosen.
-          .presentationCompactAdaptation(.popover)
-      }
-    }
-
-    private var controls: some View {
-      VStack(spacing: 12) {
-        HStack(spacing: 12) {
+      Menu {
+        ControlGroup {
           Button {
             fontSize = ReaderPreferences.fontSize(steppingDown: fontSize)
           } label: {
             Label("Smaller", systemImage: "textformat.size.smaller")
-              .frame(maxWidth: .infinity)
           }
           .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
+
+          // The size the steps reached, between them. A tap on it goes back to the
+          // system's size, as one on Safari's does.
+          Button(ReaderPreferences.percentage(of: fontSize)) {
+            fontSize = ReaderPreferences.defaultFontSize
+          }
+          .accessibilityLabel("Text Size")
+          .accessibilityValue(ReaderPreferences.percentage(of: fontSize))
+          // Its label says what it shows; what a tap does, which loses the size, is
+          // said here, or VoiceOver would announce a reset as a reading of the size.
+          .accessibilityHint("Goes back to the system's size")
 
           Button {
             fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
           } label: {
             Label("Bigger", systemImage: "textformat.size.larger")
-              .frame(maxWidth: .infinity)
           }
           .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
         }
-        .labelStyle(.iconOnly)
-        // The size the step reached, which the glyphs alone never tell VoiceOver:
-        // relative to the system's, as that is what the reader's own size is.
-        .accessibilityValue(
-          Text(
-            fontSize / ReaderPreferences.defaultFontSize,
-            format: .percent.precision(.fractionLength(0)))
-        )
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .controlGroupStyle(.compactMenu)
+        // Open while the size is stepped, so the text behind it can be watched.
+        .menuActionDismissBehavior(.disabled)
 
-        Button("Use System Size") {
+        Button("Use System Size", systemImage: "arrow.counterclockwise") {
           fontSize = ReaderPreferences.defaultFontSize
         }
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
+
+        Toggle("Draw Diagrams", systemImage: "square.grid.3x3", isOn: $drawDiagrams)
+      } label: {
+        Label("Text Size", systemImage: "textformat.size")
       }
-      .padding()
-      .frame(minWidth: 220)
     }
   }
 #endif

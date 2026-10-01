@@ -77,6 +77,24 @@ final class LibraryModel {
   /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
 
+  /// The presentation the reader chose from a block's menu, per document, for the
+  /// app's session. Here rather than in `DocumentSession`, which goes when the
+  /// reader goes back. Not persisted.
+  private(set) var chosenPresentations:
+    [DocumentID: [PresentationKey: PresentationChoices.Presentation]] = [:]
+
+  /// The reader's choices in `id`, over the preference for every document.
+  func presentationChoices(for id: DocumentID, drawsDiagrams: Bool) -> PresentationChoices {
+    PresentationChoices(drawsDiagrams: drawsDiagrams, chosen: chosenPresentations[id] ?? [:])
+  }
+
+  func choose(
+    _ presentation: PresentationChoices.Presentation, for key: PresentationKey,
+    in id: DocumentID
+  ) {
+    chosenPresentations[id, default: [:]][key] = presentation
+  }
+
   /// Every collection and its members, fetched again on every save of a collection or
   /// an item (#603) and published only when it changed (#349). The sidebar, a
   /// collection's list, the Add to Collection menus, the Mac's menu bar and scripts

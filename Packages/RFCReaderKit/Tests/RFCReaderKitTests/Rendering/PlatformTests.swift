@@ -32,6 +32,16 @@ struct PlatformTests {
     #expect(aside.alpha > card.alpha && aside.alpha < 0.15, "aside alpha \(aside.alpha)")
   }
 
+  /// A stroke crosses from one line's fragment into the next, and two translucent
+  /// partial coverages of one pixel composite lighter than one: #31's seam. Opaque,
+  /// a stroke's pieces can overlap without showing it.
+  @Test(arguments: [false, true])
+  func `a stroke is an opaque mid gray in either appearance`(dark: Bool) throws {
+    let stroke = try resolved(RFCColors.stroke, dark: dark)
+    #expect(stroke.alpha == 1, "stroke alpha \(stroke.alpha)")
+    #expect(stroke.white > 0.3 && stroke.white < 0.7, "stroke white \(stroke.white)")
+  }
+
   private func resolved(_ color: PlatformColor, dark: Bool) throws -> (
     white: CGFloat, alpha: CGFloat
   ) {

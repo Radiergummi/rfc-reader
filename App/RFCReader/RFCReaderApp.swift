@@ -429,6 +429,8 @@ private struct ReadingSettings: View {
   @AppStorage(ReaderPreferences.measureKey) private var measure = ReaderPreferences.defaultMeasure
   @AppStorage(ReaderPreferences.underlineLinksKey) private var underlineLinks =
     ReaderPreferences.defaultUnderlineLinks
+  @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
+    ReaderPreferences.defaultDrawDiagrams
 
   /// A toggle over the preference rather than a picker: there are two choices,
   /// and one of them is the default the reader opts out of.
@@ -451,6 +453,12 @@ private struct ReadingSettings: View {
         Text("Otherwise lines stop at a comfortable reading length, and the text is centered.")
       }
       Toggle("Underline links", isOn: $underlineLinks)
+      Toggle(isOn: $drawDiagrams) {
+        Text("Draw diagrams")
+        Text(
+          "Otherwise they are shown as the text they were drawn with. A diagram's own menu can still switch it."
+        )
+      }
     }
     .formStyle(.grouped)
   }

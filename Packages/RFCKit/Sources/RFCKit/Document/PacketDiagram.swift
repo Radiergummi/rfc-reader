@@ -62,7 +62,48 @@ public struct PacketDiagram: Equatable, Sendable {
   /// The diagram `text` draws, or nil when it is not exactly a packet diagram.
   public static func recognize(_ text: String) -> PacketDiagram? {
     var recognizer = Recognizer(text: text)
-    return recognizer.run()
+    return recognizer.analyze()?.diagram
+  }
+
+  /// The diagram `text` draws and its layout, from one reading of `text`: where
+  /// the diagram's lines are and which characters draw its grid, what a renderer
+  /// hides and draws over, and what it holds, for saying it. Nil exactly when
+  /// `recognize` is.
+  public static func analyze(_ text: String) -> (diagram: PacketDiagram, layout: Layout)? {
+    var recognizer = Recognizer(text: text)
+    return recognizer.analyze()
+  }
+}
+
+extension PacketDiagram {
+  /// One character that draws the grid, where it is in the block's text: `line`
+  /// from 0, `column` in `Character`s.
+  public struct Mark: Equatable, Sendable {
+    public var line: Int
+    public var column: Int
+    public var kind: MarkKind
+  }
+
+  /// What a `Mark` draws.
+  public enum MarkKind: Equatable, Sendable {
+    /// `+`
+    case corner
+    /// `-` in a border, running into another or a corner.
+    case rule
+    /// `=`, the same.
+    case doubleRule
+    /// `|` on a bit boundary.
+    case delimiter
+    /// `~`, `:`, `/`, `\` or `.` at a row's end: a field of no fixed length.
+    case variableDelimiter
+  }
+
+  public struct Layout: Equatable, Sendable {
+    /// The bit ruler: the tens line, if there is one, and the bits' line.
+    public var rulerLines: Range<Int>
+    /// From the first border to the last. A blank line ends it.
+    public var gridLines: Range<Int>
+    public var marks: [Mark]
   }
 }
 
@@ -145,7 +186,7 @@ private struct Recognizer {
     var variableSegments: Set<Int>
   }
 
-  mutating func run() -> PacketDiagram? {
+  mutating func analyze() -> (diagram: PacketDiagram, layout: PacketDiagram.Layout)? {
     guard let rulerIndex = lines.firstIndex(where: { !$0.isEmpty }),
       let ruler = findRuler(from: rulerIndex), ruler < lines.count
     else { return nil }
@@ -179,8 +220,49 @@ private struct Recognizer {
         borders.append(characters)
       }
     }
-    guard !rows.isEmpty else { return nil }
-    return fields(rows: rows, borders: borders)
+    guard !rows.isEmpty, let diagram = fields(rows: rows, borders: borders) else { return nil }
+    let gridLines = ruler..<(ruler + grid.count)
+    return (
+      diagram,
+      PacketDiagram.Layout(
+        rulerLines: rulerIndex..<ruler, gridLines: gridLines, marks: marks(in: gridLines))
+    )
+  }
+
+  // MARK: - Marks
+
+  /// Every character that draws the grid. A rule's `-` counts only where it runs
+  /// into another like it or a corner, as `isOpen` reads it: one between letters is
+  /// a hyphen in a name written across the border.
+  private func marks(in gridLines: Range<Int>) -> [PacketDiagram.Mark] {
+    var marks: [PacketDiagram.Mark] = []
+    for index in gridLines {
+      let line = lines[index]
+      if line[boundary(0)] == "+" {
+        for (column, character) in line.enumerated() {
+          if character == "+" {
+            marks.append(PacketDiagram.Mark(line: index, column: column, kind: .corner))
+          } else if Self.rules.contains(character) {
+            let beside = [column - 1, column + 1].map { Self.character(line, $0) }
+            guard beside.contains(where: { $0 == character || $0 == "+" }) else { continue }
+            marks.append(
+              PacketDiagram.Mark(
+                line: index, column: column, kind: character == "=" ? .doubleRule : .rule))
+          }
+        }
+      } else if let end = endBit(of: line) {
+        for bit in 0...end {
+          let column = boundary(bit)
+          let character = Self.character(line, column)
+          if character == "|" {
+            marks.append(PacketDiagram.Mark(line: index, column: column, kind: .delimiter))
+          } else if bit == 0 || bit == end, Self.variableMarks.contains(character) {
+            marks.append(PacketDiagram.Mark(line: index, column: column, kind: .variableDelimiter))
+          }
+        }
+      }
+    }
+    return marks
   }
 
   /// The index of the first grid line, once the ruler above it is read.

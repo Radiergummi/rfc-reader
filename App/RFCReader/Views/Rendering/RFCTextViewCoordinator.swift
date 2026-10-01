@@ -100,6 +100,8 @@ final class RFCTextViewCoordinator: NSObject {
   }
   /// See `RFCTextView.onSelectionChange`.
   var onSelectionChange: (Bool) -> Void = { _ in }
+  /// See `RFCTextView.onChoosePresentation`.
+  var onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)?
   /// What `onSelectionChange` was last told, so a selection dragged across the text
   /// reports once rather than on every character.
   private var reportedSelection: Bool?
@@ -491,6 +493,10 @@ final class RFCTextViewCoordinator: NSObject {
       // A link the reader does not own, a web page, is UIKit's to open. Read from
       // the storage, as the preview's is: a press on a chip's leading glyph is an
       // attachment item, whose own default action follows nothing.
+      // A figure is an item for its long press alone: a tap on it is a tap on text,
+      // which `chromeTap` takes for the bars. Not nil: for an item with no primary
+      // action UIKit opens the menu on a tap, and that took the tap from the bars.
+      if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
       // A backlink chip goes nowhere: it lists what refers to its section.
       if backlinkChip(at: offset) != nil {
@@ -520,6 +526,7 @@ final class RFCTextViewCoordinator: NSObject {
     func textView(
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
+      if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
       // A backlink chip's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
       if backlinkChip(at: textItem.range.location) != nil { return nil }
