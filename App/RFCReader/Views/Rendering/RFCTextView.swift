@@ -1,6 +1,5 @@
 import RFCKit
 import RFCReaderKit
-import SwiftData
 import SwiftUI
 
 /// The reader body: one text view over one text storage.
@@ -18,7 +17,6 @@ struct RFCTextView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
-  @Environment(\.modelContext) private var modelContext
   /// Everything else, gathered once here; see `ReaderInputs` for each.
   let inputs: ReaderInputs
 
@@ -72,7 +70,7 @@ struct RFCTextView: View {
         inputs: inputs,
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader,
-          container: modelContext.container),
+          container: library.container),
         width: geometry.size.width)
     }
   }

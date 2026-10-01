@@ -10,10 +10,11 @@ import SwiftUI
 
 @main
 struct RFCReaderApp: App {
-  /// The one library. The app is a composition root, where `.shared` is reached
-  /// for; what it makes hands the library on.
-  @State private var library = LibraryModel.shared
-  #if os(macOS)
+  #if !os(macOS)
+    /// The one library. The app is a composition root, where `.shared` is reached
+    /// for; what it makes hands the library on.
+    @State private var library = LibraryModel.shared
+  #else
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
     /// contents panel has to be a real `NSSplitViewItem` in the window's own split
     /// view controller for the tab bar and the toolbar to be confined by it, and a
@@ -33,9 +34,9 @@ struct RFCReaderApp: App {
       }
       .commands {
         WindowCommands()
-        DocumentCommands(library: library)
+        DocumentCommands()
         #if DEBUG
-          DeveloperCommands(library: library)
+          DeveloperCommands()
         #endif
       }
     #else
@@ -93,15 +94,13 @@ struct RFCReaderApp: App {
   /// A developer's way in until packs have a Settings ▸ Offline of their own (#36):
   /// install the legacy XML pack from an `.aar` or an unpacked folder.
   struct DeveloperCommands: Commands {
-    let library: LibraryModel
-
     var body: some Commands {
       CommandMenu("Developer") {
-        Button("Install Data Pack…") { chooseAndInstall() }
+        Button("Install Data Pack…") { Self.chooseAndInstall() }
       }
     }
 
-    private func chooseAndInstall() {
+    private static func chooseAndInstall() {
       let panel = NSOpenPanel()
       panel.message = "Choose a legacy XML pack: an .aar archive, or a folder with its manifest."
       panel.canChooseFiles = true
@@ -111,7 +110,9 @@ struct RFCReaderApp: App {
       Task {
         let alert = NSAlert()
         do {
-          let pack = try await library.installLegacyPack(from: source)
+          // `.shared` on the click rather than handed over: the App holds no library
+          // on macOS, so that launch makes it where `AppDelegate` does, no earlier.
+          let pack = try await LibraryModel.shared.installLegacyPack(from: source)
           alert.messageText = "Installed Data Pack \(pack.manifest.version)"
           alert.informativeText = "\(pack.manifest.files.count) documents."
         } catch {
@@ -127,7 +128,6 @@ struct RFCReaderApp: App {
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
-  let library: LibraryModel
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
 
@@ -158,6 +158,7 @@ struct DocumentCommands: Commands {
     private var isBookmarked: Bool { active.controller?.isBookmarked == true }
     private func toggleBookmark() { active.controller?.toggleBookmark() }
   #else
+    let library: LibraryModel
     @FocusedValue(\.openDocumentAction) private var openDocument
     /// The focused scene's navigation, so Back and Forward act on the tab the reader
     /// is actually looking at rather than on whichever one registered last.
@@ -213,11 +214,12 @@ struct DocumentCommands: Commands {
         #if os(macOS)
           // The key window's undo manager, so Edit > Undo puts back a document
           // removed from here, as it does for a removal in the list (#349).
-          if let navigation, let document = navigation.selection {
+          if let controller = active.controller, let document = controller.navigation.selection {
             Menu("Add to Collection") {
               AddToCollectionItems(
-                document: document, library: library, navigation: navigation,
-                undoManager: active.controller?.window?.undoManager)
+                document: document, library: controller.library,
+                navigation: controller.navigation,
+                undoManager: controller.window?.undoManager)
             }
           }
         #endif

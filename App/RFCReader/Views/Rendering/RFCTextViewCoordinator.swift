@@ -831,6 +831,8 @@ final class RFCTextViewCoordinator: NSObject {
         self, name: NSView.boundsDidChangeNotification, object: nil)
       textView?.textContainer?.textView = nil
       onToolbarTitleReleased(self)
+      // The window's models, which nothing that outlives the window should hold.
+      environment = nil
     }
 
     private func referenceUnderRestingPointer() -> HoverTarget? {

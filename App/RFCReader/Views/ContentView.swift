@@ -10,7 +10,7 @@ import SwiftUI
 #if !os(macOS)
   struct ContentView: View {
     /// The scene's, which this view hands on to everything inside it with the tab's
-    /// own state; see `environment`.
+    /// own state, as a `ReaderEnvironment` applied at the end of `body`.
     let library: LibraryModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
