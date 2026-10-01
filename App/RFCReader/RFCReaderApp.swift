@@ -10,9 +10,10 @@ import SwiftUI
 
 @main
 struct RFCReaderApp: App {
-  #if !os(macOS)
-    @State private var library = LibraryModel.shared
-  #else
+  /// The one library. The app is a composition root, where `.shared` is reached
+  /// for; what it makes hands the library on.
+  @State private var library = LibraryModel.shared
+  #if os(macOS)
     /// Windows are made by the delegate. macOS has no `WindowGroup` at all: the
     /// contents panel has to be a real `NSSplitViewItem` in the window's own split
     /// view controller for the tab bar and the toolbar to be confined by it, and a
@@ -32,9 +33,9 @@ struct RFCReaderApp: App {
       }
       .commands {
         WindowCommands()
-        DocumentCommands()
+        DocumentCommands(library: library)
         #if DEBUG
-          DeveloperCommands()
+          DeveloperCommands(library: library)
         #endif
       }
     #else
@@ -42,8 +43,7 @@ struct RFCReaderApp: App {
       // opens a window at launch — measured, both leave the app running with no
       // interface at all — so this cannot carry the link for a new tab.
       WindowGroup {
-        ContentView()
-          .environment(library)
+        ContentView(library: library)
           .task { await library.bootstrap() }
           .onOpenURL { url in
             // rfc://9110#section-4.2, plus rfc-editor.org and datatracker
@@ -63,9 +63,8 @@ struct RFCReaderApp: App {
             }
           }
       }
-      .modelContainer(AppData.container)
       .commands {
-        DocumentCommands()
+        DocumentCommands(library: library)
       }
     #endif
   }
@@ -94,13 +93,15 @@ struct RFCReaderApp: App {
   /// A developer's way in until packs have a Settings ▸ Offline of their own (#36):
   /// install the legacy XML pack from an `.aar` or an unpacked folder.
   struct DeveloperCommands: Commands {
+    let library: LibraryModel
+
     var body: some Commands {
       CommandMenu("Developer") {
-        Button("Install Data Pack…") { Self.chooseAndInstall() }
+        Button("Install Data Pack…") { chooseAndInstall() }
       }
     }
 
-    private static func chooseAndInstall() {
+    private func chooseAndInstall() {
       let panel = NSOpenPanel()
       panel.message = "Choose a legacy XML pack: an .aar archive, or a folder with its manifest."
       panel.canChooseFiles = true
@@ -110,7 +111,7 @@ struct RFCReaderApp: App {
       Task {
         let alert = NSAlert()
         do {
-          let pack = try await LibraryModel.shared.installLegacyPack(from: source)
+          let pack = try await library.installLegacyPack(from: source)
           alert.messageText = "Installed Data Pack \(pack.manifest.version)"
           alert.informativeText = "\(pack.manifest.files.count) documents."
         } catch {
@@ -126,6 +127,7 @@ struct RFCReaderApp: App {
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
+  let library: LibraryModel
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
 
@@ -162,7 +164,6 @@ struct DocumentCommands: Commands {
     @FocusedValue(\.navigationModel) private var navigation
     /// The focused scene's reader, for the title a new bookmark is filed under.
     @FocusedValue(\.readerState) private var reader
-    @State private var library = LibraryModel.shared
 
     private var isBookmarked: Bool {
       navigation?.selection.map { library.bookmarkedDocuments.contains($0) } ?? false
@@ -215,7 +216,7 @@ struct DocumentCommands: Commands {
           if let navigation, let document = navigation.selection {
             Menu("Add to Collection") {
               AddToCollectionItems(
-                document: document, library: .shared, navigation: navigation,
+                document: document, library: library, navigation: navigation,
                 undoManager: active.controller?.window?.undoManager)
             }
           }

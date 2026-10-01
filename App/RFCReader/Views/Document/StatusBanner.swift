@@ -4,15 +4,10 @@ import SwiftUI
 
 /// The single most important piece of context: is this still the current document?
 struct StatusBanner: View {
-  /// Handed over rather than read from the environment.
-  ///
-  /// This view is hosted in an `NSHostingController`/`UIHostingController` in the
-  /// text view's top inset — outside the SwiftUI tree that `ContentView` injects
-  /// into — so an `@Environment` lookup here is a runtime trap waiting to fire
-  /// rather than a compile-time requirement. The two models arrive as properties so
-  /// the compiler is the thing that notices when a call site forgets one.
-  let library: LibraryModel
-  let navigation: NavigationModel
+  /// Read from the environment of the hosting controller in the text view's top
+  /// inset, which `ReaderEnvironment` makes sure it was given.
+  @Environment(LibraryModel.self) private var library
+  @Environment(NavigationModel.self) private var navigation
   let metadata: RFCMetadata
   /// From the header's identity, so a new `revisions.json` re-measures the header.
   let revisionLines: [RevisionsSummary.Line]

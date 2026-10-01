@@ -79,11 +79,12 @@ final class RFCTextViewCoordinator: NSObject {
   /// `UITargetedPreview` that wraps its view.
   var referencePreviewHost: PlatformHostingController<AnyView>?
 
-  /// Injected explicitly: a hosting controller the coordinator builds — the
-  /// reference preview, on both platforms — sits outside SwiftUI's environment
-  /// chain, so `@Environment(LibraryModel.self)` inside it would come back empty
-  /// rather than crash. `ReferencePreview` takes the library directly instead.
-  var library: LibraryModel?
+  /// What every hosting controller the coordinator builds is given — the header's,
+  /// and a reference preview's on both platforms — since each sits outside SwiftUI's
+  /// environment chain; see `ReaderEnvironment`.
+  var environment: ReaderEnvironment?
+  /// The environment's, which references are resolved against.
+  var library: LibraryModel? { environment?.library }
 
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
@@ -532,17 +533,17 @@ final class RFCTextViewCoordinator: NSObject {
       if backlinkChip(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
-      guard let library, let documentID,
+      guard let environment, let documentID,
         let (box, range) = reference(at: textItem.range.location),
         let url = link(at: range.location),
         let target = LinkPreview.resolve(
-          box.reference, linkedTo: url, from: documentID, in: library.index)
+          box.reference, linkedTo: url, from: documentID, in: environment.library.index)
       else { return .init(menu: defaultMenu) }
       let host: UIHostingController<AnyView>
       switch target {
       case .card:
         guard let preview = preview(for: box.reference) else { return .init(menu: defaultMenu) }
-        host = UIHostingController(rootView: AnyView(preview))
+        host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         // Sized here, the way the header host is in `layOut`: the preview is shown
         // at its view's own size, and a hosting controller's view is not sized to
         // its content until something lays it out.
@@ -555,10 +556,10 @@ final class RFCTextViewCoordinator: NSObject {
         let size = LinkPreview.documentSize(fitting: window.bounds.size)
         // The commit is the tap, performed as the primary action; nothing in a
         // context menu's preview is clicked.
-        let preview = DocumentPreview(library: library, id: id, place: place, size: size) {}
-        // The preview's reader asks the environment for the library, and a hosting
-        // controller is outside every environment chain.
-        host = UIHostingController(rootView: AnyView(preview.environment(library)))
+        let preview = DocumentPreview(
+          library: environment.library, id: id, place: place, size: size
+        ) {}
+        host = UIHostingController(rootView: AnyView(preview.readerEnvironment(environment)))
         host.view.frame.size = size
       }
       // Opaque, as a context-menu preview's view is expected to be: neither preview
@@ -575,7 +576,7 @@ final class RFCTextViewCoordinator: NSObject {
       let menu = referenceMenu(
         defaultMenu,
         sharing: LinkCopy.forLink(
-          url, from: documentID, in: library.index, bibliography: bibliography),
+          url, from: documentID, in: environment.library.index, bibliography: bibliography),
         from: textView, at: range)
       return UITextItem.MenuConfiguration(preview: .view(container), menu: menu)
     }
@@ -660,12 +661,14 @@ final class RFCTextViewCoordinator: NSObject {
       reportChrome()
     }
 
-    /// The header as hosted: with a tap on its blank space for the bars.
-    func hostedHeader(_ header: AnyView) -> AnyView {
+    /// The header as hosted: given `environment`, and with a tap on its blank space
+    /// for the bars.
+    func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
       AnyView(
         header
           .contentShape(.rect)
-          .onTapGesture { [weak self] in self?.tappedHeader() })
+          .onTapGesture { [weak self] in self?.tappedHeader() }
+          .readerEnvironment(environment))
     }
 
     /// Beside the text view's own recognizers, so a tap on a link still follows it
@@ -765,6 +768,11 @@ final class RFCTextViewCoordinator: NSObject {
       return true
     }
 
+    /// The header as hosted: given `environment`.
+    func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
+      AnyView(header.readerEnvironment(environment))
+    }
+
     // MARK: - Hover preview
 
     /// Hands the controller the text view and what only the document knows: where a
@@ -775,11 +783,13 @@ final class RFCTextViewCoordinator: NSObject {
       hover.target = { [weak self] point in self?.reference(atWindowPoint: point) }
       hover.restingTarget = { [weak self] in self?.referenceUnderRestingPointer() }
       hover.card = { [weak self] target in
-        guard let self, let preview = self.preview(for: target.box.reference),
+        guard let self, let environment = self.environment,
+          let preview = self.preview(for: target.box.reference),
           let rect = self.referenceRect(for: target.range)
         else { return nil }
         return ReferenceHoverController.Popover(
-          content: NSHostingController(rootView: preview), anchor: rect)
+          content: NSHostingController(rootView: preview.readerEnvironment(environment)),
+          anchor: rect)
       }
       hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
     }
@@ -878,12 +888,13 @@ final class RFCTextViewCoordinator: NSObject {
     /// what a click on the reference would have, with the modifiers held for it,
     /// and closes it. Nil for a reference that names no document of ours.
     private func documentPreview(for target: HoverTarget) -> ReferenceHoverController.Popover? {
-      guard let documentID, let library, let url = link(at: target.range.location),
+      guard let documentID, let environment, let url = link(at: target.range.location),
         case .document(let id, let place)? = LinkPreview.resolve(
-          url, from: documentID, in: library.index),
+          url, from: documentID, in: environment.library.index),
         let rect = referenceRect(for: target.range)
       else { return nil }
-      let preview = DocumentPreview(library: library, id: id, place: place) { [weak self] in
+      let preview = DocumentPreview(library: environment.library, id: id, place: place) {
+        [weak self] in
         guard let self else { return }
         let sameDocument = id == self.documentID
         // The popover fades out as the reader moves, not before it: waiting for the
@@ -899,9 +910,7 @@ final class RFCTextViewCoordinator: NSObject {
           withAnimation(Self.documentCrossFade) { _ = self.onLink(url, .current) }
         }
       }
-      // The preview's reader asks the environment for the library, and a hosting
-      // controller is outside every environment chain.
-      let host = NSHostingController(rootView: preview.environment(library))
+      let host = NSHostingController(rootView: preview.readerEnvironment(environment))
       return ReferenceHoverController.Popover(
         content: host, size: preview.size, anchor: rect)
     }
