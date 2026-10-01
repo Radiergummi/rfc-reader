@@ -16,7 +16,7 @@ struct LegacyTextParserAnchorsTests {
     let fixtures = try Fixtures.legacyTexts()
     #expect(fixtures.count > 20)
     for fixture in fixtures {
-      let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let document = try Fixtures.document(fixture)
       let repeated = Dictionary(grouping: document.declaredAnchors, by: { $0 }).filter {
         $0.value.count > 1
       }.keys.sorted()
@@ -47,7 +47,7 @@ struct LegacyTextParserAnchorsTests {
   @Test func `every anchor is a name and every citation reaches one`() throws {
     var cited = 0
     for fixture in try Fixtures.legacyTexts() {
-      let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let document = try Fixtures.document(fixture)
       // An NCName, closely enough: a letter or underscore, then letters, digits, `.`, `-`, `_`.
       let unnamed = document.declaredAnchors.filter {
         $0.wholeMatch(of: #/[\p{L}_][\p{L}0-9._-]*/#) == nil

@@ -43,7 +43,7 @@ struct LegacyTextParserFrontMatterTests {
   /// pages of traffic tables. RFC 1927 kept 3 of its blocks, RFC 509 none.
   @Test func `an omitted section ends where its boilerplate does`() throws {
     func middle(_ name: String) throws -> (document: RFCDocument, middle: Substring) {
-      let document = LegacyTextParser.parse(try Fixtures.string(name))
+      let document = try Fixtures.document(name)
       let xml = RFCXMLSerializer().serialize(document)
       let start = try #require(xml.range(of: "<middle>"))
       let end = try #require(xml.range(of: "</middle>"))
@@ -351,7 +351,7 @@ struct LegacyTextParserFrontMatterTests {
     ("rfc811.txt", 811), ("rfc4801.txt", 4801), ("rfc2347.txt", 2347), ("rfc103.txt", 103),
   ])
   func `every spelling of the number line is read`(fixture: String, number: Int) throws {
-    #expect(LegacyTextParser.parse(try Fixtures.string(fixture)).header.id == .rfc(number))
+    #expect(try Fixtures.document(fixture).header.id == .rfc(number))
   }
 
   /// The header block was taken to be the first run of lines, and RFC 609 opens with its

@@ -213,7 +213,7 @@ struct RequirementsTests {
   @Test func `requirements read from legacy text are marked heuristic`() throws {
     var found: [Requirement] = []
     for name in try Fixtures.legacyTexts() where found.isEmpty {
-      found = Requirements.extract(from: LegacyTextParser.parse(try Fixtures.data(name)))
+      found = Requirements.extract(from: try Fixtures.document(name))
     }
     #expect(!found.isEmpty)
     #expect(found.allSatisfy { $0.isHeuristic })

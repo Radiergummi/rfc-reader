@@ -108,7 +108,7 @@ struct RFCXMLSerializerTests {
   func `a converted definition list states how its terms are set`(name: String, tag: String)
     throws
   {
-    let original = LegacyTextParser.parse(try Fixtures.string(name))
+    let original = try Fixtures.document(name)
     let xml = RFCXMLSerializer().serialize(original)
     #expect(xml.contains(tag))
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
@@ -417,7 +417,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
   @Test func `every front has an author even when none is known`() throws {
     for fixture in ["rfc1.txt", "rfc5234.txt"] {
-      let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let parsed = try Fixtures.document(fixture)
       let xml = RFCXMLSerializer().serialize(parsed)
       let authors = { (document: RFCDocument) in
         document.allSections.flatMap(\.blocks).flatMap { block -> [[Author]] in
