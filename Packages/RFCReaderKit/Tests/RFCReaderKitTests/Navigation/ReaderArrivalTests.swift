@@ -6,23 +6,25 @@ import Testing
 struct ReaderArrivalTests {
   /// Stands in for the navigation's scroll request, which is the app's.
   private typealias Arrival = ReaderArrival<String>
+  /// A line into section two, as the reader saves its place.
+  private let saved = ReadingPlace(anchor: "section-2-3", offset: 40)
 
   /// The first time the text appears, nothing has been read in this view yet.
   @Test func `a request wins over the stored position on opening`() {
     let arrival = Arrival.onAppear(
-      pendingAnchor: nil, placeLeft: nil, request: "section-5", storedAnchor: "section-2")
+      pendingAnchor: nil, placeLeft: nil, request: "section-5", stored: saved)
     #expect(arrival == .request("section-5"))
   }
 
-  @Test func `the stored position is restored when there is no request`() {
+  @Test func `the stored line is restored when there is no request`() {
     let arrival = Arrival.onAppear(
-      pendingAnchor: nil, placeLeft: nil, request: nil, storedAnchor: "section-2")
-    #expect(arrival == .place("section-2"))
+      pendingAnchor: nil, placeLeft: nil, request: nil, stored: saved)
+    #expect(arrival == .stored(saved))
   }
 
   @Test func `a document never read opens where it is`() {
     let arrival = Arrival.onAppear(
-      pendingAnchor: nil, placeLeft: nil, request: nil, storedAnchor: nil)
+      pendingAnchor: nil, placeLeft: nil, request: nil, stored: nil)
     #expect(arrival == .stay)
   }
 
@@ -32,7 +34,7 @@ struct ReaderArrivalTests {
   @Test func `the text made again returns to where the reader was`() {
     let arrival = Arrival.onAppear(
       pendingAnchor: nil, placeLeft: .section("section-12"), request: "section-5",
-      storedAnchor: "section-2")
+      stored: saved)
     #expect(arrival == .place("section-12"))
   }
 
@@ -41,7 +43,7 @@ struct ReaderArrivalTests {
   /// what they were reading. A text view made again starts at the top.
   @Test func `the text made again stays at the top the reader left it at`() {
     let arrival = Arrival.onAppear(
-      pendingAnchor: nil, placeLeft: .top, request: "section-5", storedAnchor: "section-2")
+      pendingAnchor: nil, placeLeft: .top, request: "section-5", stored: saved)
     #expect(arrival == .stay)
   }
 
@@ -50,7 +52,7 @@ struct ReaderArrivalTests {
   @Test func `a scroll asked for while the text was gone wins over the place left`() {
     let arrival = Arrival.onAppear(
       pendingAnchor: "section-7", placeLeft: .section("section-12"), request: "section-7",
-      storedAnchor: "section-2")
+      stored: saved)
     #expect(arrival == .place("section-7"))
   }
 
@@ -59,9 +61,9 @@ struct ReaderArrivalTests {
     var reads = 0
     _ = Arrival.onAppear(
       pendingAnchor: nil, placeLeft: .section("section-12"), request: nil,
-      storedAnchor: {
+      stored: {
         reads += 1
-        return "section-2"
+        return saved
       }())
     #expect(reads == 0)
   }

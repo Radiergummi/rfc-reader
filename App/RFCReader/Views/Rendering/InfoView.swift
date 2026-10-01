@@ -329,7 +329,7 @@ private struct LinkRow: View {
           Button("Download") { save(document, format) }
         }
       #endif
-      .task(id: outcome) { await settle() }
+      .resets($outcome, to: nil, after: .seconds(1.5))
     case .copyable(let text):
       Button {
         Clipboard.copy(text)
@@ -340,7 +340,7 @@ private struct LinkRow: View {
       .buttonStyle(.plain)
       .focusEffectDisabled()
       .help("Copy \(row.label)")
-      .task(id: outcome) { await settle() }
+      .resets($outcome, to: nil, after: .seconds(1.5))
     default:
       content(detail: nil, trailing: nil)
     }
@@ -352,13 +352,6 @@ private struct LinkRow: View {
     case .failed: "exclamationmark.triangle"
     case nil: nil
     }
-  }
-
-  /// The check or the warning stands for a moment, then the row's own icon returns.
-  private func settle() async {
-    guard outcome != nil else { return }
-    try? await Task.sleep(for: .seconds(1.5))
-    outcome = nil
   }
 
   private func open(_ url: URL, saving file: (DocumentID, FileFormat)) {
@@ -468,11 +461,7 @@ private struct OfflineSection: View {
     .task(id: isKept) {
       size = isKept ? await library.downloadedSize(document) : nil
     }
-    .task(id: downloadFailed) {
-      guard downloadFailed else { return }
-      try? await Task.sleep(for: .seconds(1.5))
-      downloadFailed = false
-    }
+    .resets($downloadFailed, to: false, after: .seconds(1.5))
   }
 
   private var symbol: String {

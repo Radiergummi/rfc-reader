@@ -11,6 +11,8 @@
 public enum ReaderArrival<Request> {
   /// Scroll to this anchor, unanimated.
   case place(String)
+  /// Scroll to the stored reading position's line, unanimated (#322).
+  case stored(ReadingPlace)
   /// Carry out the navigation's scroll request: a deep link, or a place in the
   /// history.
   case request(Request)
@@ -26,11 +28,11 @@ public enum ReaderArrival<Request> {
   ///     it has not gone with a place yet. Taken as it goes, not as it comes back:
   ///     a text view reports the top of its text as it is made, before any restore.
   ///   - request: the navigation's scroll request, if it holds one.
-  ///   - storedAnchor: the stored reading position's anchor, if the document holds
-  ///     it. Read only when nothing before it decides.
+  ///   - stored: the stored reading position, if the document holds its anchor.
+  ///     Read only when nothing before it decides.
   public static func onAppear(
     pendingAnchor: String?, placeLeft: ReaderPlaceLeft?, request: Request?,
-    storedAnchor: @autoclosure () -> String?
+    stored: @autoclosure () -> ReadingPlace?
   ) -> Self {
     if let pendingAnchor { return .place(pendingAnchor) }
     switch placeLeft {
@@ -39,7 +41,7 @@ public enum ReaderArrival<Request> {
     case nil: break
     }
     if let request { return .request(request) }
-    return storedAnchor().map(Self.place) ?? .stay
+    return stored().map(Self.stored) ?? .stay
   }
 }
 

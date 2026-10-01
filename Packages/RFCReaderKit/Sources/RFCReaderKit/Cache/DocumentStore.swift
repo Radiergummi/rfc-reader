@@ -1,16 +1,28 @@
 import Foundation
 import RFCKit
-import RFCReaderKit
 import os
 
-nonisolated private let storeLog = Logger(
+/// The app's log subsystem, as the app's own loggers name it: at run time
+/// `Bundle.main` is the app's, from a package too.
+private let storeLog = Logger(
   subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader", category: "store")
+
+/// The store's intervals, in the app's Points of Interest lane: the same subsystem
+/// and category as the app's `signposter`, so `make trace` reads them as before.
+private let signposter = OSSignposter(
+  subsystem: Bundle.main.bundleIdentifier ?? "me.mazetti.rfc-reader",
+  category: .pointsOfInterest
+)
 
 /// On-disk cache of raw RFC files plus an in-memory cache of parsed documents.
 ///
 /// Files are stored exactly as served by the RFC Editor, so the "original text"
 /// view and re-parsing after a parser improvement both come for free.
-actor DocumentStore {
+///
+/// Here rather than in the App target for its tests, which run its sequences — a
+/// second open joining the first, a removal during a download — against a fetcher
+/// that waits until the test lets it finish (#596).
+public actor DocumentStore {
   private let directory: URL
   /// The documents parsed last, so reopening one, or going back to it, skips the
   /// parse: 35 to 60 ms for the largest XML, half a second for RFC 5661's text
@@ -66,23 +78,32 @@ actor DocumentStore {
   /// swap it in.
   private var isInstallingPack = false
 
-  struct AlreadyInstalling: Error, CustomStringConvertible {
-    var description: String { "A data pack is already being installed." }
+  public struct AlreadyInstalling: Error, CustomStringConvertible {
+    public var description: String { "A data pack is already being installed." }
   }
 
-  struct DownloadFailed: Error, CustomStringConvertible {
-    let url: URL
-    let status: Int
-    var description: String { "\(url.absoluteString) answered HTTP \(status)" }
+  public struct DownloadFailed: Error, CustomStringConvertible {
+    public let url: URL
+    public let status: Int
+    public var description: String { "\(url.absoluteString) answered HTTP \(status)" }
   }
 
-  init() {
+  /// The app's store: Application Support/RFCReader for what it keeps, and
+  /// Caches/RFCReader for what it can make again.
+  public init() {
     let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[
       0]
-    directory = support.appending(path: "RFCReader", directoryHint: .isDirectory)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appending(path: "RFCReader", directoryHint: .isDirectory)
+    self.init(
+      directory: support.appending(path: "RFCReader", directoryHint: .isDirectory),
+      caches: caches.appending(path: "RFCReader", directoryHint: .isDirectory))
+  }
+
+  /// A store keeping its documents, index and packs in `directory`, and the index
+  /// snapshot in `caches`. Both are created when they do not exist.
+  public init(directory: URL, caches: URL) {
+    self.directory = directory
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try? FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
     snapshotURL = caches.appending(path: "rfc-index.json")
   }
@@ -93,10 +114,10 @@ actor DocumentStore {
   private nonisolated var checkURL: URL { directory.appending(path: "rfc-index-check.json") }
 
   /// The cached index's XML, when it was written, and its snapshot when that is current.
-  struct CachedIndex {
-    let url: URL
-    let updatedAt: Date
-    let snapshot: URL?
+  public struct CachedIndex: Sendable {
+    public let url: URL
+    public let updatedAt: Date
+    public let snapshot: URL?
   }
 
   /// Where the cached index is, when it was written, and its snapshot when that is
@@ -106,7 +127,7 @@ actor DocumentStore {
   /// Only a lookup, and nonisolated: the caller reads it, off this actor (#367).
   /// Read here, the index held the store for as long as the parse took, so a
   /// document opened during launch — an `rfc://` link — waited behind it.
-  nonisolated func cachedIndexLocation() -> CachedIndex? {
+  public nonisolated func cachedIndexLocation() -> CachedIndex? {
     let url: URL
     var updatedAt = Date.distantPast
     if FileManager.default.fileExists(atPath: indexURL.path) {
@@ -131,7 +152,9 @@ actor DocumentStore {
   ///
   /// Waits for a snapshot write already running first: one of the index being
   /// replaced that landed after the new XML would be newer than it, and so current.
-  func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?) async throws {
+  public func storeIndex(_ data: Data, parsed index: RFCIndex, validators: CacheValidators?)
+    async throws
+  {
     await snapshotWrite?.value
     try data.write(to: indexURL, options: .atomic)
     writeSnapshot(of: index)
@@ -140,7 +163,7 @@ actor DocumentStore {
 
   /// The last check of the index kept on disk, or nil when there is no index on
   /// disk to have checked: the validators describe that file, and nothing else.
-  nonisolated func indexCheck() -> IndexCheck? {
+  public nonisolated func indexCheck() -> IndexCheck? {
     guard FileManager.default.fileExists(atPath: indexURL.path),
       let data = try? Data(contentsOf: checkURL)
     else { return nil }
@@ -149,7 +172,7 @@ actor DocumentStore {
 
   /// Records that a check sent with `kept`'s validators found the index unchanged,
   /// and returns when.
-  func recordUnchangedIndex(_ kept: IndexCheck) throws -> Date {
+  public func recordUnchangedIndex(_ kept: IndexCheck) throws -> Date {
     var check = kept
     check.checkedAt = .now
     try storeCheck(check)
@@ -164,7 +187,7 @@ actor DocumentStore {
   /// takes about 165 ms, which a launch should not wait for, and a document opened
   /// meanwhile should not queue behind. A snapshot that fails to write costs the
   /// next launch a parse, nothing else.
-  func writeSnapshot(of index: RFCIndex) {
+  public func writeSnapshot(of index: RFCIndex) {
     snapshotWrite = Task(name: "Write index snapshot") { [snapshotURL, snapshotWrite] in
       await snapshotWrite?.value
       await Self.write(index, to: snapshotURL)
@@ -193,12 +216,12 @@ actor DocumentStore {
 
   /// The last good `revisions.json`. Nil when there is none, or it no longer decodes
   /// (a newer version, after a downgrade).
-  func cachedRevisions() -> RFCRevisions? {
+  public func cachedRevisions() -> RFCRevisions? {
     guard let data = try? Data(contentsOf: revisionsURL) else { return nil }
     return try? RFCRevisions.decode(data)
   }
 
-  func storeRevisions(_ data: Data) throws {
+  public func storeRevisions(_ data: Data) throws {
     try data.write(to: revisionsURL, options: .atomic)
   }
 
@@ -217,7 +240,7 @@ actor DocumentStore {
   /// Every cached registry's entries, and which registries are due a fetch: never
   /// fetched, older than `maximumAge`, or no longer readable. A stale registry's
   /// entries are still returned, to use until the fetch succeeds.
-  func cachedRegistries(maximumAge: TimeInterval) -> (
+  public func cachedRegistries(maximumAge: TimeInterval) -> (
     entries: [IANARegistry: [RegistryEntry]], stale: [IANARegistry]
   ) {
     var entries: [IANARegistry: [RegistryEntry]] = [:]
@@ -240,7 +263,7 @@ actor DocumentStore {
     return (entries, stale)
   }
 
-  func storeRegistry(_ data: Data, for registry: IANARegistry) throws {
+  public func storeRegistry(_ data: Data, for registry: IANARegistry) throws {
     try FileManager.default.createDirectory(
       at: registriesDirectory, withIntermediateDirectories: true)
     try data.write(to: registryURL(registry), options: .atomic)
@@ -252,13 +275,13 @@ actor DocumentStore {
     directory.appending(path: DocumentCacheIndex.fileName(for: id, format: format))
   }
 
-  func isCached(_ id: DocumentID) -> Bool {
+  public func isCached(_ id: DocumentID) -> Bool {
     cachedDocuments.revalidate()
     return cachedDocuments.contains(id)
   }
 
   /// How much disk the cached body takes, or nil when there is none.
-  func downloadedSize(_ id: DocumentID) -> Int? {
+  public func downloadedSize(_ id: DocumentID) -> Int? {
     let sizes = DocumentCacheIndex.bodyFormats.compactMap { format in
       (try? fileURL(id, format: format).resourceValues(forKeys: [.fileSizeKey]))?.fileSize
     }
@@ -266,14 +289,14 @@ actor DocumentStore {
   }
 
   /// Numbers of every RFC with a cached body.
-  func cachedNumbers() -> Set<Int> {
+  public func cachedNumbers() -> Set<Int> {
     cachedDocuments.revalidate()
     return cachedDocuments.rfcNumbers
   }
 
   /// A body that cannot be deleted is left where it is, and stays cached: the
   /// index records what the removal left on disk, not what it set out to do.
-  func remove(_ id: DocumentID) {
+  public func remove(_ id: DocumentID) {
     downloads.removed(id)
     texts.removed(id)
     parses.removed(id)
@@ -286,8 +309,8 @@ actor DocumentStore {
     }
   }
 
-  func document(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient) async throws
-    -> RFCDocument
+  public func document(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
+    async throws -> RFCDocument
   {
     let signpostID = signposter.makeSignpostID()
     let interval = signposter.beginInterval(
@@ -390,7 +413,7 @@ actor DocumentStore {
   /// Not cached: the XML when the index says it exists, otherwise the text, and the
   /// text only when there is no XML (#125). Off the actor, parse included, so the
   /// store answers other calls meanwhile.
-  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: RFCEditorClient)
+  private static func fetch(_ id: DocumentID, formats: [FileFormat], client: any DocumentFetching)
     async throws -> RFCEditorClient.FetchedDocument
   {
     let interval = signposter.beginInterval(
@@ -427,7 +450,7 @@ actor DocumentStore {
   /// download one from, replacing the installed one only once the new one has
   /// verified. Documents already parsed are parsed again on their next open, so
   /// they come from the pack.
-  func installLegacyPack(from source: URL) async throws -> InstalledPack {
+  public func installLegacyPack(from source: URL) async throws -> InstalledPack {
     // Checked and set without a suspension between them, so a second install
     // arriving while the first is off the actor is refused rather than raced.
     guard !isInstallingPack else { throw AlreadyInstalling() }
@@ -473,13 +496,13 @@ actor DocumentStore {
 
   /// Whether a body has been written since eviction last ran: asked before the
   /// caller builds the pinned set, which is not free.
-  var hasGrownSinceEviction: Bool { hasGrown }
+  public var hasGrownSinceEviction: Bool { hasGrown }
 
   /// Removes the least recently opened bodies past `bound`, never a pinned one; see
   /// `CacheEviction`. Only after the cache has grown, so an ordinary open costs
   /// nothing here. Returns what it removed.
   @discardableResult
-  func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
+  public func evict(pinned: Set<DocumentID>, bound: Int) -> [DocumentID] {
     guard hasGrown else { return [] }
     hasGrown = false
     let victims = CacheEviction.victims(
@@ -490,7 +513,7 @@ actor DocumentStore {
     return victims
   }
 
-  func originalText(_ id: DocumentID, client: RFCEditorClient) async throws -> String {
+  public func originalText(_ id: DocumentID, client: any DocumentFetching) async throws -> String {
     if let data = try? Data(contentsOf: fileURL(id, format: .text)) {
       return LegacyTextParser.stripPagination(LegacyTextParser.text(decoding: data))
     }
@@ -502,7 +525,7 @@ actor DocumentStore {
   /// and written by the one told to keep it, with no suspension between, so a
   /// removal cannot slip in before the write, and the others find it on disk once
   /// they have it (#116).
-  private func text(_ id: DocumentID, client: RFCEditorClient) async throws -> Data {
+  private func text(_ id: DocumentID, client: any DocumentFetching) async throws -> Data {
     let (data, isKept) = try await texts.value(for: id) {
       Task { try await client.fetchDocumentData(id, format: .text) }
     }
@@ -513,5 +536,13 @@ actor DocumentStore {
       hasGrown = true
     }
     return data
+  }
+
+  // MARK: - Tests
+
+  /// How many readers wait for the fetch of `id`'s document, and for its `.txt`, so
+  /// a test acts once the readers it started have joined them.
+  func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
+    (downloads.waiters(id), texts.waiters(id))
   }
 }

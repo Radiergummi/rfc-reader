@@ -27,8 +27,8 @@ import Synchronization
 /// metered or poor connection, writes nothing, and the next open starts afresh. While any reader still waits, it goes on: closing one
 /// of two tabs on a document does not fail the other.
 ///
-/// Here rather than in the App target for its tests, which run the store's own
-/// sequence.
+/// A type of its own rather than part of `DocumentStore` for its tests, which run
+/// the store's own sequence.
 public final class InFlightDownloads<Value: Sendable>: Sendable {
   private struct Running {
     let task: Task<Value, any Error>

@@ -48,6 +48,15 @@ import RFCReaderKit
       }
     }
 
+    /// A find match or a VoiceOver rotor stop far from the viewport lands on an
+    /// estimate under viewport layout; the engine puts it there exactly instead.
+    var revealRange: ((NSRange) -> Bool)?
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+      if revealRange?(range) == true { return }
+      super.scrollRangeToVisible(range)
+    }
+
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
 
@@ -105,6 +114,15 @@ import RFCReaderKit
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
     var willTrackMouseDown: () -> Bool = { false }
+
+    /// A find match or a VoiceOver rotor stop far from the viewport lands on an
+    /// estimate under viewport layout; the engine puts it there exactly instead.
+    var revealRange: ((NSRange) -> Bool)?
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+      if revealRange?(range) == true { return }
+      super.scrollRangeToVisible(range)
+    }
     /// The quote for a range of the text, from the coordinator (#186).
     var quoteSelection: (NSRange) -> QuoteCitation.Quote? = { _ in nil }
     /// What shows a rendered verbatim block as its text, or back, or nil where the
@@ -141,12 +159,13 @@ import RFCReaderKit
     weak var header: NSView?
 
     /// The text view sets the I-beam over its whole bounds — over the header's
-    /// author chips too, which are buttons, and its title, which cannot be selected.
-    /// Over the header the pointer is the arrow. Both overrides are needed: a cursor
-    /// update the hosting view does not handle arrives here through the responder
-    /// chain, and every move resets it.
+    /// author chips too, which are buttons, and its title, which cannot be selected,
+    /// and under the overlay scroller, which lies over the text. Over either the
+    /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
+    /// view does not handle arrives here through the responder chain, and every move
+    /// resets it.
     override func cursorUpdate(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
       }
@@ -154,16 +173,21 @@ import RFCReaderKit
     }
 
     override func mouseMoved(with event: NSEvent) {
-      guard !isOverHeader(event) else {
+      guard !wantsArrow(event) else {
         NSCursor.arrow.set()
         return
       }
       super.mouseMoved(with: event)
     }
 
-    private func isOverHeader(_ event: NSEvent) -> Bool {
-      guard let header else { return false }
-      return header.frame.contains(convert(event.locationInWindow, from: nil))
+    private func wantsArrow(_ event: NSEvent) -> Bool {
+      if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
+        return true
+      }
+      guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
+        !scroller.isHidden
+      else { return false }
+      return scroller.frame.contains(scrollView.convert(event.locationInWindow, from: nil))
     }
 
     /// Before `super`, which runs the whole click — `clickedOnLink` included — in its

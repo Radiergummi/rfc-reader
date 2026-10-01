@@ -11,16 +11,16 @@ import SwiftData
 /// bookmark stores, which is now `DocumentActions.bookmarkTitle`.
 ///
 /// Nobody displays the state by asking here: `LibraryModel` reads
-/// `bookmarkedDocuments(in:)` after every save, and the toolbars, the menu and the
-/// list rows read its set, which is cheap enough for `NSToolbar` to revalidate
-/// against on every event.
+/// `bookmarkedDocuments(in:)` after every save of a bookmark, and the toolbars, the
+/// menu and the list rows read its set, which is cheap enough for `NSToolbar` to
+/// revalidate against on every event.
 ///
 /// In the package beside `CollectionStore`, and on its terms: every failure is
 /// thrown, and the App decides what to do with it.
 @MainActor
 public enum BookmarkStore {
   /// Every bookmarked document. Only the keys are fetched: this runs on every save
-  /// of the store, and most of those record a reading position.
+  /// of a bookmark (`UserDataMirrors`, #603).
   ///
   /// Throws rather than answering with an empty set, which would read as "nothing is
   /// bookmarked": eviction would take that as leave to delete the bookmarked

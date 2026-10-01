@@ -20,14 +20,18 @@ public struct ReaderChrome: Equatable, Sendable {
     public var distanceToEnd: CGFloat
     /// Whether a finger moved it: dragging, or the deceleration after one.
     public var isUserDriven: Bool
+    /// Whether it is the deceleration after a fling, the finger off the glass.
+    public var isFlinging: Bool
 
     public init(
-      position: CGFloat, distanceFromTop: CGFloat, distanceToEnd: CGFloat, isUserDriven: Bool
+      position: CGFloat, distanceFromTop: CGFloat, distanceToEnd: CGFloat, isUserDriven: Bool,
+      isFlinging: Bool = false
     ) {
       self.position = position
       self.distanceFromTop = distanceFromTop
       self.distanceToEnd = distanceToEnd
       self.isUserDriven = isUserDriven
+      self.isFlinging = isFlinging
     }
 
     /// The scroll a scroll view is at, from its offset, its insets and its size.
@@ -35,13 +39,13 @@ public struct ReaderChrome: Equatable, Sendable {
     /// is.
     public init(
       offset: CGFloat, topInset: CGFloat, bottomInset: CGFloat, contentHeight: CGFloat,
-      viewportHeight: CGFloat, isUserDriven: Bool
+      viewportHeight: CGFloat, isUserDriven: Bool, isFlinging: Bool = false
     ) {
       self.init(
         position: offset,
         distanceFromTop: offset + topInset,
         distanceToEnd: contentHeight + bottomInset - viewportHeight - offset,
-        isUserDriven: isUserDriven)
+        isUserDriven: isUserDriven, isFlinging: isFlinging)
     }
   }
 
@@ -89,6 +93,9 @@ public struct ReaderChrome: Equatable, Sendable {
     let delta = position - previous
     guard delta != 0 else { return }
     let down = delta > 0
+    // A fling cannot turn by itself: what moves against it is the scroll view
+    // keeping the text in place as TextKit corrects its estimates.
+    if scroll.isFlinging, let runsDown, down != runsDown { return }
     if down != runsDown || runStart == nil {
       runsDown = down
       runStart = previous
