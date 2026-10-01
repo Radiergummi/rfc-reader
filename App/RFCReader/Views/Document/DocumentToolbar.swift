@@ -12,9 +12,6 @@ import SwiftUI
     let navigation: NavigationModel
     let reader: ReaderState
     let isBookmarked: Bool
-    /// The system's, handed over by the reader: inside it, `openURL` is the reader's
-    /// own, which follows links in the app.
-    let openURL: OpenURLAction
     @Binding var showsInspector: Bool
     /// Save to Files and the print sheet, which are the reader's: their state and
     /// the `.fileExporter` are view state, and `ToolbarContent` has none (#375, #376).
@@ -27,6 +24,7 @@ import SwiftUI
     let showsBottomBar: Bool
 
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.openURL) private var openURL
 
     /// Share and More at the top; Contents and Info leading the bottom bar, and
     /// Bookmark trailing it as the view's primary action, the way Notes puts
@@ -63,6 +61,8 @@ import SwiftUI
             Label("Info", systemImage: "info.circle")
           }
           .keyboardShortcut("i", modifiers: .command)
+
+          TextSizeButton()
         }
 
         ToolbarSpacer(.flexible, placement: .bottomBar)
@@ -119,7 +119,10 @@ import SwiftUI
             Button(format.name) { exportDocument(format) }
           }
         }
+        // Not for a document read as its PDF or PostScript original (#207).
+        .disabled(!reader.offersPrintAndExport)
         Button("Print…", systemImage: "printer") { printDocument() }
+          .disabled(!reader.offersPrintAndExport)
       } label: {
         Label("More", systemImage: "ellipsis")
       }
@@ -154,6 +157,69 @@ import SwiftUI
       guard let metadata else { return }
       Clipboard.copy(
         DocumentActions.citation(metadata, section: reader.currentSection, style: style))
+    }
+  }
+
+  /// The reader's own text size on iOS, which has no Settings scene to put the
+  /// slider in (#153): "Aa" opens a popover to step it, as Books does. Its own view
+  /// for the popover's state, which `ToolbarContent` cannot hold. The keyboard's
+  /// ⌘+, ⌘− and ⌘0 are `DocumentCommands`'.
+  private struct TextSizeButton: View {
+    @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+      .defaultFontSize
+    @State private var isShowingControls = false
+
+    var body: some View {
+      Button {
+        isShowingControls = true
+      } label: {
+        Label("Text Size", systemImage: "textformat.size")
+      }
+      .popover(isPresented: $isShowingControls) {
+        controls
+          // A popover on an iPhone too: a sheet would cover the text whose size is
+          // being chosen.
+          .presentationCompactAdaptation(.popover)
+      }
+    }
+
+    private var controls: some View {
+      VStack(spacing: 12) {
+        HStack(spacing: 12) {
+          Button {
+            fontSize = ReaderPreferences.fontSize(steppingDown: fontSize)
+          } label: {
+            Label("Smaller", systemImage: "textformat.size.smaller")
+              .frame(maxWidth: .infinity)
+          }
+          .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
+
+          Button {
+            fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
+          } label: {
+            Label("Bigger", systemImage: "textformat.size.larger")
+              .frame(maxWidth: .infinity)
+          }
+          .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
+        }
+        .labelStyle(.iconOnly)
+        // The size the step reached, which the glyphs alone never tell VoiceOver:
+        // relative to the system's, as that is what the reader's own size is.
+        .accessibilityValue(
+          Text(
+            fontSize / ReaderPreferences.defaultFontSize,
+            format: .percent.precision(.fractionLength(0)))
+        )
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+
+        Button("Use System Size") {
+          fontSize = ReaderPreferences.defaultFontSize
+        }
+        .disabled(fontSize == ReaderPreferences.defaultFontSize)
+      }
+      .padding()
+      .frame(minWidth: 220)
     }
   }
 #endif

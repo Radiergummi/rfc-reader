@@ -536,7 +536,8 @@
     /// panel as a sheet on this window (#375). Laid out for the paper Page Setup has
     /// chosen; a different paper picked in the panel itself is scaled to fit.
     func printDocument() {
-      guard !isPrinting, let id = navigation.selection, reader.hasDocument, let window else {
+      guard !isPrinting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      else {
         return
       }
       // The PDF's pages carry their own margins; AppKit's, left in, would shrink
@@ -583,7 +584,8 @@
     /// picks (#376), as a sheet on this window. A paged format is laid out for the
     /// paper Page Setup has chosen, as a print is.
     func exportDocument() {
-      guard !isExporting, let id = navigation.selection, reader.hasDocument, let window else {
+      guard !isExporting, let id = navigation.selection, reader.offersPrintAndExport, let window
+      else {
         return
       }
       let panel = NSSavePanel()
@@ -689,6 +691,26 @@
       ActiveReaderWindow.shared.willClose(self)
       library.unregister(navigation)
       AppDelegate.shared?.forget(self)
+      releaseWindowContent()
+    }
+
+    /// Empties a closing window, so that if something keeps the window itself, it
+    /// keeps a few hundred bytes and not a whole document.
+    ///
+    /// Something does, sometimes (#432): SwiftUI's focus bookkeeping for the menu
+    /// bar's `.commands` can hold a closed window whose first responder was the
+    /// sidebar's list, long after this controller is gone. Everything the window
+    /// showed — the split view controller, its hosted roots, the reader's text view
+    /// and its storage — hangs off `contentViewController`, and the toolbar and the
+    /// delegate point back at this controller.
+    ///
+    /// Not `WindowGroup`'s forbidden content replacement: the window is closing, it
+    /// is AppKit's, and nothing takes the content's place.
+    private func releaseWindowContent() {
+      guard let window else { return }
+      window.contentViewController = nil
+      window.toolbar = nil
+      window.delegate = nil
     }
 
     // MARK: - Tabs

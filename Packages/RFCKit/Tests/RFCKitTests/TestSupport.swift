@@ -57,6 +57,9 @@ extension RFCDocument {
 
   var paragraphs: [Paragraph] { everyBlock.compactMap(\.paragraph) }
 
+  /// The items of each definition list: a catalog, or hanging-indent definitions.
+  var definitionLists: [[DefinitionItem]] { everyBlock.compactMap(\.definitionItems) }
+
   /// Every paragraph at any depth: inside list items, definitions, figures, block
   /// quotes and asides as well as directly in a section.
   var nestedParagraphs: [Paragraph] { everyBlock.flattened.compactMap(\.paragraph) }

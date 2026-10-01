@@ -123,4 +123,4 @@ If `sync` reports that the stack on GitHub has diverged from yours, don't resolv
 - Merge a pull request, push to `main`, or force-push someone else's branch. The maintainer merges. That includes `gh stack merge`, and `gh stack unstack`. The force-with-lease pushes `gh stack rebase`, `sync` and `submit` make to your own `epic/` branches are the exception.
 - Close an issue, or remove `agent-ready`. `Closes #N` closes the issue on merge.
 - Commit unsigned. Every branch requires signed commits. If signing fails because Secretive is locked, sign that commit with the fallback key: `git -c gpg.format=openpgp -c user.signingkey=8F4ED9558B0722C0 commit …`.
-- Widen the change beyond the issue. Anything else you notice goes in a marked comment, or in a new issue if it clearly deserves one.
+- Widen the change beyond the issue. Anything else you notice goes in a marked comment on the pull request or its issue. It becomes a new issue only if it clearly deserves one and is true of `main` without your pull request: an issue describes `main`, never an unmerged branch, so a limit, follow-up or gap of your own change stays on the pull request.

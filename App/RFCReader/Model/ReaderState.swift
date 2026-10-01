@@ -35,7 +35,8 @@ final class ReaderState {
 
   /// The anchor the reader is looking at: the contents' highlight.
   var currentAnchor: String?
-  /// The same place as a section number, for the citation and the section link.
+  /// The same place as a section's `place` — its number, or `appendix-1` for an
+  /// appendix numbered like a section (#429) — for the citation and the section link.
   /// Resolved by `DocumentView`, which has the document — rather than handing the
   /// document itself to a toolbar item that needs one string from it.
   var currentSection: String?
@@ -76,6 +77,21 @@ final class ReaderState {
   /// by the reader.
   var showOriginal = false {
     didSet { titleOwnership.showsOriginal = showOriginal }
+  }
+
+  /// Why the RFC is read as its PDF or PostScript original, if it is (#207). Set by
+  /// the reader as the load starts and ends, and again when the index arrives. A
+  /// scan's page shows the header the index gives, so its title stays out of the
+  /// toolbar.
+  var publishedOriginal: PublishedOriginalPage.Status? {
+    didSet { titleOwnership.showsPublishedOriginal = publishedOriginal?.kind == .scan }
+  }
+
+  /// Whether Print and Export have something to offer: a document on screen, read
+  /// as its text.
+  var offersPrintAndExport: Bool {
+    PublishedOriginalPage.offersPrintAndExport(
+      hasDocument: hasDocument, kind: publishedOriginal?.kind)
   }
 
   /// Who says how far the title has come into the toolbar, and the one place its
@@ -155,6 +171,7 @@ final class ReaderState {
     currentAnchor = nil
     currentSection = nil
     hasDocument = false
+    publishedOriginal = nil
     isLoading = false
     hasSelection = false
     documentTitle = nil

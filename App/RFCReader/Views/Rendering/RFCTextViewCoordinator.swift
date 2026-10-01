@@ -25,8 +25,11 @@ import os
 final class VisibleAnchorBox {
   var anchor: String?
   /// The reader's line, as a place that survives a rebuild: what the reading
-  /// position saves (#322). Nil at the top of the document, and on the old path.
+  /// position saves (#322). Nil at the top of the document.
   var place: ReadingPlace?
+  /// Whether the top of the viewport is ahead of section one, which `anchor`
+  /// reports as section one.
+  var isAheadOfSections = false
 }
 
 /// Where the header's heading ends, in the hosted header's own coordinates, as
@@ -333,7 +336,11 @@ final class RFCTextViewCoordinator: NSObject {
     // The abstract is the first prose in the storage and sits ahead of section
     // one, so while it is on screen the reader is, as far as every consumer of
     // this is concerned, in section one — which is what the old view reported too.
-    guard let anchor = sectionIndex.anchor(at: offset) ?? sectionIndex.entries.first?.anchor,
+    // The box tells the two apart for the one that must not scroll there: the
+    // reader's text made again, which starts at the top (#449).
+    let section = sectionIndex.anchor(at: offset)
+    lastVisibleAnchor?.isAheadOfSections = section == nil
+    guard let anchor = section ?? sectionIndex.entries.first?.anchor,
       anchor != lastReportedAnchor
     else { return }
     lastReportedAnchor = anchor
@@ -459,7 +466,8 @@ final class RFCTextViewCoordinator: NSObject {
     case .document:
       return ReferencePreview(
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
-    case .anchor(let anchor):
+    // A section of an entry outside the series previews the entry (#473).
+    case .anchor(let anchor), .entrySection(let anchor, _, _, _):
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
@@ -517,7 +525,8 @@ final class RFCTextViewCoordinator: NSObject {
       guard let library, let documentID,
         let (box, range) = reference(at: textItem.range.location),
         let url = link(at: range.location),
-        let target = LinkPreview.resolve(url, from: documentID, in: library.index)
+        let target = LinkPreview.resolve(
+          box.reference, linkedTo: url, from: documentID, in: library.index)
       else { return .init(menu: defaultMenu) }
       let host: UIHostingController<AnyView>
       switch target {
@@ -828,7 +837,8 @@ final class RFCTextViewCoordinator: NSObject {
         let target = reference(atWindowPoint: event.locationInWindow),
         let documentID,
         let url = link(at: target.range.location),
-        let resolved = LinkPreview.resolve(url, from: documentID, in: library?.index)
+        let resolved = LinkPreview.resolve(
+          target.box.reference, linkedTo: url, from: documentID, in: library?.index)
       else { return false }
       switch resolved {
       case .card:

@@ -157,8 +157,9 @@ extension DocumentTextBuilder {
   /// it by the padding gives the tint its own room. Run once over the finished
   /// text rather than as each chip is made, because the character before a chip
   /// is whatever came before its inline, and two adjacent chips each add to the
-  /// one character between them.
-  func reserveChipPadding() {
+  /// one character between them. A table cell runs it over its own runs too, to be
+  /// measured as it is drawn (#488).
+  static func reserveChipPadding(in output: NSMutableAttributedString) {
     let padding = FragmentGeometry.chipPadding
     let whole = NSRange(location: 0, length: output.length)
     var chips: [NSRange] = []
@@ -170,17 +171,22 @@ extension DocumentTextBuilder {
     // The backing store itself: `string` would copy the whole document.
     let text = output.mutableString
     for chip in chips {
-      addKern(padding, at: NSMaxRange(chip) - 1)
+      addKern(padding, at: NSMaxRange(chip) - 1, in: output)
       let before = chip.location - 1
       // A chip that starts a line has nothing before it to make room in: its
-      // tint reaches into the margin, as a card's does.
-      if before >= 0, text.character(at: before) != 0x0A {
-        addKern(padding, at: before)
+      // tint reaches into the margin, as a card's does. Nor does one that starts a
+      // table cell: the layout ignores a tab's kern and sets the chip at its stop,
+      // so kerning the tab would only let the measuring of the cell, which cannot
+      // see the tab, disagree with the drawing where a layout did honor it.
+      if before >= 0, text.character(at: before) != 0x0A, text.character(at: before) != 0x09 {
+        addKern(padding, at: before, in: output)
       }
     }
   }
 
-  private func addKern(_ amount: CGFloat, at index: Int) {
+  private static func addKern(
+    _ amount: CGFloat, at index: Int, in output: NSMutableAttributedString
+  ) {
     let existing = output.attribute(.kern, at: index, effectiveRange: nil) as? CGFloat ?? 0
     output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
   }
@@ -221,7 +227,10 @@ extension DocumentTextBuilder {
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size and its bounds are centered on that font's cap height.
+  /// the run's own font size and its bounds are centered on that font's cap height,
+  /// to the nearest whole point: a symbol that hangs below the line's descender
+  /// makes its line that much taller, even past a fixed line height, and a
+  /// fraction there puts every fragment below it off the pixel grid (#273).
   private func chipSymbolRun(
     _ name: String, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
@@ -232,7 +241,7 @@ extension DocumentTextBuilder {
     let attachment = NSTextAttachment()
     attachment.image = symbol
     attachment.bounds = CGRect(
-      x: 0, y: (font.capHeight - symbol.size.height) / 2, width: symbol.size.width,
+      x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width,
       height: symbol.size.height)
     let run = NSMutableAttributedString(attachment: attachment)
     run.addAttributes(attributes, range: NSRange(location: 0, length: run.length))
@@ -290,6 +299,8 @@ extension DocumentTextBuilder {
     case .anchor(let anchor):
       let scheme = referenceAnchors.contains(anchor) ? Self.referenceScheme : Self.anchorScheme
       return Self.url(anchor, scheme: scheme)
+    case .entrySection(let entry, _, _, let url):
+      return url ?? Self.url(entry, scheme: Self.referenceScheme)
     }
   }
 

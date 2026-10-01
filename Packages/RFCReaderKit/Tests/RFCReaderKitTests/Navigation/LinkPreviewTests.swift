@@ -60,6 +60,16 @@ struct LinkPreviewTests {
     #expect(resolve("https://www.iana.org/assignments/") == nil)
   }
 
+  /// A section of an entry outside the series links to the web, and previews the
+  /// entry's card all the same: the entry is what the reader knows of it (#473).
+  @Test func `a section of an entry outside the series previews the entry's card`() throws {
+    let page = try #require(URL(string: "https://fetch.spec.whatwg.org/#cors-check"))
+    let reference = CrossReference(
+      target: .entrySection(entry: "FETCH", tag: "FETCH", section: "4.9", url: page))
+    #expect(
+      LinkPreview.resolve(reference, linkedTo: page, from: current, in: nil) == .card("FETCH"))
+  }
+
   /// macOS's popover gets the whole preview; a phone's context menu gets what its
   /// screen leaves beside the gutters, and room under it for the menu.
   @Test func `the document preview is its full size where it fits`() {

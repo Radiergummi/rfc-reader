@@ -304,6 +304,75 @@ struct LegacyTextParserHeadingsTests {
     #expect(document.anchor(forPlace: "B") == "appendix-B")
   }
 
+  // MARK: Contents entries and centered chapters (#403)
+
+  /// A contents entry ends in a leader and a page number, and a heading never does:
+  /// dots run on, or are spaced, or meet the number, and the number may be roman. A
+  /// range in a title, `0...255`, is no leader.
+  @Test func `a leader and a page number make a contents entry`() {
+    #expect(LegacyTextParser.isContentsEntry("2.  Widget Overview ............................ 5"))
+    #expect(LegacyTextParser.isContentsEntry("FOREWORD .............................. iv"))
+    #expect(LegacyTextParser.isContentsEntry("3.1  Frobnication Order. . . . . . . . . . . 12"))
+    #expect(LegacyTextParser.isContentsEntry("Widget Notes.......7"))
+    #expect(!LegacyTextParser.isContentsEntry("2.  Widget Overview"))
+    #expect(!LegacyTextParser.isContentsEntry("4.2  Values 0...255"))
+    #expect(!LegacyTextParser.isContentsEntry("Wait for it ......"))
+  }
+
+  /// A column-0 contents listing is not a stack of headings: RFC 793's opened sections
+  /// 1, 2 and 3 over the listing, with its sub-entries inside them as artwork, and a
+  /// `REFERENCES ..... 85` section that took the preface for a bibliography.
+  @Test func `a column zero contents listing opens no sections`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    #expect(!document.allSections.contains { $0.titleText.contains("....") })
+    #expect(!document.artworkText.contains { $0.contains("Motivation ....") })
+    #expect(document.nestedParagraphs.contains { $0.plainText.contains("nine earlier editions") })
+  }
+
+  /// RFC 791 and 793, and the protocol specifications set like them, center a chapter's
+  /// heading, `1.  INTRODUCTION`, and set its subsections at column 0. Centered, it was
+  /// a list of one item; it is a heading, because the next heading is its first
+  /// subsection.
+  @Test func `a centered chapter heading heads its chapter`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let introduction = try #require(document.section(number: "1"))
+    #expect(introduction.titleText == "INTRODUCTION")
+    #expect(introduction.subsections.first?.number == "1.1")
+    #expect(introduction.blocks.first?.paragraph?.plainText.hasPrefix("The Transmission") == true)
+    #expect(document.sections.compactMap(\.number) == ["1", "2", "3"])
+    #expect(
+      !document.lists.contains { list in
+        list.items.count == 1 && list.items[0].blocks.first?.paragraph?.plainText == "PHILOSOPHY"
+      })
+  }
+
+  /// A numbered line on its own is a centered heading only where the next heading is
+  /// its first subsection, and no nearer line of its shape has its number.
+  @Test func `a numbered line is a centered heading only before its first subsection`() {
+    let lines: [LegacyTextParser.Line] = [
+      .text(""), .text("                         2.  WIDGET RULES"), .text(""),
+      .text("   The text."), .text(""), .text("2.1.  Widget Sizes"), .text(""),
+    ]
+    func heading(_ lines: [LegacyTextParser.Line], at index: Int = 1) -> String? {
+      LegacyTextParser.centeredHeadings(
+        in: lines, from: 0, bodyIsIndented: true, colonNumbered: false)[index]?.title
+    }
+    #expect(heading(lines) == "WIDGET RULES")
+    var nextIsNotItsSubsection = lines
+    nextIsNotItsSubsection[5] = .text("3.1.  Widget Sizes")
+    #expect(heading(nextIsNotItsSubsection) == nil)
+    var notOnItsOwn = lines
+    notOnItsOwn[2] = .text("   The text.")
+    #expect(heading(notOnItsOwn) == nil)
+    var aContentsEntry = lines
+    aContentsEntry[1] = .text("   2.  WIDGET RULES ................ 4")
+    #expect(heading(aContentsEntry) == nil)
+    var aNearerOne = lines
+    aNearerOne[3] = .text("                         2.  WIDGET RULES")
+    #expect(heading(aNearerOne) == nil, "a row of the same number sits nearer")
+    #expect(heading(aNearerOne, at: 3) == "WIDGET RULES")
+  }
+
   // MARK: Unnumbered headings (#201)
 
   /// A column-0 line that starts in lower case is a MIB line, wrapped prose or an `o`
