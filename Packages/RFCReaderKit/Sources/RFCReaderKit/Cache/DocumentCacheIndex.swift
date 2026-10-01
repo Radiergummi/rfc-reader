@@ -18,9 +18,8 @@ import RFCKit
 /// asked rather than at the next launch. A watcher would learn the same thing
 /// sooner, at the price of a source to keep alive for a list nobody is looking at.
 ///
-/// Here rather than beside `DocumentStore` because the App target has no test
-/// bundle, and which file names count as a cached body is exactly the kind of
-/// rule that wants one.
+/// A type of its own rather than part of `DocumentStore`, because which file names
+/// count as a cached body is exactly the kind of rule that wants tests of its own.
 public struct DocumentCacheIndex: Sendable {
   private let directory: URL
   private var documents: Set<DocumentID>

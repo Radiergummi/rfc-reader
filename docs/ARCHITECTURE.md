@@ -13,10 +13,10 @@ rfc-reader/
 │   │   ├── Citation/         CitationFormatter (short, full, Markdown, BibTeX, URL)
 │   │   └── Search/           IndexSearch (in-memory metadata search with a small query grammar), SearchQuery (that grammar written back out, and completed)
 │   └── Tests/RFCKitTests/    Swift Testing suites with real fixtures (RFC 1149, 2119, 5234, 8999, index sample, RSS, JSON)
-├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, the stores and the SwiftData schema. Needs an Apple SDK.
+├── Packages/RFCReaderKit/    Swift package: everything in the app that is a pure function of its inputs — DocumentTextBuilder, FragmentGeometry, ReaderLayout, link routing, DocumentStore (actor, disk cache), the stores and the SwiftData schema. Needs an Apple SDK.
 ├── Tools/corpus-build/       Offline pipeline (fetch, convert to RFCXML, manifest; the checks in RFCCorpusKit); see DATA_PIPELINE.md
 ├── App/RFCReader/            SwiftUI multiplatform app (iOS, iPadOS, macOS); no test bundle, so nothing testable lives here
-│   ├── Model/                LibraryModel (process-wide), NavigationModel (per tab), ReaderState (per window), DocumentStore (actor, disk cache)
+│   ├── Model/                LibraryModel (process-wide), NavigationModel (per tab), ReaderState (per window)
 │   ├── Views/                Navigation, list, reader, inspector
 │   │   └── Rendering/        RFCTextView, RFCTextViewCoordinator, RFCTextLayoutFragment — one TextKit 2 text view over one document text storage
 │   ├── Window/               macOS only: AppDelegate, ReaderWindowController, the toolbar
