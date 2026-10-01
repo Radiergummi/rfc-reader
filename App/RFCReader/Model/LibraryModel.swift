@@ -413,7 +413,11 @@ final class LibraryModel {
       switch fetched {
       case .unchanged:
         // A `304` answers only a request that sent validators, which came from `kept`.
-        guard let kept else { break }
+        // One that answers none leaves no index to wait for.
+        guard let kept else {
+          settleIndex()
+          break
+        }
         indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
       case .changed(let data, let validators):
         // Off the main actor: the parse alone is about a second (#124).
@@ -729,8 +733,8 @@ final class LibraryModel {
 
   /// The open tabs, most recently used first, and the link waiting for one: which tab
   /// a link goes to, and when, is `SceneRegistry`'s to decide (#137). This carries out
-  /// its decisions.
-  private var sceneRegistry = SceneRegistry<NavigationModel>()
+  /// its decisions. Not observed: no view reads it.
+  @ObservationIgnored private var sceneRegistry = SceneRegistry<NavigationModel>()
 
   #if os(macOS)
     /// The window layer, set by `AppDelegate` at launch. Weak: the delegate owns the
@@ -760,7 +764,18 @@ final class LibraryModel {
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
   private func settleIndex() {
-    if let delivery = sceneRegistry.indexSettled() { carryOut(delivery) }
+    let preferred = preferredScene
+    sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
+  }
+
+  /// The tab a link from outside goes to when nothing else decides: on macOS the front
+  /// tab of the window made key last (#277); none on iOS.
+  private var preferredScene: NavigationModel? {
+    #if os(macOS)
+      windows?.activeNavigation
+    #else
+      nil
+    #endif
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
@@ -778,11 +793,7 @@ final class LibraryModel {
   /// whatever window the reader next opens, possibly minutes later. iOS brings up a
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
-    #if os(macOS)
-      let preferred = windows?.activeNavigation
-    #else
-      let preferred: NavigationModel? = nil
-    #endif
+    let preferred = preferredScene
     switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
     case .deliver(let delivery):
       carryOut(delivery)

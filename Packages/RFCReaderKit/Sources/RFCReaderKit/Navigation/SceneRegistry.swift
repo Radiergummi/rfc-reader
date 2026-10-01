@@ -1,6 +1,6 @@
 import RFCKit
 
-/// The open tabs a link is routed through, most recently used first, and the one link
+/// The open tabs a link is routed through, most recently used first, and the links
 /// waiting for a tab (#137). Pure, over any kind of tab, so the routing is tested here
 /// rather than in the App target, which carries out its decisions.
 ///
@@ -8,13 +8,23 @@ import RFCKit
 /// it, a deep link would open in all of them at once. Tabs are held weakly: a tab's
 /// lifetime is its window's, and nothing here should keep a closed one alive.
 ///
-/// A link waits, in one slot, until there is a tab to take it and the index has
-/// arrived (#241). On a cold launch the first tab registers before the index is
-/// loaded, and a BCP or STD link handed over then would select the series itself,
-/// because resolving it to its first RFC needs the index. Every link waits, not only
-/// a series': the wait is the moment the cached index takes to read, and one rule is
-/// easier to trust than two. Of two links that wait, the later wins: the first tab
-/// can show one document, and the later link is the more recent ask.
+/// A link waits until there is a tab to take it and the index has arrived or failed
+/// to (#241). On a cold launch the first tab registers before the index is read, and
+/// a BCP or STD link handed over then would select the series itself, because
+/// resolving it to its first RFC needs the index. Every link waits, not only a
+/// series': the wait is the time the index takes to read from the cache or the copy
+/// bundled with the app, and one rule is easier to trust than two.
+///
+/// Two kinds of link wait, apart, so that neither displaces the other:
+/// - **For a new tab**, opened behind or in front from a tab already open: in order,
+///   one per tab, each bound to the next tab to register. One whose tab closes before
+///   it is delivered is dropped: the tab it was made for is gone, and the tab in use
+///   did not ask for it.
+/// - **Routed from outside**, before the index arrived or with no tab to take it. One
+///   slot: of two, the later wins, being the more recent ask, and the first tab can
+///   show one document (#140). Bound to the tab routing chose, or to the next tab to
+///   register; when that tab closes, or no tab registers but one is open when the
+///   index arrives, it goes to the tab in use.
 public struct SceneRegistry<Scene: AnyObject> {
   /// A link handed to a tab: open it there, and when `bringsForward`, make that the
   /// tab in use and bring its window forward.
@@ -31,7 +41,8 @@ public struct SceneRegistry<Scene: AnyObject> {
     case deliver(Delivery)
     /// There is no tab: open a window, whose tab will take the link when it registers.
     case openWindow
-    /// The index has not arrived; the link is held, and `indexSettled()` delivers it.
+    /// The index has not arrived; the link is held, and `indexSettled(preferring:)`
+    /// delivers it.
     case wait
   }
 
@@ -39,48 +50,60 @@ public struct SceneRegistry<Scene: AnyObject> {
     weak var scene: Scene?
   }
 
-  private enum Target {
-    /// The next tab to register: one being made for the link.
+  /// A link for a tab being made: unbound until that tab registers.
+  private struct ForNewTab {
+    let link: RFCLink
+    let bringsForward: Bool
+    var scene: Weak?
+  }
+
+  /// Where a routed link that waits is to go.
+  private enum RoutedTarget {
     case nextScene
-    /// This tab, as routing chose it.
     case scene(Weak)
-    /// The tab it was bound to has closed: the tab in use, when the link is delivered.
     case inUse
   }
 
-  private struct Pending {
+  /// A link routed from outside, waiting.
+  private struct Routed {
     let link: RFCLink
-    var target: Target
-    let bringsForward: Bool
+    var target: RoutedTarget
   }
 
   private var scenes: [Weak] = []
-  private var pending: Pending?
+  private var forNewTabs: [ForNewTab] = []
+  private var routed: Routed?
   /// Whether the index has arrived, or failed to: a link then waits for nothing more
   /// than a tab.
-  public private(set) var isIndexSettled = false
+  private var isIndexSettled = false
 
   public init() {}
 
   /// The open tabs, most recently used first.
   public var open: [Scene] { scenes.compactMap(\.scene) }
 
-  /// A new tab, now the most recently used, and the link it is to take, if one waits
-  /// for it and may be delivered.
+  /// A new tab, now the most recently used, and the link made for it, if one is and
+  /// the index has arrived.
   public mutating func register(_ scene: Scene) -> Delivery? {
     promote(scene)
-    guard var waiting = pending else { return nil }
-    if case .nextScene = waiting.target {
-      waiting.target = .scene(Weak(scene: scene))
-      pending = waiting
+    if let waiting = forNewTabs.firstIndex(where: { $0.scene == nil }) {
+      forNewTabs[waiting].scene = Weak(scene: scene)
+      guard isIndexSettled else { return nil }
+      let held = forNewTabs.remove(at: waiting)
+      return Delivery(link: held.link, scene: scene, bringsForward: held.bringsForward)
     }
-    return deliverIfReady()
+    guard let waiting = routed, case .nextScene = waiting.target else { return nil }
+    routed?.target = .scene(Weak(scene: scene))
+    guard isIndexSettled else { return nil }
+    routed = nil
+    return Delivery(link: waiting.link, scene: scene, bringsForward: true)
   }
 
   public mutating func unregister(_ scene: Scene) {
     scenes.removeAll { $0.scene == nil || $0.scene === scene }
-    if case .scene(let bound)? = pending?.target, bound.scene == nil || bound.scene === scene {
-      pending?.target = .inUse
+    forNewTabs.removeAll { Self.isGone($0.scene, or: scene) }
+    if case .scene(let bound)? = routed?.target, Self.isGone(bound, or: scene) {
+      routed?.target = .inUse
     }
   }
 
@@ -102,39 +125,50 @@ public struct SceneRegistry<Scene: AnyObject> {
       let target = LinkRouting.target(
         for: link.id, in: open, showing: showing, preferring: isPreferred)
     else {
-      pending = Pending(link: link, target: .nextScene, bringsForward: true)
+      routed = Routed(link: link, target: .nextScene)
       return .openWindow
     }
     guard isIndexSettled else {
-      pending = Pending(link: link, target: .scene(Weak(scene: target)), bringsForward: true)
+      routed = Routed(link: link, target: .scene(Weak(scene: target)))
       return .wait
     }
     return .deliver(Delivery(link: link, scene: target, bringsForward: true))
   }
 
-  /// Holds `link` for the next tab to register: one being made for it, in front or
-  /// behind.
+  /// Holds `link` for the next tab to register that no other link is held for: one
+  /// being made for it, in front or behind.
   public mutating func hold(_ link: RFCLink, bringsForward: Bool) {
-    pending = Pending(link: link, target: .nextScene, bringsForward: bringsForward)
+    forNewTabs.append(ForNewTab(link: link, bringsForward: bringsForward, scene: nil))
   }
 
-  /// The index has arrived, or failed to: the link held for it, if its tab is there.
-  public mutating func indexSettled() -> Delivery? {
+  /// The index has arrived, or failed to: every link held for it whose tab is there.
+  /// A routed link whose tab has closed, or that waits for a tab while one is open,
+  /// goes to the preferred tab, else the most recently used.
+  public mutating func indexSettled(preferring isPreferred: (Scene) -> Bool = { _ in false })
+    -> [Delivery]
+  {
     isIndexSettled = true
-    return deliverIfReady()
+    var deliveries: [Delivery] = []
+    forNewTabs.removeAll { held in
+      guard let scene = held.scene?.scene else { return false }
+      deliveries.append(
+        Delivery(link: held.link, scene: scene, bringsForward: held.bringsForward))
+      return true
+    }
+    if let waiting = routed {
+      var bound: Scene?
+      if case .scene(let weak) = waiting.target { bound = weak.scene }
+      if let scene = bound ?? open.first(where: isPreferred) ?? open.first {
+        routed = nil
+        deliveries.append(Delivery(link: waiting.link, scene: scene, bringsForward: true))
+      }
+    }
+    return deliveries
   }
 
-  private mutating func deliverIfReady() -> Delivery? {
-    guard isIndexSettled, let waiting = pending else { return nil }
-    let scene: Scene?
-    switch waiting.target {
-    case .nextScene: scene = nil
-    case .scene(let bound): scene = bound.scene ?? open.first
-    case .inUse: scene = open.first
-    }
-    guard let scene else { return nil }
-    pending = nil
-    return Delivery(link: waiting.link, scene: scene, bringsForward: waiting.bringsForward)
+  private static func isGone(_ bound: Weak?, or scene: Scene) -> Bool {
+    guard let bound else { return false }
+    return bound.scene == nil || bound.scene === scene
   }
 
   private mutating func promote(_ scene: Scene) {
