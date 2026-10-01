@@ -49,4 +49,20 @@ struct ToolbarTitleRevealTests {
     #expect(ToolbarTitleReveal.progress(headingBottom: 200, visibleTop: 199, distance: 0) == 0)
     #expect(ToolbarTitleReveal.progress(headingBottom: 200, visibleTop: 200, distance: 0) == 1)
   }
+
+  /// iOS places the title by its top, y growing down: just under the bar's bottom
+  /// edge while hidden, centered in the bar once shown, and the way between in step
+  /// with the scroll.
+  @Test func `the title rises from under the bar to its middle`() {
+    #expect(ToolbarTitleReveal.top(atProgress: 0, inBar: 44, height: 36) == 44)
+    #expect(ToolbarTitleReveal.top(atProgress: 1, inBar: 44, height: 36) == 4)
+    #expect(ToolbarTitleReveal.top(atProgress: 0.5, inBar: 44, height: 36) == 24)
+  }
+
+  /// A heading handing over inside the subtitle's own line is the same rise, in a
+  /// bar exactly its height: from just under the line to filling it.
+  @Test func `a line the height of the text rises to fill it`() {
+    #expect(ToolbarTitleReveal.top(atProgress: 0, inBar: 16, height: 16) == 16)
+    #expect(ToolbarTitleReveal.top(atProgress: 1, inBar: 16, height: 16) == 0)
+  }
 }

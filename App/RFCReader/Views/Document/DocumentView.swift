@@ -137,11 +137,19 @@ struct DocumentView: View {
     content
       .navigationTitle(id.displayName)
       #if !os(macOS)
-        // The designation as the title, and what it is called beneath it.
-        .navigationSubtitle(
-          DocumentActions.subtitle(metadata: metadata, documentTitle: reader.documentTitle) ?? ""
-        )
         .navigationBarTitleDisplayMode(.inline)
+        // The designation over what it is called, in the bar once the header has
+        // scrolled away. The navigation title stays, for the back button and the
+        // app switcher.
+        .toolbar {
+          ToolbarItem(placement: .principal) {
+            DocumentTitle(
+              title: id.displayName,
+              subtitle: DocumentActions.subtitle(
+                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
+              reader: reader)
+          }
+        }
         .toolbar {
           DocumentToolbar(
             id: id, metadata: metadata, library: library, navigation: navigation,
