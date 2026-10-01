@@ -96,29 +96,30 @@ public struct NavigationHistory: Sendable {
   /// forward again returns to it.
   @discardableResult
   public mutating func goBack(leaving position: String? = nil) -> HistoryEntry? {
-    guard let previous = backward.popLast() else { return nil }
-    if var leaving = current {
-      leaving.section = position ?? leaving.section
-      forward.append(leaving)
-    }
-    current = previous
-    arrivedByGoing = false
-    isHidden = false
-    return previous
+    step(from: \.backward, to: \.forward, leaving: position)
   }
 
   /// The mirror of `goBack(leaving:)`.
   @discardableResult
   public mutating func goForward(leaving position: String? = nil) -> HistoryEntry? {
-    guard let next = forward.popLast() else { return nil }
+    step(from: \.forward, to: \.backward, leaving: position)
+  }
+
+  /// One step through what was already here: the place on top of `source` becomes
+  /// current, and the one left, at `position`, goes on top of `destination`.
+  private mutating func step(
+    from source: WritableKeyPath<Self, [HistoryEntry]>,
+    to destination: WritableKeyPath<Self, [HistoryEntry]>, leaving position: String?
+  ) -> HistoryEntry? {
+    guard let arrived = self[keyPath: source].popLast() else { return nil }
     if var leaving = current {
       leaving.section = position ?? leaving.section
-      backward.append(leaving)
+      self[keyPath: destination].append(leaving)
     }
-    current = next
+    current = arrived
     arrivedByGoing = false
     isHidden = false
-    return next
+    return arrived
   }
 
   /// Put the current place away without leaving it: going back to the list on an
