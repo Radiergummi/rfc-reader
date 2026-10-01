@@ -666,11 +666,9 @@ struct DocumentView: View {
   private static func listSections(
     of document: RFCDocument, in built: BuiltDocument, into reader: ReaderState
   ) {
-    // Taken once: `AnchorIndex.sections` filters, sorts and re-indexes every
-    // anchor in the document, so asking inside the filter would rebuild the whole
-    // index once per section.
-    let sections = built.anchors.sections
-    reader.sections = document.allSections.filter { sections.offset(of: $0.anchor) != nil }
+    reader.sections = document.allSections.filter {
+      built.anchors.sections.offset(of: $0.anchor) != nil
+    }
   }
 
   /// The Requirements tab's rows (#180), off the main actor: every sentence of the

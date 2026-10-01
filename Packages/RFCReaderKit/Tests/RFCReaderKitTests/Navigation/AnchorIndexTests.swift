@@ -46,6 +46,22 @@ struct AnchorIndexTests {
     #expect(unsorted.entries.map(\.anchor) == ["a", "b"])
   }
 
+  /// #143: the section index is made with the index, so asking for it is free and
+  /// gives the same index each time; an index of sections only is its own.
+  @Test func `the section index holds the sections, and is its own`() {
+    let index = AnchorIndex([
+      .init(anchor: "section-1", offset: 0, heading: "1. Introduction"),
+      .init(anchor: "figure-1", offset: 120),
+      .init(anchor: "section-2", offset: 400, heading: "2. Terms"),
+    ])
+    #expect(index.sections.entries.map(\.anchor) == ["section-1", "section-2"])
+    #expect(index.sections.heading(of: "section-2") == "2. Terms")
+    #expect(index.sections.offset(of: "figure-1") == nil)
+    #expect(index.sections.sections == index.sections)
+    #expect(index.sections != index)
+    #expect(AnchorIndex([]).sections == AnchorIndex([]))
+  }
+
   /// The one binary search both lookups share: the first element past the
   /// partition point, the end when there is none.
   @Test func `the partitioning index is the first element that belongs after the point`() {
