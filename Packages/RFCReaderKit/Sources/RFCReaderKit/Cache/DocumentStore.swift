@@ -537,4 +537,12 @@ public actor DocumentStore {
     }
     return data
   }
+
+  // MARK: - Tests
+
+  /// How many readers wait for the fetch of `id`'s document, and for its `.txt`, so
+  /// a test acts once the readers it started have joined them.
+  func waiters(_ id: DocumentID) -> (documents: Int, texts: Int) {
+    (downloads.waiters(id), texts.waiters(id))
+  }
 }
