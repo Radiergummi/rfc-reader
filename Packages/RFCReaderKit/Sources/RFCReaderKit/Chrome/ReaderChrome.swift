@@ -18,7 +18,8 @@ public struct ReaderChrome: Equatable, Sendable {
     public var distanceFromTop: CGFloat
     /// How far the document can still scroll down; zero or less at its end.
     public var distanceToEnd: CGFloat
-    /// Whether a finger moved it: dragging, or the deceleration after one.
+    /// Whether a finger panned it: a pan, or the deceleration after one. Not a
+    /// drag of the scroll indicator; see `Drag`.
     public var isUserDriven: Bool
     /// Whether it is the deceleration after a fling, the finger off the glass.
     public var isFlinging: Bool
@@ -47,6 +48,86 @@ public struct ReaderChrome: Equatable, Sendable {
         distanceToEnd: contentHeight + bottomInset - viewportHeight - offset,
         isUserDriven: isUserDriven, isFlinging: isFlinging)
     }
+  }
+
+  /// One drag on the text view, from the finger coming down to it lifting, told
+  /// apart by how the text moves against the finger.
+  ///
+  /// A pan moves the text with the finger, which moves the offset against it. A
+  /// drag of the scroll indicator moves the offset the way the finger goes, and
+  /// much further, because the indicator stands for the whole document: down it
+  /// and back up, it hid and showed the bars as fast as the finger turned. It is
+  /// one interaction that neither hides nor shows them, so only a pan is
+  /// `Scroll.isUserDriven`. Decided once, by the first movement of both the text
+  /// and the finger, so a pan that wobbles at its end stays a pan.
+  public struct Drag: Equatable, Sendable {
+    /// Nil until the text and the finger first move together.
+    public private(set) var kind: DragKind?
+    private var startOffset: CGFloat
+    private let startFinger: CGFloat
+    private var isLifted = false
+
+    /// `offset` is the content offset, growing down the document; `finger` is the
+    /// pan's translation, growing down the screen.
+    public init(offset: CGFloat, finger: CGFloat) {
+      startOffset = offset
+      startFinger = finger
+    }
+
+    /// Text that moves while the finger stays is not the finger's — the layout
+    /// engine's pin after the header changed height, an inset clamping the offset,
+    /// an offset applied before the pan's translation catches up — and decides
+    /// nothing: the drag is measured from where it was moved to.
+    public mutating func moved(offset: CGFloat, finger: CGFloat) {
+      guard kind == nil else { return }
+      let textMoved = offset - startOffset
+      guard textMoved != 0 else { return }
+      let fingerMoved = finger - startFinger
+      guard fingerMoved != 0 else {
+        startOffset = offset
+        return
+      }
+      kind = textMoved * fingerMoved < 0 ? .pan : .indicator
+    }
+
+    /// The finger came off the text with the scroll still decelerating, which is
+    /// still this drag's. The next touch starts another, even one the delegate
+    /// hears nothing of: a finger that stops a deceleration and lifts without
+    /// dragging ends neither the drag nor the deceleration, so this one is still
+    /// there when that touch scrolls.
+    public mutating func lifted() {
+      isLifted = true
+    }
+
+    /// Whether a scroll in this drag is the reader's to hide or show the bars by:
+    /// a pan, with the finger down or the scroll it flung decelerating, and not a
+    /// scroll the layout engine makes during it.
+    public func isUserDriven(touching: Bool, decelerating: Bool, engineMoving: Bool) -> Bool {
+      kind == .pan && !engineMoving && (touching || decelerating)
+    }
+
+    /// The drag a scroll belongs to, given `drag`, the one before it.
+    ///
+    /// With a finger down (`touching`), a scroll with no drag, or only a lifted
+    /// one, starts a drag, undecided until the text moves again. Without a finger,
+    /// the drag is left as it is: a deceleration is still the pan's.
+    public static func following(
+      _ drag: Drag?, offset: CGFloat, finger: CGFloat, touching: Bool
+    ) -> Drag? {
+      guard touching else { return drag }
+      var current = drag ?? Drag(offset: offset, finger: finger)
+      if current.isLifted {
+        current = Drag(offset: offset, finger: finger)
+      }
+      current.moved(offset: offset, finger: finger)
+      return current
+    }
+  }
+
+  /// What a `Drag` turned out to be.
+  public enum DragKind: Equatable, Sendable {
+    case pan
+    case indicator
   }
 
   /// How far a scroll down runs before the bars go: a nudge to settle a line is
