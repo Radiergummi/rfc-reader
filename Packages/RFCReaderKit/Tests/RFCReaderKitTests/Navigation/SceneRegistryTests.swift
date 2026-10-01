@@ -1,0 +1,172 @@
+import RFCKit
+import RFCReaderKit
+import Testing
+
+/// The open tabs a link is routed through, and the link waiting for one (#137): held
+/// until there is a tab to take it and the index has arrived, so a BCP or STD opens
+/// its first RFC rather than selecting the series itself (#241).
+@Suite("Scene registry")
+@MainActor
+struct SceneRegistryTests {
+  final class Tab {
+    var selection: DocumentID?
+    init(showing selection: DocumentID? = nil) { self.selection = selection }
+  }
+
+  private let bcp14 = RFCLink(id: DocumentID(series: .bcp, number: 14))
+  private let rfc9110 = RFCLink(id: .rfc(9110))
+
+  private func registry(ready: Bool = true) -> SceneRegistry<Tab> {
+    var registry = SceneRegistry<Tab>()
+    if ready { _ = registry.indexSettled() }
+    return registry
+  }
+
+  @Test func `registered tabs are most recently used first, and activation promotes`() {
+    var registry = registry()
+    let first = Tab()
+    let second = Tab()
+    _ = registry.register(first)
+    _ = registry.register(second)
+    #expect(registry.open.map(ObjectIdentifier.init) == [second, first].map(ObjectIdentifier.init))
+    registry.activate(first)
+    #expect(registry.open.first === first)
+    registry.unregister(first)
+    #expect(registry.open.map(ObjectIdentifier.init) == [ObjectIdentifier(second)])
+  }
+
+  /// A tab that has gone away is not kept alive by the registry, nor routed to.
+  @Test func `a released tab is not open`() {
+    var registry = registry()
+    do {
+      let gone = Tab()
+      _ = registry.register(gone)
+    }
+    #expect(registry.open.isEmpty)
+  }
+
+  @Test func `a link goes to the tab showing its document, else the most recent`() {
+    var registry = registry()
+    let showing = Tab(showing: .rfc(9110))
+    let recent = Tab()
+    _ = registry.register(showing)
+    _ = registry.register(recent)
+    #expect(route(rfc9110, in: &registry) == .deliver(Delivery(rfc9110, to: showing)))
+    #expect(route(bcp14, in: &registry) == .deliver(Delivery(bcp14, to: recent)))
+  }
+
+  /// With no tab open, a window is opened for the link, and the tab it makes takes it.
+  @Test func `with no tab, the link waits for the tab a new window makes`() {
+    var registry = registry()
+    #expect(route(rfc9110, in: &registry) == .openWindow)
+    let made = Tab()
+    #expect(registry.register(made).map(Delivery.init) == Delivery(rfc9110, to: made))
+    // Taken once.
+    #expect(registry.register(Tab()) == nil)
+  }
+
+  /// #140: a link routed before any tab registered, then the first tab.
+  @Test func `a link before the first tab is given to it`() {
+    var registry = registry()
+    _ = route(rfc9110, in: &registry)
+    let first = Tab()
+    #expect(registry.register(first).map(Delivery.init) == Delivery(rfc9110, to: first))
+  }
+
+  /// #241: on a cold launch the first tab registers before the index has arrived. The
+  /// link waits for the index, so that `open` can resolve the series to its first RFC.
+  @Test func `a series link on a cold launch waits for the index`() {
+    var registry = registry(ready: false)
+    _ = route(bcp14, in: &registry)
+    let first = Tab()
+    #expect(registry.register(first) == nil)
+    #expect(registry.indexSettled().map(Delivery.init) == Delivery(bcp14, to: first))
+    #expect(registry.indexSettled() == nil)
+  }
+
+  /// Every link waits while the index is on its way, a tab already open or not, and is
+  /// routed when it arrives, to the tab it would have gone to.
+  @Test func `a link routed before the index arrives is delivered when it does`() {
+    var registry = registry(ready: false)
+    let showing = Tab(showing: .rfc(9110))
+    let recent = Tab()
+    _ = registry.register(showing)
+    _ = registry.register(recent)
+    #expect(route(rfc9110, in: &registry) == .wait)
+    #expect(registry.indexSettled().map(Delivery.init) == Delivery(rfc9110, to: showing))
+  }
+
+  /// One slot: the first tab can show one document, and the later link is the more
+  /// recent ask.
+  @Test func `of two early links the later wins`() {
+    var registry = registry(ready: false)
+    _ = route(rfc9110, in: &registry)
+    _ = route(bcp14, in: &registry)
+    let first = Tab()
+    _ = registry.register(first)
+    #expect(registry.indexSettled().map(Delivery.init) == Delivery(bcp14, to: first))
+  }
+
+  /// A link for a new tab goes to the next tab to register, and does not bring it
+  /// forward: a tab opened behind stays behind.
+  @Test func `a link held for a new tab goes to it, in the background as asked`() {
+    var registry = registry()
+    let existing = Tab()
+    _ = registry.register(existing)
+    registry.hold(rfc9110, bringsForward: false)
+    let made = Tab()
+    let delivery = registry.register(made)
+    #expect(delivery?.scene === made)
+    #expect(delivery?.bringsForward == false)
+  }
+
+  /// The tab a held link was bound to closed before the index arrived: the link goes
+  /// to the tab in use instead of nowhere.
+  @Test func `a held link whose tab closed goes to the tab in use`() {
+    var registry = registry(ready: false)
+    let other = Tab()
+    _ = registry.register(other)
+    do {
+      let closing = Tab()
+      _ = registry.register(closing)
+      _ = route(rfc9110, in: &registry)
+      registry.unregister(closing)
+    }
+    #expect(registry.indexSettled().map(Delivery.init) == Delivery(rfc9110, to: other))
+  }
+
+  // MARK: - Support
+
+  /// What a decision came to, comparable: the link and the tab, by identity.
+  struct Delivery: Equatable {
+    let link: RFCLink
+    let scene: ObjectIdentifier
+    let bringsForward: Bool
+
+    init(_ link: RFCLink, to scene: Tab, bringsForward: Bool = true) {
+      self.link = link
+      self.scene = ObjectIdentifier(scene)
+      self.bringsForward = bringsForward
+    }
+
+    init(_ delivery: SceneRegistry<Tab>.Delivery) {
+      link = delivery.link
+      scene = ObjectIdentifier(delivery.scene)
+      bringsForward = delivery.bringsForward
+    }
+  }
+
+  enum Decision: Equatable {
+    case deliver(Delivery)
+    case openWindow
+    case wait
+  }
+
+  private func route(_ link: RFCLink, in registry: inout SceneRegistry<Tab>) -> Decision {
+    switch registry.route(link, showing: \.selection) {
+    case .deliver(let delivery): .deliver(Delivery(delivery))
+    case .openWindow: .openWindow
+    case .wait: .wait
+    }
+  }
+}
