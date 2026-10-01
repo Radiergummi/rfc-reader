@@ -30,9 +30,11 @@ extension Block {
     if case .figure(let figure) = self { figure } else { nil }
   }
 
-  var definitionItems: [DefinitionItem]? {
-    if case .definitionList(let items) = self { items } else { nil }
+  var definitionList: DefinitionList? {
+    if case .definitionList(let list) = self { list } else { nil }
   }
+
+  var definitionItems: [DefinitionItem]? { definitionList?.items }
 }
 
 extension Inline {

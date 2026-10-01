@@ -302,8 +302,8 @@ extension DocumentTextBuilder {
         appendParagraph(paragraph, indent: indent)
       case .list(let list):
         appendList(list, indent: indent)
-      case .definitionList(let items):
-        appendDefinitionList(items, indent: indent)
+      case .definitionList(let list):
+        appendDefinitionList(list.items, indent: indent)
       case .preformatted(let content):
         appendVerbatim(content, indent: indent)
       case .table(let table):

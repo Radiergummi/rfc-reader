@@ -51,7 +51,7 @@ struct BuilderListTests {
   @Test func `definition terms are bold and definitions are indented`() throws {
     let item = DefinitionItem(
       term: [.text("MUST")], definition: [.paragraph(Paragraph(text: "absolute requirement"))])
-    let document = Fixtures.document(.definitionList([item]))
+    let document = Fixtures.document(.definitionList(DefinitionList([item])))
     let built = DocumentTextBuilder.build(document, style: style)
     let offset = try Fixtures.offset(of: "MUST", in: built.text)
     let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
@@ -80,7 +80,8 @@ struct BuilderListTests {
       DefinitionItem(
         term: [.text("SHOULD")], definition: [.paragraph(Paragraph(text: "recommended"))]),
     ]
-    let built = DocumentTextBuilder.build(Fixtures.document(.definitionList(items)), style: style)
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.definitionList(DefinitionList(items))), style: style)
 
     let definition = try #require(built.anchors.offset(of: "must-definition"))
     #expect(try Fixtures.offset(of: "absolute requirement", in: built.text) == definition)

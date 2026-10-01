@@ -617,7 +617,12 @@ public enum RFCXMLParser {
             isCompact: element["spacing"] == "compact"
           ))
       case "dl":
-        return .definitionList(parseDefinitionItems(element))
+        return .definitionList(
+          DefinitionList(
+            parseDefinitionItems(element),
+            isCompact: element["spacing"] == "compact",
+            hangsTerms: element["newline"] == "false"
+          ))
       case "artwork":
         return .preformatted(parseArtwork(element, kind: .artwork))
       case "sourcecode":

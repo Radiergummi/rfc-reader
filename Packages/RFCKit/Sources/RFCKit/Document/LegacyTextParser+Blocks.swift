@@ -210,15 +210,16 @@ extension LegacyTextParser {
       {
         var items = definitionItems(hanging.entries, linker: linker)
         if definitionsAbove?.indent == hanging.indent,
-          case .definitionList(let previous)? = result.last
+          case .definitionList(var previous)? = result.last
         {
-          result[result.count - 1] = .definitionList(previous + items)
+          previous.items += items
+          result[result.count - 1] = .definitionList(previous)
         } else {
           if let lone = loneAbove, lone.definitions.indent == hanging.indent {
             result.removeLast(lone.blocks)
             items = definitionItems(lone.definitions.entries, linker: linker) + items
           }
-          result.append(.definitionList(items))
+          result.append(.definitionList(DefinitionList(items)))
         }
         openDefinitions = (hanging.indent, continuationColumn)
         openListIndent = nil
@@ -250,8 +251,8 @@ extension LegacyTextParser {
         {
           previous.items += list.items
           result[result.count - 1] = .list(previous)
-        } else if case .definitionList(let items) = parsed,
-          case .definitionList(let previous)? = result.last,
+        } else if case .definitionList(let list) = parsed,
+          case .definitionList(var previous)? = result.last,
           let catalog = openCatalog,
           block.lines.first?.leadingSpaceCount == catalog.indent
             || block.lines.first.flatMap(catalogTextColumn(of:)) == catalog.textColumn
@@ -259,7 +260,8 @@ extension LegacyTextParser {
           // At the same column only, of its numbers or of its text: a catalog set
           // deeper is not the one above, and right-aligned numbers (RFC 1140's `1006`
           // over `996`) move the number's column but not the text's.
-          result[result.count - 1] = .definitionList(previous + items)
+          previous.items += list.items
+          result[result.count - 1] = .definitionList(previous)
         } else {
           result.append(parsed)
         }
@@ -351,14 +353,14 @@ extension LegacyTextParser {
   private static func appendToLastDefinition(
     _ lines: [String], in result: inout [Block], linker: InlineLinker
   ) -> Bool {
-    guard case .definitionList(var items)? = result.last, var item = items.last else {
+    guard case .definitionList(var list)? = result.last, var item = list.items.last else {
       return false
     }
     let inlines = linker.link(joinWrappedLines(lines))
     guard !inlines.isEmpty else { return false }
     item.definition.append(.paragraph(Paragraph(inlines)))
-    items[items.count - 1] = item
-    result[result.count - 1] = .definitionList(items)
+    list.items[list.items.count - 1] = item
+    result[result.count - 1] = .definitionList(list)
     return true
   }
 
@@ -762,9 +764,15 @@ extension LegacyTextParser {
 
     // Catalogs: every entry a number and a dash at one indent, anything else hung
     // past it. Before the prose test, which takes a one-line entry for a paragraph
-    // and the rest of the block for artwork.
+    // and the rest of the block for artwork. Compact, with each number hung beside
+    // its text, as the document sets them: a catalog is a table of short entries, and
+    // a number on a line of its own doubled its height (#352).
     if let entries = catalogEntries {
-      return [.definitionList(definitionItems(entries, linker: linker))]
+      return [
+        .definitionList(
+          DefinitionList(
+            definitionItems(entries, linker: linker), isCompact: true, hangsTerms: true))
+      ]
     }
 
     if looksLikeProse(lines, maxIndent: proseIndent) {

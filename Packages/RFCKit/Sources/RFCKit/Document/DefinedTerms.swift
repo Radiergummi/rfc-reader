@@ -124,8 +124,8 @@ enum DefinedTerms {
   /// that way).
   static func definitionLists(in blocks: [Block]) -> [[DefinitionItem]] {
     blocks.flatMap { block -> [[DefinitionItem]] in
-      if case .definitionList(let items) = block {
-        return [items]
+      if case .definitionList(let list) = block {
+        return [list.items]
       }
       return definitionLists(in: block.nestedBlocks)
     }

@@ -34,10 +34,11 @@ struct DocumentReportTests {
         Section(
           anchor: "section-1.1", number: "1.1", title: "Terms",
           blocks: [
-            .definitionList([
-              DefinitionItem(
-                term: [.text("Term")], definition: [.paragraph(Paragraph(text: "Meaning."))])
-            ]),
+            .definitionList(
+              DefinitionList([
+                DefinitionItem(
+                  term: [.text("Term")], definition: [.paragraph(Paragraph(text: "Meaning."))])
+              ])),
             .references(
               ReferenceList(
                 title: "References",

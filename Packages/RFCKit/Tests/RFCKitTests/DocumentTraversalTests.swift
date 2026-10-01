@@ -30,11 +30,12 @@ struct DocumentTraversalTests {
               Table(
                 title: nil, header: [Table.Row(cells: [[.text("head "), cite(4)]])],
                 rows: [Table.Row(cells: [[.text("cell "), cite(5)]])])),
-            .definitionList([
-              DefinitionItem(
-                term: [.text("term "), cite(6)],
-                definition: [.paragraph(Paragraph(text: "definition"))])
-            ]),
+            .definitionList(
+              DefinitionList([
+                DefinitionItem(
+                  term: [.text("term "), cite(6)],
+                  definition: [.paragraph(Paragraph(text: "definition"))])
+              ])),
             .figure(
               Figure(title: "F", blocks: [.preformatted(Preformatted(kind: .artwork, text: "+-+"))])
             ),
