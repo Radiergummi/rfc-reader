@@ -184,7 +184,7 @@ struct InlineRunTests {
   /// wording decision -- so it is left alone rather than composed over.
   @Test func `a bare section format is not chipped`() {
     let xref = CrossReference(target: .document(.rfc(2119), section: "2"), sectionFormat: .bare)
-    #expect(xref.displayLabel == "2")
+    #expect(xref.display.text == "2")
     #expect(
       Fixtures.inlineRun([.crossReference(xref)]).attribute(.rfcChip, at: 0, effectiveRange: nil)
         == nil)

@@ -739,8 +739,9 @@ public struct CrossReference: Sendable, Hashable, Codable {
   }
 
   /// The text a reader shows for this reference -- what `[Inline].plainText`
-  /// flattens to, and what the reader draws.
-  public var displayLabel: String { display.text }
+  /// flattens to, and what the reader draws. Readers outside RFCKit ask `display`,
+  /// which also says whether the text is a chip.
+  var displayLabel: String { display.text }
 
   /// A label should never break between its word and its number, so "RFC 9110"
   /// and "Section 4.2" are joined with U+00A0.

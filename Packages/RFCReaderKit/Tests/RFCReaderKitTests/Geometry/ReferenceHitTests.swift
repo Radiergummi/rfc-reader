@@ -17,7 +17,7 @@ struct ReferenceHitTests {
     let text = Fixtures.inlineRun([.text("See "), .crossReference(chipped), .text(" for more.")])
     let start = try Fixtures.offset(of: "\u{FFFC}", in: text)
     let whole = NSRange(
-      location: start, length: (Self.chipPrefix + chipped.displayLabel).utf16.count)
+      location: start, length: (Self.chipPrefix + chipped.display.text).utf16.count)
     for offset in whole.location..<NSMaxRange(whole) {
       let hit = try #require(text.reference(at: offset), "no reference at \(offset)")
       #expect(hit.range == whole, "at \(offset)")
@@ -28,7 +28,7 @@ struct ReferenceHitTests {
   @Test func `two adjacent references are two hits`() throws {
     let second = CrossReference(target: .document(.rfc(9111), section: nil))
     let text = Fixtures.inlineRun([.crossReference(chipped), .crossReference(second)])
-    let boundary = (Self.chipPrefix + chipped.displayLabel).utf16.count
+    let boundary = (Self.chipPrefix + chipped.display.text).utf16.count
     let first = try #require(text.reference(at: boundary - 1))
     let next = try #require(text.reference(at: boundary))
     #expect(first.range == NSRange(location: 0, length: boundary))
@@ -41,7 +41,7 @@ struct ReferenceHitTests {
   /// and the popover would otherwise span both.
   @Test func `two identical adjacent references are two hits`() throws {
     let text = Fixtures.inlineRun([.crossReference(chipped), .crossReference(chipped)])
-    let boundary = (Self.chipPrefix + chipped.displayLabel).utf16.count
+    let boundary = (Self.chipPrefix + chipped.display.text).utf16.count
     let first = try #require(text.reference(at: boundary - 1))
     let next = try #require(text.reference(at: boundary))
     #expect(first.range == NSRange(location: 0, length: boundary))
