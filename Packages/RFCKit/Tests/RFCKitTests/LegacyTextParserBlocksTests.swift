@@ -108,6 +108,43 @@ struct LegacyTextParserBlocksTests {
     #expect(two.map(\.text) == ["Reserved", "First Value"])
   }
 
+  /// A catalog is set as the document sets it, each number beside its text and no
+  /// space between the entries; a hanging-indent definition keeps its term on a line
+  /// of its own, as every definition list was set before (#352).
+  @Test func `a catalog is compact and hangs its numbers, a hanging definition does not`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let catalog = LegacyTextParser.RawBlock(lines: [
+      "      0 - Reserved",
+      "      1 - First Value",
+    ])
+    let catalogList = try #require(
+      LegacyTextParser.blocks(from: [catalog], proseIndent: 6, linker: linker).first?
+        .definitionList)
+    #expect(catalogList.items.map(\.term.plainText) == ["0", "1"])
+    #expect(catalogList.isCompact)
+    #expect(catalogList.hangsTerms)
+
+    let hanging = LegacyTextParser.RawBlock(lines: [
+      "   Widget:  A part that is carried over a link",
+      "      from one end to the other.",
+    ])
+    let hangingList = try #require(
+      LegacyTextParser.blocks(from: [hanging], proseIndent: 6, linker: linker).first?
+        .definitionList)
+    #expect(hangingList.items.map(\.term.plainText) == ["Widget:"])
+    #expect(!hangingList.isCompact)
+    #expect(!hangingList.hangsTerms)
+  }
+
+  /// The same through a whole document: RFC 1540's standards summaries are catalogs,
+  /// and every one of them is compact and hangs its numbers, merged entries included.
+  @Test func `a document's catalogs are compact and hang their numbers`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+    let catalogs = document.everyBlock.compactMap(\.definitionList)
+    #expect(catalogs.count > 1)
+    #expect(catalogs.allSatisfy { $0.isCompact && $0.hangsTerms })
+  }
+
   @Test func `lines that only look like catalog entries are not`() {
     // Arithmetic, not an entry.
     #expect(LegacyTextParser.catalogEntries(["   3 - 2 leaves one"]) == nil)

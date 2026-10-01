@@ -53,8 +53,8 @@ extension DocumentTextBuilder {
   /// twice. A reference column is: each of its chips is built to be measured and
   /// again to be set. Building runs numbers a chip, so measuring advances
   /// `nextChipID`; the numbers only have to differ between neighbors, so the gap is
-  /// harmless.
-  private func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
+  /// harmless. A hanging definition list measures its terms with it too.
+  func cellWidth(_ cell: [Inline], base: [NSAttributedString.Key: Any]) -> CGFloat {
     let isPlainText = cell.allSatisfy { inline in
       if case .text = inline { true } else { false }
     }
