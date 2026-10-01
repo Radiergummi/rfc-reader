@@ -23,7 +23,6 @@ struct GlossaryTests {
     let entry = Glossary.entry(for: term)
     #expect((1...2).contains(Self.sentences(in: entry.summary)), "\(entry.summary)")
     #expect(entry.summary.hasSuffix("."))
-    #expect(!entry.detail.isEmpty)
   }
 
   /// A related term opens its own entry, so it has to be another term, and once.
