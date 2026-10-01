@@ -4,7 +4,7 @@
 
   /// A title over a line of detail, as a window's own titlebar draws its title over
   /// its subtitle: the list's title.
-  final class TitleStack: NSStackView {
+  private final class TitleStack: NSStackView {
     private let title = TitleStack.titleLabel()
     private let subtitle = TitleStack.subtitleLabel()
 
