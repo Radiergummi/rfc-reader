@@ -136,6 +136,15 @@ struct LegacyTextParserBlocksTests {
     #expect(!hangingList.hangsTerms)
   }
 
+  /// The same through a whole document: RFC 1540's standards summaries are catalogs,
+  /// and every one of them is compact and hangs its numbers, merged entries included.
+  @Test func `a document's catalogs are compact and hang their numbers`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+    let catalogs = document.everyBlock.compactMap(\.definitionList)
+    #expect(catalogs.count > 1)
+    #expect(catalogs.allSatisfy { $0.isCompact && $0.hangsTerms })
+  }
+
   @Test func `lines that only look like catalog entries are not`() {
     // Arithmetic, not an entry.
     #expect(LegacyTextParser.catalogEntries(["   3 - 2 leaves one"]) == nil)

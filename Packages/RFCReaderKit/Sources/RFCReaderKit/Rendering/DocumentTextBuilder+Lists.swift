@@ -62,42 +62,32 @@ extension DocumentTextBuilder {
 
   func appendDefinitionList(_ list: DefinitionList, indent: CGFloat) {
     let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
-    let termFont = style.boldBodyFont
     let termAttributes: [NSAttributedString.Key: Any] = [
-      .font: termFont,
+      .font: style.boldBodyFont,
       .foregroundColor: bodyColor,
       .paragraphStyle: paragraphStyle(
         indent: indent, spacingAfter: list.isCompact ? 0 : style.paragraphSpacing * 0.3),
     ]
-    // A hanging list's terms share one gutter, measured once for the list as a list's
-    // markers are, and its attributes are built once for every item that hangs.
-    let gap = style.bodySize * Self.markerGapShare
-    let termWidths =
-      list.hangsTerms ? list.items.map { lineWidth($0.term.plainText, font: termFont) } : []
-    let gutterWidth = Self.termGutterWidth(
-      termWidths: termWidths, gap: gap, step: style.indentStep,
-      limit: (style.measure - indent) * Self.termGutterShare)
-    let gutter = indent + gutterWidth
-    let hangingStyle = paragraphStyle(
-      indent: gutter, firstLineIndent: indent, spacingAfter: spacing,
-      tabStops: [NSTextTab(textAlignment: .left, location: gutter)])
-    var hangingTermAttributes = termAttributes
-    hangingTermAttributes[.paragraphStyle] = hangingStyle
-    let hangingAttributes = bodyAttributes(hangingStyle)
+    let hanging =
+      list.hangsTerms
+      ? hangingTerms(list, indent: indent, spacing: spacing, base: termAttributes) : nil
+    // A term that does not hang sets its definition under it, one step in; in a list
+    // whose other terms hang, at their gutter, so the definitions share one edge.
+    let definitionIndent = hanging?.gutter ?? indent + style.indentStep
+    let compactAttributes = bodyAttributes(
+      paragraphStyle(indent: definitionIndent, spacingAfter: spacing))
 
     for (index, item) in list.items.enumerated() {
       mark(item.anchor)
       // The term beside its definition's first paragraph, in one paragraph, when it
       // fits the gutter; otherwise on a line of its own, so one long term does not
       // push every definition in the list across (#352).
-      if list.hangsTerms, termWidths[index] + gap <= gutterWidth,
-        case .paragraph(let first)? = item.definition.first
-      {
-        output.append(inlineRuns(item.term, base: hangingTermAttributes))
-        append("\t", hangingTermAttributes)
+      if let hanging, hanging.fits[index], case .paragraph(let first)? = item.definition.first {
+        output.append(inlineRuns(item.term, base: hanging.termAttributes))
+        append("\t", hanging.termAttributes)
         mark(item.definitionAnchor)
-        appendParagraph(first, attributes: hangingAttributes)
-        appendBlocks(Array(item.definition.dropFirst()), indent: gutter)
+        appendParagraph(first, attributes: hanging.attributes)
+        appendBlocks(Array(item.definition.dropFirst()), indent: hanging.gutter)
         continue
       }
       output.append(inlineRuns(item.term, base: termAttributes))
@@ -108,18 +98,45 @@ extension DocumentTextBuilder {
       if item.definition.isEmpty { mark(item.definitionAnchor) }
       append("\n", termAttributes)
       if !item.definition.isEmpty { mark(item.definitionAnchor) }
-      let definitionIndent = indent + style.indentStep
-      if list.isCompact, case .paragraph(let first)? = item.definition.first {
+      if list.isCompact, case .paragraph(let first)? = item.definition.first, first.indent == 0 {
         // A compact list's spacing, as a compact list item's first paragraph takes it.
-        appendParagraph(
-          first,
-          attributes: bodyAttributes(
-            paragraphStyle(indent: definitionIndent, spacingAfter: spacing)))
+        // An author's indent keeps the ordinary paragraph's, which sets it.
+        appendParagraph(first, attributes: compactAttributes)
         appendBlocks(Array(item.definition.dropFirst()), indent: definitionIndent)
       } else {
         appendBlocks(item.definition, indent: definitionIndent)
       }
     }
+  }
+
+  /// A hanging list's gutter, which of its terms hang there, and the attributes those
+  /// items are set in, all worked out once for the list as a list's marker column is.
+  private struct HangingTerms {
+    let gutter: CGFloat
+    let fits: [Bool]
+    let termAttributes: [NSAttributedString.Key: Any]
+    let attributes: [NSAttributedString.Key: Any]
+  }
+
+  /// Each term is measured as it is drawn, as a table cell is, chips and code included.
+  private func hangingTerms(
+    _ list: DefinitionList, indent: CGFloat, spacing: CGFloat,
+    base termAttributes: [NSAttributedString.Key: Any]
+  ) -> HangingTerms {
+    let gap = style.bodySize * Self.markerGapShare
+    let termWidths = list.items.map { cellWidth($0.term, base: termAttributes) }
+    let gutterWidth = Self.termGutterWidth(
+      termWidths: termWidths, gap: gap, step: style.indentStep,
+      limit: (style.measure - indent) * Self.termGutterShare)
+    let gutter = indent + gutterWidth
+    let paragraph = paragraphStyle(
+      indent: gutter, firstLineIndent: indent, spacingAfter: spacing,
+      tabStops: [NSTextTab(textAlignment: .left, location: gutter)])
+    var hangingTermAttributes = termAttributes
+    hangingTermAttributes[.paragraphStyle] = paragraph
+    return HangingTerms(
+      gutter: gutter, fits: termWidths.map { $0 + gap <= gutterWidth },
+      termAttributes: hangingTermAttributes, attributes: bodyAttributes(paragraph))
   }
 
   /// How wide a hanging definition list's term gutter is: the widest term that fits

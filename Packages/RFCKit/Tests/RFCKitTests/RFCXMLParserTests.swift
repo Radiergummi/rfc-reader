@@ -673,16 +673,16 @@ struct RFCXMLParserTests {
 
   /// One that says neither keeps its terms on their own lines, as the converter's
   /// documents from before #352 need: RFCXML's own default would hang them.
+  /// RFC 9985 with its `<dl>`s' attributes taken out at run time, as those documents
+  /// write them.
   @Test func `a definition list that says nothing sets its terms on their own lines`() throws {
-    let xml = """
-      <rfc><front><title>T</title></front><middle>
-        <section anchor="s"><name>S</name><dl><dt>1</dt><dd><t>One</t></dd></dl></section>
-      </middle></rfc>
-      """
+    let xml = String(decoding: try Fixtures.data("rfc9985.xml"), as: UTF8.self)
+      .replacing(#" newline="false""#, with: "")
+      .replacing(#" spacing="compact""#, with: "")
     let document = try RFCXMLParser.parse(Data(xml.utf8))
-    let list = try #require(document.everyBlock.compactMap(\.definitionList).first)
-    #expect(!list.hangsTerms)
-    #expect(!list.isCompact)
+    let lists = document.everyBlock.flattened.compactMap(\.definitionList)
+    #expect(!lists.isEmpty)
+    #expect(lists.allSatisfy { !$0.hangsTerms && !$0.isCompact })
   }
 
   @Test func `rejects non RFC documents`() {

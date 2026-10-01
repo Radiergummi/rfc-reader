@@ -129,6 +129,12 @@ struct BuilderListTests {
     let paragraph = try #require(
       built.text.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle)
     #expect(paragraph.headIndent - paragraph.firstLineHeadIndent < style.measure / 3)
+    // Its definition starts at the gutter, where the hanging ones' wrapped lines do.
+    let fallback = try Fixtures.offset(of: "Its meaning", in: built.text)
+    let fallbackParagraph = try #require(
+      built.text.attribute(.paragraphStyle, at: fallback, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(fallbackParagraph.headIndent == paragraph.headIndent)
+    #expect(fallbackParagraph.firstLineHeadIndent == paragraph.headIndent)
   }
 
   /// A list that does not hang its terms sets each on its own line, as before #352.
