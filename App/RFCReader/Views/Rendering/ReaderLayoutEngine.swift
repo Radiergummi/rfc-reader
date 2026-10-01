@@ -174,7 +174,9 @@ final class ReaderLayoutEngine: PinSurface {
     completionInterval = signposter.beginInterval(
       "Lay out document", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     completion = Task { [weak self] in
-      while let self, !self.planner.isComplete {
+      // Ends with the text view, too: without one no slice is laid out and the
+      // planner never completes, and iOS dismantles its view without `stop()`.
+      while let self, self.textView != nil, !self.planner.isComplete {
         await Task.yield()
         guard !Task.isCancelled else { return }
         if self.isInLiveResize {
@@ -230,8 +232,10 @@ final class ReaderLayoutEngine: PinSurface {
     #endif
   }
 
+  /// Takes the slice first, so the planner moves on even when there is nothing to
+  /// lay it out in, and the completion's loop cannot spin in place.
   private func layOutSlice() {
-    guard let layout = textView?.textLayoutManager, let slice = planner.nextSlice(),
+    guard let slice = planner.nextSlice(), let layout = textView?.textLayoutManager,
       let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
     else { return }
     layout.ensureLayout(for: range)
