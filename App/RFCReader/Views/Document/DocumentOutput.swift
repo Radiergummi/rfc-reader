@@ -10,16 +10,16 @@
   /// same way, through `DocumentExport` and `DocumentPDF`.
   @Observable
   final class DocumentOutput {
-    /// Whether a print is being prepared or its sheet is up; see `print`.
+    /// Whether a print is being prepared or its sheet is up; see `printDocument`.
     private(set) var isPrinting = false
     /// A finished export, while Save to Files is showing it (#376).
     private(set) var exported: ExportedFile?
-    /// Whether an export is being made or Save to Files is up; see `export`.
+    /// Whether an export is being made or Save to Files is up; see `exportDocument`.
     private(set) var isExporting = false
 
     /// Save to Files, with the document in `format` (#376). Laid out for the
     /// region's paper, as a print is.
-    func export(_ id: DocumentID, as format: ExportFormat, library: LibraryModel) {
+    func exportDocument(_ id: DocumentID, as format: ExportFormat, library: LibraryModel) {
       // A second tap while the file is made would make it again, and present Save to
       // Files over the first.
       guard !isExporting else { return }
@@ -45,7 +45,7 @@
 
     /// The system's print sheet, with the document laid out for paper (#375). Laid
     /// out for the region's paper; the sheet scales it to whatever paper is chosen.
-    func print(
+    func printDocument(
       _ id: DocumentID, original: Bool, title: String?, library: LibraryModel
     ) {
       // A second tap while the PDF is built would build it again and present the
@@ -67,7 +67,11 @@
         let controller = UIPrintInteractionController.shared
         controller.printInfo = info
         controller.printingItem = data
-        controller.present(animated: true) { [weak self] _, _, _ in self?.isPrinting = false }
+        // False when it cannot present, and then its handler never runs.
+        let presented = controller.present(animated: true) { [weak self] _, _, _ in
+          self?.isPrinting = false
+        }
+        if !presented { isPrinting = false }
       }
     }
   }

@@ -20,7 +20,7 @@ import os
 /// Reporting to `DocumentView` goes through a `Task`, because it can fire from
 /// inside a view update where mutating state is illegal — and a `Task` has no
 /// ordering guarantee against `onDisappear`, so a scroll immediately followed by
-/// navigating away would persist the section before last. `saveReadingPosition`
+/// navigating away would persist the section before last. `ReadingPositionKeeper`
 /// reads this instead: it is written the moment the anchor is computed.
 final class VisibleAnchorBox {
   var anchor: String?

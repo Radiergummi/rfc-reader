@@ -157,9 +157,9 @@ struct DocumentView: View {
             id: id, metadata: metadata, library: library, navigation: navigation,
             reader: reader, isBookmarked: library.bookmarkedDocuments.contains(id),
             showsInspector: $showsInspector,
-            exportDocument: { output.export(id, as: $0, library: library) },
+            exportDocument: { output.exportDocument(id, as: $0, library: library) },
             printDocument: {
-              output.print(
+              output.printDocument(
                 id, original: reader.showOriginal,
                 title: reader.documentTitle ?? metadata?.title, library: library)
             },
@@ -232,14 +232,16 @@ struct DocumentView: View {
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
       .onChange(of: library.indexState) {
-        session.deriveInfo(into: reader, library: library)
+        session.deriveInfo(into: reader, library: library, navigation: navigation)
         session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
       }
       // A pack installed while the document is open can make it a pointer (#316).
       .onChange(of: library.pointersInPack) {
         session.markPublishedOriginal(into: reader, library: library, navigation: navigation)
       }
-      .onChange(of: library.revisions) { session.deriveInfo(into: reader, library: library) }
+      .onChange(of: library.revisions) {
+        session.deriveInfo(into: reader, library: library, navigation: navigation)
+      }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
         // the selected document's.

@@ -32,7 +32,7 @@ extension DocumentSession {
     markPublishedOriginal(into: reader, library: library, navigation: navigation)
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
-    deriveInfo(into: reader, library: library)
+    deriveInfo(into: reader, library: library, navigation: navigation)
     // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
     // the pack lists (#316), whose XML it left out.
     let pointerInPack = library.pointersInPack.contains(id)
@@ -77,18 +77,6 @@ extension DocumentSession {
     }
   }
 
-  /// Builds for `inputs`, and lists the sections the build holds into the reader.
-  func requestBuild(
-    for inputs: BuildInputs, resizeIsLive: Bool, into reader: ReaderState,
-    navigation: NavigationModel
-  ) {
-    requestBuild(for: inputs, resizeIsLive: resizeIsLive) {
-      [reader, navigation, id] built, document in
-      guard navigation.selection == id else { return }
-      Self.listSections(of: document, in: built, into: reader)
-    }
-  }
-
   /// Why this RFC is read as its original, if it is (#207): as the load starts, and
   /// again when the index loads, which may be after the fetch ended.
   func markPublishedOriginal(
@@ -102,7 +90,8 @@ extension DocumentSession {
   /// opened before the index finished loading has none to show until it does. And
   /// again once the document is here, whose own authors carry the contact details
   /// their chips open.
-  func deriveInfo(into reader: ReaderState, library: LibraryModel) {
+  func deriveInfo(into reader: ReaderState, library: LibraryModel, navigation: NavigationModel) {
+    guard navigation.selection == id else { return }
     reader.info = Self.info(for: id, authors: state.document?.header.authors, in: library)
   }
 
@@ -126,22 +115,6 @@ extension DocumentSession {
     }
   }
 
-  /// The sections the storage actually holds, straight from the index the builder
-  /// just emitted — rather than re-deriving "is this a bibliography?" from the model
-  /// and hoping the two rules stay in step. A contents row that has no anchor is a
-  /// destination `scroll(to:)` cannot reach.
-  ///
-  /// No place to restore here: the coordinator carries the line at the top of the
-  /// viewport into the new storage itself, which a section anchor could only
-  /// approximate to the section's heading.
-  private static func listSections(
-    of document: RFCDocument, in built: BuiltDocument, into reader: ReaderState
-  ) {
-    reader.sections = document.allSections.filter {
-      built.anchors.sections.offset(of: $0.anchor) != nil
-    }
-  }
-
   /// The Requirements tab's rows (#180), off the main actor: every sentence of the
   /// document is split and read for key words.
   @concurrent
@@ -154,7 +127,7 @@ extension DocumentSession {
   /// cancellation, so a build that has started runs to the end; `requestBuild` is
   /// what discards a canceled one. `DocumentPreview` builds through it too.
   @concurrent
-  static func build(
+  static func built(
     _ document: RFCDocument, style: ReadingStyle, choices: PresentationChoices = .defaults
   ) async -> BuiltDocument {
     let name = document.header.id?.displayName ?? "untitled"
