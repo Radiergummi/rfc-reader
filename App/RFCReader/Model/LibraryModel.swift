@@ -145,7 +145,7 @@ final class LibraryModel {
     collections = snapshot
     // A collection deleted in another tab, or on another device, is not left on
     // screen with no name and nothing in it.
-    for scene in scenes.compactMap(\.model) {
+    for scene in sceneRegistry.open {
       scene.keepFilter(in: snapshot)
     }
   }
@@ -259,6 +259,7 @@ final class LibraryModel {
       }
     } catch {
       indexState = .failed(error.localizedDescription)
+      settleIndex()
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
@@ -425,7 +426,10 @@ final class LibraryModel {
       // discarded either.
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      if index == nil { indexState = .failed(error.localizedDescription) }
+      if index == nil {
+        indexState = .failed(error.localizedDescription)
+        settleIndex()
+      }
     }
   }
 
@@ -442,6 +446,7 @@ final class LibraryModel {
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
+    settleIndex()
   }
 
   // MARK: - Spotlight
@@ -722,23 +727,10 @@ final class LibraryModel {
 
   // MARK: - Scene routing
 
-  /// The open scenes, most recently used first.
-  ///
-  /// Weak, because a scene's lifetime is its window's and nothing here should keep a
-  /// closed tab alive. This registry exists because `onOpenURL` is delivered to
-  /// *every* open scene: without one place to decide, a deep link would open in all
-  /// of them at once.
-  private var scenes: [WeakScene] = []
-
-  private struct WeakScene {
-    weak let model: NavigationModel?
-  }
-
-  /// Waiting for the next scene to appear, because nothing can be handed to a tab
-  /// as it is made — see `openInNewScene(_:inBackground:)` — or because a link was
-  /// routed before any scene existed — see `route(_:)`. Taken in `register(_:)` and
-  /// cleared there, so no later window picks up a stale one.
-  private var pendingSceneLink: RFCLink?
+  /// The open tabs, most recently used first, and the link waiting for one: which tab
+  /// a link goes to, and when, is `SceneRegistry`'s to decide (#137). This carries out
+  /// its decisions.
+  private var sceneRegistry = SceneRegistry<NavigationModel>()
 
   #if os(macOS)
     /// The window layer, set by `AppDelegate` at launch. Weak: the delegate owns the
@@ -747,30 +739,28 @@ final class LibraryModel {
   #endif
 
   /// Registers a new scene, and gives it the link it was opened for if it was
-  /// opened for one. Nil for a window from the menu or at launch, which lands on
-  /// the library as before.
+  /// opened for one and the index has arrived. Nil for a window from the menu or at
+  /// launch, which lands on the library as before.
   func register(_ scene: NavigationModel) {
-    promote(scene)
-    guard let link = pendingSceneLink else { return }
-    pendingSceneLink = nil
-    scene.open(link, in: index)
+    if let delivery = sceneRegistry.register(scene) { carryOut(delivery) }
   }
 
   func unregister(_ scene: NavigationModel) {
-    scenes.removeAll { $0.model == nil || $0.model === scene }
+    sceneRegistry.unregister(scene)
   }
 
   /// Makes a scene the most recently used, which is where an untargeted link lands
   /// when no tab is preferred over it -- on macOS `route(_:)` prefers the tab of the
   /// window that was key last.
   func activate(_ scene: NavigationModel) {
-    guard scenes.first?.model !== scene else { return }
-    promote(scene)
+    sceneRegistry.activate(scene)
   }
 
-  private func promote(_ scene: NavigationModel) {
-    unregister(scene)
-    scenes.insert(WeakScene(model: scene), at: 0)
+  /// The index has arrived, or failed to: a link held for it goes to its tab now
+  /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
+  /// RFC.
+  private func settleIndex() {
+    if let delivery = sceneRegistry.indexSettled() { carryOut(delivery) }
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
@@ -778,12 +768,8 @@ final class LibraryModel {
   /// window was key last, which a tab opened in the background does not displace --
   /// and failing that the most recently used tab.
   ///
-  /// A link can arrive before any scene has registered -- a URL or the Open RFC
-  /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
-  /// `pendingSceneLink` instead, for `register(_:)` to hand to the first scene. One
-  /// slot, so of two links routed before then the later wins: the first scene can
-  /// show one document, and the later link is the more recent ask. It cannot race
-  /// `openInNewScene`, which is only ever reached from a scene that already exists.
+  /// A link that arrives before any scene has registered, or before the index has, is
+  /// held by the registry and delivered once both are there (#140, #241).
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
@@ -792,21 +778,29 @@ final class LibraryModel {
   /// whatever window the reader next opens, possibly minutes later. iOS brings up a
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
-    scenes.removeAll { $0.model == nil }
-    let open = scenes.compactMap(\.model)
     #if os(macOS)
       let preferred = windows?.activeNavigation
     #else
       let preferred: NavigationModel? = nil
     #endif
-    guard
-      let target = LinkRouting.target(
-        for: link.id, in: open, showing: \.selection, preferring: { $0 === preferred })
-    else {
-      openInNewWindow(link)
-      return
+    switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
+    case .deliver(let delivery):
+      carryOut(delivery)
+    case .openWindow:
+      #if os(macOS)
+        windows?.openWindow()
+      #endif
+    case .wait:
+      break
     }
-    deliver(link, to: target)
+  }
+
+  private func carryOut(_ delivery: SceneRegistry<NavigationModel>.Delivery) {
+    if delivery.bringsForward {
+      deliver(delivery.link, to: delivery.scene)
+    } else {
+      delivery.scene.open(delivery.link, in: index)
+    }
   }
 
   /// Opens `link` in `scene` and makes that the tab in use.
@@ -823,7 +817,7 @@ final class LibraryModel {
 
   /// Opens a window for `link`, which it takes in `register(_:)`.
   private func openInNewWindow(_ link: RFCLink) {
-    pendingSceneLink = link
+    sceneRegistry.hold(link, bringsForward: true)
     #if os(macOS)
       windows?.openWindow()
     #endif
@@ -853,8 +847,8 @@ final class LibraryModel {
   /// On macOS through AppKit, because the app makes its own windows: there is no
   /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
   /// controller rather than by SwiftUI. Nothing can be passed to a window as it is
-  /// made, so the link waits in `pendingSceneLink` for the window that appears to
-  /// take it in `register(_:)`.
+  /// made, so the link is held by the registry for the window that appears to take it
+  /// in `register(_:)`.
   ///
   /// On iPad a window of its own, asked of UIKit with a user activity carrying the
   /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
@@ -862,7 +856,7 @@ final class LibraryModel {
   /// always comes to the front there, so `inBackground` does not apply.
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
-      pendingSceneLink = link
+      sceneRegistry.hold(link, bringsForward: !inBackground)
       windows?.openTab(inBackground: inBackground)
     #else
       guard opensNewWindows else { return }
@@ -971,7 +965,7 @@ final class LibraryModel {
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
-    let open = scenes.compactMap { $0.model?.selection }
+    let open = sceneRegistry.open.compactMap(\.selection)
     return bookmarked.union(read).union(open)
   }
 
