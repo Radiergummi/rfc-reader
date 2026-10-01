@@ -24,6 +24,10 @@ extension LegacyTextParser {
   /// either way is how a description under an entry is set, and a caption centered
   /// under a legend stands well past it (RFC 793's at 26 against 12).
   private static let catalogContinuationSlack = 2
+  /// A term as xml2rfc sets a `<dl>` entry's (#436): words ending in a colon, with
+  /// no double space among them, then two spaces or more and the definition.
+  private static let hangingTermPattern = Pattern(
+    #/^(?<indent> *)(?<term>\S(?:\S| (?! ))*:) {2,}(?<text>\S.*)$/#)
   private static let numberedItemPattern = Pattern(
     #/^(?<indent>\s*)(?<marker>\(?(?:\d+|[a-z]|[ivx]+)[\.\)])\s+(?<text>\S.*)$/#)
   /// `containsArtwork` answers the same question byte by byte; an alternative added
@@ -135,16 +139,30 @@ extension LegacyTextParser {
   {
     // Re-join paragraphs that a page break cut in half.
     var merged: [RawBlock] = []
+    // The column the lines of the hanging-indent definition above hang in, while
+    // the blocks after it are its paragraphs.
+    var hangColumn: Int?
     var index = 0
     while index < rawBlocks.count {
       var block = rawBlocks[index]
       while block.followedByPageBreak, index + 1 < rawBlocks.count,
         shouldJoinAcrossPage(block, rawBlocks[index + 1], proseIndent: proseIndent)
+          || continuesDefinitionAcrossPage(block, rawBlocks[index + 1], hangColumn: hangColumn)
       {
         block.lines += rawBlocks[index + 1].lines
         block.followedByPageBreak = rawBlocks[index + 1].followedByPageBreak
         index += 1
       }
+      hangColumn =
+        if let column = hangingDefinitions(block.lines)?.continuationColumn {
+          column
+        } else if let column = hangColumn,
+          continuesHangingDefinition(block.lines, column: column)
+        {
+          column
+        } else {
+          nil
+        }
       merged.append(block)
       index += 1
     }
@@ -155,10 +173,59 @@ extension LegacyTextParser {
     // The same for a catalog: the column its numbers stand in, and the column the
     // text of its last entry starts in.
     var openCatalog: (indent: Int, textColumn: Int)?
+    // The same for a list of hanging-indent definitions: the column its terms stand
+    // in, and the column the lines under them do.
+    var openDefinitions: (indent: Int, continuationColumn: Int)?
+    // The one-line definitions just before this block, each set as a paragraph of its
+    // own while no hanging one had said they are a list: how many blocks of `result`
+    // they took, and their entries.
+    var loneDefinitions: (blocks: Int, definitions: HangingDefinitions)?
     for block in merged {
       // Probed once: the continuation test needs to know the block opens with no
       // marker, and a list the block produces needs the column of its own.
       let marker = listMarker(of: block.lines)
+      let definitionsAbove = openDefinitions
+      let loneAbove = loneDefinitions
+      openDefinitions = nil
+      loneDefinitions = nil
+      if let definitions = definitionsAbove, marker == nil,
+        attachContinuation(block, toDefinitions: definitions, in: &result, linker: linker)
+      {
+        openDefinitions = definitions
+        continue
+      }
+      // A hanging-indent definition, as xml2rfc sets a `<dl>` entry (#436). One
+      // that runs past its line says the block is one; a one-line entry is only
+      // one beside those, and is otherwise the paragraph it always was. Each block
+      // is its own when a blank line separates the entries, so they are gathered
+      // here into one list, the one-line entries just above included.
+      // Probed once as well: `classify` builds a catalog from them, and the catalog
+      // left open after it is this block's only if it had them. A catalog entry
+      // with a colon in its title takes a hanging definition's shape too.
+      let entries = catalogEntries(block.lines)
+      let hanging = marker == nil && entries == nil ? hangingDefinitions(block.lines) : nil
+      if let hanging,
+        let continuationColumn = hanging.continuationColumn
+          ?? definitionsAbove.flatMap({ $0.indent == hanging.indent ? $0.continuationColumn : nil })
+      {
+        var items = definitionItems(hanging.entries, linker: linker)
+        if definitionsAbove?.indent == hanging.indent,
+          case .definitionList(let previous)? = result.last
+        {
+          result[result.count - 1] = .definitionList(previous + items)
+        } else {
+          if let lone = loneAbove, lone.definitions.indent == hanging.indent {
+            result.removeLast(lone.blocks)
+            items = definitionItems(lone.definitions.entries, linker: linker) + items
+          }
+          result.append(.definitionList(items))
+        }
+        openDefinitions = (hanging.indent, continuationColumn)
+        openListIndent = nil
+        openCatalog = nil
+        continue
+      }
+      let countBefore = result.count
       if let indent = openListIndent,
         attachContinuation(block, toListAt: indent, marker: marker, in: &result, linker: linker)
       {
@@ -170,9 +237,6 @@ extension LegacyTextParser {
       {
         continue
       }
-      // Probed once as well: `classify` builds a catalog from them, and the catalog
-      // left open after it is this block's only if it had them.
-      let entries = catalogEntries(block.lines)
       for parsed in classify(
         block, marker: marker, catalogEntries: entries, proseIndent: proseIndent, linker: linker)
       {
@@ -213,8 +277,46 @@ extension LegacyTextParser {
         } else {
           nil
         }
+      // A one-line definition that made a block of its own is remembered, for a
+      // hanging one below it to take into its list.
+      if let hanging, result.count == countBefore + 1 {
+        if var lone = loneAbove, lone.definitions.indent == hanging.indent {
+          lone.blocks += 1
+          lone.definitions.entries += hanging.entries
+          loneDefinitions = lone
+        } else {
+          loneDefinitions = (1, hanging)
+        }
+      }
     }
     return result
+  }
+
+  /// Each entry of a catalog or of a hanging-indent list, its term as it stands and
+  /// its text as a paragraph.
+  private static func definitionItems(
+    _ entries: [(term: String, text: String)], linker: InlineLinker
+  ) -> [DefinitionItem] {
+    entries.map { entry in
+      DefinitionItem(
+        term: [.text(entry.term)], definition: [.paragraph(Paragraph(linker.link(entry.text)))])
+    }
+  }
+
+  /// A paragraph standing under a hanging-indent definition, past its term, is the
+  /// rest of that definition: xml2rfc sets a `<dd>`'s second paragraph at the
+  /// column its first one's lines hang in, and carrying no marker of its own (the
+  /// caller asks).
+  private static func attachContinuation(
+    _ block: RawBlock,
+    toDefinitions definitions: (indent: Int, continuationColumn: Int),
+    in result: inout [Block],
+    linker: InlineLinker
+  ) -> Bool {
+    guard continuesHangingDefinition(block.lines, column: definitions.continuationColumn) else {
+      return false
+    }
+    return appendToLastDefinition(block.lines, in: &result, linker: linker)
   }
 
   /// A paragraph indented past a catalog entry's number and carrying no marker of
@@ -237,14 +339,22 @@ extension LegacyTextParser {
     in result: inout [Block],
     linker: InlineLinker
   ) -> Bool {
-    guard case .definitionList(var items)? = result.last, var item = items.last else {
-      return false
-    }
     guard marker == nil,
       continuesCatalogEntry(
         block.lines, numberIndent: catalog.indent, textColumn: catalog.textColumn)
     else { return false }
-    let inlines = linker.link(joinWrappedLines(block.lines))
+    return appendToLastDefinition(block.lines, in: &result, linker: linker)
+  }
+
+  /// `lines` as the next paragraph of the last definition in the list `result`
+  /// ends with. False when `result` ends with no list.
+  private static func appendToLastDefinition(
+    _ lines: [String], in result: inout [Block], linker: InlineLinker
+  ) -> Bool {
+    guard case .definitionList(var items)? = result.last, var item = items.last else {
+      return false
+    }
+    let inlines = linker.link(joinWrappedLines(lines))
     guard !inlines.isEmpty else { return false }
     item.definition.append(.paragraph(Paragraph(inlines)))
     items[items.count - 1] = item
@@ -267,9 +377,27 @@ extension LegacyTextParser {
     guard indent > numberIndent, indent <= textColumn + catalogContinuationSlack,
       catalogEntries(lines) == nil
     else { return false }
+    return readsAsEntryText(lines)
+  }
+
+  /// The prose test with its cap excused, and past the classic cap its sentence
+  /// share excused too for a block of two lines at most: what an entry above a
+  /// block lets it be.
+  private static func readsAsEntryText(_ lines: [String]) -> Bool {
     let refusals = diagnose(lines, maxIndent: .max, thorough: true).rejections
     let excused = lines.count <= 2 ? [ProseDiagnostics.Rejection.deepIndentNotSentences] : []
     return refusals.allSatisfy(excused.contains)
+  }
+
+  /// Whether `lines`, with no marker of their own, are the next paragraph of the
+  /// hanging-indent definition above them: every line in the column its lines hang
+  /// in, exactly. xml2rfc sets a `<dd>`'s artwork a column or two past it (a format
+  /// string, an example line), and that is not the definition's prose. The prose
+  /// test is the catalog's, with its excuse for a short block past the classic cap.
+  /// Internal, so the test can be pinned on hand-written lines.
+  static func continuesHangingDefinition(_ lines: [String], column: Int) -> Bool {
+    guard lines.allSatisfy({ $0.leadingSpaceCount == column }) else { return false }
+    return readsAsEntryText(lines)
   }
 
   /// A block indented past a list's marker and carrying no marker of its own is the
@@ -375,6 +503,33 @@ extension LegacyTextParser {
     }
     if let last = lastLine.last, ".:!?".contains(last) { return false }
     return true
+  }
+
+  /// A page break cuts a hanging-indent definition as it cuts any paragraph, but the
+  /// prose test `shouldJoinAcrossPage` asks refuses the hang (#436). The rest of it
+  /// stands in the column the definition's lines hang in: under the block of terms
+  /// that is cut, or under a paragraph of the definition after it, which
+  /// `hangColumn` says it is. Joined as lines, so a word broken at its hyphen or a
+  /// cross reference that runs over the break is whole again.
+  static func continuesDefinitionAcrossPage(
+    _ first: RawBlock, _ second: RawBlock, hangColumn: Int?
+  ) -> Bool {
+    guard listMarker(of: second.lines) == nil else { return false }
+    let lastLine = first.lines.last?.trimmingCharacters(in: .whitespaces) ?? ""
+    let nextLine = second.lines.first?.trimmingCharacters(in: .whitespaces) ?? ""
+    let opensLowerCase = nextLine.first?.isLowercase == true
+    if !opensLowerCase, let last = lastLine.last, ".:!?".contains(last) {
+      return false
+    }
+    if let definitions = hangingDefinitions(first.lines) {
+      // A one-line entry often stops short of a full stop (RFC 2060's `Contents:
+      // zero or more numbers`), so what follows it has to open in lower case.
+      guard opensLowerCase || definitions.continuationColumn != nil else { return false }
+      return hangingDefinitions(first.lines + second.lines) != nil
+    }
+    guard let hangColumn else { return false }
+    return continuesHangingDefinition(first.lines, column: hangColumn)
+      && continuesHangingDefinition(second.lines, column: hangColumn)
   }
 
   /// `maxIndent` is the deepest a paragraph may start and still read as prose: the
@@ -609,14 +764,7 @@ extension LegacyTextParser {
     // past it. Before the prose test, which takes a one-line entry for a paragraph
     // and the rest of the block for artwork.
     if let entries = catalogEntries {
-      return [
-        .definitionList(
-          entries.map { entry in
-            DefinitionItem(
-              term: [.text(entry.term)],
-              definition: [.paragraph(Paragraph(linker.link(entry.text)))])
-          })
-      ]
+      return [.definitionList(definitionItems(entries, linker: linker))]
     }
 
     if looksLikeProse(lines, maxIndent: proseIndent) {
@@ -683,6 +831,75 @@ extension LegacyTextParser {
       }
     }
     return entries.map { ($0.term, joinWrappedLines($0.lines)) }
+  }
+
+  /// The entries of a block set as xml2rfc sets a `<dl>`: each a term ending in a
+  /// colon, two spaces or more, and its definition, with the rest of the definition
+  /// hung under it (#436). Nil when the block is not one.
+  ///
+  /// Every term stands at the first one's indent. A line under a term stands past
+  /// it and no deeper than where that term's definition starts: three columns in
+  /// is xml2rfc's hang, and a term short enough for the hang has its definition,
+  /// and the lines under it, in the hang's column. All of them stand in one column,
+  /// and none is a term itself: terms aligned at their colons are a table's. A term
+  /// with a drawing in it (`C->S:` in a protocol trace) is not one, nor one with a
+  /// sentence's end in it (a bibliography entry's `Name, A. Title:`), nor is a
+  /// definition with a drawing or a column gap in it. Internal, so the shape can be
+  /// pinned on hand-written lines.
+  static func hangingDefinitions(_ lines: [String]) -> HangingDefinitions? {
+    // Asked of every block with no marker: a substring test turns nearly all of
+    // them away before the regex starts.
+    guard let first = lines.first, first.contains(":  "),
+      let head = first.firstMatch(of: hangingTermPattern)
+    else {
+      return nil
+    }
+    let indent = head.indent.count
+    var continuationColumn: Int?
+    var entries: [(term: String, lines: [String])] = []
+    // Where the last entry's definition starts on its term's line.
+    var textColumn = 0
+    for line in lines {
+      let lineIndent = line.leadingSpaceCount
+      if lineIndent == indent {
+        guard let match = line.firstMatch(of: hangingTermPattern),
+          !containsArtwork(String(match.term)), !match.term.contains(". ")
+        else { return nil }
+        textColumn = line.distance(from: line.startIndex, to: match.text.startIndex)
+        entries.append((String(match.term), [String(match.text)]))
+      } else if !entries.isEmpty, lineIndent > indent, lineIndent <= textColumn,
+        (continuationColumn ?? lineIndent) == lineIndent, !line.contains(hangingTermPattern)
+      {
+        continuationColumn = lineIndent
+        entries[entries.count - 1].lines.append(line)
+      } else {
+        return nil
+      }
+    }
+    for entry in entries {
+      for line in entry.lines where containsArtwork(line) || hasInternalGap(line) {
+        return nil
+      }
+    }
+    let joined = entries.map { ($0.term, joinWrappedLines($0.lines)) }
+    // Some of what hangs has to be words. A contact block (`Editor:  A. Name` over a
+    // mailto line, in a YANG module or an author's address), a hex dump under its
+    // label and a protocol exchange under `Example:` take the same shape. A block of
+    // one-line entries is asked nothing: it is only a list beside one that hangs, and
+    // `Name:  VALUE` is how a registration template begins one.
+    guard continuationColumn == nil || readsLikeSentences(joined.map(\.1), share: (of: 1, in: 5))
+    else { return nil }
+    return HangingDefinitions(
+      indent: indent, continuationColumn: continuationColumn, entries: joined)
+  }
+
+  /// A block of hanging-indent definitions: the column its terms stand in, the
+  /// column the lines under them stand in (nil when no entry runs past one line),
+  /// and each entry's term and its text with those lines joined.
+  struct HangingDefinitions {
+    var indent: Int
+    var continuationColumn: Int?
+    var entries: [(term: String, text: String)]
   }
 
   /// The column an entry line's text starts in, past its number and dash, or nil

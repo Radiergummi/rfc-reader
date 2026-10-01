@@ -50,18 +50,32 @@ public struct NavigationHistory: Sendable {
   /// Go to `place`, recording `position` as the spot being left behind, and return
   /// the place to arrive at: nil when there is nowhere to move.
   ///
-  /// Re-opening the document and section already current is not a navigation:
-  /// clicking the same link twice must not stack two identical entries to walk back
-  /// through, so the history does not move and `position` is not recorded. The
-  /// place is still returned when it names a section, because the entry records
-  /// where the tab was sent, not where the reader has scrolled since (#287).
-  /// Striking out in a new direction drops whatever was ahead, as a browser does.
+  /// Going to the current place while the reader is still there is not a
+  /// navigation: clicking the same link twice must not stack two identical entries
+  /// to walk back through, so the history does not move and the place is returned
+  /// only to scroll to. Still there means `position`, where the reader is, not only
+  /// where the tab was sent: sent to §4.2 and read on to §9, a link to §4.2 is a
+  /// navigation, and Back returns to §9 (#482). Striking out in a new direction
+  /// drops whatever was ahead, as a browser does.
+  ///
+  /// `places`, the document on screen's, resolves a section number and an anchor
+  /// to one spelling, the anchor, which is the one compared and recorded.
   @discardableResult
-  public mutating func go(to place: HistoryEntry, leaving position: String? = nil)
-    -> HistoryEntry?
-  {
+  public mutating func go(
+    to place: HistoryEntry, leaving position: String? = nil, in places: DocumentPlaces? = nil
+  ) -> HistoryEntry? {
     defer { isHidden = false }
-    guard place != current else { return place.section == nil ? nil : place }
+    let anchor = { (section: String) in places?.anchor(for: section) ?? section }
+    let place = HistoryEntry(id: place.id, section: place.section.map(anchor))
+    let position = position.map(anchor)
+    if let current, place == HistoryEntry(id: current.id, section: current.section.map(anchor)) {
+      guard let section = place.section else { return nil }
+      let reported = places?.section(of: section) ?? section
+      if position == nil || position == section || position == reported {
+        self.current = place
+        return place
+      }
+    }
     // Reopening the hidden document from its row, which names no section: back
     // where it was, and not a jump to offer a way back from.
     if isHidden, place.section == nil, place.id == current?.id {
@@ -69,7 +83,7 @@ public struct NavigationHistory: Sendable {
       return nil
     }
     if var previous = current {
-      previous.section = position ?? previous.section
+      previous.section = position ?? previous.section.map(anchor)
       backward.append(previous)
     }
     forward.removeAll()

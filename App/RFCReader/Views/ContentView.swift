@@ -292,7 +292,7 @@ struct EmptyDetailView: View {
             .foregroundStyle(.secondary)
           if let section = row.link.section {
             Spacer(minLength: 0)
-            Text("§ \(section)")
+            Text(PlaceName.abbreviated(section))
               .foregroundStyle(.secondary)
               .monospacedDigit()
           }

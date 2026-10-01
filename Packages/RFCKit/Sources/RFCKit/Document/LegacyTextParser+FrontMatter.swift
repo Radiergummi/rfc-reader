@@ -237,9 +237,14 @@ extension LegacyTextParser {
       guard line.contains("..") || line.contains(". ."),
         let page = line.split(whereSeparator: { $0 == " " || $0 == "." }).last
       else { return false }
-      return page.allSatisfy(\.isNumber) || isRomanPageNumber(page)
+      return isPageNumber(page)
     }
     return entries > 0 && entries * 2 >= lines.count
+  }
+
+  /// A page number in arabic or lower-case roman numerals.
+  static func isPageNumber(_ word: Substring) -> Bool {
+    word.allSatisfy(\.isNumber) || isRomanPageNumber(word)
   }
 
   private static let romanPageNumberPattern = Pattern(#/x{0,3}(?:ix|iv|v?i{0,3})/#)

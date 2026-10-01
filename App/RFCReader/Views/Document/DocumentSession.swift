@@ -47,10 +47,10 @@ final class DocumentSession {
   let id: DocumentID
 
   private(set) var state = LoadState()
-  /// Anchor to section number, made once with the document. See
+  /// Anchor to the section's place (`Section.place`), made once with the document. See
   /// `DocumentView`'s `onVisibleAnchorChange` for why it is not asked of the
   /// document each time.
-  private(set) var sectionNumbers: [String: String] = [:]
+  private(set) var sectionPlaces: [String: String] = [:]
 
   /// The original text (`reader.showOriginal`), fetched the first time it is shown,
   /// and why it could not be.
@@ -126,9 +126,9 @@ final class DocumentSession {
       do {
         let document = try await library.document(for: id)
         guard let self, !Task.isCancelled, state.isLoading else { return }
-        sectionNumbers = Dictionary(
+        sectionPlaces = Dictionary(
           document.allSections.compactMap { section in
-            section.number.map { (section.anchor, $0) }
+            section.place.map { (section.anchor, $0) }
           },
           uniquingKeysWith: { first, _ in first }
         )

@@ -152,4 +152,24 @@ struct LegacyTextParserReferencesTests {
       LegacyTextParser.parseReferences([note, entries]).map(\.displayAnchor) == ["ONE", "TWO"])
     #expect(LegacyTextParser.blocksBeforeFirstEntry([entries]).map(\.lines) == [[entries.lines[0]]])
   }
+
+  /// An entry's document is the one its own series info or label names, never an RFC
+  /// its title mentions: an entry whose title is about RFC 2119's keywords resolved to
+  /// RFC 2119, and its citations became chips for RFC 2119 that linked there (#424).
+  @Test func `an entry is not the RFC its title names`() {
+    let entries = LegacyTextParser.parseReferences([
+      LegacyTextParser.RawBlock(lines: [
+        "   [RFC9990]  Someone, A., \"Revisiting the Keywords of RFC 2119\",",
+        "              BCP 14, RFC 9990, May 2031.",
+        "   [4]        Someone, B., \"Notes on RFC 822 Headers\", RFC 9991,",
+        "              June 2031.",
+        "   [5]        Someone, C., \"Replacing RFC 1234 and BCP 12\", Work in",
+        "              Progress, July 2031.",
+      ])
+    ])
+    #expect(entries.map(\.documentID) == [.rfc(9990), .rfc(9991), nil])
+    #expect(entries[0].seriesInfo.contains(SeriesInfo(name: "BCP", value: "14")))
+    #expect(
+      !entries[2].seriesInfo.contains { $0.name == "BCP" }, "the title's BCP is not the entry's")
+  }
 }

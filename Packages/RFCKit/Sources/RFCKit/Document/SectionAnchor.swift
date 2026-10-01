@@ -54,7 +54,7 @@ enum SectionAnchor {
   /// Whether `place` is shaped like a section number rather than an anchor: it
   /// starts with a digit, or is an appendix's single letter, alone or before a dot
   /// (`A`, `A.1`), and no dash follows the number, as a paragraph's does (`4.2-3`).
-  private static func isSectionNumber(_ place: String) -> Bool {
+  static func isSectionNumber(_ place: String) -> Bool {
     guard let first = place.first, !place.contains("-") else { return false }
     let rest = place.dropFirst()
     return first.isNumber || (first.isLetter && (rest.isEmpty || rest.first == "."))

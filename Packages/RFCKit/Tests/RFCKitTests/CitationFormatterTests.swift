@@ -70,6 +70,34 @@ struct CitationFormatterTests {
       ))
   }
 
+  /// BibTeX accepts these, but LaTeX reads each as markup when it typesets the
+  /// field (#242), in every field that `bibtexEscaped` handles.
+  @Test(arguments: [
+    ("_", #"\_"#),
+    ("$", #"\$"#),
+    ("#", ##"\#"##),
+    ("^", #"\textasciicircum{}"#),
+    ("~", #"\textasciitilde{}"#),
+  ])
+  func `bibtex escapes a character LaTeX reads as markup`(character: String, escaped: String) {
+    let rfc = RFCMetadata(
+      id: .rfc(1), title: "a\(character)b", authors: [Author(name: "e\(character)f")],
+      date: PublicationDate(year: 1969), abstract: "c\(character)d")
+    let entry = CitationFormatter.cite(rfc, style: .bibtex)
+    #expect(entry.contains("    author = {e\(escaped)f},"))
+    #expect(entry.contains("    title = {{a\(escaped)b}},"))
+    #expect(entry.contains("    abstract = {c\(escaped)d},"))
+  }
+
+  /// A combining mark joins the character before it into one `Character`, which a
+  /// switch over characters doesn't match, so the brace or `_` it follows went
+  /// through raw.
+  @Test func `bibtex escapes a special character that a combining mark follows`() {
+    #expect(
+      CitationFormatter.bibtexEscaped("{\u{0301}_\u{0332}")
+        == "\\textbraceleft{}\u{0301}\\_\u{0332}")
+  }
+
   /// BibTeX counts braces whether or not a backslash precedes them, so `\{` only
   /// works for braces that already pair up. A lone one in a title has to leave the
   /// entry's braces balanced, or the field runs on into the rest of the entry.

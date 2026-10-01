@@ -97,6 +97,21 @@ struct RFCXMLSerializerTests {
     #expect(annotations(reparsed) == annotations(original))
   }
 
+  /// "Section 4.9 of [FETCH]" keeps its section, its wording and its link (#473).
+  @Test func `a citation of a section of an entry outside the series survives a round trip`()
+    throws
+  {
+    let (original, reparsed) = try Self.roundTrip("rfc9842.xml")
+    func citations(_ document: RFCDocument) -> [CrossReference] {
+      document.everyCrossReference.filter {
+        if case .entrySection = $0.target { return true }
+        return false
+      }
+    }
+    #expect(citations(original).count == 6)
+    #expect(citations(reparsed) == citations(original))
+  }
+
   @Test func `a paragraph indent survives a round trip`() throws {
     let (original, reparsed) = try Self.roundTrip("rfc9601.xml")
     func indents(_ document: RFCDocument) -> [Int] {
@@ -169,6 +184,32 @@ struct RFCXMLSerializerTests {
     #expect(serialization.warnings.first?.contains("references") == true)
   }
 
+  /// `format="none"` with nothing inside shows nothing; written back without its
+  /// format, it would come back composed as "Section 4.9 of [WIDGETS]" (#473).
+  @Test func `an empty citation of a section of an entry stays empty`() throws {
+    let xref = CrossReference(
+      target: .entrySection(entry: "WIDGETS", tag: "WIDGETS", section: "4.9", url: nil), text: "")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Test"),
+      sections: [
+        Section(
+          anchor: "intro", title: "Introduction",
+          blocks: [.paragraph(Paragraph([.text("See "), .crossReference(xref), .text(".")]))]),
+        Section(
+          anchor: "references", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References", entries: [Reference(anchor: "WIDGETS", title: "Widgets")]))
+          ]),
+      ],
+      source: .xml
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    let reparsed = RFCXMLParser.crossReferences(in: try XMLTree.parse(Data(xml.utf8)))
+    #expect(reparsed.map(\.label) == [""])
+  }
+
   @Test func `unresolved document references survive as links`() throws {
     // RFC 1149 mentions no other RFC in a references section, so a synthetic one is used.
     let document = RFCDocument(
@@ -205,6 +246,83 @@ struct RFCXMLSerializerTests {
           CrossReference(
             target: .document(.rfc(9110), section: "4.2"), text: "Section 4.2 of RFC 9110"))))
     #expect(paragraph.plainText == "See Section 4.2 of RFC 9110 and example & <tags>.")
+  }
+
+  /// A citation is written against the entry it resolved to, not the first entry that
+  /// names the same document: an erratum listed ahead of the RFC it corrects took
+  /// that RFC's citations, 887 of them in 569 converted documents (#424).
+  @Test func `a citation is written against the entry it resolved to`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(99999), title: "Test"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Intro",
+          blocks: [
+            .paragraph(
+              Paragraph([
+                .text("See "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "Err1"), text: "[Err1]")),
+                .text(", "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: "RFC7159"), text: "[RFC7159]"
+                  )),
+                .text(" and "),
+                .crossReference(
+                  CrossReference(
+                    target: .document(.rfc(7159), section: nil, entry: nil), text: "RFC 7159")),
+                .text("."),
+              ]))
+          ]),
+        Section(
+          anchor: "section-2", number: "2", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References",
+                entries: [
+                  Reference(
+                    anchor: "Err1", title: "Erratum",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                  Reference(
+                    anchor: "RFC7159", title: "The Format",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "7159")]),
+                ]))
+          ]),
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("<xref target=\"Err1\">[Err1]</xref>"), "\(xml)")
+    #expect(xml.contains("<xref target=\"RFC7159\">[RFC7159]</xref>"), "\(xml)")
+    // A bare mention records no entry, and goes to the one anchored under its document.
+    #expect(xml.contains("<xref target=\"RFC7159\">RFC 7159</xref>"), "\(xml)")
+    let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
+    #expect(
+      reparsed.everyCrossReference.map(\.target) == [
+        .document(.rfc(7159), section: nil, entry: "Err1"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
+        .document(.rfc(7159), section: nil, entry: "RFC7159"),
+      ])
+  }
+
+  /// A citation of a `<referencegroup>`'s member records the group as its entry, and
+  /// the group names another document (BCP 14, not RFC 8174): written against the
+  /// group, it read back as the group's document, or as no document at all.
+  @Test func `a group member's citation keeps its document through a round trip`() throws {
+    for name in ["rfc9290.xml", "rfc9682.xml", "rfc9783.xml"] {
+      let original = try RFCXMLParser.parse(try Fixtures.data(name))
+      let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
+      func documents(_ document: RFCDocument) -> [DocumentID] {
+        document.everyCrossReference.compactMap {
+          guard case .document(let id, _, _) = $0.target else { return nil }
+          return id
+        }
+      }
+      #expect(documents(reparsed) == documents(original), "\(name)")
+    }
   }
 
   @Test func `artwork is preserved byte for byte`() throws {
