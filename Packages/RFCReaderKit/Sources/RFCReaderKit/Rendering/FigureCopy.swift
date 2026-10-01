@@ -14,30 +14,20 @@ import RFCKit
 /// The App target decides only where the menu is and puts the string on the
 /// pasteboard; which figure and what text are answered here, where they are tested.
 public enum FigureCopy {
-  /// The figure whose run holds `location`: a context menu opened on it.
-  public static func figure(at location: Int, in text: NSAttributedString) -> Preformatted? {
-    box(at: location, in: text)?.content
-  }
-
-  /// The box of the figure whose run holds `location`, with what the build decided
-  /// about it: its menu's "Show as Text" needs its ordinal and how it is shown.
+  /// The box of the figure whose run holds `location`: a context menu opened on
+  /// it. Its block, and what the build decided about it: its menu's "Show as Text"
+  /// needs its ordinal and how it is shown.
   public static func box(at location: Int, in text: NSAttributedString) -> VerbatimBox? {
     guard location >= 0, location < text.length else { return nil }
     return text.attribute(.rfcVerbatim, at: location, effectiveRange: nil) as? VerbatimBox
   }
 
-  /// The one figure a selection touches, or nil when it touches none or more than
-  /// one: a menu offering to copy "the figure" has to know which. An empty
-  /// selection is a location.
+  /// The box of the one figure a selection touches, or nil when it touches none or
+  /// more than one: a menu offering to copy "the figure" has to know which. An
+  /// empty selection is a location.
   ///
   /// Figures are told apart by their box's identity, one per block, so two
   /// adjacent blocks with the same text are still two.
-  public static func figure(in range: NSRange, of text: NSAttributedString) -> Preformatted? {
-    box(in: range, of: text)?.content
-  }
-
-  /// The box of the one figure a selection touches, or nil when it touches none or
-  /// more than one; `figure(in:of:)` is its block.
   public static func box(in range: NSRange, of text: NSAttributedString) -> VerbatimBox? {
     guard range.length > 0 else { return box(at: range.location, in: text) }
     let clamped = NSIntersectionRange(range, NSRange(location: 0, length: text.length))

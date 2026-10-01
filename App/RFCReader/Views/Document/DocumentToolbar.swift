@@ -190,6 +190,9 @@ import SwiftUI
           }
           .accessibilityLabel("Text Size")
           .accessibilityValue(ReaderPreferences.percentage(of: fontSize))
+          // Its label says what it shows; what a tap does, which loses the size, is
+          // said here, or VoiceOver would announce a reset as a reading of the size.
+          .accessibilityHint("Goes back to the system's size")
 
           Button {
             fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
