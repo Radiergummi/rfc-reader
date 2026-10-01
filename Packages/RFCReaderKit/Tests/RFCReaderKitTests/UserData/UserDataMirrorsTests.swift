@@ -16,6 +16,9 @@ struct UserDataMirrorsTests {
   }
 
   /// What each save of the context said it changed, as the library's observer reads it.
+  /// On the main actor, which makes it `Sendable`, so the observer's `@Sendable`
+  /// closure can hold it: a nested type does not take the suite's isolation.
+  @MainActor
   private final class Saves {
     var entityNames: [Set<String>?] = []
   }
