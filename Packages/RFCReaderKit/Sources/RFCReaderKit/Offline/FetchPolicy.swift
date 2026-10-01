@@ -1,5 +1,3 @@
-import Foundation
-
 /// Whether a document's body is fetched now, on the path the device has, or waits
 /// for a better one (#358).
 ///
@@ -43,6 +41,10 @@ public enum FetchPolicy {
     case unsatisfied
     /// Unsatisfied because iOS's per-app cellular switch is off for the app.
     case cellularDenied
+    /// Not up yet, but a connection attempt would bring it up, as an on-demand VPN
+    /// does. A fetch makes that attempt, so it counts as satisfied, and the path's cost
+    /// still decides.
+    case requiresConnection
   }
 
   /// What the policy needs to know of the network path: its status and its cost.
@@ -83,7 +85,7 @@ public enum FetchPolicy {
     switch path.status {
     case .unsatisfied: return .deferred(.offline)
     case .cellularDenied: return .deferred(.cellularDenied)
-    case .satisfied: break
+    case .satisfied, .requiresConnection: break
     }
     if path.isConstrained { return .deferred(.lowDataMode) }
     if path.isExpensive { return .deferred(.waitingForWiFi) }

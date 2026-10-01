@@ -1,11 +1,10 @@
-import Foundation
 import RFCKit
+import RFCReaderKit
 import Testing
 
-@testable import RFCReaderKit
-
 /// What keeping documents offline still owes, given the marks and what is on disk
-/// (#358): bodies moved between the tiers, fetches to make, and fetches to stop.
+/// (#358): bodies moved between the tiers, fetches to start, and the reconciler's own
+/// fetches to leave.
 @Suite("Offline reconciler")
 struct OfflineReconcilerTests {
   /// Marked documents are wanted; bookmarked ones only with the setting on, since a
@@ -44,34 +43,57 @@ struct OfflineReconcilerTests {
     #expect(plan == OfflineReconciler.Plan(release: [.rfc(1)]))
   }
 
-  /// A body in both tiers is kept where it is wanted and left alone otherwise; the
-  /// kept copy is the one the plan speaks for.
-  @Test func `a body in both tiers is not moved onto itself`() {
+  /// A body in both tiers is moved into the one it belongs in, replacing the copy
+  /// there, so the two tiers end with one between them.
+  @Test func `a body in both tiers ends in the one it belongs in`() {
     #expect(
-      OfflineReconciler.plan(wanted: [.rfc(1)], kept: [.rfc(1)], cached: [.rfc(1)]) == .init())
+      OfflineReconciler.plan(wanted: [.rfc(1)], kept: [.rfc(1)], cached: [.rfc(1)])
+        == OfflineReconciler.Plan(keep: [.rfc(1)]))
     #expect(
       OfflineReconciler.plan(wanted: [], kept: [.rfc(1)], cached: [.rfc(1)])
         == OfflineReconciler.Plan(release: [.rfc(1)]))
   }
 
-  /// A fetch already running is not started again, whoever asked for it: a reader's
-  /// open is joined, not doubled.
-  @Test func `a wanted document being fetched is not owed another fetch`() {
+  /// A download already running, whoever started it, is not started again, and the
+  /// body it may still write is not moved under it; the next run moves it.
+  @Test func `a document being downloaded is neither fetched again nor moved`() {
     let plan = OfflineReconciler.plan(
-      wanted: [.rfc(1), .rfc(2)], kept: [], cached: [],
-      fetching: [.rfc(1): .open, .rfc(2): .syncedMark])
-    #expect(plan == .init())
+      wanted: [.rfc(1), .rfc(2)], kept: [.rfc(3)], cached: [.rfc(2)],
+      running: [.rfc(1), .rfc(2), .rfc(3)])
+    #expect(plan == OfflineReconciler.Plan())
   }
 
-  /// #116's case: the mark goes while its fetch runs. A fetch nobody waits for is
-  /// stopped, so it spends no more of the connection; one a reader waits for goes on,
-  /// and its body lands in the cache, since it is no longer wanted.
-  @Test func `a mark removed while its fetch runs stops only a discretionary fetch`() {
+  /// #116's case: the mark goes while the reconciler's fetch runs. It leaves that
+  /// fetch, and `InFlightDownloads` stops the download unless a reader joined it, in
+  /// which case its body lands in the cache. A reader's own download is not the
+  /// reconciler's to leave.
+  @Test func `a mark removed while its fetch runs leaves only the reconciler's own fetch`() {
     let plan = OfflineReconciler.plan(
-      wanted: [], kept: [], cached: [],
-      fetching: [.rfc(1): .syncedMark, .rfc(2): .open, .rfc(3): .bookmarkSetting])
-    #expect(plan == OfflineReconciler.Plan(cancel: [.rfc(1), .rfc(3)]))
-    #expect(StorageTier.of(.rfc(2), wanted: []) == .cache)
+      wanted: [.rfc(3)], kept: [], cached: [],
+      running: [.rfc(1), .rfc(2), .rfc(3)], own: [.rfc(1), .rfc(3)])
+    #expect(plan == OfflineReconciler.Plan(leave: [.rfc(1)]))
+    #expect(StorageTier.of(.rfc(1), wanted: [.rfc(3)]) == .cache)
+  }
+
+  /// On a path the policy refuses, nothing is started, and the reconciler leaves the
+  /// fetches it had running, which wait with the rest and say why.
+  @Test func `a path that stops allowing discretionary fetches makes them wait`() {
+    let plan = OfflineReconciler.plan(
+      wanted: [.rfc(1), .rfc(2)], kept: [], cached: [],
+      running: [.rfc(2), .rfc(3)], own: [.rfc(2), .rfc(3)],
+      policy: .deferred(.waitingForWiFi))
+    #expect(
+      plan
+        == OfflineReconciler.Plan(
+          waiting: [.rfc(1), .rfc(2)], deferral: .waitingForWiFi, leave: [.rfc(2), .rfc(3)]))
+  }
+
+  /// Moves between the tiers fetch nothing, so they go ahead on any path; a deferral
+  /// is named only when something waits for it.
+  @Test func `a deferred path still moves bodies, and names no reason when nothing waits`() {
+    let plan = OfflineReconciler.plan(
+      wanted: [.rfc(1)], kept: [.rfc(2)], cached: [.rfc(1)], policy: .deferred(.offline))
+    #expect(plan == OfflineReconciler.Plan(keep: [.rfc(1)], release: [.rfc(2)]))
   }
 
   /// Turning the bookmark setting off releases the bookmarks' bodies, but not a body
@@ -84,7 +106,9 @@ struct OfflineReconcilerTests {
       marks: marks, bookmarks: bookmarks, keepsBookmarks: true)
     let withoutBookmarks = OfflineReconciler.wanted(
       marks: marks, bookmarks: bookmarks, keepsBookmarks: false)
-    #expect(OfflineReconciler.plan(wanted: withBookmarks, kept: kept, cached: []) == .init())
+    #expect(
+      OfflineReconciler.plan(wanted: withBookmarks, kept: kept, cached: [])
+        == OfflineReconciler.Plan())
     #expect(
       OfflineReconciler.plan(wanted: withoutBookmarks, kept: kept, cached: [])
         == OfflineReconciler.Plan(release: [.rfc(2)]))

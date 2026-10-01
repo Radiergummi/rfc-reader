@@ -1,7 +1,5 @@
-import Foundation
+import RFCReaderKit
 import Testing
-
-@testable import RFCReaderKit
 
 /// Whether a fetch goes ahead on the path the device has, by why it was asked for
 /// (#358): one somebody waits for always does, a discretionary one only on a path that
@@ -13,8 +11,9 @@ struct FetchPolicyTests {
   private static let lowData = FetchPolicy.Path(status: .satisfied, isConstrained: true)
   private static let offline = FetchPolicy.Path(status: .unsatisfied)
   private static let cellularDenied = FetchPolicy.Path(status: .cellularDenied)
+  private static let onDemand = FetchPolicy.Path(status: .requiresConnection)
 
-  private static let paths = [wifi, cellular, lowData, offline, cellularDenied]
+  private static let paths = [wifi, cellular, lowData, offline, cellularDenied, onDemand]
 
   /// Opening a document, Retry, a Keep Offline tap on this device and Download Now:
   /// somebody is waiting, so they fetch on any path, in Low Power Mode too. One that
@@ -46,11 +45,17 @@ struct FetchPolicyTests {
     #expect(decide(Self.offline) == .deferred(.offline))
     #expect(decide(Self.cellularDenied) == .deferred(.cellularDenied))
     #expect(decide(Self.wifi, lowPower: true) == .deferred(.lowPowerMode))
+    // An on-demand VPN comes up when a fetch asks; what the path costs still decides.
+    #expect(decide(Self.onDemand) == .fetch)
+    #expect(
+      decide(FetchPolicy.Path(status: .requiresConnection, isExpensive: true))
+        == .deferred(.waitingForWiFi))
   }
 
-  /// One reason, the first that holds: whether there is a network at all, then what
-  /// the path costs, then the device's power. Low Data Mode is a setting the reader
-  /// chose, so it is named before the expense it usually comes with.
+  /// One reason, the first that holds: whether there is a network at all, then the
+  /// per-app cellular switch, then what the path costs, then the device's power. Low
+  /// Data Mode is a setting the reader chose, so it is named before the expense it
+  /// usually comes with.
   @Test func `a deferral names the first reason that holds`() {
     func decide(_ path: FetchPolicy.Path, lowPower: Bool) -> FetchPolicy.Decision {
       FetchPolicy.decide(cause: .syncedMark, path: path, lowPower: lowPower)
@@ -61,5 +66,8 @@ struct FetchPolicyTests {
     #expect(decide(Self.cellular, lowPower: true) == .deferred(.waitingForWiFi))
     let offlineButExpensive = FetchPolicy.Path(status: .unsatisfied, isExpensive: true)
     #expect(decide(offlineButExpensive, lowPower: true) == .deferred(.offline))
+    let deniedAndExpensive = FetchPolicy.Path(
+      status: .cellularDenied, isExpensive: true, isConstrained: true)
+    #expect(decide(deniedAndExpensive, lowPower: true) == .deferred(.cellularDenied))
   }
 }

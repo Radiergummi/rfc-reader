@@ -1,12 +1,12 @@
-import Foundation
 import RFCKit
 
 /// Where a document's body is stored (#358).
 public enum StorageTier: Sendable, Hashable {
-  /// `Application Support`, kept until the document is no longer wanted offline:
-  /// a promise, with no bound.
+  /// Kept until the document is no longer wanted offline: a promise, with no bound,
+  /// and the store's to write in `Application Support`.
   case kept
-  /// `Caches`, which the system may purge and `CacheEviction` bounds.
+  /// The reading cache, which `CacheEviction` bounds, and the store's to write in
+  /// `Caches`, which the system may purge.
   case cache
 
   /// The tier `id`'s body belongs in, given what is wanted offline: where a fetch
@@ -20,61 +20,88 @@ public enum StorageTier: Sendable, Hashable {
 /// (#358).
 ///
 /// The App target runs it again whenever a mark changes, the network path changes or
-/// Low Power Mode does, and carries out its plan: moves through the store, fetches
-/// through `FetchPolicy` with a discretionary cause. Pure, and here rather than in
-/// the App target, because the App target has no test bundle.
+/// Low Power Mode does, and carries out its plan. Pure, and here rather than in the
+/// App target, because the App target has no test bundle.
+///
+/// The fetches it starts are its own waiters on the store's downloads, as a reader's
+/// open is one: to stop one, it leaves, and `InFlightDownloads` cancels the download
+/// only when nobody else waits for it (#116). So a reader who opened the document
+/// meanwhile still gets it, and the reconciler never has to know who else is waiting.
 public enum OfflineReconciler {
   /// What to do to bring the disk in line with what is wanted.
   public struct Plan: Sendable, Hashable {
-    /// Bodies to move from the cache into the kept tier. Marking a document already
+    /// Bodies to move from the cache into the kept tier: marking a document already
     /// read fetches nothing.
     public var keep: Set<DocumentID>
     /// Bodies to move from the kept tier back into the cache, where eviction treats
-    /// them as any other. Unmarking does not delete.
+    /// them as any other: unmarking does not delete.
+    ///
+    /// A move replaces a body already at its destination, so a document with a body
+    /// in both tiers ends with one, in the tier it belongs in.
     public var release: Set<DocumentID>
-    /// Wanted documents with a body in neither tier and no fetch running: the
-    /// fetches still owed.
+    /// Documents to start fetching, with a discretionary cause.
     public var fetch: Set<DocumentID>
-    /// Running fetches nobody waits for, for documents no longer wanted, to stop so
-    /// they spend no more of the connection.
-    public var cancel: Set<DocumentID>
+    /// Documents owed a fetch that the path does not allow now, the reason being
+    /// `deferral`: their rows say so, with Download Now.
+    public var waiting: Set<DocumentID>
+    /// Why `waiting` waits; `nil` when nothing does.
+    public var deferral: FetchPolicy.Reason?
+    /// The reconciler's own fetches to leave: those for documents no longer wanted,
+    /// and all of them when the path stops allowing them.
+    public var leave: Set<DocumentID>
 
     public init(
       keep: Set<DocumentID> = [], release: Set<DocumentID> = [], fetch: Set<DocumentID> = [],
-      cancel: Set<DocumentID> = []
+      waiting: Set<DocumentID> = [], deferral: FetchPolicy.Reason? = nil,
+      leave: Set<DocumentID> = []
     ) {
       self.keep = keep
       self.release = release
       self.fetch = fetch
-      self.cancel = cancel
+      self.waiting = waiting
+      self.deferral = deferral
+      self.leave = leave
     }
   }
 
   /// The documents wanted offline: every marked one, and every bookmarked one when
   /// "Keep bookmarked documents offline" is on. A bookmark otherwise means "find
-  /// this again", not "store this".
+  /// this again", not "store this", and its body stays in the cache.
   public static func wanted(
     marks: Set<DocumentID>, bookmarks: Set<DocumentID>, keepsBookmarks: Bool
   ) -> Set<DocumentID> {
     keepsBookmarks ? marks.union(bookmarks) : marks
   }
 
-  /// The plan for `wanted`, given the bodies in each tier and the fetches running,
-  /// with why each was started.
+  /// The plan for `wanted`.
   ///
-  /// A fetch already running for a wanted document is not owed again: a reader's
-  /// open is joined, not doubled. One running for a document no longer wanted is
-  /// stopped only when nobody waits for it; a reader's goes on, and its body lands
-  /// in the cache (`StorageTier.of`).
+  /// - Parameters:
+  ///   - kept: the documents with a body in the kept tier.
+  ///   - cached: the documents with a body in the cache.
+  ///   - running: every document with a download running, whoever started it. One is
+  ///     not owed another fetch, since a fetch would join it, and its body is not
+  ///     moved while the download may still write it; the next run moves it.
+  ///   - own: the documents the reconciler itself is waiting on, a subset of `running`.
+  ///   - policy: `FetchPolicy`'s decision for a discretionary fetch on the path now.
   public static func plan(
     wanted: Set<DocumentID>, kept: Set<DocumentID>, cached: Set<DocumentID>,
-    fetching: [DocumentID: FetchPolicy.Cause] = [:]
+    running: Set<DocumentID> = [], own: Set<DocumentID> = [],
+    policy: FetchPolicy.Decision = .fetch
   ) -> Plan {
-    Plan(
-      keep: wanted.intersection(cached).subtracting(kept),
-      release: kept.subtracting(wanted),
-      fetch: wanted.subtracting(kept).subtracting(cached).subtracting(fetching.keys),
-      cancel: Set(
-        fetching.filter { !$0.value.isAwaited && !wanted.contains($0.key) }.keys))
+    let owed = wanted.subtracting(kept).subtracting(cached).subtracting(running)
+    var plan = Plan(
+      keep: wanted.intersection(cached).subtracting(running),
+      release: kept.subtracting(wanted).subtracting(running))
+    switch policy {
+    case .fetch:
+      plan.fetch = owed
+      plan.leave = own.subtracting(wanted)
+    case .deferred(let reason):
+      // What the reconciler was fetching and still wants waits with the rest.
+      plan.waiting = owed.union(own.intersection(wanted))
+      plan.deferral = plan.waiting.isEmpty ? nil : reason
+      plan.leave = own
+    }
+    return plan
   }
 }
