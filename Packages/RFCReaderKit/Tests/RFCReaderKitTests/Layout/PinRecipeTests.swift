@@ -84,6 +84,25 @@ struct PinRecipeTests {
     }
   }
 
+  /// After TextKit drops its layout, the viewport range can start far past the top
+  /// for one pass; the first fragment from there is not what is at the top, and
+  /// taking it moved the reader's place 150,000 characters on RFC 5661.
+  @Test func `a lookup that starts past the top finds nothing`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = Surface(layout: fixture.layout)
+    let sections = built.anchors.sections.entries
+    PinRecipe.pin(
+      ReaderAnchor(characterOffset: sections[1].offset), in: fixture.layout, on: surface)
+    let later = try #require(fixture.layout.location(atOffset: sections[sections.count / 2].offset))
+    let stale = try #require(fixture.layout.textLayoutFragment(for: later))
+    fixture.layout.ensureLayout(for: stale.rangeInElement)
+    #expect(
+      PinRecipe.anchor(
+        atContainerTop: surface.containerTop, in: fixture.layout,
+        from: stale.rangeInElement.location) == nil)
+  }
+
   @Test func `pinning an empty document does nothing`() {
     let fixture = LayoutFixture(text: NSAttributedString(), width: 712)
     let surface = Surface(layout: fixture.layout)

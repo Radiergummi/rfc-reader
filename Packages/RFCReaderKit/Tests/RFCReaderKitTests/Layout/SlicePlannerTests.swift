@@ -35,4 +35,21 @@ struct SlicePlannerTests {
     #expect(planner.isComplete)
     #expect(planner.nextSlice() == nil)
   }
+
+  // MARK: - A dropped layout
+
+  /// Measured on an iPhone, RFC 5661: the document laid out at 836,956 pt, then
+  /// TextKit dropped the layout on its own and estimated 739,555 pt.
+  @Test func `the estimate after TextKit drops the layout is a drop`() {
+    #expect(SlicePlanner.layoutWasDropped(laidOut: 836_956, now: 739_555))
+  }
+
+  /// A fragment laid out again a little taller is layout, not a loss of it.
+  @Test func `a small change after completion is not a drop`() {
+    #expect(!SlicePlanner.layoutWasDropped(laidOut: 836_956, now: 837_056))
+  }
+
+  @Test func `an empty document never drops its layout`() {
+    #expect(!SlicePlanner.layoutWasDropped(laidOut: 0, now: 0))
+  }
 }

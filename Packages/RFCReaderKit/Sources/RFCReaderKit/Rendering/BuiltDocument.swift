@@ -38,19 +38,14 @@ public struct BuiltDocument: @unchecked Sendable {
   /// empty in a build with no live links, which draws no chips.
   public let backlinks: [String: [Backlink]]
 
-  /// Every paragraph's measurements, for the reader's height model
-  /// (`HeightModel`). Empty in a build nothing scrolls, such as a print's.
-  public let paragraphs: [ParagraphMetrics]
-
   public init(
     text: NSAttributedString, anchors: AnchorIndex, keepsWithNext: Set<Int> = [],
-    backlinks: [String: [Backlink]] = [:], paragraphs: [ParagraphMetrics] = []
+    backlinks: [String: [Backlink]] = [:]
   ) {
     self.text = text
     self.anchors = anchors
     self.keepsWithNext = keepsWithNext
     self.backlinks = backlinks
-    self.paragraphs = paragraphs
   }
 
   /// What a heading's backlink chip lists (#183): the sections that refer to the

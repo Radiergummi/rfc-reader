@@ -270,7 +270,7 @@ final class RFCTextViewCoordinator: NSObject {
     }
     reportSelection()
     if ReaderLayoutEngine.isEnabled {
-      engine.installed(built, column: laidOutColumn)
+      engine.installed(built)
       reportVisibleAnchor()
     } else {
       beginLayout()
@@ -463,7 +463,7 @@ final class RFCTextViewCoordinator: NSObject {
         textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
       #endif
       if ReaderLayoutEngine.isEnabled {
-        engine.columnChanged(to: column)
+        engine.columnChanged()
       } else if tracker.columnChanged(to: column) {
         beginLayout()
         restorePlace()
@@ -477,26 +477,6 @@ final class RFCTextViewCoordinator: NSObject {
     // The gutter or the header moved the container in the view: the same line stays on top.
     if ReaderLayoutEngine.isEnabled, !columnChanged { engine.pin() }
   }
-
-  #if !canImport(UIKit)
-    func attach(scroller: ReaderScroller, to scroll: ReaderScrollView) {
-      scroll.knob = { [weak self] in self?.engine.knob() }
-      scroller.knobMoved = { [weak self] fraction in
-        self?.engine.jump(toFraction: fraction)
-        self?.reportVisibleAnchor()
-      }
-      scroller.knobTracking = { [weak self] tracking in
-        guard let self else { return }
-        if tracking {
-          self.engine.knobTrackingBegan()
-        }
-      }
-      engine.onHeightChange = { [weak scroll] in
-        guard let scroll else { return }
-        scroll.reflectScrolledClipView(scroll.contentView)
-      }
-    }
-  #endif
 
   // MARK: - Scrolling
 
@@ -852,20 +832,6 @@ final class RFCTextViewCoordinator: NSObject {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
       followChrome(scrollView)
-    }
-
-    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-      settleHeldContentSize()
-    }
-
-    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-      if !decelerate { settleHeldContentSize() }
-    }
-
-    private func settleHeldContentSize() {
-      guard ReaderLayoutEngine.isEnabled, let textView = textView as? ReaderTextView else { return }
-      textView.applyHeldContentSize()
-      engine.pin()
     }
   }
 

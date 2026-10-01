@@ -48,29 +48,6 @@ import RFCReaderKit
       }
     }
 
-    /// On while the viewport-layout engine runs: a content size TextKit reports while
-    /// the reader touches or flings is held and applied when they stop, so the
-    /// indicator does not jump under them.
-    var holdsContentSize = false
-    private var heldContentSize: CGSize?
-
-    override var contentSize: CGSize {
-      get { super.contentSize }
-      set {
-        guard holdsContentSize, isTracking || isDecelerating else {
-          super.contentSize = newValue
-          return
-        }
-        heldContentSize = newValue
-      }
-    }
-
-    func applyHeldContentSize() {
-      guard let held = heldContentSize else { return }
-      heldContentSize = nil
-      super.contentSize = held
-    }
-
     /// A find match or a VoiceOver rotor stop far from the viewport lands on an
     /// estimate under viewport layout; the engine puts it there exactly instead.
     var revealRange: ((NSRange) -> Bool)?

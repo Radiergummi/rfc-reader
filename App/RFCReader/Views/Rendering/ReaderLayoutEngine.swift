@@ -17,7 +17,6 @@ final class ReaderLayoutEngine: PinSurface {
 
   weak var textView: PlatformTextView?
   private(set) var keeper = AnchorKeeper()
-  private(set) var model: HeightModel?
   private(set) var built: BuiltDocument?
 
   // MARK: - PinSurface
@@ -37,24 +36,16 @@ final class ReaderLayoutEngine: PinSurface {
 
   // MARK: - Changes of geometry
 
-  /// A new storage is in, built for `column`: carries the place across and pins it.
-  func installed(_ built: BuiltDocument, column: CGFloat?) {
+  /// A new storage is in: carries the place across and pins it.
+  func installed(_ built: BuiltDocument) {
     let carried = self.built.map { keeper.carried(in: $0.anchors) }
     self.built = built
-    model = column.map { HeightModel(paragraphs: built.paragraphs, column: $0) }
-    scrollerHeight.columnChanged(to: model?.total ?? 0)
     if let carried { keeper.restore(carried, in: built.anchors, length: built.text.length) }
     pin()
     startCompletion()
   }
 
-  func columnChanged(to column: CGFloat) {
-    // A storage installed before the first column has no model yet.
-    if model == nil, let built {
-      model = HeightModel(paragraphs: built.paragraphs, column: column)
-    }
-    model?.setColumn(column)
-    scrollerHeight.columnChanged(to: model?.total ?? 0)
+  func columnChanged() {
     pin()
     startCompletion()
   }
@@ -85,10 +76,8 @@ final class ReaderLayoutEngine: PinSurface {
   @discardableResult
   func userScrolled() -> Int? {
     guard let textView, let layout = textView.textLayoutManager else { return nil }
-    if !keeper.isEngineMoving {
-      lastUserScroll = .now
-      scrollerHeight.interactionBegan()
-    }
+    if !keeper.isEngineMoving { lastUserScroll = .now }
+    noticeDroppedLayout(in: layout)
     let top = textView.viewportTop
     guard top >= 0 else {
       keeper.userScrolledAboveText()
@@ -131,79 +120,40 @@ final class ReaderLayoutEngine: PinSurface {
     keeper.jumped(to: found.anchor)
   }
 
-  // MARK: - The scroller
-
-  /// The knob's position and size (`HeightModel.knob`): where the line at the top
-  /// sits in the model, plus how far into its paragraph the viewport's top is.
-  func knob() -> (position: Double, proportion: CGFloat)? {
-    guard let textView, let layout = textView.textLayoutManager, let model else { return nil }
-    let visible = textView.viewportHeight
-    guard case .line(let anchor) = keeper.place,
-      let location = layout.location(atOffset: anchor.characterOffset),
-      let fragment = layout.textLayoutFragment(for: location)
-    else {
-      return model.knob(paragraph: 0, within: 0, visible: visible, shown: scrollerHeight.shown)
-    }
-    return model.knob(
-      paragraph: model.paragraph(containing: anchor.characterOffset),
-      within: textView.viewportTop - fragment.layoutFragmentFrame.minY,
-      visible: visible, shown: scrollerHeight.shown)
-  }
-
-  /// The knob moved to `fraction`: the paragraph at that height in the model, put
-  /// at the top by the pin recipe, then the rest of the way into it. The ends are
-  /// the document's first line and its last screen.
-  func jump(toFraction fraction: Double) {
-    guard let textView, let layout = textView.textLayoutManager, let model, model.count > 0 else {
-      return
-    }
-    let target = model.target(
-      atFraction: fraction, visible: textView.viewportHeight, shown: scrollerHeight.shown)
-    keeper.jumped(
-      to: ReaderAnchor(characterOffset: model.characterOffset(ofParagraph: target.paragraph)))
-    pin()
-    guard target.within > 0 else { return }
-    keeper.beginEngineMove()
-    scroll(toContainerY: containerTop + target.within)
-    layOutViewport()
-    keeper.endEngineMove(top: containerTop)
-    if let start = layout.textViewportLayoutController.viewportRange?.location,
-      let found = PinRecipe.anchor(atContainerTop: containerTop, in: layout, from: start)
-    {
-      keeper.jumped(to: found.anchor)
-    }
-  }
-
-  /// A knob drag began: the knob's height freezes, and completion pauses, for as
-  /// long as it sends actions.
-  func knobTrackingBegan() {
-    scrollerHeight.interactionBegan()
-    lastUserScroll = .now
-  }
-
   // MARK: - Background completion
 
   private var planner = SlicePlanner(length: 0)
   private var completion: Task<Void, Never>?
   /// When the reader last scrolled, for pausing completion while they do.
   private var lastUserScroll = ContinuousClock.now - .seconds(1)
-  private(set) var scrollerHeight = ScrollerHeight(total: 0)
-  /// Told whenever `scrollerHeight.shown` moved, so the scroller is redrawn.
-  var onHeightChange: () -> Void = {}
+  /// TextKit's height once completion laid the document out; nil until it has.
+  private var laidOutHeight: CGFloat?
 
   /// Lays the document out from its start in the background, a slice per idle turn.
   private func startCompletion() {
     completion?.cancel()
+    laidOutHeight = nil
     planner = SlicePlanner(length: built?.text.length ?? 0)
     completion = Task { [weak self] in
-      while let self, !self.planner.isComplete || self.scrollerHeight.isEasing {
+      while let self, !self.planner.isComplete {
         try? await Task.sleep(for: .milliseconds(self.isInteracting ? 50 : 4))
         guard !Task.isCancelled else { return }
-        self.advanceScroller()
-        guard !self.isInteracting, !self.planner.isComplete else { continue }
+        guard !self.isInteracting else { continue }
         self.layOutSlice()
       }
+      self?.laidOutHeight = self?.textView?.textLayoutManager?.usageBoundsForTextContainer.height
     }
+  }
+
+  /// TextKit drops the layout of the whole document on its own now and then (see
+  /// `SlicePlanner.layoutWasDropped`), on the old path as well; laid out again, its
+  /// positions and the scroller's height are exact again.
+  private func noticeDroppedLayout(in layout: NSTextLayoutManager) {
+    guard let laidOutHeight,
+      SlicePlanner.layoutWasDropped(
+        laidOut: laidOutHeight, now: layout.usageBoundsForTextContainer.height)
+    else { return }
+    startCompletion()
   }
 
   func stop() {
@@ -225,28 +175,6 @@ final class ReaderLayoutEngine: PinSurface {
       let range = layout.textRange(for: NSRange(location: 0, length: NSMaxRange(slice)))
     else { return }
     layout.ensureLayout(for: range)
-    recordHeights(of: slice, in: layout)
     pin()
-  }
-
-  private func recordHeights(of slice: NSRange, in layout: NSTextLayoutManager) {
-    guard var model, let location = layout.location(atOffset: slice.location) else { return }
-    var measured: [(paragraph: Int, height: CGFloat)] = []
-    layout.enumerateTextLayoutFragments(from: location, options: []) { fragment in
-      let offset = layout.offset(of: fragment.rangeInElement.location)
-      guard offset < NSMaxRange(slice) else { return false }
-      measured.append((model.paragraph(containing: offset), fragment.layoutFragmentFrame.height))
-      return true
-    }
-    model.measure(measured)
-    self.model = model
-    scrollerHeight.modelChanged(to: model.total, now: Date.timeIntervalSinceReferenceDate)
-  }
-
-  private func advanceScroller() {
-    let before = scrollerHeight.shown
-    if !isInteracting { scrollerHeight.interactionEnded(now: Date.timeIntervalSinceReferenceDate) }
-    scrollerHeight.advance(to: Date.timeIntervalSinceReferenceDate)
-    if scrollerHeight.shown != before { onHeightChange() }
   }
 }

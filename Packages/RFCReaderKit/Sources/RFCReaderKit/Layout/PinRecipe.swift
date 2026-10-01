@@ -42,6 +42,10 @@ public enum PinRecipe {
     layout.ensureLayout(for: paragraph.rangeInElement)
     var passes = 0
     while passes < maximumPasses, let fragment = layout.textLayoutFragment(for: location) {
+      // After TextKit drops its layout, the fragment can come back unlaid, its frame
+      // zero: scrolling to it sent the reader to the top of the document.
+      layout.ensureLayout(for: fragment.rangeInElement)
+      guard fragment.layoutFragmentFrame.height > 0 else { break }
       let start = layout.offset(of: fragment.rangeInElement.location)
       let wanted =
         fragment.layoutFragmentFrame.minY
@@ -56,7 +60,9 @@ public enum PinRecipe {
 
   /// The anchor at the viewport's top, `top` in container coordinates, read from the
   /// fragments laid out from `start` on: the viewport's own, never a point lookup,
-  /// which can answer with a stale fragment. Nil when nothing is laid out there.
+  /// which can answer with a stale fragment. Nil when nothing is laid out there, and
+  /// when the fragments from `start` begin below the top: after TextKit drops its
+  /// layout, the viewport range can start far past it for a pass.
   @MainActor
   public static func anchor(
     atContainerTop top: CGFloat, in layout: NSTextLayoutManager, from start: any NSTextLocation
@@ -65,6 +71,7 @@ public enum PinRecipe {
     layout.enumerateTextLayoutFragments(from: start, options: []) { fragment in
       let frame = fragment.layoutFragmentFrame
       guard frame.maxY > top else { return true }
+      guard frame.minY <= top else { return false }
       found = LinePin.anchor(
         atFragmentY: max(0, top - frame.minY), in: fragment.textLineFragments,
         fragmentStart: layout.offset(of: fragment.rangeInElement.location))

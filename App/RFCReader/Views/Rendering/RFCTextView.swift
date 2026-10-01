@@ -186,41 +186,6 @@ struct ReaderInputs {
       return insets
     }
 
-    /// Where the knob goes and how big it is, from the reader's height model; nil
-    /// leaves AppKit's own.
-    var knob: (() -> (position: Double, proportion: CGFloat)?)?
-
-    override func reflectScrolledClipView(_ clip: NSClipView) {
-      super.reflectScrolledClipView(clip)
-      guard let knob = knob?(), let scroller = verticalScroller else { return }
-      scroller.knobProportion = knob.proportion
-      scroller.doubleValue = knob.position
-    }
-  }
-
-  /// The reader's vertical scroller: drawn as the stock one, but its knob is placed
-  /// from the reader's height model, and dragging it is a jump. See
-  /// `ReaderLayoutEngine.knob()`.
-  final class ReaderScroller: NSScroller {
-    /// The knob dragged, or a click in the track that jumps there, to this share of
-    /// the document.
-    var knobMoved: ((Double) -> Void)?
-    /// True as a knob drag begins, false as it ends.
-    var knobTracking: ((Bool) -> Void)?
-
-    override func sendAction(_ action: Selector?, to target: Any?) -> Bool {
-      if hitPart == .knob || hitPart == .knobSlot, let knobMoved {
-        knobMoved(doubleValue)
-        return true
-      }
-      return super.sendAction(action, to: target)
-    }
-
-    override func trackKnob(with event: NSEvent) {
-      knobTracking?(true)
-      super.trackKnob(with: event)
-      knobTracking?(false)
-    }
   }
 #endif
 
@@ -280,7 +245,6 @@ struct ReaderInputs {
       context.coordinator.chromeTap = tap
 
       context.coordinator.textView = textView
-      textView.holdsContentSize = ReaderLayoutEngine.isEnabled
       context.coordinator.headerHost = host
       context.coordinator.lastVisibleAnchor = inputs.lastVisibleAnchor
       return textView
@@ -361,11 +325,6 @@ struct ReaderInputs {
       let scroll = ReaderScrollView()
       scroll.documentView = textView
       scroll.hasVerticalScroller = true
-      if ReaderLayoutEngine.isEnabled {
-        let scroller = ReaderScroller()
-        scroll.verticalScroller = scroller
-        context.coordinator.attach(scroller: scroller, to: scroll)
-      }
       scroll.drawsBackground = false
 
       // AppKit has no scroll delegate. The selector-based observer unregisters
