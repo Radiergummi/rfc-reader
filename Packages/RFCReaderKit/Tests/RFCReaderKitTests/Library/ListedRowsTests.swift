@@ -49,29 +49,28 @@ struct ListedRowsTests {
 @Suite("Library list inputs")
 struct LibraryListInputsTests {
   /// Records which inputs were read.
-  private final class Reads {
-    var names: [String] = []
+  private final class Sources: ListSources {
+    var reads: [String] = []
+    var bookmarked: Set<Int> {
+      reads.append("bookmarked")
+      return [1]
+    }
+    var recentlyRead: [Int] {
+      reads.append("recentlyRead")
+      return [2]
+    }
+    var downloaded: Set<Int> {
+      reads.append("downloaded")
+      return [3]
+    }
+    func members(of collection: UUID) -> [Int] {
+      reads.append("members")
+      return [4]
+    }
   }
 
-  private func reading(_ filter: LibraryFilter, into reads: Reads) -> LibraryList {
-    LibraryList.reading(
-      filter: filter, query: "", options: ListOptions(),
-      bookmarked: {
-        reads.names.append("bookmarked")
-        return [1]
-      }(),
-      recentlyRead: {
-        reads.names.append("recentlyRead")
-        return [2]
-      }(),
-      downloaded: {
-        reads.names.append("downloaded")
-        return [3]
-      }(),
-      members: { _ in
-        reads.names.append("members")
-        return [4]
-      })
+  private func reading(_ filter: LibraryFilter, from sources: Sources) -> LibraryList {
+    LibraryList.reading(filter, query: "", options: ListOptions(), from: sources)
   }
 
   @Test(arguments: [
@@ -81,25 +80,25 @@ struct LibraryListInputsTests {
     (.collection(UUID()), "members"),
   ])
   func `a filter reads its own input and no other`(filter: LibraryFilter, input: String) {
-    let reads = Reads()
-    _ = reading(filter, into: reads)
-    #expect(reads.names == [input])
+    let sources = Sources()
+    _ = reading(filter, from: sources)
+    #expect(sources.reads == [input])
   }
 
   @Test(arguments: [LibraryFilter.all, .standards, .workingGroup("httpbis")])
   func `a filter of the index reads none of them`(filter: LibraryFilter) {
-    let reads = Reads()
-    _ = reading(filter, into: reads)
-    #expect(reads.names.isEmpty)
+    let sources = Sources()
+    _ = reading(filter, from: sources)
+    #expect(sources.reads.isEmpty)
   }
 
   @Test func `what is read is what is listed from`() {
-    let reads = Reads()
+    let sources = Sources()
     #expect(
-      reading(.bookmarks, into: reads)
+      reading(.bookmarks, from: sources)
         == LibraryList(filter: .bookmarks, query: "", bookmarked: [1]))
     #expect(
-      reading(.downloaded, into: reads)
+      reading(.downloaded, from: sources)
         == LibraryList(filter: .downloaded, query: "", downloaded: [3]))
   }
 }

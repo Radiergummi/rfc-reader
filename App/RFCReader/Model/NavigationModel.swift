@@ -56,11 +56,21 @@ final class NavigationModel: Identifiable {
   var searchText = "" {
     didSet { followSearchText(pausing: true) }
   }
-  /// The query the list, its count and the sidebar's results are computed for: the
-  /// search text, trimmed, once typing pauses and its hits are ready (#124). Until
-  /// then the list keeps the results it has, as Mail and Finder do.
-  private(set) var appliedQuery = ""
+  /// The search text, trimmed, once typing pauses (#124): what the list is asked to
+  /// search for. Read only to make the list; views read `appliedQuery`.
+  private var requestedQuery = ""
   @ObservationIgnored private var pendingSearch: Task<Void, Never>?
+
+  /// What the list shows, made off the main actor whenever one of its inputs changes
+  /// (#597): this tab's filter, query, options and the inputs it took on entering the
+  /// filter, and the library's index, bookmarks and collections. Views only read it.
+  /// Until the next arrives the list keeps what it has, as Mail and Finder do.
+  private(set) var listed = ListedRows.empty
+  @ObservationIgnored private var listing: Task<Void, Never>?
+
+  /// The query the list, its count and the sidebar's results are for: the one whose
+  /// rows are on show.
+  var appliedQuery: String { listed.list.query }
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -79,6 +89,12 @@ final class NavigationModel: Identifiable {
 
   init(library: LibraryModel) {
     self.library = library
+    followListInputs()
+  }
+
+  isolated deinit {
+    listing?.cancel()
+    pendingSearch?.cancel()
   }
 
   /// The Recently Read order, taken once when the filter is entered.
@@ -229,7 +245,15 @@ final class NavigationModel: Identifiable {
     searchText = text
     pendingSearch?.cancel()
     pendingSearch = nil
-    appliedQuery = AppliedSearch.query(for: text)
+    requestedQuery = AppliedSearch.query(for: text)
+    listNow()
+  }
+
+  /// Lists what the inputs ask for before returning, on the main actor: for a
+  /// script, which reads the list straight after changing it.
+  func listNow() {
+    guard let now = library.listedNow(requestedList()) else { return }
+    listed = now
   }
 
   /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
@@ -237,18 +261,43 @@ final class NavigationModel: Identifiable {
   private func followSearchText(pausing: Bool) {
     pendingSearch?.cancel()
     pendingSearch = nil
-    switch AppliedSearch.step(applying: searchText, over: appliedQuery, pausing: pausing) {
+    switch AppliedSearch.step(applying: searchText, over: requestedQuery, pausing: pausing) {
     case nil:
-      // Typed back to the query on show: nothing is left to apply.
+      // Typed back to the query asked for: nothing is left to apply.
       return
     case .apply(let query):
-      appliedQuery = query
+      requestedQuery = query
     case .search(let query, let delay):
-      pendingSearch = Task(name: "Apply search") { [library] in
+      pendingSearch = Task(name: "Apply search") {
         guard await Debounce.outlasted(delay) else { return }
-        await library.prepareSearch(query)
-        guard !Task.isCancelled else { return }
-        appliedQuery = query
+        requestedQuery = query
+      }
+    }
+  }
+
+  // MARK: - The list
+
+  /// The list the inputs ask for, read so that only what this filter lists from is
+  /// observed (`LibraryList.reading`).
+  private func requestedList() -> LibraryList {
+    LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self)
+  }
+
+  /// Lists again whenever an input of the list changes: `Observations` yields the
+  /// list asked for after each change, and the latest one when a listing ends, so
+  /// typing or clicking through filters faster than a listing takes makes one per
+  /// pause rather than one per change.
+  private func followListInputs() {
+    let inputs = Observations { [weak self] () -> LibraryList? in
+      // The index is read for its observation: a new one lists again.
+      guard let self, self.library.index != nil else { return nil }
+      return self.requestedList()
+    }
+    listing = Task(name: "List") { [weak self] in
+      for await list in inputs {
+        guard let list, let library = self?.library else { continue }
+        guard let listed = await library.listed(list), !Task.isCancelled else { continue }
+        self?.listed = listed
       }
     }
   }
@@ -328,5 +377,16 @@ final class NavigationModel: Identifiable {
   private func arrive(at place: HistoryEntry, animated: Bool = true) {
     scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
+  }
+}
+
+/// What this tab's list may list from: the inputs it took on entering the filter,
+/// and the library's bookmarks and collections as they stand.
+extension NavigationModel: ListSources {
+  var bookmarked: Set<Int> { library.bookmarkedNumbers }
+  var recentlyRead: [Int] { recentOrder }
+
+  func members(of collection: UUID) -> [Int] {
+    library.collections[collection]?.rfcNumbers ?? []
   }
 }

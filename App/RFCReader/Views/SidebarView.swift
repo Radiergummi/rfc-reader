@@ -82,7 +82,7 @@ struct SidebarView: View {
       .toolbar { LibraryBottomBar(navigation: navigation) }
       .overlay {
         if isSearchingInPlace, library.indexState.isReady,
-          library.librarySearch(navigation.appliedQuery).isEmpty
+          navigation.listed.librarySearch.isEmpty
         {
           ContentUnavailableView.search(text: navigation.appliedQuery)
         }
@@ -240,7 +240,7 @@ struct SidebarView: View {
     /// query: the list is windowed (`ListWindow`) and this is not.
     @ViewBuilder
     private var searchResults: some View {
-      let results = library.librarySearch(navigation.appliedQuery)
+      let results = navigation.listed.librarySearch
       let bookmarked = library.bookmarkedNumbers
       Section {
         ForEach(results.prefix(Self.searchResultLimit)) { rfc in

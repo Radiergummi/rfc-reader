@@ -13,7 +13,7 @@ struct RFCListView: View {
   @State private var addingTo: PickerTarget?
 
   private var rfcs: [RFCMetadata] {
-    library.list(for: navigation)
+    navigation.listed.rows
   }
 
   @Environment(\.undoManager) private var undoManager
@@ -231,15 +231,19 @@ struct RFCListView: View {
         }
       }
     #endif
-    .onChange(of: navigation.filter, initial: true) {
-      limit = ListWindow.initialLimit(covering: selectedRow())
-      #if !os(macOS)
+    #if !os(macOS)
+      .onChange(of: navigation.filter) {
         // Edit belongs to a collection's list, and its button goes with it: left
         // on, a list beside the sidebar stayed in Edit with no way out.
         editMode?.wrappedValue = .inactive
-      #endif
+      }
+    #endif
+    // On the rows' own filter, options and query rather than the tab's: those
+    // change first, and the rows the window covers arrive after them (#597).
+    .onChange(of: navigation.listed.list.filter, initial: true) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
     }
-    .onChange(of: navigation.listOptions) {
+    .onChange(of: navigation.listed.list.options) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.appliedQuery) {

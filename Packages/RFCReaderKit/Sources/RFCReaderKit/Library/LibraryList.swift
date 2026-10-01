@@ -16,6 +16,15 @@ extension String {
   }
 }
 
+/// Where the inputs a list may list from are read: each only when a filter asks
+/// for it (`LibraryList.reading`).
+public protocol ListSources {
+  var bookmarked: Set<Int> { get }
+  var recentlyRead: [Int] { get }
+  var downloaded: Set<Int> { get }
+  func members(of collection: UUID) -> [Int]
+}
+
 /// Everything a library list is a function of, and the list it makes.
 ///
 /// The filter and the query are passed in rather than read off the library: they
@@ -47,27 +56,25 @@ public struct LibraryList: Hashable, Sendable {
     self.members = members
   }
 
-  /// The list `filter` shows, reading only the inputs it lists from. The others are
-  /// never evaluated, so a caller whose reads are observed is not asked to list
-  /// again for a change it does not show: every tab searched again for a bookmark
-  /// toggled.
+  /// The list `filter` shows, reading from `sources` only the input it lists from.
+  /// The others are never read, so a caller whose reads are observed is not asked
+  /// to list again for a change it does not show: every tab searched again for a
+  /// bookmark toggled.
   public static func reading(
-    filter: LibraryFilter, query: String, options: ListOptions,
-    bookmarked: @autoclosure () -> Set<Int>, recentlyRead: @autoclosure () -> [Int],
-    downloaded: @autoclosure () -> Set<Int>, members: (UUID) -> [Int]
+    _ filter: LibraryFilter, query: String, options: ListOptions, from sources: some ListSources
   ) -> LibraryList {
-    var collection: [Int] {
+    var members: [Int] {
       guard case .collection(let identifier) = filter else { return [] }
-      return members(identifier)
+      return sources.members(of: identifier)
     }
     return LibraryList(
       filter: filter,
       query: query,
-      bookmarked: filter == .bookmarks ? bookmarked() : [],
-      recentlyRead: filter == .recent ? recentlyRead() : [],
-      downloaded: filter == .downloaded ? downloaded() : [],
+      bookmarked: filter == .bookmarks ? sources.bookmarked : [],
+      recentlyRead: filter == .recent ? sources.recentlyRead : [],
+      downloaded: filter == .downloaded ? sources.downloaded : [],
       options: options,
-      members: collection
+      members: members
     )
   }
 
