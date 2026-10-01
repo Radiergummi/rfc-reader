@@ -38,6 +38,8 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
+  /// Whether a new column comes from a resize still under way; see `ReaderResize`.
+  @State private var resize = ReaderResize()
 
   init(id: DocumentID) {
     self.id = id
@@ -92,6 +94,11 @@ struct DocumentView: View {
   /// than waiting to be told by the text view it has not created yet — which is
   /// why nothing is built until the geometry reader has run once.
   @State private var paneWidth: CGFloat?
+  #if os(macOS)
+    /// How far the toolbar reaches over the pane, which the published-original page
+    /// starts below (#207).
+    @State private var toolbarInset: CGFloat = 0
+  #endif
 
   /// Derived from the pane's width and the measure preference, and nothing else.
   ///
@@ -213,7 +220,8 @@ struct DocumentView: View {
       }
       .onChange(of: buildInputs, initial: true) {
         // Captures the reader, not the view; see `DocumentSession.startLoad`.
-        session.requestBuild(for: buildInputs) { [reader, navigation, id] built, document in
+        session.requestBuild(for: buildInputs, resizeIsLive: resize.isLive) {
+          [reader, navigation, id] built, document in
           // A replaced reader lives on through its fade (`ReaderHost`), and its
           // rebuild must not list its sections under the next document.
           guard navigation.selection == id else { return }
@@ -223,7 +231,10 @@ struct DocumentView: View {
       // The index state, not the metadata: a refresh can change a series' members
       // without changing this document's entry, and comparing the state is cheaper
       // on a body the reader re-evaluates on every section crossing.
-      .onChange(of: library.indexState) { deriveInfo() }
+      .onChange(of: library.indexState) {
+        deriveInfo()
+        markPublishedOriginal()
+      }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
@@ -259,12 +270,24 @@ struct DocumentView: View {
         // the window jump wider every time it opened: the floor rose by 320, and
         // macOS grew the window to satisfy it.
         .frame(minWidth: ReaderLayout.minimumPaneWidth)
+      #else
+        // Which size changes are a rotation, so their new column builds at once.
+        .background {
+          SizeTransitionObserver(resize: resize)
+          .accessibilityHidden(true)
+        }
       #endif
   }
 
   @ViewBuilder
   private var states: some View {
-    if reader.showOriginal {
+    if let metadata,
+      let page = PublishedOriginalPage(
+        id, formats: metadata.formats, showsOriginal: reader.showOriginal,
+        text: session.state.document)
+    {
+      originalOnly(page, metadata: metadata)
+    } else if reader.showOriginal {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
@@ -382,6 +405,56 @@ struct DocumentView: View {
     }
   }
 
+  /// An RFC that is its PDF or PostScript original (#207): the header the index
+  /// gives, and the original to open, rather than an error or a text that only says
+  /// where the original is.
+  ///
+  /// Laid out as the reader lays out a document: the header at the top of the
+  /// column, padded as `RFCTextView` pads it, and the notice below it, centered in
+  /// the same column.
+  private func originalOnly(_ page: PublishedOriginalPage, metadata: RFCMetadata) -> some View {
+    let name = page.original.format.displayName
+    return ScrollView {
+      VStack(alignment: .leading, spacing: 0) {
+        DocumentHeaderView(
+          library: library, navigation: navigation,
+          identity: DocumentHeaderView.Identity(
+            header: DocumentHeader(id: id, title: metadata.title),
+            metadata: metadata,
+            revisions: library.revisionsSummary(for: metadata.id)),
+          heading: heading
+        )
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        ContentUnavailableView {
+          Label("Published as \(name)", systemImage: "doc.richtext")
+        } description: {
+          Text(page.explanation)
+        } actions: {
+          Link("Open the Original (\(name))", destination: page.original.url)
+            // The reader's own handler would read the file's URL as a link to this
+            // RFC, and open it here again.
+            .environment(\.openURL, OpenURLAction { _ in .systemAction })
+        }
+        // Its own height, so it does not fill the pane and push itself down.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity)
+      }
+      // The column `RFCTextView` sets its header and text in, centered in the pane
+      // as its gutters center it.
+      .frame(width: column)
+      .frame(maxWidth: .infinity)
+      .padding(.bottom, ReaderLayout.margin)
+    }
+    #if os(macOS)
+      // The reader's hosted root refuses the safe area, so the scroll view would
+      // start under the toolbar; the reader's own scroll view is AppKit's, and
+      // insets itself by as much.
+      .contentMargins(.top, toolbarInset, for: .scrollContent)
+      .background(ToolbarInsetReader { toolbarInset = $0 })
+    #endif
+  }
+
   /// On iOS only; the Mac's toolbar is the window's, and stays.
   private func setBarsHidden(_ hidden: Bool) {
     #if !os(macOS)
@@ -482,9 +555,16 @@ struct DocumentView: View {
     // Its header is on its way until the reader reports, so the title stays out of
     // the toolbar rather than showing and then dropping (#281).
     reader.documentStartsLoading()
+    markPublishedOriginal()
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
+    // A scan has no text to fetch (#207): its page is the index's.
+    guard PublishedOriginalPage.loadsText(id, formats: metadata?.formats) else {
+      session.skipLoad()
+      reader.isLoading = false
+      return
+    }
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
     session.startLoad(from: library) { [reader, library, navigation, modelContext, id] loaded in
       // Not over the next document's reader state; see `requestBuild`'s caller.
@@ -505,6 +585,7 @@ struct DocumentView: View {
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
+      reader.publishedOriginal = Self.publishedOriginal(id, text: loaded, in: library)
       // Last and apart, so the first build does not wait for it; and, like the
       // rest, not written over the next document's reader state.
       Task(name: "Extract requirements") { [reader, navigation, id] in
@@ -513,11 +594,30 @@ struct DocumentView: View {
         reader.requirements = requirements
       }
     } failed: { [reader, navigation, id] in
-      // No header is coming, so the toolbar names the RFC that failed.
+      // No header is coming, so the toolbar names the RFC that failed; unless it is
+      // a scan (`publishedOriginal`), whose page shows the header.
       guard navigation.selection == id else { return }
       reader.documentFailedToLoad()
       // A jump waiting for the text is not coming.
       if let request = navigation.scrollRequest { navigation.settle(request) }
+    }
+  }
+
+  /// Why this RFC is read as its original, if it is (#207): as the load starts, and
+  /// again when the index loads, which may be after the fetch ended.
+  private func markPublishedOriginal() {
+    // Not while fading out: the reader state is the selected document's.
+    guard navigation.selection == id else { return }
+    reader.publishedOriginal = Self.publishedOriginal(
+      id, text: session.state.document, in: library)
+  }
+
+  /// Static, so the load's callback can ask it without capturing the view.
+  private static func publishedOriginal(
+    _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
+  ) -> PublishedOriginalPage.Status? {
+    library.metadata(id).flatMap {
+      PublishedOriginalPage.Status(id, formats: $0.formats, text: document)
     }
   }
 
@@ -695,3 +795,34 @@ struct DocumentView: View {
     }
   }
 }
+
+#if os(macOS)
+  /// Reports how far the window's toolbar reaches over this view: the distance from
+  /// its top down to the window's `contentLayoutRect`. SwiftUI cannot say, since
+  /// the reader's hosted root refuses the safe area.
+  private struct ToolbarInsetReader: NSViewRepresentable {
+    let report: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ReaderView { ReaderView() }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+      view.report = report
+    }
+
+    final class ReaderView: NSView {
+      var report: (CGFloat) -> Void = { _ in }
+      private var reported: CGFloat?
+
+      override func layout() {
+        super.layout()
+        guard let window else { return }
+        let top = convert(NSPoint(x: 0, y: bounds.maxY), to: nil).y
+        let inset = max(0, top - window.contentLayoutRect.maxY)
+        guard inset != reported else { return }
+        reported = inset
+        // Not during the layout pass that measured it.
+        Task { @MainActor [report] in report(inset) }
+      }
+    }
+  }
+#endif

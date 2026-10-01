@@ -25,6 +25,9 @@ import SwiftUI
     @State private var hasAppeared = false
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
+    /// The reader's own text size, which ⌘= steps (#153).
+    @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+      .defaultFontSize
 
     /// Short enough to survive a tab: the document's designation, not its title.
     private var windowTitle: String {
@@ -135,6 +138,17 @@ import SwiftUI
       .background {
         Button("Go to RFC") { navigation.isShowingGoToSheet = true }
           .keyboardShortcut("k", modifiers: .command)
+          .opacity(0)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
+      }
+      // ⌘= enlarges the text as View ▸ Bigger's ⌘+ does (#153): on a US keyboard
+      // "+" takes Shift, and ⌘= is the chord people press. Invisible for the same
+      // reason as ⌘K's; on the Mac, SwiftUI left a hidden menu item out of the menu
+      // with its shortcut, measured.
+      .background {
+        Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
+          .keyboardShortcut("=", modifiers: .command)
           .opacity(0)
           .allowsHitTesting(false)
           .accessibilityHidden(true)

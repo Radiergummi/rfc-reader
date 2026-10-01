@@ -126,6 +126,9 @@ struct RFCReaderApp: App {
 
 /// Menu bar commands; also give every action a keyboard shortcut on iPad.
 struct DocumentCommands: Commands {
+  @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
+    .defaultFontSize
+
   #if os(macOS)
     /// The key window's navigation, so Back and Forward act on the tab the reader is
     /// actually looking at. `@FocusedValue` cannot answer that any more: the views
@@ -140,6 +143,11 @@ struct DocumentCommands: Commands {
     /// selection is cleared.
     private var showsDocument: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
+    }
+    /// A document on screen that Print and Export offer: not one read as its PDF or
+    /// PostScript original (#207).
+    private var offersPrintAndExport: Bool {
+      navigation?.selection != nil && reader?.offersPrintAndExport == true
     }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
@@ -219,7 +227,7 @@ struct DocumentCommands: Commands {
       CommandGroup(replacing: .importExport) {
         Button("Export…") { active.controller?.exportDocument() }
           .keyboardShortcut("e", modifiers: [.command, .shift])
-          .disabled(!showsDocument)
+          .disabled(!offersPrintAndExport)
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.
@@ -229,18 +237,40 @@ struct DocumentCommands: Commands {
           .disabled(active.controller == nil)
         Button("Print…") { active.controller?.printDocument() }
           .keyboardShortcut("p", modifiers: .command)
-          .disabled(!showsDocument)
+          .disabled(!offersPrintAndExport)
       }
-      // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
-      // list's view options before.
-      CommandGroup(after: .toolbar) {
+    #endif
+    CommandGroup(after: .toolbar) {
+      // View > Bigger, Smaller and Actual Size (#153), the reader's own size on top
+      // of the system's. A setting of the app's rather than the window's, as the
+      // Settings slider it steps is, so it needs no reader to act on.
+      //
+      // Not in a `Section`: the group draws a separator before itself and a section
+      // one at each end, so a section opening the group drew two lines -- measured,
+      // as in the `.sidebar` group below.
+      //
+      // ⌘= is Bigger too, and not here: on the Mac, SwiftUI left a hidden item out
+      // of the menu, shortcut and all -- measured. `ReaderWindow` answers it on the
+      // Mac, an invisible button in `ContentView` on the iPad.
+      Button("Bigger") { fontSize = ReaderPreferences.fontSize(steppingUp: fontSize) }
+        .keyboardShortcut("+", modifiers: .command)
+        .disabled(ReaderPreferences.fontSize(steppingUp: fontSize) == fontSize)
+      Button("Smaller") { fontSize = ReaderPreferences.fontSize(steppingDown: fontSize) }
+        .keyboardShortcut("-", modifiers: .command)
+        .disabled(ReaderPreferences.fontSize(steppingDown: fontSize) == fontSize)
+      Button("Actual Size") { fontSize = ReaderPreferences.defaultFontSize }
+        .keyboardShortcut("0", modifiers: .command)
+        .disabled(fontSize == ReaderPreferences.defaultFontSize)
+      #if os(macOS)
+        // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
+        // list's view options before.
         if let navigation {
           Section {
             ListViewOptions(navigation: navigation)
           }
         }
-      }
-    #endif
+      #endif
+    }
     CommandGroup(before: .sidebar) {
       #if os(macOS)
         // View ▸ Show Sidebar (#157). Not `SidebarCommands()`: SwiftUI's item never
@@ -413,7 +443,9 @@ private struct ReadingSettings: View {
 
   var body: some View {
     Form {
-      Slider(value: $fontSize, in: 12...28, step: 1) {
+      Slider(
+        value: $fontSize, in: ReaderPreferences.fontSizes, step: ReaderPreferences.fontSizeStep
+      ) {
         Text("Reading font size: \(Int(fontSize))")
       }
       Toggle(isOn: usesFullWidth) {
