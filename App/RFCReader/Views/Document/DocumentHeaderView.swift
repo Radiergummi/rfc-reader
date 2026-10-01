@@ -70,8 +70,12 @@ struct DocumentHeaderView: View {
         }
       HStack(spacing: 8) {
         if let metadata = identity.metadata {
-          StatusBadge(status: metadata.currentStatus)
-          Text(metadata.stream.displayName)
+          GlossaryButton(term: .status(metadata.currentStatus), presentation: .scene(navigation)) {
+            StatusBadge(status: metadata.currentStatus)
+          }
+          GlossaryButton(term: .stream(metadata.stream), presentation: .scene(navigation)) {
+            Text(metadata.stream.displayName)
+          }
         }
         if let date = identity.date {
           Text(date)

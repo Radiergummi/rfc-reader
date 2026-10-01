@@ -30,12 +30,13 @@ struct StatusBanner: View {
       VStack(alignment: .leading, spacing: 6) {
         if metadata.isObsolete {
           row(
-            "Obsoleted by", metadata.obsoletedBy, symbol: "exclamationmark.triangle.fill",
-            tint: .red)
+            "Obsoleted by", metadata.obsoletedBy, term: .obsoletes,
+            symbol: "exclamationmark.triangle.fill", tint: .red)
         }
         if !metadata.updatedBy.isEmpty {
           row(
-            "Updated by", metadata.updatedBy, symbol: "arrow.triangle.2.circlepath", tint: .orange)
+            "Updated by", metadata.updatedBy, term: .updates,
+            symbol: "arrow.triangle.2.circlepath", tint: .orange)
         }
         if metadata.hasErrata, let url = metadata.errataURL {
           Link(destination: url) {
@@ -80,12 +81,16 @@ struct StatusBanner: View {
 
   /// The title and the documents wrap beside the symbol, so a document updated by
   /// many others flows onto as many lines as it takes, indented under the title
-  /// (#439).
-  private func row(_ title: String, _ ids: [DocumentID], symbol: String, tint: Color) -> some View {
+  /// (#439). The title opens its glossary entry (#362).
+  private func row(
+    _ title: String, _ ids: [DocumentID], term: Glossary.ProcessTerm, symbol: String, tint: Color
+  ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       self.symbol(symbol).foregroundStyle(tint)
       WrappingRowLayout(spacing: 6) {
-        Text(title).fontWeight(.medium)
+        GlossaryButton(term: .process(term), presentation: .scene(navigation)) {
+          Text(title).fontWeight(.medium)
+        }
         ForEach(ids, id: \.self) { id in
           Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
             .buttonStyle(.plain)

@@ -215,6 +215,17 @@ struct CorpusBackedCatalogTests {
       "no entry is left as artwork")
   }
 
+  /// Its entries stand a blank line apart, so each arrives as a block of its own and
+  /// is merged into the catalog above; the merged catalog is still compact, and hangs
+  /// its numbers, so a thousand entries are not set at twice their height (#352).
+  @Test func `the RFC index of RFC 1012 is compact and hangs its numbers`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
+    let catalog = try #require(
+      document.everyBlock.compactMap(\.definitionList).max { $0.items.count < $1.items.count })
+    #expect(catalog.isCompact)
+    #expect(catalog.hangsTerms)
+  }
+
   /// The standards summaries set a new RFC's number and title on one line and its
   /// description under it. The title was a paragraph and the description artwork;
   /// the description is the entry's second paragraph now.

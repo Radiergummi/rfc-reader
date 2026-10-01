@@ -41,10 +41,11 @@ struct DefinedTermsTests {
 
   /// A one-item definition list for `term`, as a terminology list sets it.
   private static func list(_ term: String) -> Block {
-    .definitionList([
-      DefinitionItem(
-        term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
-    ])
+    .definitionList(
+      DefinitionList([
+        DefinitionItem(
+          term: [.text("\(term):")], definition: [.paragraph(Paragraph(text: "A part."))])
+      ]))
   }
 
   /// A definition list nested in a definition describes a part of that term, not a term
@@ -57,13 +58,15 @@ struct DefinedTermsTests {
     let outer = DefinitionItem(
       term: [.text("Widget:")],
       definition: [
-        .paragraph(Paragraph(text: "The unit a sender emits.")), .definitionList([nested]),
+        .paragraph(Paragraph(text: "The unit a sender emits.")),
+        .definitionList(DefinitionList([nested])),
       ],
       anchor: "widget")
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [
-        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([outer])])
+        Section(
+          anchor: "terms", title: "Terminology", blocks: [.definitionList(DefinitionList([outer]))])
       ],
       source: .xml)
     #expect(Array(DefinedTerms.defined(in: document).keys) == ["Widget"])
@@ -120,7 +123,8 @@ struct DefinedTermsTests {
     let item = DefinitionItem(
       term: [.text("Widget:")],
       definition: [.paragraph(Paragraph(text: "The unit a sender emits."))])
-    let indented = ListBlock(style: .bare, items: [ListItem(blocks: [.definitionList([item])])])
+    let indented = ListBlock(
+      style: .bare, items: [ListItem(blocks: [.definitionList(DefinitionList([item]))])])
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [Section(anchor: "terms", title: "Terminology", blocks: [.list(indented)])],
@@ -138,7 +142,9 @@ struct DefinedTermsTests {
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [
-        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([listed])])
+        Section(
+          anchor: "terms", title: "Terminology", blocks: [.definitionList(DefinitionList([listed]))]
+        )
       ],
       source: .xml)
     let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
@@ -162,7 +168,9 @@ struct DefinedTermsTests {
       sections: [
         Section(
           anchor: "terms", title: "Terminology",
-          blocks: [.definitionList([bare]), .definitionList([listed])])
+          blocks: [
+            .definitionList(DefinitionList([bare])), .definitionList(DefinitionList([listed])),
+          ])
       ],
       source: .xml)
     let indexed = DefinedTerm(term: "widget", anchor: "terms", definition: [])
@@ -194,7 +202,9 @@ struct DefinedTermsTests {
     let document = RFCDocument(
       header: DocumentHeader(title: "Widgets"),
       sections: [
-        Section(anchor: "terms", title: "Terminology", blocks: [.definitionList([listed])])
+        Section(
+          anchor: "terms", title: "Terminology", blocks: [.definitionList(DefinitionList([listed]))]
+        )
       ],
       source: .xml)
     let indexed = DefinedTerm(

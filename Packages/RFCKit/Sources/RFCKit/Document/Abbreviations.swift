@@ -77,8 +77,8 @@ enum Abbreviations {
     for block in blocks.flattened {
       if case .references = block { continue }
       for run in block.proseRuns { found(expansions(in: run.plainText)) }
-      if case .definitionList(let items) = block {
-        for item in items {
+      if case .definitionList(let list) = block {
+        for item in list.items {
           if let pair = glossaryEntry(term: item.term.plainText, definition: item.definition) {
             found([pair])
           }

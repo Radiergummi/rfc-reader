@@ -6,7 +6,10 @@ extension Span<UInt8> {
   func holds(_ literal: StaticString, at index: Int) -> Bool {
     let length = literal.utf8CodeUnitCount
     guard index >= 0, index + length <= count else { return false }
-    for offset in 0..<length where self[index + offset] != literal.utf8Start[offset] {
+    // The one unsafe read in RFCKit (#147): `utf8Start` points at the literal's
+    // `utf8CodeUnitCount` bytes, which `offset` stays below, and a `StaticString` is
+    // never freed. The safe ways to its bytes copy them, on a scan's hot path.
+    for offset in 0..<length where unsafe self[index + offset] != literal.utf8Start[offset] {
       return false
     }
     return true

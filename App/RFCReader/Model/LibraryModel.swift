@@ -94,6 +94,11 @@ final class LibraryModel {
   /// rather than by a live query of every reading position in the view.
   private(set) var recentlyReadCount = 0
 
+  /// The mirrors whose last fetch failed. The next save reads them again, whatever
+  /// it changed, so a failure is mended on the next save, as it was when every save
+  /// read every mirror, rather than on the next save of the same entity (#603).
+  @ObservationIgnored private var failedMirrors: UserDataMirrors = []
+
   private init() {
     refresh(.all)
     storeSaves = NotificationCenter.default.addObserver(
@@ -125,7 +130,9 @@ final class LibraryModel {
     }
   }
 
-  private func refresh(_ mirrors: UserDataMirrors) {
+  private func refresh(_ changed: UserDataMirrors) {
+    let mirrors = changed.union(failedMirrors)
+    failedMirrors = []
     if mirrors.contains(.bookmarks) { refreshBookmarks() }
     if mirrors.contains(.collections) { refreshCollections() }
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
@@ -136,7 +143,8 @@ final class LibraryModel {
     do {
       count = try ReadingPositionStore.recentlyReadRFCCount(in: AppData.container.mainContext)
     } catch {
-      // The last count read stands until a fetch succeeds.
+      // The last count read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.recentlyReadCount)
       libraryLog.error(
         "counting the recently read failed: \(String(describing: error), privacy: .public)")
       return
@@ -147,7 +155,7 @@ final class LibraryModel {
 
   private func refreshCollections() {
     let snapshot = CollectionSnapshot.fetch(in: AppData.container.mainContext)
-    // Only a change is news: most saves record a reading position.
+    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard snapshot != collections else { return }
     collections = snapshot
     // A collection deleted in another tab, or on another device, is not left on
@@ -203,11 +211,12 @@ final class LibraryModel {
     do {
       documents = try BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
     } catch {
-      // The last set read stands until a fetch succeeds.
+      // The last set read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.bookmarks)
       libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
       return
     }
-    // Only a change is news: most saves record a reading position, not a bookmark.
+    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
     bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))

@@ -69,6 +69,9 @@ final class NavigationModel: Identifiable {
   /// sidebar, the Add to Collection menus and the Mac's File menu can all ask for
   /// it, and the one view that presents it is in the window.
   var collectionEditor: CollectionEditorMode?
+  /// The glossary entry on show on iOS, asked for by a view that cannot present it:
+  /// the reader header, hosted outside the view-controller hierarchy (#362).
+  var glossaryTerm: Glossary.Term?
 
   /// The library the list is computed from, and which the inputs below are taken
   /// from on entering a filter.

@@ -127,7 +127,7 @@ struct RequirementsTests {
           anchor: "section-1", number: "1", title: "S",
           blocks: [
             .list(ListBlock(style: .bullet, items: [item])),
-            .definitionList([definition]),
+            .definitionList(DefinitionList([definition])),
             .references(
               ReferenceList(
                 title: "Normative References",
