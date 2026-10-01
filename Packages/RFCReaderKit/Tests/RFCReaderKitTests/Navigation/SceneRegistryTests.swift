@@ -163,6 +163,22 @@ struct SceneRegistryTests {
     #expect(delivered.map(Delivery.init) == [Delivery(rfc9110, to: preferred)])
   }
 
+  /// A routed link whose tab closed, with no other tab open when the index arrived, goes
+  /// to the next tab to register, not to whatever tab is in front at the next settle.
+  @Test func `a routed link whose tab closed with none left goes to the next tab`() {
+    var registry = registry(ready: false)
+    do {
+      let closing = Tab()
+      _ = registry.register(closing)
+      #expect(route(rfc9110, in: &registry) == .wait)
+      registry.unregister(closing)
+    }
+    #expect(registry.indexSettled().isEmpty)
+    let made = Tab()
+    #expect(registry.register(made).map(Delivery.init) == Delivery(rfc9110, to: made))
+    #expect(registry.indexSettled().isEmpty)
+  }
+
   // MARK: - Support
 
   /// What a decision came to, comparable: the link and the tab, by identity.

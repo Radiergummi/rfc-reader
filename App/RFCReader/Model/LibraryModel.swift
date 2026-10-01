@@ -826,13 +826,13 @@ final class LibraryModel {
     #endif
   }
 
-  /// Opens a window for `link`, which it takes in `register(_:)`.
-  private func openInNewWindow(_ link: RFCLink) {
-    sceneRegistry.hold(link, bringsForward: true)
-    #if os(macOS)
+  #if os(macOS)
+    /// Opens a window for `link`, which it takes in `register(_:)`.
+    private func openInNewWindow(_ link: RFCLink) {
+      sceneRegistry.hold(link, bringsForward: true)
       windows?.openWindow()
-    #endif
-  }
+    }
+  #endif
 
   /// Opens `link` the way the click asked for: in `scene`, or in a tab of its own.
   ///

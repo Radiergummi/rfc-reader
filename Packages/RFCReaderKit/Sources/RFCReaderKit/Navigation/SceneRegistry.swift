@@ -12,8 +12,9 @@ import RFCKit
 /// to (#241). On a cold launch the first tab registers before the index is read, and
 /// a BCP or STD link handed over then would select the series itself, because
 /// resolving it to its first RFC needs the index. Every link waits, not only a
-/// series': the wait is the time the index takes to read from the cache or the copy
-/// bundled with the app, and one rule is easier to trust than two.
+/// series': the wait is usually the time the index takes to read from the cache, and
+/// one rule is easier to trust than two. On a first launch with no cached index and no
+/// snapshot bundled with the app, it is the index's download.
 ///
 /// Two kinds of link wait, apart, so that neither displaces the other:
 /// - **For a new tab**, opened behind or in front from a tab already open: in order,
@@ -24,7 +25,8 @@ import RFCKit
 ///   slot: of two, the later wins, being the more recent ask, and the first tab can
 ///   show one document (#140). Bound to the tab routing chose, or to the next tab to
 ///   register; when that tab closes, or no tab registers but one is open when the
-///   index arrives, it goes to the tab in use.
+///   index arrives, it goes to the tab in use, and with none open, to the next tab to
+///   register.
 public struct SceneRegistry<Scene: AnyObject> {
   /// A link handed to a tab: open it there, and when `bringsForward`, make that the
   /// tab in use and bring its window forward.
@@ -143,7 +145,7 @@ public struct SceneRegistry<Scene: AnyObject> {
 
   /// The index has arrived, or failed to: every link held for it whose tab is there.
   /// A routed link whose tab has closed, or that waits for a tab while one is open,
-  /// goes to the preferred tab, else the most recently used.
+  /// goes to the preferred tab, else the most recently used, else the next to register.
   public mutating func indexSettled(preferring isPreferred: (Scene) -> Bool = { _ in false })
     -> [Delivery]
   {
@@ -161,6 +163,9 @@ public struct SceneRegistry<Scene: AnyObject> {
       if let scene = bound ?? open.first(where: isPreferred) ?? open.first {
         routed = nil
         deliveries.append(Delivery(link: waiting.link, scene: scene, bringsForward: true))
+      } else {
+        // No tab is left to take it: the next to register is the tab in use.
+        routed?.target = .nextScene
       }
     }
     return deliveries
