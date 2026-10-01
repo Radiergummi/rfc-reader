@@ -136,11 +136,11 @@ struct ReaderLayoutTests {
   @Test func `a restored place nobody scrolled from is restored again, not held`() {
     #expect(
       ReaderLayout.headerChange(
-        viewportTop: 14_200, from: 289, to: 229, columnChanged: false, lineAtTop: .restored)
+        viewportTop: 14_200, from: 289, to: 229, columnChanged: false, atRestoredPlace: true)
         == .restorePlace)
     #expect(
       ReaderLayout.headerChange(
-        viewportTop: 14_200, from: 208, to: 289, columnChanged: false, lineAtTop: .keepsItsY)
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: false, atRestoredPlace: false)
         == .hold(containerTop: 14_200))
   }
 
@@ -149,36 +149,11 @@ struct ReaderLayoutTests {
   @Test func `a header change asks for nothing where there is nothing to hold`() {
     #expect(
       ReaderLayout.headerChange(
-        viewportTop: 14_200, from: 208, to: 289, columnChanged: true, lineAtTop: .restored)
+        viewportTop: 14_200, from: 208, to: 289, columnChanged: true, atRestoredPlace: true)
         == nil)
     #expect(
       ReaderLayout.headerChange(
-        viewportTop: 14_200, from: 208, to: 208, columnChanged: false, lineAtTop: .restored)
+        viewportTop: 14_200, from: 208, to: 208, columnChanged: false, atRestoredPlace: true)
         == nil)
-  }
-
-  /// UITextView throws away the layout outside its viewport when the inset changes,
-  /// and lays out what it shows again from estimates, so on iOS the container y of
-  /// the line at the top names another line afterwards. There the line itself is
-  /// put back, as a restore does: the tracked place is that line.
-  @Test func `a line is restored rather than held where lines do not keep their y`() {
-    #expect(
-      ReaderLayout.headerChange(
-        viewportTop: 14_200, from: 208, to: 289, columnChanged: false, lineAtTop: .losesItsY)
-        == .restorePlace)
-    #expect(
-      ReaderLayout.headerChange(
-        viewportTop: 0, from: 208, to: 289, columnChanged: false, lineAtTop: .losesItsY)
-        == .restorePlace)
-  }
-
-  /// The header is above the text, laid out from the document's start, so its
-  /// position never rests on an estimate: a reader looking at it keeps it where it
-  /// is on either platform.
-  @Test func `a reader in the header keeps it where it is where lines do not keep their y`() {
-    #expect(
-      ReaderLayout.headerChange(
-        viewportTop: -120, from: 208, to: 289, columnChanged: false, lineAtTop: .losesItsY)
-        == .hold(containerTop: -201))
   }
 }
