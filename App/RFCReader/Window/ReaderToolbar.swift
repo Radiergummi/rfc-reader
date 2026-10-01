@@ -323,7 +323,9 @@
   /// on top of the one before it — the bookmark drew inside the back/forward group and
   /// the share icon over the panel's toggle. Native items also get the system's own
   /// grouping and glass, which a hosted control cannot.
-  final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation, NSMenuDelegate {
+  final class ReaderToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation,
+    NSMenuItemValidation, NSMenuDelegate
+  {
     private unowned let controller: ReaderWindowController
 
     /// The window's title and subtitle, drawn by us; see `ReaderWindowController`
@@ -646,6 +648,15 @@
     }
 
     // MARK: - Validation
+
+    /// More's Export and Print, for a document read as its text (#207); the rest of
+    /// what the toolbar's menus hold is always available.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+      switch item.action {
+      case #selector(exportDocument), #selector(printDocument): reader.offersPrintAndExport
+      default: true
+      }
+    }
 
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
       switch item.itemIdentifier.rawValue {

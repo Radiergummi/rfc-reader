@@ -39,6 +39,9 @@ struct DocumentInspector: View {
   /// Whether the body is on its way, so the lists show progress rather than say it
   /// has not loaded.
   let isLoading: Bool
+  /// Why the RFC is read as its original, if it is (#207), which the lists say in
+  /// their place.
+  let publishedOriginal: PublishedOriginalPage.Status?
   /// For the Info pane's offline copy, which is the store's rather than derived.
   let document: DocumentID?
   let library: LibraryModel
@@ -94,7 +97,9 @@ struct DocumentInspector: View {
 
   @ViewBuilder
   private var selectedTab: some View {
-    switch InspectorPane.navigationContent(hasBody: hasBody, isLoading: isLoading) {
+    let content = InspectorPane.navigationContent(
+      hasBody: hasBody, isLoading: isLoading, readsAsOriginal: publishedOriginal != nil)
+    switch content {
     case .lists:
       loadedTab
     case .loading:
@@ -106,6 +111,10 @@ struct DocumentInspector: View {
       ContentUnavailableView(
         "No \(tab.title)", systemImage: "doc.text.magnifyingglass",
         description: Text("\(document?.displayName ?? "The document") hasn't loaded."))
+    case .publishedOriginal:
+      ContentUnavailableView(
+        "No \(tab.title)", systemImage: "doc.richtext",
+        description: Text(publishedOriginal?.panelExplanation ?? ""))
     }
   }
 
@@ -186,6 +195,7 @@ struct PanelHost: View {
         info: reader.info,
         hasBody: reader.hasDocument,
         isLoading: reader.isLoading,
+        publishedOriginal: reader.publishedOriginal,
         document: navigation.selection,
         library: library,
         pane: reader.pane,

@@ -63,4 +63,14 @@ struct InspectorPaneTests {
   @Test func `with the body, the lists show`() {
     #expect(InspectorPane.navigationContent(hasBody: true, isLoading: false) == .lists)
   }
+
+  /// An RFC read as its original (#207) has no lists to show, and did not fail to
+  /// load: a scan has no text, and a pointer's text is not the RFC.
+  @Test func `an RFC read as its original says so, whatever its load did`() {
+    for (hasBody, isLoading) in [(false, false), (false, true), (true, false)] {
+      #expect(
+        InspectorPane.navigationContent(
+          hasBody: hasBody, isLoading: isLoading, readsAsOriginal: true) == .publishedOriginal)
+    }
+  }
 }

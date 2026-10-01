@@ -79,7 +79,10 @@ final class DocumentSession {
     originalTextLoad?.cancel()
   }
 
-  var hasStartedLoading: Bool { load != nil }
+  /// The index says the RFC is a scan, with no text to fetch (#207).
+  @ObservationIgnored private var skipsLoad = false
+
+  var hasStartedLoading: Bool { load != nil || skipsLoad }
   var hasStartedOriginalTextLoad: Bool { originalTextLoad != nil }
 
   /// Fetches the original text: once per session, the first time it is shown, plus
@@ -101,6 +104,15 @@ final class DocumentSession {
         originalTextFailure = LoadFailure(error: error)
       }
     }
+  }
+
+  /// Starts no fetch, for a scan, and counts as started: appearing again, which a
+  /// collapsed split view does spuriously, does not try the load after all.
+  func skipLoad() {
+    load?.cancel()
+    load = nil
+    skipsLoad = true
+    trace("load skipped, a scan")
   }
 
   /// Fetches, and hands the document to `loaded` once it is the state's, or says it
@@ -146,9 +158,11 @@ final class DocumentSession {
 
   /// Builds for `inputs`, as `BuildRequest` decides, and hands the build and its
   /// document to `built` once it is the state's. `built` must not capture the view,
-  /// for the reason `startLoad` gives.
+  /// for the reason `startLoad` gives. `resizeIsLive` is whether a new column comes
+  /// from a resize still under way; see `ReaderResize`.
   func requestBuild(
-    for inputs: BuildInputs, built: @escaping (BuiltDocument, RFCDocument) -> Void
+    for inputs: BuildInputs, resizeIsLive: Bool,
+    built: @escaping (BuiltDocument, RFCDocument) -> Void
   ) {
     switch BuildRequest.decide(inputs, built: builtInputs, building: buildingFor) {
     case .keep:
@@ -171,7 +185,8 @@ final class DocumentSession {
       return
     }
     buildingFor = inputs
-    let delay = state.buildDelay
+    let delay = state.buildDelay(
+      for: ColumnChange(from: builtInputs?.column, to: inputs.column, isLive: resizeIsLive))
     trace("building")
     build = Task(name: "Build document") { [weak self] in
       if delay > .zero {

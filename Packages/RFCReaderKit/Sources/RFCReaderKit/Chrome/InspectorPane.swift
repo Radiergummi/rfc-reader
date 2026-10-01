@@ -37,11 +37,18 @@ public enum InspectorPane: Sendable {
     /// That the document has not loaded: its load failed, or was offline, and
     /// nothing more is coming.
     case notLoaded
+    /// That the RFC is its PDF or PostScript original, which has no lists (#207);
+    /// `PublishedOriginalPage.Status.panelExplanation` says which.
+    case publishedOriginal
   }
 
   /// What the navigation pane shows for a document whose body is here or not, and
-  /// is still `isLoading` or not (#325).
-  public static func navigationContent(hasBody: Bool, isLoading: Bool) -> NavigationContent {
+  /// is still `isLoading` or not (#325), or that `readsAsOriginal` (#207): a scan
+  /// has no text, and a pointer's is not the RFC.
+  public static func navigationContent(
+    hasBody: Bool, isLoading: Bool, readsAsOriginal: Bool = false
+  ) -> NavigationContent {
+    if readsAsOriginal { return .publishedOriginal }
     if hasBody { return .lists }
     return isLoading ? .loading : .notLoaded
   }
