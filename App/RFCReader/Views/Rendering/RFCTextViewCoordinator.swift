@@ -850,7 +850,9 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-      if !decelerate {
+      if decelerate {
+        drag?.lifted()
+      } else {
         drag = nil
       }
     }
@@ -874,16 +876,8 @@ final class RFCTextViewCoordinator: NSObject {
       let offset = scrollView.contentOffset.y
       let finger = scrollView.panGestureRecognizer.translation(in: scrollView).y
       let touching = scrollView.isTracking || scrollView.isDragging
-      if touching {
-        // A drag that began without telling the delegate starts here, undecided
-        // until it moves again. So does one still undecided when the header's hold
-        // moves the text under it: that is not the finger, and decided by it, the
-        // whole pan would count as the indicator's.
-        if drag == nil || (isHoldingPlace && drag?.kind == nil) {
-          drag = ReaderChrome.Drag(offset: offset, finger: finger)
-        }
-        drag?.moved(offset: offset, finger: finger)
-      }
+      drag = .following(
+        drag, offset: offset, finger: finger, touching: touching, holding: isHoldingPlace)
       let insets = scrollView.adjustedContentInset
       chrome.scrolled(
         ReaderChrome.Scroll(

@@ -57,4 +57,59 @@ struct ReaderChromeDragTests {
     pan.moved(offset: 1_045, finger: 5)
     #expect(pan.kind == .pan)
   }
+
+  /// A scroll with a finger down and no drag yet starts one, undecided until the
+  /// text moves again, and decided by the movement after.
+  @Test func `a touch with no drag starts one`() {
+    let started = ReaderChrome.Drag.following(
+      nil, offset: 1_000, finger: 0, touching: true, holding: false)
+    #expect(started != nil)
+    #expect(started?.kind == nil)
+    let moved = ReaderChrome.Drag.following(
+      started, offset: 9_000, finger: 40, touching: true, holding: false)
+    #expect(moved?.kind == .indicator)
+  }
+
+  /// A finger that stops a flick's deceleration and lifts without dragging tells
+  /// the delegate nothing, so the flick's drag is still there when the next touch
+  /// scrolls. Lifted, it is over, and the next touch is a drag of its own.
+  @Test func `a touch after a lifted drag starts a new one`() {
+    var flick = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    flick.moved(offset: 1_040, finger: -40)
+    flick.lifted()
+    let next = ReaderChrome.Drag.following(
+      flick, offset: 5_000, finger: 0, touching: true, holding: false)
+    let moved = ReaderChrome.Drag.following(
+      next, offset: 9_000, finger: 40, touching: true, holding: false)
+    #expect(moved?.kind == .indicator)
+  }
+
+  /// The deceleration after a pan is still that pan's: lifting the finger keeps
+  /// it until a touch starts another.
+  @Test func `a lifted drag lasts through its deceleration`() {
+    var flick = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    flick.moved(offset: 1_040, finger: -40)
+    flick.lifted()
+    let decelerating = ReaderChrome.Drag.following(
+      flick, offset: 1_400, finger: -40, touching: false, holding: false)
+    #expect(decelerating?.kind == .pan)
+  }
+
+  /// The header's hold moves the text under a finger that has not moved it yet:
+  /// that is not the finger, and decided by it, the whole pan would count as the
+  /// indicator's. A drag already decided stays decided.
+  @Test func `the header's hold restarts an undecided drag, not a decided one`() {
+    let undecided = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    let held = ReaderChrome.Drag.following(
+      undecided, offset: 1_081, finger: 0, touching: true, holding: true)
+    let panned = ReaderChrome.Drag.following(
+      held, offset: 1_121, finger: -40, touching: true, holding: false)
+    #expect(panned?.kind == .pan)
+
+    var pan = ReaderChrome.Drag(offset: 1_000, finger: 0)
+    pan.moved(offset: 1_040, finger: -40)
+    let stillPan = ReaderChrome.Drag.following(
+      pan, offset: 1_121, finger: -40, touching: true, holding: true)
+    #expect(stillPan?.kind == .pan)
+  }
 }

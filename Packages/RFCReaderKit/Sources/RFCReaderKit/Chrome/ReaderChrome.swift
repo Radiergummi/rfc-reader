@@ -62,6 +62,7 @@ public struct ReaderChrome: Equatable, Sendable {
     public private(set) var kind: DragKind?
     private let startOffset: CGFloat
     private let startFinger: CGFloat
+    private var isLifted = false
 
     /// `offset` is the content offset, growing down the document; `finger` is the
     /// pan's translation, growing down the screen.
@@ -75,6 +76,35 @@ public struct ReaderChrome: Equatable, Sendable {
       let textMoved = offset - startOffset
       guard textMoved != 0 else { return }
       kind = textMoved * (finger - startFinger) < 0 ? .pan : .indicator
+    }
+
+    /// The finger came off the text with the scroll still decelerating, which is
+    /// still this drag's. The next touch starts another, even one the delegate
+    /// hears nothing of: a finger that stops a deceleration and lifts without
+    /// dragging ends neither the drag nor the deceleration, so this one is still
+    /// there when that touch scrolls.
+    public mutating func lifted() {
+      isLifted = true
+    }
+
+    /// The drag a scroll belongs to, given `drag`, the one before it.
+    ///
+    /// With a finger down (`touching`), a scroll with no drag, or only a lifted
+    /// one, starts a drag, undecided until the text moves again. So does one
+    /// still undecided when the header's hold (`holding`) moves the text under
+    /// the finger: that is not the finger, and decided by it, the whole pan would
+    /// count as the indicator's. Without a finger, the drag is left as it is: a
+    /// deceleration is still the pan's.
+    public static func following(
+      _ drag: Drag?, offset: CGFloat, finger: CGFloat, touching: Bool, holding: Bool
+    ) -> Drag? {
+      guard touching else { return drag }
+      var current = drag ?? Drag(offset: offset, finger: finger)
+      if current.isLifted || (holding && current.kind == nil) {
+        current = Drag(offset: offset, finger: finger)
+      }
+      current.moved(offset: offset, finger: finger)
+      return current
     }
   }
 
