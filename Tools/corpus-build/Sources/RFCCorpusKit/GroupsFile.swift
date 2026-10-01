@@ -53,6 +53,13 @@ public enum GroupsFile {
     return next.groups.count * 2 >= previous.groups.count
   }
 
+  /// False when more than half the chairs could not be named: datatracker failing
+  /// mid-run, which would publish every active group as chaired by nobody. A few
+  /// failures leave those chairs out for a day.
+  public static func chairsAreNamed(requested: Int, failed: Int) -> Bool {
+    failed * 2 <= requested
+  }
+
   private static func kept(_ groups: [Datatracker.ListedGroup], named: Set<String>)
     -> [Datatracker.ListedGroup]
   {

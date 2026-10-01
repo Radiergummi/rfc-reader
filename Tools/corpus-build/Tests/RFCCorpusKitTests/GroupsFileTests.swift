@@ -64,9 +64,43 @@ struct GroupsFileTests {
     #expect(httpbis.archive?.absoluteString == "http://lists.w3.org/Archives/Public/ietf-http-wg/")
   }
 
-  /// An empty archive is none, not a URL to nowhere.
-  @Test func `an empty list archive is none`() throws {
+  /// An empty archive is none, not a URL to nowhere, and so is one that is not a web
+  /// page: older groups record an address or a word there.
+  @Test func `an archive that is not a web page is none`() throws {
     #expect(try groups().first { $0.acronym == "urnbis" }?.archive == nil)
+    func archive(_ value: String) throws -> URL? {
+      let json = """
+        {"meta": {"next": null}, "objects": [{"id": 1, "acronym": "x", "name": "X",
+          "type": null, "state": null, "parent": null, "list_archive": "\(value)", "charter": null}]}
+        """
+      return try Datatracker.decoder().decode(Datatracker.GroupPage.self, from: Data(json.utf8))
+        .objects.first?.archive
+    }
+    #expect(try archive("none") == nil)
+    #expect(try archive("mailto:wg@ietf.org") == nil)
+    #expect(try archive("https://mailarchive.ietf.org/arch/browse/x/") != nil)
+  }
+
+  /// Datatracker allows a group's type and state to be null; such a group decodes, and
+  /// does not fail its page.
+  @Test func `a group with no type or state decodes`() throws {
+    let json = """
+      {"meta": {"next": null}, "objects": [{"id": 1, "acronym": "x", "name": "X",
+        "type": null, "state": null, "parent": null, "list_archive": null, "charter": null}]}
+      """
+    let group = try #require(
+      try Datatracker.decoder().decode(Datatracker.GroupPage.self, from: Data(json.utf8))
+        .objects.first)
+    #expect(group.typeSlug == "unknown")
+    #expect(group.stateSlug == "unknown")
+  }
+
+  /// A run that could not name most chairs is datatracker failing, not the chairs
+  /// leaving; a few failures are left out for a day.
+  @Test func `a run that could not name most chairs is not published`() {
+    #expect(GroupsFile.chairsAreNamed(requested: 170, failed: 3))
+    #expect(GroupsFile.chairsAreNamed(requested: 0, failed: 0))
+    #expect(!GroupsFile.chairsAreNamed(requested: 170, failed: 170))
   }
 
   @Test func `chair roles are grouped by group, as person URIs`() throws {

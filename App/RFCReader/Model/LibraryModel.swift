@@ -56,7 +56,12 @@ final class LibraryModel {
     }
   }
 
-  private(set) var index: RFCIndex?
+  private(set) var index: RFCIndex? {
+    didSet { groupRFCs = [:] }
+  }
+  /// Each working group's RFCs, worked out once per index for its card (#363): the
+  /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
+  @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
@@ -537,10 +542,17 @@ final class LibraryModel {
   }
 
   /// What a working group's card says: the group as the file describes it, if it
-  /// does, and every RFC of the group the index has.
+  /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
+  /// whatever the list's options hide: the card describes the group, not the list.
   func workingGroupSummary(_ acronym: String) -> WorkingGroupSummary {
-    let filter = LibraryFilter.workingGroup(acronym)
-    let rfcs = index?.rfcs.filter { filter.includes($0) == true } ?? []
+    let rfcs: [RFCMetadata]
+    if let cached = groupRFCs[acronym] {
+      rfcs = cached
+    } else {
+      let filter = LibraryFilter.workingGroup(acronym)
+      rfcs = index?.rfcs.filter { filter.includes($0) == true } ?? []
+      groupRFCs[acronym] = rfcs
+    }
     return WorkingGroupSummary(
       acronym: acronym, group: workingGroups?.group(acronym), rfcs: rfcs)
   }

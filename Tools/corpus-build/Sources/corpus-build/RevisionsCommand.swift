@@ -45,8 +45,9 @@ struct RevisionsCommand: AsyncParsableCommand {
     }
 
     let states = Datatracker.stateTable(
-      try await Self.pages(from: Datatracker.statesFirstPage, as: Datatracker.StatePage.self))
-    let listed = try await Self.pages(
+      try await DatatrackerFetch.pages(
+        from: Datatracker.statesFirstPage, as: Datatracker.StatePage.self))
+    let listed = try await DatatrackerFetch.pages(
       from: Datatracker.draftsFirstPage, as: Datatracker.DraftPage.self
     ).flatMap(\.objects)
     let adopted = listed.filter { DraftStates.isAdopted($0.states(in: states)) }
@@ -61,7 +62,8 @@ struct RevisionsCommand: AsyncParsableCommand {
       guard work != .none else { continue }
       do {
         let record = try Datatracker.decoder().decode(
-          Datatracker.DraftRecord.self, from: try await Self.fetch(Datatracker.record(draft.name)))
+          Datatracker.DraftRecord.self,
+          from: try await DatatrackerFetch.fetch(Datatracker.record(draft.name)))
         if work == .record, let reading = old?.reading {
           readings[draft.name] = try reading.refreshed(with: record)
         } else {
@@ -107,21 +109,11 @@ struct RevisionsCommand: AsyncParsableCommand {
   private static func header(_ draft: Datatracker.ListedDraft) async throws -> DraftHeader {
     try await DraftSource.header { pathExtension in
       do {
-        return try await fetch(
+        return try await DatatrackerFetch.fetch(
           Datatracker.draft(draft.name, rev: draft.rev, extension: pathExtension))
       } catch RFCEditorClient.ClientError.httpStatus(404, _) {
         return nil
       }
     }
-  }
-
-  private static func pages<Page: Datatracker.Page>(
-    from first: URL, as type: Page.Type
-  ) async throws -> [Page] {
-    try await DatatrackerFetch.pages(from: first, as: type)
-  }
-
-  private static func fetch(_ url: URL) async throws -> Data {
-    try await DatatrackerFetch.fetch(url)
   }
 }

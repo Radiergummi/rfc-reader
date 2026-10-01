@@ -32,7 +32,8 @@ public struct WorkingGroupSummary: Sendable, Equatable {
   public init(acronym: String, group: WorkingGroups.Group?, rfcs: [RFCMetadata]) {
     let capitals = acronym.uppercased()
     title = group?.name ?? capitals
-    self.acronym = group == nil ? nil : capitals
+    // Not said twice, for a group whose name is its acronym ("IAB").
+    self.acronym = title.uppercased() == capitals ? nil : capitals
     facts =
       group.map {
         [Self.typeName($0.type), $0.area, Self.stateName($0.state)].compactMap { $0 }

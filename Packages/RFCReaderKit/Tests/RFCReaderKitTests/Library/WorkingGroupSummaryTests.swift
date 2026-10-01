@@ -73,4 +73,11 @@ struct WorkingGroupSummaryTests {
   @Test func `a group with no RFCs in the index says nothing about publications`() {
     #expect(WorkingGroupSummary(acronym: "x", group: httpbis, rfcs: []).publications == nil)
   }
+
+  /// A group whose name is its acronym is not named twice.
+  @Test func `a name that is the acronym is not repeated under it`() {
+    var group = httpbis
+    group.name = "IAB"
+    #expect(WorkingGroupSummary(acronym: "iab", group: group, rfcs: []).acronym == nil)
+  }
 }

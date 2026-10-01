@@ -47,7 +47,8 @@ struct GroupsCommand: AsyncParsableCommand {
 
     var people: [String: String] = [:]
     var failures = 0
-    for uri in GroupsFile.peopleToFetch(groups: groups, named: named, chairs: chairs) {
+    let wanted = GroupsFile.peopleToFetch(groups: groups, named: named, chairs: chairs)
+    for uri in wanted {
       do {
         let person = try Datatracker.decoder().decode(
           Datatracker.Person.self, from: try await DatatrackerFetch.fetch(Datatracker.person(uri)))
@@ -63,6 +64,12 @@ struct GroupsCommand: AsyncParsableCommand {
         "groups": "\(groups.count)", "named": "\(named.count)", "chairs": "\(people.count)",
         "failures": "\(failures)",
       ])
+    guard GroupsFile.chairsAreNamed(requested: wanted.count, failed: failures) else {
+      Self.logger.error(
+        "refusing to publish: most chairs could not be named",
+        metadata: ["requested": "\(wanted.count)", "failures": "\(failures)"])
+      throw ExitCode.failure
+    }
 
     let file = GroupsFile.build(
       groups: groups, named: named, chairs: chairs, people: people, generatedAt: startedAt)
@@ -89,7 +96,6 @@ struct GroupsCommand: AsyncParsableCommand {
     return try await Self.client.fetchIndex()
   }
 
-  /// The RFC Editor's client, as `fetch` makes it.
-  private static let client = RFCEditorClient(
-    transport: RetryingTransport(URLSessionTransport(userAgent: RetryingTransport.userAgent)))
+  /// The RFC Editor's client, over the transport the datatracker requests use.
+  private static let client = RFCEditorClient(transport: DatatrackerFetch.transport)
 }

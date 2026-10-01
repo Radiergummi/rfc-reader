@@ -42,6 +42,9 @@ struct WorkingGroupCard: View {
             Link(destination: link.url) {
               Label(link.title, systemImage: link.symbol)
             }
+            // Borderless, so each link is its own tap target in the list's row, as
+            // the index status's Retry is: a row of plain ones fires them all on iOS.
+            .buttonStyle(.borderless)
             .font(.subheadline)
           }
         }

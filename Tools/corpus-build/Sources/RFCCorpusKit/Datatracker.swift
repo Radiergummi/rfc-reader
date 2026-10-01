@@ -199,14 +199,17 @@ extension Datatracker {
     public var objects: [ListedGroup]
   }
 
+  /// A group as the listing has it. Its type and state are foreign keys datatracker
+  /// allows to be null, so they are optional here: one half-made group must not fail
+  /// the page it is on, and with it the day's file.
   public struct ListedGroup: Decodable, Sendable, Equatable {
     public var id: Int
     public var acronym: String
     public var name: String
     /// "/api/v1/name/grouptypename/wg/".
-    public var type: String
+    public var type: String?
     /// "/api/v1/name/groupstatename/active/".
-    public var state: String
+    public var state: String?
     /// "/api/v1/group/group/2412/".
     public var parent: String?
     /// Empty for a group that has none.
@@ -214,17 +217,22 @@ extension Datatracker {
     /// "/api/v1/doc/document/charter-ietf-httpbis/".
     public var charter: String?
 
-    /// "wg", "rg", "area"…
-    public var typeSlug: String { Datatracker.lastComponent(of: type) }
-    /// "active", "conclude"…
-    public var stateSlug: String { Datatracker.lastComponent(of: state) }
+    /// "wg", "rg", "area"…; "unknown" for none.
+    public var typeSlug: String { type.map(Datatracker.lastComponent(of:)) ?? "unknown" }
+    /// "active", "conclude"…; "unknown" for none.
+    public var stateSlug: String { state.map(Datatracker.lastComponent(of:)) ?? "unknown" }
     public var parentID: Int? { parent.flatMap { Int(Datatracker.lastComponent(of: $0)) } }
     /// "charter-ietf-httpbis".
     public var charterName: String? { charter.map(Datatracker.lastComponent(of:)) }
 
+    /// The archive, when it is a web page: some older groups record an address or a
+    /// word there, which is no link.
     public var archive: URL? {
-      guard let listArchive, !listArchive.isEmpty else { return nil }
-      return URL(string: listArchive)
+      guard let listArchive, let url = URL(string: listArchive),
+        let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+        url.host != nil
+      else { return nil }
+      return url
     }
   }
 

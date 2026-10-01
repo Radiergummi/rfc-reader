@@ -26,9 +26,9 @@ enum DatatrackerFetch {
     return pages
   }
 
-  /// Through the transport `fetch` uses too: this tool's User-Agent, and a bounded
-  /// retry of what can pass.
-  private static let transport = RetryingTransport(
+  /// This tool's User-Agent, and a bounded retry of what can pass: the transport
+  /// every request of these commands goes through, the RFC Editor's included.
+  static let transport = RetryingTransport(
     URLSessionTransport(userAgent: RetryingTransport.userAgent))
 
   static func fetch(_ url: URL) async throws -> Data {

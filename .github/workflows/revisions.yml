@@ -14,6 +14,10 @@ on:
         description: Publish even when more than half the RFCs are gone since the last run
         type: boolean
         default: false
+      allow-groups-shrink:
+        description: Publish groups.json even when more than half the groups are gone since the last run
+        type: boolean
+        default: false
 
 # One run at a time: two would upload over each other's assets.
 concurrency:
@@ -32,6 +36,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       ALLOW_SHRINK: ${{ inputs.allow-shrink && '--allow-shrink' || '' }}
+      ALLOW_GROUPS_SHRINK: ${{ inputs.allow-groups-shrink && '--allow-shrink' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,7 +99,7 @@ jobs:
       - name: Describe groups
         run: |
           # shellcheck disable=SC2086
-          Tools/corpus-build/.build/release/corpus-build groups --out out $PREVIOUS_GROUPS $ALLOW_SHRINK
+          Tools/corpus-build/.build/release/corpus-build groups --out out $PREVIOUS_GROUPS $ALLOW_GROUPS_SHRINK
 
       - name: Publish groups
         run: gh release upload revisions out/groups.json --clobber
