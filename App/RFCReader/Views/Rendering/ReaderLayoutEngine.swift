@@ -32,8 +32,13 @@ final class ReaderLayoutEngine: PinSurface {
     textView.scroll(toY: target + textView.containerTop)
   }
 
+  /// Not during a live resize: there AppKit's own display pass lays the viewport out.
+  /// Forced on every step, it made `NSTextView` lay out a large range of the document
+  /// itself (`textViewportLayoutControllerDidLayout:` → `ensureLayoutForRange:`):
+  /// 500–630 ms per step on RFC 5661, against under 1 ms without, and the reader's
+  /// line held all the same.
   func layOutViewport() {
-    guard let textView else { return }
+    guard !isInLiveResize, let textView else { return }
     textView.syncLayout()
     textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
   }
