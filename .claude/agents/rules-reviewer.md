@@ -1,6 +1,6 @@
 ---
 name: rules-reviewer
-description: Read-only check of a diff against this repository's standing rules only (CLAUDE.md and docs/ARCHITECTURE.md constraints) - not a general bug review. Use on a PR or branch before or alongside /code-review, e.g. "check PR 398 against the repo rules".
+description: Read-only check of a diff against this repository's standing rules only (CLAUDE.md, docs/ARCHITECTURE.md and docs/decisions/ constraints) - not a general bug review. Use on a PR or branch before or alongside /code-review, e.g. "check PR 398 against the repo rules".
 tools: Bash, Read, Grep, Glob
 model: sonnet
 ---

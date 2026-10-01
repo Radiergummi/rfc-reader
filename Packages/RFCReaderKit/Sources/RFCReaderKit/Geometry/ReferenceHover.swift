@@ -22,8 +22,8 @@ public struct HoverTarget: Equatable {
 /// The macOS reader's hover, force-click and preview rules, as a value: an event
 /// goes in, the state changes, and what the window layer must do comes out.
 ///
-/// The rules are ARCHITECTURE.md's "a reference previews on hover and force click
-/// on macOS": a card after a 0.5 s dwell over a reference; a force click previews
+/// The rules are the decision "a reference previews on hover and force click on
+/// macOS" (`docs/decisions/`): a card after a 0.5 s dwell over a reference; a force click previews
 /// the document a reference names, or its card; the click that ends a force click
 /// never follows the link; following a link previews nothing it lands on until the
 /// pointer moves; a mouse-down, a context menu, scrolling or a new document ends

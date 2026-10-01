@@ -5,7 +5,7 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// The macOS reader's hover, force-click and preview rules (ARCHITECTURE.md, "a
+/// The macOS reader's hover, force-click and preview rules (`docs/decisions/`, "a
 /// reference previews on hover and force click on macOS").
 @Suite("Reference hover")
 struct ReferenceHoverTests {
