@@ -61,9 +61,11 @@ extension LegacyTextParser {
     return heading(from: string, colonNumbered: colonNumbered)
   }
 
-  /// A contents entry's end: a leader of four dots or more, run on or spaced, then a
-  /// page number. Four, because a range in a title is three, `0...255`.
-  private static let contentsEntryPattern = Pattern(#/(?:\.\s?){4,}\s*(?<page>\d+|[ivx]+)\s*$/#)
+  /// A contents entry's end: a leader of four dots or more, run on or spaced, or of
+  /// three spaced after a space, then a page number. Four run on, because a range in a
+  /// title is three, `0...255`, and a range is never spaced.
+  private static let contentsEntryPattern = Pattern(
+    #/(?:(?:\.\s?){4,}|\s(?:\.\s){3,})\s*(?<page>\d+|[ivx]+)\s*$/#)
 
   /// A contents entry, `2.  Overview ........ 5`, which reads as a heading at column
   /// 0 and never is one: RFC 791, 793 and the specifications set like them list their
@@ -77,13 +79,9 @@ extension LegacyTextParser {
   /// entry has three, and took the appendix's anchor (#427): an entry taken for a
   /// heading claims its heading's anchor, and the heading is renamed `appendix-A-2`.
   static func isContentsEntry(_ line: String) -> Bool {
-    for pattern in [contentsEntryPattern, spacedLeaderPattern] {
-      if let match = line.firstMatch(of: pattern), isPageNumber(match.page) { return true }
-    }
-    return false
+    guard let match = line.firstMatch(of: contentsEntryPattern) else { return false }
+    return isPageNumber(match.page)
   }
-
-  private static let spacedLeaderPattern = Pattern(#/\s(?:\.\s){3,}\s*(?<page>\d+|[ivx]+)\s*$/#)
 
   /// `isContentsEntry`, or an entry with no leader: a page number in a column of its
   /// own, after a word and a gap of two spaces or more, where the nearest line above
