@@ -303,7 +303,7 @@ extension DocumentTextBuilder {
       case .list(let list):
         appendList(list, indent: indent)
       case .definitionList(let list):
-        appendDefinitionList(list.items, indent: indent)
+        appendDefinitionList(list, indent: indent)
       case .preformatted(let content):
         appendVerbatim(content, indent: indent)
       case .table(let table):

@@ -39,7 +39,7 @@ RFCDocument
 Block (enum)
   paragraph(Paragraph)              inlines + optional anchor + author's indent in characters
   list(ListBlock)                   bullet / numbered(ListNumbering) / bare; items hold blocks
-  definitionList([DefinitionItem])  term inlines + definition blocks
+  definitionList(DefinitionList)    items (term inlines + definition blocks); compact, and whether terms hang beside their definitions
   preformatted(Preformatted)        artwork or sourceCode, verbatim text, optional language
   figure(Figure) · table(Table) · blockQuote · aside
   references(ReferenceList)         bibliographic entries with resolved DocumentID where possible, and annotation inlines; its kind (normative, informative, unknown) is derived from its title

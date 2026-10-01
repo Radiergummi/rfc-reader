@@ -60,14 +60,46 @@ extension DocumentTextBuilder {
     }
   }
 
-  func appendDefinitionList(_ items: [DefinitionItem], indent: CGFloat) {
+  func appendDefinitionList(_ list: DefinitionList, indent: CGFloat) {
+    let spacing = list.isCompact ? style.paragraphSpacing * 0.35 : style.paragraphSpacing
+    let termFont = style.boldBodyFont
     let termAttributes: [NSAttributedString.Key: Any] = [
-      .font: style.boldBodyFont,
+      .font: termFont,
       .foregroundColor: bodyColor,
-      .paragraphStyle: paragraphStyle(indent: indent, spacingAfter: style.paragraphSpacing * 0.3),
+      .paragraphStyle: paragraphStyle(
+        indent: indent, spacingAfter: list.isCompact ? 0 : style.paragraphSpacing * 0.3),
     ]
-    for item in items {
+    // A hanging list's terms share one gutter, measured once for the list as a list's
+    // markers are, and its attributes are built once for every item that hangs.
+    let gap = style.bodySize * Self.markerGapShare
+    let termWidths =
+      list.hangsTerms ? list.items.map { lineWidth($0.term.plainText, font: termFont) } : []
+    let gutterWidth = Self.termGutterWidth(
+      termWidths: termWidths, gap: gap, step: style.indentStep,
+      limit: (style.measure - indent) * Self.termGutterShare)
+    let gutter = indent + gutterWidth
+    let hangingStyle = paragraphStyle(
+      indent: gutter, firstLineIndent: indent, spacingAfter: spacing,
+      tabStops: [NSTextTab(textAlignment: .left, location: gutter)])
+    var hangingTermAttributes = termAttributes
+    hangingTermAttributes[.paragraphStyle] = hangingStyle
+    let hangingAttributes = bodyAttributes(hangingStyle)
+
+    for (index, item) in list.items.enumerated() {
       mark(item.anchor)
+      // The term beside its definition's first paragraph, in one paragraph, when it
+      // fits the gutter; otherwise on a line of its own, so one long term does not
+      // push every definition in the list across (#352).
+      if list.hangsTerms, termWidths[index] + gap <= gutterWidth,
+        case .paragraph(let first)? = item.definition.first
+      {
+        output.append(inlineRuns(item.term, base: hangingTermAttributes))
+        append("\t", hangingTermAttributes)
+        mark(item.definitionAnchor)
+        appendParagraph(first, attributes: hangingAttributes)
+        appendBlocks(Array(item.definition.dropFirst()), indent: gutter)
+        continue
+      }
       output.append(inlineRuns(item.term, base: termAttributes))
       // A definition's own anchor goes where its text starts. An empty `<dd>`
       // has no text, and marking it after the term's newline would put it at the
@@ -76,9 +108,35 @@ extension DocumentTextBuilder {
       if item.definition.isEmpty { mark(item.definitionAnchor) }
       append("\n", termAttributes)
       if !item.definition.isEmpty { mark(item.definitionAnchor) }
-      appendBlocks(item.definition, indent: indent + style.indentStep)
+      let definitionIndent = indent + style.indentStep
+      if list.isCompact, case .paragraph(let first)? = item.definition.first {
+        // A compact list's spacing, as a compact list item's first paragraph takes it.
+        appendParagraph(
+          first,
+          attributes: bodyAttributes(
+            paragraphStyle(indent: definitionIndent, spacingAfter: spacing)))
+        appendBlocks(Array(item.definition.dropFirst()), indent: definitionIndent)
+      } else {
+        appendBlocks(item.definition, indent: definitionIndent)
+      }
     }
   }
+
+  /// How wide a hanging definition list's term gutter is: the widest term that fits
+  /// within `limit` and `gap`, never less than `step`. A term wider than that is set on
+  /// a line of its own, so it is left out of the measure rather than widening the
+  /// gutter for every other term; with none that fits, the gutter is one step and no
+  /// term hangs.
+  static func termGutterWidth(
+    termWidths: [CGFloat], gap: CGFloat, step: CGFloat, limit: CGFloat
+  ) -> CGFloat {
+    let fitting = termWidths.map { $0 + gap }.filter { $0 <= max(step, limit) }
+    return max(step, fitting.max() ?? 0)
+  }
+
+  /// The most of the width left after a definition list's indent that its terms may
+  /// take; see `termGutterWidth`. A third of an iPhone's column is about 110 pt.
+  static let termGutterShare: CGFloat = 1.0 / 3.0
 
   /// How wide a list's marker column is: its widest marker and `gap`, never less than
   /// `step` and never more than `limit`. One step was the column for every list, and
