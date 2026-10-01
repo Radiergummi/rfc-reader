@@ -430,7 +430,7 @@ struct PacketDiagramTests {
     ]
 
   private func layout(_ lines: [String]) throws -> PacketDiagram.Layout {
-    try #require(PacketDiagram.layout(of: lines.joined(separator: "\n")))
+    try #require(PacketDiagram.analyze(lines.joined(separator: "\n"))?.layout)
   }
 
   private func marks(_ layout: PacketDiagram.Layout, line: Int) -> [PacketDiagram.Mark] {
@@ -469,6 +469,6 @@ struct PacketDiagramTests {
   }
 
   @Test func `a box drawing with no ruler has no layout`() {
-    #expect(PacketDiagram.layout(of: "+---+\n| A |\n+---+") == nil)
+    #expect(PacketDiagram.analyze("+---+\n| A |\n+---+")?.layout == nil)
   }
 }

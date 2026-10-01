@@ -31,7 +31,7 @@ struct PacketPresentationTests {
   @Test func `only the characters that draw the grid are hidden`() throws {
     let text = PacketSamples.hyphenated as NSString
     let hidden = try decorated(PacketSamples.hyphenated).hidden
-    #expect(hidden.count == PacketDiagram.layout(of: PacketSamples.hyphenated)?.marks.count)
+    #expect(hidden.count == PacketDiagram.analyze(PacketSamples.hyphenated)?.layout.marks.count)
     for range in hidden {
       #expect("+-=|".contains(text.substring(with: range)), "hid \(text.substring(with: range))")
     }
@@ -78,7 +78,7 @@ struct PacketPresentationTests {
     let text = PacketSamples.combining as NSString
     let decorated = try decorated(PacketSamples.combining)
     #expect(
-      decorated.hidden.count == PacketDiagram.layout(of: PacketSamples.combining)?.marks.count)
+      decorated.hidden.count == PacketDiagram.analyze(PacketSamples.combining)?.layout.marks.count)
     let name = text.range(of: "Le\u{0302}ngth")
     let delimiter = text.range(
       of: "|", range: NSRange(location: NSMaxRange(name), length: text.length - NSMaxRange(name)))
@@ -89,7 +89,7 @@ struct PacketPresentationTests {
   /// the lines after it would land a cell off their borders on the rest of its row.
   @Test func `a diagram with a double-width character is declined`() {
     let wide = PacketSamples.variable.replacingOccurrences(of: "Type", with: "Ty\u{6F22}e")
-    #expect(PacketDiagram.layout(of: wide) != nil, "the recognizer still reads it")
+    #expect(PacketDiagram.analyze(wide)?.layout != nil, "the recognizer still reads it")
     #expect(PacketPresentation.render(wide) == nil)
   }
 }
