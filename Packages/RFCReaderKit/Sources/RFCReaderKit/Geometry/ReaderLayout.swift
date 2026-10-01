@@ -81,25 +81,47 @@ public enum ReaderLayout {
     case hold(containerTop: CGFloat)
   }
 
+  /// What the line at the top of the viewport is when the header changes height.
+  public enum LineAtTop: Equatable, Sendable {
+    /// Where a restore left it, nobody having scrolled or jumped since
+    /// (`ReadingPlaceTracker.isAtRestoredPlace`): the place is the one carried.
+    case restored
+    /// The reader's own, in a text view that keeps every line at its container y
+    /// when the inset changes, as `NSTextView` does.
+    case keepsItsY
+    /// The reader's own, in a text view that lays the text out again when the
+    /// inset changes. `UITextView` throws away the layout after its viewport, and
+    /// lays out what it shows again from estimates, so the y read before the change
+    /// names another line after it.
+    case losesItsY
+  }
+
   /// What to do once the header above the text has changed from `oldHeight` to
   /// `newHeight`, or nil when there is nothing to do.
   ///
-  /// A place restored and not scrolled from since (`atRestoredPlace`, see
-  /// `ReadingPlaceTracker.isAtRestoredPlace`) is restored again rather than held.
-  /// A restore at the document's end is clamped, so the line at the top is not the
-  /// one holding the place; on macOS the header's height is also the padding under
-  /// the last line, so a header that shrinks clamps a held line again, off where
-  /// the restore left it, and tracking then records that line over the place.
-  /// Restored again, the place is carried as it was. Anywhere else the line at the
-  /// top is the reader's own, and is held.
+  /// A place restored and not scrolled from since is restored again rather than
+  /// held. A restore at the document's end is clamped, so the line at the top is
+  /// not the one holding the place; on macOS the header's height is also the
+  /// padding under the last line, so a header that shrinks clamps a held line
+  /// again, off where the restore left it, and tracking then records that line over
+  /// the place. Restored again, the place is carried as it was.
+  ///
+  /// Anywhere else the line at the top is the reader's own. It is held where it
+  /// keeps its y, and restored where it loses it, the place tracking holds being
+  /// that line. A reader in the header has it held either way: the header sits
+  /// above the text's first line, whose y is never an estimate.
   public static func headerChange(
     viewportTop: CGFloat, from oldHeight: CGFloat, to newHeight: CGFloat, columnChanged: Bool,
-    atRestoredPlace: Bool
+    lineAtTop: LineAtTop
   ) -> HeaderChange? {
     guard
       let held = containerTopAfterHeaderChange(
         viewportTop: viewportTop, from: oldHeight, to: newHeight, columnChanged: columnChanged)
     else { return nil }
-    return atRestoredPlace ? .restorePlace : .hold(containerTop: held)
+    switch lineAtTop {
+    case .restored: return .restorePlace
+    case .losesItsY where viewportTop >= 0: return .restorePlace
+    case .keepsItsY, .losesItsY: return .hold(containerTop: held)
+    }
   }
 }

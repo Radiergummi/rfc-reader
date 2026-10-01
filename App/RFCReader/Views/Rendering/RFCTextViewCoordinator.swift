@@ -159,6 +159,10 @@ final class RFCTextViewCoordinator: NSObject {
     /// header's height: that scroll is the header's, not the reader's, even when it
     /// lands during a drag, and moves no bars.
     private var isHoldingPlace = false
+    /// The line an animated jump is on its way to, settled under the top bar once
+    /// the animation ends; see `placeLine(at:animated:)`. Dropped when the reader
+    /// takes over the scroll.
+    private var pendingLine: Int?
   #endif
 
   /// Where section tracking last put the reader, written the moment it is computed.
@@ -238,6 +242,10 @@ final class RFCTextViewCoordinator: NSObject {
   /// document range measured 547 ms on RFC 5661 — the main thread, and therefore
   /// the whole interface, frozen for that long every time a document opens. It is
   /// spread over run-loop turns instead; see `beginLayout()`.
+  ///
+  /// All of this is the Mac's. `UITextView` keeps the layout only around its
+  /// viewport whatever is laid out ahead of it, so on iOS nothing is, and a jump
+  /// asks TextKit to put its place on screen instead; see `placeLine(at:animated:)`.
   func install(_ built: BuiltDocument) {
     guard let textView,
       let layout = textView.textLayoutManager,
@@ -317,33 +325,42 @@ final class RFCTextViewCoordinator: NSObject {
   private func beginLayout() {
     layoutTask?.cancel()
     endLayoutInterval()
-    // An ID of its own, because several text views lay out at once: every
-    // window and tab, and a force-click preview.
-    layoutInterval = signposter.beginInterval(
-      "Lay out document", id: signposter.makeSignpostID(),
-      "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
     laidOutEnd = nil
     laidOutThrough = 0
-    ensureLayout(through: Self.layoutSlice)
-    layoutTask = Task(name: "Lay out document") { [weak self] in
-      while let self, self.laidOutEnd == nil {
-        // A sleep rather than `Task.yield()`: yielding hands the main actor
-        // its next queued job, which is this loop again, and the run loop
-        // never gets between two slices. A timer does.
-        try? await Task.sleep(for: .milliseconds(1))
-        guard !Task.isCancelled else { return }
-        let before = self.laidOutThrough
-        self.ensureLayout(through: before + Self.layoutSlice)
-        // A slice that laid nothing out means there is nothing left to lay
-        // out — an empty document, or a text view that has gone away. Either
-        // way the end stays unknown, which is the safe state, and looping on
-        // it would spin.
-        guard self.laidOutThrough > before else {
-          self.endLayoutInterval()
-          return
+    // Not on iOS, where the document end stays unknown: `UITextView` throws away
+    // the layout outside its viewport as it scrolls, and when its top inset
+    // changes, so what this lays out does not last. Worse, laying the document out
+    // from its start puts back the frames a jump's relocated viewport had moved
+    // past: measured on Mac Catalyst's `UITextView` over 3,000 paragraphs, the
+    // line a jump had put at the top moved 19,632 pt off it when the rest of the
+    // document was laid out after it.
+    #if !canImport(UIKit)
+      // An ID of its own, because several text views lay out at once: every
+      // window and tab, and a force-click preview.
+      layoutInterval = signposter.beginInterval(
+        "Lay out document", id: signposter.makeSignpostID(),
+        "\(self.documentID?.displayName ?? "untitled", privacy: .public)")
+      ensureLayout(through: Self.layoutSlice)
+      layoutTask = Task(name: "Lay out document") { [weak self] in
+        while let self, self.laidOutEnd == nil {
+          // A sleep rather than `Task.yield()`: yielding hands the main actor
+          // its next queued job, which is this loop again, and the run loop
+          // never gets between two slices. A timer does.
+          try? await Task.sleep(for: .milliseconds(1))
+          guard !Task.isCancelled else { return }
+          let before = self.laidOutThrough
+          self.ensureLayout(through: before + Self.layoutSlice)
+          // A slice that laid nothing out means there is nothing left to lay
+          // out — an empty document, or a text view that has gone away. Either
+          // way the end stays unknown, which is the safe state, and looping on
+          // it would spin.
+          guard self.laidOutThrough > before else {
+            self.endLayoutInterval()
+            return
+          }
         }
       }
-    }
+    #endif
   }
 
   /// Lays out from the start of the document through `offset`, and records the
@@ -418,7 +435,7 @@ final class RFCTextViewCoordinator: NSObject {
     let headerChange = laidOutHeaderHeight.flatMap {
       ReaderLayout.headerChange(
         viewportTop: textView.viewportTop, from: $0, to: headerHeight, columnChanged: columnChanged,
-        atRestoredPlace: tracker.isAtRestoredPlace)
+        lineAtTop: tracker.isAtRestoredPlace ? .restored : Self.readersLine)
     }
     laidOutColumn = column
     laidOutGutter = gutter
@@ -488,6 +505,15 @@ final class RFCTextViewCoordinator: NSObject {
     }
   }
 
+  /// What the reader's own line at the top is across a change of the top inset;
+  /// see `ReaderLayout.LineAtTop`. `NSTextView` keeps the document's layout, and
+  /// `UITextView` does not (`placeLine(at:animated:)`).
+  #if canImport(UIKit)
+    private static let readersLine = ReaderLayout.LineAtTop.losesItsY
+  #else
+    private static let readersLine = ReaderLayout.LineAtTop.keepsItsY
+  #endif
+
   // MARK: - Scrolling
 
   /// Puts the anchor's fragment at the top of the viewport.
@@ -514,27 +540,31 @@ final class RFCTextViewCoordinator: NSObject {
   /// Puts the line holding `offset` at the top of the viewport; see
   /// `FragmentGeometry.scrollTarget(of:in:fragmentStart:)`.
   private func scroll(toOffset offset: Int, animated: Bool = false) {
-    guard let textView, let layout = textView.textLayoutManager else { return }
-    // What a deep jump into a document still laying out costs: everything above the
-    // target, at once, on the main thread (#295). Recorded only when there is any,
-    // by `ensureLayout(through:)`'s own condition, so a jump into text already laid
-    // out leaves no empty interval behind.
-    let layoutTarget = offset + Self.layoutSlice
-    if let built, min(layoutTarget, built.text.length) > laidOutThrough {
-      signposter.withIntervalSignpost(
-        "Jump layout", id: signposter.makeSignpostID(),
-        "\(self.documentID?.displayName ?? "untitled", privacy: .public)"
-      ) {
-        ensureLayout(through: layoutTarget)
+    #if canImport(UIKit)
+      placeLine(at: offset, animated: animated)
+    #else
+      guard let textView, let layout = textView.textLayoutManager else { return }
+      // What a deep jump into a document still laying out costs: everything above the
+      // target, at once, on the main thread (#295). Recorded only when there is any,
+      // by `ensureLayout(through:)`'s own condition, so a jump into text already laid
+      // out leaves no empty interval behind.
+      let layoutTarget = offset + Self.layoutSlice
+      if let built, min(layoutTarget, built.text.length) > laidOutThrough {
+        signposter.withIntervalSignpost(
+          "Jump layout", id: signposter.makeSignpostID(),
+          "\(self.documentID?.displayName ?? "untitled", privacy: .public)"
+        ) {
+          ensureLayout(through: layoutTarget)
+        }
       }
-    }
-    guard let location = layout.location(atOffset: offset),
-      let fragment = layout.textLayoutFragment(for: location)
-    else { return }
-    let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
-    let line = FragmentGeometry.scrollTarget(
-      of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart)
-    scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line, animated: animated)
+      guard let location = layout.location(atOffset: offset),
+        let fragment = layout.textLayoutFragment(for: location)
+      else { return }
+      let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+      let line = FragmentGeometry.scrollTarget(
+        of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart)
+      scrollContainerTopTo(fragment.layoutFragmentFrame.minY + line, animated: animated)
+    #endif
     reportVisibleAnchor()
   }
 
@@ -825,6 +855,88 @@ final class RFCTextViewCoordinator: NSObject {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       reportVisibleAnchor()
       followChrome(scrollView)
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+      guard let offset = pendingLine else { return }
+      pendingLine = nil
+      settleLine(at: offset)
+      reportVisibleAnchor()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+      pendingLine = nil
+    }
+  }
+
+  // MARK: - Jumps on iOS
+
+  extension RFCTextViewCoordinator {
+    /// Puts the line holding `offset` at the top of the viewport, by relocating the
+    /// viewport to it: TextKit's own way to put a place on screen.
+    ///
+    /// Not by the fragment's frame, as on the Mac. `UITextView` keeps the layout
+    /// only around its viewport: it throws away what a scroll leaves behind, and
+    /// everything after the viewport when its top inset changes, and lays out what
+    /// it shows again from estimates. A fragment's frame elsewhere is then an
+    /// estimate, a zero, or a leftover from an earlier viewport. Measured on Mac
+    /// Catalyst's `UITextView` over 3,000 paragraphs, laid out as the Mac lays out
+    /// before each jump, 10 of 12 jumps made between scrolls landed on another
+    /// paragraph, up to 300 away, below the target as often as above it; and with
+    /// the whole document laid out first, every jump made after the top inset grew
+    /// read a frame of zero.
+    ///
+    /// The relocation answers with the y the fragment is laid out at once the
+    /// viewport's own top is there. That top is under the top bar, so the fragment
+    /// is put there first, and then settled below the bar by its laid-out frame
+    /// (`settleLine(at:)`). An animated jump goes straight to the bar's edge and
+    /// settles once it lands, because the frames it passes are laid out again on
+    /// the way.
+    func placeLine(at offset: Int, animated: Bool) {
+      pendingLine = nil
+      guard let textView, let layout = textView.textLayoutManager else { return }
+      // An inset `layOut` has just changed lays the text out again when it is
+      // applied; that has to happen before the relocation, not after it.
+      textView.syncLayout()
+      guard let location = layout.location(atOffset: offset),
+        let fragment = layout.textLayoutFragment(for: location)
+      else { return }
+      let fragmentTop = layout.textViewportLayoutController.relocateViewport(
+        to: fragment.rangeInElement.location)
+      if animated, !UIAccessibility.isReduceMotionEnabled {
+        pendingLine = offset
+        textView.scroll(toY: textView.containerTop + fragmentTop, animated: true)
+        return
+      }
+      textView.contentOffset = CGPoint(x: 0, y: textView.containerTop + fragmentTop)
+      textView.syncLayout()
+      settleLine(at: offset)
+    }
+
+    /// Scrolls the line holding `offset` to the top of the uncovered viewport by
+    /// its laid-out frame, which is what is on screen once the viewport is laid out
+    /// around it.
+    ///
+    /// More than once if need be: moving the viewport's top above the line lays
+    /// out the text there, and `UITextView` moves the frames below to make room
+    /// for what that measured, keeping the text on screen where it was. Measured,
+    /// one pass left 4 of 12 jumps a line or a paragraph's spacing off, and
+    /// passing again until the line stayed put left none.
+    private func settleLine(at offset: Int) {
+      guard let textView, let layout = textView.textLayoutManager,
+        let location = layout.location(atOffset: offset)
+      else { return }
+      for _ in 0..<3 {
+        guard let fragment = layout.textLayoutFragment(for: location) else { return }
+        let fragmentStart = layout.offset(of: fragment.rangeInElement.location)
+        let top =
+          fragment.layoutFragmentFrame.minY
+          + FragmentGeometry.scrollTarget(
+            of: offset, in: fragment.textLineFragments, fragmentStart: fragmentStart)
+        guard abs(top - textView.viewportTop) >= 0.5 else { return }
+        textView.scroll(toY: textView.containerTop + top)
+        textView.syncLayout()
+      }
     }
   }
 

@@ -506,9 +506,18 @@ extension NSTextLayoutManager {
   /// Both are read at the same point, `FragmentGeometry.readBackY(atViewportTop:)`.
   /// Reading the paragraph at the top itself and the line a point below it is what
   /// made a heading put at the top by a jump read as the section before (#299).
+  ///
+  /// The paragraph is looked for among the fragments the viewport was last laid out
+  /// with, which are the ones on screen, before TextKit's hit test is asked.
+  /// `UITextView` keeps the layout only around its viewport, and a fragment laid
+  /// out for an earlier viewport keeps the frame it had then: on Mac Catalyst's
+  /// `UITextView`, the hit test at the viewport's top answered with another fragment than the
+  /// one on screen 9 times in 98 jumps and scrolls, once 378 paragraphs away.
   public func readingPlace(atViewportTop top: CGFloat) -> (fragmentStart: Int, line: NSRange)? {
-    let point = CGPoint(x: 0, y: FragmentGeometry.readBackY(atViewportTop: top))
-    guard let fragment = textLayoutFragment(for: point) else { return nil }
+    let y = FragmentGeometry.readBackY(atViewportTop: top)
+    guard
+      let fragment = viewportFragment(atY: y) ?? textLayoutFragment(for: CGPoint(x: 0, y: y))
+    else { return nil }
     let fragmentStart = offset(of: fragment.rangeInElement.location)
     let line = FragmentGeometry.topLine(
       atViewportTop: top,
@@ -518,5 +527,23 @@ extension NSTextLayoutManager {
       fragmentEnd: offset(of: fragment.rangeInElement.endLocation)
     )
     return (fragmentStart, line)
+  }
+
+  /// The fragment at `y` among those the viewport was last laid out with, or nil
+  /// where `y` is not among them: above the viewport, or below what it laid out,
+  /// as after a scroll the viewport has not been laid out for yet.
+  private func viewportFragment(atY y: CGFloat) -> NSTextLayoutFragment? {
+    guard let start = textViewportLayoutController.viewportRange?.location else { return nil }
+    var found: NSTextLayoutFragment?
+    enumerateTextLayoutFragments(from: start, options: []) { fragment in
+      let frame = fragment.layoutFragmentFrame
+      guard fragment.state == .layoutAvailable, frame.minY <= y else { return false }
+      if y < frame.maxY {
+        found = fragment
+        return false
+      }
+      return true
+    }
+    return found
   }
 }
