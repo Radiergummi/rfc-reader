@@ -25,7 +25,7 @@ public struct ReaderAnchor: Sendable, Equatable {
 ///
 /// A line's span runs from its top to its bottom, except that a fragment's first
 /// line starts at the fragment's top, the spacing above it included, which is where
-/// `FragmentGeometry.scrollTarget` has always put a paragraph's first character.
+/// a jump to an anchor has always put a paragraph's first character.
 /// Both directions measure against the same span, so they are inverses.
 public enum LinePin {
   /// The anchor for the viewport's top at `fragmentY`, in the fragment's own
