@@ -387,7 +387,12 @@ public struct Preformatted: Sendable, Hashable, Codable {
 
   public var kind: Kind
   public var text: String
-  /// Language hint from `<sourcecode type="abnf">`, or an artwork type such as `svg`.
+  /// RFCXML's `type` attribute, which means one thing per kind: for source code, its
+  /// language (`abnf`, `json`); for artwork, its form (`svg`, `ascii-art`). Neither
+  /// is a media type. The legacy parser sets `abnf` on a block that parses as ABNF.
+  ///
+  /// It keeps RFCXML's name because no other name covers both (#149): `language`
+  /// is wrong for artwork, and `mediaType` promises MIME types it never holds.
   public var type: String?
   public var name: String?
   public var anchor: String?
