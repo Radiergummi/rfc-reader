@@ -1,10 +1,12 @@
 # The reader's layout engine — implementation plan
 
+> **Revised 1 October 2026.** Tasks 1–12 were built as written. On an iPhone and a Mac, the scroll height of our own (Tasks 3, 4, 9 and 10) and jumping without laying out what is above the target turned out not to work; the spec's "What the devices showed" has the measurements. Those tasks' code is removed, the scrollers are the platforms' own, a jump settles its line (`PinRecipe.settle`), and a live resize pins without a forced viewport layout. Tasks 1–12 below are the record of what was built; Tasks 13 and 14 are rewritten for the engine as it now is.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the reader's whole-document layout with viewport layout that holds the reader's line through every change of geometry, completes layout in the background, and drives the macOS scroller from a height model of its own.
+**Goal:** Replace the reader's whole-document layout with viewport layout that holds the reader's line through every change of geometry and completes layout in the background. (As first written, also driving the macOS scroller from a height model of its own; removed, see the revision note.)
 
-**Architecture:** Every piece of arithmetic is a pure, tested type in `RFCReaderKit/Layout/`: the anchor (`ReaderAnchor`, `LinePin`), the pin recipe over a `PinSurface` protocol (`PinRecipe`), the height model (`ParagraphMetrics`, `HeightModel`), the scroller's smoothing (`ScrollerHeight`), the slice planner (`SlicePlanner`) and the place keeper (`AnchorKeeper`). The App target gets one adapter, `ReaderLayoutEngine`, which the coordinator drives. It arrives behind a launch flag, is checked by hand on both platforms, and only then replaces the old path.
+**Architecture:** Every piece of arithmetic is a pure, tested type in `RFCReaderKit/Layout/`: the anchor (`ReaderAnchor`, `LinePin`), the pin recipe over a `PinSurface` protocol (`PinRecipe`, with `settle`), the slice planner (`SlicePlanner`) and the place keeper (`AnchorKeeper`). The App target gets one adapter, `ReaderLayoutEngine`, which the coordinator drives. It arrives behind a launch flag, is checked by hand on both platforms, and only then replaces the old path.
 
 **Tech Stack:** Swift 6, TextKit 2 (`NSTextLayoutManager`, `NSTextViewportLayoutController`), AppKit/UIKit, Swift Testing, package-benchmark.
 
@@ -29,11 +31,11 @@
 
 ## Review Focus
 
-1. **A document shorter than the viewport** (a one-page RFC): pinning must not loop, the model must not index an empty array, and the knob must not divide by zero. Tests in Tasks 2 and 3; the knob's guards in Task 9.
+1. **A document shorter than the viewport** (a one-page RFC): pinning must not loop. Tested in Task 2. (The model's and the knob's guards went with Tasks 3 and 9.)
 2. **A place carried into a rebuild whose anchor's block came back shorter** (a table re-shaped for a narrow column): the restored character must stay inside the document. Test in Task 6.
 3. **The reader at the very top, over the header, through a resize**: the place stays `.top` and the header stays in view, rather than snapping to the first line. Tests in Task 6 and the hand check in Task 7.
 4. **A very narrow column** (split view on iPad, about 120 pt of text): many lines per paragraph, fractions near line ends. The resize test in Task 2 runs down to 120 pt.
-5. **The knob dragged to the very bottom or top**: it lands exactly at the end or the start, not a paragraph short. The model's ends are tested in Task 3; the knob is checked by hand in Task 9.
+5. **The knob dragged to the very bottom or top**: removed with Task 9; the stock scroller does this itself.
 
 ---
 
@@ -45,8 +47,8 @@ Created in `Packages/RFCReaderKit/Sources/RFCReaderKit/Layout/`:
 |---|---|
 | `LinePin.swift` | `ReaderAnchor`, and `LinePin`: anchor ↔ y within one paragraph fragment |
 | `PinRecipe.swift` | `PinSurface` protocol; `PinRecipe.pin` and `PinRecipe.anchor(atContainerTop:…)` |
-| `HeightModel.swift` | `ParagraphMetrics` (measured at build) and `HeightModel` (estimate, refine, look up) |
-| `ScrollerHeight.swift` | The knob's height: frozen while interacting, eased over 150 ms |
+| `HeightModel.swift` | Removed 1 October 2026 (was `ParagraphMetrics` and `HeightModel`) |
+| `ScrollerHeight.swift` | Removed 1 October 2026 (was the knob's eased height) |
 | `SlicePlanner.swift` | Which slice of background layout comes next |
 | `AnchorKeeper.swift` | The reader's place: only the reader moves it; carried across a rebuild |
 
@@ -504,6 +506,8 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ### Task 3: Paragraph metrics and the height model
 
+> Removed 1 October 2026: the scrollers are the platforms' own. See the spec, "What the devices showed".
+
 **Files:**
 - Create: `Packages/RFCReaderKit/Sources/RFCReaderKit/Layout/HeightModel.swift`
 - Modify: `Packages/RFCReaderKit/Sources/RFCReaderKit/Rendering/BuiltDocument.swift` (add `paragraphs`)
@@ -804,6 +808,8 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ---
 
 ### Task 4: The scroller's height, smoothed
+
+> Removed 1 October 2026, with Task 3.
 
 **Files:**
 - Create: `Packages/RFCReaderKit/Sources/RFCReaderKit/Layout/ScrollerHeight.swift`
@@ -1618,6 +1624,8 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ### Task 9: The macOS scroller reads the model
 
+> Removed 1 October 2026: the maintainer wants the stock scroller, and the model cannot follow TextKit's coordinates. See the spec.
+
 **Files:**
 - Modify: `App/RFCReader/Views/Rendering/RFCTextView.swift` (`ReaderScrollView`, a new `ReaderScroller`, and the scroll view's assembly in `makeNSView`)
 - Modify: `App/RFCReader/Views/Rendering/ReaderLayoutEngine.swift` (`knob`, `jump(toFraction:)`)
@@ -1780,6 +1788,8 @@ With the flag, on RFC 5661, beside a stock-scroller window of another app: overl
 ---
 
 ### Task 10: iOS holds its content height still while the reader scrolls
+
+> Removed 1 October 2026: the held content size put a bottom in the middle of the text and, once, a height of 0 that threw the reader to the top. See the spec.
 
 UIKit's indicator cannot be separated from the content offset, which is in TextKit's coordinates, so iOS takes the spec's fallback directly: the content height TextKit reports is applied only when the reader is not touching or flinging, and the pin that follows a change keeps the line.
 
@@ -2002,7 +2012,7 @@ The maintainer: scroll halfway into a long section, go back to the list, reopen 
 
 ### Task 13: The old path goes, and the decision is recorded
 
-Only after the hand checks in Tasks 7, 9, 10, 11 and 12 passed.
+Only after the hand checks in Tasks 7, 11 and 12, and those of the revision, passed.
 
 **Files:**
 - Modify: `App/RFCReader/Views/Rendering/RFCTextViewCoordinator.swift`, `ReaderLayoutEngine.swift`, `RFCTextView.swift`, `ReaderTextView.swift`
@@ -2013,7 +2023,6 @@ Only after the hand checks in Tasks 7, 9, 10, 11 and 12 passed.
 
 - Delete `ReaderLayoutEngine.isEnabled` and every `if ReaderLayoutEngine.isEnabled` branch, keeping the engine's side of each.
 - From the coordinator delete: `beginLayout()`, `ensureLayout(through:)`, `endLayoutInterval()`, `layoutTask`, `layoutInterval`, `layoutSlice`, `laidOutEnd`, `laidOutThrough`, `restorePlace(fallback:)`, `tracker` and every use, the hit-test branch in `reportVisibleAnchor()`, and the clamp in `scrollContainerTopTo` that reads `laidOutEnd` (delete `scrollContainerTopTo` if nothing else calls it). The `deinit` that ends the layout interval goes with them.
-- `ReaderScroller` is always installed; `holdsContentSize` is always on.
 - `grep -rn "ReadingPlaceTracker\|laidOutEnd\|laidOutThrough\|beginLayout\|ReaderViewportLayout" App Packages` finds nothing.
 
 - [ ] **Step 2: Delete the tracker and its tests**
@@ -2026,9 +2035,13 @@ git rm Packages/RFCReaderKit/Sources/RFCReaderKit/Navigation/ReadingPlaceTracker
 - [ ] **Step 3: Record the decision**
 
 In `docs/ARCHITECTURE.md`:
-- Add a section `## Decision: the reader lays out its viewport, and holds the reader's line` (dated 30 September 2026), summarizing the spec's "Why", the probe table, the engine's four parts, and that it replaces the whole-document layout recorded under #9. Link the spec.
+- Add a section `## Decision: the reader lays out its viewport, and holds the reader's line` (dated 30 September 2026, revised 1 October 2026), summarizing the spec's "Why", the probe table, the device findings (TextKit dropping its layout, the two sets of coordinates after a jump that did not lay out what is above it, the cost of laying out from the start), the engine's three parts and the settle rule, and that it replaces the whole-document layout recorded under #9. Link the spec.
 - In the "Known gaps" list, replace the bullet that begins "The reader still lays out the whole document body" with one line pointing at the new decision.
-- In "The TextKit 2 traps": in the paragraph beginning "A text container that tracks the text view's width", delete from "That one still does, until its rebuild lands" to the end of the paragraph, and add a paragraph: `relocateViewport(to:)` put its target at y = 0 or collapsed the viewport after a prior relocation (1/40 exact in the probe), and a point lookup after a relocation can return a stale fragment; the pin recipe lays out the target's paragraph and reads the viewport's own fragments instead.
+- In "The TextKit 2 traps": in the paragraph beginning "A text container that tracks the text view's width", delete from "That one still does, until its rebuild lands" to the end of the paragraph, and add paragraphs for:
+  - `relocateViewport(to:)` putting its target at y = 0 or collapsing the viewport after a prior relocation (1/40 exact in the probe), and a point lookup after a relocation returning a stale fragment; the engine reads the viewport's own fragments instead.
+  - TextKit dropping the layout of the whole document on its own (RFC 5661 on an iPhone, 836,956 → 739,555 pt, no invalidation asked for), so its positions are never reliably exact for long.
+  - A jump that does not lay out what is above its target leaving the viewport in estimated coordinates that the layout from the start later replaces (73,000 characters on RFC 5661); `PinRecipe.settle` is the rule.
+  - A forced viewport layout during a live resize making `NSTextView` lay out a large range itself (500–630 ms a step on RFC 5661); the engine leaves the viewport to AppKit's display pass then.
 - In `CLAUDE.md`'s standing constraints, nothing changes.
 
 - [ ] **Step 4: Gate**
@@ -2058,14 +2071,16 @@ At the end of the `benchmarks` closure:
 
 ```swift
   // The reader's layout engine (see docs/ARCHITECTURE.md, the viewport-layout
-  // decision): a jump to the last section, one resize step with the line held, and
-  // one background slice, on the largest RFCs. The probe's baseline: a jump 2–6 ms,
-  // a resize step 2.4–5.8 ms median, a 6,000-character slice about 3–5 ms.
+  // decision): a settled jump to the last section, which lays out everything above
+  // it, one resize step with the line pinned, and one background slice. The
+  // baseline: laying out from the start to the end of RFC 5661 took 545 ms on a Mac
+  // (debug); a resize step 2.4–5.8 ms median in the probe; a 6,000-character slice
+  // about 3–5 ms.
   for number in [9000] {
     Benchmark("Layout: jump to the last section, RFC \(number)") { benchmark, input in
       for _ in benchmark.scaledIterations {
         let (layout, surface, target) = input.fresh()
-        blackHole(PinRecipe.pin(ReaderAnchor(characterOffset: target), in: layout, on: surface))
+        blackHole(PinRecipe.settle(ReaderAnchor(characterOffset: target), in: layout, on: surface))
       }
     } setup: {
       await LayoutInput(data: corpus.data("rfc\(number).xml"))
@@ -2150,7 +2165,7 @@ Add `import AppKit` at the top of the file. If package-benchmark's closures are 
 - [ ] **Step 2: Run them**
 
 Run: `make benchmark BENCHMARK_ARGS='--filter "Layout.*"'`
-Expected: the jump's and the resize step's medians within 2–10 ms, and a slice's within 2–8 ms, on this machine; record the numbers in the commit message.
+Expected: the settled jump's median about what laying out RFC 9000 from its start costs (348 K characters; on the order of 0.1–0.2 s here), the resize step's within 2–10 ms, and a slice's within 2–8 ms; record the numbers in the commit message.
 
 - [ ] **Step 3: Commit**
 
@@ -2165,4 +2180,4 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ## Handover
 
-Open a pull request against `main` from `fix/resize-reading-position` titled "The reader lays out its viewport and holds the reader's line", closing #546, #295 and #322, with the spec and this plan linked, the probe table, and the hand checks from Tasks 7, 9, 10, 11 and 12 as a checklist. Before pushing, check the PR is still open (if one exists) and push with `git push origin fix/resize-reading-position`.
+Open a pull request against `main` from `fix/resize-reading-position` titled "The reader lays out its viewport and holds the reader's line", closing #546 and #322 (not #295: a deep jump before completion costs what it does on the old path), with the spec and this plan linked, the probe table and the device findings, and the hand checks as a checklist: a live resize on the Mac, wide and narrow; the stock scroller and its pointer; rotation, flinging and dragging the indicator on an iPhone; find and the VoiceOver rotors far down RFC 5661; a restored reading position. Before pushing, check the PR is still open (if one exists) and push with `git push origin fix/resize-reading-position`.

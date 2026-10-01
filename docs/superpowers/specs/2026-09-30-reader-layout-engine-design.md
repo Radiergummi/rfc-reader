@@ -2,7 +2,13 @@
 
 *30 September 2026. Approved in brainstorming, section by section, after a measured probe;
 implementation plan to follow. Replaces the "whole document laid out" decision recorded with
-#9. Fixes #546, #295 and #322.*
+#9. Fixes #546 and #322.*
+
+*Revised 1 October 2026, after the first builds ran on an iPhone and a Mac: the scroll height of
+our own and jumping without laying out what is above the target are gone, for the reasons in
+"What the devices showed". A deep jump before the document is laid out costs what it does on
+the old path, so #295 is not fixed here. "Design" and everything after it describe the engine
+as it now is.*
 
 ## Why
 
@@ -34,7 +40,8 @@ natural, real time and snappy on any RFC, the largest included.
 This is the first of four projects:
 
 1. **The layout engine** — this spec. Viewport layout, the reader's line held through every
-   change of geometry, background completion, and a scroll height of our own.
+   change of geometry, and background completion. (As first written, also a scroll height of
+   our own; see "What the devices showed".)
 2. **Column-dependent blocks at layout time** — artwork scale and RFC 8792 unfolding, table
    shape and tab stops, list marker widths, and on the artwork branch the centering indent, all
    decided from the live column instead of at build time. Its own spec.
@@ -93,20 +100,106 @@ What it established:
 - **Slices must be smaller than today's.** 20 K characters is 10–16 ms, a frame at 60 Hz; the
   engine's slices are 5–8 K, about 3–5 ms.
 
+## What the devices showed
+
+*1 October 2026. Measured in the running app on an iPhone 15 Pro and on the MacBook Pro (M3 Pro)
+of the probe, debug builds unless said otherwise, RFC 5661 throughout. A probe build stepped the
+reader through the document by itself and logged TextKit's geometry against the engine's; none
+of it is committed. The first design was built through the plan's Task 12 before this was
+known.*
+
+**TextKit drops the layout of the whole document on its own.** Scrolling back up RFC 5661, at
+the same place every run, one fragment came back 100 pt taller and every fragment in the
+document went back to estimated heights: the document's height fell from 836,956 to 739,555 pt.
+Nothing asked for it — no `invalidateLayout(for:)` over a large range was called — the container's
+width, the insets and the text size were unchanged, and it happened the same with TextKit's
+plain `NSTextLayoutFragment` in place of ours, and on the old path without the engine.
+TextKit's positions are therefore never reliably exact for long, even after the whole document
+was laid out.
+
+**After a far jump there are two sets of coordinates.** A jump that lays out only its target's
+paragraph leaves the viewport where TextKit estimated it — around y = 393,000 for a line in the
+middle of RFC 5661 — while the layout from the document's start puts the same line at 441,201.
+Neither gives way to the other:
+
+| What completion did when it reached the viewport | What the iPhone showed |
+|---|---|
+| Nothing | The text 73,000 characters earlier, at the same scroll offset: the offset never moved |
+| Pinned the line after every slice | The line wandered by about 300 characters a slice; each pin took about 0.4 s, and completion ran ten times slower |
+| Pinned once, when it reached the viewport | Right for 0.4 s, then 73,000 characters off again |
+| Scrolled by the distance the line moved | 83,000 characters off: the viewport laid out its own coordinates again |
+
+The old path never had this, because its jumps lay out everything above the target first; then
+there is one set of coordinates, and the scroll view keeps the text in place by itself as the rest
+is laid out. With that settle in place, the same jump took 264 ms and the line did not move by a
+character while completion laid out the rest.
+
+**Laying out from the start costs this much.** After the layout was thrown away, laying out from
+the document's start to a point:
+
+| To | iPhone 15 Pro | Mac |
+|---|---|---|
+| 10% (130 K characters) | 73 ms | 49 ms |
+| 25% | 199 ms | 148 ms |
+| 50% | 352 ms | 258 ms |
+| 75% | 516 ms | 395 ms |
+| 100% (1.3 M characters) | 705 ms | 545 ms |
+
+A release build on the iPhone measured the same to the millisecond: the time is TextKit's. A
+typical RFC is a tenth of RFC 5661's length or less.
+
+**A scroll height of our own cannot follow those coordinates.** It was built as specified — a
+height model from the builder's per-paragraph measurements, a macOS `NSScroller` subclass placing
+its knob from it, and on iOS a content size TextKit reported while the reader touched or flung
+held back and applied when they stopped. On the device:
+
+- The held content size was the cause of most of the iPhone's failures: an invisible bottom in
+  the middle of the text wherever TextKit's estimate was short, and a stale height of 0, held
+  through a change of document, applied later and throwing the reader to the top.
+- A content height from the model instead (TextKit's place for the top, plus the model's height
+  below it) put the end where the text ends going down, but fought UIKit's own correction of the
+  offset going back up, by about 68,000 pt each way.
+- The model's estimates before measurement overshot by about a third at the iPhone's 345 pt
+  column (a paragraph estimated at 240 pt laid out at 177 pt), against the probe's 6% at 712 pt.
+- The maintainer wants the platforms' own scrollers, including hiding them as the system setting
+  says, not a knob placed by us. With TextKit's own height, the iPhone's indicator still moves
+  while it estimates during a fast fling or a drag of the indicator; it did the same on the old
+  path.
+
+**The pin had two more ways to send the reader to the top.** After TextKit dropped its layout,
+the anchor's fragment could come back with a zero frame, and the pin scrolled to its y of 0; and
+the viewport range could start past the top for one pass, so that reading the place from it
+took a line 150,000 characters away. Both are guarded in `PinRecipe` now, with a test for the
+second.
+
+**A forced viewport layout during a live resize is what made it slow.** Pinning on estimates in
+every step of a drag is cheap, but laying the viewport out after the pin made `NSTextView` lay out
+a large range of the document itself, from `textViewportLayoutControllerDidLayout:` through
+`ensureLayoutForRange:` (sampled): 500–630 ms per step. Without it a step took under 1 ms, and the
+line held through the drag and after it. Settling when the resize ended was also wasted: the
+rebuild for the new column, which follows every change of column, settles again a moment later,
+and doing both cost about 450 ms twice.
+
+**A fling's corrections looked like the reader turning.** As TextKit corrects its estimates during
+a fast fling, UIKit moves the offset against the fling to keep the text in place, and a
+correction of 44 pt or more hid the iPhone's bars, which the next frames showed again.
+
 ## Design
 
 ### The engine
 
 One owner for the reader's geometry, `ReaderLayoutEngine`, driven by `RFCTextViewCoordinator`,
-with every piece of arithmetic in `RFCReaderKit` where a test can reach it. It has four
+with every piece of arithmetic in `RFCReaderKit` where a test can reach it. It has three
 responsibilities:
 
-1. **Viewport layout.** Nothing is laid out up front beyond what is visible. `install` puts the
-   storage in and lays out the first viewport; the whole-document layout, its first 20 K slice
-   and `laidOutEnd` go.
-2. **The anchor** — the reader's place, held through every change of geometry by one mechanism.
-3. **Background completion** — idle-time slices that make the geometry exact after a change.
-4. **The scroll height** — a model of our own that drives the scroller.
+1. **Viewport layout.** `install` puts the storage in and lays out no more than it has to; the
+   whole-document layout of the old path, its first 20 K slice and `laidOutEnd` go.
+2. **The anchor** — the reader's place, held through every change of geometry.
+3. **Background completion** — idle-time slices that lay the rest of the document out, so the
+   scroller's height is exact.
+
+The scrollers are the platforms' own: the text view's frame, and on iOS its content size, are
+TextKit's, and nothing places a knob.
 
 ### The anchor
 
@@ -116,93 +209,68 @@ after a re-wrap, the character that was at the top is at the top, not the first 
 paragraph. Carried across a new storage — a rebuild for a new column or text size, until
 projects 2 and 3 remove them — as a `ReadingPlace` (the nearest anchor of any kind, plus a
 character distance), which already survives a rebuild. Scrolled above the text, where the header
-is, it is `.top`, as today, and a document read from the very top stays there through any
-resize.
+is, it is `.top`, and a document read from the very top stays there through any resize.
 
 **Only the reader moves it.**
 
 - A scroll the reader makes re-reads the anchor from the viewport's own fragments.
-- A move the engine makes — a pin, a slice, a correction of the height — runs inside an engine
-  transaction, and the scroll notifications it causes do not touch the anchor. This replaces
-  `ReadingPlaceTracker`'s pausing and resuming with one rule: the engine never records its own
-  moves.
-- A jump sets the anchor to its target, as `scroll(to:)` sets the place today.
+- A move the engine makes runs inside an engine transaction, and the scroll notifications it
+  causes do not touch the anchor. This replaces `ReadingPlaceTracker`'s pausing and resuming
+  with one rule: the engine never records its own moves.
+- A jump sets the anchor to its target.
 
-**How it is pinned.** Every change of geometry ends in exactly one pin: a resize step, a
-rotation, a split view, the measure preference, a side panel, a rebuild installing, a slice
-landing, a correction of the height. The recipe, from the probe:
+**How it is put back: settled.** A jump, a document installing (a rebuild included) and a change
+of column settle the anchor (`PinRecipe.settle`):
 
-1. Lay out the anchor's paragraph: `ensureLayout(for:)` over its range.
-2. Find the line fragment holding the anchor's character, and its top within the paragraph.
-3. Scroll so that the line's top, plus the fraction of its height, meets the viewport's top.
-4. Lay out the viewport. If the target's frame moved — estimates above it were replaced — scroll
-   by the difference and lay out again. At most a handful of passes; the probe needed two.
+1. Lay out the document from its start through the anchor's paragraph.
+2. Pin: find the line fragment holding the anchor's character, scroll so that the line's top, plus
+   the fraction of its height, meets the viewport's top, lay out the viewport, and settle once
+   more if the line moved. At most a handful of passes.
+
+The line is then where the layout of the whole document puts it, so there is one set of
+coordinates, and the scroll view keeps the line in place by itself while completion lays out the
+rest: nothing in completion moves what the reader is looking at. Laying out from the start costs
+what is measured above — up to 0.35 s for the middle of RFC 5661 on an iPhone — but once
+completion has passed the place it costs nothing, because what is above is laid out already.
+
+**During a live resize on the Mac: pinned on estimates.** A live resize cannot afford the layout
+from the start on every step, so each change of column only pins, on TextKit's estimates, and the
+viewport is left to AppKit's own display pass. The rebuild for the new column, which follows the
+resize, settles. A change of gutter or header that moves the container without re-wrapping
+anything also only pins.
 
 **Where it lives.** The line lookup, the fraction and the settle rule are pure functions in
-`RFCReaderKit`, beside `FragmentGeometry.topLine`: given a paragraph's line fragments and a
-character, where does the viewport's top go. The recipe itself is an `RFCReaderKit` function
-over two small protocols — a layout side, which a real `NSTextLayoutManager` satisfies, and a
-scroll side — so it is tested against real TextKit layout with a fake scroll view. The App
-target keeps the adapters: the calls into the text view and the scroll itself, on AppKit and
-UIKit.
+`RFCReaderKit` (`LinePin`). The recipe is an `RFCReaderKit` function over a small protocol for
+the scroll side (`PinSurface`), tested against real TextKit layout with a fake scroll view. The
+App target keeps the adapters: the calls into the text view and the scroll itself.
 
 **What reads it.** Section tracking, the running heading and the toolbar title read the anchor
-instead of hit-testing the top themselves. The saved reading position becomes the anchor, so a
+instead of hit-testing the top themselves. The saved reading position is the anchor, so a
 restored position lands on its line (#322).
-
-### The scroll height
-
-**The scroller is ours; the content position stays TextKit's.** The clip view (and on iOS the
-scroll view's content offset) scrolls in TextKit's own coordinates, so layout, hit-testing and
-pinning are untouched. Only the scroller reads the model:
-
-- **macOS:** a custom `NSScroller` subclass on the reader's `NSScrollView` whose knob position
-  and proportion come from the model, not from the document view's frame. Overlay style,
-  click-in-track paging and the scroll bar's accessibility value behave as the stock scroller's.
-- **iOS:** the scroll view's content height and indicator follow the model; the content offset is
-  corrected in the same transaction whenever the height above the viewport changes, so the
-  change is invisible.
-
-Dragging the knob is a jump: the knob's fraction → the height in the model → the character at
-that height → the pin recipe. A drag to the bottom lands exactly at the end.
-
-**The model**, pure and tested in `RFCReaderKit`:
-
-- At build time, `DocumentTextBuilder` records each paragraph's natural width on one line, its
-  line height and its spacing — measurements it already makes.
-- At any column, a paragraph's estimated height is a few arithmetic operations, and the
-  document's is one pass over the paragraph list: about 30 K paragraphs on RFC 5661, well under a
-  millisecond.
-- A paragraph TextKit has laid out replaces its estimate with its real height, so the model
-  starts close and converges to exact as layout completes.
-
-**Smoothing, so the knob never jumps under the reader.** While the reader drags the knob or a
-scroll is tracking or decelerating, the model's total is frozen. When it settles, a changed
-total eases the knob to its new place over about 150 ms. A change of column recomputes the total
-at once: everything is moving then, and the reader is watching it move.
 
 ### Background completion
 
-After any change of geometry, and after opening a document, idle-time slices lay the document out
-at the current column, from its start: TextKit's positions are exact only once everything above
-them is laid out. Slices are 5–8 K characters, about 3–5 ms. They pause while a live resize, a
-scroll or a knob drag is in progress, and each ends in one pin. When the last lands, the
-geometry is exact and the model equals the truth: about 0.7 s of spare time on RFC 5661, spread
-over frames. A document read without a change of width is laid out once, as today; a resize
-lays it out once more, after the drag ends.
+After opening a document and after any change of geometry, idle-time slices lay the document out
+at the current column from its start, 6,000 characters at a time, a few milliseconds each. They
+move nothing on screen, pin nothing, and do not pause for the reader's scrolling, as the old
+path's background layout did not; they pause only through a live resize, whose every step
+re-wraps them. When the last lands, TextKit's height is exact. When TextKit later drops the
+layout, nothing is done: what is above the reader is laid out, so the drop moves nothing they are
+looking at, and the scroller's height is an estimate again until the reader causes a settle.
 
 ### What depends on the whole document being laid out today
 
-| Consumer | Today | Under the engine |
+| Consumer | The old path | Under the engine |
 |---|---|---|
-| Jumps, deep links, the contents panel, links within the document | `ensureLayout` of everything above the target (#295) | The pin recipe: one paragraph, 2–6 ms |
+| Jumps, deep links, the contents panel, links within the document | `ensureLayout` of everything above the target (#295) | The same, through `PinRecipe.settle`: free once completion has passed the target |
 | The restored reading position | A section, restored to its heading (#322) | The anchor, restored to its line |
 | Section tracking, the running heading, the toolbar title | Hit-test the top of the viewport; paused around a rebuild | Read the anchor |
-| Find (the macOS find bar, iOS's find interaction) | AppKit and UIKit scroll a match into view on laid-out geometry | `ReaderTextView` overrides `scrollRangeToVisible` and routes it through the pin recipe |
-| VoiceOver's rotors (headings, links, diagrams) | Frames from the full layout | A frame asked for when the item is, after the recipe lays out its paragraph |
+| Find (the macOS find bar, iOS's find interaction) | AppKit and UIKit scroll a match into view on laid-out geometry | `ReaderTextView` overrides `scrollRangeToVisible`; a match outside the viewport is a jump |
+| VoiceOver's rotors (headings, links, diagrams) | Frames from the full layout | A stop is handed to the system as a range, which it scrolls into view; the last heading of RFC 5661 landed on screen, checked by hand |
 | Selection, drag-select, Select All, copy | — | Unchanged: copy reads the storage; TextKit scrolls a drag |
 | Hover and force-click previews, backlinks, figure controls | Fragments on screen | Unchanged |
-| The iPhone's bars following a scroll | The content height from the frame | The content height from the model |
+| The iPhone's bars following a scroll | The content height from the frame | Unchanged, and a fling's own corrections are ignored |
+| The scrollers | The platforms' own | The platforms' own |
 | Print and export | Their own layout manager, laid out in full | Unchanged: paper needs exact pagination |
 
 ### What goes away
@@ -211,37 +279,39 @@ lays it out once more, after the drag ends.
 - `laidOutEnd`, `laidOutThrough` and the clamping that reads them in `scrollContainerTopTo`.
 - `ReadingPlaceTracker`'s pause-and-resume logic; the value types it records stay.
 - The 650 ms debounce for a change of width, once project 2 means a width no longer rebuilds.
-  Until then it stays for the rebuild, and the pin makes it invisible.
+  Until then it stays for the rebuild, and the pins in between hold the line.
 
 ## Testing
 
 Nothing testable lives in the App target; the design is shaped by that.
 
-- **Pure tests in `RFCReaderKit`:** the height model (estimate, refinement, convergence, the total
-  at a column, the character at a height), the anchor's line arithmetic, the slice planner and
-  the smoothing rule.
-- **The pin recipe against real TextKit.** The recipe runs over its two protocols in a test, with a
-  real `NSTextLayoutManager` laying out a committed fixture and a fake scroll side. The probe's two
-  headline results become regression tests: a jump lands exactly from any prior state, and a
-  resize from 712 to 300 pt and back holds the line in every step.
-- **A benchmark in `Tools/benchmarks`** for a jump, a resize step and a slice on the largest RFCs,
-  with the probe's numbers as the baseline, so `make benchmark` catches a regression.
+- **Pure tests in `RFCReaderKit`:** the anchor's line arithmetic (`LinePin`), the place keeper
+  (`AnchorKeeper`), the slice planner, and the bars ignoring a fling's corrections
+  (`ReaderChrome`).
+- **The pin recipe against real TextKit.** The recipe runs over its protocol in a test, with a real
+  `NSTextLayoutManager` laying out a committed fixture and a fake scroll side: a jump lands
+  exactly from any prior state, a resize from 712 to 120 pt and back holds the line in every
+  step, a settled line is where the whole document's layout puts it (a plain pin fails this), and
+  a lookup that starts past the top finds nothing.
+- **A benchmark in `Tools/benchmarks`** for a settled jump, a resize step and a slice on the largest
+  RFCs, so `make benchmark` catches a regression.
 - **By hand, with the maintainer:** a live drag on macOS, wide and narrow; rotation and split view
-  on iOS; opening each side panel; find far down a long RFC; the VoiceOver rotors; the custom
-  scroller beside a stock one.
+  on iOS; flinging and dragging the indicator on an iPhone; opening each side panel; find far down
+  a long RFC; the VoiceOver rotors.
 
 ## Risks
 
-- **The probe ran headless, on macOS.** A real `NSTextView` in a window, and `UITextView` on iOS,
-  may schedule viewport layout differently. The first implementation step is the pin recipe
-  behind a flag, checked on both platforms in the running app before anything is removed.
-- **A custom scroller has to feel native.** Overlay style, the knob's appearance, click-in-track
-  paging and the accessibility value are checked by hand against a stock scroller in the first
-  build that has it.
-- **iOS has no scroller to replace.** Keeping the content height on the model and correcting the
-  offset in the same transaction is the plan; if the indicator still visibly jumps on a device,
-  the fallback is to keep the content height fixed until background completion ends.
+- **A deep jump before completion freezes for as long as the layout above it takes:** up to 0.7 s
+  at the end of RFC 5661 on an iPhone, as on the old path. A rotation in the middle of it, about
+  0.35 s, was hardly noticeable to the maintainer.
+- **The rebuild after a resize settles, about 0.35–0.6 s on RFC 5661 on a Mac,** felt as a short
+  freeze when the drag ends; a typical RFC is a tenth of that.
+- **TextKit drops its layout when it chooses.** The engine relies on it not moving what is above
+  the reader when it does, which the iPhone showed; the scroller's height is an estimate again
+  afterwards, as on the old path.
 - **This reverses a recorded decision.** `docs/ARCHITECTURE.md` gets a dated decision replacing
-  #9's, with the probe's numbers. "The TextKit 2 traps" loses its paragraph about the tracker
-  pausing for a rebuild once that no longer happens, and gains one about `relocateViewport(to:)`
-  and point lookups after a relocation.
+  #9's, with the probe's numbers and these. "The TextKit 2 traps" loses its paragraph about the
+  tracker pausing for a rebuild once that no longer happens, and gains ones about
+  `relocateViewport(to:)` and point lookups after a relocation, about TextKit dropping its
+  layout, about the two sets of coordinates after a jump that did not lay out what is above it,
+  and about a forced viewport layout during a live resize.
