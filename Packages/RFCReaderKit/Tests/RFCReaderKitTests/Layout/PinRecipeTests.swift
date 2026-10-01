@@ -84,6 +84,41 @@ struct PinRecipeTests {
     }
   }
 
+  /// The header hangs in the text view's top inset, above the container. When it
+  /// changes height — a cold launch's revisions banner arriving after the reading
+  /// position was restored, 208 to 289 pt on RFC 8060 (#492) — the offset stays and
+  /// the container moves under it, so the viewport's top in container coordinates
+  /// moves the other way. No scroll of the reader's happened, so the keeper still
+  /// names the line, and the engine's pin puts it back at the top.
+  @Test func `a header inset change keeps the line at the top`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = Surface(layout: fixture.layout)
+    var keeper = AnchorKeeper()
+    let sections = built.anchors.sections.entries
+    keeper.jumped(to: ReaderAnchor(characterOffset: sections[sections.count / 2].offset))
+    for change: CGFloat in [81, -81, 160, -20] {
+      guard case .line(let anchor) = keeper.place else {
+        Issue.record("the place left its line")
+        return
+      }
+      keeper.beginEngineMove()
+      PinRecipe.settle(anchor, in: fixture.layout, on: surface)
+      keeper.endEngineMove(top: surface.containerTop)
+      let before = try #require(surface.anchor()).line
+      surface.containerTop -= change
+      keeper.beginEngineMove()
+      PinRecipe.pin(anchor, in: fixture.layout, on: surface)
+      keeper.endEngineMove(top: surface.containerTop)
+      let after = try #require(surface.anchor())
+      #expect(after.line == before, "header changed by \(change) pt")
+      #expect(NSLocationInRange(anchor.characterOffset, after.line))
+      // What the platform reports of the pin afterwards is the engine's, not the reader's.
+      keeper.userScrolled(to: after.anchor, line: after.line, top: surface.containerTop)
+      #expect(keeper.place == .line(anchor))
+    }
+  }
+
   /// After TextKit drops its layout, the viewport range can start far past the top
   /// for one pass; the first fragment from there is not what is at the top, and
   /// taking it moved the reader's place 150,000 characters on RFC 5661.
