@@ -141,6 +141,11 @@ struct DocumentCommands: Commands {
     private var showsDocument: Bool {
       navigation?.selection != nil && reader?.hasDocument == true
     }
+    /// A document on screen that Print and Export offer: not one read as its PDF or
+    /// PostScript original (#207).
+    private var offersPrintAndExport: Bool {
+      navigation?.selection != nil && reader?.offersPrintAndExport == true
+    }
     private var openDocument: (() -> Void)? {
       guard let navigation else { return nil }
       return { navigation.isShowingGoToSheet = true }
@@ -219,7 +224,7 @@ struct DocumentCommands: Commands {
       CommandGroup(replacing: .importExport) {
         Button("Export…") { active.controller?.exportDocument() }
           .keyboardShortcut("e", modifiers: [.command, .shift])
-          .disabled(!showsDocument)
+          .disabled(!offersPrintAndExport)
       }
       // File > Page Setup… and Print…, which a SwiftUI app has only for a document
       // scene (#375). Print is disabled unless a document is on screen.
@@ -229,7 +234,7 @@ struct DocumentCommands: Commands {
           .disabled(active.controller == nil)
         Button("Print…") { active.controller?.printDocument() }
           .keyboardShortcut("p", modifiers: .command)
-          .disabled(!showsDocument)
+          .disabled(!offersPrintAndExport)
       }
       // View > Sort By and Show Obsolete (#349): the Mac had no way to reach the
       // list's view options before.
