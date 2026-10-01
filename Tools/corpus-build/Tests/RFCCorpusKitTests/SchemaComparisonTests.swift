@@ -57,6 +57,17 @@ struct SchemaComparisonTests {
     #expect(!comparison.isRegression)
   }
 
+  /// A document skipped by a decision of its own (#316) has no XML to check, and has
+  /// not stopped validating: four of the six stubs validated as empty documents.
+  @Test func `a skipped document is no regression`() throws {
+    var reports = try Self.reports(["rfc1119": []])
+    reports[0].schema = nil
+    reports[0].skipped = "published-only-as-pdf"
+    let comparison = SchemaComparison(reports: reports, previouslyValid: ["rfc1119"])
+    #expect(!comparison.isRegression)
+    #expect(comparison.startedValidating == 0)
+  }
+
   @Test func `regressions are listed in report order`() throws {
     let comparison = SchemaComparison(
       reports: try Self.reports([

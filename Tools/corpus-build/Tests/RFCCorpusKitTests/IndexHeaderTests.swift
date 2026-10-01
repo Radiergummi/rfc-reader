@@ -88,7 +88,7 @@ struct IndexHeaderTests {
     var entry = try #require(index[1149])
     entry.authors = [Author(name: "B. Second", role: .editor), Author(name: "A. First")]
     let conversion = DocumentConverter().convert(text: text, stem: "rfc1149", metadata: entry)
-    let header = try RFCXMLParser.parse(conversion.xml).header
+    let header = try RFCXMLParser.parse(try #require(conversion.xml)).header
     #expect(header.id == .rfc(1149))
     #expect(header.authors.map(\.name) == ["B. Second", "A. First"])
     #expect(header.authors.map(\.role) == [.editor, nil])

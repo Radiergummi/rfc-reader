@@ -104,7 +104,7 @@ CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
 CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
 
-## Run the corpus-backed RFCKit suites, fetching the documents they read
+## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
 # RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
 # `make test`; CI runs them weekly (.github/workflows/corpus-tests.yml). Filtered by
@@ -117,6 +117,8 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
   $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCKIT) --filter CorpusBacked
+	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
+	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 
 ## Run the benchmarks, fetching the documents they read
 # Release builds of the parsers, the search and the document builder, over real
