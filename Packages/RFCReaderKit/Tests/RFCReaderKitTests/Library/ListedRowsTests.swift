@@ -38,9 +38,19 @@ struct ListedRowsTests {
     #expect(listed(LibraryList(filter: .all, query: "")).librarySearch.isEmpty)
   }
 
-  @Test func `the empty listing is the whole library unsearched, with nothing in it`() {
-    #expect(ListedRows.empty.list == LibraryList(filter: .all, query: ""))
-    #expect(ListedRows.empty.rows.isEmpty)
+  @Test func `the hits of an earlier listing are listed from rather than searched again`() {
+    let earlier = listed(LibraryList(filter: .all, query: "host"))
+    #expect(Set(earlier.hits.map(\.number)) == [1, 2])
+    // Hits the search would not find: these rows can only have come from them.
+    let known = [index[4]!, index[3]!]
+    let again = ListedRows(
+      LibraryList(filter: .all, query: "host"), in: index, search: IndexSearch(index: index),
+      hits: known)
+    #expect(again.rows.map(\.number) == [4, 3])
+  }
+
+  @Test func `an unsearched listing keeps no hits`() {
+    #expect(listed(LibraryList(filter: .all, query: "")).hits.isEmpty)
   }
 }
 

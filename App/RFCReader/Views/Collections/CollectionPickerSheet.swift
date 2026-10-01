@@ -17,10 +17,11 @@ struct CollectionPickerSheet: View {
   /// listing with the `.all` filter, made off the main actor (#597).
   @State private var rows: [RFCMetadata] = []
 
-  /// What the rows are listed again for: the query, and a new index.
+  /// What the rows are listed again for: the query, normalized, so a space typed
+  /// after a word searches nothing again, and a new index.
   private struct Listing: Equatable {
     let query: String
-    let index: LibraryModel.IndexState
+    let indexVersion: Int
   }
 
   var body: some View {
@@ -50,11 +51,12 @@ struct CollectionPickerSheet: View {
       }
       .searchable(text: $query, prompt: "Search RFCs")
       .onChange(of: query) { limit = ListWindow.page }
-      .task(id: Listing(query: query, index: library.indexState)) {
+      .task(
+        id: Listing(query: AppliedSearch.query(for: query), indexVersion: library.indexVersion)
+      ) {
         let list = LibraryList(filter: .all, query: query)
-        let pause = list.query.isEmpty ? Duration.zero : AppliedSearch.pause
-        guard await Debounce.outlasted(pause), let listed = await library.listed(list),
-          !Task.isCancelled
+        guard await Debounce.outlasted(AppliedSearch.pause(before: list.query)),
+          let listed = await library.listed(list), !Task.isCancelled
         else { return }
         rows = listed.rows
       }

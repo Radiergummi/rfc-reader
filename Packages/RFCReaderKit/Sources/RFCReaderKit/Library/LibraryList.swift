@@ -29,8 +29,9 @@ public protocol ListSources {
 ///
 /// The filter and the query are passed in rather than read off the library: they
 /// belong to one tab (`NavigationModel`), and two tabs may be listing different
-/// things at the same time. Gathering them into one value also gives the library's
-/// cache its key. The one input not in it is the index, handed to `rows(in:search:)`.
+/// things at the same time. Gathering them into one value also says when a tab has
+/// to list again: when the list it asks for is not the one it shows (#597). The one
+/// input not in it is the index, handed to `rows(in:search:)`.
 public struct LibraryList: Hashable, Sendable {
   public let filter: LibraryFilter
   /// Normalized, so a query differing only in the spaces around it is the same list.
@@ -39,8 +40,8 @@ public struct LibraryList: Hashable, Sendable {
   public let recentlyRead: [Int]
   public let downloaded: Set<Int>
   public let options: ListOptions
-  /// A collection's members in order, so adding, removing or reordering changes
-  /// the key and a cache cannot serve a stale list (#349).
+  /// A collection's members in order, so adding, removing or reordering makes a
+  /// different list (#349).
   public let members: [Int]
 
   public init(
@@ -80,8 +81,8 @@ public struct LibraryList: Hashable, Sendable {
 
   /// The rows, as the options show them. `search` is the index's own; without one,
   /// a query finds nothing more than the filter already lists. `hits` are its hits
-  /// for `query`, best first, when they were searched ahead, off the main actor
-  /// (#124); without them the query is searched here.
+  /// for `query`, best first, when they are known already (`ListedRows`); without
+  /// them the query is searched here.
   public func rows(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [RFCMetadata] {

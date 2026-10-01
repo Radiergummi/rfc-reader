@@ -64,13 +64,16 @@ final class NavigationModel: Identifiable {
   /// What the list shows, made off the main actor whenever one of its inputs changes
   /// (#597): this tab's filter, query, options and the inputs it took on entering the
   /// filter, and the library's index, bookmarks and collections. Views only read it.
-  /// Until the next arrives the list keeps what it has, as Mail and Finder do.
-  private(set) var listed = ListedRows.empty
+  /// Until the next arrives the list keeps what it has, as Mail and Finder do; nil
+  /// until the first, so an empty list is never claimed before it was made.
+  private(set) var listed: ListedRows?
+  /// The index `listed` was made over (`LibraryModel.indexVersion`).
+  @ObservationIgnored private var listedIndexVersion = 0
   @ObservationIgnored private var listing: Task<Void, Never>?
 
   /// The query the list, its count and the sidebar's results are for: the one whose
   /// rows are on show.
-  var appliedQuery: String { listed.list.query }
+  var appliedQuery: String { listed?.list.query ?? "" }
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -233,8 +236,8 @@ final class NavigationModel: Identifiable {
   // MARK: - Search
 
   /// Applies the search text without waiting for a pause in typing: Return in the
-  /// field, or a search asked for with a click. The list still follows once the
-  /// query's hits are ready.
+  /// field, or a search asked for with a click. The list still follows once its
+  /// rows are made.
   func applySearchWithoutPause() {
     followSearchText(pausing: false)
   }
@@ -249,11 +252,21 @@ final class NavigationModel: Identifiable {
     listNow()
   }
 
-  /// Lists what the inputs ask for before returning, on the main actor: for a
-  /// script, which reads the list straight after changing it.
-  func listNow() {
-    guard let now = library.listedNow(requestedList()) else { return }
-    listed = now
+  /// Lists what the inputs ask for before returning, on the main actor.
+  private func listNow() {
+    guard let request = request(), !shows(request),
+      let made = library.listedNow(request.list, hits: knownHits(for: request))
+    else { return }
+    show(made, for: request)
+  }
+
+  /// The rows the inputs ask for, for a script, which reads the list straight after
+  /// changing it: the rows on show when they are those, and otherwise made on the
+  /// spot, leaving the list on show to its own listing.
+  func rowsNow() -> [RFCMetadata] {
+    guard let request = request() else { return [] }
+    if shows(request), let listed { return listed.rows }
+    return library.listedNow(request.list, hits: knownHits(for: request))?.rows ?? []
   }
 
   /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
@@ -277,27 +290,56 @@ final class NavigationModel: Identifiable {
 
   // MARK: - The list
 
-  /// The list the inputs ask for, read so that only what this filter lists from is
-  /// observed (`LibraryList.reading`).
-  private func requestedList() -> LibraryList {
-    LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self)
+  /// A list asked for, over the index it is to be made over.
+  private struct ListRequest: Equatable, Sendable {
+    let list: LibraryList
+    let indexVersion: Int
   }
 
-  /// Lists again whenever an input of the list changes: `Observations` yields the
-  /// list asked for after each change, and the latest one when a listing ends, so
-  /// typing or clicking through filters faster than a listing takes makes one per
-  /// pause rather than one per change.
+  /// What the inputs ask for, read so that only what this filter lists from is
+  /// observed (`LibraryList.reading`). Nil while there is no index.
+  private func request() -> ListRequest? {
+    guard library.index != nil else { return nil }
+    return ListRequest(
+      list: LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self),
+      indexVersion: library.indexVersion)
+  }
+
+  /// Whether the list on show is what `request` asks for: a change that makes the
+  /// same list, as a collection renamed or the iPhone's sidebar shown again, lists
+  /// nothing.
+  private func shows(_ request: ListRequest) -> Bool {
+    listed?.list == request.list && listedIndexVersion == request.indexVersion
+  }
+
+  /// The hits the list on show found, when `request` searches for the same over the
+  /// same index: a change of filter or options lists without searching again.
+  private func knownHits(for request: ListRequest) -> [RFCMetadata]? {
+    guard let listed, listed.list.query == request.list.query,
+      listedIndexVersion == request.indexVersion
+    else { return nil }
+    return listed.hits
+  }
+
+  private func show(_ made: ListedRows, for request: ListRequest) {
+    listed = made
+    listedIndexVersion = request.indexVersion
+  }
+
+  /// Lists again whenever an input of the list changes: `Observations` yields what
+  /// is asked for after each change, and the latest when a listing ends, so typing
+  /// or clicking through filters faster than a listing takes makes one per pause
+  /// rather than one per change.
   private func followListInputs() {
-    let inputs = Observations { [weak self] () -> LibraryList? in
-      // The index is read for its observation: a new one lists again.
-      guard let self, self.library.index != nil else { return nil }
-      return self.requestedList()
-    }
+    let requests = Observations { [weak self] in self?.request() }
     listing = Task(name: "List") { [weak self] in
-      for await list in inputs {
-        guard let list, let library = self?.library else { continue }
-        guard let listed = await library.listed(list), !Task.isCancelled else { continue }
-        self?.listed = listed
+      for await request in requests {
+        guard let request, let self, !self.shows(request) else { continue }
+        let made = await self.library.listed(request.list, hits: self.knownHits(for: request))
+        // Overtaken by a newer request, which comes next, or by `listNow()`.
+        guard let made, !Task.isCancelled, self.request() == request, !self.shows(request)
+        else { continue }
+        self.show(made, for: request)
       }
     }
   }
@@ -310,7 +352,7 @@ final class NavigationModel: Identifiable {
   /// the whole library with that one row highlighted somewhere inside it.
   ///
   /// It also skips the BCP/STD resolution `open` does, because every row the list
-  /// can emit is already an RFC: `LibraryModel.list` draws from `index.rfcs` and,
+  /// can emit is already an RFC: `LibraryList.rows` draws from `index.rfcs` and,
   /// for `.series`, from the members those entries resolve to. A list that could
   /// show a series row would have to come back through `open`.
   func select(_ id: DocumentID) {

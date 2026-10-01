@@ -63,8 +63,15 @@ final class LibraryModel {
   }
 
   private(set) var index: RFCIndex? {
-    didSet { groupRFCs = [:] }
+    didSet {
+      groupRFCs = [:]
+      indexVersion += 1
+    }
   }
+  /// Which index is installed, counted: what a tab compares to tell whether the
+  /// rows and hits it has were made over the index there is now (#597), where
+  /// comparing two indexes would compare 9,842 entries.
+  private(set) var indexVersion = 0
   /// Each working group's RFCs, worked out once per index for its card (#363): the
   /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
@@ -675,24 +682,25 @@ final class LibraryModel {
   }
 
   /// `list` over the index as it stands, made off the main actor: what a tab stores
-  /// and its list reads (#597). Nil while there is no index.
-  func listed(_ list: LibraryList) async -> ListedRows? {
+  /// and its list reads (#597). `hits` are the search's for `list.query` over this
+  /// index, if a listing found them already. Nil while there is no index.
+  func listed(_ list: LibraryList, hits: [RFCMetadata]? = nil) async -> ListedRows? {
     guard let index else { return nil }
-    return await Self.listed(list, in: index, search: search)
+    return await Self.listed(list, in: index, search: search, hits: hits)
   }
 
-  /// `listed(_:)` on the main actor, for a script, which reads the list straight
-  /// after changing what it lists.
-  func listedNow(_ list: LibraryList) -> ListedRows? {
+  /// `listed(_:hits:)` on the main actor, for a script, which reads the list
+  /// straight after changing what it lists.
+  func listedNow(_ list: LibraryList, hits: [RFCMetadata]? = nil) -> ListedRows? {
     guard let index else { return nil }
-    return Self.signposted(list) { ListedRows(list, in: index, search: search) }
+    return Self.signposted(list) { ListedRows(list, in: index, search: search, hits: hits) }
   }
 
   @concurrent
   private static func listed(
-    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?
+    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]?
   ) async -> ListedRows {
-    signposted(list) { ListedRows(list, in: index, search: search) }
+    signposted(list) { ListedRows(list, in: index, search: search, hits: hits) }
   }
 
   private nonisolated static func signposted(
@@ -702,11 +710,11 @@ final class LibraryModel {
       "List", id: signposter.makeSignpostID(), "\(list.query, privacy: .public)", around: make)
   }
 
-  /// The subtitle under the list's title: how many documents it shows. Empty while
-  /// the index loads — "0 Documents" would be a claim about the library, not about a
+  /// The subtitle under the list's title: how many documents it shows. Empty until
+  /// the list is first made — "0 Documents" would be a claim about the library, not a
   /// list that has not arrived yet.
   func listSubtitle(for scene: NavigationModel) -> String {
-    indexState.isReady ? DocumentCount.label(scene.listed.rows.count) : ""
+    scene.listed.map { DocumentCount.label($0.rows.count) } ?? ""
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
