@@ -232,7 +232,7 @@
     /// What every hosted root of this window is given; see `ReaderEnvironment`.
     var environment: ReaderEnvironment {
       ReaderEnvironment(
-        library: library, navigation: navigation, reader: reader, container: library.container)
+        library: library, navigation: navigation, reader: reader)
     }
 
     /// Every hosted root is handed `environment`: an `NSHostingController` sits

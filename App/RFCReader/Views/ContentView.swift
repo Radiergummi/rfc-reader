@@ -171,7 +171,7 @@ import SwiftUI
       // the next presentation added to this view as well.
       .readerEnvironment(
         ReaderEnvironment(
-          library: library, navigation: navigation, reader: reader, container: library.container))
+          library: library, navigation: navigation, reader: reader))
     }
   }
 #endif

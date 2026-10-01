@@ -83,8 +83,6 @@ final class RFCTextViewCoordinator: NSObject {
   /// and a reference preview's on both platforms — since each sits outside SwiftUI's
   /// environment chain; see `ReaderEnvironment`.
   var environment: ReaderEnvironment?
-  /// The environment's, which references are resolved against.
-  var library: LibraryModel? { environment?.library }
 
   var onVisibleAnchorChange: (String) -> Void = { _ in }
   var onScrollHandled: () -> Void = {}
@@ -186,6 +184,20 @@ final class RFCTextViewCoordinator: NSObject {
   /// whole resize. The inset is the gutter, so the gutter is what invalidates it.
   private var laidOutGutter: CGFloat?
   private var laidOutHeaderHeight: CGFloat?
+
+  /// The header as hosted: given `environment`, and on iOS with a tap on its blank
+  /// space for the bars.
+  func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
+    #if canImport(UIKit)
+      AnyView(
+        header
+          .contentShape(.rect)
+          .onTapGesture { [weak self] in self?.tappedHeader() }
+          .readerEnvironment(environment))
+    #else
+      AnyView(header.readerEnvironment(environment))
+    #endif
+  }
 
   // MARK: - Accessibility
 
@@ -467,7 +479,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// entry that names no RFC has its title, authors and where it was published
   /// (#198); and a figure or a table has none of those.
   private func preview(for reference: CrossReference) -> ReferencePreview? {
-    guard let library else { return nil }
+    guard let library = environment?.library else { return nil }
     switch reference.target {
     case .document:
       return ReferencePreview(
@@ -652,23 +664,13 @@ final class RFCTextViewCoordinator: NSObject {
     }
 
     /// A tap on the header's blank space, as a tap on the text is. Told by a tap
-    /// gesture on the header's root (`hostedHeader(_:)`), which the header's author
+    /// gesture on the header's root (`hostedHeader(_:in:)`), which the header's author
     /// chips and banner links take precedence over, being SwiftUI gestures below
     /// it: a tap on one of them does only what it does.
     func tappedHeader() {
       guard !tapIsNotForTheBars else { return }
       chrome.tapped()
       reportChrome()
-    }
-
-    /// The header as hosted: given `environment`, and with a tap on its blank space
-    /// for the bars.
-    func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
-      AnyView(
-        header
-          .contentShape(.rect)
-          .onTapGesture { [weak self] in self?.tappedHeader() }
-          .readerEnvironment(environment))
     }
 
     /// Beside the text view's own recognizers, so a tap on a link still follows it
@@ -768,11 +770,6 @@ final class RFCTextViewCoordinator: NSObject {
       return true
     }
 
-    /// The header as hosted: given `environment`.
-    func hostedHeader(_ header: AnyView, in environment: ReaderEnvironment) -> AnyView {
-      AnyView(header.readerEnvironment(environment))
-    }
-
     // MARK: - Hover preview
 
     /// Hands the controller the text view and what only the document knows: where a
@@ -860,14 +857,14 @@ final class RFCTextViewCoordinator: NSObject {
         let documentID,
         let url = link(at: target.range.location),
         let resolved = LinkPreview.resolve(
-          target.box.reference, linkedTo: url, from: documentID, in: library?.index)
+          target.box.reference, linkedTo: url, from: documentID, in: environment?.library.index)
       else { return false }
       switch resolved {
       case .card:
         guard preview(for: target.box.reference) != nil else { return false }
         hover.send(.forceClickCard(target))
       case .document:
-        guard library != nil, referenceRect(for: target.range) != nil else { return false }
+        guard environment != nil, referenceRect(for: target.range) != nil else { return false }
         hover.send(.forceClickDocument(target))
       }
       return true

@@ -69,8 +69,7 @@ struct RFCTextView: View {
       Representable(
         inputs: inputs,
         environment: ReaderEnvironment(
-          library: library, navigation: navigation, reader: reader,
-          container: library.container),
+          library: library, navigation: navigation, reader: reader),
         width: geometry.size.width)
     }
   }

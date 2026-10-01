@@ -20,6 +20,14 @@ struct ReaderEnvironment {
   let reader: ReaderState
   /// The one container; see `AppData`.
   let container: ModelContainer
+
+  /// The container is the library's, so it cannot be wired to another one.
+  init(library: LibraryModel, navigation: NavigationModel, reader: ReaderState) {
+    self.library = library
+    self.navigation = navigation
+    self.reader = reader
+    container = library.container
+  }
 }
 
 extension View {
