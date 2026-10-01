@@ -255,7 +255,7 @@ nonisolated private struct RunningLines {
   let fixed: [Placed]
   let footer: CGRect
   let attributes: [NSAttributedString.Key: Any]
-  let colour: CGColor
+  let color: CGColor
 
   init(_ furniture: PrintFurniture, layout: PrintLayout) {
     let attributes: [NSAttributedString.Key: Any] = [
@@ -278,7 +278,7 @@ nonisolated private struct RunningLines {
     ].compactMap { $0 }
     self.attributes = attributes
     self.footer = footer
-    colour = RFCColors.secondaryLabel.cgColor
+    color = RFCColors.secondaryLabel.cgColor
   }
 
   func draw(page: Int, in context: CGContext) {
@@ -286,7 +286,7 @@ nonisolated private struct RunningLines {
       PrintFurniture.pageLabel(page), in: footer, alignment: .right, attributes: attributes,
       token: nil)
     context.saveGState()
-    context.setFillColor(colour)
+    context.setFillColor(color)
     // The context is flipped, and CoreText sets glyphs upright only in an
     // unflipped one, so the text matrix flips them back.
     context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
