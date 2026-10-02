@@ -307,6 +307,64 @@ struct LegacyTextParserFrontMatterTests {
       "without the rest on the page, the index has only named it more fully")
   }
 
+  /// A title the index and the page both set in capitals says nothing of how it is
+  /// spelled, so it is title-cased (#219): acronyms from a fixed list stay in
+  /// capitals, short words go lower case but at the start of the title or of a part
+  /// after a dash, and an ordinal's suffix is lower case.
+  @Test func `a title set in capitals on the page and in the index is title cased`() {
+    func title(_ capitals: String) -> String {
+      LegacyTextParser.title(page: capitals, index: capitals, titlePage: [])
+    }
+
+    #expect(title("EXAMPLE TRANSFER PROTOCOL") == "Example Transfer Protocol")
+    #expect(title("NOTES ON THE TCP AND THE IMP") == "Notes on the TCP and the IMP")
+    #expect(title("THE HOST TABLE IN ITS 19TH YEAR") == "The Host Table in Its 19th Year")
+    #expect(
+      title("ROUTING EXPERIMENTS - SOME EARLY RESULTS")
+        == "Routing Experiments - Some Early Results",
+      "a part after a dash starts with a capital, as a title does")
+    #expect(title("ARPA HOST SURVEY") == "ARPA Host Survey")
+    #expect(
+      title("NICNAME/WHOIS EXAMPLE NOTES") == "NICNAME/WHOIS Example Notes", "each side of a slash")
+    #expect(title("X.Y.Z") == "X.Y.Z", "initials are left as they are")
+  }
+
+  /// The front matter can take another line for the page's title, a heading above it
+  /// or an author's, so the title page is what is asked: where it sets the index's
+  /// title in capitals, over one run or several, it is title-cased all the same.
+  @Test func `a title the title page sets in capitals is title cased`() {
+    let titlePage = [
+      ["                    EXAMPLE STANDARD FOR THE FORMAT OF"],
+      ["                      SAMPLE HOST TABLE MESSAGES"],
+    ]
+    #expect(
+      LegacyTextParser.title(
+        page: "Revised by J. Example",
+        index: "EXAMPLE STANDARD FOR THE FORMAT OF SAMPLE HOST TABLE MESSAGES",
+        titlePage: titlePage)
+        == "Example Standard for the Format of Sample Host Table Messages")
+    #expect(
+      LegacyTextParser.title(
+        page: "Revised by J. Example",
+        index: "EXAMPLE STANDARD FOR THE FORMAT OF SAMPLE HOST TABLE MESSAGES",
+        titlePage: [["          Example Standard for the Format of Sample Host Table Messages"]])
+        == "EXAMPLE STANDARD FOR THE FORMAT OF SAMPLE HOST TABLE MESSAGES",
+      "a title page that sets it in mixed case is not capitals on both sides")
+  }
+
+  /// Only a title set in capitals on both sides: the index's own casing is kept
+  /// wherever it has one, and a page's mixed case is the page's.
+  @Test func `a title cased on either side keeps its casing`() {
+    #expect(
+      LegacyTextParser.title(
+        page: "EXAMPLE TRANSFER PROTOCOL", index: "Example transfer protocol", titlePage: [])
+        == "Example transfer protocol")
+    #expect(
+      LegacyTextParser.title(
+        page: "Example Transfer Protocol", index: "EXAMPLE TRANSFER PROTOCOL", titlePage: [])
+        == "Example Transfer Protocol")
+  }
+
   /// A date alone on a line is the title page's, like the author above it: RFC 355's
   /// `June 9, 1972` was the lead-in's second block (#170).
   @Test func `a date alone on a line is the title pages`() {

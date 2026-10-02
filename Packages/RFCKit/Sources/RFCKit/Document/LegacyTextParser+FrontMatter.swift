@@ -138,7 +138,30 @@ extension LegacyTextParser {
   ///
   /// A page title set in capitals gives way to the index's whatever its words, as a
   /// typewriter's emphasis rather than a spelling.
+  ///
+  /// Where the index's title is the one taken and the index sets it in capitals, and
+  /// so does the page, neither says how it is spelled, and it is title-cased (#219).
+  /// The page is the front matter's title or, where the front matter took another
+  /// line, the title page's runs that repeat the index's: RFC 822 sets its title in
+  /// capitals over two of them, under a header the front matter took instead.
   static func title(page: String, index: String, titlePage: [[String]]) -> String {
+    let chosen = chosenTitle(page: page, index: index, titlePage: titlePage)
+    guard chosen == index, !index.contains(where: \.isLowercase),
+      !page.contains(where: \.isLowercase) || setsInCapitals(index, titlePage: titlePage)
+    else { return chosen }
+    return titleCased(index)
+  }
+
+  /// Whether the title page sets `title` in capitals: some of its runs repeat the
+  /// title's words, and none of those has a lower-case letter.
+  private static func setsInCapitals(_ title: String, titlePage: [[String]]) -> Bool {
+    let titleWords = words(title)
+    let runs = titlePage.filter { repeatsTitle($0, titleWords) }
+    return !runs.isEmpty && !runs.joined().contains { $0.contains(where: \.isLowercase) }
+  }
+
+  /// Which of the two `title` takes, by the rules its comment gives, as they come.
+  private static func chosenTitle(page: String, index: String, titlePage: [[String]]) -> String {
     guard page.contains(where: \.isLowercase) else { return index }
     let indexWords = titleWords(index)
     let pageWords = titleWords(page)
@@ -154,6 +177,62 @@ extension LegacyTextParser {
     }
     let found = indexWords.count { onTitlePage.contains($0) }
     return found * 5 >= indexWords.count * 4 ? index : page
+  }
+
+  /// The acronyms a title set in capitals keeps in capitals: a fixed list, not a
+  /// length rule, because the words to keep are names, and `TIP` and `TOP` are the
+  /// same length (#219).
+  static let titleAcronyms: Set<String> = [
+    "ARPA", "ARPANET", "BBN", "FTP", "HTTP", "IANA", "IMP", "IP", "MIT", "NCP", "NIC",
+    "NICNAME", "TCP", "TENEX", "TIP", "TIPUG", "UCLA", "WHOIS",
+  ]
+
+  /// The words a title sets lower case but at its start or after a dash.
+  private static let titleSmallWords: Set<String> = [
+    "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "nor", "of",
+    "on", "or", "over", "the", "to", "via", "with",
+  ]
+
+  /// A title set in capitals, in title case: each word with a capital and the rest
+  /// lower case, except the acronyms of `titleAcronyms`, the small words of
+  /// `titleSmallWords` past the start, a number's suffix (`21st`), and initials
+  /// (`M.I.T`). Each side of a slash or hyphen is a word, and a spaced dash starts
+  /// the title again.
+  static func titleCased(_ title: String) -> String {
+    var startsPart = true
+    return title.split(separator: " ", omittingEmptySubsequences: false).map { word in
+      if word == "-" {
+        startsPart = true
+        return String(word)
+      }
+      var cased = ""
+      var piece = ""
+      func flush() {
+        guard !piece.isEmpty else { return }
+        cased += titleCasedWord(piece, startsPart: startsPart)
+        startsPart = false
+        piece = ""
+      }
+      for character in word {
+        if character == "/" || character == "-" {
+          flush()
+          cased.append(character)
+        } else {
+          piece.append(character)
+        }
+      }
+      flush()
+      return cased
+    }
+    .joined(separator: " ")
+  }
+
+  private static func titleCasedWord(_ word: String, startsPart: Bool) -> String {
+    if titleAcronyms.contains(word) || word.contains(".") { return word }
+    if word.first?.isNumber == true { return word.lowercased() }
+    let lowered = word.lowercased()
+    if !startsPart, titleSmallWords.contains(lowered) { return lowered }
+    return lowered.prefix(1).uppercased() + lowered.dropFirst()
   }
 
   /// How many words the two have in common, in the same order: the longest run of
