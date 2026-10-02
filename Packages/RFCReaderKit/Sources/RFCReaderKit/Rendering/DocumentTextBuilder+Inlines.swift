@@ -170,15 +170,19 @@ extension DocumentTextBuilder {
     }
     // The backing store itself: `string` would copy the whole document.
     let text = output.mutableString
+    // A newline, a table cell's line separator (#506) and a tab.
+    let lineAndCellBreaks: Set<unichar> = [0x0A, 0x2028, 0x09]
     for chip in chips {
       addKern(padding, at: NSMaxRange(chip) - 1, in: output)
       let before = chip.location - 1
       // A chip that starts a line has nothing before it to make room in: its
-      // tint reaches into the margin, as a card's does. Nor does one that starts a
-      // table cell: the layout ignores a tab's kern and sets the chip at its stop,
-      // so kerning the tab would only let the measuring of the cell, which cannot
-      // see the tab, disagree with the drawing where a layout did honor it.
-      if before >= 0, text.character(at: before) != 0x0A, text.character(at: before) != 0x09 {
+      // tint reaches into the margin, as a card's does, after a newline or after
+      // the line separator a table cell's line break is set as. Nor does one
+      // that starts a table cell: the layout ignores a tab's kern and sets the chip
+      // at its stop, so kerning the tab would only let the measuring of the cell,
+      // which cannot see the tab, disagree with the drawing where a layout did
+      // honor it.
+      if before >= 0, !lineAndCellBreaks.contains(text.character(at: before)) {
         addKern(padding, at: before, in: output)
       }
     }

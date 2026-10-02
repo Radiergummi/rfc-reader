@@ -33,7 +33,10 @@ public enum SelectionText {
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
       guard let box = value as? ReferenceBox else {
+        // A table cell's line break is set as a line separator, to keep its row
+        // one paragraph (#506); on the pasteboard it is the newline it stands for.
         result += attributed.attributedSubstring(from: range).string
+          .replacing(DocumentTextBuilder.cellLineSeparator, with: "\n")
         return
       }
       // The whole reference, even when only part of it was selected: a chip is
