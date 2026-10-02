@@ -410,6 +410,20 @@ final class NavigationModel: Identifiable {
     scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
   }
+
+  // MARK: - Across launches
+
+  /// What this tab keeps across launches (#155), with its reader's inspector tab.
+  func snapshot(inspectorTab: InspectorTab) -> SceneSnapshot {
+    SceneSnapshot(history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue)
+  }
+
+  /// Puts the tab back as `snapshot` left it. Nothing is asked to scroll: the
+  /// document opens at its reading position, which is kept with it.
+  func restore(_ snapshot: SceneSnapshot) {
+    history = NavigationHistory(snapshot.history)
+    sidebarSelection = snapshot.filter
+  }
 }
 
 /// What this tab's list may list from: the inputs it took on entering the filter,

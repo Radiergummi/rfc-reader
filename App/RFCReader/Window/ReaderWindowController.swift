@@ -83,6 +83,7 @@
       // its sibling's frame from `addTabbedWindow(_:ordered:)`.
       super.init(window: window)
       window.delegate = self
+      makeRestorable(window)
       build(in: window)
     }
 
@@ -213,6 +214,7 @@
       let listTitles = Observations { [weak self] in self?.listTitle }
       let canDescribe = Observations { [weak self] in self?.reader.canDescribe }
       let showsQuickOpen = Observations { [weak self] in self?.navigation.isShowingGoToSheet }
+      let snapshots = Observations { [weak self] in self?.sceneSnapshot }
       observations = [
         Task(name: "Observe window title") { [weak self] in
           for await title in titles { if let title { self?.apply(title) } }
@@ -225,6 +227,10 @@
         },
         Task(name: "Observe Go to RFC") { [weak self] in
           for await _ in showsQuickOpen { self?.showOrHideQuickOpen() }
+        },
+        // AppKit asks for the window's state again only once told it changed (#155).
+        Task(name: "Observe scene snapshot") { [weak self] in
+          for await _ in snapshots { self?.window?.invalidateRestorableState() }
         },
       ]
     }

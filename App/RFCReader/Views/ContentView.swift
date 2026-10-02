@@ -27,6 +27,8 @@ import SwiftUI
     /// The link this window was asked to open (#158), held until it has appeared.
     @State private var requestedLink: RFCLink?
     @State private var hasAppeared = false
+    /// This scene's `SceneSnapshot`, kept by the system with the scene (#155).
+    @SceneStorage("scene") private var sceneSnapshot: Data?
     /// The one-time warning that bookmarks this session will not be kept (#152).
     @State private var showsStoreWarning = false
     /// The reader's own text size, which ⌘= steps (#153).
@@ -101,6 +103,14 @@ import SwiftUI
         }
       }
       .onAppear {
+        // Once, before anything else moves the tab: where it was when the app last
+        // ran (#155). A link it was asked to open comes after, and wins.
+        if !hasAppeared, let data = sceneSnapshot,
+          let snapshot = SceneSnapshot.decoded(from: data)
+        {
+          navigation.restore(snapshot)
+          reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
+        }
         // Collapsed, the sidebar is a list of push rows, and a filter selected
         // before anything was tapped reads as a tap left behind. The list still
         // lists it: `filter` keeps its value. Before registering, which may open a
@@ -118,6 +128,12 @@ import SwiftUI
         if horizontalSizeClass == .regular, navigation.sidebarSelection == nil {
           navigation.sidebarSelection = navigation.filter
         }
+      }
+      // Written as the tab changes: SwiftUI keeps the scene's storage, and writing it
+      // costs a comparison and an encode.
+      .onChange(of: navigation.snapshot(inspectorTab: reader.tab)) { _, snapshot in
+        guard hasAppeared else { return }
+        sceneSnapshot = snapshot.encoded()
       }
       .onDisappear { library.unregister(navigation) }
       // Once, when the bookmarks store fell back to memory (#152). Continue only:
