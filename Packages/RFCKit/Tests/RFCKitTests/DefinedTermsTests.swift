@@ -217,7 +217,7 @@ struct DefinedTermsTests {
   // MARK: Through parse
 
   @Test func `a terminology section's definition list defines its terms`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9985.xml"))
+    let document = try Fixtures.document("rfc9985.xml")
     let term = try #require(document.definedTerms["significant change"])
     #expect(term.term == "significant change", "the list's trailing colon is not the term's")
     #expect(!term.definition.isEmpty)
@@ -227,7 +227,7 @@ struct DefinedTermsTests {
 
   @Test func `a definition list elsewhere defines nothing`() throws {
     // RFC 8999's only definition list is its notation, under Notational Conventions.
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let document = try Fixtures.document("rfc8999.xml")
     #expect(document.definedTerms.isEmpty)
   }
 

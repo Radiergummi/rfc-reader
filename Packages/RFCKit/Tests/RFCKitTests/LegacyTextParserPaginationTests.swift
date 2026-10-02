@@ -115,7 +115,7 @@ struct LegacyTextParserPaginationTests {
   /// section, set off by a blank line -- and is rarer anywhere else than at the edge.
   @Test func `a line the body repeats is not furniture`() throws {
     let text = try Fixtures.string("rfc2013.txt")
-    let document = LegacyTextParser.parse(text)
+    let document = try Fixtures.document("rfc2013.txt")
     func count(_ line: String, in text: String) -> Int {
       text.split(separator: "\n").filter {
         $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") == line

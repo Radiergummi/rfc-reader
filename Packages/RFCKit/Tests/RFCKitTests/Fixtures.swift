@@ -14,7 +14,7 @@ enum Fixtures {
   /// The fixture parsed as its format is: RFCXML for `.xml`, legacy text otherwise,
   /// decoded as every reader of the format decodes it.
   ///
-  /// Parsed once per test run and kept (#144): about eighty tests read some forty
+  /// Parsed once per test run and kept (#144): over a hundred tests read a few dozen
   /// fixtures, and a parse is a pure function of the file. Two tests asking at once
   /// may both parse it; either result is the same document.
   static func document(_ name: String) throws -> RFCDocument {

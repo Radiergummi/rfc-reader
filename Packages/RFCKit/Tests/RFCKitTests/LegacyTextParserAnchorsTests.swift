@@ -133,7 +133,7 @@ struct LegacyTextParserAnchorsTests {
     for fixture in try Fixtures.legacyTexts() {
       let text = try Fixtures.string(fixture)
       let reserved = LegacyTextParser.reservedAnchors(in: text)
-      let document = LegacyTextParser.parse(text)
+      let document = try Fixtures.document(fixture)
       let unreserved = Set(document.allSections.map(\.anchor)).subtracting(reserved).sorted()
       #expect(unreserved.isEmpty, "\(fixture): \(unreserved)")
       let held = Set(document.referenceLists.flatMap(\.entries).map(\.anchor)).intersection(

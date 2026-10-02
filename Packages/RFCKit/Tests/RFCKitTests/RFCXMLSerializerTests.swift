@@ -46,7 +46,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `round trips RFCXML`() throws {
-    let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let original = try Fixtures.document("rfc8999.xml")
     let xml = RFCXMLSerializer().serialize(original)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(Self.signature(reparsed) == Self.signature(original))
@@ -56,7 +56,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `an entrys printed tag survives a round trip`() throws {
-    let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
+    let original = try Fixtures.document("rfc9220.xml")
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     func tags(_ document: RFCDocument) -> [String] {
       document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
@@ -71,7 +71,7 @@ struct RFCXMLSerializerTests {
   }
 
   static func roundTrip(_ name: String) throws -> (original: RFCDocument, reparsed: RFCDocument) {
-    let original = try RFCXMLParser.parse(try Fixtures.data(name))
+    let original = try Fixtures.document(name)
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     return (original, reparsed)
   }
@@ -346,7 +346,7 @@ struct RFCXMLSerializerTests {
   /// group, it read back as the group's document, or as no document at all.
   @Test func `a group member's citation keeps its document through a round trip`() throws {
     for name in ["rfc9290.xml", "rfc9682.xml", "rfc9783.xml"] {
-      let original = try RFCXMLParser.parse(try Fixtures.data(name))
+      let original = try Fixtures.document(name)
       let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
       func documents(_ document: RFCDocument) -> [DocumentID] {
         document.everyCrossReference.compactMap {
@@ -370,10 +370,7 @@ struct RFCXMLSerializerTests {
       source: .text
     )
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
-    guard case .preformatted(let back)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected artwork")
-      return
-    }
+    let back = try #require(reparsed.sections.first?.blocks.first?.preformatted, "expected artwork")
     #expect(back.text == art)
   }
 }

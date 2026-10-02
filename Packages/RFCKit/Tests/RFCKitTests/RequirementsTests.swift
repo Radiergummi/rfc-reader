@@ -184,7 +184,7 @@ struct RequirementsTests {
   func `every keyword the author tagged is found`(fixture: String) throws {
     let xml = try Fixtures.string(fixture)
     let tagged = xml.matches(of: /<bcp14>/).count
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let requirements = Requirements.extract(from: document)
     let boilerplate = BCP14Keyword.allCases.count
     #expect(requirements.flatMap(\.keywords).count == tagged - boilerplate)
@@ -193,7 +193,7 @@ struct RequirementsTests {
   }
 
   @Test func `a requirement knows its section and lands on its paragraph`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9197.xml"))
+    let document = try Fixtures.document("rfc9197.xml")
     let requirement = try #require(Requirements.extract(from: document).first)
     let section = try #require(document.section(anchor: requirement.sectionAnchor))
     #expect(requirement.sectionTitle == section.titleText)
