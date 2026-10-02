@@ -7,7 +7,8 @@ public struct PublishedOriginalPage: Hashable, Sendable {
   public enum Kind: Hashable, Sendable {
     /// The index lists no text: there is nothing to load.
     case scan
-    /// The text loaded, and only says where the original is.
+    /// The text only says where the original is: it loaded, or the installed pack
+    /// lists it so (#316).
     case pointer
   }
 
@@ -17,13 +18,17 @@ public struct PublishedOriginalPage: Hashable, Sendable {
     public let kind: Kind
     public let original: PublishedOriginal
 
-    /// Nil for an RFC read as its text.
-    public init?(_ id: DocumentID, formats: [FileFormat], text document: RFCDocument?) {
+    /// Nil for an RFC read as its text. `pointerInPack`: the installed pack lists
+    /// the RFC as a pointer, so its text need not load to say so.
+    public init?(
+      _ id: DocumentID, formats: [FileFormat], text document: RFCDocument?,
+      pointerInPack: Bool = false
+    ) {
       if let scan = PublishedOriginal(id, formats: formats) {
         kind = .scan
         original = scan
-      } else if let document,
-        let pointer = PublishedOriginal(id, formats: formats, text: document)
+      } else if let pointer = PublishedOriginalPage.pointer(
+        id, formats: formats, text: document, inPack: pointerInPack)
       {
         kind = .pointer
         original = pointer
@@ -53,13 +58,14 @@ public struct PublishedOriginalPage: Hashable, Sendable {
   /// the index each time, not of the load, which may have run before the index was
   /// here, without its formats.
   public init?(
-    _ id: DocumentID, formats: [FileFormat], showsOriginal: Bool, text document: RFCDocument?
+    _ id: DocumentID, formats: [FileFormat], showsOriginal: Bool, text document: RFCDocument?,
+    pointerInPack: Bool = false
   ) {
     if let scan = PublishedOriginal(id, formats: formats) {
       original = scan
       explanation = "The RFC Editor publishes \(id.displayName) only as a scan."
-    } else if !showsOriginal, let document,
-      let pointer = PublishedOriginal(id, formats: formats, text: document)
+    } else if !showsOriginal,
+      let pointer = Self.pointer(id, formats: formats, text: document, inPack: pointerInPack)
     {
       original = pointer
       explanation = "The text of \(id.displayName) only says where its original is."
@@ -69,9 +75,34 @@ public struct PublishedOriginalPage: Hashable, Sendable {
   }
 
   /// Whether the reader fetches the RFC's text: not a scan's, which the index says
-  /// has none. An index without the document yet (`nil`) leaves it to the fetch.
-  public static func loadsText(_ id: DocumentID, formats: [FileFormat]?) -> Bool {
-    formats.flatMap { PublishedOriginal(id, formats: $0) } == nil
+  /// has none, nor a pointer's the installed pack lists, which it has no XML of
+  /// (#316). An index without the document yet (`nil`) leaves it to the fetch, as
+  /// does one listing no original for a pointer: there would be no page to show.
+  public static func loadsText(
+    _ id: DocumentID, formats: [FileFormat]?, pointerInPack: Bool = false
+  ) -> Bool {
+    guard let formats else { return true }
+    return PublishedOriginal(id, formats: formats) == nil
+      && (!pointerInPack || PublishedOriginal(pointer: id, formats: formats) == nil)
+  }
+
+  /// Whether the reader records the RFC as opened though it loads no text: a
+  /// pointer the installed pack lists, whose loaded text would have been recorded
+  /// (#316), so Recently Read does not depend on a pack. Not a scan, which is not.
+  public static func recordsOpeningWithoutText(
+    _ id: DocumentID, formats: [FileFormat]?, pointerInPack: Bool
+  ) -> Bool {
+    guard let formats, PublishedOriginal(id, formats: formats) == nil else { return false }
+    return !loadsText(id, formats: formats, pointerInPack: pointerInPack)
+  }
+
+  /// The original a text that only points to it stands for: known from the
+  /// installed pack, or else from the text once it is here.
+  private static func pointer(
+    _ id: DocumentID, formats: [FileFormat], text document: RFCDocument?, inPack: Bool
+  ) -> PublishedOriginal? {
+    if inPack { return PublishedOriginal(pointer: id, formats: formats) }
+    return document.flatMap { PublishedOriginal(id, formats: formats, text: $0) }
   }
 
   /// Whether Print and Export offer the document: one on screen and read as its

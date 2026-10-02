@@ -5,7 +5,7 @@ import Foundation
 /// both use this one type (#36).
 ///
 /// A pack carries its own manifest at its root, listing its files by bare name
-/// (`rfc1.xml`), and never itself.
+/// (`rfc1.xml`) but never itself, and the documents it leaves out on purpose.
 ///
 /// No date: the same files and version give the same manifest, which is what lets a
 /// rebuild be compared with the release it would replace.
@@ -23,15 +23,40 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
   }
 
+  /// A document the pack leaves out on purpose, and why: the app learns it from the
+  /// manifest rather than from the document's text, which may be offline (#316).
+  public struct Skip: Codable, Equatable, Sendable {
+    /// The document's file stem, `rfc1119`.
+    public var document: String
+    public var reason: SkipReason
+
+    public init(document: String, reason: SkipReason) {
+      self.document = document
+      self.reason = reason
+    }
+  }
+
+  /// Why a pack leaves a document out.
+  public enum SkipReason: String, Codable, Sendable {
+    /// The text only says where the RFC's PDF or PostScript original is: RFC 570,
+    /// 1119, 1124, 1128, 1129 and 1131. Converted, it is a document with nothing in
+    /// it, which the schema refuses for two of them and takes for the other four; a
+    /// section saying where the original is would be words the RFC does not have.
+    /// The app opens the original instead (`PublishedOriginal`, #207).
+    case publishedOnlyAsPDF = "published-only-as-pdf"
+  }
+
   /// The name a pack's manifest has at the pack's root.
   public static let fileName = "manifest.json"
 
   public var version: String
   public var files: [Entry]
+  public var skipped: [Skip]
 
-  public init(version: String, files: [Entry]) {
+  public init(version: String, files: [Entry], skipped: [Skip] = []) {
     self.version = version
     self.files = files
+    self.skipped = skipped
   }
 
   /// A digest as the manifest spells it: lowercase hex, two digits a byte, the way

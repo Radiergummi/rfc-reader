@@ -20,6 +20,10 @@ public struct DocumentReport: Codable, Sendable {
   /// Why the output is not RFCXML: `[]` when it validates, nil when the run was not
   /// asked to check (`--schema`). See `SchemaCheck.Cause` for what each entry means.
   public var schema: [String]?
+  /// Why no XML was written for the document, nil when it was converted. A skipped
+  /// document is neither checked nor counted against the schema, and the legacy
+  /// pack's manifest lists it (`Manifest.skips(inReport:)`).
+  public var skipped: Manifest.SkipReason?
 
   /// Counts the blocks of `document`, and warns about the shapes a failed conversion
   /// leaves: no number, no title, no sections, no prose, more artwork than prose.

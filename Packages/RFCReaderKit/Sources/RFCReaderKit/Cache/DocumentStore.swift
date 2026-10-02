@@ -477,6 +477,12 @@ public actor DocumentStore {
     return pack
   }
 
+  /// The RFCs the installed legacy pack lists as text that only points to its
+  /// original (#316), shown as their original without a load.
+  public func pointersInPack() -> Set<DocumentID> {
+    legacyPack?.pointers ?? []
+  }
+
   /// Off the actor: a whole pack is unpacked and every file hashed.
   @concurrent
   private static func install(_ source: URL, as name: String, in packs: URL) async throws
@@ -500,8 +506,9 @@ public actor DocumentStore {
   /// Records that `id` was opened, as its bodies' modification date: a body is
   /// never modified after it is written, so the date is free to mean "last opened",
   /// and it outlives the process. A file's date is not its directory's, so this
-  /// does not send `DocumentCacheIndex` to scan again.
-  private func markOpened(_ id: DocumentID) {
+  /// does not send `DocumentCacheIndex` to scan again. Public for a document opened
+  /// without a load: a pointer the installed pack lists (#316).
+  public func markOpened(_ id: DocumentID) {
     for format in DocumentCacheIndex.bodyFormats {
       try? FileManager.default.setAttributes(
         [.modificationDate: Date.now], ofItemAtPath: fileURL(id, format: format).path)

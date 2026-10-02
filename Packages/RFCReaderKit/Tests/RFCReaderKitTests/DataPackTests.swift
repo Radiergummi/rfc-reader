@@ -162,6 +162,20 @@ struct DataPackTests {
     #expect(pack.file(for: .rfc(3)) == nil)
   }
 
+  /// What the manifest says the pack leaves out because its text only points to its
+  /// original (#316): not a file, so verification does not look for it.
+  @Test func `a pack's pointers are the documents its manifest skips`() throws {
+    let scratch = try Scratch()
+    let directory = try makePack(in: scratch.url)
+    var manifest = try manifest(of: directory)
+    manifest.skipped = [Manifest.Skip(document: "rfc3", reason: .publishedOnlyAsPDF)]
+    try JSONEncoder().encode(manifest).write(to: directory.appending(path: Manifest.fileName))
+    #expect(PackVerification.failures(in: directory, against: manifest) == [])
+    let pack = try InstalledPack(contentsOf: directory)
+    #expect(pack.pointers == [.rfc(3)])
+    #expect(pack.file(for: .rfc(3)) == nil)
+  }
+
   /// A BCP is a series, not a document: its members are in the pack, it is not.
   @Test func `a series is not in the pack`() throws {
     let scratch = try Scratch()

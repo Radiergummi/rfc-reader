@@ -243,6 +243,8 @@ struct DocumentView: View {
         deriveInfo()
         markPublishedOriginal()
       }
+      // A pack installed while the document is open can make it a pointer (#316).
+      .onChange(of: library.pointersInPack) { markPublishedOriginal() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
@@ -292,7 +294,7 @@ struct DocumentView: View {
     if let metadata,
       let page = PublishedOriginalPage(
         id, formats: metadata.formats, showsOriginal: reader.showOriginal,
-        text: session.state.document)
+        text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
     {
       originalOnly(page, metadata: metadata)
     } else if reader.showOriginal {
@@ -569,10 +571,23 @@ struct DocumentView: View {
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
-    // A scan has no text to fetch (#207): its page is the index's.
-    guard PublishedOriginalPage.loadsText(id, formats: metadata?.formats) else {
+    // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
+    // the pack lists (#316), whose XML it left out.
+    let pointerInPack = library.pointersInPack.contains(id)
+    guard
+      PublishedOriginalPage.loadsText(
+        id, formats: metadata?.formats, pointerInPack: pointerInPack)
+    else {
       session.skipLoad()
       reader.isLoading = false
+      // Recorded as its loaded text would be, so Recently Read lists it with a pack
+      // or without; here, so once per opening, like a load's.
+      if PublishedOriginalPage.recordsOpeningWithoutText(
+        id, formats: metadata?.formats, pointerInPack: pointerInPack)
+      {
+        Self.markOpened(id, in: modelContext)
+        Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
+      }
       return
     }
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
@@ -585,13 +600,7 @@ struct DocumentView: View {
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
       // document is here, so one that failed to open is not listed as read.
-      do {
-        try ReadingPositionStore.markOpened(id, in: modelContext)
-      } catch {
-        readerLog.error(
-          "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
-        )
-      }
+      Self.markOpened(id, in: modelContext)
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
@@ -613,6 +622,18 @@ struct DocumentView: View {
     }
   }
 
+  /// Lists the RFC in Recently Read. Static, so the load's callback can call it
+  /// without capturing the view.
+  private static func markOpened(_ id: DocumentID, in modelContext: ModelContext) {
+    do {
+      try ReadingPositionStore.markOpened(id, in: modelContext)
+    } catch {
+      readerLog.error(
+        "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
+      )
+    }
+  }
+
   /// Why this RFC is read as its original, if it is (#207): as the load starts, and
   /// again when the index loads, which may be after the fetch ended.
   private func markPublishedOriginal() {
@@ -627,7 +648,9 @@ struct DocumentView: View {
     _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
   ) -> PublishedOriginalPage.Status? {
     library.metadata(id).flatMap {
-      PublishedOriginalPage.Status(id, formats: $0.formats, text: document)
+      PublishedOriginalPage.Status(
+        id, formats: $0.formats, text: document,
+        pointerInPack: library.pointersInPack.contains(id))
     }
   }
 

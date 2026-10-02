@@ -180,7 +180,9 @@ struct ConvertCommand: AsyncParsableCommand {
     Self.logger.info(
       "done",
       metadata: [
-        "converted": "\(reports.count)", "overridden": "\(reports.filter(\.overridden).count)",
+        "converted": "\(reports.count(where: { $0.skipped == nil }))",
+        "skipped": "\(reports.count(where: { $0.skipped != nil }))",
+        "overridden": "\(reports.filter(\.overridden).count)",
         "withWarnings": "\(flagged.count)",
       ])
     for entry in flagged.prefix(40) {
@@ -224,7 +226,14 @@ struct ConvertCommand: AsyncParsableCommand {
       Self.logger.warning("no index entry", metadata: ["document": "\(stem)"])
     }
     let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
-    try conversion.xml.write(to: outputURL, options: .atomic)
+    guard let xml = conversion.xml else {
+      // An earlier run's output would be packed as though this one had written it.
+      if FileManager.default.fileExists(atPath: outputURL.path) {
+        try FileManager.default.removeItem(at: outputURL)
+      }
+      return Converted(offset: offset, report: conversion.report, prose: nil)
+    }
+    try xml.write(to: outputURL, options: .atomic)
     var entry = conversion.report
     try await checkSchema(outputURL, job: job, into: &entry)
     return Converted(

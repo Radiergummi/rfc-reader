@@ -25,7 +25,8 @@ public struct DocumentConverter: Sendable {
 
   /// One converted document.
   public struct Conversion: Sendable {
-    public var xml: Data
+    /// Nil when the document is skipped, and the report says why.
+    public var xml: Data?
     /// Without `schema`, which takes xmllint and so is the caller's to fill in.
     public var report: DocumentReport
     /// Nil unless `diagnosesProse`.
@@ -44,6 +45,13 @@ public struct DocumentConverter: Sendable {
   /// anything else in the document (#170, #171, #218). See `IndexHeader`.
   public func convert(text: String, stem: String, metadata: RFCMetadata?) -> Conversion {
     var document = LegacyTextParser.parse(text, title: metadata?.title)
+    if let skip = Self.skip(document, metadata: metadata) {
+      var report = DocumentReport(document: document, id: stem, overridden: false)
+      // What a document with nothing in it warns about says nothing of a skipped one.
+      report.warnings = []
+      report.skipped = skip
+      return Conversion(xml: nil, report: report)
+    }
     let notes = metadata.map { IndexHeader.apply($0, to: &document.header) } ?? []
     // Diagnosed once for both reports.
     let blocks =
@@ -78,5 +86,17 @@ public struct DocumentConverter: Sendable {
       report.warnings.append("generated XML does not parse: \(error)")
     }
     return Conversion(xml: xml, report: report, prose: prose, boundary: boundary)
+  }
+
+  /// Why `document`, parsed from the text `metadata` indexes, is not converted, if it
+  /// is not. Only a run with an index can tell: whether the RFC has an original is the
+  /// index's to say.
+  public static func skip(_ document: RFCDocument, metadata: RFCMetadata?)
+    -> Manifest.SkipReason?
+  {
+    guard let metadata,
+      PublishedOriginal(metadata.id, formats: metadata.formats, text: document) != nil
+    else { return nil }
+    return .publishedOnlyAsPDF
   }
 }

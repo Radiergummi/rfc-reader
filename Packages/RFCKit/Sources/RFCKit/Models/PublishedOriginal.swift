@@ -38,6 +38,12 @@ public struct PublishedOriginal: Sendable, Hashable {
     self.init(id, original: formats)
   }
 
+  /// The text is known to only say where the original is, without being read: an
+  /// installed data pack lists it so (#316). Which original is still the index's.
+  public init?(pointer id: DocumentID, formats: [FileFormat]) {
+    self.init(id, original: formats)
+  }
+
   private init?(_ id: DocumentID, original formats: [FileFormat]) {
     guard let format = [FileFormat.pdf, .postScript].first(where: formats.contains) else {
       return nil

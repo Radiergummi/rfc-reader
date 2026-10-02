@@ -123,6 +123,11 @@ final class LibraryModel {
   /// it enters that filter rather than waiting on the store's actor.
   private(set) var downloadedNumbers: Set<Int> = []
 
+  /// The RFCs the installed legacy pack lists as text that only points to its
+  /// original (#316): the reader shows their original without a load, offline too.
+  /// Kept here so the reader can ask while it lays out, not across the store's actor.
+  private(set) var pointersInPack: Set<DocumentID> = []
+
   /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
   /// of `recentlyReadNumbers()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
@@ -268,6 +273,12 @@ final class LibraryModel {
     downloadedNumbers = numbers
   }
 
+  private func refreshPointersInPack() async {
+    let pointers = await store.pointersInPack()
+    guard pointers != pointersInPack else { return }
+    pointersInPack = pointers
+  }
+
   private let client = RFCEditorClient()
   /// For the automatic daily check, which waits for a network that is neither
   /// metered nor in Low Data Mode instead of failing (#314).
@@ -302,6 +313,7 @@ final class LibraryModel {
       }
     }
     await refreshDownloadedNumbers()
+    await refreshPointersInPack()
     do {
       if let (prepared, updatedAt) = try await cached {
         apply(prepared, updatedAt: updatedAt)
@@ -1035,10 +1047,18 @@ final class LibraryModel {
     return document
   }
 
+  /// Records an RFC opened without a load as `document(for:)` records a loaded one:
+  /// a pointer the pack lists, shown as its original (#316).
+  func markOpened(_ id: DocumentID) async {
+    await store.markOpened(id)
+  }
+
   /// Installs the legacy XML pack from an `.aar`, a folder or a URL; see
   /// `DocumentStore.installLegacyPack(from:)`. A developer's path for now (#36).
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
-    try await store.installLegacyPack(from: source)
+    let pack = try await store.installLegacyPack(from: source)
+    await refreshPointersInPack()
+    return pack
   }
 
   func originalText(for id: DocumentID) async throws -> String {
