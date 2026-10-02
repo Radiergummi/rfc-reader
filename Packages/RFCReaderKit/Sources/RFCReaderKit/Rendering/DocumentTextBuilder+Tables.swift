@@ -67,7 +67,31 @@ extension DocumentTextBuilder {
     // pass skips.
     let runs = NSMutableAttributedString(attributedString: inlineRuns(cell, base: base))
     Self.reserveChipPadding(in: runs)
-    return lineWidth(runs) + chipSymbolWidth(in: runs)
+    // As wide as its widest line: a line break sets the rest of the cell under it.
+    return Self.lines(of: runs).map { lineWidth($0) + chipSymbolWidth(in: $0) }.max() ?? 0
+  }
+
+  /// What a cell's line break (RFCXML's `<br/>`) is set as in a table: a line
+  /// separator, which breaks the line without ending the paragraph, so a grid's row
+  /// and a stacked cell each stay one (#506).
+  static let cellLineSeparator = "\u{2028}"
+
+  /// `runs` split where a line break made a newline of it, the newlines dropped.
+  static func lines(of runs: NSAttributedString) -> [NSAttributedString] {
+    let string = runs.string as NSString
+    var lines: [NSAttributedString] = []
+    var start = 0
+    while true {
+      let rest = NSRange(location: start, length: string.length - start)
+      let newline = string.range(of: "\n", range: rest)
+      guard newline.location != NSNotFound else {
+        lines.append(runs.attributedSubstring(from: rest))
+        return lines
+      }
+      lines.append(
+        runs.attributedSubstring(from: NSRange(location: start, length: newline.location - start)))
+      start = NSMaxRange(newline)
+    }
   }
 
   /// The width of the chips' symbols in `runs`: an attachment, which `lineWidth(_:)`
@@ -123,9 +147,19 @@ extension DocumentTextBuilder {
     for (index, row) in (table.header + table.rows).enumerated() {
       let attributes = index < table.header.count ? headerAttributes : dataAttributes
       mark(row.anchor)
-      for (column, cell) in row.cells.enumerated() {
-        if column > 0 { append("\t", attributes) }
-        output.append(inlineRuns(cell, base: attributes))
+      // A row is as many lines as its tallest cell has, each holding every cell's
+      // line of that number at its stop, and set apart by line separators, so the
+      // row is still one paragraph and keeps its tab stops (#506).
+      let cells = row.cells.map { Self.lines(of: inlineRuns($0, base: attributes)) }
+      let height = cells.map(\.count).max() ?? 1
+      for line in 0..<height {
+        if line > 0 { append(Self.cellLineSeparator, attributes) }
+        // A line ends at its last cell with something on it, not in trailing tabs.
+        let last = cells.lastIndex { $0.count > line } ?? 0
+        for (column, cell) in cells.enumerated().prefix(last + 1) {
+          if column > 0 { append("\t", attributes) }
+          if line < cell.count { output.append(cell[line]) }
+        }
       }
       append("\n", attributes)
     }
@@ -153,7 +187,10 @@ extension DocumentTextBuilder {
           output.append(inlineRuns(headers[column], base: labelAttributes))
           append("  ", attributes)
         }
-        output.append(inlineRuns(cell, base: attributes))
+        for (line, text) in Self.lines(of: inlineRuns(cell, base: attributes)).enumerated() {
+          if line > 0 { append(Self.cellLineSeparator, attributes) }
+          output.append(text)
+        }
         append("\n", attributes)
       }
       // A blank line separates one row's cells from the next row's. It needs no

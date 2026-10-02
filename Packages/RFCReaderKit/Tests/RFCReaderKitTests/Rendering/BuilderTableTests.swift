@@ -259,8 +259,12 @@ struct BuilderTableTests {
     let table = RFCKit.Table(
       title: nil, header: [],
       rows: [
-        RFCKit.Table.Row(cells: [[.text("a1"), .lineBreak, .text("a2")], [.text("b1")], [.text("c1")]]),
-        RFCKit.Table.Row(cells: [[.text("d1")], [.text("e1"), .lineBreak, .text("e2")], [.text("f1")]]),
+        RFCKit.Table.Row(cells: [
+          [.text("a1"), .lineBreak, .text("a2")], [.text("b1")], [.text("c1")],
+        ]),
+        RFCKit.Table.Row(cells: [
+          [.text("d1")], [.text("e1"), .lineBreak, .text("e2")], [.text("f1")],
+        ]),
       ])
     #expect(shape(table) == .grid)
     let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
@@ -288,5 +292,40 @@ struct BuilderTableTests {
     #expect(shape(table) == .stacked)
     let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
     #expect(text.contains("6.5.4\u{2028}6.5.5\n"))
+  }
+
+  /// Laid out, a cell's second line starts where its first does: the first
+  /// column's at the row's indent, another's at its tab stop.
+  @Test func `a cell's second line is laid out under its first`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [
+        RFCKit.Table.Row(cells: [[.text("a1"), .lineBreak, .text("a2")], [.text("b1")]]),
+        RFCKit.Table.Row(cells: [[.text("d1")], [.text("e1"), .lineBreak, .text("e2")]]),
+      ])
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let storage = NSTextContentStorage()
+    storage.install(built.text)
+    let layout = NSTextLayoutManager()
+    storage.addTextLayoutManager(layout)
+    let container = NSTextContainer(size: CGSize(width: 10_000, height: 100_000))
+    container.lineFragmentPadding = 0
+    layout.textContainer = container
+    layout.ensureLayout(for: layout.documentRange)
+    defer { withExtendedLifetime(storage) {} }
+
+    /// Where the character at `offset` is drawn, from the left of its fragment.
+    func x(_ needle: String) throws -> CGFloat {
+      let offset = try Fixtures.offset(of: needle, in: built.text)
+      let location = try #require(layout.location(atOffset: offset))
+      let fragment = try #require(layout.textLayoutFragment(for: location))
+      let inFragment = offset - layout.offset(of: fragment.rangeInElement.location)
+      let line = try #require(
+        fragment.textLineFragments.first { $0.characterRange.contains(inFragment) })
+      return line.typographicBounds.minX + line.locationForCharacter(at: inFragment).x
+    }
+    #expect(abs(try x("a2") - x("a1")) < 0.5)
+    #expect(abs(try x("e2") - x("e1")) < 0.5)
+    #expect(abs(try x("e1") - x("b1")) < 0.5)
   }
 }
