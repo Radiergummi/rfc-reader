@@ -873,6 +873,12 @@ public enum RFCXMLParser {
         if format == "title", let derived {
           return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
         }
+        // Words that are the document's own name ask for its label, whatever the
+        // entry's tag: composed from the tag, `RFC 1006` against an entry `RC87` read
+        // `[RC87]` (#683).
+        if !innerText.isEmpty {
+          return CrossReference(target: target, sectionFormat: sectionFormat)
+        }
         // "RFC9110" is the canonical number; anything else is a tag the author
         // chose ("QUIC-TRANSPORT") and is the name the document uses
         // throughout, so it survives verbatim, brackets and all.
@@ -919,70 +925,66 @@ public enum RFCXMLParser {
       return CrossReference(target: target, text: text)
     }
 
+    /// Collapses whitespace the way HTML rendering would: runs become one space,
+    /// and the paragraph is trimmed at both ends. Code and verbatim spans are untouched.
     func normalize(_ inlines: [Inline]) -> [Inline] {
-      RFCXMLParser.normalize(inlines)
+      var result: [Inline] = []
+      for inline in inlines {
+        switch inline {
+        case .text(let text):
+          let hadLeading = text.first?.isWhitespace == true
+          let hadTrailing = text.last?.isWhitespace == true
+          var collapsed = text.collapsingWhitespace()
+          if collapsed.isEmpty {
+            collapsed = (hadLeading || hadTrailing) ? " " : ""
+          } else {
+            if hadLeading { collapsed = " " + collapsed }
+            if hadTrailing { collapsed += " " }
+          }
+          if collapsed.isEmpty { continue }
+          if collapsed == " ", case .text(let previous)? = result.last, previous.hasSuffix(" ") {
+            continue
+          }
+          if case .text(let previous)? = result.last {
+            // An element that yields nothing (an empty `<u>`, a `<cref>`) leaves
+            // the spaces on either side of it meeting here.
+            if previous.hasSuffix(" "), collapsed.hasPrefix(" ") {
+              collapsed.removeFirst()
+            }
+            result[result.count - 1] = .text(previous + collapsed)
+          } else {
+            result.append(.text(collapsed))
+          }
+        case .emphasis(let inner):
+          result.append(.emphasis(normalize(inner)))
+        case .strong(let inner):
+          result.append(.strong(normalize(inner)))
+        case .link(let url, let inner):
+          result.append(.link(url, normalize(inner)))
+        default:
+          result.append(inline)
+        }
+      }
+      // Trim the paragraph ends.
+      if case .text(let first)? = result.first {
+        let trimmed = String(first.drop(while: \.isWhitespace))
+        if trimmed.isEmpty { result.removeFirst() } else { result[0] = .text(trimmed) }
+      }
+      if case .text(let last)? = result.last {
+        var trimmed = last
+        while trimmed.last?.isWhitespace == true { trimmed.removeLast() }
+        if trimmed.isEmpty {
+          result.removeLast()
+        } else {
+          result[result.count - 1] = .text(trimmed)
+        }
+      }
+      return result
     }
   }
 }
 
 extension RFCXMLParser {
-  /// Collapses whitespace the way HTML rendering would: runs become one space,
-  /// and the paragraph is trimmed at both ends. Code and verbatim spans are untouched.
-  static func normalize(_ inlines: [Inline]) -> [Inline] {
-    var result: [Inline] = []
-    for inline in inlines {
-      switch inline {
-      case .text(let text):
-        let hadLeading = text.first?.isWhitespace == true
-        let hadTrailing = text.last?.isWhitespace == true
-        var collapsed = text.collapsingWhitespace()
-        if collapsed.isEmpty {
-          collapsed = (hadLeading || hadTrailing) ? " " : ""
-        } else {
-          if hadLeading { collapsed = " " + collapsed }
-          if hadTrailing { collapsed += " " }
-        }
-        if collapsed.isEmpty { continue }
-        if collapsed == " ", case .text(let previous)? = result.last, previous.hasSuffix(" ") {
-          continue
-        }
-        if case .text(let previous)? = result.last {
-          // An element that yields nothing (an empty `<u>`, a `<cref>`) leaves
-          // the spaces on either side of it meeting here.
-          if previous.hasSuffix(" "), collapsed.hasPrefix(" ") {
-            collapsed.removeFirst()
-          }
-          result[result.count - 1] = .text(previous + collapsed)
-        } else {
-          result.append(.text(collapsed))
-        }
-      case .emphasis(let inner):
-        result.append(.emphasis(normalize(inner)))
-      case .strong(let inner):
-        result.append(.strong(normalize(inner)))
-      case .link(let url, let inner):
-        result.append(.link(url, normalize(inner)))
-      default:
-        result.append(inline)
-      }
-    }
-    // Trim the paragraph ends.
-    if case .text(let first)? = result.first {
-      let trimmed = String(first.drop(while: \.isWhitespace))
-      if trimmed.isEmpty { result.removeFirst() } else { result[0] = .text(trimmed) }
-    }
-    if case .text(let last)? = result.last {
-      var trimmed = last
-      while trimmed.last?.isWhitespace == true { trimmed.removeLast() }
-      if trimmed.isEmpty {
-        result.removeLast()
-      } else {
-        result[result.count - 1] = .text(trimmed)
-      }
-    }
-    return result
-  }
-
   /// An author as the RFC Editor's rendering of an Authors' Addresses entry
   /// sets it, one detail per line, with the email and web addresses as links.
   static func addressInlines(_ author: Author) -> [Inline] {

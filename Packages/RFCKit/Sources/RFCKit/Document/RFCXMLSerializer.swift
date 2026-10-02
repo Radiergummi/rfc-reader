@@ -41,7 +41,10 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    var context = Context(Self.referenceIndex(in: document), sections: document.sections)
+    let (referenceAnchors, entryDocuments) = Self.referenceIndex(in: document)
+    var context = Context(
+      referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
+      sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -152,7 +155,7 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("front")
     var titleAttributes: [(String, String)] = []
     if let abbrev = header.abbreviatedTitle { titleAttributes.append(("abbrev", abbrev)) }
-    writer.element("title", titleAttributes, text: header.title.collapsingWhitespace())
+    writer.element("title", titleAttributes, text: header.title)
     if let id = header.id, id.series == .rfc {
       writer.empty("seriesInfo", [("name", "RFC"), ("value", String(id.number))])
     }
@@ -244,7 +247,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = Self.name(of: section, partNumber: partNumber)
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -263,16 +266,9 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("section")
   }
 
-  /// A section's `<name>`: its title, or with no `pn` to carry its number its title
-  /// after the number. Normalized as the parser reads a `<name>` back, so the XML is
-  /// what it reads (#683).
-  private static func name(of section: Section, partNumber: String?) -> [Inline] {
-    RFCXMLParser.normalize(partNumber == nil ? section.displayTitleInlines : section.title)
-  }
-
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = Self.name(of: section, partNumber: partNumber)
+    let title = partNumber == nil ? section.displayTitleInlines : section.title
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
@@ -315,12 +311,9 @@ public struct RFCXMLSerializer: Sendable {
     }
     writer.open("reference", attributes)
     writer.open("front")
-    // Collapsed, and never empty, as the parser reads a title back (#683).
-    let ownTitle = reference.title.collapsingWhitespace()
-    let title =
-      [ownTitle, reference.rawText ?? "", reference.anchor]
-      .map { $0.collapsingWhitespace() }.first { !$0.isEmpty } ?? ""
-    writer.element("title", text: title)
+    writer.element(
+      "title",
+      text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
     for author in reference.authors {
       var authorAttributes: [(String, String)] = [("fullname", author.name)]
       if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
@@ -338,7 +331,7 @@ public struct RFCXMLSerializer: Sendable {
     for info in reference.seriesInfo {
       writer.empty("seriesInfo", [("name", info.name), ("value", info.value)])
     }
-    if let raw = reference.rawText, title == ownTitle {
+    if let raw = reference.rawText, !reference.title.isEmpty {
       writer.element("refcontent", text: raw)
     }
     if !reference.annotation.isEmpty {
@@ -481,17 +474,7 @@ public struct RFCXMLSerializer: Sendable {
         result += "<sup>\(Writer.escape(text))</sup>"
       case .subscript(let text):
         result += "<sub>\(Writer.escape(text))</sub>"
-      // A link into the RFC series reads back as a citation of the document it names,
-      // so it is written as one (#683).
       case .link(let url, let inner):
-        if let link = RFCLink(url: url), link.id.series == .rfc {
-          let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
-          let authored = text.flatMap { CrossReference.isCanonicalTag($0, for: link.id) ? nil : $0 }
-          let citation = CrossReference(
-            target: .document(link.id, section: link.section), text: authored)
-          result += crossReferenceXML(citation, context: &context)
-          continue
-        }
         result +=
           "<eref target=\"\(Writer.escapeAttribute(url.absoluteString))\">\(inlineXML(inner, context: &context))</eref>"
       case .crossReference(let xref):
@@ -508,11 +491,6 @@ public struct RFCXMLSerializer: Sendable {
     switch xref.target {
     case .anchor(let anchor):
       let target = Writer.escapeAttribute(anchor)
-      // An empty citation of an entry reads back as the entry's tag in brackets, so
-      // that is what it is written as (#683).
-      let content =
-        xref.text == nil && context.entryAnchors.contains(anchor)
-        ? Writer.escape("[\(anchor)]") : content
       return content.isEmpty
         ? "<xref target=\"\(target)\"/>" : "<xref target=\"\(target)\">\(content)</xref>"
     case .entrySection(let entry, let tag, let section, let url):
@@ -544,11 +522,12 @@ public struct RFCXMLSerializer: Sendable {
           attributes += " section=\"\(Writer.escapeAttribute(section))\""
           attributes += " sectionFormat=\"\(xref.sectionFormat.rawValue)\""
         }
-        // An empty citation reads back as the entry's tag in brackets, unless the tag
-        // is the document's canonical one, so that is what it is written as (#683).
+        // A label composed from the document is said by naming the document: empty, an
+        // xref shows the entry's tag, which only says the same where it is the
+        // document's own (#683).
         let content =
           xref.text == nil && !CrossReference.isCanonicalTag(anchor, for: id)
-          ? Writer.escape("[\(anchor)]") : content
+          ? Writer.escape(id.displayName) : content
         return content.isEmpty ? "<xref\(attributes)/>" : "<xref\(attributes)>\(content)</xref>"
       }
       // No bibliography entry: an external link the parser maps back to a document reference.
@@ -564,8 +543,6 @@ public struct RFCXMLSerializer: Sendable {
     var referenceAnchors: [DocumentID: String]
     /// The document each entry names, by the entry's anchor.
     var entryDocuments: [String: DocumentID]
-    /// Every entry's anchor, whether or not it names a document.
-    var entryAnchors: Set<String>
     var warnings: [String] = []
     /// Every references section, the back's own among them, in document order, which
     /// the back writes ahead of its sections (#315).
@@ -578,10 +555,12 @@ public struct RFCXMLSerializer: Sendable {
     /// `pn` then declared the ID the lifted list's anchor declared too.
     private var partNumbers: [String: String] = [:]
 
-    init(_ index: ReferenceIndex, sections: [Section]) {
-      self.referenceAnchors = index.referenceAnchors
-      self.entryDocuments = index.entryDocuments
-      self.entryAnchors = index.entryAnchors
+    init(
+      referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
+      sections: [Section]
+    ) {
+      self.referenceAnchors = referenceAnchors
+      self.entryDocuments = entryDocuments
       var claimed: Set<String> = []
       func claim(_ sections: [Section]) {
         for section in sections {
@@ -617,39 +596,29 @@ public struct RFCXMLSerializer: Sendable {
     }
   }
 
-  /// What the bibliography says about the entries a citation is written against.
-  private struct ReferenceIndex {
-    /// The entry a citation of each document falls back to.
-    var referenceAnchors: [DocumentID: String] = [:]
-    /// The document each entry names, by the entry's anchor.
-    var entryDocuments: [String: DocumentID] = [:]
-    /// Every entry's anchor, whether or not it names a document.
-    var entryAnchors: Set<String> = []
-  }
-
   /// The entry a citation of each document falls back to, and the document each entry
   /// names. The fallback is the first entry naming the document, unless a later one is
   /// anchored under the document itself: RFC 8259 lists an erratum of RFC 7159 ahead of
   /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
-  private static func referenceIndex(in document: RFCDocument) -> ReferenceIndex {
-    var index = ReferenceIndex()
+  private static func referenceIndex(
+    in document: RFCDocument
+  ) -> (referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID]) {
+    var anchors: [DocumentID: String] = [:]
+    var documents: [String: DocumentID] = [:]
     for case .references(let list) in document.blocks {
       for reference in list.entries {
-        index.entryAnchors.insert(reference.anchor)
         guard let id = reference.documentID else { continue }
-        if let first = index.referenceAnchors[id] {
+        if let first = anchors[id] {
           if DocumentID(label: first) != id, DocumentID(label: reference.anchor) == id {
-            index.referenceAnchors[id] = reference.anchor
+            anchors[id] = reference.anchor
           }
         } else {
-          index.referenceAnchors[id] = reference.anchor
+          anchors[id] = reference.anchor
         }
-        if index.entryDocuments[reference.anchor] == nil {
-          index.entryDocuments[reference.anchor] = id
-        }
+        if documents[reference.anchor] == nil { documents[reference.anchor] = id }
       }
     }
-    return index
+    return (anchors, documents)
   }
 
   static func isReferences(_ section: Section) -> Bool {
