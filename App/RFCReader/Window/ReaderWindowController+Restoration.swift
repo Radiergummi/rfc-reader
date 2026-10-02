@@ -33,9 +33,6 @@
         let snapshot = SceneSnapshot.decoded(from: data as Data)
       else { return }
       navigation.restore(snapshot, into: reader)
-      // Ordered into its tab group by now, which copies the group's inspector state
-      // onto it, as `AppDelegate.openWindow(tabbedWith:inBackground:)` puts back.
-      closePanelWithoutDocument()
     }
   }
 

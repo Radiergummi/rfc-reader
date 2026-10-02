@@ -148,6 +148,7 @@
     /// gives it its frame and its tab group, and shows it.
     func restoredWindow() -> NSWindow? {
       let controller = ReaderWindowController(library: LibraryModel.shared)
+      controller.correctsPanelOnFirstKey = true
       if controllers.isEmpty { signposter.emitEvent("First window made") }
       controllers.append(controller)
       return controller.window

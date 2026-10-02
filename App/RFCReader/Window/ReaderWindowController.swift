@@ -42,6 +42,9 @@
     let library: LibraryModel
     /// See `placeInitialFocus()`.
     private var hasPlacedInitialFocus = false
+    /// Set on a window AppKit restores (#155), whose panel is put right once, the
+    /// first time it is made key. See `windowDidBecomeKey(_:)`.
+    var correctsPanelOnFirstKey = false
     /// The Go to RFC palette, while it is showing.
     private var quickOpen: QuickOpenPanel?
     /// Whether a print is being prepared or its panel is up, so a second ⌘P
@@ -367,7 +370,8 @@
     /// glass over a tab with no document in it is a strip of nothing. `observe()`
     /// applies it whenever `canDescribe` changes, and `AppDelegate` from outside for
     /// the one case observation cannot see: nothing about this window changed, its
-    /// sibling's panel state was copied onto it.
+    /// sibling's panel state was copied onto it. A window AppKit restores is ordered
+    /// into its group by AppKit, so `windowDidBecomeKey(_:)` makes it for that one.
     ///
     /// A window ordered into a tab group adopts the group's inspector state. Measured
     /// on this build: `isCollapsed` is still the one this controller set immediately
@@ -667,6 +671,18 @@
     func windowDidBecomeKey(_ notification: Notification) {
       ActiveReaderWindow.shared.becameKey(self)
       placeInitialFocus()
+      // A restored window is ordered into its tab group by AppKit, not by
+      // `AppDelegate.openWindow(tabbedWith:inBackground:)`, so the correction made
+      // there after the ordering call is made here instead. Not when its state is
+      // decoded: it is not yet in its group or on screen then, and measured, its
+      // panel is shut and nothing describes it yet, so the correction did nothing.
+      // On the next turn, since the group's inspector state is copied onto a window
+      // inside `makeKeyAndOrderFront(_:)`, which is still running; see
+      // `closePanelWithoutDocument()`.
+      if correctsPanelOnFirstKey {
+        correctsPanelOnFirstKey = false
+        Task { [weak self] in self?.closePanelWithoutDocument() }
+      }
     }
 
     /// Hands the list first responder the first time this window comes up, so the
