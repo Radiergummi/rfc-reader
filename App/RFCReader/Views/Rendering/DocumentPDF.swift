@@ -30,7 +30,7 @@ nonisolated enum DocumentPDF {
   /// reader is showing that instead.
   nonisolated enum Content: Sendable {
     /// With the title block and running header and footer `PrintFurniture` says.
-    case document(RFCDocument, PrintFurniture)
+    case document(Printed, PrintFurniture)
     /// With none: a published page carries its own.
     case original(String)
   }
@@ -50,7 +50,11 @@ nonisolated enum DocumentPDF {
     } else {
       let document = try await library.document(for: id)
       content = .document(
-        document, PrintFurniture(header: document.header, metadata: library.metadata(id)))
+        Printed(
+          document: document,
+          choices: library.presentationChoices(
+            for: id, drawsDiagrams: ReaderPreferences.drawsDiagrams(in: .standard))),
+        PrintFurniture(header: document.header, metadata: library.metadata(id)))
     }
     return await render(content, paperSize: paperSize)
   }
@@ -62,9 +66,9 @@ nonisolated enum DocumentPDF {
   static func render(_ content: Content, paperSize: CGSize) async -> Data {
     let layout = PrintLayout(paperSize: paperSize)
     switch content {
-    case .document(let document, let furniture):
+    case .document(let printed, let furniture):
       return buildAndLayOut(
-        document, style: layout.style, furniture: furniture, layout: layout
+        printed, style: layout.style, furniture: furniture, layout: layout
       ) { _, laidOut in
         pdf(laidOut, layout: layout, furniture: furniture)
       }
@@ -73,7 +77,14 @@ nonisolated enum DocumentPDF {
     }
   }
 
-  /// `document` built for `layout`'s paper and laid out, handed to `body` with what
+  /// A document to print, and which of its verbatim blocks the reader shows as their
+  /// source: a print shows each block as the reader does.
+  nonisolated struct Printed: Sendable {
+    let document: RFCDocument
+    let choices: PresentationChoices
+  }
+
+  /// `printed` built for `layout`'s paper and laid out, handed to `body` with what
   /// the build knows about it. All of it in the light appearance, what `body` draws
   /// included, for the reason `render` gives. A print and an export both go
   /// through here, so a PDF exported in Dark Mode is as white as a print (#376).
@@ -81,13 +92,12 @@ nonisolated enum DocumentPDF {
   /// - Parameter style: `layout.style` for a print, `layout.exportStyle` for an
   ///   export, whose links look like links.
   static func buildAndLayOut<Result>(
-    _ document: RFCDocument, style: ReadingStyle, furniture: PrintFurniture,
-    layout: PrintLayout,
+    _ printed: Printed, style: ReadingStyle, furniture: PrintFurniture, layout: PrintLayout,
     _ body: (BuiltDocument, LaidOut) -> Result
   ) -> Result {
     inLightAppearance {
       let built = DocumentTextBuilder.build(
-        document, style: style, title: furniture.titleBlock)
+        printed.document, style: style, title: furniture.titleBlock, choices: printed.choices)
       return layOut(built.text, keepingWithNext: built.keepsWithNext, layout: layout) {
         laidOut in
         body(built, laidOut)

@@ -319,6 +319,51 @@ struct LegacyTextParserHeadingsTests {
     #expect(!LegacyTextParser.isContentsEntry("Wait for it ......"))
   }
 
+  /// #427: three spaced dots are a leader, which a range never is.
+  @Test func `a short spaced leader makes a contents entry`() {
+    #expect(LegacyTextParser.isContentsEntry("Appendix B.  Widget Migration Notes  . . . 14"))
+    #expect(!LegacyTextParser.isContentsEntry("Widget Notes . . 14"))
+  }
+
+  /// #427: a page number in a column of its own, with no leader, is an entry in a run
+  /// of entries, blank lines between them or not.
+  @Test func `a page column in a run of entries makes a contents entry`() {
+    let listing: [String?] = [
+      "A   Widget Registry and Frob Allocation         21",
+      "B   Frob Tables                                 23",
+      "",
+      "APPENDIX D                                     vii",
+    ]
+    for index in [0, 1, 3] {
+      #expect(LegacyTextParser.isContentsEntry(at: index, in: listing))
+    }
+  }
+
+  /// A heading that carries its page number at the margin and stands between
+  /// paragraphs is no entry, and neither is a heading whose title is a number, a
+  /// status code or a year, which has no word before the gap.
+  @Test func `a page column alone or after no word is no contents entry`() {
+    let body: [String?] = [
+      "   the frob is then handed to the widget layer.",
+      "",
+      "APPENDIX C:  WIDGET FORMATS                           12",
+      "",
+      "   Each widget carries its own frob count.",
+    ]
+    #expect(!LegacyTextParser.isContentsEntry(at: 2, in: body))
+    let numbered: [String?] = ["12.4.  299", "", "B.3.  1983", "Widget Overview 5"]
+    for index in [0, 2, 3] {
+      #expect(!LegacyTextParser.isContentsEntry(at: index, in: numbered))
+    }
+  }
+
+  /// A column-0 table row that ends in a gap and a number is no heading: RFC 391's
+  /// rows each opened a section, named for its host and its figures.
+  @Test func `a table row ending in a number column opens no section`() throws {
+    let document = LegacyTextParser.parse(try Fixtures.string("rfc391.txt"))
+    #expect(!document.allSections.contains { $0.titleText.contains("HOST") })
+  }
+
   /// A column-0 contents listing is not a stack of headings: RFC 793's opened sections
   /// 1, 2 and 3 over the listing, with its sub-entries inside them as artwork, and a
   /// `REFERENCES ..... 85` section that took the preface for a bibliography.

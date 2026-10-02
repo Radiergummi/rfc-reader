@@ -174,6 +174,31 @@ struct CorpusBackedAppendixHeadingTests {
     }
     #expect(!targets.contains("section-2"))
   }
+
+  /// A contents entry with a short spaced leader (RFC 5735) or a page number in a
+  /// column of its own (RFC 1276) took its appendix's anchor, and the appendix was
+  /// renamed `appendix-A-2`, so a link to Appendix A opened the contents (#427).
+  @Test(arguments: ["rfc5735", "rfc1276"])
+  func `an appendix keeps its anchor from its contents entry`(stem: String) throws {
+    let document = LegacyTextParser.parse(try CorpusText.text(stem))
+    #expect(document.allSections.count { $0.isAppendix && $0.number == "A" } == 1)
+    #expect(document.section(anchor: "appendix-A") != nil)
+    #expect(document.section(anchor: "appendix-A-2") == nil)
+  }
+
+  /// RFC 707 sets its body's headings with a page number at the margin, as a contents
+  /// entry is set without a leader. Each stands between paragraphs, so each is a
+  /// heading: the four appendices are there, and the references.
+  @Test func `a heading with its page number at the margin is no contents entry`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc707"))
+    for (letter, word) in [("A", "DATA"), ("B", "TRANSMISSION"), ("C", "ENCODING"), ("D", "LOOK")] {
+      #expect(
+        document.allSections.contains {
+          $0.isAppendix && $0.number == letter && $0.titleText.contains(word)
+        })
+    }
+    #expect(document.allSections.contains { $0.titleText.hasPrefix("REFERENCES") })
+  }
 }
 
 @Suite("Corpus-backed: catalogs", .enabled(if: CorpusText.isAvailable))
@@ -189,6 +214,17 @@ struct CorpusBackedCatalogTests {
     #expect(
       document.artworkText.allSatisfy { !$0.contains("  - Crocker, Steve") },
       "no entry is left as artwork")
+  }
+
+  /// Its entries stand a blank line apart, so each arrives as a block of its own and
+  /// is merged into the catalog above; the merged catalog is still compact, and hangs
+  /// its numbers, so a thousand entries are not set at twice their height (#352).
+  @Test func `the RFC index of RFC 1012 is compact and hangs its numbers`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc1012"))
+    let catalog = try #require(
+      document.everyBlock.compactMap(\.definitionList).max { $0.items.count < $1.items.count })
+    #expect(catalog.isCompact)
+    #expect(catalog.hangsTerms)
   }
 
   /// The standards summaries set a new RFC's number and title on one line and its

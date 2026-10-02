@@ -371,9 +371,13 @@ public struct RFCXMLSerializer: Sendable {
         writer.close("li")
       }
       writer.close(name)
-    case .definitionList(let items):
-      writer.open("dl")
-      for item in items {
+    case .definitionList(let list):
+      // `newline` always: RFCXML's default for it is not the one the parser takes
+      // (`DefinitionList.hangsTerms`), and stated, either reading of the file agrees.
+      var attributes = [("newline", list.hangsTerms ? "false" : "true")]
+      if list.isCompact { attributes.append(("spacing", "compact")) }
+      writer.open("dl", attributes)
+      for item in list.items {
         var termAttributes: [(String, String)] = []
         if let anchor = item.anchor { termAttributes.append(("pn", anchor)) }
         writer.line(

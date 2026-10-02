@@ -1,3 +1,4 @@
+import RFCReaderKit
 import SwiftUI
 
 /// What a reader scene does in SwiftUI on both platforms: iOS's `ContentView` and
@@ -28,6 +29,12 @@ struct ReaderScene: ViewModifier {
       .sheet(item: $navigation.collectionEditor) { mode in
         CollectionEditorSheet(mode: mode)
       }
+      #if os(iOS)
+        // For the reader header, which cannot present on iOS; see `GlossaryPresentation`.
+        .sheet(item: $navigation.glossaryTerm) { term in
+          GlossarySheet(term: term)
+        }
+      #endif
   }
 }
 

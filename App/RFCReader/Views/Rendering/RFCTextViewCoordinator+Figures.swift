@@ -18,11 +18,12 @@
             reader.copyAsQuote()
           })
       }
-      if let figure = FigureCopy.figure(in: range, of: textView.textStorage) {
+      if let box = FigureCopy.box(in: range, of: textView.textStorage) {
         extra.append(
           UIAction(title: "Copy Figure", image: UIImage(systemName: "doc.on.doc")) { _ in
-            UIPasteboard.general.string = FigureCopy.pasteboardText(for: figure)
+            UIPasteboard.general.string = FigureCopy.pasteboardText(for: box.content)
           })
+        if let action = presentationAction(for: box) { extra.append(action) }
       }
       return extra.isEmpty ? nil : UIMenu(children: suggestedActions + extra)
     }

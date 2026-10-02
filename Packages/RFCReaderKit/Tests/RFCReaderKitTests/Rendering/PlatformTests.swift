@@ -32,6 +32,16 @@ struct PlatformTests {
     #expect(aside.alpha > card.alpha && aside.alpha < 0.15, "aside alpha \(aside.alpha)")
   }
 
+  /// A stroke crosses from one line's fragment into the next, and two translucent
+  /// partial coverages of one pixel composite lighter than one: #31's seam. Opaque,
+  /// a stroke's pieces can overlap without showing it.
+  @Test(arguments: [false, true])
+  func `a stroke is an opaque mid gray in either appearance`(dark: Bool) throws {
+    let stroke = try resolved(RFCColors.stroke, dark: dark)
+    #expect(stroke.alpha == 1, "stroke alpha \(stroke.alpha)")
+    #expect(stroke.white > 0.3 && stroke.white < 0.7, "stroke white \(stroke.white)")
+  }
+
   private func resolved(_ color: PlatformColor, dark: Bool) throws -> (
     white: CGFloat, alpha: CGFloat
   ) {
@@ -61,6 +71,27 @@ struct PlatformTests {
     #expect(bold.pointSize == base.pointSize)
     #expect(
       bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(Fixtures.describe(bold))")
+  }
+
+  /// #326: a font resolved again from its own descriptor came back at the system's
+  /// default 12 pt, once in a while, under a full parallel test run. Strong text adds
+  /// no trait to a bold system font, and must not go through that resolution at all.
+  @Test func `adding a trait the font has is the same font`() {
+    let bold = PlatformFont.systemFont(ofSize: 17, weight: .bold)
+    #expect(bold.adding(traits: []) === bold)
+    #expect(bold.adding(traits: RFCTraits.bold) === bold)
+  }
+
+  /// A superscript in strong italic text: the face, its weight and its slant at
+  /// three quarters of the size, made as a copy of the font, not a descriptor match.
+  @Test func `a resized font keeps its face and traits`() {
+    let font = PlatformFont.systemFont(ofSize: 17, weight: .bold).adding(traits: RFCTraits.italic)
+    let small = font.resized(to: 12.75)
+    #expect(small.pointSize == 12.75, "\(Fixtures.describe(small))")
+    #expect(small.fontName == font.fontName, "\(Fixtures.describe(small))")
+    #expect(
+      small.fontDescriptor.symbolicTraits.isSuperset(of: [RFCTraits.bold, RFCTraits.italic]),
+      "\(Fixtures.describe(small))")
   }
 
   @Test func `traits are distinct and non empty`() {

@@ -56,7 +56,12 @@ final class LibraryModel {
     }
   }
 
-  private(set) var index: RFCIndex?
+  private(set) var index: RFCIndex? {
+    didSet { groupRFCs = [:] }
+  }
+  /// Each working group's RFCs, worked out once per index for its card (#363): the
+  /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
+  @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
   private(set) var indexState: IndexState = .idle
   private(set) var recent: [RecentRFC] = []
 
@@ -66,6 +71,11 @@ final class LibraryModel {
   /// When this launch last fetched it; nil until it has.
   @ObservationIgnored private var revisionsFetchedAt: Date?
   @ObservationIgnored private var isRefreshingRevisions = false
+  /// `groups.json`: the groups the index names, for a working group's card (#363).
+  /// Nil until the cached copy or a fetch has arrived.
+  private(set) var workingGroups: WorkingGroups?
+  @ObservationIgnored private var workingGroupsFetchedAt: Date?
+  @ObservationIgnored private var isRefreshingWorkingGroups = false
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// Every bookmarked document, fetched again on every save of a bookmark: one set
@@ -76,6 +86,24 @@ final class LibraryModel {
   /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
   /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
   private(set) var bookmarkedNumbers: Set<Int> = []
+
+  /// The presentation the reader chose from a block's menu, per document, for the
+  /// app's session. Here rather than in `DocumentSession`, which goes when the
+  /// reader goes back. Not persisted.
+  private(set) var chosenPresentations:
+    [DocumentID: [PresentationKey: PresentationChoices.Presentation]] = [:]
+
+  /// The reader's choices in `id`, over the preference for every document.
+  func presentationChoices(for id: DocumentID, drawsDiagrams: Bool) -> PresentationChoices {
+    PresentationChoices(drawsDiagrams: drawsDiagrams, chosen: chosenPresentations[id] ?? [:])
+  }
+
+  func choose(
+    _ presentation: PresentationChoices.Presentation, for key: PresentationKey,
+    in id: DocumentID
+  ) {
+    chosenPresentations[id, default: [:]][key] = presentation
+  }
 
   /// Every collection and its members, fetched again on every save of a collection or
   /// an item (#603) and published only when it changed (#349). The sidebar, a
@@ -93,6 +121,11 @@ final class LibraryModel {
   /// of `recentlyReadNumbers()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
   private(set) var recentlyReadCount = 0
+
+  /// The mirrors whose last fetch failed. The next save reads them again, whatever
+  /// it changed, so a failure is mended on the next save, as it was when every save
+  /// read every mirror, rather than on the next save of the same entity (#603).
+  @ObservationIgnored private var failedMirrors: UserDataMirrors = []
 
   private init() {
     refresh(.all)
@@ -120,12 +153,15 @@ final class LibraryModel {
       MainActor.assumeIsolated {
         guard let self else { return }
         Task(name: "Refresh revisions") { await self.refreshRevisions() }
+        Task(name: "Refresh working groups") { await self.refreshWorkingGroups() }
         self.recheckSpotlight()
       }
     }
   }
 
-  private func refresh(_ mirrors: UserDataMirrors) {
+  private func refresh(_ changed: UserDataMirrors) {
+    let mirrors = changed.union(failedMirrors)
+    failedMirrors = []
     if mirrors.contains(.bookmarks) { refreshBookmarks() }
     if mirrors.contains(.collections) { refreshCollections() }
     if mirrors.contains(.recentlyReadCount) { refreshRecentlyReadCount() }
@@ -136,7 +172,8 @@ final class LibraryModel {
     do {
       count = try ReadingPositionStore.recentlyReadRFCCount(in: AppData.container.mainContext)
     } catch {
-      // The last count read stands until a fetch succeeds.
+      // The last count read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.recentlyReadCount)
       libraryLog.error(
         "counting the recently read failed: \(String(describing: error), privacy: .public)")
       return
@@ -147,12 +184,12 @@ final class LibraryModel {
 
   private func refreshCollections() {
     let snapshot = CollectionSnapshot.fetch(in: AppData.container.mainContext)
-    // Only a change is news: most saves record a reading position.
+    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard snapshot != collections else { return }
     collections = snapshot
     // A collection deleted in another tab, or on another device, is not left on
     // screen with no name and nothing in it.
-    for scene in scenes.compactMap(\.model) {
+    for scene in sceneRegistry.open {
       scene.keepFilter(in: snapshot)
     }
   }
@@ -203,11 +240,12 @@ final class LibraryModel {
     do {
       documents = try BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
     } catch {
-      // The last set read stands until a fetch succeeds.
+      // The last set read stands until a fetch succeeds, which the next save tries.
+      failedMirrors.insert(.bookmarks)
       libraryLog.error("reading bookmarks failed: \(String(describing: error), privacy: .public)")
       return
     }
-    // Only a change is news: most saves record a reading position, not a bookmark.
+    // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
     bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))
@@ -266,8 +304,10 @@ final class LibraryModel {
       }
     } catch {
       indexState = .failed(error.localizedDescription)
+      settleIndex()
     }
     Task(name: "Refresh revisions") { await refreshRevisions() }
+    Task(name: "Refresh working groups") { await refreshWorkingGroups() }
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
@@ -419,7 +459,11 @@ final class LibraryModel {
       switch fetched {
       case .unchanged:
         // A `304` answers only a request that sent validators, which came from `kept`.
-        guard let kept else { break }
+        // One that answers none leaves no index to wait for.
+        guard let kept else {
+          settleIndex()
+          break
+        }
         indexState = .ready(updatedAt: try await store.recordUnchangedIndex(kept))
       case .changed(let data, let validators):
         // Off the main actor: the parse alone is about a second (#124).
@@ -432,7 +476,10 @@ final class LibraryModel {
       // discarded either.
       libraryLog.error(
         "refreshing the index failed: \(String(describing: error), privacy: .public)")
-      if index == nil { indexState = .failed(error.localizedDescription) }
+      if index == nil {
+        indexState = .failed(error.localizedDescription)
+        settleIndex()
+      }
     }
   }
 
@@ -449,6 +496,7 @@ final class LibraryModel {
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
+    settleIndex()
   }
 
   // MARK: - Spotlight
@@ -508,6 +556,48 @@ final class LibraryModel {
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
     RevisionsSummary(revisions, for: id, now: .now)
+  }
+
+  // MARK: - Working groups
+
+  /// As `refreshRevisions()` does for its file, and when it does: the cached copy
+  /// first, so a card works offline, then a fetch once a day. A failure keeps the
+  /// cached copy and is logged, not shown.
+  func refreshWorkingGroups() async {
+    guard !isRefreshingWorkingGroups else { return }
+    isRefreshingWorkingGroups = true
+    defer { isRefreshingWorkingGroups = false }
+    if workingGroups == nil, let cached = await store.cachedWorkingGroups() {
+      workingGroups = cached
+    }
+    if let fetchedAt = workingGroupsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
+      return
+    }
+    do {
+      let fetched = try await client.fetchWorkingGroups()
+      try await store.storeWorkingGroups(fetched.data)
+      workingGroupsFetchedAt = .now
+      if fetched.groups != workingGroups { workingGroups = fetched.groups }
+    } catch {
+      libraryLog.error(
+        "fetching working groups failed: \(String(describing: error), privacy: .public)")
+    }
+  }
+
+  /// What a working group's card says: the group as the file describes it, if it
+  /// does, and every RFC of the group the index has -- all of them, obsolete ones too,
+  /// whatever the list's options hide: the card describes the group, not the list.
+  func workingGroupSummary(_ acronym: String) -> WorkingGroupSummary {
+    let rfcs: [RFCMetadata]
+    if let cached = groupRFCs[acronym] {
+      rfcs = cached
+    } else {
+      let filter = LibraryFilter.workingGroup(acronym)
+      rfcs = index?.rfcs.filter { filter.includes($0) == true } ?? []
+      groupRFCs[acronym] = rfcs
+    }
+    return WorkingGroupSummary(
+      acronym: acronym, group: workingGroups?.group(acronym), rfcs: rfcs)
   }
 
   // MARK: - Lists
@@ -729,23 +819,10 @@ final class LibraryModel {
 
   // MARK: - Scene routing
 
-  /// The open scenes, most recently used first.
-  ///
-  /// Weak, because a scene's lifetime is its window's and nothing here should keep a
-  /// closed tab alive. This registry exists because `onOpenURL` is delivered to
-  /// *every* open scene: without one place to decide, a deep link would open in all
-  /// of them at once.
-  private var scenes: [WeakScene] = []
-
-  private struct WeakScene {
-    weak let model: NavigationModel?
-  }
-
-  /// Waiting for the next scene to appear, because nothing can be handed to a tab
-  /// as it is made — see `openInNewScene(_:inBackground:)` — or because a link was
-  /// routed before any scene existed — see `route(_:)`. Taken in `register(_:)` and
-  /// cleared there, so no later window picks up a stale one.
-  private var pendingSceneLink: RFCLink?
+  /// The open tabs, most recently used first, and the link waiting for one: which tab
+  /// a link goes to, and when, is `SceneRegistry`'s to decide (#137). This carries out
+  /// its decisions. Not observed: no view reads it.
+  @ObservationIgnored private var sceneRegistry = SceneRegistry<NavigationModel>()
 
   #if os(macOS)
     /// The window layer, set by `AppDelegate` at launch. Weak: the delegate owns the
@@ -754,30 +831,39 @@ final class LibraryModel {
   #endif
 
   /// Registers a new scene, and gives it the link it was opened for if it was
-  /// opened for one. Nil for a window from the menu or at launch, which lands on
-  /// the library as before.
+  /// opened for one and the index has arrived. Nil for a window from the menu or at
+  /// launch, which lands on the library as before.
   func register(_ scene: NavigationModel) {
-    promote(scene)
-    guard let link = pendingSceneLink else { return }
-    pendingSceneLink = nil
-    scene.open(link, in: index)
+    if let delivery = sceneRegistry.register(scene) { carryOut(delivery) }
   }
 
   func unregister(_ scene: NavigationModel) {
-    scenes.removeAll { $0.model == nil || $0.model === scene }
+    sceneRegistry.unregister(scene)
   }
 
   /// Makes a scene the most recently used, which is where an untargeted link lands
   /// when no tab is preferred over it -- on macOS `route(_:)` prefers the tab of the
   /// window that was key last.
   func activate(_ scene: NavigationModel) {
-    guard scenes.first?.model !== scene else { return }
-    promote(scene)
+    sceneRegistry.activate(scene)
   }
 
-  private func promote(_ scene: NavigationModel) {
-    unregister(scene)
-    scenes.insert(WeakScene(model: scene), at: 0)
+  /// The index has arrived, or failed to: a link held for it goes to its tab now
+  /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
+  /// RFC.
+  private func settleIndex() {
+    let preferred = preferredScene
+    sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
+  }
+
+  /// The tab a link from outside goes to when nothing else decides: on macOS the front
+  /// tab of the window made key last (#277); none on iOS.
+  private var preferredScene: NavigationModel? {
+    #if os(macOS)
+      windows?.activeNavigation
+    #else
+      nil
+    #endif
   }
 
   /// Sends `link` to exactly one scene: the tab already showing that document if
@@ -785,12 +871,8 @@ final class LibraryModel {
   /// window was key last, which a tab opened in the background does not displace --
   /// and failing that the most recently used tab.
   ///
-  /// A link can arrive before any scene has registered -- a URL or the Open RFC
-  /// intent cold-launching the app on iOS -- and was dropped (#140). It waits in
-  /// `pendingSceneLink` instead, for `register(_:)` to hand to the first scene. One
-  /// slot, so of two links routed before then the later wins: the first scene can
-  /// show one document, and the later link is the more recent ask. It cannot race
-  /// `openInNewScene`, which is only ever reached from a scene that already exists.
+  /// A link that arrives before any scene has registered, or before the index has, is
+  /// held by the registry and delivered once both are there (#140, #241).
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
@@ -799,21 +881,25 @@ final class LibraryModel {
   /// whatever window the reader next opens, possibly minutes later. iOS brings up a
   /// scene of its own on launch, and that one registers.
   func route(_ link: RFCLink) {
-    scenes.removeAll { $0.model == nil }
-    let open = scenes.compactMap(\.model)
-    #if os(macOS)
-      let preferred = windows?.activeNavigation
-    #else
-      let preferred: NavigationModel? = nil
-    #endif
-    guard
-      let target = LinkRouting.target(
-        for: link.id, in: open, showing: \.selection, preferring: { $0 === preferred })
-    else {
-      openInNewWindow(link)
-      return
+    let preferred = preferredScene
+    switch sceneRegistry.route(link, showing: \.selection, preferring: { $0 === preferred }) {
+    case .deliver(let delivery):
+      carryOut(delivery)
+    case .openWindow:
+      #if os(macOS)
+        windows?.openWindow()
+      #endif
+    case .wait:
+      break
     }
-    deliver(link, to: target)
+  }
+
+  private func carryOut(_ delivery: SceneRegistry<NavigationModel>.Delivery) {
+    if delivery.bringsForward {
+      deliver(delivery.link, to: delivery.scene)
+    } else {
+      delivery.scene.open(delivery.link, in: index)
+    }
   }
 
   /// Opens `link` in `scene` and makes that the tab in use.
@@ -828,13 +914,13 @@ final class LibraryModel {
     #endif
   }
 
-  /// Opens a window for `link`, which it takes in `register(_:)`.
-  private func openInNewWindow(_ link: RFCLink) {
-    pendingSceneLink = link
-    #if os(macOS)
+  #if os(macOS)
+    /// Opens a window for `link`, which it takes in `register(_:)`.
+    private func openInNewWindow(_ link: RFCLink) {
+      sceneRegistry.hold(link, bringsForward: true)
       windows?.openWindow()
-    #endif
-  }
+    }
+  #endif
 
   /// Opens `link` the way the click asked for: in `scene`, or in a tab of its own.
   ///
@@ -860,8 +946,8 @@ final class LibraryModel {
   /// On macOS through AppKit, because the app makes its own windows: there is no
   /// `WindowGroup` to ask, and `newWindowForTab:` is answered by our own window
   /// controller rather than by SwiftUI. Nothing can be passed to a window as it is
-  /// made, so the link waits in `pendingSceneLink` for the window that appears to
-  /// take it in `register(_:)`.
+  /// made, so the link is held by the registry for the window that appears to take it
+  /// in `register(_:)`.
   ///
   /// On iPad a window of its own, asked of UIKit with a user activity carrying the
   /// link, which the new scene reads (`SceneRequest`, #158). Not `openWindow`: the
@@ -869,7 +955,7 @@ final class LibraryModel {
   /// always comes to the front there, so `inBackground` does not apply.
   private func openInNewScene(_ link: RFCLink, inBackground: Bool) {
     #if os(macOS)
-      pendingSceneLink = link
+      sceneRegistry.hold(link, bringsForward: !inBackground)
       windows?.openTab(inBackground: inBackground)
     #else
       guard opensNewWindows else { return }
@@ -978,7 +1064,7 @@ final class LibraryModel {
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
-    let open = scenes.compactMap { $0.model?.selection }
+    let open = sceneRegistry.open.compactMap(\.selection)
     return bookmarked.union(read).union(open)
   }
 

@@ -28,4 +28,14 @@ public enum ToolbarTitleReveal {
   public static func opacity(atProgress progress: CGFloat) -> CGFloat {
     min(1, max(0, (progress - 0.5) * 2))
   }
+
+  /// Where text `height` tall has its top in a bar `bar` tall, y growing down, as
+  /// iOS places it: at 0 just under the bar's bottom edge, out of sight; at 1
+  /// centered in the bar.
+  public static func top(atProgress progress: CGFloat, inBar bar: CGFloat, height: CGFloat)
+    -> CGFloat
+  {
+    let resting = (bar - height) / 2
+    return bar + (resting - bar) * progress
+  }
 }

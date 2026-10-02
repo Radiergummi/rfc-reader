@@ -24,7 +24,10 @@ let package = Package(
   targets: [
     .target(
       name: "RFCKit",
-      swiftSettings: swiftSettings
+      // Every unsafe construct the compiler can name is a warning here (#147): the
+      // byte scans read `Span`s and the regexes are behind `Pattern` (#146), so the one
+      // left is marked `unsafe` with its reason, and a new one has to give its own.
+      swiftSettings: swiftSettings + [.strictMemorySafety()]
     ),
     .testTarget(
       name: "RFCKitTests",
