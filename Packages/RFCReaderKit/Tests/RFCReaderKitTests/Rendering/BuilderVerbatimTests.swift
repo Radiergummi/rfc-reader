@@ -222,16 +222,8 @@ struct BuilderVerbatimTests {
 
   // MARK: - RFC 8792 folding (issue #64)
 
-  private static let header =
-    "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
-
-  /// A block folded to fit the page, whose single unfolded line is `unfolded`.
   private static func folded(_ unfolded: String) -> Preformatted {
-    let pieces = stride(from: 0, to: unfolded.count, by: 60).map { start in
-      String(unfolded.dropFirst(start).prefix(60))
-    }
-    let text = header + "\n\n" + pieces.joined(separator: "\\\n")
-    return Preformatted(kind: .sourceCode, text: text, anchor: "folded")
+    Fixtures.folded(unfolded)
   }
 
   /// The column is wider than the page the folds were made for, so the reader
@@ -297,7 +289,7 @@ struct BuilderVerbatimTests {
   /// it is expanded at its column in the rejoined line. Expanded first, it became
   /// eight spaces that unfolding stripped as the fold's indent.
   @Test func `a folded block's tabs are expanded where the unfolded line puts them`() {
-    let text = Self.header + "\n\nabc\\\n\tx"
+    let text = Fixtures.foldingHeader + "\n\nabc\\\n\tx"
     let content = Preformatted(kind: .artwork, text: text)
     let builder = DocumentTextBuilder(style: style)
     #expect(builder.displayedText(of: content, indent: 0) == "abc     x")

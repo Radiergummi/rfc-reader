@@ -44,46 +44,6 @@ public struct SyntaxTheme: Sendable {
 
   /// A color for each appearance, as sRGB hex, resolved when it is drawn.
   static func color(light: UInt32, dark: UInt32) -> PlatformColor {
-    #if canImport(UIKit)
-      UIColor { traits in rgb(traits.userInterfaceStyle == .dark ? dark : light) }
-    #else
-      NSColor(name: nil) { appearance in
-        rgb(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light)
-      }
-    #endif
-  }
-
-  private static func rgb(_ hex: UInt32) -> PlatformColor {
-    let red = CGFloat((hex >> 16) & 0xFF) / 255
-    let green = CGFloat((hex >> 8) & 0xFF) / 255
-    let blue = CGFloat(hex & 0xFF) / 255
-    #if canImport(UIKit)
-      return UIColor(red: red, green: green, blue: blue, alpha: 1)
-    #else
-      return NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
-    #endif
-  }
-}
-
-/// WCAG 2's contrast ratio between two opaque sRGB colors, from 1 to 21.
-enum Contrast {
-  struct RGB {
-    var red: Double
-    var green: Double
-    var blue: Double
-  }
-
-  static func ratio(_ first: RGB, _ second: RGB) -> Double {
-    let lighter = max(luminance(first), luminance(second))
-    let darker = min(luminance(first), luminance(second))
-    return (lighter + 0.05) / (darker + 0.05)
-  }
-
-  private static func luminance(_ color: RGB) -> Double {
-    func linear(_ channel: Double) -> Double {
-      channel <= 0.039_28 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
-    }
-    return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722
-      * linear(color.blue)
+    RFCColors.byAppearance(light: SRGBColor(hex: light), dark: SRGBColor(hex: dark))
   }
 }

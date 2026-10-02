@@ -13,13 +13,6 @@ import Testing
 @Suite("Syntax theme")
 @MainActor
 struct SyntaxThemeTests {
-  @Test func `the contrast of black on white is 21 and of a color on itself 1`() {
-    let black = Contrast.RGB(red: 0, green: 0, blue: 0)
-    let white = Contrast.RGB(red: 1, green: 1, blue: 1)
-    #expect(abs(Contrast.ratio(black, white) - 21) < 0.01)
-    #expect(abs(Contrast.ratio(white, white) - 1) < 0.01)
-  }
-
   @Test func `plain text keeps the body color`() {
     #expect(SyntaxTheme.standard.color(for: .plain) == nil)
   }
@@ -46,11 +39,11 @@ struct SyntaxThemeTests {
     let card = try resolved(RFCColors.cardFill, dark: dark)
     #expect(card.alpha > 0 && card.red >= 0, "the card resolves in sRGB")
     let level = page * (1 - card.alpha) + card.red * card.alpha
-    let background = Contrast.RGB(red: level, green: level, blue: level)
+    let background = SRGBColor(red: level, green: level, blue: level)
     for kind in TokenKind.allCases where kind != .plain {
       let color = try resolved(try #require(SyntaxTheme.standard.color(for: kind)), dark: dark)
-      let ratio = Contrast.ratio(
-        Contrast.RGB(red: color.red, green: color.green, blue: color.blue), background)
+      let ratio = SRGBColor(red: color.red, green: color.green, blue: color.blue)
+        .contrast(with: background)
       #expect(ratio >= 4.5, "\(kind) is \(ratio):1 on \(level) in \(dark ? "dark" : "light")")
     }
   }

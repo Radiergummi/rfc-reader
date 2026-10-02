@@ -13,12 +13,16 @@ import Foundation
 /// string continues across, set in on the next line. Every repetition is
 /// possessive, so none can backtrack.
 enum JSONLexer {
+  /// A string, which goes on across an RFC 8792 fold.
+  static let string = #""(?:[^"\\\n]++|\\\n[ \t]*+\\?|\\.)*+""#
+
   static let states: [String: [Lexer.Rule]] = [
     "root": [
       Lexer.Rule(#"\s++"#, .plain),
       Lexer.Rule(#"//[^\n]*+"#, .comment),
-      Lexer.Rule(#""(?:[^"\\\n]++|\\\n[ \t]*+\\?|\\.)*+"(?=\s*+:)"#, .name),
-      Lexer.Rule(#""(?:[^"\\\n]++|\\\n[ \t]*+\\?|\\.)*+""#, .string),
+      // A key: a string the colon after it says is one.
+      Lexer.Rule(string + #"(?=\s*+:)"#, .name),
+      Lexer.Rule(string, .string),
       Lexer.Rule(#"-?(?:0|[1-9][0-9]*+)(?:\.[0-9]++)?(?:[eE][+-]?[0-9]++)?"#, .number),
       Lexer.Rule(#"(?:true|false|null)\b"#, .keyword),
       Lexer.Rule(#"\.\.\.|…"#, .comment),

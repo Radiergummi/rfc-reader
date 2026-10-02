@@ -6,25 +6,27 @@ import Foundation
 /// through callbacks, nor Chroma's, which is code, is a table, and both expect a
 /// message that starts with a start line, which 221 of the corpus's 520 do not.
 enum HTTPLexer {
-  /// RFC 9112's request line, set in from the margin or not.
+  // Only what takes a kind is a group: the rest of a match is plain.
+
+  /// RFC 9112's request line, set in from the margin or not: method, target, version.
   static let requestLine =
-    #"^([ \t]*+)([A-Z][A-Z-]*+)([ \t]++)([^\s]++)([ \t]++)(HTTP/[0-9](?:\.[0-9])?)[ \t]*+$"#
-  /// RFC 9112's status line.
-  static let statusLine = #"^([ \t]*+)(HTTP/[0-9](?:\.[0-9])?)([ \t]++)([0-9]{3})([^\n]*+)$"#
+    #"^[ \t]*+([A-Z][A-Z-]*+)[ \t]++([^\s]++)[ \t]++(HTTP/[0-9](?:\.[0-9])?)[ \t]*+$"#
+  /// RFC 9112's status line: version, code.
+  static let statusLine = #"^[ \t]*+(HTTP/[0-9](?:\.[0-9])?)[ \t]++([0-9]{3})[^\n]*+$"#
   /// A status line without its version, as some RFCs abbreviate one.
-  static let bareStatusLine = #"^([ \t]*+)([1-5][0-9]{2})([ \t]++[^\n]*+)$"#
+  static let bareStatusLine = #"^[ \t]*+([1-5][0-9]{2})[ \t]++[^\n]*+$"#
   /// An HTTP/2 or HTTP/3 pseudo-header field, as RFCs list them: `:method = GET`.
-  static let pseudoHeaderLine = #"^([ \t]*+)(:[a-z]++)([ \t]*+[:=])([^\n]*+)$"#
+  static let pseudoHeaderLine = #"^[ \t]*+(:[a-z]++)([ \t]*+[:=])[^\n]*+$"#
   /// A field line: a token, a colon, a value.
-  static let fieldLine = #"^([ \t]*+)([!#$%&'*+.^_`|~0-9A-Za-z-]++)(:)([^\n]*+)$"#
+  static let fieldLine = #"^[ \t]*+([!#$%&'*+.^_`|~0-9A-Za-z-]++)(:)[^\n]*+$"#
 
   static let headStates: [String: [Lexer.Rule]] = [
     "root": [
-      Lexer.Rule(requestLine, groups: [.plain, .keyword, .plain, .string, .plain, .keyword]),
-      Lexer.Rule(statusLine, groups: [.plain, .keyword, .plain, .number, .plain]),
-      Lexer.Rule(bareStatusLine, groups: [.plain, .number, .plain]),
-      Lexer.Rule(pseudoHeaderLine, groups: [.plain, .name, .punctuation, .plain]),
-      Lexer.Rule(fieldLine, groups: [.plain, .name, .punctuation, .plain]),
+      Lexer.Rule(requestLine, groups: [.keyword, .string, .keyword]),
+      Lexer.Rule(statusLine, groups: [.keyword, .number]),
+      Lexer.Rule(bareStatusLine, groups: [.number]),
+      Lexer.Rule(pseudoHeaderLine, groups: [.name, .punctuation]),
+      Lexer.Rule(fieldLine, groups: [.name, .punctuation]),
       Lexer.Rule(#"[^\n]++"#, .plain),
       Lexer.Rule(#"\n"#, .plain),
     ]
@@ -51,7 +53,7 @@ enum HTTPLexer {
 struct HTTPMessageHighlighter: Highlighter {
   /// One message's head and body, as ranges of the block. The blank line that ends
   /// a head belongs to its body.
-  struct Message: Equatable {
+  struct Message {
     var head: NSRange
     var body: NSRange?
   }
@@ -85,7 +87,7 @@ struct HTTPMessageHighlighter: Highlighter {
     while position < text.length {
       let line = text.lineRange(for: NSRange(location: position, length: 0))
       let content = text.substring(with: line)
-      let blank = content.allSatisfy(\.isWhitespace)
+      let blank = content.isBlank
       if line.location > start, bodyStart == nil || previousLineBlank,
         HTTPLexer.isStartLine(content)
       {

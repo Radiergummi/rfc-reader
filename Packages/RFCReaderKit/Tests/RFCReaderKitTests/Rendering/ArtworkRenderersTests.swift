@@ -20,11 +20,11 @@ struct ArtworkRenderersTests {
     let classification = ArtworkClassification(type: ArtworkType.canonical("json"))
     #expect(ArtworkRenderers.presentations(for: classification.type).map(\.id) == ["syntax"])
     let rendition = try #require(ArtworkRenderers.render(block, classification, context: context))
-    guard case .styled(let styled) = rendition else {
+    guard case .styled(let tokens) = rendition else {
       Issue.record("expected styled text, got \(rendition)")
       return
     }
-    #expect(styled.tokens.contains { $0.kind == .name })
+    #expect(tokens.contains { $0.kind == .name })
   }
 
   @Test func `a type is claimed by its structured suffix`() {

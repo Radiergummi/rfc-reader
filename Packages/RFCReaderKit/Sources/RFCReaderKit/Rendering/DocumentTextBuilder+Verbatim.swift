@@ -26,15 +26,14 @@ extension DocumentTextBuilder {
       style: style, column: max(style.indentStep, style.measure - indent))
     var shownContent = content
     shownContent.text = text
+    let rendered = ArtworkRenderers.render(shownContent, classification, context: context)
+    // Tokens are a function of the text alone, so a highlighted block follows the
+    // text shown, unfolded (#64) or not. A decoration's ranges are into the grid of
+    // the block as written, so a block shown other than as written is not decorated.
     let rendition: Rendition? =
-      switch ArtworkRenderers.render(shownContent, classification, context: context) {
-      // Tokens are a function of the text alone, so a highlighted block follows the
-      // text shown, unfolded (#64) or not.
-      case .styled(let styled)?: .styled(styled)
-      // A decoration's ranges are into the block as written, so a block shown other
-      // than as written is not decorated.
-      case .decorated(let decorated)? where text == content.text: .decorated(decorated)
-      default: nil
+      switch rendered {
+      case .decorated? where text != content.text: nil
+      default: rendered
       }
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
@@ -110,8 +109,8 @@ extension DocumentTextBuilder {
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
     // Last, so no pass above walks the runs the colors cut the block into.
-    if case .styled(let styled)? = rendition {
-      highlight(styled, from: bodyStart)
+    if case .styled(let tokens)? = rendition {
+      highlight(tokens, from: bodyStart)
     }
   }
 
@@ -154,10 +153,10 @@ extension DocumentTextBuilder {
   /// of JSON is otherwise cut into a run for every token and every space between
   /// two, and every later pass over the storage walks them (`Build: RFC 8727` in
   /// `make benchmark`).
-  func highlight(_ styled: StyledText, from bodyStart: Int) {
+  func highlight(_ tokens: [SyntaxToken], from bodyStart: Int) {
     let text = output.mutableString
     var run: (range: NSRange, color: PlatformColor)?
-    for token in styled.tokens {
+    for token in tokens {
       let range = NSRange(location: bodyStart + token.range.location, length: token.range.length)
       let color = SyntaxTheme.standard.color(for: token.kind)
       if let current = run, color == nil || color === current.color,

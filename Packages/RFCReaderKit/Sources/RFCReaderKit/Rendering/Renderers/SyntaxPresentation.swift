@@ -10,7 +10,7 @@ enum SyntaxPresentation {
         guard let type = classification.type,
           let tokens = Lexers.highlight(block.text, as: type)
         else { return nil }
-        return .styled(StyledText(tokens: tokens))
+        return .styled(tokens)
       }
     ])
 }

@@ -123,16 +123,8 @@ struct BuilderHighlightingTests {
 
   // MARK: - RFC 8792 folding
 
-  private static let header =
-    "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
-
-  /// A JSON block folded to fit the page, whose single unfolded line is `unfolded`.
   private static func folded(_ unfolded: String) -> Preformatted {
-    let pieces = stride(from: 0, to: unfolded.count, by: 60).map { start in
-      String(unfolded.dropFirst(start).prefix(60))
-    }
-    let text = header + "\n\n" + pieces.joined(separator: "\\\n")
-    return Preformatted(kind: .sourceCode, text: text, type: "json", anchor: "listing")
+    Fixtures.folded(unfolded, type: "json", anchor: "listing")
   }
 
   @Test func `a folded block is highlighted where it is shown unfolded`() throws {

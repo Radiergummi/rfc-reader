@@ -59,21 +59,14 @@ public struct DecoratedText: Equatable, Sendable {
   }
 }
 
-/// Code highlighted: the block's own text, unchanged, and the tokens a lexer read in
-/// it, colored by the reader's theme. Ranges are UTF-16, relative to the text lexed.
-public struct StyledText: Equatable, Sendable {
-  public var tokens: [SyntaxToken]
-
-  public init(tokens: [SyntaxToken]) {
-    self.tokens = tokens
-  }
-}
-
 /// What a presentation makes of a block. Drawings join as a case when a renderer
 /// first needs them.
 public enum Rendition: Equatable, Sendable {
   case decorated(DecoratedText)
-  case styled(StyledText)
+  /// Code highlighted: the block's own text, unchanged, and the tokens a lexer read
+  /// in it, colored by the reader's theme. Ranges are UTF-16, relative to the text
+  /// lexed.
+  case styled([SyntaxToken])
 }
 
 /// What a presentation may measure against.
