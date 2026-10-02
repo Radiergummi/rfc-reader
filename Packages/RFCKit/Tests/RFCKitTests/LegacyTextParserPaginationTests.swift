@@ -33,10 +33,11 @@ struct LegacyTextParserPaginationTests {
 
     let header = try #require(artwork.first { $0.contains("Destination net") })
     let lines = header.split(separator: "\n", omittingEmptySubsequences: false)
-    // The block's indent is four, from `    0`, and every line loses exactly that.
-    #expect(lines.first == "0           Destination net          (8)")
-    #expect(lines.contains { $0.hasPrefix("  This field") })
-    #expect(lines.contains { $0.hasPrefix("    0 -- Escape") })
+    // The block's indent is two, from the column titles above it, which a blank
+    // line apart are the same figure (#437), and every line loses exactly that.
+    #expect(lines.contains("  0           Destination net          (8)"))
+    #expect(lines.contains { $0.hasPrefix("    This field") })
+    #expect(lines.contains { $0.hasPrefix("      0 -- Escape") })
   }
 
   /// RFC 793 repeats a three-line page header on 62 pages, justified left and right on

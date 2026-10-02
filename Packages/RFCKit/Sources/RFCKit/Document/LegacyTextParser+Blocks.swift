@@ -180,7 +180,11 @@ extension LegacyTextParser {
     // own while no hanging one had said they are a list: how many blocks of `result`
     // they took, and their entries.
     var loneDefinitions: (blocks: Int, definitions: HangingDefinitions)?
+    // The lines of the artwork `result.last` holds, while the block above made it.
+    var openArtwork: [String]?
     for block in merged {
+      let artworkAbove = openArtwork
+      openArtwork = nil
       // Probed once: the continuation test needs to know the block opens with no
       // marker, and a list the block produces needs the column of its own.
       let marker = listMarker(of: block.lines)
@@ -246,7 +250,20 @@ extension LegacyTextParser {
         // every entry, so each arrives as a block of its own. A numbered block
         // joins the list above only when its first marker is that list's next one:
         // RFC 1927 starts each of its lists at `1)`, a blank line apart.
-        if case .list(let list) = parsed, case .list(var previous)? = result.last,
+        // And artwork into the artwork just above: a drawing with blank lines in
+        // it, such as a message ladder, arrives as a block per stretch between
+        // them (#437). Kept as one, with its blank lines and its stretches where
+        // they stand against each other. Not across a page break: what starts the
+        // next page is as often an underlined heading set as artwork (RFC 796).
+        if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
+          let above = artworkAbove, case .preformatted(let previous)? = result.last,
+          previous.kind == .artwork, joinsArtwork(block.lines)
+        {
+          let lines = above + [""] + block.lines
+          result[result.count - 1] = .preformatted(
+            Preformatted(kind: .artwork, text: verbatimText(lines)))
+          openArtwork = block.followedByPageBreak ? nil : lines
+        } else if case .list(let list) = parsed, case .list(var previous)? = result.last,
           list.continues(previous)
         {
           previous.items += list.items
@@ -264,6 +281,11 @@ extension LegacyTextParser {
           result[result.count - 1] = .definitionList(previous)
         } else {
           result.append(parsed)
+          if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
+            !block.followedByPageBreak, joinsArtwork(block.lines)
+          {
+            openArtwork = block.lines
+          }
         }
       }
       openListIndent = if case .list? = result.last { marker?.indent } else { nil }
@@ -781,16 +803,34 @@ extension LegacyTextParser {
     }
 
     // Anything else is preserved verbatim, minus the common indentation.
-    let indent = block.indent
-    let text = lines.map { line in
-      String(line.dropFirst(min(indent, line.leadingSpaceCount)))
-    }.joined(separator: "\n")
+    let text = verbatimText(lines)
     // A grammar is recognized by parsing it, and set as RFCXML sets one: source code
     // typed `abnf` (#45). Only what would otherwise be artwork; no prose verdict changes.
     if ABNF.recognizes(text) {
       return [.preformatted(Preformatted(kind: .sourceCode, text: text, type: "abnf"))]
     }
     return [.preformatted(Preformatted(kind: .artwork, text: text))]
+  }
+
+  /// Whether a block of artwork may be one with the artwork beside it, a blank
+  /// line apart (#437). Not when it is prose the prose test refused, as a document
+  /// indented deeper than its body sets whole paragraphs (RFC 796), nor a title
+  /// underlined with dashes: joined, each took its section's drawings with it into
+  /// one block.
+  static func joinsArtwork(_ lines: [String]) -> Bool {
+    let underlined =
+      lines.count == 2
+      && lines[1].trimmingCharacters(in: .whitespaces).allSatisfy { $0 == "-" || $0 == "=" }
+    return !underlined && !readsLikeSentences(lines, minimumWords: 4)
+  }
+
+  /// Lines as a verbatim block holds them: less the indentation every line that is
+  /// not blank shares.
+  private static func verbatimText(_ lines: [String]) -> String {
+    let indent = lines.filter { !$0.isBlank }.map(\.leadingSpaceCount).min() ?? 0
+    return lines.map { line in
+      String(line.dropFirst(min(indent, line.leadingSpaceCount)))
+    }.joined(separator: "\n")
   }
 
   /// Joins wrapped lines with spaces, except after a trailing hyphen, which in the

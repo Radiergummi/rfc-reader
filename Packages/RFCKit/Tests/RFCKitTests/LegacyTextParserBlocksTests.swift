@@ -532,4 +532,32 @@ struct LegacyTextParserBlocksTests {
       ], proseIndent: 3, linker: linker)
     #expect(blocks.map { $0.preformatted != nil } == [true, false, true])
   }
+
+  /// Prose the prose test refused, and a title underlined with dashes, are set as
+  /// artwork in a document indented deeper than its body, and are not one with the
+  /// drawings beside them: joined, a section's drawings and text were one block.
+  @Test(arguments: [
+    ["      Frame", "      -----"],
+    [
+      "         Each frame carries a sixteen bit tag that the sender chooses",
+      "         and the receiver echoes back in its reply to the frame.",
+    ],
+  ])
+  func `a title or prose set as artwork is not joined to a drawing`(lines: [String]) {
+    #expect(!LegacyTextParser.joinsArtwork(lines))
+    #expect(LegacyTextParser.joinsArtwork(["      Hello(1) ------>"]))
+  }
+
+  /// A page break ends a drawing: what starts the next page is as often a heading.
+  @Test func `artwork is not joined across a page break`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(
+          lines: ["      +-------+", "      | Front |", "      +-------+"],
+          followedByPageBreak: true),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
 }
