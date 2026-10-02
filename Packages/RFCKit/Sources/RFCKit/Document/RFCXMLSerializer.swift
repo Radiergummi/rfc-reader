@@ -599,16 +599,16 @@ public struct RFCXMLSerializer: Sendable {
       claim(sections)
     }
 
-    /// The section's `pn`, or nil when it has no number or an earlier section claimed
-    /// that one. Two sections numbered alike (RFC 1 has two appendices A) would share
-    /// a `pn`, which is an ID. The second is written unnumbered, its number in its
-    /// name, so it reads the same and names nothing twice (#65). Given once: a second
-    /// section of the same anchor gets none.
     /// Whether `partNumber(of:)` will give the section a `pn`, before it is asked.
     func isNumbered(_ section: Section) -> Bool {
       section.number != nil && partNumbers[section.anchor] != nil
     }
 
+    /// The section's `pn`, or nil when it has no number or an earlier section claimed
+    /// that one. Two sections numbered alike (RFC 1 has two appendices A) would share
+    /// a `pn`, which is an ID. The second is written unnumbered, its number in its
+    /// name, so it reads the same and names nothing twice (#65). Given once: a second
+    /// section of the same anchor gets none.
     mutating func partNumber(of section: Section) -> String? {
       guard section.number != nil else { return nil }
       return partNumbers.removeValue(forKey: section.anchor)
