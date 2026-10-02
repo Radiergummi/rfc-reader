@@ -242,6 +242,46 @@ jobs:
             Tools/corpus-build/.build
           key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
 
+  corpus-overrides:
+    name: Corpus patches (Linux)
+    # Every patch in corpus/overrides applied to the converter's output, with
+    # FoundationXML's libxml2 rather than macOS's NSXML: a parser change that breaks a
+    # patch fails its own pull request (#197).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: swift:6.3@sha256:8de8ea332a61e961ead4ef41029c2552b18e1a70dd5942d25ecf7d8de2eec5b5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        id: toolchain
+        run: |
+          swift --version
+          echo "hash=$(swift --version 2>&1 | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # The Linux test job's builds, restored only: this job saves none of its own.
+      - name: Restore the SwiftPM builds
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Tools/corpus-build/.build
+          key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
+          restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
+      # The index and the patched documents, fetched once a month. What the check
+      # reads from them was fixed when each document was published.
+      - name: Cache the index and the patched texts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            corpus/rfc-index.xml
+            corpus/text.noindex
+          key: corpus-overrides-${{ steps.toolchain.outputs.month }}-${{ hashFiles('corpus/overrides/*.xml') }}
+          restore-keys: corpus-overrides-${{ steps.toolchain.outputs.month }}-
+      # make, and SQLite's headers for corpus-build's index database (#174).
+      - name: Install make and SQLite's headers
+        run: apt-get update -qq && apt-get install -y -qq make libsqlite3-dev >/dev/null
+      - run: make corpus-overrides-check
+
   prune-caches:
     name: Prune caches
     # Every save above keys its entry on the commit, so each push to main adds one
