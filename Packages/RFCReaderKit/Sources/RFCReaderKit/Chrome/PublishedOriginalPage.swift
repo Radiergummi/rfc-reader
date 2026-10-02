@@ -86,16 +86,6 @@ public struct PublishedOriginalPage: Hashable, Sendable {
       && (!pointerInPack || PublishedOriginal(pointer: id, formats: formats) == nil)
   }
 
-  /// Whether the reader records the RFC as opened though it loads no text: a
-  /// pointer the installed pack lists, whose loaded text would have been recorded
-  /// (#316), so Recently Read does not depend on a pack. Not a scan, which is not.
-  public static func recordsOpeningWithoutText(
-    _ id: DocumentID, formats: [FileFormat]?, pointerInPack: Bool
-  ) -> Bool {
-    guard let formats, PublishedOriginal(id, formats: formats) == nil else { return false }
-    return !loadsText(id, formats: formats, pointerInPack: pointerInPack)
-  }
-
   /// The original a text that only points to it stands for: known from the
   /// installed pack, or else from the text once it is here.
   private static func pointer(

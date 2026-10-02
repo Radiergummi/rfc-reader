@@ -132,34 +132,6 @@ struct PublishedOriginalActionsTests {
     #expect(PublishedOriginalPage.loadsText(.rfc(1119), formats: [.text], pointerInPack: true))
   }
 
-  /// A pointer the pack lists is opened without a load, and counts as opened as
-  /// its loaded text would (#316), so Recently Read lists it with a pack or without.
-  @Test func `a pointer the pack lists is recorded as opened without its text`() {
-    #expect(
-      PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(1119), formats: [.text, .postScript, .pdf], pointerInPack: true))
-  }
-
-  /// A load records the opening itself, once the document is here; and a scan is
-  /// left as it was, unrecorded.
-  @Test func `only a pointer the pack lists is recorded without its text`() {
-    #expect(
-      !PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(1119), formats: [.text, .postScript, .pdf], pointerInPack: false))
-    #expect(
-      !PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(1119), formats: nil, pointerInPack: true))
-    #expect(
-      !PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(1119), formats: [.text], pointerInPack: true))
-    #expect(
-      !PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(8), formats: [.pdf], pointerInPack: false))
-    #expect(
-      !PublishedOriginalPage.recordsOpeningWithoutText(
-        .rfc(8), formats: [.pdf], pointerInPack: true))
-  }
-
   @Test func `a document read as its text is printed and exported`() {
     #expect(PublishedOriginalPage.offersPrintAndExport(hasDocument: true, kind: nil))
   }
