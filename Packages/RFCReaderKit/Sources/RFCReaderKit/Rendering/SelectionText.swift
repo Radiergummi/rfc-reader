@@ -63,6 +63,26 @@ public enum SelectionText {
     return result
   }
 
+  /// The rich text for `attributed`, a selection taken out of the reader's storage:
+  /// the same runs, with every character a decorated block hides behind its strokes
+  /// in the text color again. The strokes are the reader's drawing and do not travel,
+  /// so a rich paste without its borders would be a grid of field names in space.
+  /// Nil when nothing in the selection is hidden, and the rich flavors can stay
+  /// AppKit's.
+  public static func richText(of attributed: NSAttributedString) -> NSAttributedString? {
+    var result: NSMutableAttributedString?
+    attributed.enumerateAttribute(
+      .foregroundColor, in: NSRange(location: 0, length: attributed.length)
+    ) { value, range, _ in
+      guard let color = value as? PlatformColor, color == DocumentTextBuilder.hiddenColor else {
+        return
+      }
+      if result == nil { result = NSMutableAttributedString(attributedString: attributed) }
+      result?.addAttribute(.foregroundColor, value: RFCColors.label, range: range)
+    }
+    return result
+  }
+
   /// A label with its typesetting taken back out.
   ///
   /// The non-breaking spaces are there to stop a reference wrapping mid-label in a

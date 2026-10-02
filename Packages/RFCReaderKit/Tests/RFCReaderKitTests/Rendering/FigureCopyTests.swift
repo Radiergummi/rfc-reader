@@ -31,7 +31,7 @@ struct FigureCopyTests {
   @Test func `a menu on a figure finds it`() throws {
     let text = built().text
     let figure = try #require(
-      FigureCopy.figure(at: try Fixtures.offset(of: "| A |", in: text), in: text))
+      FigureCopy.box(at: try Fixtures.offset(of: "| A |", in: text), in: text)?.content)
     #expect(figure.text == Self.diagram.text)
   }
 
@@ -40,15 +40,15 @@ struct FigureCopyTests {
   @Test func `the language label belongs to its figure`() throws {
     let text = built().text
     let figure = try #require(
-      FigureCopy.figure(at: try Fixtures.offset(of: "JSON", in: text), in: text))
+      FigureCopy.box(at: try Fixtures.offset(of: "JSON", in: text), in: text)?.content)
     #expect(figure.type == "json")
   }
 
   @Test func `prose is no figure`() throws {
     let text = built().text
-    #expect(FigureCopy.figure(at: try Fixtures.offset(of: "Between", in: text), in: text) == nil)
-    #expect(FigureCopy.figure(at: -1, in: text) == nil)
-    #expect(FigureCopy.figure(at: text.length, in: text) == nil)
+    #expect(FigureCopy.box(at: try Fixtures.offset(of: "Between", in: text), in: text) == nil)
+    #expect(FigureCopy.box(at: -1, in: text) == nil)
+    #expect(FigureCopy.box(at: text.length, in: text) == nil)
   }
 
   /// A selection that strays into the prose around one figure still means that
@@ -59,11 +59,11 @@ struct FigureCopyTests {
     let diagram = try Fixtures.offset(of: "| A |", in: text)
 
     let aroundOne = NSRange(location: between, length: diagram + 2 - between)
-    #expect(FigureCopy.figure(in: aroundOne, of: text)?.text == Self.diagram.text)
-    #expect(FigureCopy.figure(in: NSRange(location: 0, length: text.length), of: text) == nil)
-    #expect(FigureCopy.figure(in: NSRange(location: between, length: 7), of: text) == nil)
+    #expect(FigureCopy.box(in: aroundOne, of: text)?.content.text == Self.diagram.text)
+    #expect(FigureCopy.box(in: NSRange(location: 0, length: text.length), of: text) == nil)
+    #expect(FigureCopy.box(in: NSRange(location: between, length: 7), of: text) == nil)
     #expect(
-      FigureCopy.figure(in: NSRange(location: diagram, length: 0), of: text)?.text
+      FigureCopy.box(in: NSRange(location: diagram, length: 0), of: text)?.content.text
         == Self.diagram.text)
   }
 
@@ -76,11 +76,24 @@ struct FigureCopyTests {
       !text.string.contains("NOTE: '\\' line wrapping"),
       "a folded block that fits is shown without its header")
     let figure = try #require(
-      FigureCopy.figure(at: try Fixtures.offset(of: "a long", in: text), in: text))
+      FigureCopy.box(at: try Fixtures.offset(of: "a long", in: text), in: text)?.content)
     #expect(FigureCopy.pasteboardText(for: figure) == "{\"key\": \"a long value\"}")
   }
 
   @Test func `an unfolded figure is copied as it is`() {
     #expect(FigureCopy.pasteboardText(for: Self.diagram) == Self.diagram.text)
+  }
+
+  @Test func `the box under a location carries the block's ordinal and how it is shown`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .artwork, text: "+---+\n| A |\n+---+")),
+        .preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
+      style: ReadingStyle())
+    let offset = try Fixtures.offset(of: "Value", in: built.text)
+    let box = try #require(FigureCopy.box(at: offset, in: built.text))
+    #expect(box.ordinal == 1)
+    #expect(box.shown == .rendered)
+    #expect(FigureCopy.box(in: NSRange(location: offset, length: 3), of: built.text) === box)
   }
 }

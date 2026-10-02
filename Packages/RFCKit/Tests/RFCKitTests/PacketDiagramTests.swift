@@ -407,4 +407,68 @@ struct PacketDiagramTests {
         16, 16, 32, 32, 4, 6, 1, 1, 1, 1, 1, 1, 16, 16, 16, 24, 8, 32,
       ])
   }
+
+  // MARK: - Layout
+
+  /// A field whose name runs across an open border, with a hyphen in the border.
+  private static let hyphenated =
+    ruler16 + [
+      border16,
+      "   |             Long              |",
+      "   +            Hyphen-            +",
+      "   |             Name              |",
+      border16,
+    ]
+
+  private static let variable =
+    ruler16 + [
+      border16,
+      "   |     Type      |    Length     |",
+      border16,
+      "   ~             Value             ~",
+      border16,
+    ]
+
+  private func layout(_ lines: [String]) throws -> PacketDiagram.Layout {
+    try #require(PacketDiagram.analyze(lines.joined(separator: "\n"))?.layout)
+  }
+
+  private func marks(_ layout: PacketDiagram.Layout, line: Int) -> [PacketDiagram.Mark] {
+    layout.marks.filter { $0.line == line }
+  }
+
+  @Test func `a diagram's layout names its ruler and grid lines`() throws {
+    let layout = try layout(Self.header)
+    #expect(layout.rulerLines == 0..<2)
+    #expect(layout.gridLines == 2..<7)
+  }
+
+  @Test func `a border's corners and rules are marks and a hyphen in a name is not`() throws {
+    let layout = try layout(Self.hyphenated)
+    let top = marks(layout, line: 2)
+    #expect(
+      top.filter { $0.kind == .corner }.map(\.column) == Array(stride(from: 3, through: 35, by: 2)))
+    #expect(
+      top.filter { $0.kind == .rule }.map(\.column) == Array(stride(from: 4, through: 34, by: 2)))
+    #expect(
+      marks(layout, line: 4).map(\.column) == [3, 35], "the hyphen at column 22 is part of the name"
+    )
+    #expect(marks(layout, line: 3).map(\.kind) == [.delimiter, .delimiter])
+  }
+
+  @Test func `a row's delimiters are marks and a variable-length end is marked as such`() throws {
+    let layout = try layout(Self.variable)
+    #expect(marks(layout, line: 3).map(\.column) == [3, 19, 35])
+    #expect(marks(layout, line: 5).map(\.kind) == [.variableDelimiter, .variableDelimiter])
+  }
+
+  @Test func `the lines after a blank line are outside the grid`() throws {
+    let layout = try layout(Self.header + ["", "   Figure 9: A caption"])
+    #expect(layout.gridLines == 2..<7)
+    #expect(layout.marks.allSatisfy { $0.line < 7 })
+  }
+
+  @Test func `a box drawing with no ruler has no layout`() {
+    #expect(PacketDiagram.analyze("+---+\n| A |\n+---+")?.layout == nil)
+  }
 }

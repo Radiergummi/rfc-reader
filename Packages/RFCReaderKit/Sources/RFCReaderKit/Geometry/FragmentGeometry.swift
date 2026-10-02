@@ -47,6 +47,9 @@ public enum FragmentGeometry {
     /// above one: the ends `Placement.cardRect` cuts rather than caps.
     public let meetsCardAbove: Bool
     public let meetsCardBelow: Bool
+    /// How wide the run's content is set, where the card hugs it: a verbatim
+    /// block's widest line. Nil where the card spans the column.
+    public let contentWidth: CGFloat?
   }
 
   /// A chip's fill and rounding, worked out per *line* fragment.
@@ -110,7 +113,9 @@ public enum FragmentGeometry {
       runRange: effective,
       indent: indent(in: text, over: effective),
       meetsCardAbove: drawsCard(in: text, at: effective.location - 1),
-      meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective))
+      meetsCardBelow: drawsCard(in: text, at: NSMaxRange(effective)),
+      contentWidth: text.attribute(.rfcContentWidth, at: effective.location, effectiveRange: nil)
+        as? CGFloat
     )
   }
 
@@ -270,12 +275,19 @@ public enum FragmentGeometry {
     public let containerWidth: CGFloat
     /// How far the decorated text is inset from the column's left edge.
     public let indent: CGFloat
+    /// How wide the decorated content is set, where the band hugs it rather than
+    /// spanning the column (`DecorationSpan.contentWidth`).
+    public let contentWidth: CGFloat?
 
-    public init(origin: CGPoint, frame: CGRect, containerWidth: CGFloat, indent: CGFloat) {
+    public init(
+      origin: CGPoint, frame: CGRect, containerWidth: CGFloat, indent: CGFloat,
+      contentWidth: CGFloat? = nil
+    ) {
       self.origin = origin
       self.frame = frame
       self.containerWidth = containerWidth
       self.indent = indent
+      self.contentWidth = contentWidth
     }
 
     /// The decorated text's own left edge, in the drawing space. The fragment's
@@ -295,13 +307,18 @@ public enum FragmentGeometry {
     /// `capTop`/`capBottom` add the run's outer padding only on its own first and
     /// last fragment, so consecutive fragments tile into one band rather than
     /// overlapping — which, with a translucent fill, would darken every seam.
+    ///
+    /// Where the content's own width is known, the band ends a padding past it
+    /// instead, never past the column: a narrow diagram on a wide window sat at the
+    /// left of a card twice its width. Every line of a block reports the same width,
+    /// so the right edge is as straight as the left.
     public func decorationRect(padding: CGFloat, capTop: Bool, capBottom: Bool) -> CGRect {
       let top = capTop ? padding / 2 : 0
       let bottom = capBottom ? padding / 2 : 0
       return CGRect(
         x: columnLeft - padding,
         y: origin.y - top,
-        width: max(0, containerWidth - indent) + padding * 2,
+        width: min(max(0, containerWidth - indent), contentWidth ?? .infinity) + padding * 2,
         height: frame.height + top + bottom
       )
     }

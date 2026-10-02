@@ -163,3 +163,95 @@ public enum Datatracker {
     uri.split(separator: "/").last.map(String.init) ?? uri
   }
 }
+
+// MARK: - Groups
+
+/// What `corpus-build groups` reads (#363): every group, the chair roles, and the
+/// people in them. Measured against the live API on 1 October 2026: about 1,600
+/// groups, two pages of a thousand.
+extension Datatracker {
+  /// Every group of every type and state, ordered by ID for the reason the drafts
+  /// listing is.
+  public static let groupsFirstPage = base.appending(path: "api/v1/group/group/")
+    .appending(queryItems: [
+      URLQueryItem(name: "format", value: "json"),
+      URLQueryItem(name: "limit", value: "1000"),
+      URLQueryItem(name: "order_by", value: "id"),
+    ])
+
+  /// Every current chair role. Datatracker keeps a concluded group's roles, which
+  /// `GroupsFile` leaves out.
+  public static let chairsFirstPage = base.appending(path: "api/v1/group/role/")
+    .appending(queryItems: [
+      URLQueryItem(name: "format", value: "json"),
+      URLQueryItem(name: "limit", value: "1000"),
+      URLQueryItem(name: "order_by", value: "id"),
+      URLQueryItem(name: "name", value: "chair"),
+    ])
+
+  /// A person's record, from the URI a role names: "/api/v1/person/person/119325/".
+  public static func person(_ uri: String) -> URL {
+    base.appending(path: uri).appending(queryItems: [URLQueryItem(name: "format", value: "json")])
+  }
+
+  public struct GroupPage: Page {
+    public var meta: Meta
+    public var objects: [ListedGroup]
+  }
+
+  /// A group as the listing has it. Its type and state are foreign keys datatracker
+  /// allows to be null, so they are optional here: one half-made group must not fail
+  /// the page it is on, and with it the day's file.
+  public struct ListedGroup: Decodable, Sendable, Equatable {
+    public var id: Int
+    public var acronym: String
+    public var name: String
+    /// "/api/v1/name/grouptypename/wg/".
+    public var type: String?
+    /// "/api/v1/name/groupstatename/active/".
+    public var state: String?
+    /// "/api/v1/group/group/2412/".
+    public var parent: String?
+    /// Empty for a group that has none.
+    public var listArchive: String?
+    /// "/api/v1/doc/document/charter-ietf-httpbis/".
+    public var charter: String?
+
+    /// "wg", "rg", "area"…; "unknown" for none.
+    public var typeSlug: String { type.map(Datatracker.lastComponent(of:)) ?? "unknown" }
+    /// "active", "conclude"…; "unknown" for none.
+    public var stateSlug: String { state.map(Datatracker.lastComponent(of:)) ?? "unknown" }
+    public var parentID: Int? { parent.flatMap { Int(Datatracker.lastComponent(of: $0)) } }
+    /// "charter-ietf-httpbis".
+    public var charterName: String? { charter.map(Datatracker.lastComponent(of:)) }
+
+    /// The archive, when it is a web page: some older groups record an address or a
+    /// word there, which is no link.
+    public var archive: URL? {
+      guard let listArchive, let url = URL(string: listArchive),
+        let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+        url.host != nil
+      else { return nil }
+      return url
+    }
+  }
+
+  public struct RolePage: Page {
+    public var meta: Meta
+    public var objects: [Role]
+  }
+
+  public struct Role: Decodable, Sendable, Equatable {
+    /// "/api/v1/group/group/1718/".
+    public var group: String
+    /// "/api/v1/person/person/119325/".
+    public var person: String
+
+    public var groupID: Int? { Int(Datatracker.lastComponent(of: group)) }
+  }
+
+  public struct Person: Decodable, Sendable {
+    /// "Tommy Pauly".
+    public var name: String
+  }
+}

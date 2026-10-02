@@ -83,17 +83,37 @@ public final class DocumentTextBuilder {
   /// there is nothing to press.
   var backlinks: [String: [Backlink]] = [:]
 
-  init(style: ReadingStyle) {
+  /// Which blocks the reader asked to see as their source.
+  let choices: PresentationChoices
+  /// Reviewed verdicts on artwork types, for `ArtworkClassifier`.
+  let hints: ArtworkHints
+  /// The document being built, for its hints. Set by `appendDocument`.
+  var documentID: DocumentID?
+  /// The ordinal the next verbatim block gets.
+  var nextVerbatimOrdinal = 0
+
+  /// The color of a character a decorated block draws over instead of showing.
+  public static let hiddenColor = PlatformColor.clear
+
+  init(
+    style: ReadingStyle, choices: PresentationChoices = .defaults,
+    hints: ArtworkHints = .bundled
+  ) {
     self.style = style
+    self.choices = choices
+    self.hints = hints
   }
 
   /// - Parameter title: a title block to open the text with. The reader has none —
   ///   its title is the header view above the text — but a printed page has nothing
   ///   above the text, so a print passes one (#375).
+  /// - Parameter choices: the blocks the reader asked to see as their source.
+  /// - Parameter hints: reviewed artwork types; tests pass their own.
   public static func build(
-    _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil
+    _ document: RFCDocument, style: ReadingStyle, title: TitleBlock? = nil,
+    choices: PresentationChoices = .defaults, hints: ArtworkHints = .bundled
   ) -> BuiltDocument {
-    let builder = DocumentTextBuilder(style: style)
+    let builder = DocumentTextBuilder(style: style, choices: choices, hints: hints)
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
@@ -142,9 +162,16 @@ public final class DocumentTextBuilder {
   /// once the build is done, so a chip is measured narrower than it is drawn; a
   /// table cell adds both before it measures, in `cellWidth`.
   func lineWidth(_ text: NSAttributedString) -> CGFloat {
+    Self.lineWidth(text)
+  }
+
+  /// The same, where there is no builder: `StrokeGeometry` measures a column as the
+  /// builder does.
+  static func lineWidth(_ text: NSAttributedString) -> CGFloat {
     let line = CTLineCreateWithAttributedString(text)
     return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
   }
+
 }
 
 extension DocumentTextBuilder {
@@ -186,6 +213,7 @@ extension DocumentTextBuilder {
   }
 
   func appendDocument(_ document: RFCDocument) {
+    documentID = document.header.id
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
@@ -258,11 +286,13 @@ extension DocumentTextBuilder {
   private func emitting(in style: ReadingStyle, color: PlatformColor, _ body: () -> Void) {
     let outerStyle = self.style
     let outerColor = bodyColor
+    defer {
+      self.style = outerStyle
+      bodyColor = outerColor
+    }
     self.style = style
     bodyColor = color
     body()
-    self.style = outerStyle
-    bodyColor = outerColor
   }
 
   private func appendSection(_ section: Section, depth: Int) {

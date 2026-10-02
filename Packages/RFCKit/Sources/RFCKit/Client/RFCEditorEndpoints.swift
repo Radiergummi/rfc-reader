@@ -37,4 +37,9 @@ public enum RFCEditorEndpoints {
   /// the revisions workflow publishes daily on the repository's `revisions` release.
   public static let revisions = URL(
     string: "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/revisions.json")!
+
+  /// `groups.json`: the groups the index names, as datatracker describes them (#363),
+  /// published beside `revisions.json` by the same daily workflow.
+  public static let workingGroups = URL(
+    string: "https://github.com/Radiergummi/rfc-reader/releases/download/revisions/groups.json")!
 }

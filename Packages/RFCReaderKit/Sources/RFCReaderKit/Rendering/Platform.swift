@@ -1,3 +1,5 @@
+import CoreText
+
 #if canImport(UIKit)
   import UIKit
 
@@ -71,15 +73,22 @@ public enum RFCColors {
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
   /// so it tints whatever the page is rather than assuming its color.
   private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
+    byAppearance(light: (white: 0, alpha: light), dark: (white: 1, alpha: dark))
+  }
+
+  /// A gray for each appearance, resolved when it is drawn.
+  private static func byAppearance(
+    light: (white: CGFloat, alpha: CGFloat), dark: (white: CGFloat, alpha: CGFloat)
+  ) -> PlatformColor {
     #if canImport(UIKit)
       UIColor { traits in
-        traits.userInterfaceStyle == .dark
-          ? UIColor(white: 1, alpha: dark) : UIColor(white: 0, alpha: light)
+        let gray = traits.userInterfaceStyle == .dark ? dark : light
+        return UIColor(white: gray.white, alpha: gray.alpha)
       }
     #else
       NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-          ? NSColor(white: 1, alpha: dark) : NSColor(white: 0, alpha: light)
+        let gray = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        return NSColor(white: gray.white, alpha: gray.alpha)
       }
     #endif
   }
@@ -96,6 +105,16 @@ public enum RFCColors {
       .separatorColor
     #endif
   }
+
+  /// The lines a decorated block draws over its text: a step back from the label
+  /// color, so a grid reads as structure and its field names as the content. Opaque,
+  /// where the secondary label color is not: a stroke is drawn in pieces, one per
+  /// line's fragment, and translucent pieces meeting on a fractional pixel draw a
+  /// lighter band at every line, #31's seam again, and a darker patch wherever a
+  /// rule and a delimiter overlap at a corner.
+  public static let stroke = byAppearance(
+    light: (white: 0.45, alpha: 1), dark: (white: 0.6, alpha: 1))
+
 }
 
 /// Symbolic traits, which AppKit and UIKit spell differently.
@@ -141,20 +160,20 @@ extension PlatformImage {
 }
 
 extension PlatformFont {
-  /// This font with `traits` added, or this font unchanged when the descriptor
-  /// cannot supply them. UIKit's `withSymbolicTraits` returns an optional
-  /// descriptor and AppKit's does not, and only AppKit's font initializer is
-  /// failable; both spellings collapse to the same fallback here.
+  /// This font with `traits` added, or this font unchanged when it has them already
+  /// or cannot have them.
+  ///
+  /// A copy of the font, made by Core Text, rather than a font resolved again from a
+  /// descriptor: `PlatformFont(descriptor:size:)` on a system font's descriptor
+  /// returned a 12 pt font for a 17 pt one, once in a while, under the full parallel
+  /// test run (#326). A strong run in bold text adds nothing, and is this font.
   func adding(traits: PlatformFontDescriptor.SymbolicTraits) -> PlatformFont {
-    let descriptor = fontDescriptor
-    let combined = descriptor.symbolicTraits.union(traits)
-    #if canImport(UIKit)
-      guard let traited = descriptor.withSymbolicTraits(combined) else { return self }
-      return PlatformFont(descriptor: traited, size: pointSize)
-    #else
-      return PlatformFont(descriptor: descriptor.withSymbolicTraits(combined), size: pointSize)
-        ?? self
-    #endif
+    let added = traits.subtracting(fontDescriptor.symbolicTraits)
+    guard !added.isEmpty else { return self }
+    let value = CTFontSymbolicTraits(rawValue: added.rawValue)
+    guard let copy = CTFontCreateCopyWithSymbolicTraits(self as CTFont, 0, nil, value, value)
+    else { return self }
+    return copy as PlatformFont
   }
 
   /// The font's weight as its descriptor states it. This is what lets a run inside
@@ -170,12 +189,9 @@ extension PlatformFont {
     return fontDescriptor.symbolicTraits.contains(RFCTraits.bold) ? .bold : .regular
   }
 
-  /// This font's face and traits at another size.
+  /// This font's face and traits at another size: a Core Text copy, for the reason
+  /// `adding(traits:)` is one.
   func resized(to size: CGFloat) -> PlatformFont {
-    #if canImport(UIKit)
-      PlatformFont(descriptor: fontDescriptor, size: size)
-    #else
-      PlatformFont(descriptor: fontDescriptor, size: size) ?? self
-    #endif
+    CTFontCreateCopyWithAttributes(self as CTFont, size, nil, nil) as PlatformFont
   }
 }

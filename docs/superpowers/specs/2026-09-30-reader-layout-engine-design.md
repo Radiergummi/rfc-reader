@@ -222,8 +222,11 @@ is, it is `.top`, and a document read from the very top stays there through any 
 **How it is put back: settled.** A jump, a document installing (a rebuild included) and a change
 of column settle the anchor (`PinRecipe.settle`):
 
-1. Lay out the document from its start through the anchor's paragraph.
-2. Pin: find the line fragment holding the anchor's character, scroll so that the line's top, plus
+1. Scroll to the document's start and lay out the viewport there. UIKit walks its viewport from
+   the fragment it last put at the top, by the distance scrolled from the y it put it at, so a
+   walk from anywhere the next step moves lands elsewhere (#625).
+2. Lay out the document from its start through the anchor's paragraph.
+3. Pin: find the line fragment holding the anchor's character, scroll so that the line's top, plus
    the fraction of its height, meets the viewport's top, lay out the viewport, and settle once
    more if the line moved. At most a handful of passes.
 

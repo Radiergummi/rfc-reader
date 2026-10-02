@@ -23,24 +23,23 @@ extension PlatformTextView {
   /// `scroll(toY:)` and `viewportHeight` are measured the same way, so a jump
   /// lands where tracking then reads.
   var viewportTop: CGFloat {
-    #if canImport(UIKit)
-      return contentOffset.y + contentInset.top - textContainerInset.top
-    #else
-      return unobscuredTop - textContainerOrigin.y
-    #endif
+    unobscuredTop - containerTop
   }
 
-  #if !canImport(UIKit)
-    /// The top of the part of the viewport nothing covers — the toolbar's bottom
-    /// edge — in the text view's own coordinates. Not `visibleRect.minY` moved by
-    /// an inset: the text view's `visibleRect` stops at its own top, so at the top of
-    /// a document it reads 0 where the clip view is showing the toolbar's height
-    /// above it.
-    var unobscuredTop: CGFloat {
+  /// The top of the part of the viewport nothing covers — the bar's bottom edge —
+  /// in the text view's own coordinates. On iOS that is the top inset's edge, the
+  /// navigation bar's height below the offset. On macOS, not `visibleRect.minY`
+  /// moved by an inset: the text view's `visibleRect` stops at its own top, so at
+  /// the top of a document it reads 0 where the clip view is showing the toolbar's
+  /// height above it.
+  var unobscuredTop: CGFloat {
+    #if canImport(UIKit)
+      return contentOffset.y + contentInset.top
+    #else
       guard let clip = enclosingScrollView?.contentView else { return visibleRect.minY }
       return convert(clip.bounds.origin, from: clip).y + clip.contentInsets.top
-    }
-  #endif
+    #endif
+  }
 
   /// Where the text container's origin sits inside the scrolled content.
   var containerTop: CGFloat {

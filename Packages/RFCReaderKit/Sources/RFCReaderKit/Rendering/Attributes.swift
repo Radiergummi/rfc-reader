@@ -1,6 +1,10 @@
 import Foundation
 import RFCKit
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 extension NSAttributedString.Key {
   /// The cross reference a run stands for: hit testing, preview, chip drawing.
   public static let rfcReference = NSAttributedString.Key("rfcReference")
@@ -40,6 +44,27 @@ extension NSAttributedString.Key {
   /// underlines nor recolours the run, which an exported PDF still turns into a
   /// link annotation (#376). The value is the URL the reader's `.link` would carry.
   public static let rfcLinkTarget = NSAttributedString.Key("rfcLinkTarget")
+  /// The strokes a decorated block draws over its text (`DecoratedText`), set on
+  /// every character of the block so each line's fragment finds them, and which of
+  /// the block's lines it holds, through the box's extent (`StrokeGeometry`).
+  public static let rfcStrokes = NSAttributedString.Key("rfcStrokes")
+  /// How wide a verbatim block's widest line is set, in points, on every character
+  /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
+  /// which compares by value, so the runs of one block coalesce.
+  public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
+  /// Makes a block with a rendering one item for a long press, which shows the
+  /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
+  /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
+  /// text item tag, which is what makes the press reach the text view's delegate;
+  /// on macOS, where the context menu finds the block by its box, it is only marked.
+  /// The value is the block's `FigureMenu.itemTag(of:)`.
+  public static let rfcFigureItem: NSAttributedString.Key = {
+    #if canImport(UIKit)
+      .textItemTag
+    #else
+      NSAttributedString.Key("rfcFigureItem")
+    #endif
+  }()
 }
 
 public enum RFCDecoration: String, Sendable {
@@ -70,10 +95,64 @@ extension RFCDecoration {
   }
 }
 
-/// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute.
+/// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
+/// what the build decided about it.
 public final class VerbatimBox: Sendable {
+  /// Whether the block is set as its source or rendered, and whether a rendering
+  /// exists to switch to: its menu offers "Show as Text" on a rendered block and
+  /// "Show as Figure" on one shown as its source.
+  public enum Shown: Sendable, Equatable {
+    /// No presentation accepts the block.
+    case plain
+    case rendered
+    /// A presentation accepts it, and the reader asked for the source.
+    case source
+  }
+
   public let content: Preformatted
-  public init(_ content: Preformatted) { self.content = content }
+  /// Its place among the document's verbatim blocks, in the order the build sets
+  /// them: what a presentation choice is keyed by when the block has no anchor.
+  public let ordinal: Int
+  public let classification: ArtworkClassification
+  public let shown: Shown
+  /// What VoiceOver says in place of a rendered block's drawing, from its
+  /// rendition (`DecoratedText.spokenLabel`); nil unless it is shown rendered.
+  public let spokenLabel: String?
+
+  public init(
+    _ content: Preformatted, ordinal: Int = 0,
+    classification: ArtworkClassification = .unclassified, shown: Shown = .plain,
+    spokenLabel: String? = nil
+  ) {
+    self.content = content
+    self.ordinal = ordinal
+    self.classification = classification
+    self.shown = shown
+    self.spokenLabel = spokenLabel
+  }
+}
+
+extension VerbatimBox {
+  /// What a presentation choice names this block by.
+  public var presentationKey: PresentationKey {
+    PresentationKey(anchor: content.anchor, ordinal: ordinal)
+  }
+
+  /// How it is shown, or nil for a block with no rendering to switch to.
+  public var presentation: PresentationChoices.Presentation? {
+    switch shown {
+    case .plain: nil
+    case .rendered: .figure
+    case .source: .text
+    }
+  }
+}
+
+/// Boxes a decorated block's strokes, for the reason `VerbatimBox` boxes its block:
+/// one instance per block, so the attribute's extent is the block.
+public final class StrokeBox: Sendable {
+  public let strokes: [Stroke]
+  public init(_ strokes: [Stroke]) { self.strokes = strokes }
 }
 
 /// Boxes a `CrossReference` for the same reason.
