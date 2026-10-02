@@ -135,6 +135,16 @@ struct LegacyTextParserHeadingsTests {
         })
   }
 
+  /// An unnumbered heading keeps the words of its line, not the columns they were set
+  /// in, as a numbered one does and as reading it back from the XML gives (#683). Its
+  /// anchor is the same either way.
+  @Test func `an unnumbered heading's title has its whitespace collapsed`() throws {
+    let heading = try #require(
+      LegacyTextParser.heading(from: "Field Name      Meaning   ", colonNumbered: false))
+    #expect(heading.title == "Field Name Meaning")
+    #expect(heading.anchor == "name-field-name-meaning")
+  }
+
   /// An appendix numbered like a section, `APPENDIX 3`, is named `appendix-3`, not
   /// `section-3`: a document may have a section 3 as well, and `Section 3` in its
   /// prose cites that one, never the appendix.
