@@ -217,7 +217,7 @@ struct DefinedTermsTests {
   // MARK: Through parse
 
   @Test func `a terminology section's definition list defines its terms`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9985.xml"))
+    let document = try Fixtures.document("rfc9985.xml")
     let term = try #require(document.definedTerms["significant change"])
     #expect(term.term == "significant change", "the list's trailing colon is not the term's")
     #expect(!term.definition.isEmpty)
@@ -227,13 +227,13 @@ struct DefinedTermsTests {
 
   @Test func `a definition list elsewhere defines nothing`() throws {
     // RFC 8999's only definition list is its notation, under Notational Conventions.
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let document = try Fixtures.document("rfc8999.xml")
     #expect(document.definedTerms.isEmpty)
   }
 
   /// RFC 2013 §2 is titled Definitions and holds a MIB module, no definition list.
   @Test func `a definitions section without a definition list defines nothing`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+    let document = try Fixtures.document("rfc2013.txt")
     #expect(document.definedTerms.isEmpty)
   }
 
@@ -262,10 +262,8 @@ struct DefinedTermsTests {
     #expect(
       terms.map(\.anchor) == ["widget-def", "gadgets"], "its element's anchor, or the section's")
     let definition = try #require(terms.first?.definition.first)
-    guard case .paragraph(let paragraph) = definition else {
-      Issue.record("the definition is the paragraph the entry sits in")
-      return
-    }
+    let paragraph = try #require(
+      definition.paragraph, "the definition is the paragraph the entry sits in")
     #expect(paragraph.plainText.hasPrefix("A widget is the unit"))
   }
 

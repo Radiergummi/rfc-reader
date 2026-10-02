@@ -45,12 +45,9 @@ struct CorpusBackedPageJoinTests {
   @Test func `a bullet at the top of a page is not the rest of a sentence`() throws {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc1581"))
     let blocks = try #require(document.section(number: "3.3")).blocks
-    guard case .paragraph(let sentence)? = blocks.first,
-      case .list(let list)? = blocks.dropFirst().first
-    else {
-      Issue.record("expected the sentence and then its list")
-      return
-    }
+    let sentence = try #require(blocks.first?.paragraph, "expected the sentence and then its list")
+    let list = try #require(
+      blocks.dropFirst().first?.list, "expected the sentence and then its list")
     #expect(sentence.plainText.hasSuffix("assumed that:"))
     #expect(list.items.count == 2)
   }
@@ -65,10 +62,9 @@ struct CorpusBackedPageJoinTests {
         guard case .paragraph(let paragraph) = $0 else { return false }
         return paragraph.plainText.hasSuffix("they send")
       })
-    guard case .list(let list)? = blocks.dropFirst(sentence + 1).first else {
-      Issue.record("expected the list of packet types after the sentence")
-      return
-    }
+    let list = try #require(
+      blocks.dropFirst(sentence + 1).first?.list,
+      "expected the list of packet types after the sentence")
     let items = list.items.compactMap { item -> String? in
       guard case .paragraph(let text)? = item.blocks.first else { return nil }
       return text.plainText

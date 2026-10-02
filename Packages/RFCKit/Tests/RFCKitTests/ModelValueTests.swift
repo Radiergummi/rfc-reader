@@ -18,8 +18,8 @@ struct ModelValueTests {
   /// equal documents, with equal hashes.
   @Test(arguments: try Fixtures.documents())
   func `parsing the same source twice gives equal documents`(fixture: String) throws {
-    let first = try Fixtures.document(fixture)
-    let second = try Fixtures.document(fixture)
+    let first = try Fixtures.parse(fixture)
+    let second = try Fixtures.parse(fixture)
     #expect(first == second)
     #expect(first.hashValue == second.hashValue)
   }
@@ -38,10 +38,8 @@ struct ModelValueTests {
       changed.sections[section].blocks.lastIndex { block in
         if case .paragraph = block { true } else { false }
       })
-    guard case .paragraph(var contents) = changed.sections[section].blocks[paragraph] else {
-      Issue.record("not a paragraph")
-      return
-    }
+    var contents = try #require(
+      changed.sections[section].blocks[paragraph].paragraph, "not a paragraph")
     contents.indent += 1
     changed.sections[section].blocks[paragraph] = .paragraph(contents)
     #expect(changed != document)

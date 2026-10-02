@@ -46,7 +46,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `round trips RFCXML`() throws {
-    let original = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let original = try Fixtures.document("rfc8999.xml")
     let xml = RFCXMLSerializer().serialize(original)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(Self.signature(reparsed) == Self.signature(original))
@@ -56,7 +56,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `an entrys printed tag survives a round trip`() throws {
-    let original = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml"))
+    let original = try Fixtures.document("rfc9220.xml")
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     func tags(_ document: RFCDocument) -> [String] {
       document.allSections.flatMap(\.blocks).flatMap { block -> [String] in
@@ -71,7 +71,7 @@ struct RFCXMLSerializerTests {
   }
 
   static func roundTrip(_ name: String) throws -> (original: RFCDocument, reparsed: RFCDocument) {
-    let original = try RFCXMLParser.parse(try Fixtures.data(name))
+    let original = try Fixtures.document(name)
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
     return (original, reparsed)
   }
@@ -108,7 +108,7 @@ struct RFCXMLSerializerTests {
   func `a converted definition list states how its terms are set`(name: String, tag: String)
     throws
   {
-    let original = LegacyTextParser.parse(try Fixtures.string(name))
+    let original = try Fixtures.document(name)
     let xml = RFCXMLSerializer().serialize(original)
     #expect(xml.contains(tag))
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
@@ -157,7 +157,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `round trips legacy text`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     let xml = RFCXMLSerializer(
       options: .init(
         generatorComment: "test",
@@ -175,7 +175,7 @@ struct RFCXMLSerializerTests {
   }
 
   @Test func `canonical labels survive legacy round trip`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     let xml = RFCXMLSerializer().serialize(parsed)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
 
@@ -271,10 +271,8 @@ struct RFCXMLSerializerTests {
     let xml = RFCXMLSerializer().serialize(document)
     #expect(xml.contains("&amp; &lt;tags&gt;."))
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
-    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected paragraph")
-      return
-    }
+    let paragraph = try #require(
+      reparsed.sections.first?.blocks.first?.paragraph, "expected paragraph")
     #expect(
       paragraph.inlines.contains(
         .crossReference(
@@ -348,7 +346,7 @@ struct RFCXMLSerializerTests {
   /// group, it read back as the group's document, or as no document at all.
   @Test func `a group member's citation keeps its document through a round trip`() throws {
     for name in ["rfc9290.xml", "rfc9682.xml", "rfc9783.xml"] {
-      let original = try RFCXMLParser.parse(try Fixtures.data(name))
+      let original = try Fixtures.document(name)
       let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(original).utf8))
       func documents(_ document: RFCDocument) -> [DocumentID] {
         document.everyCrossReference.compactMap {
@@ -372,10 +370,7 @@ struct RFCXMLSerializerTests {
       source: .text
     )
     let reparsed = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(document).utf8))
-    guard case .preformatted(let back)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected artwork")
-      return
-    }
+    let back = try #require(reparsed.sections.first?.blocks.first?.preformatted, "expected artwork")
     #expect(back.text == art)
   }
 }
@@ -419,7 +414,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// RFC 1 folds its author into the title -- which failed the schema in 7,566 documents.
   @Test func `every front has an author even when none is known`() throws {
     for fixture in ["rfc1.txt", "rfc5234.txt"] {
-      let parsed = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let parsed = try Fixtures.document(fixture)
       let xml = RFCXMLSerializer().serialize(parsed)
       let authors = { (document: RFCDocument) in
         document.allSections.flatMap(\.blocks).flatMap { block -> [[Author]] in
@@ -441,9 +436,9 @@ struct RFCXMLSerializerCorpusFindingsTests {
       #expect(authors(reparsed) == authors(parsed))
     }
     // The two cases this pins: a header naming no author, and entries naming none.
-    #expect(LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).header.authors.isEmpty)
+    #expect(try Fixtures.document("rfc1.txt").header.authors.isEmpty)
     #expect(
-      LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).allSections.contains { section in
+      try Fixtures.document("rfc5234.txt").allSections.contains { section in
         section.blocks.contains {
           if case .references(let list) = $0 {
             list.entries.contains { $0.authors.isEmpty }
@@ -458,7 +453,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// written as `<references>`, and its `pn` names it an appendix. Read back, it was a
   /// numbered section that was not one (#201).
   @Test func `a references appendix round trips as an appendix`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let parsed = try Fixtures.document("rfc2049.txt")
     let appendix = try #require(parsed.section(anchor: "appendix-C"))
     #expect(appendix.isAppendix)
     #expect(appendix.blocks.contains { if case .references = $0 { true } else { false } })
@@ -473,7 +468,7 @@ struct RFCXMLSerializerCorpusFindingsTests {
   /// anchor is the part number for every numbered section, so it is written once, as the
   /// `pn` the published series always carries, and read back from there.
   @Test func `an anchor that is the part number is written once`() throws {
-    let parsed = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let parsed = try Fixtures.document("rfc5234.txt")
     #expect(parsed.allSections.contains { $0.anchor == "section-1" })
     let xml = RFCXMLSerializer().serialize(parsed)
     // Per tag, whichever order the two attributes come in.
@@ -504,10 +499,8 @@ struct RFCXMLSerializerCorpusFindingsTests {
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(reparsed.header.title == "Title")
-    guard case .paragraph(let paragraph)? = reparsed.sections.first?.blocks.first else {
-      Issue.record("expected paragraph")
-      return
-    }
+    let paragraph = try #require(
+      reparsed.sections.first?.blocks.first?.paragraph, "expected paragraph")
     #expect(
       paragraph.plainText == "ab c", "tab survives escaping and is collapsed like other whitespace")
   }

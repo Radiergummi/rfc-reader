@@ -12,10 +12,10 @@ struct LegacyTextParserLinkingTests {
   /// corpus's prose. RFC 2606 sets its citations `[RFC 1034]`; RFC 2147 writes a
   /// multi-anchor `[RFC1883, Section 4.3]`, where the bracket is not ours to eat.
   @Test func `bracketed RFC mentions link whatever their spacing`() throws {
-    let spaced = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
+    let spaced = try Fixtures.document("rfc2606.txt")
     #expect(spaced.referencedDocuments.contains(.rfc(1034)), "[RFC 1034] names a document")
 
-    let multi = LegacyTextParser.parse(try Fixtures.string("rfc2147.txt"))
+    let multi = try Fixtures.document("rfc2147.txt")
     #expect(multi.referencedDocuments.contains(.rfc(1883)))
     let notes = multi.paragraphs.filter { $0.plainText.hasPrefix("Note 2") }
     let note = try #require(notes.first)
@@ -25,7 +25,7 @@ struct LegacyTextParserLinkingTests {
   }
 
   @Test func `legacy bracketed RFC labels are flagged as canonical`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let xrefs = document.crossReferences
     // Measured over 1,200 corpus documents before this rule was fixed: 12,612
     // references, 253 of them chips. The rest were exactly this case.
@@ -76,7 +76,7 @@ struct LegacyTextParserLinkingTests {
   /// Measured on the corpus, prose held 2,223 of the first and 659 of the second,
   /// against 1,640 of the plain `RFC 791` the linker already knew.
   @Test func `hyphenated and plural mentions link`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc980.txt"))
+    let document = try Fixtures.document("rfc980.txt")
     let xrefs = document.crossReferences
     let byTarget = Dictionary(
       xrefs.map { ($0.target, $0) }, uniquingKeysWith: { first, _ in first })

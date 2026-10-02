@@ -16,22 +16,22 @@ struct LegacyTextParserAnchorsTests {
     let fixtures = try Fixtures.legacyTexts()
     #expect(fixtures.count > 20)
     for fixture in fixtures {
-      let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let document = try Fixtures.document(fixture)
       let repeated = Dictionary(grouping: document.declaredAnchors, by: { $0 }).filter {
         $0.value.count > 1
       }.keys.sorted()
       #expect(repeated.isEmpty, "\(fixture): \(repeated)")
     }
 
-    let first = LegacyTextParser.parse(try Fixtures.string("rfc1.txt")).allSections.map(\.anchor)
+    let first = try Fixtures.document("rfc1.txt").allSections.map(\.anchor)
     let original = try #require(first.firstIndex(of: "name-introduction"))
     let second = try #require(first.firstIndex(of: "name-introduction-2"))
     #expect(original < second)
     #expect(
-      LegacyTextParser.parse(try Fixtures.string("rfc19.txt")).allSections.map(\.anchor).contains(
+      try Fixtures.document("rfc19.txt").allSections.map(\.anchor).contains(
         "section-1-2"))
 
-    let entries = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(
+    let entries = try Fixtures.document("rfc1556.txt").referenceLists.flatMap(
       \.entries)
     let relabeled = try #require(entries.first { $0.anchor == "ISO-8859-2" })
     #expect(
@@ -47,7 +47,7 @@ struct LegacyTextParserAnchorsTests {
   @Test func `every anchor is a name and every citation reaches one`() throws {
     var cited = 0
     for fixture in try Fixtures.legacyTexts() {
-      let document = LegacyTextParser.parse(try Fixtures.string(fixture))
+      let document = try Fixtures.document(fixture)
       // An NCName, closely enough: a letter or underscore, then letters, digits, `.`, `-`, `_`.
       let unnamed = document.declaredAnchors.filter {
         $0.wholeMatch(of: #/[\p{L}_][\p{L}0-9._-]*/#) == nil
@@ -63,24 +63,24 @@ struct LegacyTextParserAnchorsTests {
     #expect(cited > 0, "the fixtures cite something by anchor, so the check checks something")
 
     // A label that is a name is the anchor, as the published series has it.
-    let rfc5234 = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt")).referenceLists.flatMap(
+    let rfc5234 = try Fixtures.document("rfc5234.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc5234.contains { $0.anchor == "US-ASCII" && $0.displayAnchor == "US-ASCII" })
     // One that is not takes the document it cites, and still reads as its label: RFC 2023
     // lists RFCs 1883 and 1884 both as `[2]`, and they are two anchors, not one and a `-2`.
-    let rfc2023 = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt")).referenceLists.flatMap(
+    let rfc2023 = try Fixtures.document("rfc2023.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc2023.filter { $0.displayAnchor == "2" }.map(\.anchor) == ["RFC1883", "RFC1884"])
-    let rfc2347 = LegacyTextParser.parse(try Fixtures.string("rfc2347.txt"))
+    let rfc2347 = try Fixtures.document("rfc2347.txt")
     #expect(
       rfc2347.crossReferences.contains {
         $0.target == .document(.rfc(2348), section: nil, entry: "RFC2348") && $0.text == "[2]"
       })
     // And one that cites no document is `ref-` and the label spelled as a name.
-    let rfc1556 = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt")).referenceLists.flatMap(
+    let rfc1556 = try Fixtures.document("rfc1556.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc1556.contains { $0.anchor == "ref-ECMA-TR-53" && $0.displayAnchor == "ECMA TR/53" })
-    let rfc2606 = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt")).referenceLists.flatMap(
+    let rfc2606 = try Fixtures.document("rfc2606.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc2606.contains { $0.anchor == "RFC1034" && $0.displayAnchor == "RFC 1034" })
   }
@@ -133,7 +133,7 @@ struct LegacyTextParserAnchorsTests {
     for fixture in try Fixtures.legacyTexts() {
       let text = try Fixtures.string(fixture)
       let reserved = LegacyTextParser.reservedAnchors(in: text)
-      let document = LegacyTextParser.parse(text)
+      let document = try Fixtures.document(fixture)
       let unreserved = Set(document.allSections.map(\.anchor)).subtracting(reserved).sorted()
       #expect(unreserved.isEmpty, "\(fixture): \(unreserved)")
       let held = Set(document.referenceLists.flatMap(\.entries).map(\.anchor)).intersection(
