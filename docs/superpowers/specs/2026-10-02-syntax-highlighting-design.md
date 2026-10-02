@@ -76,15 +76,17 @@ ABNF rule links, a dedicated parser serves it (`ABNF`), as the artwork roadmap a
   lexed.
 - **`Lexer`**, the engine: named states, each an ordered list of `Rule(pattern, action)`, starting in
   `root`. An action emits one kind, or one kind per capture group; it may push a state or pop one.
-  At each position the first rule of the current state that matches there wins. Its semantics are
-  fixed, each pinned by an engine test:
-  - **Matching** is at the position (`.anchored`) with `.withTransparentBounds` and
+  Each state is compiled to one alternation and searched forward from the current position: the
+  first rule that matches at the earliest position wins, and the characters before it are unmatched.
+  Its semantics are fixed, each pinned by an engine test:
+  - **Matching** uses `.withTransparentBounds` and
     `.withoutAnchoringBounds`, so lookbehind and `\b` see the characters before it and `^` matches
     only at a line's start. Patterns compile with `.anchorsMatchLines`, as Pygments' and Chroma's
     default to.
   - **Coverage:** the tokens cover the text exactly once, in order, without gaps or overlaps.
-    Characters of a match outside every group are `plain`. A rule whose groups nest, or that can
-    leave a group unmatched, is rejected when its lexer is built — a test builds every lexer.
+    Characters of a match outside every group are `plain`. A rule whose groups nest, or that
+    refers back to a group, is rejected when its lexer is built — a test builds every lexer; a group
+    that matches nothing emits nothing.
   - **Zero-length matches** are allowed only for a rule that changes state; one that does not is
     rejected when the lexer is built, so lexing cannot loop.
   - **Pop at `root`** is ignored.
@@ -144,7 +146,7 @@ ABNF rule links, a dedicated parser serves it (`ABNF`), as the artwork roadmap a
   the build inputs. When a theme becomes a preference it joins `ReadingStyle`, which keys the
   preview cache (`BuildKey`).
 - **`.standard`** is restrained, for a reader where code supports prose: punctuation and comments in
-  the secondary label color; names, strings, and keywords/numbers/attributes in three custom
+  a muted gray (the secondary label color is about 4:1 on the card); names, strings, and keywords/numbers/attributes in three custom
   dynamic colors with light and dark values. Every token color reaches **4.5:1** against the
   verbatim card's fill in both appearances; a test in RFCReaderKit resolves the theme in light and
   dark and checks the ratios. A theme's colors must be dynamic, and the test checks that too.
@@ -166,7 +168,8 @@ lexer translated from Chroma carries both. The project is AGPL-3.0, which is com
 
 - **`THIRD_PARTY_NOTICES`** at the repository root holds both license texts with their copyright
   lines, and each translated lexer names its upstream file and version.
-- **The app shows them**, from the same text, bundled as a resource of RFCReaderKit:
+- **The app shows them**, from the same text, kept in RFCReaderKit as `Acknowledgements.text`, which a test holds equal
+  to the file:
   - macOS: the standard About panel's credits (`orderFrontStandardAboutPanel(options:)` with
     `.credits`);
   - iOS, which has no Settings screen of its own: an "Acknowledgements" item in the app's existing
