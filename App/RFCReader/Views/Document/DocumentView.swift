@@ -580,14 +580,10 @@ struct DocumentView: View {
     else {
       session.skipLoad()
       reader.isLoading = false
-      // Recorded as its loaded text would be, so Recently Read lists it with a pack
-      // or without; here, so once per opening, like a load's.
-      if PublishedOriginalPage.recordsOpeningWithoutText(
-        id, formats: metadata?.formats, pointerInPack: pointerInPack)
-      {
-        Self.markOpened(id, in: modelContext)
-        Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
-      }
+      // Recorded as a loaded text would be: Recently Read lists a scan, and a
+      // pointer with a pack or without. Here, so once per opening, like a load's.
+      Self.markOpened(id, in: modelContext)
+      Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
       return
     }
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
