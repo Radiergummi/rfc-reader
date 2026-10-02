@@ -41,7 +41,7 @@ enum XMLDriver {
   static func run(_ data: Data, into events: any XMLEvents) throws(XMLSyntaxError) {
     let delegate = Delegate(events: events)
     let parser = XMLParser(data: data)
-    parser.delegate = delegate
+    attach(delegate, to: parser)
     parser.shouldProcessNamespaces = false
     parser.shouldResolveExternalEntities = false
     _ = parser.parse()
@@ -53,6 +53,17 @@ enum XMLDriver {
       line: parser.lineNumber, column: parser.columnNumber,
       message: delegate.depth == 0
         ? noRootMessage(for: data) : "the document ended before its root element closed")
+  }
+
+  /// Darwin's `XMLParser.delegate` is `unowned(unsafe)`, swift-corelibs-foundation's
+  /// `weak`, so only Darwin's assignment is unsafe (#147). It is sound here: each
+  /// caller keeps its delegate in a local that it reads after `parse()` returns.
+  private static func attach(_ delegate: some XMLParserDelegate, to parser: XMLParser) {
+    #if canImport(Darwin)
+      unsafe parser.delegate = delegate
+    #else
+      parser.delegate = delegate
+    #endif
   }
 
   /// An empty document is said as one on both platforms, and only a blank one is:
@@ -133,7 +144,7 @@ enum XMLDriver {
   ) throws(XMLSyntaxError) -> [String: String] {
     let delegate = RootDelegate()
     let parser = XMLParser(data: data)
-    parser.delegate = delegate
+    attach(delegate, to: parser)
     parser.shouldProcessNamespaces = false
     parser.shouldResolveExternalEntities = false
     _ = parser.parse()
