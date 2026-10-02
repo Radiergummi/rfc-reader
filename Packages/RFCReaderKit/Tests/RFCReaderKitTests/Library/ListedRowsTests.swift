@@ -17,8 +17,8 @@ struct ListedRowsTests {
     ],
     series: [])
 
-  private func listed(_ list: LibraryList) -> ListedRows {
-    ListedRows(list, in: index, search: IndexSearch(index: index))
+  private func listed(_ list: LibraryList, indexVersion: Int = 1) -> ListedRows {
+    ListedRows(list, in: index, indexVersion: indexVersion, search: IndexSearch(index: index))
   }
 
   @Test func `the rows are the list's own`() {
@@ -44,13 +44,31 @@ struct ListedRowsTests {
     // Hits the search would not find: these rows can only have come from them.
     let known = [index[4]!, index[3]!]
     let again = ListedRows(
-      LibraryList(filter: .all, query: "host"), in: index, search: IndexSearch(index: index),
-      hits: known)
+      LibraryList(filter: .all, query: "host"), in: index, indexVersion: 1,
+      search: IndexSearch(index: index), hits: known)
     #expect(again.rows.map(\.number) == [4, 3])
   }
 
   @Test func `an unsearched listing keeps no hits`() {
     #expect(listed(LibraryList(filter: .all, query: "")).hits.isEmpty)
+  }
+
+  @Test func `a list is on show only when it was made over the same index`() {
+    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [2])
+    let shown = listed(list, indexVersion: 3)
+    #expect(shown.shows(list, indexVersion: 3))
+    #expect(!shown.shows(list, indexVersion: 4))
+    #expect(!shown.shows(LibraryList(filter: .all, query: "host"), indexVersion: 3))
+  }
+
+  @Test func `hits are reused for the same query over the same index`() {
+    let shown = listed(
+      LibraryList(filter: .bookmarks, query: "host", bookmarked: [2]), indexVersion: 3)
+    let otherFilter = LibraryList(filter: .all, query: "host")
+    #expect(
+      shown.hits(for: otherFilter, indexVersion: 3)?.map(\.number) == shown.hits.map(\.number))
+    #expect(shown.hits(for: otherFilter, indexVersion: 4) == nil)
+    #expect(shown.hits(for: LibraryList(filter: .all, query: "software"), indexVersion: 3) == nil)
   }
 }
 

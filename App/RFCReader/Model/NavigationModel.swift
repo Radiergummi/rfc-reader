@@ -67,8 +67,6 @@ final class NavigationModel: Identifiable {
   /// Until the next arrives the list keeps what it has, as Mail and Finder do; nil
   /// until the first, so an empty list is never claimed before it was made.
   private(set) var listed: ListedRows?
-  /// The index `listed` was made over (`LibraryModel.indexVersion`).
-  @ObservationIgnored private var listedIndexVersion = 0
   @ObservationIgnored private var listing: Task<Void, Never>?
 
   /// The query the list, its count and the sidebar's results are for: the one whose
@@ -257,7 +255,7 @@ final class NavigationModel: Identifiable {
     guard let request = request(), !shows(request),
       let made = library.listedNow(request.list, hits: knownHits(for: request))
     else { return }
-    show(made, for: request)
+    listed = made
   }
 
   /// The rows the inputs ask for, for a script, which reads the list straight after
@@ -281,9 +279,9 @@ final class NavigationModel: Identifiable {
     case .apply(let query):
       requestedQuery = query
     case .search(let query, let delay):
-      pendingSearch = Task(name: "Apply search") {
+      pendingSearch = Task(name: "Apply search") { [weak self] in
         guard await Debounce.outlasted(delay) else { return }
-        requestedQuery = query
+        self?.requestedQuery = query
       }
     }
   }
@@ -305,25 +303,15 @@ final class NavigationModel: Identifiable {
       indexVersion: library.indexVersion)
   }
 
-  /// Whether the list on show is what `request` asks for: a change that makes the
-  /// same list, as a collection renamed or the iPhone's sidebar shown again, lists
-  /// nothing.
+  /// Whether the list on show is what `request` asks for (`ListedRows.shows`).
   private func shows(_ request: ListRequest) -> Bool {
-    listed?.list == request.list && listedIndexVersion == request.indexVersion
+    listed?.shows(request.list, indexVersion: request.indexVersion) ?? false
   }
 
-  /// The hits the list on show found, when `request` searches for the same over the
-  /// same index: a change of filter or options lists without searching again.
+  /// The hits the list on show found, if `request` can list from them
+  /// (`ListedRows.hits(for:indexVersion:)`).
   private func knownHits(for request: ListRequest) -> [RFCMetadata]? {
-    guard let listed, listed.list.query == request.list.query,
-      listedIndexVersion == request.indexVersion
-    else { return nil }
-    return listed.hits
-  }
-
-  private func show(_ made: ListedRows, for request: ListRequest) {
-    listed = made
-    listedIndexVersion = request.indexVersion
+    listed?.hits(for: request.list, indexVersion: request.indexVersion)
   }
 
   /// Lists again whenever an input of the list changes: `Observations` yields what
@@ -339,7 +327,7 @@ final class NavigationModel: Identifiable {
         // Overtaken by a newer request, which comes next, or by `listNow()`.
         guard let made, !Task.isCancelled, self.request() == request, !self.shows(request)
         else { continue }
-        self.show(made, for: request)
+        self.listed = made
       }
     }
   }

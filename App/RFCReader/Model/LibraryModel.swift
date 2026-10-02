@@ -686,21 +686,27 @@ final class LibraryModel {
   /// index, if a listing found them already. Nil while there is no index.
   func listed(_ list: LibraryList, hits: [RFCMetadata]? = nil) async -> ListedRows? {
     guard let index else { return nil }
-    return await Self.listed(list, in: index, search: search, hits: hits)
+    return await Self.listed(
+      list, in: index, indexVersion: indexVersion, search: search, hits: hits)
   }
 
   /// `listed(_:hits:)` on the main actor, for a script, which reads the list
   /// straight after changing what it lists.
   func listedNow(_ list: LibraryList, hits: [RFCMetadata]? = nil) -> ListedRows? {
     guard let index else { return nil }
-    return Self.signposted(list) { ListedRows(list, in: index, search: search, hits: hits) }
+    return Self.signposted(list) {
+      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
+    }
   }
 
   @concurrent
   private static func listed(
-    _ list: LibraryList, in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]?
+    _ list: LibraryList, in index: RFCIndex, indexVersion: Int, search: IndexSearch?,
+    hits: [RFCMetadata]?
   ) async -> ListedRows {
-    signposted(list) { ListedRows(list, in: index, search: search, hits: hits) }
+    signposted(list) {
+      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
+    }
   }
 
   private nonisolated static func signposted(

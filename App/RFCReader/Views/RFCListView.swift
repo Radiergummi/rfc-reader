@@ -250,6 +250,11 @@ struct RFCListView: View {
     .onChange(of: shown.filter, initial: true) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
+    // A new tab's first rows arrive after it appears, for the filter it already had
+    // and maybe under a document it was opened on, which the window has to reach.
+    .onChange(of: navigation.listed == nil) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
+    }
     .onChange(of: shown.options) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
@@ -278,7 +283,8 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
-        if let collection {
+        // The tab's collection rather than the rows': a control follows the tab.
+        if case .collection(let collection) = navigation.filter {
           ToolbarItem(placement: .primaryAction) {
             Button {
               addingTo = PickerTarget(id: collection)
