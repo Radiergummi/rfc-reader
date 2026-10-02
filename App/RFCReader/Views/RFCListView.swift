@@ -12,7 +12,7 @@ struct RFCListView: View {
   /// The collection the picker adds to, while it is on show (#349).
   @State private var addingTo: PickerTarget?
 
-  private var rfcs: [RFCMetadata] {
+  private var rows: [LibraryRow] {
     navigation.listed?.rows ?? []
   }
 
@@ -46,7 +46,7 @@ struct RFCListView: View {
   /// A drag in the visible rows, resolved by their documents rather than their
   /// offsets: the rows on screen may hide obsolete documents or be only the first
   /// pages (`CollectionOrder.neighbors`).
-  private func move(from source: IndexSet, to destination: Int, in visible: [RFCMetadata]) {
+  private func move(from source: IndexSet, to destination: Int, in visible: [LibraryRow]) {
     place(CollectionOrder.drop(from: source, to: destination, in: visible.map(\.id)))
   }
 
@@ -69,8 +69,8 @@ struct RFCListView: View {
   }
 
   /// VoiceOver's Move Up and Move Down, one row at a time.
-  private func step(_ rfc: RFCMetadata, by offset: Int, in visible: [RFCMetadata]) {
-    place(CollectionOrder.step(rfc.id, by: offset, in: visible.map(\.id)))
+  private func step(_ row: LibraryRow, by offset: Int, in visible: [LibraryRow]) {
+    place(CollectionOrder.step(row.id, by: offset, in: visible.map(\.id)))
   }
 
   var body: some View {
@@ -78,21 +78,21 @@ struct RFCListView: View {
     // Once, and shared by every row: `RFCRow` used to scan the whole bookmark list
     // itself, which is a linear search per row over a list that can be 9,842 rows
     // long.
-    let bookmarked = library.bookmarkedNumbers
+    let bookmarked = library.bookmarkedDocuments
     // Once, and shared by everything below and the overlay.
-    let rows = rfcs
+    let rows = self.rows
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
     // `library.open(_:activation:in:)` like every other open: a selection binding
     // is handed the outcome, not the click, and Command-click on a list row is the
     // platform's multi-select chord rather than ours to take.
     let window = rows.prefix(limit)
-    let row = { (rfc: RFCMetadata, showsYear: Bool) in
+    let row = { (row: LibraryRow, showsYear: Bool) in
       RFCRow(
-        rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear,
+        row: row, isBookmarked: bookmarked.contains(row.id), showsYear: showsYear,
         filter: shown.filter
       )
-      .tag(rfc.id)
+      .tag(row.id)
       // A combined element with no trait has the role AXUnknown on macOS, which
       // says nothing of what it is (#300). Here, where the row selects rather
       // than presses: elsewhere `RFCRow` is a button's label, and is a button.
@@ -101,17 +101,17 @@ struct RFCListView: View {
       #endif
       // An item provider rather than `.draggable`: it cooperates with `.onMove`,
       // which a collection's own list also uses (#349).
-      .itemProvider { NSItemProvider(object: rfc.id.fileStem as NSString) }
+      .itemProvider { NSItemProvider(object: row.id.fileStem as NSString) }
       #if os(macOS)
         .modifier(
           MacRowActions(
-            rfc: rfc, collection: collection, library: library, navigation: navigation,
+            row: row, collection: collection, library: library, navigation: navigation,
             undoManager: undoManager, remove: remove))
       #else
-        .modifier(RowActions(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number)))
+        .modifier(RowActions(row: row, isBookmarked: bookmarked.contains(row.id)))
       #endif
       .onAppear {
-        guard rfc.id == trigger else { return }
+        guard row.id == trigger else { return }
         limit = ListWindow.extendedLimit(from: limit, total: rows.count)
       }
     }
@@ -119,12 +119,12 @@ struct RFCListView: View {
     // sectioned by year, so this is the branch a collection uses.
     let allowsMoving = shown.options.allowsMoving(in: shown.filter, query: shown.query)
     let visible = Array(window)
-    let unsectioned = ForEach(window) { rfc in
-      row(rfc, true)
+    let unsectioned = ForEach(window) { listed in
+      row(listed, true)
         .accessibilityActions {
           if allowsMoving {
-            Button("Move Up") { step(rfc, by: -1, in: visible) }
-            Button("Move Down") { step(rfc, by: 1, in: visible) }
+            Button("Move Up") { step(listed, by: -1, in: visible) }
+            Button("Move Down") { step(listed, by: 1, in: visible) }
           }
         }
     }
@@ -150,7 +150,7 @@ struct RFCListView: View {
         if YearSections.apply(to: shown.filter, query: shown.query) {
           ForEach(YearSections.sections(of: window)) { section in
             Section {
-              ForEach(section.rfcs) { row($0, false) }
+              ForEach(section.rows) { row($0, false) }
             } header: {
               Text(String(section.year))
                 .levelWithCards()
@@ -320,7 +320,7 @@ struct RFCListView: View {
   /// and it compares two `Int`s per row.
   private func selectedRow() -> Int? {
     guard let selection = navigation.selection else { return nil }
-    return rfcs.firstIndex { $0.id == selection }
+    return rows.firstIndex { $0.id == selection }
   }
 }
 
@@ -392,8 +392,10 @@ struct IndexStatusView: View {
   }
 }
 
+/// A library row: an RFC, or a BCP, STD or FYI bookmarked or read as itself
+/// (#321), which shows the RFCs it names where an RFC shows its status and group.
 struct RFCRow: View {
-  let rfc: RFCMetadata
+  let row: LibraryRow
   let isBookmarked: Bool
   /// False under a year's header, which already says it (#347).
   var showsYear = true
@@ -401,9 +403,13 @@ struct RFCRow: View {
   /// not each say "pppext", nor the Internet Standards' each say "STD".
   var filter: LibraryFilter?
 
-  private var showsStatus: Bool { filter?.fixesStatus != true }
+  private var rfc: RFCMetadata? { row.rfc }
+
+  private var status: PublicationStatus? {
+    filter?.fixesStatus == true ? nil : rfc?.currentStatus
+  }
   private var workingGroup: String? {
-    filter?.fixesWorkingGroup == true ? nil : rfc.workingGroup
+    filter?.fixesWorkingGroup == true ? nil : rfc?.workingGroup
   }
 
   var body: some View {
@@ -412,15 +418,18 @@ struct RFCRow: View {
         designation
         title
         HStack(spacing: 6) {
-          if showsStatus {
-            StatusBadge(status: rfc.currentStatus)
-              .glossaryTooltip(.status(rfc.currentStatus))
+          if let status {
+            StatusBadge(status: status)
+              .glossaryTooltip(.status(status))
           }
-          if rfc.isObsolete {
+          if row.isObsolete {
             Text("Obsolete").font(.caption2).foregroundStyle(.secondary)
           }
           if let workingGroup {
             Text(workingGroup).font(.caption2).foregroundStyle(.tertiary)
+          }
+          if let memberList = row.memberList {
+            Text(memberList).font(.caption2).foregroundStyle(.secondary)
           }
         }
       #else
@@ -435,24 +444,27 @@ struct RFCRow: View {
             // leads a line of text now rather than standing in one.
             // A narrow no-break space inside it, so "RFC" and its number read as
             // one thing beside the parts the wider gaps set apart.
-            Text(rfc.id.displayName.replacing(" ", with: "\u{202F}"))
+            Text(row.id.displayName.replacing(" ", with: "\u{202F}"))
             if showsYear {
-              Text(String(rfc.date.year))
+              Text(String(row.date.year))
             }
             // Spelled as the sidebar and the list's title spell it.
             if let workingGroup {
               Text(workingGroup.uppercased())
             }
-            if rfc.isObsolete {
+            if row.isObsolete {
               Text("Obsolete")
+            }
+            if let memberList = row.memberList {
+              Text(memberList)
             }
           }
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .lineLimit(1)
-          if showsStatus {
-            StatusBadge(status: rfc.currentStatus)
-              .glossaryTooltip(.status(rfc.currentStatus))
+          if let status {
+            StatusBadge(status: status)
+              .glossaryTooltip(.status(status))
           }
           if isBookmarked {
             Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(.tint)
@@ -464,13 +476,13 @@ struct RFCRow: View {
     // One element, not five: VoiceOver read the number, the year, the title, the
     // status and the group as separate stops per row (#156).
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(rfc.accessibilityLabel(isBookmarked: isBookmarked))
+    .accessibilityLabel(row.accessibilityLabel(isBookmarked: isBookmarked))
   }
 
   #if os(macOS)
     private var designation: some View {
       HStack(alignment: .firstTextBaseline) {
-        Text(rfc.id.displayName)
+        Text(row.id.displayName)
           .font(.subheadline.monospacedDigit())
           .foregroundStyle(.secondary)
         Spacer()
@@ -478,16 +490,16 @@ struct RFCRow: View {
           Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(.tint)
         }
         if showsYear {
-          Text(String(rfc.date.year)).font(.caption).foregroundStyle(.tertiary)
+          Text(String(row.date.year)).font(.caption).foregroundStyle(.tertiary)
         }
       }
     }
   #endif
 
   private var title: some View {
-    Text(rfc.title)
+    Text(row.title)
       .lineLimit(2)
-      .strikethrough(rfc.isObsolete, color: .secondary)
+      .strikethrough(row.isObsolete, color: .secondary)
       // Typeset as the English it is. Under a German system language, iOS
       // hyphenated titles mid-word, as in "Key Exch-ange" (#346).
       .typesettingLanguage(.init(identifier: "en"))

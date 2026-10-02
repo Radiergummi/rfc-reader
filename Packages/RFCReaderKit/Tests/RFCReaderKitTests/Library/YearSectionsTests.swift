@@ -7,8 +7,8 @@ import Testing
 /// The iOS list's year sections (#347).
 @Suite("Year sections")
 struct YearSectionsTests {
-  private func rfc(_ number: Int, year: Int) -> RFCMetadata {
-    Fixtures.metadata(number, year: year)
+  private func rfc(_ number: Int, year: Int) -> LibraryRow {
+    .rfc(Fixtures.metadata(number, year: year))
   }
 
   @Test func `consecutive rows of one year make one section`() {
@@ -17,7 +17,7 @@ struct YearSectionsTests {
     let sections = YearSections.sections(of: rows)
 
     #expect(sections.map(\.year) == [2026, 2025])
-    #expect(sections.map { $0.rfcs.map(\.number) } == [[10050, 10042], [9700]])
+    #expect(sections.map { $0.rows.map(\.id.number) } == [[10050, 10042], [9700]])
   }
 
   /// Numbers are assigned before publication, so a list in number order can put a
@@ -28,7 +28,7 @@ struct YearSectionsTests {
     let sections = YearSections.sections(of: rows)
 
     #expect(sections.map(\.year) == [2026, 2025])
-    #expect(sections.map { $0.rfcs.map(\.number) } == [[10050, 10048], [10049]])
+    #expect(sections.map { $0.rows.map(\.id.number) } == [[10050, 10048], [10049]])
   }
 
   @Test func `nothing makes no sections`() {

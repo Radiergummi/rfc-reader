@@ -146,7 +146,9 @@
       guard let navigation = controller?.navigation else { return [] }
       // Not the rows on show: the script may have changed the collection a moment
       // ago, and they follow a turn later.
-      return navigation.rowsNow().map { ScriptableRFC($0.id) }
+      // RFCs only: an `rfc` element is specified by its number, so a series row
+      // listed as one would be taken for the RFC of its number (#152, #321).
+      return navigation.rowsNow().compactMap(\.rfc).map { ScriptableRFC($0.id) }
     }
 
     @objc var scriptInspectorVisible: Bool {

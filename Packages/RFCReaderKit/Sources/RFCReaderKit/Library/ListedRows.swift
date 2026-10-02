@@ -8,7 +8,7 @@ import RFCKit
 /// count and sections are about until the next one arrives.
 public struct ListedRows: Sendable {
   public let list: LibraryList
-  public let rows: [RFCMetadata]
+  public let rows: [LibraryRow]
   /// The search's hits for `list.query`, best first, whatever the filter: empty for
   /// a list that is not searched. Kept so a change of filter or options lists again
   /// without searching again.
@@ -53,8 +53,8 @@ public struct ListedRows: Sendable {
   /// The whole library's results for the query, as All RFCs lists them: what the
   /// iPhone sidebar shows while it is searched (#345). Shaped from `hits` when read,
   /// since only that sidebar reads it.
-  public var librarySearch: [RFCMetadata] {
+  public var librarySearch: [LibraryRow] {
     guard !list.query.isEmpty else { return [] }
-    return ListOptions().apply(to: hits, filter: .all, query: list.query)
+    return ListOptions().apply(to: hits.map(LibraryRow.rfc), filter: .all, query: list.query)
   }
 }

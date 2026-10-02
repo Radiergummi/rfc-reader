@@ -241,13 +241,13 @@ struct SidebarView: View {
     @ViewBuilder
     private var searchResults: some View {
       let results = navigation.listed?.librarySearch ?? []
-      let bookmarked = library.bookmarkedNumbers
+      let bookmarked = library.bookmarkedDocuments
       Section {
-        ForEach(results.prefix(Self.searchResultLimit)) { rfc in
+        ForEach(results.prefix(Self.searchResultLimit)) { row in
           Button {
-            library.open(rfc.id, activation: .current, in: navigation)
+            library.open(row.id, activation: .current, in: navigation)
           } label: {
-            RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
+            RFCRow(row: row, isBookmarked: bookmarked.contains(row.id))
           }
           .buttonStyle(.plain)
         }
@@ -315,7 +315,8 @@ struct SidebarView: View {
     }
     // List rows dropped here join the collection at its end.
     .dropDestination(for: String.self) { keys, _ in
-      let documents = keys.compactMap(DocumentID.init(fileStem:))
+      // A collection holds RFCs: a series row dragged here is not taken (#321).
+      let documents = keys.compactMap(DocumentID.init(fileStem:)).filter { $0.series == .rfc }
       guard !documents.isEmpty else { return false }
       library.editCollections { context in
         for document in documents {
@@ -350,7 +351,7 @@ struct SidebarView: View {
     /// filter it lists nothing in.
     private func count(_ filter: LibraryFilter) -> Int? {
       switch filter {
-      case .bookmarks: library.bookmarkedNumbers.count
+      case .bookmarks: library.bookmarkedDocuments.count
       case .downloaded: library.downloadedNumbers.count
       case .recent: library.recentlyReadCount
       default: library.indexCounts[filter]

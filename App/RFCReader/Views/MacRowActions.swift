@@ -3,9 +3,10 @@ import RFCReaderKit
 import SwiftUI
 
 #if os(macOS)
-  /// What a Mac list row offers on a right click (#349).
+  /// What a Mac list row offers on a right click (#349). A series row is bookmarked
+  /// as itself, but not added to a collection, which holds RFCs (#321).
   struct MacRowActions: ViewModifier {
-    let rfc: RFCMetadata
+    let row: LibraryRow
     let collection: UUID?
     let library: LibraryModel
     let navigation: NavigationModel
@@ -21,21 +22,23 @@ import SwiftUI
         }
         // macOS 27 hides a menu item's icon unless the label asks to keep it.
         .labelStyle(.titleAndIcon)
-        Menu("Add to Collection") {
-          AddToCollectionItems(
-            document: rfc.id, library: library, navigation: navigation,
-            undoManager: undoManager)
+        if row.rfc != nil {
+          Menu("Add to Collection") {
+            AddToCollectionItems(
+              document: row.id, library: library, navigation: navigation,
+              undoManager: undoManager)
+          }
         }
         if collection != nil {
-          Button("Remove from Collection") { remove(rfc.id) }
+          Button("Remove from Collection") { remove(row.id) }
         }
       }
     }
 
-    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(rfc.id) }
+    private var isBookmarked: Bool { library.bookmarkedDocuments.contains(row.id) }
 
     private func toggleBookmark() {
-      library.toggleBookmark(rfc.id)
+      library.toggleBookmark(row.id)
     }
   }
 #endif

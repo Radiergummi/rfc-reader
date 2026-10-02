@@ -15,7 +15,7 @@ struct CollectionPickerSheet: View {
   @State private var limit = ListWindow.page
   /// Unsearched, the whole library newest first, as All RFCs lists it: the same
   /// listing with the `.all` filter, made off the main actor (#597).
-  @State private var rows: [RFCMetadata] = []
+  @State private var rows: [LibraryRow] = []
 
   /// What the rows are listed again for: the query, normalized, so a space typed
   /// after a word searches nothing again, and a new index.
@@ -28,15 +28,15 @@ struct CollectionPickerSheet: View {
     let members = Set(library.collections[collection]?.members ?? [])
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     NavigationStack {
-      List(rows.prefix(limit)) { rfc in
-        let isMember = members.contains(rfc.id)
+      List(rows.prefix(limit)) { row in
+        let isMember = members.contains(row.id)
         Button {
           library.editCollections {
-            try CollectionStore.toggle(rfc.id, in: collection, undoManager: undoManager, in: $0)
+            try CollectionStore.toggle(row.id, in: collection, undoManager: undoManager, in: $0)
           }
         } label: {
           HStack {
-            RFCRow(rfc: rfc, isBookmarked: false)
+            RFCRow(row: row, isBookmarked: false)
             Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
               .foregroundStyle(isMember ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
               .accessibilityHidden(true)
@@ -45,7 +45,7 @@ struct CollectionPickerSheet: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isMember ? .isSelected : [])
         .onAppear {
-          guard rfc.id == trigger else { return }
+          guard row.id == trigger else { return }
           limit = ListWindow.extendedLimit(from: limit, total: rows.count)
         }
       }
