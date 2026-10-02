@@ -46,6 +46,95 @@ struct PinRecipeTests {
     }
   }
 
+  /// A scroll view whose viewport moves as UIKit's does (#625): it remembers the
+  /// fragment it put at the top and the y it put it at, and a scroll walks from there
+  /// by the distance scrolled, through the fragments' heights. When a layout from the
+  /// start has since moved that fragment, the walk still starts from the remembered y,
+  /// so it lands as far off as the fragment moved. At the document's start the walk
+  /// starts from the start. Until it is first laid out it has no viewport, and puts
+  /// one where TextKit's estimates say, as after TextKit drops its layout.
+  final class AnchoredSurface: PinSurface {
+    let layout: NSTextLayoutManager
+    var containerTop: CGFloat = 0
+    private var remembered: (offset: Int, y: CGFloat)?
+
+    init(layout: NSTextLayoutManager) { self.layout = layout }
+
+    func scroll(toContainerY target: CGFloat) {
+      containerTop = max(0, target)
+      guard containerTop > 0 else {
+        remembered = (0, 0)
+        return
+      }
+      guard let remembered, var fragment = fragment(at: remembered.offset) else { return }
+      var y = remembered.y
+      while containerTop < y, let previous = self.fragment(at: start(of: fragment) - 1) {
+        y -= previous.layoutFragmentFrame.height
+        fragment = previous
+      }
+      while y + fragment.layoutFragmentFrame.height <= containerTop,
+        let next = self.fragment(at: end(of: fragment))
+      {
+        y += fragment.layoutFragmentFrame.height
+        fragment = next
+      }
+      self.remembered = (start(of: fragment), y)
+    }
+
+    func layOutViewport() {
+      guard remembered == nil,
+        let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: containerTop))
+      else { return }
+      remembered = (start(of: first), first.layoutFragmentFrame.minY)
+    }
+
+    /// What the viewport shows at its top.
+    func shown() -> ReaderAnchor? {
+      guard let remembered, let fragment = fragment(at: remembered.offset) else { return nil }
+      return LinePin.anchor(
+        atFragmentY: containerTop - remembered.y, in: fragment.textLineFragments,
+        fragmentStart: remembered.offset
+      ).anchor
+    }
+
+    /// The fragment holding `offset`, laid out, or nil outside the text.
+    private func fragment(at offset: Int) -> NSTextLayoutFragment? {
+      guard offset >= 0, let location = layout.location(atOffset: offset),
+        location.compare(layout.documentRange.endLocation) == .orderedAscending,
+        let fragment = layout.textLayoutFragment(for: location)
+      else { return nil }
+      layout.ensureLayout(for: fragment.rangeInElement)
+      return layout.textLayoutFragment(for: location)
+    }
+
+    private func start(of fragment: NSTextLayoutFragment) -> Int {
+      layout.offset(of: fragment.rangeInElement.location)
+    }
+
+    private func end(of fragment: NSTextLayoutFragment) -> Int {
+      layout.offset(of: fragment.rangeInElement.endLocation)
+    }
+  }
+
+  /// On an iPhone, a settle laid out from the start, which moved the fragments the
+  /// viewport was showing, and the scroll to the target then walked from where the
+  /// viewport remembered them: RFC 9000 showed §20.1 for §14.3.2, 80,000 characters on.
+  @Test func `a settle lands its target where the viewport walks to`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = AnchoredSurface(layout: fixture.layout)
+    let sections = built.anchors.sections.entries
+    // The viewport on estimates, in the middle of the document.
+    PinRecipe.pin(
+      ReaderAnchor(characterOffset: sections[sections.count / 2].offset), in: fixture.layout,
+      on: surface)
+    for index in [sections.count * 3 / 4, sections.count / 3, sections.count - 1, 1] {
+      let target = sections[index].offset
+      PinRecipe.settle(ReaderAnchor(characterOffset: target), in: fixture.layout, on: surface)
+      #expect(surface.shown()?.characterOffset == target, "jump to \(sections[index].anchor)")
+    }
+  }
+
   @Test func `a jump lands its target at the top from wherever the last one left`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
