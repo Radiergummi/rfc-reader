@@ -12,9 +12,9 @@ import RFCKit
 /// has arrived or failed to as well (#241). On a cold launch the first tab registers
 /// before the index is read, and a series link handed over then would select the series
 /// itself, because resolving it to its first RFC needs the index. A plain RFC link needs
-/// nothing from the index and does not wait for it. Making every link wait was the
-/// first design, and the maintainer chose this over it: no index is bundled with the
-/// app, so on a first launch every link would wait for the index's whole download.
+/// nothing from the index and does not wait for it. Making every link wait was set
+/// aside: no index is bundled with the app, so on a first launch every link would wait
+/// for the index's whole download.
 ///
 /// Two kinds of link wait, apart, so that neither displaces the other:
 /// - **For a new tab**, opened behind or in front from a tab already open: in order,
