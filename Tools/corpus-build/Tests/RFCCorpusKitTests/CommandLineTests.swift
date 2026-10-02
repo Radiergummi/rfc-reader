@@ -118,4 +118,24 @@ struct CommandLineTests {
     #expect(sqlite3_step(statement) == SQLITE_ROW)
     #expect(sqlite3_column_int(statement, 0) == 4)
   }
+
+  /// An RFC that does not parse would leave a hole in the graph that nothing else
+  /// shows, so the run fails, naming it, after writing the rest.
+  @Test func `index fails on an RFC it cannot read`() throws {
+    let out = Self.temporaryDirectory()
+    let input = out.appending(path: "xml")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.copyItem(
+      at: Fixtures.url("rfc9290.xml"), to: input.appending(path: "rfc9290.xml"))
+    try Data("<rfc".utf8).write(to: input.appending(path: "rfc1.xml"))
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", input.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status != 0)
+    #expect(result.standardError.contains("rfc1"), "\(result.standardError)")
+    #expect(FileManager.default.fileExists(atPath: database.path))
+  }
 }

@@ -107,6 +107,25 @@ extension RFCDocument {
     return [(sectionAnchor: nil, inlines: abstract.flatMap(\.flattened))] + sections
   }
 
+  /// The runs of prose the reader draws in the body, by the place they are read in:
+  /// the abstract first, with no anchor, then each section with its heading and its
+  /// own blocks' prose. Not a bibliography's annotations, which the references panel
+  /// shows, nor a section that `holdsOnlyReferences`, which the body leaves out. What
+  /// `Backlinks` and `Citations` count references in, so the two agree on where the
+  /// text refers to anything.
+  public var drawnProseBySection: [(sectionAnchor: String?, runs: [[Inline]])] {
+    func drawn(_ blocks: [Block]) -> [[Inline]] {
+      blocks.flattened.flatMap { block -> [[Inline]] in
+        if case .references = block { return [] }
+        return block.proseRuns
+      }
+    }
+    let sections = allSections.filter { !$0.holdsOnlyReferences }.map { section in
+      (sectionAnchor: Optional(section.anchor), runs: [section.title] + drawn(section.blocks))
+    }
+    return [(sectionAnchor: nil, runs: drawn(header.abstract))] + sections
+  }
+
   /// The first section, depth first, that `matches`, without building the list of
   /// every section to look through.
   func firstSection(where matches: (Section) -> Bool) -> Section? {

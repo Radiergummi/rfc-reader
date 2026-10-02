@@ -34,10 +34,10 @@ public final class IndexDatabase {
   /// Creates the database at `url`, replacing any file there.
   public init(creatingAt url: URL) throws {
     try? FileManager.default.removeItem(at: url)
+    // A failed open still hands back a connection, for its message; `deinit`
+    // closes it, as it closes any other.
     guard sqlite3_open(url.path, &connection) == SQLITE_OK else {
-      let failure = Failure(description: Self.message(of: connection))
-      sqlite3_close(connection)
-      throw failure
+      throw Failure(description: Self.message(of: connection))
     }
     try execute(
       """
@@ -66,8 +66,8 @@ public final class IndexDatabase {
   public func setMeta(_ key: String, to value: String) throws {
     let statement = try prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
     defer { sqlite3_finalize(statement) }
-    bind(key, at: 1, in: statement)
-    bind(value, at: 2, in: statement)
+    try bind(key, at: 1, in: statement)
+    try bind(value, at: 2, in: statement)
     try step(statement)
   }
 
@@ -75,22 +75,22 @@ public final class IndexDatabase {
   public func insert(_ citations: [Citation], citing: DocumentID) throws {
     let statement = insertCitation
     for citation in citations {
-      sqlite3_reset(statement)
-      bind(citing.description, at: 1, in: statement)
-      bind(citation.cited.description, at: 2, in: statement)
+      try check(sqlite3_reset(statement))
+      try bind(citing.description, at: 1, in: statement)
+      try bind(citation.cited.description, at: 2, in: statement)
       switch citation.place {
       case .abstract:
-        bind("abstract", at: 3, in: statement)
-        bind(nil, at: 4, in: statement)
+        try bind("abstract", at: 3, in: statement)
+        try bind(nil, at: 4, in: statement)
       case .section(let anchor):
-        bind("section", at: 3, in: statement)
-        bind(anchor, at: 4, in: statement)
+        try bind("section", at: 3, in: statement)
+        try bind(anchor, at: 4, in: statement)
       case .bibliography:
-        bind("bibliography", at: 3, in: statement)
-        bind(nil, at: 4, in: statement)
+        try bind("bibliography", at: 3, in: statement)
+        try bind(nil, at: 4, in: statement)
       }
-      sqlite3_bind_int64(statement, 5, Int64(citation.count))
-      bind(citation.kind?.rawValue, at: 6, in: statement)
+      try check(sqlite3_bind_int64(statement, 5, Int64(citation.count)))
+      try bind(citation.kind?.rawValue, at: 6, in: statement)
       try step(statement)
     }
   }
@@ -132,12 +132,20 @@ public final class IndexDatabase {
   /// SQLite copies the text, since the Swift string it came from does not outlive
   /// the call: `SQLITE_TRANSIENT`, which the C macro spells as a cast Swift cannot
   /// import.
-  private func bind(_ text: String?, at index: Int32, in statement: OpaquePointer?) {
+  private func bind(_ text: String?, at index: Int32, in statement: OpaquePointer?) throws {
     guard let text else {
-      sqlite3_bind_null(statement, index)
+      try check(sqlite3_bind_null(statement, index))
       return
     }
-    sqlite3_bind_text(statement, index, text, -1, Self.transient)
+    try check(sqlite3_bind_text(statement, index, text, -1, Self.transient))
+  }
+
+  /// A failed bind leaves the parameter as it was, so a row would be written with the
+  /// last one's value; it has to stop the build instead.
+  private func check(_ result: Int32) throws {
+    guard result == SQLITE_OK else {
+      throw Failure(description: Self.message(of: connection))
+    }
   }
 
   private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

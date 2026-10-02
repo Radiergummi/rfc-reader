@@ -84,6 +84,14 @@ struct CitationsTests {
     #expect(citations.allSatisfy { $0.kind == nil })
   }
 
+  /// The index names a document by its file, which a header may not: whichever ID is
+  /// given is the one never cited.
+  @Test func `the document named as citing is never cited`() throws {
+    let citations = Citations.of(try Fixtures.document("rfc9290.xml"), citing: .rfc(7252))
+    #expect(!citations.contains { $0.cited == .rfc(7252) })
+    #expect(!citations.isEmpty)
+  }
+
   @Test func `citations survive encoding`() throws {
     let citations = try Self.citations("rfc9290.xml")
     let data = try JSONEncoder().encode(citations)

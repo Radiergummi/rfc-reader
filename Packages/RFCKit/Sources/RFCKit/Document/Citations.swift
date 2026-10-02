@@ -33,14 +33,18 @@ public struct Citation: Sendable, Hashable, Codable {
 /// Which documents a document cites, from where, and how (#174).
 ///
 /// A citation is a cross reference to another document in what the reader draws as
-/// prose: the abstract, the headings and the body, as `Backlinks` counts them, but not
-/// a bibliography's annotations. A document the bibliography lists and the prose never
+/// prose, `RFCDocument.drawnProseBySection`, where `Backlinks` counts too: the
+/// abstract, the headings and the body, but not a bibliography's annotations. A document the bibliography lists and the prose never
 /// cites is still cited, from `.bibliography`. Never the document itself, which its
 /// abstract and headings are the likeliest to name.
 public enum Citations {
   /// In document order: the places as the reader meets them, and within one place the
   /// documents in the order it first cites them; the bibliography last, in its order.
-  public static func of(_ document: RFCDocument) -> [Citation] {
+  ///
+  /// `citing` is the document's own ID, which it never cites: its header's unless
+  /// given, as the index gives the one its file names.
+  public static func of(_ document: RFCDocument, citing: DocumentID? = nil) -> [Citation] {
+    let own = citing ?? document.header.id
     var kindByEntry: [String: ReferenceList.Kind] = [:]
     var kindByDocument: [DocumentID: ReferenceList.Kind] = [:]
     var listed: [(id: DocumentID, kind: ReferenceList.Kind)] = []
@@ -53,18 +57,14 @@ public enum Citations {
       }
     }
 
-    let places =
-      [(place: Citation.Place.abstract, runs: prose(document.header.abstract))]
-      + document.allSections.map { section in
-        (place: .section(section.anchor), runs: [section.title] + prose(section.blocks))
-      }
     var citations: [Citation] = []
     var cited: Set<DocumentID> = []
-    for (place, runs) in places {
+    for (anchor, runs) in document.drawnProseBySection {
+      let place = anchor.map(Citation.Place.section) ?? .abstract
       var found: [Citation] = []
       for inline in runs.flatMap(\.flattened) {
         guard case .crossReference(let xref) = inline,
-          case .document(let id, _, let entry) = xref.target, id != document.header.id
+          case .document(let id, _, let entry) = xref.target, id != own
         else { continue }
         if let index = found.firstIndex(where: { $0.cited == id }) {
           found[index].count += 1
@@ -78,19 +78,10 @@ public enum Citations {
     }
 
     var seen: Set<DocumentID> = []
-    for (id, kind) in listed where id != document.header.id && !cited.contains(id) {
+    for (id, kind) in listed where id != own && !cited.contains(id) {
       guard seen.insert(id).inserted else { continue }
       citations.append(Citation(cited: id, place: .bibliography, count: 1, kind: kind))
     }
     return citations
-  }
-
-  /// The runs of prose in these blocks and every block nested in them, but for a
-  /// bibliography's.
-  private static func prose(_ blocks: [Block]) -> [[Inline]] {
-    blocks.flattened.flatMap { block -> [[Inline]] in
-      if case .references = block { return [] }
-      return block.proseRuns
-    }
   }
 }

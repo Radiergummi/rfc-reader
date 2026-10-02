@@ -7,7 +7,19 @@ import Testing
 /// The corpus's index database (#174), read back through SQLite's own API, as a
 /// reader in any language would.
 @Suite
-struct IndexDatabaseTests {
+final class IndexDatabaseTests {
+  /// One per test, removed with everything written into it.
+  private let directory = FileManager.default.temporaryDirectory
+    .appending(path: "index-database-\(UUID().uuidString)")
+
+  init() throws {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  }
+
+  deinit {
+    try? FileManager.default.removeItem(at: directory)
+  }
+
   private static let citations = [
     Citation(cited: .rfc(7807), place: .abstract, count: 1, kind: .normative),
     Citation(cited: .rfc(7252), place: .section("basic"), count: 4, kind: .normative),
@@ -18,9 +30,8 @@ struct IndexDatabaseTests {
   ]
 
   /// A database written to a fresh temporary file, closed, and opened again.
-  private static func written(_ write: (IndexDatabase) throws -> Void) throws -> OpaquePointer? {
-    let url = FileManager.default.temporaryDirectory
-      .appending(path: "indexes-\(UUID().uuidString).sqlite")
+  private func written(_ write: (IndexDatabase) throws -> Void) throws -> OpaquePointer? {
+    let url = directory.appending(path: "indexes.sqlite")
     let database = try IndexDatabase(creatingAt: url)
     try write(database)
     try database.close()
@@ -45,7 +56,7 @@ struct IndexDatabaseTests {
   }
 
   @Test func `citations read back as they were written`() throws {
-    let connection = try Self.written { try $0.insert(Self.citations, citing: .rfc(9290)) }
+    let connection = try written { try $0.insert(Self.citations, citing: .rfc(9290)) }
     defer { sqlite3_close(connection) }
     #expect(
       Self.rows(
@@ -62,7 +73,7 @@ struct IndexDatabaseTests {
 
   /// What the index is for: which documents cite one, which no document can say.
   @Test func `the documents citing one are a lookup`() throws {
-    let connection = try Self.written { database in
+    let connection = try written { database in
       try database.insert(Self.citations, citing: .rfc(9290))
       try database.insert(
         [Citation(cited: .rfc(7252), place: .section("intro"), count: 1, kind: .normative)],
@@ -76,7 +87,7 @@ struct IndexDatabaseTests {
   }
 
   @Test func `the schema version and the build's metadata are kept`() throws {
-    let connection = try Self.written { try $0.setMeta("version", to: "2026.10") }
+    let connection = try written { try $0.setMeta("version", to: "2026.10") }
     defer { sqlite3_close(connection) }
     #expect(
       Self.rows("SELECT key, value FROM meta ORDER BY key", in: connection)
@@ -84,8 +95,7 @@ struct IndexDatabaseTests {
   }
 
   @Test func `writing over a database replaces it`() throws {
-    let url = FileManager.default.temporaryDirectory
-      .appending(path: "indexes-\(UUID().uuidString).sqlite")
+    let url = directory.appending(path: "indexes.sqlite")
     for citing in [DocumentID.rfc(1), .rfc(2)] {
       let database = try IndexDatabase(creatingAt: url)
       try database.insert(Self.citations, citing: citing)
@@ -95,5 +105,12 @@ struct IndexDatabaseTests {
     #expect(sqlite3_open_v2(url.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
     defer { sqlite3_close(connection) }
     #expect(Self.rows("SELECT DISTINCT citing FROM citations", in: connection) == [["RFC2"]])
+  }
+
+  /// A failed open is an error, not a crash: SQLite hands back a connection even then,
+  /// and it is closed once.
+  @Test func `a database that cannot be created is an error`() {
+    let url = directory.appending(path: "missing/indexes.sqlite")
+    #expect(throws: IndexDatabase.Failure.self) { try IndexDatabase(creatingAt: url) }
   }
 }

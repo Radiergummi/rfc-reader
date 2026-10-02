@@ -37,16 +37,25 @@ struct IndexCommand: ParsableCommand {
     try database.setMeta("version", to: version)
     var indexed = 0
     var citations = 0
+    var failed: [String] = []
     for (index, file) in files.enumerated() {
-      // A document is the one its file names, which a converted header may lack.
-      guard let data = try? Data(contentsOf: file), let document = try? RFCXMLParser.parse(data),
-        let id = document.header.id
-          ?? DocumentID(fileStem: file.deletingPathExtension().lastPathComponent)
-      else {
-        Self.logger.warning("unparseable", metadata: ["file": "\(file.lastPathComponent)"])
+      let stem = file.deletingPathExtension().lastPathComponent
+      // A document is the one its file names: a converted header may lack its number,
+      // or state another one, and two files must not index as the same document.
+      guard let id = DocumentID(fileStem: stem) else {
+        Self.logger.info("not an RFC", metadata: ["file": "\(file.lastPathComponent)"])
         continue
       }
-      let cited = Citations.of(document)
+      let document: RFCDocument
+      do {
+        document = try RFCXMLParser.parse(Data(contentsOf: file))
+      } catch {
+        Self.logger.error(
+          "unreadable", metadata: ["file": "\(file.lastPathComponent)", "error": "\(error)"])
+        failed.append(stem)
+        continue
+      }
+      let cited = Citations.of(document, citing: id)
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
@@ -65,5 +74,12 @@ struct IndexCommand: ParsableCommand {
         "documents": "\(indexed)", "citations": "\(citations)", "bytes": "\(size)",
         "duration": "\(clock.now - started)", "path": "\(out)",
       ])
+    // An RFC left out is a gap in the graph nothing else would show, so the run fails
+    // once the rest is written, for the files to be looked at.
+    guard failed.isEmpty else {
+      Self.logger.error(
+        "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
+      throw ExitCode.failure
+    }
   }
 }
