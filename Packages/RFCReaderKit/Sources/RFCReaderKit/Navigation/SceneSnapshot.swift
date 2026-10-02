@@ -37,10 +37,9 @@ public struct SceneSnapshot: Codable, Equatable, Sendable {
   /// The snapshot `data` holds, or nil when it holds none this build can read: one of
   /// another version, or anything else.
   public static func decoded(from data: Data) -> SceneSnapshot? {
-    struct Version: Decodable { let version: Int }
-    guard (try? JSONDecoder().decode(Version.self, from: data))?.version == version else {
-      return nil
-    }
-    return try? JSONDecoder().decode(SceneSnapshot.self, from: data)
+    guard let snapshot = try? JSONDecoder().decode(SceneSnapshot.self, from: data),
+      snapshot.version == version
+    else { return nil }
+    return snapshot
   }
 }
