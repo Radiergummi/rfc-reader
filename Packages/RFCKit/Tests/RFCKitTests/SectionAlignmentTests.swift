@@ -21,6 +21,14 @@ struct SectionAlignmentTests {
       blocks: [.paragraph(Paragraph(text: text))])
   }
 
+  /// `old` and `new` aligned, with the edge between them in `new`'s header, where the
+  /// index finds it.
+  private static func pairs(old: RFCDocument, new: RFCDocument) -> [AlignedSection] {
+    var new = new
+    if let id = old.header.id { new.header.obsoletes.append(id) }
+    return SectionAlignment.pairs(among: [old, new])
+  }
+
   private static func numbers(_ pairs: [AlignedSection]) -> Set<String> {
     Set(pairs.map { "\($0.oldSection) -> \($0.newSection)" })
   }
@@ -41,7 +49,7 @@ struct SectionAlignmentTests {
         Self.section("4", "Gadget Responses", "A server answers with the gadget it holds now."),
         Self.section("7", "Widget Requests", "A client asks for a widget by name."),
       ])
-    let pairs = SectionAlignment.pairs(old: old, new: new)
+    let pairs = Self.pairs(old: old, new: new)
     #expect(Self.numbers(pairs) == ["section-1 -> section-7", "section-2 -> section-4"])
     #expect(pairs.allSatisfy { $0.old == .rfc(1) && $0.new == .rfc(2) })
   }
@@ -65,7 +73,7 @@ struct SectionAlignmentTests {
         Self.section("2", "Methods", "A method names what the client wants done to a resource."),
         Self.section("6", "Content", framing),
       ])
-    let pairs = SectionAlignment.pairs(old: old, new: new)
+    let pairs = Self.pairs(old: old, new: new)
     #expect(Self.numbers(pairs).contains("section-3 -> section-6"))
     #expect(!Self.numbers(pairs).contains("section-3 -> section-2"))
   }
@@ -90,8 +98,81 @@ struct SectionAlignmentTests {
         Self.section(
           "8.2", "Entity Tag Validators", "An entity tag validator compares opaque tags."),
       ])
-    let pairs = SectionAlignment.pairs(old: old, new: new)
+    let pairs = Self.pairs(old: old, new: new)
     #expect(Self.numbers(pairs) == ["section-5 -> section-8.1", "section-5 -> section-8.2"])
+  }
+
+  /// A document obsoleted by two is aligned with both at once: a section that moved
+  /// to one is paired there, and not also with its nearest match in the other.
+  @Test func `a section that moved to another successor is paired only there`() {
+    let old = Self.document(
+      1,
+      [
+        Self.section("1", "Widget Requests", "A client asks for a widget by sending its name."),
+        Self.section(
+          "2", "Widget Framing", "Each widget request is framed by a length and a checksum."),
+      ])
+    var semantics = Self.document(
+      2, [Self.section("3", "Widget Requests", "A client asks for a widget by sending its name.")])
+    var syntax = Self.document(
+      3,
+      [
+        Self.section(
+          "4", "Widget Framing", "Each widget request is framed by a length and a checksum.")
+      ])
+    semantics.header.obsoletes = [.rfc(1)]
+    syntax.header.obsoletes = [.rfc(1)]
+    let pairs = SectionAlignment.pairs(among: [old, semantics, syntax])
+    #expect(
+      Set(pairs.map { "\($0.oldSection) -> \($0.new.number) \($0.newSection)" })
+        == ["section-1 -> 2 section-3", "section-2 -> 3 section-4"])
+  }
+
+  /// The same the other way: a document obsoleting two takes each section's
+  /// predecessor from the one that holds it, not the nearest match from each.
+  @Test func `a section whose predecessor is in another old document is paired only there`() {
+    let requests = Self.document(
+      1, [Self.section("1", "Widget Requests", "A client asks for a widget by sending its name.")])
+    let framing = Self.document(
+      2,
+      [
+        Self.section(
+          "1", "Widget Framing", "Each widget request is framed by a length and a checksum.")
+      ])
+    var merged = Self.document(
+      3,
+      [
+        Self.section("5", "Widget Requests", "A client asks for a widget by sending its name."),
+        Self.section(
+          "6", "Widget Framing", "Each widget request is framed by a length and a checksum."),
+      ])
+    merged.header.obsoletes = [.rfc(1), .rfc(2)]
+    let pairs = SectionAlignment.pairs(among: [requests, framing, merged])
+    #expect(
+      Set(pairs.map { "\($0.old.number) \($0.oldSection) -> \($0.newSection)" })
+        == ["1 section-1 -> section-5", "2 section-1 -> section-6"])
+  }
+
+  /// A title alone is not enough: two sections that share a generic title and nothing
+  /// they say are no pair.
+  @Test func `an equal title with nothing in common is no pair`() {
+    let old = Self.document(
+      1, [Self.section("1", "Overview", "Widgets are requested by name and returned whole.")])
+    let new = Self.document(
+      2, [Self.section("9", "Overview", "Telemetry counters export daily over a side channel.")])
+    #expect(Self.pairs(old: old, new: new).isEmpty)
+  }
+
+  /// An edge named twice is one edge, and a document naming itself is none.
+  @Test func `a repeated or a self-naming edge writes nothing more`() {
+    let old = Self.document(
+      1, [Self.section("1", "Widget Requests", "A client asks for a widget by sending its name.")])
+    var new = Self.document(
+      2, [Self.section("1", "Widget Requests", "A client asks for a widget by sending its name.")])
+    new.header.obsoletes = [.rfc(1), .rfc(1), .rfc(2)]
+    let pairs = SectionAlignment.pairs(among: [old, new, new])
+    #expect(pairs.count == 1)
+    #expect(pairs.allSatisfy { $0.old == .rfc(1) && $0.new == .rfc(2) })
   }
 
   /// A section with nothing in common with any old one has no predecessor: a new
@@ -106,7 +187,7 @@ struct SectionAlignmentTests {
         Self.section(
           "2", "Telemetry Export", "Counters are exported over a separate channel daily."),
       ])
-    let pairs = SectionAlignment.pairs(old: old, new: new)
+    let pairs = Self.pairs(old: old, new: new)
     #expect(!pairs.contains { $0.newSection == "section-2" })
   }
 
@@ -117,7 +198,7 @@ struct SectionAlignmentTests {
     old.header.id = nil
     let new = Self.document(
       2, [Self.section("1", "Widget Requests", "A client asks for a widget by sending its name.")])
-    #expect(SectionAlignment.pairs(old: old, new: new).isEmpty)
+    #expect(Self.pairs(old: old, new: new).isEmpty)
   }
 }
 
@@ -164,33 +245,76 @@ struct CorpusBackedSectionAlignmentTests {
     7233: ["14.5"],
   ]
 
+  /// The sections of RFC 7230 that went to RFC 9112, the other document obsoleting it,
+  /// and have no counterpart in 9110: the message syntax and framing, and pipelining.
+  private static let movedTo9112 = [
+    "3.1.1", "3.1.2", "3.3.1", "3.3.3", "4.1", "4.1.1", "4.1.3", "5.3.1", "5.3.4", "6.3.2",
+    "9.5",
+  ]
+
+  /// An old document as `corpus-build index` reads it: converted to RFCXML and parsed
+  /// back, under the number its file names.
   private static func old(_ number: Int) throws -> RFCDocument {
-    LegacyTextParser.parse(try CorpusText.text("rfc\(number)"))
+    let parsed = LegacyTextParser.parse(try CorpusText.text("rfc\(number)"))
+    var document = try RFCXMLParser.parse(Data(RFCXMLSerializer().serialize(parsed).utf8))
+    document.header.id = .rfc(number)
+    return document
+  }
+
+  private static func new(_ number: Int) throws -> RFCDocument {
+    var document = try RFCXMLParser.parse(CorpusText.xml("rfc\(number)"))
+    document.header.id = .rfc(number)
+    return document
+  }
+
+  /// Each section's number, by anchor.
+  private static func numbers(of document: RFCDocument) -> [String: String] {
+    Dictionary(
+      document.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
+      uniquingKeysWith: { first, _ in first })
+  }
+
+  /// The documents RFC 9110 obsoletes, as `corpus-build index` aligns them: together,
+  /// with 9110 and with 9112, the other document obsoleting 7230.
+  private static let olds = [2818, 7230, 7231, 7232, 7233, 7235, 7538, 7615, 7694]
+
+  /// The group's pairs with 9110 for each old document, by section number.
+  private static func pairsWith9110() throws -> [Int: [(old: String, new: String)]] {
+    let olds = try Self.olds.map(Self.old)
+    let new = try Self.new(9110)
+    let numbers = Dictionary(
+      uniqueKeysWithValues: (olds + [new]).compactMap { document in
+        document.header.id.map { ($0, Self.numbers(of: document)) }
+      })
+    let pairs = SectionAlignment.pairs(among: olds + [new, try Self.new(9112)])
+    var byOld: [Int: [(old: String, new: String)]] = [:]
+    for pair in pairs where pair.new == .rfc(9110) {
+      guard let oldNumber = numbers[pair.old]?[pair.oldSection],
+        let newNumber = numbers[pair.new]?[pair.newSection]
+      else { continue }
+      byOld[pair.old.number, default: []].append((oldNumber, newNumber))
+    }
+    return byOld
+  }
+
+  /// A section that moved to the other successor gets no row in this one: its best
+  /// match in 9110 would be a wrong "replaced by".
+  @Test func `a section that went to another successor is not aligned with this one`() throws {
+    let pairs = try Self.pairsWith9110()[7230] ?? []
+    let wrong = pairs.filter { Self.movedTo9112.contains($0.old) }
+    #expect(wrong.isEmpty, "\(wrong.map { "7230 §\($0.old) -> 9110 §\($0.new)" })")
   }
 
   @Test func `RFC 9110 is aligned with what it obsoletes`() throws {
-    let new = try RFCXMLParser.parse(CorpusText.xml("rfc9110"))
-    let newNumbers = Dictionary(
-      new.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
-      uniquingKeysWith: { first, _ in first })
+    let aligned = try Self.pairsWith9110()
     var claimed = 0
     var right = 0
     var found = 0
     var wrong: [String] = []
     var missed: [String] = []
     for (number, labeled) in Self.predecessors {
-      let old = try Self.old(number)
-      let oldNumbers = Dictionary(
-        old.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
-        uniquingKeysWith: { first, _ in first })
       let labeledSections = Set(labeled.map(\.new)).union(Self.newcomers[number] ?? [])
-      let pairs = SectionAlignment.pairs(old: old, new: new).compactMap {
-        pair -> (old: String, new: String)? in
-        guard let oldNumber = oldNumbers[pair.oldSection],
-          let newNumber = newNumbers[pair.newSection]
-        else { return nil }
-        return (oldNumber, newNumber)
-      }
+      let pairs = aligned[number] ?? []
       for pair in pairs where labeledSections.contains(pair.new) {
         claimed += 1
         if labeled.contains(where: { $0.old == pair.old && $0.new == pair.new }) {
@@ -206,9 +330,6 @@ struct CorpusBackedSectionAlignmentTests {
           missed.append("\(number) §\(label.old) -> 9110 §\(label.new)")
         }
       }
-      // The pass over the whole corpus has this edge too: every document 9110
-      // obsoletes is one its header names.
-      #expect(new.header.obsoletes.contains(.rfc(number)))
     }
     let labels = Self.predecessors.values.map(\.count).reduce(0, +)
     let precision = Double(right) / Double(max(claimed, 1))

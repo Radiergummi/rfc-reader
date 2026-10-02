@@ -38,9 +38,11 @@ struct IndexCommand: ParsableCommand {
     var indexed = 0
     var citations = 0
     var failed: [String] = []
-    // The documents that obsolete others, for the second pass, which needs both of a
-    // pair at once: holding every parsed document for it would hold the corpus.
-    var obsoleting: [(id: DocumentID, file: URL)] = []
+    // Every document read, and what it obsoletes, for the second pass, which needs
+    // the documents of an edge at once: holding every parsed document for it would
+    // hold the corpus.
+    var readFiles: [DocumentID: URL] = [:]
+    var obsoletes: [DocumentID: [DocumentID]] = [:]
     for (index, file) in files.enumerated() {
       let stem = file.deletingPathExtension().lastPathComponent
       // A document is the one its file names: a converted header may lack its number,
@@ -62,8 +64,9 @@ struct IndexCommand: ParsableCommand {
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
+      readFiles[id] = file
       if !document.header.obsoletes.isEmpty {
-        obsoleting.append((id, file))
+        obsoletes[id] = document.header.obsoletes
       }
       if (index + 1) % 2000 == 0 {
         Self.logger.info(
@@ -71,24 +74,18 @@ struct IndexCommand: ParsableCommand {
       }
     }
 
+    // A section's best match is judged across every edge it is on, so the documents
+    // joined by obsoletes edges are aligned a group at a time, each parsed once. An
+    // obsoleted number the corpus does not hold, such as an RFC never issued, joins
+    // no group; one that failed to parse is reported above.
     var successions = 0
-    for successor in obsoleting {
-      let new = try Self.document(successor.id, at: successor.file)
-      for oldID in new.header.obsoletes {
-        let file = URL(fileURLWithPath: input).appending(path: "\(oldID.fileStem).xml")
-        // An obsoleted number with no file is one the corpus does not hold, such as
-        // an RFC never issued; one that failed to parse is already reported above.
-        guard FileManager.default.fileExists(atPath: file.path),
-          let old = try? Self.document(oldID, at: file)
-        else {
-          Self.logger.info(
-            "obsoleted document not read", metadata: ["new": "\(successor.id)", "old": "\(oldID)"])
-          continue
-        }
-        let pairs = SectionAlignment.pairs(old: old, new: new)
-        try database.insert(pairs)
-        successions += pairs.count
+    for group in Self.groups(of: obsoletes, among: Set(readFiles.keys)) {
+      let documents = try group.compactMap { id in
+        try readFiles[id].map { try Self.document(id, at: $0) }
       }
+      let pairs = SectionAlignment.pairs(among: documents)
+      try database.insert(pairs)
+      successions += pairs.count
     }
     try database.setMeta("documents", to: String(indexed))
     try database.close()
@@ -107,6 +104,36 @@ struct IndexCommand: ParsableCommand {
       Self.logger.error(
         "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
       throw ExitCode.failure
+    }
+  }
+
+  /// The documents joined by obsoletes edges between documents in `read`, a group for
+  /// each connected set of two or more, in order.
+  private static func groups(
+    of obsoletes: [DocumentID: [DocumentID]], among read: Set<DocumentID>
+  ) -> [[DocumentID]] {
+    var parent: [DocumentID: DocumentID] = [:]
+    func root(_ id: DocumentID) -> DocumentID {
+      var current = id
+      while let next = parent[current], next != current {
+        current = next
+      }
+      return current
+    }
+    for (new, olds) in obsoletes {
+      for old in olds where old != new && read.contains(old) {
+        let (first, second) = (root(new), root(old))
+        if first != second {
+          parent[max(first, second)] = min(first, second)
+        }
+      }
+    }
+    let members = Dictionary(grouping: parent.keys.sorted() + Set(parent.values).sorted()) {
+      root($0)
+    }
+    return members.keys.sorted().compactMap { key in
+      let group = Set(members[key] ?? []).sorted()
+      return group.count > 1 ? group : nil
     }
   }
 
