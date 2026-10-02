@@ -245,13 +245,7 @@ final class NavigationModel: Identifiable {
       appliedQuery = query
     case .search(let query, let delay):
       pendingSearch = Task(name: "Apply search") { [library] in
-        if delay > .zero {
-          do {
-            try await Task.sleep(for: delay)
-          } catch {
-            return
-          }
-        }
+        guard await Debounce.outlasted(delay) else { return }
         await library.prepareSearch(query)
         guard !Task.isCancelled else { return }
         appliedQuery = query

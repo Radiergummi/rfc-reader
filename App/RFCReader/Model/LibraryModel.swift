@@ -812,8 +812,7 @@ final class LibraryModel {
   }
 
   /// What the Go to RFC palette and sheet list under what was typed, once the reader
-  /// has paused: run per change of the query and canceled by the next, which is the
-  /// debounce, so only a pause long enough to outlast the sleep reaches the search.
+  /// has paused: run per change of the query and canceled by the next (`Debounce`).
   ///
   /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
   ///   without searching, for a link, which names its document outright and which
@@ -822,11 +821,7 @@ final class LibraryModel {
     guard !query.isEmpty else { return nil }
     if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
     guard index != nil else { return [] }
-    do {
-      try await Task.sleep(for: .milliseconds(120))
-    } catch {
-      return nil
-    }
+    guard await Debounce.outlasted(.milliseconds(120)) else { return nil }
     let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
     return Task.isCancelled ? nil : hits
   }

@@ -268,6 +268,9 @@ struct ReaderInputs {
     /// Brings the bars back if this reader had put them away: the next one, after a
     /// load or a failure, starts with them showing and would not report otherwise.
     static func dismantleUIView(_ textView: UITextView, coordinator: RFCTextViewCoordinator) {
+      // The background layout ends with the view, as `releaseDocument()` ends it on
+      // the Mac.
+      coordinator.engine.stop()
       coordinator.setChromeEnabled(false)
       // What it said of the title goes with it, as on the Mac (`releaseDocument()`):
       // a reader made afresh, on the way back from the original text, has not
