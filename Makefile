@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -214,6 +214,10 @@ CONFIGURATION ?= Debug
 IOS_DEVICE      ?=
 IOS_DESTINATION ?= generic/platform=iOS
 
+# The simulated device `run-sim` boots and installs on, by the name
+# `xcrun simctl list devices available` shows.
+IOS_SIMULATOR ?= iPhone 18 Pro
+
 # Where xcodebuild left RFCReader.app for a destination. Asked for rather than
 # spelled out: the DerivedData directory carries a hash of the project's own
 # path, so it differs per checkout. Recursively expanded (`=`, not `:=`) so only
@@ -254,6 +258,24 @@ run-device: run-device-check ios-app
 
 run-device-check:
 	@test -n '$(IOS_DEVICE)' || { echo "set IOS_DEVICE to one of these:"; xcrun devicectl list devices; exit 1; }
+
+## Build, install and launch the app in the iOS Simulator
+# The iOS counterpart of `run`. The simulated device is booted if it is not
+# already, headless: Xcode 27 has no Simulator app, and nothing takes focus.
+# `xcrun simctl io booted screenshot <file>.png` shows what it shows. Unlike an
+# iPhone it never locks, and it needs no signing.
+#
+#   make run-sim
+#   make run-sim IOS_SIMULATOR='iPad Air 11-inch (M4)'
+#
+run-sim: IOS_DESTINATION = platform=iOS Simulator,name=$(IOS_SIMULATOR)
+run-sim: ios-app
+	@app='$(call built_app,$(IOS_DESTINATION))'; \
+	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
+	  xcrun simctl bootstatus '$(IOS_SIMULATOR)' -b >/dev/null && \
+	  xcrun simctl install '$(IOS_SIMULATOR)' "$$app" && \
+	  xcrun simctl launch --terminate-running-process '$(IOS_SIMULATOR)' \
+	    "$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$app/Info.plist")"
 
 ## Build and launch the macOS app
 # A running copy is quit first, or `open` would just bring the old build back to

@@ -19,6 +19,7 @@ Everything goes through the `Makefile`:
 | `make build-app` / `make ios-sim` / `make ios-app` | compile the app for macOS / iOS Simulator / iOS device |
 | `make run` | build and launch the macOS app (quits a running copy first) |
 | `make run-device IOS_DEVICE=<name>` | build, install and launch on an attached iPhone |
+| `make run-sim` | build, install and launch in the iOS Simulator, headless (`IOS_SIMULATOR=` for another device than the iPhone 18 Pro); `xcrun simctl io booted screenshot x.png` to see it |
 | `make install` | build Release and copy it into `/Applications` |
 | `make trace` | build Release, record a Time Profiler trace of a scripted session into `traces/`, and print the app's signpost intervals; `TRACE_SCENARIO='wait 6; open 9110; wait 5'` for another session |
 | `make benchmark` | Release benchmarks of the index and document parsers, the search and the builder over real RFCs (`Tools/benchmarks`); `BENCHMARK_ARGS='baseline update before'`, then `'baseline compare before'` after a change |
