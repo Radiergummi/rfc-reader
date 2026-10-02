@@ -120,15 +120,15 @@ jobs:
         # The release the Makefile pins, checked against its SHA-256 (#165), into
         # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
         run: make xcodegen-install
-      # The newest cache any earlier run saved: entries are keyed on their inputs,
-      # so a stale one is never used, only not hit.
-      # Restored and saved whole, so every save is the last one plus what this build
-      # added, and the store only grows: 577 MB when measured (#214). The month in
-      # the key starts it afresh on the first build of each month, which costs that
-      # build its hits.
+      # The store is restored and saved whole, so every save is the last one plus
+      # what this build added, and it only grows: 577 MB when measured (#103). The
+      # month in the key starts it afresh on the first build of each month, which
+      # costs that build its hits (#214).
       - name: Name the cache's month
         id: cache-month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # The newest cache any earlier run saved this month: entries are keyed on
+      # their inputs, so a stale one is never used, only not hit.
       # The path is Xcode's default for COMPILATION_CACHE_CAS_PATH, under the default
       # DerivedData. A -derivedDataPath in the Makefile's builds moves the store, and
       # every restore would then miss without saying so (#214).
@@ -172,11 +172,11 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_27.app && xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
-      # Its own kind, so neither Xcode's cache is pruned for the other's.
       # A month to a store, as in the job above.
       - name: Name the cache's month
         id: cache-month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # Its own kind, so neither Xcode's cache is pruned for the other's.
       - name: Restore the compilation cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
