@@ -86,6 +86,26 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// An `<eref>` to an RFC is a citation of it, but one to a page about it, or to an
+  /// anchor that names no section, stays the link it is: a citation would open the
+  /// document at its top (#683).
+  @Test func `an eref is a citation only where a citation can say all of it`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Linking</title></front>
+        <middle><section anchor="intro"><name>Intro</name>
+          <t><eref target="https://www.rfc-editor.org/rfc/rfc4321">it</eref>
+          <eref target="https://www.rfc-editor.org/errata/rfc4321">errata</eref>
+          <eref target="https://www.rfc-editor.org/rfc/rfc4321.html#name-flows">flows</eref></t>
+        </section></middle>
+      </rfc>
+      """
+    let inlines = try #require(try RFCXMLParser.parse(Data(xml.utf8)).paragraphs.first).inlines
+    #expect(inlines.compactMap(\.crossReference).count == 1)
+    #expect(inlines.count { if case .link = $0 { true } else { false } } == 2)
+  }
+
   /// Words inside a citation that are the cited document's own name ask for the
   /// document's label, not the entry's tag: `<xref target="LOCAL">RFC 4321</xref>`
   /// reads `[RFC 4321]`, as the words say, rather than `[LOCAL]` (#683). An empty one

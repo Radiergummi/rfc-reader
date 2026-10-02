@@ -153,6 +153,13 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A URL a citation cannot say all of, its errata or an anchor, stays a link.
+  @Test func `a URL to a page about an RFC stays a link`() throws {
+    let address = "https://www.rfc-editor.org/errata/rfc4321"
+    let url = try #require(URL(string: address))
+    #expect(linker.link("See \(address).") == [.text("See "), .link(url, [.text(address)]), .text(".")])
+  }
+
   // MARK: - Nothing to link
 
   @Test func `prose with nothing to link is one run of text`() {
