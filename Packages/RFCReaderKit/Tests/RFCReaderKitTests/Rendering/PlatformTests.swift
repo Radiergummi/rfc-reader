@@ -73,6 +73,27 @@ struct PlatformTests {
       bold.fontDescriptor.symbolicTraits.contains(RFCTraits.bold), "\(Fixtures.describe(bold))")
   }
 
+  /// #326: a font resolved again from its own descriptor came back at the system's
+  /// default 12 pt, once in a while, under a full parallel test run. Strong text adds
+  /// no trait to a bold system font, and must not go through that resolution at all.
+  @Test func `adding a trait the font has is the same font`() {
+    let bold = PlatformFont.systemFont(ofSize: 17, weight: .bold)
+    #expect(bold.adding(traits: []) === bold)
+    #expect(bold.adding(traits: RFCTraits.bold) === bold)
+  }
+
+  /// A superscript in strong italic text: the face, its weight and its slant at
+  /// three quarters of the size, made as a copy of the font, not a descriptor match.
+  @Test func `a resized font keeps its face and traits`() {
+    let font = PlatformFont.systemFont(ofSize: 17, weight: .bold).adding(traits: RFCTraits.italic)
+    let small = font.resized(to: 12.75)
+    #expect(small.pointSize == 12.75, "\(Fixtures.describe(small))")
+    #expect(small.fontName == font.fontName, "\(Fixtures.describe(small))")
+    #expect(
+      small.fontDescriptor.symbolicTraits.isSuperset(of: [RFCTraits.bold, RFCTraits.italic]),
+      "\(Fixtures.describe(small))")
+  }
+
   @Test func `traits are distinct and non empty`() {
     #expect(!RFCTraits.italic.isEmpty)
     #expect(!RFCTraits.bold.isEmpty)

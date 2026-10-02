@@ -46,6 +46,95 @@ struct PinRecipeTests {
     }
   }
 
+  /// A scroll view whose viewport moves as UIKit's does (#625): it remembers the
+  /// fragment it put at the top and the y it put it at, and a scroll walks from there
+  /// by the distance scrolled, through the fragments' heights. When a layout from the
+  /// start has since moved that fragment, the walk still starts from the remembered y,
+  /// so it lands as far off as the fragment moved. At the document's start the walk
+  /// starts from the start. Until it is first laid out it has no viewport, and puts
+  /// one where TextKit's estimates say, as after TextKit drops its layout.
+  final class AnchoredSurface: PinSurface {
+    let layout: NSTextLayoutManager
+    var containerTop: CGFloat = 0
+    private var remembered: (offset: Int, y: CGFloat)?
+
+    init(layout: NSTextLayoutManager) { self.layout = layout }
+
+    func scroll(toContainerY target: CGFloat) {
+      containerTop = max(0, target)
+      guard containerTop > 0 else {
+        remembered = (0, 0)
+        return
+      }
+      guard let remembered, var fragment = fragment(at: remembered.offset) else { return }
+      var y = remembered.y
+      while containerTop < y, let previous = self.fragment(at: start(of: fragment) - 1) {
+        y -= previous.layoutFragmentFrame.height
+        fragment = previous
+      }
+      while y + fragment.layoutFragmentFrame.height <= containerTop,
+        let next = self.fragment(at: end(of: fragment))
+      {
+        y += fragment.layoutFragmentFrame.height
+        fragment = next
+      }
+      self.remembered = (start(of: fragment), y)
+    }
+
+    func layOutViewport() {
+      guard remembered == nil,
+        let first = layout.textLayoutFragment(for: CGPoint(x: 0, y: containerTop))
+      else { return }
+      remembered = (start(of: first), first.layoutFragmentFrame.minY)
+    }
+
+    /// What the viewport shows at its top.
+    func shown() -> ReaderAnchor? {
+      guard let remembered, let fragment = fragment(at: remembered.offset) else { return nil }
+      return LinePin.anchor(
+        atFragmentY: containerTop - remembered.y, in: fragment.textLineFragments,
+        fragmentStart: remembered.offset
+      ).anchor
+    }
+
+    /// The fragment holding `offset`, laid out, or nil outside the text.
+    private func fragment(at offset: Int) -> NSTextLayoutFragment? {
+      guard offset >= 0, let location = layout.location(atOffset: offset),
+        location.compare(layout.documentRange.endLocation) == .orderedAscending,
+        let fragment = layout.textLayoutFragment(for: location)
+      else { return nil }
+      layout.ensureLayout(for: fragment.rangeInElement)
+      return layout.textLayoutFragment(for: location)
+    }
+
+    private func start(of fragment: NSTextLayoutFragment) -> Int {
+      layout.offset(of: fragment.rangeInElement.location)
+    }
+
+    private func end(of fragment: NSTextLayoutFragment) -> Int {
+      layout.offset(of: fragment.rangeInElement.endLocation)
+    }
+  }
+
+  /// On an iPhone, a settle laid out from the start, which moved the fragments the
+  /// viewport was showing, and the scroll to the target then walked from where the
+  /// viewport remembered them: RFC 9000 showed §20.1 for §14.3.2, 80,000 characters on.
+  @Test func `a settle lands its target where the viewport walks to`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = AnchoredSurface(layout: fixture.layout)
+    let sections = built.anchors.sections.entries
+    // The viewport on estimates, in the middle of the document.
+    PinRecipe.pin(
+      ReaderAnchor(characterOffset: sections[sections.count / 2].offset), in: fixture.layout,
+      on: surface)
+    for index in [sections.count * 3 / 4, sections.count / 3, sections.count - 1, 1] {
+      let target = sections[index].offset
+      PinRecipe.settle(ReaderAnchor(characterOffset: target), in: fixture.layout, on: surface)
+      #expect(surface.shown()?.characterOffset == target, "jump to \(sections[index].anchor)")
+    }
+  }
+
   @Test func `a jump lands its target at the top from wherever the last one left`() throws {
     let built = try LayoutFixture.built()
     let fixture = LayoutFixture(text: built.text, width: 712)
@@ -81,6 +170,41 @@ struct PinRecipeTests {
       PinRecipe.pin(held, in: fixture.layout, on: surface)
       let line = try #require(surface.anchor()).line
       #expect(NSLocationInRange(held.characterOffset, line), "at \(width) pt")
+    }
+  }
+
+  /// The header hangs in the text view's top inset, above the container. When it
+  /// changes height — a cold launch's revisions banner arriving after the reading
+  /// position was restored, 208 to 289 pt on RFC 8060 (#492) — the offset stays and
+  /// the container moves under it, so the viewport's top in container coordinates
+  /// moves the other way. No scroll of the reader's happened, so the keeper still
+  /// names the line, and the engine's pin puts it back at the top.
+  @Test func `a header inset change keeps the line at the top`() throws {
+    let built = try LayoutFixture.built()
+    let fixture = LayoutFixture(text: built.text, width: 712)
+    let surface = Surface(layout: fixture.layout)
+    var keeper = AnchorKeeper()
+    let sections = built.anchors.sections.entries
+    keeper.jumped(to: ReaderAnchor(characterOffset: sections[sections.count / 2].offset))
+    for change: CGFloat in [81, -81, 160, -20] {
+      guard case .line(let anchor) = keeper.place else {
+        Issue.record("the place left its line")
+        return
+      }
+      keeper.beginEngineMove()
+      PinRecipe.settle(anchor, in: fixture.layout, on: surface)
+      keeper.endEngineMove(top: surface.containerTop)
+      let before = try #require(surface.anchor()).line
+      surface.containerTop -= change
+      keeper.beginEngineMove()
+      PinRecipe.pin(anchor, in: fixture.layout, on: surface)
+      keeper.endEngineMove(top: surface.containerTop)
+      let after = try #require(surface.anchor())
+      #expect(after.line == before, "header changed by \(change) pt")
+      #expect(NSLocationInRange(anchor.characterOffset, after.line))
+      // What the platform reports of the pin afterwards is the engine's, not the reader's.
+      keeper.userScrolled(to: after.anchor, line: after.line, top: surface.containerTop)
+      #expect(keeper.place == .line(anchor))
     }
   }
 

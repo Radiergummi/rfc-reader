@@ -286,11 +286,13 @@ extension DocumentTextBuilder {
   private func emitting(in style: ReadingStyle, color: PlatformColor, _ body: () -> Void) {
     let outerStyle = self.style
     let outerColor = bodyColor
+    defer {
+      self.style = outerStyle
+      bodyColor = outerColor
+    }
     self.style = style
     bodyColor = color
     body()
-    self.style = outerStyle
-    bodyColor = outerColor
   }
 
   private func appendSection(_ section: Section, depth: Int) {

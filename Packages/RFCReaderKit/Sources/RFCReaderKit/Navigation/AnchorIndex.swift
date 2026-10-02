@@ -37,21 +37,44 @@ public struct AnchorIndex: Sendable, Equatable {
   public let entries: [Entry]
   private let offsets: [String: Int]
   private let headings: [String: String]
+  /// The section index, made once with this one (#143). A class, because a struct
+  /// cannot hold a value of its own type; nil in an index of sections only, which
+  /// is its own.
+  private let sectionIndex: SectionIndex?
+
+  private final class SectionIndex: Sendable {
+    let index: AnchorIndex
+
+    init(_ index: AnchorIndex) {
+      self.index = index
+    }
+  }
 
   public init(_ entries: [Entry]) {
-    let sorted = entries.sorted { $0.offset < $1.offset }
+    self.init(sorted: entries.sorted { $0.offset < $1.offset })
+  }
+
+  private init(sorted: [Entry]) {
     self.entries = sorted
     self.offsets = Dictionary(
       sorted.map { ($0.anchor, $0.offset) }, uniquingKeysWith: { first, _ in first })
     self.headings = Dictionary(
       sorted.compactMap { entry in entry.heading.map { (entry.anchor, $0) } },
       uniquingKeysWith: { first, _ in first })
+    let sections = sorted.filter(\.isSection)
+    self.sectionIndex =
+      sections.count == sorted.count ? nil : SectionIndex(AnchorIndex(sorted: sections))
   }
 
   /// Just the section anchors, as an index of their own: what section tracking
-  /// hit-tests against.
+  /// hit-tests against. Made with the index, so asking costs nothing.
   public var sections: AnchorIndex {
-    AnchorIndex(entries.filter(\.isSection))
+    sectionIndex?.index ?? self
+  }
+
+  /// Two indexes are equal when their entries are: everything else is made from them.
+  public static func == (lhs: AnchorIndex, rhs: AnchorIndex) -> Bool {
+    lhs.entries == rhs.entries
   }
 
   public func offset(of anchor: String) -> Int? {
