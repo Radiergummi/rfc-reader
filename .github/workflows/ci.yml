@@ -122,8 +122,9 @@ jobs:
         run: make xcodegen-install
       # The store is restored and saved whole, so every save is the last one plus
       # what this build added, and it only grows: 577 MB when measured (#103). The
-      # month in the key starts it afresh on the first build of each month, which
-      # costs that build its hits (#214).
+      # month in the key starts it afresh each month (#214). Until the month's first
+      # push to main has saved a store, every run, pull requests included, finds
+      # none to restore and compiles cold.
       - name: Name the cache's month
         id: cache-month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
