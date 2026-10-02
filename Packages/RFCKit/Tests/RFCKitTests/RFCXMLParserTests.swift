@@ -86,6 +86,29 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// Words inside a citation that are the cited document's own name ask for the
+  /// document's label, not the entry's tag: `<xref target="LOCAL">RFC 4321</xref>`
+  /// reads `[RFC 4321]`, as the words say, rather than `[LOCAL]` (#683). An empty one
+  /// still reads as the entry's tag, as xml2rfc renders it.
+  @Test func `a citation naming its document in its words gets the document's label`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Citing</title></front>
+        <middle><section anchor="intro"><name>Intro</name>
+          <t>See <xref target="LOCAL">RFC 4321</xref> and <xref target="LOCAL"/>.</t>
+        </section></middle>
+        <back><references><name>References</name>
+          <reference anchor="LOCAL"><front><title>Local</title></front>
+            <seriesInfo name="RFC" value="4321"/></reference>
+        </references></back>
+      </rfc>
+      """
+    let xrefs = try RFCXMLParser.parse(Data(xml.utf8)).everyCrossReference
+    #expect(xrefs.map(\.label) == ["[RFC\u{00A0}4321]", "[LOCAL]"])
+    #expect(xrefs.first?.text == nil)
+  }
+
   /// A legacy conversion writes a numbered section that follows the references into
   /// `<back>`, with a section's `pn`. It is announced as the section it is, and so are
   /// its subsections; a section without a `pn` there is still an appendix (#683).
