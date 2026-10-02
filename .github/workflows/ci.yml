@@ -277,9 +277,10 @@ jobs:
             corpus/text.noindex
           key: corpus-overrides-${{ steps.toolchain.outputs.month }}-${{ hashFiles('corpus/overrides/*.xml') }}
           restore-keys: corpus-overrides-${{ steps.toolchain.outputs.month }}-
-      # make, and SQLite's headers for corpus-build's index database (#174).
-      - name: Install make and SQLite's headers
-        run: apt-get update -qq && apt-get install -y -qq make libsqlite3-dev >/dev/null
+      # make and curl, and SQLite's headers for corpus-build (#174). The image
+      # carries none of them.
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
       - run: make corpus-overrides-check
 
   prune-caches:
