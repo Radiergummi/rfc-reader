@@ -41,9 +41,10 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    let (referenceAnchors, entryDocuments) = Self.referenceIndex(in: document)
+    let (referenceAnchors, entryDocuments, entryAnchors) = Self.referenceIndex(in: document)
     var context = Context(
       referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
+      entryAnchors: entryAnchors,
       sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
@@ -492,6 +493,11 @@ public struct RFCXMLSerializer: Sendable {
     switch xref.target {
     case .anchor(let anchor):
       let target = Writer.escapeAttribute(anchor)
+      // An empty citation of an entry reads back as the entry's tag in brackets, so
+      // that is what it is written as (#683).
+      let content =
+        xref.text == nil && context.entryAnchors.contains(anchor)
+        ? Writer.escape("[\(anchor)]") : content
       return content.isEmpty
         ? "<xref target=\"\(target)\"/>" : "<xref target=\"\(target)\">\(content)</xref>"
     case .entrySection(let entry, let tag, let section, let url):
@@ -523,6 +529,11 @@ public struct RFCXMLSerializer: Sendable {
           attributes += " section=\"\(Writer.escapeAttribute(section))\""
           attributes += " sectionFormat=\"\(xref.sectionFormat.rawValue)\""
         }
+        // An empty citation reads back as the entry's tag in brackets, unless the tag
+        // is the document's canonical one, so that is what it is written as (#683).
+        let content =
+          xref.text == nil && !CrossReference.isCanonicalTag(anchor, for: id)
+          ? Writer.escape("[\(anchor)]") : content
         return content.isEmpty ? "<xref\(attributes)/>" : "<xref\(attributes)>\(content)</xref>"
       }
       // No bibliography entry: an external link the parser maps back to a document reference.
@@ -538,6 +549,8 @@ public struct RFCXMLSerializer: Sendable {
     var referenceAnchors: [DocumentID: String]
     /// The document each entry names, by the entry's anchor.
     var entryDocuments: [String: DocumentID]
+    /// Every entry's anchor, whether or not it names a document.
+    var entryAnchors: Set<String>
     var warnings: [String] = []
     /// Every references section, the back's own among them, in document order, which
     /// the back writes ahead of its sections (#315).
@@ -552,10 +565,11 @@ public struct RFCXMLSerializer: Sendable {
 
     init(
       referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
-      sections: [Section]
+      entryAnchors: Set<String>, sections: [Section]
     ) {
       self.referenceAnchors = referenceAnchors
       self.entryDocuments = entryDocuments
+      self.entryAnchors = entryAnchors
       var claimed: Set<String> = []
       func claim(_ sections: [Section]) {
         for section in sections {
@@ -592,11 +606,16 @@ public struct RFCXMLSerializer: Sendable {
   /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
   private static func referenceIndex(
     in document: RFCDocument
-  ) -> (referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID]) {
+  ) -> (
+    referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
+    entryAnchors: Set<String>
+  ) {
     var anchors: [DocumentID: String] = [:]
     var documents: [String: DocumentID] = [:]
+    var entryAnchors: Set<String> = []
     for case .references(let list) in document.blocks {
       for reference in list.entries {
+        entryAnchors.insert(reference.anchor)
         guard let id = reference.documentID else { continue }
         if let first = anchors[id] {
           if DocumentID(label: first) != id, DocumentID(label: reference.anchor) == id {
@@ -608,7 +627,7 @@ public struct RFCXMLSerializer: Sendable {
         if documents[reference.anchor] == nil { documents[reference.anchor] = id }
       }
     }
-    return (anchors, documents)
+    return (anchors, documents, entryAnchors)
   }
 
   static func isReferences(_ section: Section) -> Bool {
