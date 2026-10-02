@@ -233,6 +233,9 @@ built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 	  | sed -n 's/^ *BUILT_PRODUCTS_DIR = //p' | head -1)/$(SCHEME).app
 
 ## Build the app for macOS
+# No -derivedDataPath, here or in ios-sim: CI restores its compilation cache to
+# the default DerivedData, and a build anywhere else would miss it without saying
+# so (ci.yml, #214).
 build-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
 	  -destination '$(MAC_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
