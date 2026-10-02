@@ -20,7 +20,8 @@ struct ListOptionsTests {
   @Test func `oldest first reverses a list in order of publication`() {
     let options = ListOptions(order: .oldestFirst)
 
-    #expect(options.apply(to: rows, filter: .all, query: "").map(\.id.number) == [2616, 7231, 9110])
+    #expect(
+      options.apply(to: rows, filter: .all, query: "").map(\.id.number) == [2616, 7231, 9110])
   }
 
   /// Recently Read is in reading order and a search in order of relevance:

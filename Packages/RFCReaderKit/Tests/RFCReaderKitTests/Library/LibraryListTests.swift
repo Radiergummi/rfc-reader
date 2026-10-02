@@ -33,13 +33,15 @@ struct LibraryListTests {
 
   @Test func `bookmarks and offline copies are newest first, whatever order they were given in`() {
     #expect(
-      numbers(LibraryList(filter: .bookmarks, query: "", bookmarked: [.rfc(1), .rfc(4), .rfc(2)])) == [4, 2, 1])
+      numbers(LibraryList(filter: .bookmarks, query: "", bookmarked: [.rfc(1), .rfc(4), .rfc(2)]))
+        == [4, 2, 1])
     #expect(numbers(LibraryList(filter: .downloaded, query: "", downloaded: [3, 1])) == [3, 1])
   }
 
   @Test func `recently read and a collection keep their own order`() {
     #expect(
-      numbers(LibraryList(filter: .recent, query: "", recentlyRead: [.rfc(2), .rfc(4), .rfc(1)])) == [2, 4, 1])
+      numbers(LibraryList(filter: .recent, query: "", recentlyRead: [.rfc(2), .rfc(4), .rfc(1)]))
+        == [2, 4, 1])
     let collection = LibraryList(filter: .collection(UUID()), query: "", members: [3, 1, 4])
     #expect(numbers(collection) == [3, 1, 4])
   }
@@ -50,7 +52,8 @@ struct LibraryListTests {
   }
 
   @Test func `a number the index does not know is left out`() {
-    #expect(numbers(LibraryList(filter: .bookmarks, query: "", bookmarked: [.rfc(9999), .rfc(2)])) == [2])
+    #expect(
+      numbers(LibraryList(filter: .bookmarks, query: "", bookmarked: [.rfc(9999), .rfc(2)])) == [2])
   }
 
   @Test func `a search inside a filter finds only what the filter lists`() {

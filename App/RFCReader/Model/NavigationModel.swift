@@ -89,13 +89,13 @@ final class NavigationModel: Identifiable {
   /// entering instead, the order is whatever it was on arrival and stays put while
   /// it is being read through; coming back to the filter takes a fresh one, the
   /// same way `downloaded` beside it does.
-  private(set) var recentOrder: [Int] = []
+  private(set) var recentOrder: [DocumentID] = []
   /// The RFCs available offline, as of entering the filter.
   private(set) var downloaded: Set<Int> = []
 
   /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
-    recentOrder = library.recentlyReadNumbers()
+    recentOrder = library.recentlyRead()
     downloaded = library.downloadedNumbers
   }
 

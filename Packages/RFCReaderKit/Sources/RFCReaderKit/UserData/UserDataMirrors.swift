@@ -21,7 +21,7 @@ public struct UserDataMirrors: OptionSet, Sendable {
   public static let bookmarks = UserDataMirrors(rawValue: 1 << 0)
   /// `CollectionSnapshot.fetch`, read from collections and their items.
   public static let collections = UserDataMirrors(rawValue: 1 << 1)
-  /// `ReadingPositionStore.recentlyReadRFCCount`, read from `ReadingPosition` rows
+  /// `ReadingPositionStore.recentlyReadCount`, read from `ReadingPosition` rows
   /// alone: a bookmark is not a reading.
   public static let recentlyReadCount = UserDataMirrors(rawValue: 1 << 2)
 

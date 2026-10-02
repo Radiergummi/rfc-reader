@@ -54,8 +54,8 @@ public struct ListOptions: Hashable, Sendable {
 
   /// `rows`, newest first as every list is built, shown as these options say.
   public func apply(
-    to rows: [RFCMetadata], filter: LibraryFilter, query: String
-  ) -> [RFCMetadata] {
+    to rows: [LibraryRow], filter: LibraryFilter, query: String
+  ) -> [LibraryRow] {
     let shown = showsObsolete ? rows : rows.filter { !$0.isObsolete }
     if case .collection = filter { return sortedCollection(shown, query: query) }
     guard order == .oldestFirst, Self.canReorder(filter, query: query) else { return shown }
@@ -73,12 +73,12 @@ public struct ListOptions: Hashable, Sendable {
   /// By publication date, then number: a collection is in the reader's order, so
   /// reversing it would not put the oldest first. A search stays in order of
   /// relevance.
-  private func sortedCollection(_ rows: [RFCMetadata], query: String) -> [RFCMetadata] {
+  private func sortedCollection(_ rows: [LibraryRow], query: String) -> [LibraryRow] {
     guard query.isUnsearchedQuery else { return rows }
     switch collectionSort {
     case .manual: return rows
-    case .newestFirst: return rows.sorted { ($0.date, $0.number) > ($1.date, $1.number) }
-    case .oldestFirst: return rows.sorted { ($0.date, $0.number) < ($1.date, $1.number) }
+    case .newestFirst: return rows.sorted { ($0.date, $0.id.number) > ($1.date, $1.id.number) }
+    case .oldestFirst: return rows.sorted { ($0.date, $0.id.number) < ($1.date, $1.id.number) }
     }
   }
 }

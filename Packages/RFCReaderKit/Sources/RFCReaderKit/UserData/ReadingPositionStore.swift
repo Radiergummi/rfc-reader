@@ -54,13 +54,13 @@ public enum ReadingPositionStore {
     return try context.fetch(descriptor).compactMap(\.document)
   }
 
-  /// How many of the documents `recentlyRead` lists are RFCs: the Recently Read
-  /// count, which the library refreshes on every save of a reading position, so only
-  /// the keys are fetched, unsorted.
-  public static func recentlyReadRFCCount(in context: ModelContext) throws -> Int {
+  /// How many documents `recentlyRead` lists, a BCP, STD or FYI among them (#321):
+  /// the Recently Read count, which the library refreshes on every save of a reading
+  /// position, so only the keys are fetched, unsorted.
+  public static func recentlyReadCount(in context: ModelContext) throws -> Int {
     var descriptor = FetchDescriptor<ReadingPosition>()
     descriptor.propertiesToFetch = [\.documentKey]
-    return try context.fetch(descriptor).count { $0.document?.series == .rfc }
+    return try context.fetch(descriptor).count { $0.document != nil }
   }
 
   /// The documents opened or left after `date`.

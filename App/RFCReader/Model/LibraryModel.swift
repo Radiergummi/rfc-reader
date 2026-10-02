@@ -85,13 +85,9 @@ final class LibraryModel {
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// Every bookmarked document, fetched again on every save of a bookmark: one set
-  /// for the toolbars and scripts alike, which ask about the document on screen, so
-  /// BCP 14 is not answered for by RFC 14 (#152).
+  /// for the toolbars, scripts and lists alike, so BCP 14 is not answered for by
+  /// RFC 14 (#152), and is listed as itself (#321).
   private(set) var bookmarkedDocuments: Set<DocumentID> = []
-
-  /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
-  /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
-  private(set) var bookmarkedNumbers: Set<Int> = []
 
   /// The presentation the reader chose from a block's menu, per document, for the
   /// app's session. Here rather than in `DocumentSession`, which goes when the
@@ -128,8 +124,8 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
-  /// of `recentlyReadNumbers()`, kept current on every save of a reading position
+  /// How many documents Recently Read lists, for the sidebar's count (#344): the
+  /// length of `recentlyRead()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
   private(set) var recentlyReadCount = 0
 
@@ -186,7 +182,7 @@ final class LibraryModel {
   private func refreshRecentlyReadCount() {
     let count: Int
     do {
-      count = try ReadingPositionStore.recentlyReadRFCCount(in: container.mainContext)
+      count = try ReadingPositionStore.recentlyReadCount(in: container.mainContext)
     } catch {
       // The last count read stands until a fetch succeeds, which the next save tries.
       failedMirrors.insert(.recentlyReadCount)
@@ -264,7 +260,6 @@ final class LibraryModel {
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
-    bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))
   }
 
   private func refreshDownloadedNumbers() async {
@@ -665,7 +660,7 @@ final class LibraryModel {
   /// That makes a hit read nothing observable, though, so `list` reads `index`
   /// before looking here: the key carries every other input, and those the caller
   /// reads for itself.
-  @ObservationIgnored private var listCache = RecentValues<LibraryList, [RFCMetadata]>(
+  @ObservationIgnored private var listCache = RecentValues<LibraryList, [LibraryRow]>(
     capacity: listCacheCapacity)
   private static let listCacheCapacity = 8
 
@@ -703,7 +698,7 @@ final class LibraryModel {
 
   /// What `scene`'s list shows: its filter and search, over the inputs it took on
   /// entering the filter and the bookmarks as they stand.
-  func list(for scene: NavigationModel) -> [RFCMetadata] {
+  func list(for scene: NavigationModel) -> [LibraryRow] {
     // Observed on every call, hit or miss: this is what re-renders the list when
     // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
     guard let index else { return [] }
@@ -715,7 +710,7 @@ final class LibraryModel {
     let key = LibraryList(
       filter: filter,
       query: scene.appliedQuery,
-      bookmarked: filter == .bookmarks ? bookmarkedNumbers : [],
+      bookmarked: filter == .bookmarks ? bookmarkedDocuments : [],
       recentlyRead: filter == .recent ? scene.recentOrder : [],
       downloaded: filter == .downloaded ? scene.downloaded : [],
       options: scene.listOptions,
@@ -727,7 +722,7 @@ final class LibraryModel {
   /// The whole library searched for `query`, whatever filter a scene is on: what the
   /// sidebar lists while it is searched on an iPhone, where the list is not on
   /// screen beside it (#345).
-  func librarySearch(_ query: String) -> [RFCMetadata] {
+  func librarySearch(_ query: String) -> [LibraryRow] {
     // Observed on every call, for the reason `list(for:)` gives.
     guard let index else { return [] }
     let key = LibraryList(filter: .all, query: query)
@@ -747,7 +742,7 @@ final class LibraryModel {
   /// empties the cache: that keeps the cache correct, and the read of `index` at the
   /// top of `list` is what gets the view to ask again. The index is handed in from
   /// that read rather than read again here, so the observed read is the only one.
-  private func list(_ key: LibraryList, in index: RFCIndex) -> [RFCMetadata] {
+  private func list(_ key: LibraryList, in index: RFCIndex) -> [LibraryRow] {
     if let hit = listCache.value(for: key) { return hit }
     let computed = signposter.withIntervalSignpost(
       "List", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
@@ -1108,7 +1103,8 @@ final class LibraryModel {
     await store.downloadedSize(id)
   }
 
-  /// The documents the reader has opened, most recent first.
+  /// The documents the reader has opened, most recent first, a BCP, STD or FYI
+  /// among them as itself (#321).
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
@@ -1117,16 +1113,14 @@ final class LibraryModel {
   ///
   /// Empty when the fetch fails, which is logged: the list is only shown, and
   /// nothing is decided by its being empty.
-  func recentlyReadNumbers() -> [Int] {
-    let documents: [DocumentID]
+  func recentlyRead() -> [DocumentID] {
     do {
-      documents = try ReadingPositionStore.recentlyRead(in: container.mainContext)
+      return try ReadingPositionStore.recentlyRead(in: container.mainContext)
     } catch {
       libraryLog.error(
         "reading the recently read list failed: \(String(describing: error), privacy: .public)")
       return []
     }
-    return documents.filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

@@ -21,15 +21,15 @@ struct CollectionPickerSheet: View {
     let members = Set(library.collections[collection]?.members ?? [])
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     NavigationStack {
-      List(rows.prefix(limit)) { rfc in
-        let isMember = members.contains(rfc.id)
+      List(rows.prefix(limit)) { row in
+        let isMember = members.contains(row.id)
         Button {
           library.editCollections {
-            try CollectionStore.toggle(rfc.id, in: collection, undoManager: undoManager, in: $0)
+            try CollectionStore.toggle(row.id, in: collection, undoManager: undoManager, in: $0)
           }
         } label: {
           HStack {
-            RFCRow(rfc: rfc, isBookmarked: false)
+            RFCRow(row: row, isBookmarked: false)
             Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
               .foregroundStyle(isMember ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
               .accessibilityHidden(true)
@@ -38,7 +38,7 @@ struct CollectionPickerSheet: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isMember ? .isSelected : [])
         .onAppear {
-          guard rfc.id == trigger else { return }
+          guard row.id == trigger else { return }
           limit = ListWindow.extendedLimit(from: limit, total: rows.count)
         }
       }

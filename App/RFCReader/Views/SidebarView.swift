@@ -241,13 +241,13 @@ struct SidebarView: View {
     @ViewBuilder
     private var searchResults: some View {
       let results = library.librarySearch(navigation.appliedQuery)
-      let bookmarked = library.bookmarkedNumbers
+      let bookmarked = library.bookmarkedDocuments
       Section {
-        ForEach(results.prefix(Self.searchResultLimit)) { rfc in
+        ForEach(results.prefix(Self.searchResultLimit)) { row in
           Button {
-            library.open(rfc.id, activation: .current, in: navigation)
+            library.open(row.id, activation: .current, in: navigation)
           } label: {
-            RFCRow(rfc: rfc, isBookmarked: bookmarked.contains(rfc.number))
+            RFCRow(row: row, isBookmarked: bookmarked.contains(row.id))
           }
           .buttonStyle(.plain)
         }
@@ -350,7 +350,7 @@ struct SidebarView: View {
     /// filter it lists nothing in.
     private func count(_ filter: LibraryFilter) -> Int? {
       switch filter {
-      case .bookmarks: library.bookmarkedNumbers.count
+      case .bookmarks: library.bookmarkedDocuments.count
       case .downloaded: library.downloadedNumbers.count
       case .recent: library.recentlyReadCount
       default: library.indexCounts[filter]
