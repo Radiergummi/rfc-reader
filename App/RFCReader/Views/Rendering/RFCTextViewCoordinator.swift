@@ -26,7 +26,12 @@ final class VisibleAnchorBox {
   var anchor: String?
   /// The reader's line, as a place that survives a rebuild: what the reading
   /// position saves (#322). Nil at the top of the document.
-  var place: ReadingPlace?
+  var place: ReadingPlace? {
+    didSet { if place != oldValue { placeDidChange() } }
+  }
+  /// Told when `place` moves, on every scroll tick that moves it: `DocumentView`
+  /// saves the place once the reader stops (#155).
+  var placeDidChange: () -> Void = {}
   /// Whether the top of the viewport is ahead of section one, which `anchor`
   /// reports as section one.
   var isAheadOfSections = false
