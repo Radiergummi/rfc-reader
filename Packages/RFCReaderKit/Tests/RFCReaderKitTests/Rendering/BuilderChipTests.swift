@@ -42,7 +42,7 @@ struct BuilderChipTests {
   /// The screen and a copied selection say the same thing.
   @Test func `what is copied is what is shown`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
-    // The rendered run is the display label plus the chip's own symbol and joiner.
+    // The rendered run is the display text plus the chip's own symbol and joiner.
     #expect(run(xref).string == Self.chipPrefix + xref.display.text)
     #expect([Inline.crossReference(xref)].plainText == xref.display.text)
   }

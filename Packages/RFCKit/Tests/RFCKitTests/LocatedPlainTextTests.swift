@@ -30,7 +30,7 @@ struct LocatedPlainTextTests {
     #expect(located.crossReferences.map(\.reference) == [Self.section, Self.anchor])
     #expect(
       located.crossReferences.map { String(located.text[$0.range]) } == [
-        Self.section.displayLabel, "the introduction",
+        Self.section.display.text, "the introduction",
       ])
   }
 

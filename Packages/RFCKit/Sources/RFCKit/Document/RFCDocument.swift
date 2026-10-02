@@ -387,12 +387,15 @@ public struct Preformatted: Sendable, Hashable, Codable {
 
   public var kind: Kind
   public var text: String
-  /// RFCXML's `type` attribute, which means one thing per kind: for source code, its
-  /// language (`abnf`, `json`); for artwork, its form (`svg`, `ascii-art`). Neither
-  /// is a media type. The legacy parser sets `abnf` on a block that parses as ABNF.
+  /// RFCXML's `type` attribute, as the source writes it: free text that names what
+  /// the block holds. Usually a language (`abnf`, `json`) or an artwork's form
+  /// (`svg`, `ascii-art`), and now and then a media type with parameters
+  /// (`message/http; msgtype="request"`). Nothing ties a value to a kind: artwork
+  /// may be typed `abnf`. `ArtworkType.canonical` reads it. The legacy parser sets
+  /// `abnf` on a block that parses as ABNF.
   ///
-  /// It keeps RFCXML's name because no other name covers both (#149): `language`
-  /// is wrong for artwork, and `mediaType` promises MIME types it never holds.
+  /// It keeps RFCXML's name because no other name covers all of these (#149):
+  /// `language` is wrong for artwork, and `mediaType` for most of what it holds.
   public var type: String?
   public var name: String?
   public var anchor: String?
@@ -743,11 +746,6 @@ public struct CrossReference: Sendable, Hashable, Codable {
     return Display(text: composed, isChip: true)
   }
 
-  /// The text a reader shows for this reference -- what `[Inline].plainText`
-  /// flattens to, and what the reader draws. Readers outside RFCKit ask `display`,
-  /// which also says whether the text is a chip.
-  var displayLabel: String { display.text }
-
   /// A label should never break between its word and its number, so "RFC 9110"
   /// and "Section 4.2" are joined with U+00A0.
   private static let labelNumberPattern = Pattern(#/(\p{L})[ \t]+(\d)/#)
@@ -835,7 +833,7 @@ public struct LocatedPlainText: Sendable, Hashable {
         append(inner)
       case .crossReference(let reference):
         let start = text.endIndex
-        text += reference.displayLabel
+        text += reference.display.text
         crossReferences.append(
           LocatedCrossReference(reference: reference, range: start..<text.endIndex))
       case .lineBreak:

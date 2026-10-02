@@ -51,7 +51,7 @@ public enum RFCColors {
     #endif
   }
 
-  /// A link, where no text view colours it: an exported PDF's (#376).
+  /// A link, where no text view colors it: an exported PDF's (#376).
   public static var link: PlatformColor {
     #if canImport(UIKit)
       .link

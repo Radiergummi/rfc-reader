@@ -143,7 +143,7 @@ struct ExportLinkTests {
   }
 
   /// An exported PDF is read on screen: a reference is an ordinary link, underlined
-  /// in the link colour, and neither a chip nor a print's plain text.
+  /// in the link color, and neither a chip nor a print's plain text.
   @Test func `an export's references are underlined links, not chips`() throws {
     let layout = PrintLayout(paperSize: PrintLayout.letter)
     #expect(layout.exportStyle.references == .link)
