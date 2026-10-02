@@ -102,4 +102,19 @@ struct CorpusBackedOverridesTests {
     }
     #expect(artwork.text.trimmingCharacters(in: .whitespacesAndNewlines) == "PREFACE")
   }
+
+  /// A patch on a document the run does not convert would do nothing without a word
+  /// said, so it fails: RFC 570's text only points to its PostScript original (#316).
+  @Test func `a patch on a skipped document fails`() throws {
+    let patch = try XMLPatch(
+      parsing: Data("<diff><remove sel=\"/rfc/@category\"/></diff>".utf8), name: "rfc570.xml")
+    let conversion = DocumentConverter().convert(
+      text: try CorpusText.text("rfc570"), stem: "rfc570", metadata: try CorpusText.index()[570],
+      patch: patch)
+    #expect(conversion.report.skipped == .publishedOnlyAsPDF)
+    #expect(conversion.xml == nil)
+    #expect(conversion.report.override == .patch)
+    let failure = try #require(conversion.report.failure)
+    #expect(failure.hasPrefix("rfc570.xml: "), "\(failure)")
+  }
 }

@@ -58,10 +58,14 @@ public struct DocumentConverter: Sendable {
   ) -> Conversion {
     var document = LegacyTextParser.parse(text, title: metadata?.title)
     if let skip = Self.skip(document, metadata: metadata) {
-      var report = DocumentReport(document: document, id: stem)
+      var report = DocumentReport(document: document, id: stem, override: patch.map { _ in .patch })
       // What a document with nothing in it warns about says nothing of a skipped one.
       report.warnings = []
       report.skipped = skip
+      // Its patch would do nothing without a word said.
+      if let patch {
+        report.failure = "\(patch.name): the document is not converted (\(skip.rawValue))"
+      }
       return Conversion(xml: nil, report: report)
     }
     let notes = metadata.map { IndexHeader.apply($0, to: &document.header) } ?? []

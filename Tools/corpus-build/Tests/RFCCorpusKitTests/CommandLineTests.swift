@@ -133,6 +133,27 @@ struct CommandLineTests {
     #expect(written == ["rfc1149.xml"])
   }
 
+  /// An override that is not XML fails as a patch does, and the rest of the run goes on.
+  @Test func `an override that is not XML fails its document only`() throws {
+    let out = Self.temporaryDirectory()
+    let overrides = Self.temporaryDirectory()
+    defer {
+      try? FileManager.default.removeItem(at: out)
+      try? FileManager.default.removeItem(at: overrides)
+    }
+    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    try Data("<diff><remove sel=\"//t[contains(., 'a & b')]\"/></diff>".utf8)
+      .write(to: overrides.appending(path: "rfc2119.xml"))
+
+    let result = try Self.run([
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119", "1149",
+      "--overrides", overrides.path,
+    ])
+    #expect(result.status == 1)
+    #expect(result.standardError.contains("rfc2119.xml: not XML"), "\(result.standardError)")
+    #expect(try FileManager.default.contentsOfDirectory(atPath: out.path) == ["rfc1149.xml"])
+  }
+
   /// `--out` is where both files go; without it there is nowhere to write, and
   /// nothing may be fetched first.
   @Test func `revisions requires out`() throws {

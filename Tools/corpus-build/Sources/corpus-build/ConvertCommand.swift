@@ -229,7 +229,9 @@ struct ConvertCommand: AsyncParsableCommand {
       FileManager.default.fileExists(atPath: overrideURL.path)
     {
       let data = try Data(contentsOf: overrideURL)
-      if try XMLDocument(data: data).rootElement()?.name == "diff" {
+      // An override that is not XML is a patch that failed, not a run that stops.
+      let root = (try? XMLDocument(data: data))?.rootElement()?.name
+      if root == nil || root == "diff" {
         do {
           patch = try XMLPatch(parsing: data, name: "\(stem).xml")
         } catch {
