@@ -15,6 +15,14 @@ struct ReachableSectionsTests {
     #expect(listed.allSatisfy { built.anchors.sections.offset(of: $0.anchor) != nil })
   }
 
+  @Test func `the bibliography is left out and every other section is in`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let expected = document.allSections.filter { !$0.holdsOnlyReferences }
+    #expect(expected.count < document.allSections.count)
+    #expect(built.reachableSections(of: document).map(\.anchor) == expected.map(\.anchor))
+  }
+
   @Test func `they are the document's own sections, in its order`() throws {
     let document = try Fixtures.rfc8999()
     let built = DocumentTextBuilder.build(document, style: ReadingStyle())
