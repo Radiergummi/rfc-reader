@@ -286,36 +286,30 @@ extension AccessibleReading {
 extension AccessibleReading {
   /// A line of a diagram, and the pronunciation VoiceOver is given in place of its
   /// characters.
-  public struct SpokenLine: Equatable, Sendable {
-    public let range: NSRange
+  struct SpokenLine: Equatable {
+    let range: NSRange
     /// IPA, as `accessibilitySpeechIPANotation` takes it.
-    public let pronunciation: String
+    let pronunciation: String
   }
 
-  /// What VoiceOver says in place of each line of every diagram, on iOS (#308).
+  /// What VoiceOver says in place of each line of the diagram at `range`, on iOS
+  /// (#308).
   ///
   /// `UITextView` has no per-range accessor to override, as `ReaderTextView` does
   /// on macOS, so there the only way to change what a range is said as is a speech
-  /// attribute in the text itself. A diagram's first line that is not blank is
-  /// pronounced as the word "diagram" and its later lines as nothing, which is what
-  /// `pieces(of:in:)` says on macOS, read a line at a time. Line breaks, and lines
-  /// with nothing on them, carry nothing, so VoiceOver still has lines to move
-  /// between. Only "diagram": IPA can't be made of a packet diagram's fields, so
+  /// attribute in the text itself. The diagram's first line that is not blank is
+  /// pronounced as the word "diagram" and its later lines as nothing. Line breaks,
+  /// and lines with nothing on them, carry nothing, so VoiceOver still has lines to
+  /// move between. Unlike macOS, where the label goes on the diagram's first
+  /// character, a blank first line is passed over: it has nothing to pronounce in
+  /// place of. Only "diagram": IPA can't be made of a packet diagram's fields, so
   /// its `spokenLabel` stays the Mac's.
-  public static func diagramSpeech(in text: NSAttributedString) -> [SpokenLine] {
-    let string = text.string as NSString
+  static func diagramSpeech(ofDiagram range: NSRange, in string: NSString) -> [SpokenLine] {
     var lines: [SpokenLine] = []
-    text.enumerateAttribute(
-      .rfcVerbatim, in: NSRange(location: 0, length: text.length)
-    ) { value, diagram, _ in
-      guard let box = value as? VerbatimBox, isDiagram(box) else { return }
-      var announced = false
-      string.enumerateSubstrings(in: diagram, options: .byLines) { line, range, _, _ in
-        guard let line, !line.allSatisfy(\.isWhitespace) else { return }
-        lines.append(
-          SpokenLine(range: range, pronunciation: announced ? silence : labelPronunciation))
-        announced = true
-      }
+    string.enumerateSubstrings(in: range, options: .byLines) { line, range, _, _ in
+      guard let line, !line.allSatisfy(\.isWhitespace) else { return }
+      lines.append(
+        SpokenLine(range: range, pronunciation: lines.isEmpty ? labelPronunciation : silence))
     }
     return lines
   }

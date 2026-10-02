@@ -117,7 +117,6 @@ public final class DocumentTextBuilder {
     if let title { builder.appendTitle(title) }
     builder.appendDocument(document)
     builder.setDecoratedLinesOnWholePoints()
-    builder.setDiagramSpeech()
     reserveChipPadding(in: builder.output)
     // Handed over, not copied: `builder` ends here, so nothing is left that could
     // write `output` once the result leaves this function. A copy would also be
@@ -276,18 +275,6 @@ extension DocumentTextBuilder {
       [.accessibilityTextHeadingLevel: min(depth, 6)]
     #else
       [:]
-    #endif
-  }
-
-  /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
-  /// the text, since `UITextView` has no per-range accessor to override (#308).
-  /// AppKit reads no such key, and `ReaderTextView` says a diagram there itself.
-  func setDiagramSpeech() {
-    #if canImport(UIKit)
-      for line in AccessibleReading.diagramSpeech(in: output) {
-        output.addAttribute(
-          .accessibilitySpeechIPANotation, value: line.pronunciation, range: line.range)
-      }
     #endif
   }
 
