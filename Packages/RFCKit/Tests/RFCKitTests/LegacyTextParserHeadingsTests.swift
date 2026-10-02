@@ -135,14 +135,13 @@ struct LegacyTextParserHeadingsTests {
         })
   }
 
-  /// An unnumbered heading keeps the words of its line, not the columns they were set
-  /// in, as a numbered one does and as reading it back from the XML gives (#683). Its
-  /// anchor is the same either way.
-  @Test func `an unnumbered heading's title has its whitespace collapsed`() throws {
-    let heading = try #require(
-      LegacyTextParser.heading(from: "Field Name      Meaning   ", colonNumbered: false))
-    #expect(heading.title == "Field Name Meaning")
-    #expect(heading.anchor == "name-field-name-meaning")
+  /// A section's title is the words of its heading, not the columns they were set in,
+  /// as reading it back from the XML gives (#683). RFC 757's contents-style headings
+  /// end in a page number set far to the right.
+  @Test func `a section's title has its whitespace collapsed`() throws {
+    let titles = try Fixtures.document("rfc757.txt").allSections.map(\.titleText)
+    #expect(!titles.isEmpty)
+    #expect(titles.filter { $0 != $0.collapsingWhitespace() } == [])
   }
 
   /// An appendix numbered like a section, `APPENDIX 3`, is named `appendix-3`, not
