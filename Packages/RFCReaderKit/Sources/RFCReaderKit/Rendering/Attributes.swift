@@ -98,15 +98,23 @@ extension RFCDecoration {
 /// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
 /// what the build decided about it.
 public final class VerbatimBox: Sendable {
-  /// Whether the block is set as its source or rendered, and whether a rendering
-  /// exists to switch to: its menu offers "Show as Text" on a rendered block and
-  /// "Show as Figure" on one shown as its source.
+  /// Whether the block is set as its source, rendered, or highlighted, and whether a
+  /// rendering exists to switch to: its menu offers "Show as Text" on a rendered
+  /// block and "Show as Figure" on one shown as its source.
   public enum Shown: Sendable, Equatable {
     /// No presentation accepts the block.
     case plain
     case rendered
     /// A presentation accepts it, and the reader asked for the source.
     case source
+    /// Code, highlighted: always, with nothing to switch to, and never a figure.
+    case highlighted
+
+    /// Whether the block is a figure: one with a drawing to switch to and from, a
+    /// menu to do it in, and a card in the middle of the column.
+    public var isFigure: Bool {
+      self == .rendered || self == .source
+    }
   }
 
   public let content: Preformatted
@@ -141,7 +149,7 @@ extension VerbatimBox {
   /// How it is shown, or nil for a block with no rendering to switch to.
   public var presentation: PresentationChoices.Presentation? {
     switch shown {
-    case .plain: nil
+    case .plain, .highlighted: nil
     case .rendered: .figure
     case .source: .text
     }

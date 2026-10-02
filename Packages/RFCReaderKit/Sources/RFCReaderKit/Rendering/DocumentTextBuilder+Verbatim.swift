@@ -22,17 +22,30 @@ extension DocumentTextBuilder {
     let classification = ArtworkClassifier.classify(content, in: documentID, hints: hints)
     let text = displayedText(of: content, indent: indent)
     let scale = monospaceScale(for: text, indent: indent)
-    // A rendition's ranges are into the block's own text, so a block shown other
-    // than as written (unfolded, #64) is not decorated.
-    let rendition =
-      text == content.text
-      ? ArtworkRenderers.render(
-        content, classification,
-        context: RenderContext(style: style, column: max(style.indentStep, style.measure - indent)))
-      : nil
+    let context = RenderContext(
+      style: style, column: max(style.indentStep, style.measure - indent))
+    var shownContent = content
+    shownContent.text = text
+    let rendition: Rendition? =
+      switch ArtworkRenderers.render(shownContent, classification, context: context) {
+      // Tokens are a function of the text alone, so a highlighted block follows the
+      // text shown, unfolded (#64) or not.
+      case .styled(let styled)?: .styled(styled)
+      // A decoration's ranges are into the block as written, so a block shown other
+      // than as written is not decorated.
+      case .decorated(let decorated)? where text == content.text: .decorated(decorated)
+      default: nil
+      }
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
-    let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
+    // Code is highlighted whatever the choices say: it has no other presentation, and
+    // "Draw diagrams" and "Show as Text" are about drawings.
+    let shown: VerbatimBox.Shown =
+      switch rendition {
+      case nil: .plain
+      case .styled?: .highlighted
+      case .decorated?: showsSource ? .source : .rendered
+      }
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
     let box = VerbatimBox(
@@ -54,13 +67,12 @@ extension DocumentTextBuilder {
       : 0
     let lineHeight = content.kind == .artwork ? style.artworkLineHeightMultiple : nil
     let contentWidth = max(labelWidth, widestLine(of: text, scale: scale))
-    // A rendered diagram's card sits in the middle of the column; source code and
-    // plain artwork keep their indent. Through the indent, so selection, find and
-    // strokes follow. The scale fitted the block at `indent`, which this never
-    // narrows.
+    // A figure's card sits in the middle of the column; source code, highlighted
+    // code and plain artwork keep their indent. Through the indent, so selection,
+    // find and strokes follow. The scale fitted the block at `indent`, which this
+    // never narrows.
     let bodyIndent =
-      content.kind == .artwork && shown != .plain
-      ? max(indent, (style.measure - contentWidth) / 2) : indent
+      shown.isFigure ? max(indent, (style.measure - contentWidth) / 2) : indent
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length
     append(
@@ -75,10 +87,13 @@ extension DocumentTextBuilder {
     if let decorated {
       decorate(decorated, from: bodyStart)
     }
+    if case .styled(let styled)? = rendition {
+      highlight(styled, from: bodyStart)
+    }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
     }
-    if shown != .plain, style.emitsLinks {
+    if shown.isFigure, style.emitsLinks {
       output.addAttribute(
         .rfcFigureItem, value: FigureMenu.itemTag(of: box),
         range: NSRange(location: bodyStart, length: output.length - bodyStart))
@@ -126,6 +141,18 @@ extension DocumentTextBuilder {
           .foregroundColor, value: color,
           range: NSRange(location: bodyStart + range.location, length: range.length))
       }
+    }
+  }
+
+  /// Colors a highlighted block's tokens from the theme. Plain tokens keep the
+  /// body color the block was set in, which a quote or an aside sets. The text is
+  /// unchanged.
+  func highlight(_ styled: StyledText, from bodyStart: Int) {
+    for token in styled.tokens {
+      guard let color = SyntaxTheme.standard.color(for: token.kind) else { continue }
+      output.addAttribute(
+        .foregroundColor, value: color,
+        range: NSRange(location: bodyStart + token.range.location, length: token.range.length))
     }
   }
 

@@ -119,8 +119,11 @@ public enum AccessibleReading {
   /// grammars, message examples, tables — and those read perfectly well as words.
   /// A block its rendering says something about is a diagram whatever it draws
   /// with; only one with no rendering to say is left to the drawing-share guess.
+  /// Highlighted code never is: it is read as code.
   public static func isDiagram(_ box: VerbatimBox) -> Bool {
-    box.spokenLabel != nil || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
+    guard box.shown != .highlighted else { return false }
+    return box.spokenLabel != nil
+      || (box.content.kind == .artwork && looksLikeDrawing(box.content.text))
   }
 
   /// A drawing is mostly lines, boxes and arrows: at least this share of the
