@@ -249,4 +249,44 @@ struct BuilderTableTests {
     let header = expected == .grid ? "Method" : "Code"
     #expect(try Fixtures.offset(of: header, in: built.text) == offset)
   }
+
+  /// A line break in a grid cell (RFCXML's `<br/>`) was a newline, which ended the
+  /// row's paragraph: the rest of the cell and every cell after it started a new
+  /// paragraph at the indent, not at their tab stops (#506). A row with one is
+  /// still one paragraph, of as many lines as its tallest cell, each line holding
+  /// every cell's line of that number at its stop.
+  @Test func `a line break in a grid cell keeps the row one paragraph`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [
+        RFCKit.Table.Row(cells: [[.text("a1"), .lineBreak, .text("a2")], [.text("b1")], [.text("c1")]]),
+        RFCKit.Table.Row(cells: [[.text("d1")], [.text("e1"), .lineBreak, .text("e2")], [.text("f1")]]),
+      ])
+    #expect(shape(table) == .grid)
+    let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
+    #expect(text.contains("a1\tb1\tc1\u{2028}a2\n"))
+    #expect(text.contains("d1\te1\tf1\u{2028}\te2\n"))
+  }
+
+  /// A cell with a line break is as wide as its widest line, not as its lines laid
+  /// end to end, which could tip a table that fits into the stacked shape (#506).
+  @Test func `a cell with a line break is measured as its widest line`() {
+    let builder = DocumentTextBuilder(style: ReadingStyle())
+    func width(_ cell: [Inline]) -> CGFloat {
+      builder.naturalColumnWidths(
+        RFCKit.Table(title: nil, header: [], rows: [RFCKit.Table.Row(cells: [cell])]))[0]
+    }
+    let long = "Implementation Considerations"
+    #expect(width([.text(long), .lineBreak, .text("short")]) == width([.text(long)]))
+  }
+
+  /// In the stacked shape a cell is a paragraph of its own, and a line break in it
+  /// is a line separator there too, so a cell is always one paragraph.
+  @Test func `a line break in a stacked cell keeps the cell one paragraph`() {
+    var table = prose
+    table.rows[0].cells[2] = [.text("6.5.4"), .lineBreak, .text("6.5.5")]
+    #expect(shape(table) == .stacked)
+    let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
+    #expect(text.contains("6.5.4\u{2028}6.5.5\n"))
+  }
 }
