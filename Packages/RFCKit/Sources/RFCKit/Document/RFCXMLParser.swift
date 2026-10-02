@@ -798,8 +798,9 @@ public enum RFCXMLParser {
       case "eref":
         let inner = parseInlines(element.children, linkBare: false)
         guard let target = element["target"], let url = URL(string: target) else { return inner }
-        // Links into the RFC series are document references, whichever site they point at.
-        if let link = RFCLink(url: url), link.id.series == .rfc {
+        // Links into the RFC series are document references, whichever site they point
+        // at, where a citation can say all of the link (#683).
+        if let link = RFCLink(citing: url) {
           let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
           // This is the shape `RFCXMLSerializer` writes a document mention in
           // when the document has no bibliography entry, which is most of the

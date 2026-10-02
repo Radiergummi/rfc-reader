@@ -196,7 +196,7 @@ struct InlineLinker: Sendable {
       let end = text.index(match.range.lowerBound, offsetBy: raw.count)
       // A URL into the RFC series cites the document it names, whichever site it points
       // at, as an `<eref>` to one reads (#683); the words the prose spelled it in stay.
-      if let link = RFCLink(url: url), link.id.series == .rfc {
+      if let link = RFCLink(citing: url) {
         let citation = CrossReference(
           target: .document(link.id, section: link.section),
           text: CrossReference.isCanonicalTag(raw, for: link.id) ? nil : raw)
