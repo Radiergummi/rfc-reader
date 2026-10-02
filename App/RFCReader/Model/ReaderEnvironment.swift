@@ -10,7 +10,7 @@ import SwiftUI
 /// none of them can be given three of the four parts and not the fourth: the value
 /// cannot be made without all of them. What the compiler cannot check is that a new
 /// hosting controller applies it at all; one that hosts a view reading any of these
-/// must, as every host in `ReaderWindowController`, `ContentView`,
+/// must, as every such host in `ReaderWindowController`, `ContentView`,
 /// `RFCTextView` and `RFCTextViewCoordinator` does.
 struct ReaderEnvironment {
   let library: LibraryModel

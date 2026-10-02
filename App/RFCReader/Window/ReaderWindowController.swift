@@ -230,7 +230,7 @@
     }
 
     /// What every hosted root of this window is given; see `ReaderEnvironment`.
-    var environment: ReaderEnvironment {
+    private var environment: ReaderEnvironment {
       ReaderEnvironment(
         library: library, navigation: navigation, reader: reader)
     }
