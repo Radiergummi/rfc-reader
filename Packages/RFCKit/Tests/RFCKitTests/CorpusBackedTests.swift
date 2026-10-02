@@ -127,6 +127,21 @@ struct CorpusBackedTitlePageTests {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc355"))
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }
+
+  /// A title the index and the title page both set in capitals is title-cased (#219),
+  /// where the front matter took another line and only the title page's runs repeat
+  /// the index's: RFC 822 sets its title over two of them under a header, and RFC 169
+  /// under a workshop's name.
+  @Test func `a title in capitals on the title page and in the index is title cased`() throws {
+    let format = LegacyTextParser.parse(
+      try CorpusText.text("rfc822"),
+      title: "STANDARD FOR THE FORMAT OF ARPA INTERNET TEXT MESSAGES")
+    #expect(format.header.title == "Standard for the Format of ARPA Internet Text Messages")
+
+    let networks = LegacyTextParser.parse(
+      try CorpusText.text("rfc169"), title: "COMPUTER NETWORKS")
+    #expect(networks.header.title == "Computer Networks")
+  }
 }
 
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
