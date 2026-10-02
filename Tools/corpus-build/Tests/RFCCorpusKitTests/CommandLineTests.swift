@@ -1,3 +1,4 @@
+import CSQLite
 import Foundation
 import RFCCorpusKit
 import RFCKit
@@ -91,5 +92,50 @@ struct CommandLineTests {
     let result = try Self.run(["revisions"])
     #expect(result.status == 64, "EX_USAGE")
     #expect(result.standardError.contains("--out"), "\(result.standardError)")
+  }
+
+  /// `index` over the fixtures, whose XML is RFCs and also a sample of the RFC index
+  /// and an RSS feed: the RFCs are indexed, and the rest is said and passed over.
+  @Test func `index writes the citations of every RFC it reads`() throws {
+    let out = Self.temporaryDirectory()
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", Fixtures.directory.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status == 0, "\(result.standardError)")
+    #expect(result.standardError.contains("rfcrss.xml"), "\(result.standardError)")
+
+    var connection: OpaquePointer?
+    #expect(sqlite3_open_v2(database.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
+    defer { sqlite3_close(connection) }
+    var statement: OpaquePointer?
+    let sql = "SELECT count(*) FROM citations WHERE citing = 'RFC9290' AND cited = 'RFC7252'"
+    #expect(sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK)
+    defer { sqlite3_finalize(statement) }
+    #expect(sqlite3_step(statement) == SQLITE_ROW)
+    #expect(sqlite3_column_int(statement, 0) == 4)
+  }
+
+  /// An RFC that does not parse would leave a hole in the graph that nothing else
+  /// shows, so the run fails, naming it, after writing the rest.
+  @Test func `index fails on an RFC it cannot read`() throws {
+    let out = Self.temporaryDirectory()
+    let input = out.appending(path: "xml")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.copyItem(
+      at: Fixtures.url("rfc9290.xml"), to: input.appending(path: "rfc9290.xml"))
+    try Data("<rfc".utf8).write(to: input.appending(path: "rfc1.xml"))
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", input.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status != 0)
+    #expect(result.standardError.contains("rfc1"), "\(result.standardError)")
+    #expect(FileManager.default.fileExists(atPath: database.path))
   }
 }

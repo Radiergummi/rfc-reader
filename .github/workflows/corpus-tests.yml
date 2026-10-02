@@ -34,9 +34,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The image carries neither.
+      # make and curl, and SQLite's headers for corpus-build (#174). The image
+      # carries none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make curl >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
       # Fetches the documents in the Makefile's CORPUS_TEST_DOCUMENTS, checks every
       # document a test reads is among them, and runs the suites.
       - run: make test-corpus

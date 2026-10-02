@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-index corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -102,7 +102,7 @@ test-app:
 # committed as fixtures, so these are fetched instead.
 CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2910 rfc3407 rfc355 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
-CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114 rfc9393
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
@@ -434,6 +434,14 @@ corpus-score: corpus-fetch-xml
 	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
 	  --out $(CORPUS)/score.json
 
+## Write the index database of the converted and modern documents
+# What a device cannot compute from one document, such as which documents cite it,
+# computed over all of them (#174). Metadata and anchors only, no RFC text, so it is
+# a pack of its own beside the XML packs (docs/DATA_PIPELINE.md).
+corpus-index: corpus-tool
+	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
+	  --version $(CORPUS_VERSION)
+
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
@@ -451,7 +459,7 @@ corpus-queries: corpus-tool
 revisions: corpus-tool
 	$(CORPUS_BIN) revisions --out $(CORPUS)/revisions $(if $(wildcard $(CORPUS)/revisions/revisions-scan.json),--scan $(CORPUS)/revisions/revisions-scan.json)
 
-## Run the whole corpus pipeline: fetch, convert, manifest
+## Run the whole corpus pipeline: fetch, convert, index, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-index corpus-manifest
