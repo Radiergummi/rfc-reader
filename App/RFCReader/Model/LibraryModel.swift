@@ -651,8 +651,9 @@ final class LibraryModel {
   /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
   /// scripts — and SwiftUI evaluates that body far more often than any of these
   /// inputs change -- twice per pass, several passes per click.
-  /// Uncached, one filter change ran the full-text scan a dozen times over, and that
-  /// scan measures 107 ms against the real index.
+  /// Uncached, one filter change ran the metadata scan a dozen times over, and that
+  /// scan is the "Search" benchmarks of `make benchmark` (and the "Search" signpost
+  /// in a trace), a few milliseconds in Release and many times that in Debug.
   ///
   /// A dictionary rather than a single slot because tabs have their own filters now:
   /// with one slot, two tabs listing different things evict each other on every pass
@@ -767,8 +768,8 @@ final class LibraryModel {
 
   /// Every hit for a query, best first, searched off the main actor by
   /// `prepareSearch(_:)` before a scene applies the query (#124), so a list
-  /// computed for it only filters. The scan measures 7–11 ms in Release and up to
-  /// 98 ms in Debug. A query that is not here, as after `apply` or for a script,
+  /// computed for it only filters. What the scan costs is the "Search" benchmarks of
+  /// `make benchmark`. A query that is not here, as after `apply` or for a script,
   /// is searched on the spot.
   ///
   /// Not observed, for the reason `listCache` gives; applying the query is what
@@ -802,8 +803,9 @@ final class LibraryModel {
 
   /// The Go to RFC palette's candidates for what was typed, best first.
   ///
-  /// Off the main actor: a short query like `http` scans every title and abstract,
-  /// measured at 107 ms (#22), and this runs as the reader types.
+  /// Off the main actor: a short query like `http` scans every title and abstract
+  /// (the "Search: http" benchmark of `make benchmark`), and this runs as the reader
+  /// types.
   func suggestions(for query: String, limit: Int) async -> [DocumentID] {
     guard let search else { return [] }
     return await Self.suggestions(in: search, for: query, limit: limit)
