@@ -33,6 +33,12 @@ public enum LibraryRow: Hashable, Sendable, Identifiable {
     }
   }
 
+  /// The RFC the row is, or nil for a series, which has no status, group or
+  /// collection of its own: those belong to its members.
+  public var rfc: RFCMetadata? {
+    if case .rfc(let rfc) = self { rfc } else { nil }
+  }
+
   /// The RFCs the row stands for: its own, or the series'.
   public var members: [RFCMetadata] {
     switch self {
@@ -43,12 +49,15 @@ public enum LibraryRow: Hashable, Sendable, Identifiable {
 
   /// The series has no title in the index, so its first member's stands for it.
   public var title: String {
-    members[0].title
+    switch self {
+    case .rfc(let rfc): rfc.title
+    case .series(let id, let members): members.first?.title ?? id.displayName
+    }
   }
 
   /// The series is as old as its newest member, which is what it says today.
   public var date: PublicationDate {
-    newest.date
+    newest?.date ?? PublicationDate(year: 0)
   }
 
   /// Obsolescence belongs to a member, not to the series that names it.
@@ -68,10 +77,19 @@ public enum LibraryRow: Hashable, Sendable, Identifiable {
   /// Newest first: by date, then by number, a series by its newest member's, and
   /// then by the document, so a series and its newest member have an order too.
   static func isNewer(_ lhs: LibraryRow, than rhs: LibraryRow) -> Bool {
-    (lhs.date, lhs.newest.number, lhs.id) > (rhs.date, rhs.newest.number, rhs.id)
+    (lhs.date, lhs.newestNumber, lhs.id) > (rhs.date, rhs.newestNumber, rhs.id)
   }
 
-  private var newest: RFCMetadata {
-    members.max { ($0.date, $0.number) < ($1.date, $1.number) } ?? members[0]
+  private var newestNumber: Int {
+    newest?.number ?? id.number
+  }
+
+  /// The RFC itself, without the array `members` makes: lists sort and section
+  /// thousands of RFC rows by this.
+  private var newest: RFCMetadata? {
+    switch self {
+    case .rfc(let rfc): rfc
+    case .series(_, let members): members.max { ($0.date, $0.number) < ($1.date, $1.number) }
+    }
   }
 }

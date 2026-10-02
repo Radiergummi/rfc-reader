@@ -384,11 +384,7 @@ struct RFCRow: View {
   /// not each say "pppext", nor the Internet Standards' each say "STD".
   var filter: LibraryFilter?
 
-  /// The RFC the row is, or nil for a series, which has no status, group or
-  /// obsolescence of its own: those belong to its members.
-  private var rfc: RFCMetadata? {
-    if case .rfc(let rfc) = row { rfc } else { nil }
-  }
+  private var rfc: RFCMetadata? { row.rfc }
 
   private var status: PublicationStatus? {
     filter?.fixesStatus == true ? nil : rfc?.currentStatus
@@ -501,9 +497,7 @@ struct RFCRow: View {
     let row: LibraryRow
     let isBookmarked: Bool
 
-    private var rfc: RFCMetadata? {
-      if case .rfc(let rfc) = row { rfc } else { nil }
-    }
+    private var rfc: RFCMetadata? { row.rfc }
     @Environment(LibraryModel.self) private var library
     @Environment(NavigationModel.self) private var navigation
     @Environment(\.undoManager) private var undoManager
@@ -617,7 +611,7 @@ private struct PickerTarget: Identifiable {
         }
         // macOS 27 hides a menu item's icon unless the label asks to keep it.
         .labelStyle(.titleAndIcon)
-        if case .rfc = row {
+        if row.rfc != nil {
           Menu("Add to Collection") {
             AddToCollectionItems(
               document: row.id, library: library, navigation: navigation,

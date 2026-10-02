@@ -315,7 +315,8 @@ struct SidebarView: View {
     }
     // List rows dropped here join the collection at its end.
     .dropDestination(for: String.self) { keys, _ in
-      let documents = keys.compactMap(DocumentID.init(fileStem:))
+      // A collection holds RFCs: a series row dragged here is not taken (#321).
+      let documents = keys.compactMap(DocumentID.init(fileStem:)).filter { $0.series == .rfc }
       guard !documents.isEmpty else { return false }
       library.editCollections { context in
         for document in documents {

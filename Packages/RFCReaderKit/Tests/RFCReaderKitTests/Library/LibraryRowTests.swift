@@ -50,6 +50,8 @@ struct LibraryRowTests {
     #expect(row.title == "Requirement Levels")
     #expect(row.memberList == nil)
     #expect(row.members == [older])
+    #expect(row.rfc == older)
+    #expect(series.rfc == nil)
   }
 
   @Test func `a series row is spoken with its members and no status`() {

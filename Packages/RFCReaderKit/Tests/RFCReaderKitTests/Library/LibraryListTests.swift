@@ -122,6 +122,13 @@ struct LibraryListTests {
     #expect(ids(recent) == [Self.bcp14])
   }
 
+  @Test func `a series and its member both bookmarked are both found`() {
+    let list = LibraryList(
+      filter: .bookmarks, query: "requirement", bookmarked: [Self.bcp14, .rfc(2119)])
+
+    #expect(ids(list) == [.rfc(2119), Self.bcp14])
+  }
+
   @Test func `a series the index does not know is left out`() {
     let unknown = DocumentID(series: .std, number: 99)
     let list = LibraryList(filter: .bookmarks, query: "", bookmarked: [unknown, .rfc(9110)])

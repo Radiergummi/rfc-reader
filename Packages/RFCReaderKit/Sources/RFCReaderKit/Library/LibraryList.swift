@@ -76,8 +76,7 @@ public struct LibraryList: Hashable, Sendable {
     // Through the predicate the sidebar's counts use, so the two cannot disagree.
     case .standards, .bestCurrentPractice, .stream, .workingGroup:
       base = index.rfcs.reversed().filter { filter.includes($0) == true }.map(LibraryRow.rfc)
-    case .series(let id):
-      base = (index.series(id)?.members.compactMap { index[$0] } ?? []).map(LibraryRow.rfc)
+    case .series(let id): base = (LibraryRow(id, in: index)?.members ?? []).map(LibraryRow.rfc)
     case .collection: base = members.compactMap { index[$0] }.map(LibraryRow.rfc)
     }
 
@@ -97,12 +96,25 @@ public struct LibraryList: Hashable, Sendable {
     // Everything is allowed in the whole library, so there is nothing to filter.
     if case .all = filter { return found.map(LibraryRow.rfc) }
     // In order of relevance, a series row where its best hit is: it is found when
-    // any of the RFCs it names is.
-    var rowsByMember: [Int: [LibraryRow]] = [:]
+    // any of the RFCs it names is. Only Bookmarks and Recently Read hold one, so
+    // the RFC rows, thousands in a stream or a group, go in a set.
+    var allowed: Set<Int> = []
+    var seriesByMember: [Int: [LibraryRow]] = [:]
     for row in base {
-      for member in row.members { rowsByMember[member.number, default: []].append(row) }
+      if let rfc = row.rfc {
+        allowed.insert(rfc.number)
+      } else {
+        for member in row.members { seriesByMember[member.number, default: []].append(row) }
+      }
+    }
+    guard !seriesByMember.isEmpty else {
+      return found.filter { allowed.contains($0.number) }.map(LibraryRow.rfc)
     }
     var listed: Set<DocumentID> = []
-    return found.flatMap { rowsByMember[$0.number] ?? [] }.filter { listed.insert($0.id).inserted }
+    return found.flatMap { hit in
+      (allowed.contains(hit.number) ? [LibraryRow.rfc(hit)] : [])
+        + (seriesByMember[hit.number] ?? [])
+    }
+    .filter { listed.insert($0.id).inserted }
   }
 }
