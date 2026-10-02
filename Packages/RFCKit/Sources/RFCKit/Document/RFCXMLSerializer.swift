@@ -41,11 +41,7 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    let (referenceAnchors, entryDocuments) = Self.referenceIndex(in: document)
-    var context = Context(
-      referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
-      entryAnchors: Self.entryAnchors(in: document),
-      sections: document.sections)
+    var context = Context(Self.referenceIndex(in: document), sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
     if let comment = options.generatorComment {
@@ -248,9 +244,7 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    // As the parser reads a `<name>` back, so the XML is what it reads (#683).
-    let title = RFCXMLParser.normalize(
-      partNumber == nil ? section.displayTitleInlines : section.title)
+    let title = Self.name(of: section, partNumber: partNumber)
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -269,11 +263,16 @@ public struct RFCXMLSerializer: Sendable {
     writer.close("section")
   }
 
+  /// A section's `<name>`: its title, or with no `pn` to carry its number its title
+  /// after the number. Normalized as the parser reads a `<name>` back, so the XML is
+  /// what it reads (#683).
+  private static func name(of section: Section, partNumber: String?) -> [Inline] {
+    RFCXMLParser.normalize(partNumber == nil ? section.displayTitleInlines : section.title)
+  }
+
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    // As the parser reads a `<name>` back, so the XML is what it reads (#683).
-    let title = RFCXMLParser.normalize(
-      partNumber == nil ? section.displayTitleInlines : section.title)
+    let title = Self.name(of: section, partNumber: partNumber)
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
@@ -317,8 +316,9 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("reference", attributes)
     writer.open("front")
     // Collapsed, and never empty, as the parser reads a title back (#683).
+    let ownTitle = reference.title.collapsingWhitespace()
     let title =
-      [reference.title, reference.rawText ?? "", reference.anchor]
+      [ownTitle, reference.rawText ?? "", reference.anchor]
       .map { $0.collapsingWhitespace() }.first { !$0.isEmpty } ?? ""
     writer.element("title", text: title)
     for author in reference.authors {
@@ -338,7 +338,7 @@ public struct RFCXMLSerializer: Sendable {
     for info in reference.seriesInfo {
       writer.empty("seriesInfo", [("name", info.name), ("value", info.value)])
     }
-    if let raw = reference.rawText, title == reference.title.collapsingWhitespace() {
+    if let raw = reference.rawText, title == ownTitle {
       writer.element("refcontent", text: raw)
     }
     if !reference.annotation.isEmpty {
@@ -578,13 +578,10 @@ public struct RFCXMLSerializer: Sendable {
     /// `pn` then declared the ID the lifted list's anchor declared too.
     private var partNumbers: [String: String] = [:]
 
-    init(
-      referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
-      entryAnchors: Set<String>, sections: [Section]
-    ) {
-      self.referenceAnchors = referenceAnchors
-      self.entryDocuments = entryDocuments
-      self.entryAnchors = entryAnchors
+    init(_ index: ReferenceIndex, sections: [Section]) {
+      self.referenceAnchors = index.referenceAnchors
+      self.entryDocuments = index.entryDocuments
+      self.entryAnchors = index.entryAnchors
       var claimed: Set<String> = []
       func claim(_ sections: [Section]) {
         for section in sections {
@@ -620,38 +617,39 @@ public struct RFCXMLSerializer: Sendable {
     }
   }
 
+  /// What the bibliography says about the entries a citation is written against.
+  private struct ReferenceIndex {
+    /// The entry a citation of each document falls back to.
+    var referenceAnchors: [DocumentID: String] = [:]
+    /// The document each entry names, by the entry's anchor.
+    var entryDocuments: [String: DocumentID] = [:]
+    /// Every entry's anchor, whether or not it names a document.
+    var entryAnchors: Set<String> = []
+  }
+
   /// The entry a citation of each document falls back to, and the document each entry
   /// names. The fallback is the first entry naming the document, unless a later one is
   /// anchored under the document itself: RFC 8259 lists an erratum of RFC 7159 ahead of
   /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
-  private static func referenceIndex(
-    in document: RFCDocument
-  ) -> (referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID]) {
-    var anchors: [DocumentID: String] = [:]
-    var documents: [String: DocumentID] = [:]
+  private static func referenceIndex(in document: RFCDocument) -> ReferenceIndex {
+    var index = ReferenceIndex()
     for case .references(let list) in document.blocks {
       for reference in list.entries {
+        index.entryAnchors.insert(reference.anchor)
         guard let id = reference.documentID else { continue }
-        if let first = anchors[id] {
+        if let first = index.referenceAnchors[id] {
           if DocumentID(label: first) != id, DocumentID(label: reference.anchor) == id {
-            anchors[id] = reference.anchor
+            index.referenceAnchors[id] = reference.anchor
           }
         } else {
-          anchors[id] = reference.anchor
+          index.referenceAnchors[id] = reference.anchor
         }
-        if documents[reference.anchor] == nil { documents[reference.anchor] = id }
+        if index.entryDocuments[reference.anchor] == nil {
+          index.entryDocuments[reference.anchor] = id
+        }
       }
     }
-    return (anchors, documents)
-  }
-
-  /// Every entry's anchor, whether or not it names a document.
-  private static func entryAnchors(in document: RFCDocument) -> Set<String> {
-    var anchors: Set<String> = []
-    for case .references(let list) in document.blocks {
-      anchors.formUnion(list.entries.map(\.anchor))
-    }
-    return anchors
+    return index
   }
 
   static func isReferences(_ section: Section) -> Bool {
