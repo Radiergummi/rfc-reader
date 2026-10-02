@@ -113,6 +113,12 @@ final class NavigationModel: Identifiable {
   /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
     recentOrder = library.recentlyReadNumbers()
+    takeDownloaded()
+  }
+
+  /// Takes the RFCs available offline again, without the rest of the list inputs:
+  /// for the first set the library reads, which a tab made before it took empty.
+  func takeDownloaded() {
     downloaded = library.downloadedNumbers
   }
 
