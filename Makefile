@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-index corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -426,6 +426,14 @@ corpus-score: corpus-fetch-xml
 	$(CORPUS_BIN) score --xml $(CORPUS)/xml.noindex --text $(CORPUS)/modern-text.noindex \
 	  --out $(CORPUS)/score.json
 
+## Write the index database of the converted and modern documents
+# What a device cannot compute from one document, such as which documents cite it,
+# computed over all of them (#174). Metadata and anchors only, no RFC text, so it is
+# a pack of its own beside the XML packs (docs/DATA_PIPELINE.md).
+corpus-index: corpus-tool
+	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
+	  --version $(CORPUS_VERSION)
+
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
@@ -443,7 +451,7 @@ corpus-queries: corpus-tool
 revisions: corpus-tool
 	$(CORPUS_BIN) revisions --out $(CORPUS)/revisions $(if $(wildcard $(CORPUS)/revisions/revisions-scan.json),--scan $(CORPUS)/revisions/revisions-scan.json)
 
-## Run the whole corpus pipeline: fetch, convert, manifest
+## Run the whole corpus pipeline: fetch, convert, index, manifest
 # Review corpus/report.json afterwards; it is what says whether a conversion
 # regressed.
-corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-manifest
+corpus: corpus-fetch corpus-fetch-xml corpus-schema-control corpus-convert corpus-index corpus-manifest
