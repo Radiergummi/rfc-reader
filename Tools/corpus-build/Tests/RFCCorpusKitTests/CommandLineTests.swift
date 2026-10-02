@@ -86,6 +86,53 @@ struct CommandLineTests {
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)
   }
 
+  /// A patch in `--overrides` is applied to the converter's output (#197).
+  @Test func `a patch in the overrides is applied`() throws {
+    let out = Self.temporaryDirectory()
+    let overrides = Self.temporaryDirectory()
+    defer {
+      try? FileManager.default.removeItem(at: out)
+      try? FileManager.default.removeItem(at: overrides)
+    }
+    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    try Data("<diff><remove sel=\"//section[@pn='section-9']\"/></diff>".utf8)
+      .write(to: overrides.appending(path: "rfc2119.xml"))
+
+    let result = try Self.run([
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119",
+      "--overrides", overrides.path,
+    ])
+    #expect(result.status == 0, "\(result.standardError)")
+    let document = try RFCXMLParser.parse(
+      try Data(contentsOf: out.appending(path: "rfc2119.xml")))
+    #expect(document.section(anchor: "section-9") == nil)
+  }
+
+  /// A patch that fails leaves no output, not even an earlier run's, and fails the
+  /// run once every document is converted, naming the operation.
+  @Test func `a failing patch fails the run and removes the stale output`() throws {
+    let out = Self.temporaryDirectory()
+    let overrides = Self.temporaryDirectory()
+    defer {
+      try? FileManager.default.removeItem(at: out)
+      try? FileManager.default.removeItem(at: overrides)
+    }
+    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    try Data("<diff><remove sel=\"//section[@pn='section-99']\"/></diff>".utf8)
+      .write(to: overrides.appending(path: "rfc2119.xml"))
+    try Data("stale".utf8).write(to: out.appending(path: "rfc2119.xml"))
+
+    let result = try Self.run([
+      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119", "1149",
+      "--overrides", overrides.path,
+    ])
+    #expect(result.status == 1)
+    #expect(result.standardError.contains("operation 1"), "\(result.standardError)")
+    let written = try FileManager.default.contentsOfDirectory(atPath: out.path)
+    #expect(written == ["rfc1149.xml"])
+  }
+
   /// `--out` is where both files go; without it there is nowhere to write, and
   /// nothing may be fetched first.
   @Test func `revisions requires out`() throws {

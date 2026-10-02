@@ -34,19 +34,30 @@ struct PatchedConversionTests {
     #expect(text.contains("from rfc2119.txt and patched by corpus/overrides/rfc2119.xml."))
   }
 
+  private static let fixtures: [String] = {
+    let names =
+      (try? FileManager.default.contentsOfDirectory(atPath: Fixtures.directory.path)) ?? []
+    return names.filter { $0.wholeMatch(of: #/rfc\d+\.txt/#) != nil }.sorted()
+  }()
+
   /// The patched output is the canonical one: written again from what the app reads,
-  /// so a patched document differs from an unpatched one only where the patch does.
-  @Test func `a patch that changes nothing changes no byte`() throws {
-    let unpatched = try #require(
-      DocumentConverter().convert(text: try Self.text(), stem: "rfc2119", metadata: nil).xml)
-    let patched = try #require(
-      try Self.convert(
-        "<replace sel=\"/rfc/front/date/@year\">1997</replace>"
-      ).xml)
-    let comment = "from rfc2119.txt and patched by corpus/overrides/rfc2119.xml."
-    let restored = String(decoding: patched, as: UTF8.self)
-      .replacingOccurrences(of: comment, with: "from rfc2119.txt.")
-    #expect(restored == String(decoding: unpatched, as: UTF8.self))
+  /// so a patched document differs from an unpatched one only where the patch does,
+  /// artwork's spaces included.
+  @Test(arguments: fixtures)
+  func `a patch that changes nothing changes no byte`(fixture: String) throws {
+    let stem = String(fixture.dropLast(4))
+    let text = LegacyTextParser.text(decoding: try Data(contentsOf: Fixtures.url(fixture)))
+    let patch = try XMLPatch(
+      parsing: Data("<diff><replace sel=\"/rfc/@version\">3</replace></diff>".utf8),
+      name: "\(stem).xml")
+    let unpatched = DocumentConverter().convert(text: text, stem: stem, metadata: nil).xml
+    let patched = DocumentConverter().convert(
+      text: text, stem: stem, metadata: nil, patch: patch)
+    let xml = try #require(patched.xml, "\(patched.report.failure ?? "")")
+    let restored = String(decoding: xml, as: UTF8.self).replacingOccurrences(
+      of: "from \(stem).txt and patched by corpus/overrides/\(stem).xml.",
+      with: "from \(stem).txt.")
+    #expect(restored == unpatched.map { String(decoding: $0, as: UTF8.self) })
   }
 
   @Test func `a failing patch writes nothing and says why`() throws {
@@ -76,10 +87,8 @@ struct PatchedConversionTests {
   /// Parsing and writing a converted document again gives the same bytes (#683), and
   /// a corpus run warns about any document where it would not.
   @Test func `no fixture's conversion warns that the round trip changes it`() throws {
-    let fixtures = try FileManager.default.contentsOfDirectory(atPath: Fixtures.directory.path)
-      .filter { $0.wholeMatch(of: #/rfc\d+\.txt/#) != nil }
-    #expect(!fixtures.isEmpty)
-    for fixture in fixtures {
+    #expect(!Self.fixtures.isEmpty)
+    for fixture in Self.fixtures {
       let text = LegacyTextParser.text(decoding: try Data(contentsOf: Fixtures.url(fixture)))
       let report = DocumentConverter().convert(
         text: text, stem: String(fixture.dropLast(4)), metadata: nil
