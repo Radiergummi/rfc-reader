@@ -89,9 +89,11 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
-  // The reader's column, 712 pt, as #357 measured the builds.
+  // The reader's column, 712 pt, as #357 measured the builds. RFC 8927 and RFC 8727
+  // are mostly source code, so they are what syntax highlighting is measured on;
+  // RFC 8727 holds the corpus's largest JSON block, 53 KB.
   let style = ReadingStyle(measure: ReaderLayout.idealMeasure)
-  for number in [9110, 9000] {
+  for number in [9110, 9000, 8927, 8727] {
     Benchmark("Build: RFC \(number)") { benchmark, document in
       for _ in benchmark.scaledIterations {
         blackHole(DocumentTextBuilder.build(document, style: style))
