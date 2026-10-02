@@ -492,4 +492,162 @@ struct LegacyTextParserBlocksTests {
     ])
     #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
+
+  /// A drawing with blank lines inside it, such as a message ladder, arrives as one
+  /// raw block per stretch between them. It is one artwork, with its blank lines and
+  /// its pieces where they stand against each other, not a card per stretch, each
+  /// moved to the margin (#437).
+  @Test func `artwork that blank lines cut is one artwork`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let pieces = [
+      ["      Sender                              Receiver"],
+      ["      Hello(1) ------>"],
+      ["                          <------ Ack(1)"],
+    ].map { LegacyTextParser.RawBlock(lines: $0) }
+    let blocks = LegacyTextParser.blocks(from: pieces, proseIndent: 3, linker: linker)
+    #expect(blocks.count == 1)
+    let artwork = try #require(blocks.first?.preformatted)
+    #expect(artwork.kind == .artwork)
+    #expect(
+      artwork.text == """
+        Sender                              Receiver
+
+        Hello(1) ------>
+
+                            <------ Ack(1)
+        """)
+  }
+
+  /// Prose between two pieces of artwork ends the first: they are two.
+  @Test func `artwork with prose between is two artworks`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: [
+          "   The box above stands for the sender, and the one below for the",
+          "   receiver of every message in this section.",
+        ]),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.map { $0.preformatted != nil } == [true, false, true])
+  }
+
+  /// Prose the prose test refused, and a title underlined with dashes, are set as
+  /// artwork in a document indented deeper than its body, and are not one with the
+  /// drawings beside them: joined, a section's drawings and text were one block.
+  @Test(arguments: [
+    ["      Frame", "      -----"],
+    [
+      "         Each frame carries a sixteen bit tag that the sender chooses",
+      "         and the receiver echoes back in its reply to the frame.",
+    ],
+  ])
+  func `a title or prose set as artwork is not joined to a drawing`(lines: [String]) {
+    #expect(!LegacyTextParser.joinsArtwork(lines))
+    #expect(LegacyTextParser.joinsArtwork(["      Hello(1) ------>"]))
+  }
+
+  /// A page break ends a drawing: what starts the next page is as often a heading.
+  @Test func `artwork is not joined across a page break`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(
+          lines: ["      +-------+", "      | Front |", "      +-------+"],
+          followedByPageBreak: true),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
+
+  /// One-line definitions a blank line apart are set as artwork until a hanging
+  /// one below says they are a list, and it takes them back as the blocks they
+  /// made: joined as artwork, they were left out of it (#437).
+  @Test func `one-line definitions are not joined as artwork`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let entry = { (name: String) in
+      LegacyTextParser.RawBlock(lines: [
+        "   Field label:     \(name)",
+        "   Value kind:      Text only.",
+      ])
+    }
+    let hanging = LegacyTextParser.RawBlock(lines: [
+      "   Field label:     gamma, which this entry goes on to explain over",
+      "                    a second line under the first.",
+    ])
+    let blocks = LegacyTextParser.blocks(
+      from: [entry("alpha"), entry("beta"), hanging], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 1)
+    #expect(try #require(blocks.first?.definitionItems).count == 5)
+  }
+
+  /// A caption below a drawing, a blank line apart, draws nothing and stays its
+  /// own: joined, it made the drawing mostly words, and the drawing was read.
+  @Test func `a caption is not joined to the drawing above it`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
+
+  /// A caption with a hyphen or a slash in its words draws, and is still its own:
+  /// a caption is told by its label.
+  @Test(arguments: ["Figure 4: Front-Box Layout", "Figure 5: Probe/Echo Exchange"])
+  func `a caption with a hyphen or a slash is not joined to the drawing above it`(
+    caption: String
+  ) {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 \(caption)"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
+
+  /// A caption below one drawing, with the next drawing a blank line below it, is
+  /// the first one's: it does not open the second.
+  @Test func `a caption below a drawing is not joined to the next drawing`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 3)
+  }
+
+  /// A packet diagram is recognized from the bit ruler on its first line, so a
+  /// title above it, a blank line apart, is not joined to it.
+  @Test func `a packet diagram is not joined to the title above it`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["        Probe Layout ----"]),
+        LegacyTextParser.RawBlock(lines: [
+          "     0                   1",
+          "     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+          "    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+          "    |     Kind      |    Width      |",
+          "    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+        ]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+    let diagram = try #require(blocks.last?.preformatted)
+    #expect(PacketDiagram.recognize(diagram.text) != nil)
+  }
+
+  /// RFC 796 indents its subsections deeper than its body, so their titles,
+  /// underlined with dashes, and their prose are set as artwork, between the
+  /// drawings. Joined, each subsection was one block, its prose inside (#437).
+  @Test func `prose set as artwork is not joined to the drawings beside it`() throws {
+    let document = try Fixtures.document("rfc796.txt")
+    let artwork = document.artworkText
+    #expect(!artwork.contains { $0.contains("SATNET") && $0.contains("WBCNET") })
+  }
 }

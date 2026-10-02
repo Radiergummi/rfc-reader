@@ -4,7 +4,7 @@ Date: 2026-09-21
 Machine: Apple M3 Pro, macOS 27.0 (build 26A428), arm64
 Toolchain: Apple Swift 6.4 (swiftlang-6.4.0.34.1)
 
-*References below to "Task N", "the spec", "the design spec" and "requirement 1" are to the implementation plan and the design this was measured for, retired in #161; `ARCHITECTURE.md`'s TextKit decision keeps what the design decided. Requirement 1 was that selection flows continuously through the document, across artwork, tables and figures. Both documents are recoverable with `git show ed0dc7d:docs/superpowers/plans/2026-09-21-textkit-2-reader-body.md` and `git show ed0dc7d:docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md`.*
+*References below to "Task N", "the spec", "the design spec" and "requirement 1" are to the implementation plan and the design this was measured for, retired in #161; the TextKit decision (`2026-09-20-textkit-2-for-the-reader-body.md`) keeps what the design decided. Requirement 1 was that selection flows continuously through the document, across artwork, tables and figures. Both documents are recoverable with `git show ed0dc7d:docs/superpowers/plans/2026-09-21-textkit-2-reader-body.md` and `git show ed0dc7d:docs/superpowers/specs/2026-09-21-textkit-2-reader-design.md`.*
 
 Measured with the throwaway `Tools/textkit-probe` package (deleted after this run; git history
 keeps it at the commit that adds this file). Probes A and B ran headless — no window, no view —

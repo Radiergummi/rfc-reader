@@ -81,6 +81,40 @@ struct QuoteCitationTests {
         """)
   }
 
+  /// A table row whose cell has a line break is one paragraph (#506), its lines
+  /// set apart by a line separator; quoted, each is a line of the quote.
+  @Test func `a table cell's lines are quoted as lines`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [RFCKit.Table.Row(cells: [[.text("first"), .lineBreak, .text("second")]])])
+    let built = DocumentTextBuilder.build(Fixtures.document(.table(table)), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "first", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: ("first\u{2028}second" as NSString).length))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(quote.markdown.hasPrefix("> first\n>\n> second\n"))
+  }
+
+  /// Each of a row's lines loses its trailing tabs, as a row of one line does: a
+  /// cell whose line is empty leaves the tab that leads up to it.
+  @Test func `a table row's lines are quoted without trailing tabs`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [
+        RFCKit.Table.Row(cells: [
+          [.text("a1"), .lineBreak, .text("a2")],
+          [.text("b1"), .lineBreak, .lineBreak, .text("b3")],
+        ])
+      ])
+    let built = DocumentTextBuilder.build(Fixtures.document(.table(table)), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "a1", in: built.text)
+    let end = try Fixtures.offset(of: "b3", in: built.text) + 2
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: end - start))
+    let quote = QuoteCitation.quote(of: selection, document: .rfc(9110), section: nil)
+    #expect(quote.markdown.hasPrefix("> a1\tb1\n>\n> a2\n>\n> \tb3\n"))
+  }
+
   /// The reader ends a paragraph with one line break and draws the gap between
   /// paragraphs as spacing, so every paragraph of the selection is quoted as one of
   /// its own, or Markdown runs them together.

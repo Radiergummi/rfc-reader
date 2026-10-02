@@ -41,4 +41,10 @@ struct AppliedSearchTests {
   @Test func `the pause is short enough to follow while reading`() {
     #expect(AppliedSearch.pause == .milliseconds(150))
   }
+
+  /// The collection picker's own search waits as the list's does.
+  @Test func `a query waits for the pause and no search waits for nothing`() {
+    #expect(AppliedSearch.pause(before: "http") == AppliedSearch.pause)
+    #expect(AppliedSearch.pause(before: "") == .zero)
+  }
 }

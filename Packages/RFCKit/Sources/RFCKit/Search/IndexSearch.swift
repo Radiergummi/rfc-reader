@@ -38,8 +38,9 @@ public struct SearchHit: Sendable, Identifiable {
 
 /// In-memory search over index metadata: number, title, keywords, authors, abstract.
 ///
-/// Ten thousand entries scan in well under a frame, so there is no need for an index
-/// until full-text search over document bodies arrives (that is SQLite FTS territory).
+/// A scan of every entry per query, with no index: the "Search" benchmarks of
+/// `make benchmark` measure it over the real index. An index for the metadata waits
+/// for full-text search over document bodies, which will hold both (#37, #605).
 public struct IndexSearch: Sendable {
   public let index: RFCIndex
 

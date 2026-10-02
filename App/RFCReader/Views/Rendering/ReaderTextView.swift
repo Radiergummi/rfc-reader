@@ -103,6 +103,16 @@ import RFCReaderKit
   /// object-replacement character and its brackets do not live there at all, so the
   /// characters under a selection are not the text that selection stands for.
   final class ReaderTextView: NSTextView {
+    /// Posted, with the view as the object, when a live resize of the view ends: the
+    /// window's, or a drag of a split view's divider beside it, of which the window
+    /// says nothing. The background layout waits for it (`ReaderLayoutEngine`).
+    static let didEndLiveResizeNotification = Notification.Name("ReaderTextViewDidEndLiveResize")
+
+    override func viewDidEndLiveResize() {
+      super.viewDidEndLiveResize()
+      NotificationCenter.default.post(name: Self.didEndLiveResizeNotification, object: self)
+    }
+
     /// Force click on a reference previews it; answers whether it did. Set by the
     /// representable, and a closure rather than the coordinator so this view stays
     /// about text.
