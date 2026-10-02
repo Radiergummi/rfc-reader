@@ -150,7 +150,7 @@ public struct RFCXMLSerializer: Sendable {
     writer.open("front")
     var titleAttributes: [(String, String)] = []
     if let abbrev = header.abbreviatedTitle { titleAttributes.append(("abbrev", abbrev)) }
-    writer.element("title", titleAttributes, text: header.title)
+    writer.element("title", titleAttributes, text: header.title.collapsingWhitespace())
     if let id = header.id, id.series == .rfc {
       writer.empty("seriesInfo", [("name", "RFC"), ("value", String(id.number))])
     }
@@ -242,7 +242,9 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeSection(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    // As the parser reads a `<name>` back, so the XML is what it reads (#683).
+    let title = RFCXMLParser.normalize(
+      partNumber == nil ? section.displayTitleInlines : section.title)
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber {
       attributes.append(("numbered", "true"))
@@ -263,7 +265,9 @@ public struct RFCXMLSerializer: Sendable {
 
   private func writeReferences(_ section: Section, writer: inout Writer, context: inout Context) {
     let partNumber = context.partNumber(of: section)
-    let title = partNumber == nil ? section.displayTitleInlines : section.title
+    // As the parser reads a `<name>` back, so the XML is what it reads (#683).
+    let title = RFCXMLParser.normalize(
+      partNumber == nil ? section.displayTitleInlines : section.title)
     var attributes = Self.anchorAttribute(section.anchor, partNumber: partNumber)
     if let partNumber { attributes.append(("pn", partNumber)) }
     writer.open("references", attributes)
@@ -306,9 +310,11 @@ public struct RFCXMLSerializer: Sendable {
     }
     writer.open("reference", attributes)
     writer.open("front")
-    writer.element(
-      "title",
-      text: reference.title.isEmpty ? (reference.rawText ?? reference.anchor) : reference.title)
+    // Collapsed, and never empty, as the parser reads a title back (#683).
+    let title =
+      [reference.title, reference.rawText ?? "", reference.anchor]
+      .map { $0.collapsingWhitespace() }.first { !$0.isEmpty } ?? ""
+    writer.element("title", text: title)
     for author in reference.authors {
       var authorAttributes: [(String, String)] = [("fullname", author.name)]
       if let role = author.role { authorAttributes.append(("role", role.rawValue)) }
@@ -326,7 +332,7 @@ public struct RFCXMLSerializer: Sendable {
     for info in reference.seriesInfo {
       writer.empty("seriesInfo", [("name", info.name), ("value", info.value)])
     }
-    if let raw = reference.rawText, !reference.title.isEmpty {
+    if let raw = reference.rawText, title == reference.title.collapsingWhitespace() {
       writer.element("refcontent", text: raw)
     }
     if !reference.annotation.isEmpty {
