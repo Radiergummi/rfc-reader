@@ -8,10 +8,9 @@ import SwiftUI
 /// it. The abstract is no longer here; it is the first prose in the storage, which is
 /// what puts the banner between the title and the abstract as `VISION.md` asks.
 struct DocumentHeaderView: View {
-  /// Passed down for the same reason `StatusBanner` takes them: this whole subtree
-  /// is hosted outside the SwiftUI hierarchy.
-  let library: LibraryModel
-  let navigation: NavigationModel
+  /// Hosted outside the SwiftUI hierarchy, by a host that `ReaderEnvironment`
+  /// guarantees gave it the environment.
+  @Environment(NavigationModel.self) private var navigation
 
   /// Exactly what the body below reads, and nothing else.
   ///
@@ -92,8 +91,8 @@ struct DocumentHeaderView: View {
       }
       if let metadata = identity.metadata {
         StatusBanner(
-          library: library, navigation: navigation, metadata: metadata,
-          revisionLines: identity.revisionLines, moreRevisions: identity.moreRevisions
+          metadata: metadata, revisionLines: identity.revisionLines,
+          moreRevisions: identity.moreRevisions
         )
         .padding(.top, 4)
       }

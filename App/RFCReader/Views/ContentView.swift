@@ -9,13 +9,17 @@ import SwiftUI
 // window's own root gets AppKit to confine the tab bar and split the toolbar.
 #if !os(macOS)
   struct ContentView: View {
-    @Environment(LibraryModel.self) private var library
+    /// The scene's, which this view hands on to everything inside it with the tab's
+    /// own state, as a `ReaderEnvironment` applied at the end of `body`.
+    let library: LibraryModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
     /// selection, filter, search text and back/forward stack. Shared library state —
-    /// the index, the cache — stays on the environment's `LibraryModel`.
+    /// the index, the cache — stays on `LibraryModel`. `.shared` because a property
+    /// initializer cannot read `library`: this is a composition root, where the
+    /// app's state is made.
     @State private var navigation = NavigationModel(library: .shared)
     /// What the reader is showing, shared with the panel. One per scene, for the same
     /// reason `NavigationModel` is.
@@ -165,8 +169,9 @@ import SwiftUI
       // `GoToDocumentSheet`'s `@Environment(NavigationModel.self)` lookup, which is
       // a runtime trap with no compile-time warning. Out here it covers both, and
       // the next presentation added to this view as well.
-      .environment(navigation)
-      .environment(reader)
+      .readerEnvironment(
+        ReaderEnvironment(
+          library: library, navigation: navigation, reader: reader))
     }
   }
 #endif

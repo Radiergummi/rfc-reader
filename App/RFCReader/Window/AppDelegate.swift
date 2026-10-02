@@ -12,6 +12,10 @@
   /// reader window is created here and kept here: an `NSWindowController` with no owner
   /// is deallocated the moment the call that made it returns.
   final class AppDelegate: NSObject, NSApplicationDelegate, WindowOpening {
+    /// The one AppKit made, for what opens or forgets a window and has no owner to be
+    /// handed it by: File ▸ New Window and New Tab, which SwiftUI makes, and a window
+    /// controller closing. A singleton because AppKit's delegate is one, and the
+    /// menus need a single target (#139).
     private(set) static weak var shared: AppDelegate?
 
     private(set) var controllers: [ReaderWindowController] = []
@@ -166,6 +170,9 @@
   /// under strict concurrency, and the delegate is already on the main actor.
   @Observable
   final class ActiveReaderWindow {
+    /// One per process, as the menu bar is: SwiftUI makes the commands that read it,
+    /// with no way to hand them anything, and the key window is a single target
+    /// (#139).
     static let shared = ActiveReaderWindow()
 
     private(set) var controller: ReaderWindowController?

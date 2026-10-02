@@ -229,26 +229,21 @@
       ]
     }
 
-    /// Every hosted root is handed the models by hand.
-    ///
-    /// An `NSHostingController` sits outside any SwiftUI environment chain, so
-    /// `@Environment(LibraryModel.self)` inside one is a runtime trap with no
-    /// compile-time warning — the same reason `DocumentHeaderView` and `StatusBanner`
-    /// take theirs as properties.
+    /// What every hosted root of this window is given; see `ReaderEnvironment`.
+    private var environment: ReaderEnvironment {
+      ReaderEnvironment(
+        library: library, navigation: navigation, reader: reader)
+    }
+
+    /// Every hosted root is handed `environment`: an `NSHostingController` sits
+    /// outside any SwiftUI environment chain.
     ///
     /// The root keeps its own type rather than being erased to `AnyView`: these roots
     /// are re-evaluated by observation — `PanelHost` reads `reader.currentAnchor`, so
     /// it updates on every section crossing while scrolling — and an erased root
     /// gives SwiftUI nothing to diff against.
     private func host(_ view: some View) -> NSHostingController<some View> {
-      let controller = NSHostingController(
-        rootView:
-          view
-          .environment(library)
-          .environment(navigation)
-          .environment(reader)
-          .modelContainer(AppData.container)
-      )
+      let controller = NSHostingController(rootView: view.readerEnvironment(environment))
       // The hosted view must not size the window. By default a hosting controller
       // reports its content's preferred size, and as a split view item that reaches
       // the window: measured, it pinned the window at 219 pt tall and left the
