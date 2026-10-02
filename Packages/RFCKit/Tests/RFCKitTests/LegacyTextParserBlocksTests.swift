@@ -492,4 +492,44 @@ struct LegacyTextParserBlocksTests {
     ])
     #expect(LegacyTextParser.shouldJoinAcrossPage(endOfPage, restOfSentence, proseIndent: 6))
   }
+
+  /// A drawing with blank lines inside it, such as a message ladder, arrives as one
+  /// raw block per stretch between them. It is one artwork, with its blank lines and
+  /// its pieces where they stand against each other, not a card per stretch, each
+  /// moved to the margin (#437).
+  @Test func `artwork that blank lines cut is one artwork`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let pieces = [
+      ["      Sender                              Receiver"],
+      ["      Hello(1) ------>"],
+      ["                          <------ Ack(1)"],
+    ].map { LegacyTextParser.RawBlock(lines: $0) }
+    let blocks = LegacyTextParser.blocks(from: pieces, proseIndent: 3, linker: linker)
+    #expect(blocks.count == 1)
+    let artwork = try #require(blocks.first?.preformatted)
+    #expect(artwork.kind == .artwork)
+    #expect(
+      artwork.text == """
+        Sender                              Receiver
+
+        Hello(1) ------>
+
+                            <------ Ack(1)
+        """)
+  }
+
+  /// Prose between two pieces of artwork ends the first: they are two.
+  @Test func `artwork with prose between is two artworks`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: [
+          "   The box above stands for the sender, and the one below for the",
+          "   receiver of every message in this section.",
+        ]),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.map { $0.preformatted != nil } == [true, false, true])
+  }
 }
