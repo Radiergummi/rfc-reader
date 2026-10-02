@@ -12,11 +12,13 @@ import Testing
 /// headings, the kind of correction a patch exists for.
 @Suite("XML patch")
 struct XMLPatchTests {
+  /// Converted once; each test patches a tree of its own.
+  private static let xml: Data? = try? DocumentConverter().convert(
+    text: Fixtures.text("rfc2119.txt"), stem: "rfc2119", metadata: nil
+  ).xml
+
   private static func converted() throws -> XMLDocument {
-    let text = LegacyTextParser.text(decoding: try Data(contentsOf: Fixtures.url("rfc2119.txt")))
-    let xml = try #require(
-      DocumentConverter().convert(text: text, stem: "rfc2119", metadata: nil).xml)
-    return try XMLDocument(data: xml, options: .nodePreserveWhitespace)
+    try XMLDocument(data: try #require(xml), options: .nodePreserveWhitespace)
   }
 
   private static func patch(_ operations: String) throws -> XMLPatch {

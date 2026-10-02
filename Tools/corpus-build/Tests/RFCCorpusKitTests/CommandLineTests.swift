@@ -86,22 +86,28 @@ struct CommandLineTests {
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)
   }
 
+  /// Converts the documents `only` names into `out`, with `override` as RFC 2119's
+  /// file in a directory of overrides of its own.
+  private static func convert(
+    only: [String], into out: URL, override: String
+  ) throws -> (status: Int32, standardError: String) {
+    let overrides = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: overrides) }
+    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    try Data(override.utf8).write(to: overrides.appending(path: "rfc2119.xml"))
+    return try run(
+      ["convert", "--in", Fixtures.directory.path, "--out", out.path, "--only"] + only
+        + ["--overrides", overrides.path])
+  }
+
   /// A patch in `--overrides` is applied to the converter's output (#197).
   @Test func `a patch in the overrides is applied`() throws {
     let out = Self.temporaryDirectory()
-    let overrides = Self.temporaryDirectory()
-    defer {
-      try? FileManager.default.removeItem(at: out)
-      try? FileManager.default.removeItem(at: overrides)
-    }
-    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
-    try Data("<diff><remove sel=\"//section[@pn='section-9']\"/></diff>".utf8)
-      .write(to: overrides.appending(path: "rfc2119.xml"))
+    defer { try? FileManager.default.removeItem(at: out) }
 
-    let result = try Self.run([
-      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119",
-      "--overrides", overrides.path,
-    ])
+    let result = try Self.convert(
+      only: ["2119"], into: out,
+      override: "<diff><remove sel=\"//section[@pn='section-9']\"/></diff>")
     #expect(result.status == 0, "\(result.standardError)")
     let document = try RFCXMLParser.parse(
       try Data(contentsOf: out.appending(path: "rfc2119.xml")))
@@ -112,21 +118,13 @@ struct CommandLineTests {
   /// run once every document is converted, naming the operation.
   @Test func `a failing patch fails the run and removes the stale output`() throws {
     let out = Self.temporaryDirectory()
-    let overrides = Self.temporaryDirectory()
-    defer {
-      try? FileManager.default.removeItem(at: out)
-      try? FileManager.default.removeItem(at: overrides)
-    }
-    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
     try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-    try Data("<diff><remove sel=\"//section[@pn='section-99']\"/></diff>".utf8)
-      .write(to: overrides.appending(path: "rfc2119.xml"))
     try Data("stale".utf8).write(to: out.appending(path: "rfc2119.xml"))
 
-    let result = try Self.run([
-      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119", "1149",
-      "--overrides", overrides.path,
-    ])
+    let result = try Self.convert(
+      only: ["2119", "1149"], into: out,
+      override: "<diff><remove sel=\"//section[@pn='section-99']\"/></diff>")
     #expect(result.status == 1)
     #expect(result.standardError.contains("operation 1"), "\(result.standardError)")
     let written = try FileManager.default.contentsOfDirectory(atPath: out.path)
@@ -136,19 +134,11 @@ struct CommandLineTests {
   /// An override that is not XML fails as a patch does, and the rest of the run goes on.
   @Test func `an override that is not XML fails its document only`() throws {
     let out = Self.temporaryDirectory()
-    let overrides = Self.temporaryDirectory()
-    defer {
-      try? FileManager.default.removeItem(at: out)
-      try? FileManager.default.removeItem(at: overrides)
-    }
-    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
-    try Data("<diff><remove sel=\"//t[contains(., 'a & b')]\"/></diff>".utf8)
-      .write(to: overrides.appending(path: "rfc2119.xml"))
+    defer { try? FileManager.default.removeItem(at: out) }
 
-    let result = try Self.run([
-      "convert", "--in", Fixtures.directory.path, "--out", out.path, "--only", "2119", "1149",
-      "--overrides", overrides.path,
-    ])
+    let result = try Self.convert(
+      only: ["2119", "1149"], into: out,
+      override: "<diff><remove sel=\"//t[contains(., 'a & b')]\"/></diff>")
     #expect(result.status == 1)
     #expect(result.standardError.contains("rfc2119.xml: not XML"), "\(result.standardError)")
     #expect(try FileManager.default.contentsOfDirectory(atPath: out.path) == ["rfc1149.xml"])

@@ -3,6 +3,10 @@ import RFCCorpusKit
 import RFCKit
 import Testing
 
+#if canImport(FoundationXML)
+  import FoundationXML
+#endif
+
 /// The committed overrides in `corpus/overrides/`: RFC 5261 patches, and the one
 /// snapshot, `rfc1142.xml`. `convert` reads them only during a corpus run, so this is
 /// what notices a broken one before then. Whether a patch still applies to the
@@ -22,8 +26,9 @@ struct OverridesTests {
     try Data(contentsOf: directory.appending(path: name))
   }
 
+  /// As `convert` tells them apart: by the root element.
   private static func isPatch(_ name: String) throws -> Bool {
-    String(decoding: try data(name), as: UTF8.self).contains("<diff>")
+    try XMLDocument(data: try data(name)).rootElement()?.name == "diff"
   }
 
   @Test func `there are overrides`() {

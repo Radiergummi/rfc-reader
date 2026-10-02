@@ -9,7 +9,10 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
-CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
+# Release for a corpus run. CI checks the patches with the debug build its tests
+# already made (CORPUS_CONFIGURATION=debug), rather than building again.
+CORPUS_CONFIGURATION ?= release
+CORPUS_BIN   := $(CORPUS_BUILD)/.build/$(CORPUS_CONFIGURATION)/corpus-build
 
 # Whether this machine has an Apple SDK, so RFCReaderKit can build here.
 DARWIN := $(filter Darwin,$(shell uname -s))
@@ -345,7 +348,7 @@ trace: build-app
 # and is a no-op when they have not changed, which make cannot say without
 # restating the package's file list here.
 corpus-tool:
-	swift build -c release --package-path $(CORPUS_BUILD)
+	swift build -c $(CORPUS_CONFIGURATION) --package-path $(CORPUS_BUILD)
 
 # Twenty documents by default, enough to exercise the pipeline in a minute. The
 # full set is the 8,457 legacy RFCs with a text file, roughly 450 MB and twenty

@@ -21,10 +21,16 @@ enum CorpusText {
   }
 
   static func index() throws -> RFCIndex {
-    guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_INDEX"], !path.isEmpty
-    else { throw CorpusTextError.notConfigured }
-    return try RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path))
+    guard let parsedIndex else { throw CorpusTextError.notConfigured }
+    return parsedIndex
   }
+
+  /// Parsed once: it is several megabytes.
+  private static let parsedIndex: RFCIndex? = {
+    guard let path = ProcessInfo.processInfo.environment["RFC_CORPUS_INDEX"], !path.isEmpty
+    else { return nil }
+    return try? RFCIndexParser.parse(contentsOf: URL(fileURLWithPath: path))
+  }()
 
   /// The document `stem` names, such as `rfc570`, decoded as a convert run decodes it.
   static func text(_ stem: String) throws -> String {

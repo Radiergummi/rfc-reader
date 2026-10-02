@@ -57,8 +57,9 @@ public struct DocumentConverter: Sendable {
     text: String, stem: String, metadata: RFCMetadata?, patch: XMLPatch? = nil
   ) -> Conversion {
     var document = LegacyTextParser.parse(text, title: metadata?.title)
+    let override: DocumentReport.Override? = patch == nil ? nil : .patch
     if let skip = Self.skip(document, metadata: metadata) {
-      var report = DocumentReport(document: document, id: stem, override: patch.map { _ in .patch })
+      var report = DocumentReport(document: document, id: stem, override: override)
       // What a document with nothing in it warns about says nothing of a skipped one.
       report.warnings = []
       report.skipped = skip
@@ -89,18 +90,16 @@ public struct DocumentConverter: Sendable {
     var xml = Data(serialization.xml.utf8)
 
     if let patch {
-      switch Self.apply(patch, to: xml, serializer: serializer) {
-      case .success(let patched):
-        (document, xml) = patched
-      case .failure(let failure):
-        var report = DocumentReport(document: document, id: stem, override: .patch)
-        report.failure = failure.message
+      do {
+        (document, xml) = try Self.apply(patch, to: xml, serializer: serializer)
+      } catch {
+        var report = DocumentReport(document: document, id: stem, override: override)
+        report.failure = error.message
         return Conversion(xml: nil, report: report)
       }
     }
 
-    var report = DocumentReport(
-      document: document, id: stem, override: patch == nil ? nil : .patch)
+    var report = DocumentReport(document: document, id: stem, override: override)
     report.warnings += notes
     report.warnings += serialization.warnings
     if countsFurniture { report.furniture = LegacyTextParser.recurringFurniture(in: text).count }
@@ -108,7 +107,8 @@ public struct DocumentConverter: Sendable {
     // the same bytes (#683).
     do {
       let again = serializer.serialize(try RFCXMLParser.parse(xml))
-      if let line = Self.firstDifferingLine(String(decoding: xml, as: UTF8.self), again) {
+      if Data(again.utf8) != xml {
+        let line = Self.firstDifferingLine(String(decoding: xml, as: UTF8.self), again)
         report.warnings.append("round trip changes the XML at line \(line)")
       }
     } catch {
@@ -118,8 +118,8 @@ public struct DocumentConverter: Sendable {
   }
 
   /// Why a patch was not applied.
-  public struct PatchFailure: Error {
-    public var message: String
+  struct PatchFailure: Error {
+    var message: String
   }
 
   /// `patch` applied to the converter's `xml`, then parsed and written again by
@@ -132,7 +132,7 @@ public struct DocumentConverter: Sendable {
   /// and of the written XML must be the same words.
   static func apply(
     _ patch: XMLPatch, to xml: Data, serializer: RFCXMLSerializer
-  ) -> Result<(RFCDocument, Data), PatchFailure> {
+  ) throws(PatchFailure) -> (RFCDocument, Data) {
     do {
       let tree = try XMLDocument(data: xml, options: .nodePreserveWhitespace)
       try patch.apply(to: tree)
@@ -142,14 +142,15 @@ public struct DocumentConverter: Sendable {
       if let divergence = Self.divergence(
         tree.rootElement()?.stringValue ?? "", writtenTree.rootElement()?.stringValue ?? "")
       {
-        return .failure(
-          PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)"))
+        throw PatchFailure(message: "\(patch.name): writing it loses text, \(divergence)")
       }
-      return .success((document, written))
+      return (document, written)
+    } catch let failure as PatchFailure {
+      throw failure
     } catch let failure as XMLPatch.Failure {
-      return .failure(PatchFailure(message: failure.description))
+      throw PatchFailure(message: failure.description)
     } catch {
-      return .failure(PatchFailure(message: "\(patch.name): \(error)"))
+      throw PatchFailure(message: "\(patch.name): \(error)")
     }
   }
 
@@ -165,9 +166,8 @@ public struct DocumentConverter: Sendable {
     return "from word \(index + 1): “\(words(patchedWords))” became “\(words(writtenWords))”"
   }
 
-  /// The first line, from 1, where `first` and `second` differ; nil when they do not.
-  static func firstDifferingLine(_ first: String, _ second: String) -> Int? {
-    guard first != second else { return nil }
+  /// The first line, from 1, where `first` and `second`, which differ, part.
+  static func firstDifferingLine(_ first: String, _ second: String) -> Int {
     let firstLines = first.split(separator: "\n", omittingEmptySubsequences: false)
     let secondLines = second.split(separator: "\n", omittingEmptySubsequences: false)
     return zip(firstLines, secondLines).prefix { $0 == $1 }.count + 1

@@ -217,7 +217,7 @@ public struct XMLPatch: Sendable {
           document.setRootElement(replacement)
         }
       case .attribute, .text:
-        target.stringValue = try text(operation.content, for: target)
+        target.stringValue = try text(operation.content)
       default:
         throw Malformed(message: "only an element, an attribute or a text node is replaced")
       }
@@ -246,7 +246,7 @@ public struct XMLPatch: Sendable {
       guard element.attribute(forName: name) == nil else {
         throw Malformed(message: "the element already has \(name); replace it instead")
       }
-      let value = try text(operation.content, for: target)
+      let value = try text(operation.content)
       guard let attribute = XMLNode.attribute(withName: name, stringValue: value) as? XMLNode
       else { throw Malformed(message: "\(name) is not an attribute name") }
       element.addAttribute(attribute)
@@ -272,9 +272,7 @@ public struct XMLPatch: Sendable {
   }
 
   /// The content as the text of an attribute or a text node.
-  private static func text(
-    _ content: [Content], for target: XMLNode
-  ) throws(Malformed) -> String {
+  private static func text(_ content: [Content]) throws(Malformed) -> String {
     var text = ""
     for item in content {
       guard case .text(let part) = item else {
