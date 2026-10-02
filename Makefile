@@ -401,16 +401,20 @@ $(CORPUS)/schema-control.noindex/%.xml:
 # the converter's output, so a converter change can leave it stale without anything
 # failing. This reruns every script against the current converter and compares.
 # Not part of `check`: it needs the source text, fetched here when it is missing,
-# and Python 3.9 or later. On a difference, commit the script's output.
+# and Python 3.9 or later.
+#
+# Informational until #197: it reports a stale override and does not fail. The
+# output is not committed, because it would be a fresh snapshot of RFC text, so
+# rfc1142.xml stays frozen and #197 decides what becomes of it (#243).
 corpus-overrides-check: corpus-tool
-	@status=0; for script in $(CORPUS)/overrides/rfc*.py; do \
+	@for script in $(CORPUS)/overrides/rfc*.py; do \
 	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
 	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
 	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
-	  else echo "$$stem.xml: stale -- rerun $$script"; status=1; fi; rm -f "$$out"; \
-	done; exit $$status
+	  else echo "$$stem.xml: stale -- frozen until #197, not regenerated"; fi; rm -f "$$out"; \
+	done
 
 ## Score the legacy parser against the RFCs xml2rfc generated from XML
 # From RFC 8650 on, an RFC's text is generated from its XML, so the XML says what
