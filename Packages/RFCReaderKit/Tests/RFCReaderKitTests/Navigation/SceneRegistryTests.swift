@@ -78,16 +78,17 @@ struct SceneRegistryTests {
   }
 
   /// A series link waits while the index is on its way, a tab already open or not, and
-  /// is delivered when it arrives, to the tab it would have gone to.
+  /// is delivered when it arrives, to the tab it would have gone to: here the one
+  /// showing its document, the later of two series links taking the slot.
   @Test func `a series link routed before the index arrives is delivered when it does`() {
     var registry = registry(ready: false)
     let showing = Tab(showing: bcp14.id)
     let recent = Tab()
     _ = registry.register(showing)
     _ = registry.register(recent)
-    #expect(route(bcp14, in: &registry) == .wait)
     #expect(route(std97, in: &registry) == .wait)
-    #expect(registry.indexSettled().map(Delivery.init) == [Delivery(std97, to: recent)])
+    #expect(route(bcp14, in: &registry) == .wait)
+    #expect(registry.indexSettled().map(Delivery.init) == [Delivery(bcp14, to: showing)])
   }
 
   /// A plain RFC link needs no index to resolve, so it does not wait for one: not with a
@@ -143,6 +144,23 @@ struct SceneRegistryTests {
     let made = Tab()
     #expect(registry.register(made).map(Delivery.init) == Delivery(rfc9110, to: made))
     #expect(registry.indexSettled().isEmpty)
+  }
+
+  /// A plain RFC link opened in front after a series link was is the later ask: when the
+  /// index arrives, the series link goes to its tab without pulling the reader back.
+  @Test func `a held series link yields the front to a later link delivered at once`() {
+    var registry = registry(ready: false)
+    _ = registry.register(Tab())
+    registry.hold(bcp14, bringsForward: true)
+    let earlier = Tab()
+    #expect(registry.register(earlier) == nil)
+    registry.hold(rfc9110, bringsForward: true)
+    let later = Tab()
+    #expect(registry.register(later).map(Delivery.init) == Delivery(rfc9110, to: later))
+    #expect(
+      registry.indexSettled().map(Delivery.init) == [
+        Delivery(bcp14, to: earlier, bringsForward: false)
+      ])
   }
 
   /// A series link held for a new tab waits for the index, then goes to that tab (#241).

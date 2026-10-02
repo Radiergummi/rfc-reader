@@ -20,7 +20,8 @@ import RFCKit
 /// - **For a new tab**, opened behind or in front from a tab already open: in order,
 ///   one per tab, each bound to the next tab to register. One whose tab closes before
 ///   it is delivered is dropped: the tab it was made for is gone, and the tab in use
-///   did not ask for it.
+///   did not ask for it. One still waiting when a later link is delivered at once and
+///   brought forward no longer brings its own tab forward.
 /// - **Routed from outside**, a series link before the index arrived, or any link with
 ///   no tab to take it. One slot: of two, the later wins, being the more recent ask, and
 ///   the first tab can show one document (#140); a link delivered at once empties it.
@@ -55,7 +56,7 @@ public struct SceneRegistry<Scene: AnyObject> {
   /// A link for a tab being made: unbound until that tab registers.
   private struct ForNewTab {
     let link: RFCLink
-    let bringsForward: Bool
+    var bringsForward: Bool
     var scene: Weak?
   }
 
@@ -92,12 +93,14 @@ public struct SceneRegistry<Scene: AnyObject> {
       forNewTabs[waiting].scene = Weak(scene: scene)
       guard !waitsForIndex(forNewTabs[waiting].link) else { return nil }
       let held = forNewTabs.remove(at: waiting)
+      if held.bringsForward { yieldFront() }
       return Delivery(link: held.link, scene: scene, bringsForward: held.bringsForward)
     }
     guard let waiting = routed, case .nextScene = waiting.target else { return nil }
     routed?.target = .scene(Weak(scene: scene))
     guard !waitsForIndex(waiting.link) else { return nil }
     routed = nil
+    yieldFront()
     return Delivery(link: waiting.link, scene: scene, bringsForward: true)
   }
 
@@ -136,6 +139,7 @@ public struct SceneRegistry<Scene: AnyObject> {
     }
     // The later ask: a series link still waiting does not land on top of this one.
     routed = nil
+    yieldFront()
     return .deliver(Delivery(link: link, scene: target, bringsForward: true))
   }
 
@@ -178,6 +182,13 @@ public struct SceneRegistry<Scene: AnyObject> {
   /// before the index has arrived or failed to. A plain RFC link never does.
   private func waitsForIndex(_ link: RFCLink) -> Bool {
     link.id.series != .rfc && !isIndexSettled
+  }
+
+  /// A link delivered at once and brought forward is the later ask: a link held for a
+  /// new tab that is still waiting goes to its tab when it can, but no longer brings that
+  /// tab forward over this one.
+  private mutating func yieldFront() {
+    for held in forNewTabs.indices { forNewTabs[held].bringsForward = false }
   }
 
   private static func isGone(_ bound: Weak?, or scene: Scene) -> Bool {
