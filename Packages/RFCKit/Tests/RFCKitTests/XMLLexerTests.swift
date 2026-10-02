@@ -52,6 +52,14 @@ struct XMLLexerTests {
     #expect(tokens.kind(of: "</b>", in: text) == .name)
   }
 
+  @Test func `a value folded per RFC 8792 is one value`() {
+    let text = "<a href=\"https://example.com/abc\\\n    def\">x</a>"
+    let tokens = tokens(text)
+    #expect(tokens.cover(text))
+    #expect(tokens.text(of: .string, in: text) == ["\"https://example.com/abc\\\n    def\""])
+    #expect(tokens.kind(of: "</a>", in: text) == .name)
+  }
+
   @Test func `a tag never closed does not swallow the next element`() {
     let text = "<a href=x\n<b>y</b>"
     let tokens = tokens(text)

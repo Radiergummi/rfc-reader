@@ -65,6 +65,23 @@ struct JSONLexerTests {
     #expect(tokens.text(of: .string, in: text).allSatisfy { !$0.contains("\n") })
   }
 
+  /// RFC 8792 folds a long line with a backslash at its end and goes on, set in, on
+  /// the next; the reader shows a folded block as published where unfolding it
+  /// would not fit.
+  @Test func `a string folded per RFC 8792 is one string`() {
+    let text = "{\n  \"key\": \"abcdef\\\n      ghijkl\",\n  \"next\": 1\n}"
+    let tokens = tokens(text)
+    #expect(tokens.cover(text))
+    #expect(tokens.text(of: .string, in: text) == ["\"abcdef\\\n      ghijkl\""])
+    #expect(tokens.kind(of: #""next""#, in: text) == .name)
+  }
+
+  /// RFC 8792's second strategy marks the continuation with a backslash too.
+  @Test func `a string folded with a backslash on both lines is one string`() {
+    let text = "[\"abcdef\\\n   \\ghijkl\"]"
+    #expect(tokens(text).text(of: .string, in: text) == ["\"abcdef\\\n   \\ghijkl\""])
+  }
+
   @Test func `a character outside the BMP keeps the ranges after it right`() {
     let text = #"{"emoji": "😀", "next": 1}"#
     let tokens = tokens(text)
