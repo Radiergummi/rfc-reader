@@ -132,7 +132,7 @@ RFC numbers passed 10000 in 2026 (RFC 10050 was published on 19 September 2026).
 
 - **Legacy text parsing will never be perfect.** Definition lists with hanging indents, nested lists, and tables drawn in ASCII are hard to classify. Mitigation: bias toward preformatted (never mangle), keep the original text one toggle away, and let users report a misrendered section.
 - **Rendering performance.** Settled: the reader body is one TextKit 2 text storage per document in `UITextView`/`NSTextView`, not a lazy stack of SwiftUI views; [the decision](decisions/2026-09-20-textkit-2-for-the-reader-body.md) says why.
-- **Search latency.** Metadata search over the whole index takes 3.6 ms per query in the current in-memory implementation. FTS5 replaces it when full-text search arrives.
+- **Search latency.** Metadata search scans the whole index per query in the current in-memory implementation (the "Search" benchmarks of `make benchmark` measure it). FTS5 replaces it when full-text search arrives.
 - **Business model.** The app will be public and possibly sold. AGPL open source plus a paid App Store build is a legitimate combination (the source is free, the convenience and signing are not). This makes the licensing of the legacy XML pack a real question rather than a formality; see DATA_PIPELINE.md.
 - **Name.** "RFC Reader" is descriptive and probably taken. Worth a short list of alternatives before the App Store listing exists.
 

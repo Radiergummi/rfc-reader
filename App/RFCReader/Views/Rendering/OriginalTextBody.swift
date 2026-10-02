@@ -6,8 +6,8 @@ import SwiftUI
 ///
 /// One `Text` held the whole depaginated source: one layout pass over it on the main
 /// thread before anything drew, and no find in the document (#159) -- the reasons the
-/// reader body is TextKit 2 as well (`docs/decisions/`, "TextKit 2 for the
-/// reader body"). A plain text view gets incremental layout, Find and selection from
+/// reader body is TextKit 2 as well
+/// (`docs/decisions/2026-09-20-textkit-2-for-the-reader-body.md`). A plain text view gets incremental layout, Find and selection from
 /// the platform. It is not `RFCTextView`: none of that view's decorations, chips or
 /// anchors apply to text shown exactly as it was published.
 ///

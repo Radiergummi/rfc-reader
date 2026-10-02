@@ -105,7 +105,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient ──────────byt
 - A document is fetched by `RFCEditorClient.fetchPreferredDocument`, the one fallback rule (#125): the XML where the index lists it, and the text only when there is no XML, a 404 for it. A canceled load, a server error or a network failure is the error, not a reason to start a second request whose failure would be reported instead. XML that is there but does not parse falls back to the text too, and the parse error comes back beside the document for `DocumentStore` to log; with no text either, the parse error is what is thrown.
 - Raw files are cached exactly as served. Re-parsing after a parser fix is free, and the "original text" mode needs no second download.
 - The index is cached to disk and checked in the background when it was last checked over a day ago: a conditional request with the kept `ETag`, so an unchanged index is a `304` that only records the check (`IndexCheck`). The `ETag` is sent for a week after the index was downloaded and then dropped, so a tag that failed to change cannot hide a new index for longer. Nobody is waiting for the check, so it waits for a network that is neither expensive nor constrained (#314); a bundled snapshot (drop `rfc-index.xml` into the app's resources) makes first launch work offline.
-- Navigation is data, and a tab's own. `NavigationModel.open(_:in:)` moves the tab's history to a `HistoryEntry` — a document and, optionally, a section — and sets `selection` and a `scrollRequest`; `DocumentView` scrolls once the document has loaded. A link from inside a tab goes through `LibraryModel.open(_:activation:in:)`, which opens it in that tab or in a new one ("Decision: per-tab navigation"). A link from outside — the URL scheme or the App Intent — has no tab, and `LibraryModel.route(_:)` picks one: the tab already showing the document, else on macOS the tab of the window that was key last (#277), else the one used last, else a new window (`LinkRouting`, in `RFCReaderKit`). Which tabs are open, most recently used first, and the one link waiting for a tab are `SceneRegistry`'s (#137): a link waits until there is a tab to take it, and a BCP or STD link until the index has arrived, or failed to, as well, so on a cold launch it opens its first RFC rather than selecting the series (#241). Only series links wait for the index because only they need it to resolve; making every link wait was set aside because no index is bundled with the app, and a first launch would hold every link for the index's whole download. The library never reaches for the window layer: on macOS it asks `WindowOpening`, which `AppDelegate` answers.
+- Navigation is data, and a tab's own. `NavigationModel.open(_:in:)` moves the tab's history to a `HistoryEntry` — a document and, optionally, a section — and sets `selection` and a `scrollRequest`; `DocumentView` scrolls once the document has loaded. A link from inside a tab goes through `LibraryModel.open(_:activation:in:)`, which opens it in that tab or in a new one ([the per-tab navigation decision](decisions/2026-09-22-per-tab-navigation-and-how-a-tab-gets-opened.md)). A link from outside — the URL scheme or the App Intent — has no tab, and `LibraryModel.route(_:)` picks one: the tab already showing the document, else on macOS the tab of the window that was key last (#277), else the one used last, else a new window (`LinkRouting`, in `RFCReaderKit`). Which tabs are open, most recently used first, and the one link waiting for a tab are `SceneRegistry`'s (#137): a link waits until there is a tab to take it, and a BCP or STD link until the index has arrived, or failed to, as well, so on a cold launch it opens its first RFC rather than selecting the series (#241). Only series links wait for the index because only they need it to resolve; making every link wait was set aside because no index is bundled with the app, and a first launch would hold every link for the index's whole download. The library never reaches for the window layer: on macOS it asks `WindowOpening`, which `AppDelegate` answers.
 - Cross references are `.link` attributes in the built text, with three private schemes: `rfc://…` for other documents, `rfc-anchor:…` for a place in the same one, and one for a bibliography entry, which the body leaves out and the inspector shows. The text view's delegate hands a clicked link to `DocumentView` with the click's `LinkActivation` — `clickedOnLink` on macOS, `primaryActionFor` on iOS — and `LinkDestination.resolve` decides where it goes; what it does not understand falls through to the system. `DocumentView` installs no `OpenURLAction` of its own: every other link under it is a page on the web, and one that did read rfc-editor.org's pages as the RFCs they name (#450).
 
 ## Testing
@@ -123,33 +123,35 @@ came from. What this document describes is the code as it is; the decisions say 
 is that way, and what was measured or tried first.
 
 - [TextKit 2 for the reader body](decisions/2026-09-20-textkit-2-for-the-reader-body.md)
-- [The parsers do not decide how a reference reads](decisions/2026-09-24-the-parsers-do-not-decide-how-a-reference-reads.md)
-- [A section of an entry outside the series is a target of its own](decisions/2026-09-30-a-section-of-an-entry-outside-the-series-is-a-target-of-its-own.md)
-- [A reference previews on hover and force click on macOS, and on long press on iOS](decisions/2026-09-26-a-reference-previews-on-hover-and-force-click-on-macos-and-on-long-press-on-ios.md)
-- [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
+- [TextKit 2 probe results](decisions/2026-09-21-textkit-2-probe-results.md)
+- [A section is a fragment](decisions/2026-09-22-a-section-is-a-fragment.md)
 - [Per-tab navigation, and how a tab gets opened](decisions/2026-09-22-per-tab-navigation-and-how-a-tab-gets-opened.md)
 - [The window layer is AppKit's on macOS](decisions/2026-09-22-the-window-layer-is-appkits-on-macos.md)
-- [A section is a fragment](decisions/2026-09-22-a-section-is-a-fragment.md)
-- [The document cache is indexed in memory, and revalidated by the directory's date](decisions/2026-09-27-the-document-cache-is-indexed-in-memory-and-revalidated-by-the-directorys-date.md)
-- [A removal during a download shows the document and does not keep it](decisions/2026-09-28-a-removal-during-a-download-shows-the-document-and-does-not-keep-it.md)
-- [The user data store is versioned, keyed on the document, and in CloudKit's shape](decisions/2026-09-28-the-user-data-store-is-versioned-keyed-on-the-document-and-in-cloudkits-shape.md)
-- [Collections are rows linked by identifier, ordered by position](decisions/2026-09-28-collections-are-rows-linked-by-identifier-ordered-by-position.md)
-- [The document cache is bounded by size, and evicts the least recently opened](decisions/2026-09-27-the-document-cache-is-bounded-by-size-and-evicts-the-least-recently-opened.md)
-- [Three things RFCXML says that the model now keeps](decisions/2026-09-27-three-things-rfcxml-says-that-the-model-now-keeps.md)
-- [The document model is a value, and its encoding is internal](decisions/2026-09-27-the-document-model-is-a-value-and-its-encoding-is-internal.md)
-- [A citation records the bibliography entry it resolved to](decisions/2026-09-29-a-citation-records-the-bibliography-entry-it-resolved-to.md)
-- [The Mac is scriptable through a dictionary over the same models](decisions/2026-09-27-the-mac-is-scriptable-through-a-dictionary-over-the-same-models.md)
-- [Info is a pane of its own, derived from the index once per document](decisions/2026-09-28-info-is-a-pane-of-its-own-derived-from-the-index-once-per-document.md)
+- [Window hijack: probe results](decisions/2026-09-22-window-hijack-probe-results.md)
 - [Full-text search ranks by measurement, and was measured before it was built](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md)
-- [Requirements are uppercase key words, read from the model in both formats](decisions/2026-09-29-requirements-are-uppercase-key-words-read-from-the-model-in-both-formats.md)
-- [Print renders a PDF, built again for the paper](decisions/2026-09-29-print-renders-a-pdf-built-again-for-the-paper.md)
-- [The client's sessions have no URL cache, and the store keeps the validators](decisions/2026-09-29-the-clients-sessions-have-no-url-cache-and-the-store-keeps-the-validators.md)
+- [The parsers do not decide how a reference reads](decisions/2026-09-24-the-parsers-do-not-decide-how-a-reference-reads.md)
+- [A reference previews on hover and force click on macOS, and on long press on iOS](decisions/2026-09-26-a-reference-previews-on-hover-and-force-click-on-macos-and-on-long-press-on-ios.md)
+- [The document cache is bounded by size, and evicts the least recently opened](decisions/2026-09-27-the-document-cache-is-bounded-by-size-and-evicts-the-least-recently-opened.md)
+- [The document cache is indexed in memory, and revalidated by the directory's date](decisions/2026-09-27-the-document-cache-is-indexed-in-memory-and-revalidated-by-the-directorys-date.md)
+- [The document model is a value, and its encoding is internal](decisions/2026-09-27-the-document-model-is-a-value-and-its-encoding-is-internal.md)
+- [The Mac is scriptable through a dictionary over the same models](decisions/2026-09-27-the-mac-is-scriptable-through-a-dictionary-over-the-same-models.md)
+- [Three things RFCXML says that the model now keeps](decisions/2026-09-27-three-things-rfcxml-says-that-the-model-now-keeps.md)
+- [A removal during a download shows the document and does not keep it](decisions/2026-09-28-a-removal-during-a-download-shows-the-document-and-does-not-keep-it.md)
+- [Collections are rows linked by identifier, ordered by position](decisions/2026-09-28-collections-are-rows-linked-by-identifier-ordered-by-position.md)
+- [Info is a pane of its own, derived from the index once per document](decisions/2026-09-28-info-is-a-pane-of-its-own-derived-from-the-index-once-per-document.md)
+- [The user data store is versioned, keyed on the document, and in CloudKit's shape](decisions/2026-09-28-the-user-data-store-is-versioned-keyed-on-the-document-and-in-cloudkits-shape.md)
+- [A citation records the bibliography entry it resolved to](decisions/2026-09-29-a-citation-records-the-bibliography-entry-it-resolved-to.md)
 - [An amendment is a section citation of a document the header updates](decisions/2026-09-29-an-amendment-is-a-section-citation-of-a-document-the-header-updates.md)
-- [A heading lists the sections that refer to it, through a chip](decisions/2026-09-30-a-heading-lists-the-sections-that-refer-to-it-through-a-chip.md)
 - [Datatracker data reaches the app as a published file](decisions/2026-09-29-datatracker-data-reaches-the-app-as-a-published-file.md)
+- [Print renders a PDF, built again for the paper](decisions/2026-09-29-print-renders-a-pdf-built-again-for-the-paper.md)
+- [Requirements are uppercase key words, read from the model in both formats](decisions/2026-09-29-requirements-are-uppercase-key-words-read-from-the-model-in-both-formats.md)
+- [The client's sessions have no URL cache, and the store keeps the validators](decisions/2026-09-29-the-clients-sessions-have-no-url-cache-and-the-store-keeps-the-validators.md)
 - [The Xcode project stays generated by XcodeGen, pinned](decisions/2026-09-29-the-xcode-project-stays-generated-by-xcodegen-pinned.md)
+- [A heading lists the sections that refer to it, through a chip](decisions/2026-09-30-a-heading-lists-the-sections-that-refer-to-it-through-a-chip.md)
+- [A section of an entry outside the series is a target of its own](decisions/2026-09-30-a-section-of-an-entry-outside-the-series-is-a-target-of-its-own.md)
 - [On iPhone, reading on hides the bars](decisions/2026-09-30-on-iphone-reading-on-hides-the-bars.md)
 - [The reader lays out its viewport, and holds the reader's line](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)
+- [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
 
 ## Planned engines
 

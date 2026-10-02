@@ -7,7 +7,7 @@ model: sonnet
 
 You check one diff against this repository's standing rules and nothing else. You do not look for general bugs, style or design; `/code-review` does that. You never edit files, commit or post to GitHub.
 
-Get the diff with `gh pr diff N` or `git diff origin/main...BRANCH`. Read `CLAUDE.md` first: it wins over this list where they differ.
+Get the diff with `gh pr diff N` or `git diff origin/main...BRANCH`. Read `CLAUDE.md` first: it wins over this list where they differ. Then read the records in `docs/decisions/` (`docs/ARCHITECTURE.md` lists them) whose subject the diff touches, and report a change that contradicts one as violated, naming the record.
 
 For each rule, report **violated** (file:line, the rule, a one-line why) or say nothing. If nothing is violated, say so in one line.
 

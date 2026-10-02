@@ -54,6 +54,8 @@ Standing constraints those documents establish, which are easy to violate by acc
 - **Cross references resolve at parse time**, not at render time. Both parsers index the references section first, then linkify.
 - Both XML parsers **deliberately ignore a parser error reported after the root element closes** (a swift-corelibs-foundation quirk on large valid inputs). There is a test pinning it; it is not a bug to fix.
 
+A comment that cites a cost names what measures it — a benchmark of `make benchmark`, or a signpost a trace shows — rather than carrying the number, which drifts as the code does (#607). A figure belongs in a decision record or a pull request, dated by where it is.
+
 ## Working on the legacy text heuristics
 
 `LegacyTextParser` recovers structure from plain text by indentation and shape, so every change risks a regression across 8,457 documents. The workflow:
@@ -83,6 +85,5 @@ The line is the entry point, not the size of the input. If a test calls `parse`,
 
 `.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; a line that has to run past the cap carries a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
 
-A comment that cites a cost names what measures it — a benchmark of `make benchmark`, or a signpost a trace shows — rather than carrying the number, which drifts as the code does (#607). A figure belongs in a decision record or a pull request, dated by where it is.
 
 Layout belongs to swift-format, on its defaults: `.swift-format` sets nothing else, and a deviation needs a reason good enough to write down. Where a SwiftLint rule disagrees with swift-format's output, the SwiftLint rule gives way.
