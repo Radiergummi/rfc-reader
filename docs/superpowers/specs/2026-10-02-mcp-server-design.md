@@ -148,11 +148,16 @@ annotations are read and changed there, with or without the app running:
 - **The app sees the helper's changes** the way it sees another device's. #655 makes the app
   refresh from changes it did not make, through the store's history.
 - **Only the app syncs.** CloudKit sync runs inside the process that opened the store with it.
-  It is not a property of the file. The app stays the only such process, for three reasons:
+  It is not a property of the file. The app stays the only such process:
   - two processes syncing one store would each export and import it;
-  - Apple's advice for extensions that share a CloudKit-backed store is to let the app sync;
-  - the iCloud entitlement would need a provisioning profile, and so a bundled helper app
-    rather than a command-line tool.
+  - Apple's advice for extensions that share a CloudKit-backed store is to let the app sync.
+
+  Entitlements are not what stands in the way. The team's paid membership can issue the iCloud
+  entitlement to the helper too. It is a restricted entitlement, though, and needs an embedded
+  provisioning profile, which only a bundle can carry. A syncing helper would therefore ship
+  as a helper app (`Contents/Helpers/RFC Reader Agent.app`) rather than a bare command-line
+  tool. That is a packaging cost, not a blocker. If #655's probe shows that two syncing
+  processes are safe, that design replaces the background launch below.
 
   How a change made with the app closed still reaches other devices promptly is slice 6's
   ("Getting changes to other devices").
