@@ -102,7 +102,7 @@ Ideas from the first brainstorm session and where each one lands.
 | Links with a preview on hard press | Tier 1, **decided: TextKit 2 renderer** | SwiftUI `Text` cannot attach per-link context menus or previews. The reader body is a TextKit 2 backed text view, which also brings hover popovers on Mac, find-in-document and better selection. See ARCHITECTURE.md. |
 | Handoff between iPhone, iPad and Mac | Tier 1 | `NSUserActivity` carrying the `rfc://` link of the current section. |
 | ⌘-click a reference to open it in a new window (Mac) | Tier 1 | Falls out of navigation being a link. |
-| An MCP server for local coding agents | Tier 1 (#193) | A helper executable in the app bundle, over stdio: the corpus read straight from the app's files, the library through the running app. Prompts for the common questions and an agent-run conformance review against a document's requirements. Local, so it is not the "server-side anything" ruled out below. |
+| An MCP server for local coding agents | Tier 1 (#193) | A helper executable in the app bundle, over stdio: the corpus and the iCloud-synced library read straight from the app's shared files, so it works with the app closed. Prompts for the common questions and an agent-run conformance review against a document's requirements. Local, so it is not the "server-side anything" ruled out below. |
 
 ## What the experience should feel like
 

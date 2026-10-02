@@ -2,10 +2,12 @@
 
 *2 October 2026. Approved in brainstorming. It widens #193, which asked for a read-only server
 over the corpus, to the reader's library and to the protocol's prompts and resources. The
-storage move (slice 2) and the library bridge (slice 6) are **probe-gated**: each design is
+storage move (slice 2) and the library tools (slice 6) are **probe-gated**: each design is
 approved only once its probe below has been measured. Each slice gets its own plan and pull
-request. Facts about the protocol were checked against its primary sources on this date. They
-are cited where they are used, because the protocol changes faster than this document will.*
+request. Revised the same day: iCloud sync (#655) comes first, and the library tools open the
+synced store themselves instead of asking the running app. Facts about the protocol were
+checked against its primary sources on this date. They are cited where they are used, because
+the protocol changes faster than this document will.*
 
 ## Why
 
@@ -51,8 +53,11 @@ The server works by VISION.md's principles. It has its own consequences of them:
 | 3 | **The server**: the `rfc-mcp` executable, the stdio transport, the corpus reader, and the core read tools and resources | 1, 2 | an agent can resolve, search, outline, read and cite any RFC |
 | 4 | **Spec detail tools**: requirements with stable IDs, definitions, references, artwork and packet layouts, protocol identifiers | 3 | grounded answers to the questions implementers actually ask |
 | 5 | **Prompts and the conformance procedure** | 4 | reusable slash commands, and an agent-run conformance review |
-| 6 | **The library bridge** (probe-gated): the reader's library over a local socket, with read and write tools, and opening a passage in the reader | 3 | agents can read and change bookmarks, collections and offline documents |
+| 6 | **The library tools** (probe-gated): read and write tools over the shared, synced store, and opening a passage in the reader | 3, and iCloud sync (#655) | agents can read and change bookmarks, collections and offline documents, with the app closed |
 | 7 | **Setup**: Settings ▸ Agents with a ready-made configuration for each client, and the docs | 3 | people can install it without reading this document |
+
+**iCloud sync (#655) comes before the epic.** It moves the user data store into the app group's
+container and teaches the app to notice changes it did not make. Slice 6 stands on both.
 
 The rules that let each slice ship on its own:
 
@@ -97,9 +102,12 @@ here. That is a decision for the maintainer, not a workaround to slip in.
 ## Where it runs, and what it reads
 
 ```
- coding agent ──stdio──▶ rfc-mcp ──reads──▶ app-group container: index, documents, packs
-                            │
-                            └──local socket──▶ RFC Reader (running): the library, opening a passage
+ coding agent ──stdio──▶ rfc-mcp ──▶ app-group container
+                            │          ├─ index, documents, packs   (read; written only by `download`)
+                            │          └─ user data store           (read and written; never synced from here)
+                            │                     ▲
+                            │          RFC Reader ┘ the only process that syncs with iCloud
+                            └──opens rfc:// links──▶ RFC Reader
 ```
 
 **`rfc-mcp` is one executable.** The agent starts it as a subprocess and talks to it over stdio.
@@ -113,32 +121,43 @@ directory of its own (below).
   prepares it the same way (`IndexSnapshot`, `PreparedIndex`).
 - **Documents.** It reads the bodies and data packs the app has downloaded, and parses them with
   RFCKit's two parsers.
-- **Never writes to the app's directory.** A document that is not there is fetched from
-  rfc-editor.org into memory, kept in a small least-recently-used set like
-  `DocumentStore`'s `RecentValues`, and never written. The store's directory has one writer.
-  The two cache decisions in ARCHITECTURE.md (an index revalidated by the directory's date, and
-  eviction with a pinned set read from SwiftData) assume that writer is the app. Keeping a
-  document offline is a write, so it goes through the app (slice 6, `download`).
+- **Reading never writes.** A document that is not there is fetched from rfc-editor.org into
+  memory, kept in a small least-recently-used set like `DocumentStore`'s `RecentValues`, and
+  not written. Only `download` (slice 6) writes a body, because keeping a document offline is
+  what the person asked for. It writes through `DocumentStore`'s own code, so names and atomic
+  writes match the app's. The cache's index revalidates by the directory's date, which a
+  second writer already satisfies, since Finder can change the directory too. Eviction stays the
+  app's: it needs the pinned set, and runs after the app's next write, so the helper's
+  downloads can leave the cache over its bound until then.
 - **The network is used only for what an agent asked for.** This follows VISION.md's "kind to
   metered connections". A tool that may fetch says so in its annotations (`openWorldHint`).
 - **No index yet.** On a Mac where the app has never run, the helper fetches the index once,
   into memory. That is the same 14 MB the app would fetch on first launch.
 
-**The library goes through the app.** Bookmarks, collections, reading positions, and later
-annotations are read and changed by the running app, through a local socket (slice 6). The
-helper never opens the SwiftData store. Four reasons:
+**The library is the shared store, opened by the helper too.** After #655, the user data store
+lives in the group container and syncs through iCloud. The helper opens the same store, with the
+same schema and migration plan, with CloudKit off. Bookmarks, collections, and later
+annotations are read and changed there, with or without the app running:
 
-- **The app must see the change.** Its mirrors refresh on `ModelContext.didSave`, which only
-  fires in the process that saved.
-- **The store will sync.** With CloudKit sync turned on, one process should own the store.
-- **Only the app knows when the store is in memory** (#318). In that state a change is not kept,
-  and a write tool must say so, as the scripting dictionary does.
-- **The rules stay where they are tested.** Uniqueness, deduplication and "only an RFC goes in
-  a collection" are `BookmarkStore`'s and `CollectionStore`'s rules. They already run on the
-  main context.
+- **The rules are the app's own.** Uniqueness, deduplication and "only an RFC goes in a
+  collection" are `BookmarkStore`'s and `CollectionStore`'s, in RFCReaderKit, which the helper
+  links on macOS.
+- **The schema already expects more than one writer.** It is in CloudKit's shape (#152): nothing
+  is unique in the store, and duplicates are merged by code, because CloudKit can deliver two
+  rows for one document. A second local writer is the same case.
+- **The app sees the helper's changes** the way it sees another device's. #655 makes the app
+  refresh from changes it did not make, through the store's history.
+- **Only the app syncs.** CloudKit sync runs inside the process that opened the store with it.
+  It is not a property of the file. The app stays the only such process, for three reasons:
+  - two processes syncing one store would each export and import it;
+  - Apple's advice for extensions that share a CloudKit-backed store is to let the app sync;
+  - the iCloud entitlement would need a provisioning profile, and so a bundled helper app
+    rather than a command-line tool.
 
-When the app is not running, a library tool fails with a sentence saying so, and the corpus tools
-keep working.
+  How a change made with the app closed still reaches other devices promptly is slice 6's
+  ("Getting changes to other devices").
+- **The in-memory fallback (#318) is the app's alone.** When the helper cannot open the store, its
+  library tools fail with a sentence saying so, and the corpus tools keep working.
 
 **On Linux**, `rfc-mcp` has no app to share with. It reads and writes its own directory:
 `$RFC_READER_HOME`, or `$XDG_CACHE_HOME/rfc-reader`. That directory holds the index and the
@@ -201,7 +220,7 @@ On iOS nothing moves.
   copy of a cache that may be 500 MB plus packs. If the move fails, the app keeps using the old
   location and logs why. The helper then reports the corpus as unavailable, rather than
   presenting an empty one as real.
-- **The SwiftData store does not move.** Only the app opens it (above).
+- **The user data store moves too, but in #655,** with the same rule when a move fails.
 - **The entitlement** goes in `project.yml`, for the app and the helper alike. The generated
   `.entitlements` are never edited.
 
@@ -404,41 +423,51 @@ once the SDK and a client we target support the extension. The file is written t
 [Agent Skills](https://agentskills.io) format from the start, front matter included, so that
 step is packaging only.
 
-## Slice 6: the library bridge (probe-gated)
+## Slice 6: the library tools (probe-gated)
 
-### The channel
+### The store, from the helper
 
-The app listens on a Unix domain socket in the group container while it runs. The helper
-connects per call. Requests and responses are `Codable` enums in RFCReaderKit, one case per
-operation, written as newline-delimited JSON. The app's handler calls the same models the menus
-and the scripting dictionary call (`LibraryModel`, `BookmarkStore`, `CollectionStore`), on the
-main actor.
+The helper opens the user data store in the group container (#655) with the app's schema and
+migration plan, and CloudKit off. It reads and writes through `BookmarkStore`,
+`CollectionStore` and `LibraryFilter`, on its own main actor, so the rules are the same code the
+app runs.
 
-- **Only the helper may connect.** The app reads the peer's audit token from the socket
-  (`LOCAL_PEERTOKEN`) and checks its code signature against a requirement naming the team and
-  the helper's identifier. Any other process, including other processes of the same user, is
-  refused. The group container keeps unsandboxed processes from finding the socket, but the
-  signature check is what this design relies on.
+- **Opening it.** If the store cannot be opened, or a migration would be needed, every library
+  tool fails with a sentence saying so. The helper never migrates the store: the app does that,
+  and the two ship in one bundle, so a mismatch means the app has not run since an update.
 - **Unchanged values are not news.** A write that leaves the library unchanged (bookmarking a
   document that is bookmarked) succeeds and says nothing changed.
-- **Unsaved writes say so.** When the store is in memory (#318), every write succeeds and says
-  that the change will not be kept, as the scripting dictionary does.
+- **Opening a passage needs no channel.** `open_in_reader` opens the `rfc://` link with
+  `NSWorkspace`, which starts the app if needed and routes the link as any outside link is
+  routed (`LibraryModel.route`).
+- **Keeping a document offline** writes its body into the shared document directory, through
+  `DocumentStore`'s write path, as "Where it runs" describes.
 
-**The probe, before any of this is built.** On a Mac, prove that:
+### Getting changes to other devices
 
-1. the sandboxed app can bind a socket in the group container, and the sandboxed helper can
-   connect to it;
-2. `LOCAL_PEERTOKEN` and `SecCodeCreateWithToken` identify the helper and refuse a process
-   signed otherwise;
-3. none of this triggers a privacy prompt.
+CloudKit sync is not a property of the store file. It runs inside the process that opened the
+store with CloudKit on, which here is only the app. A change the helper makes is therefore in the
+store, and in its history, but reaches iCloud only when the app exports it:
 
-Report on the slice's issue. If the socket is refused, the candidates are:
+- **While the app runs,** it notices the change through the history (#655), refreshes its
+  windows, and exports it within seconds, as it would its own change.
+- **While the app is closed,** the helper launches it in the background after a write: no
+  window, no activation. The app exports what is pending and quits once the export has
+  finished, or after a timeout. A person who opens the app meanwhile gets an ordinary launch.
+  Without that launch, the change would wait for the next time the app is opened on this Mac.
 
-- Apple Events with `com.apple.security.scripting-targets`, which brings an Automation prompt
-  and needs the dictionary to grow collections;
-- an XPC service registered through `SMAppService`, which is a separate process and not the app.
+The background launch is a mode of the app: an argument or environment value that `AppDelegate`
+reads before it opens any window. Whether the export's end can be observed under SwiftData is
+#655's probe, item 3. If it cannot, the app quits after a fixed timeout measured in that probe.
 
-Neither is chosen without the maintainer.
+**The probe** is #655's, and it decides this slice's shape. It has three items:
+
+1. the helper's write reaches the running app live;
+2. a write made while the app is closed is exported at the app's next launch;
+3. a background launch exports and ends.
+
+If 1 or 2 fails, the library tools go through the running app instead, over a channel of their
+own. Which channel is the maintainer's choice, and work stops to ask.
 
 ### Tools
 
@@ -468,17 +497,22 @@ for clients that do use them.
 | `remove_from_collection` | removes documents from a collection | false | true | true |
 | `rename_collection` | renames a collection, or changes its color | false | true | true |
 | `delete_collection` | deletes a collection. Its documents stay in the library | false | true | true |
-| `download` | keeps documents offline, through the app's store | false | false | true |
+| `download` | keeps documents offline, in the shared document directory | false | false | true |
 
 All of them are `openWorldHint: false`, except `download`, which fetches. A collection is named
 by its name or identifier, through `LibraryFilter(scriptName:…)`, as the scripting dictionary
-names one. A name that matches nothing is an error, in words.
+names one. A name that matches nothing is an error, in words. Every library tool works with the
+app closed.
 
 A guard test pins the table: every tool's annotations as declared here. A new tool must add its
 row, so no write tool can ship claiming to be read-only.
 
-**The resource list grows too.** While the app is reachable, the resource list puts bookmarked
-documents and the user's collections first.
+**The resource list grows too.** The resource list puts bookmarked documents and the user's
+collections first.
+
+**Security.** The store and the document directory are in the group container. Only processes
+that are members of the group, and so signed by the team, open them without a privacy prompt
+(slice 2's probe checks this). The helper adds no listening socket or other way in.
 
 ## Slice 7: setup
 
@@ -492,8 +526,8 @@ documents and the user's collections first.
     - Codex: `[mcp_servers.rfc]` in `config.toml`.
 
   The shapes are those clients' own documentation's, current as of this date. The pane also
-  says whether the corpus is readable (slice 2's failure state) and whether the bridge is
-  listening.
+  says whether the corpus is readable (slice 2's failure state) and whether the user data store
+  is.
 - **`docs/AGENTS.md`**: the tools, the resources, the prompts, and the Linux use.
 - **MCPB** (`.mcpb`, which accepts a native binary) would give Claude Desktop a one-click install.
   It waits until someone asks for it.
@@ -515,8 +549,9 @@ exists. The epic lists them, so whoever builds the feature adds its part to the 
 | the SDK's `2026-07-28` support | the stateless protocol; the conformance guide as an MCP skill |
 
 The annotation tools target a passage the way the highlights design stores one: an anchor and the
-exact quoted text. The agent never computes offsets. The app resolves the quote with `relocate`,
-and a quote that is ambiguous or missing is an error, not a guess.
+exact quoted text. The agent never computes offsets. The helper resolves the quote with
+`relocate`, against the same document the reader would build, and a quote that is ambiguous or
+missing is an error, not a guess.
 
 ## Testing
 
@@ -530,8 +565,9 @@ and a quote that is ambiguous or missing is an error, not a guess.
   - every result validated against its tool's `outputSchema`;
   - pagination bounded and lossless: the pages of a long section joined equal the whole;
   - the resource templates round-tripping through `RFCLink`.
-- **The bridge:** the request and response enums round-trip; the handler's decisions are pure
-  functions in RFCReaderKit with tests; the peer check is covered by the probe and by hand.
+- **The library tools:** the annotations guard; each tool's decisions as pure functions in
+  RFCReaderKit, over an in-memory store; the two-process behavior is #655's probe, and checked by
+  hand.
 - **By hand**, on a Mac:
   - the helper registered in Claude Code with `claude mcp add`;
   - a session that reads RFC 9110 §8.3, lists its requirements, bookmarks it and opens it in the
@@ -555,9 +591,10 @@ and a quote that is ambiguous or missing is an error, not a guess.
 
 ## Open questions
 
-1. **When the app is not running**, a library tool fails with a sentence saying so. Should the
-   helper launch the app instead? Doing that well needs a launch that opens no window.
-   Recommendation: fail, for now.
+1. **The background launch** that exports an agent's change with the app closed: should it be on
+   by default? Or should agent changes wait for the next time the app is opened, with the launch
+   behind a setting? Recommendation: on. A bookmark made on the Mac should be on the iPhone
+   without anyone opening the app first.
 2. **`requiresUserInteraction` on destructive tools.** It would force a prompt on every delete,
    even for a person who has allowed it. Recommendation: no. The split by name already lets each
    person choose.
