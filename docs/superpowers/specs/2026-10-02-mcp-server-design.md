@@ -500,8 +500,8 @@ documents and the user's collections first.
 
 ## Grows with
 
-Each of these is part of the named feature's own work, not of this epic. Each issue gets a line
-saying what its feature adds to the server:
+Each of these is part of the named feature's own work, not of this epic, once the server
+exists. The epic lists them, so whoever builds the feature adds its part to the server:
 
 | When this lands | the server gains |
 |---|---|
