@@ -6,7 +6,7 @@
   /// The reader's chrome on iOS (#601): its title in the bar, the toolbar, the bars
   /// put away while reading on, the return offer, the panel as a column or a sheet,
   /// and Save to Files. On the Mac all of it is the window's (`ReaderWindowController`).
-  struct IOSReaderChrome: ViewModifier {
+  struct IOSDocumentChrome: ViewModifier {
     let id: DocumentID
     let metadata: RFCMetadata?
     /// What the return offer names its place in.

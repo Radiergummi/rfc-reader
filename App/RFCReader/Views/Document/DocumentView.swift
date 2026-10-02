@@ -140,7 +140,7 @@ struct DocumentView: View {
       .navigationTitle(id.displayName)
       #if !os(macOS)
         .modifier(
-          IOSReaderChrome(
+          IOSDocumentChrome(
             id: id, metadata: metadata, document: session.state.document, library: library,
             navigation: navigation, reader: reader, showsInspector: $showsInspector,
             barsHidden: $barsHidden, output: output))
