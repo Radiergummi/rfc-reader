@@ -295,6 +295,18 @@ struct BuilderTableTests {
     #expect(text.contains("Ref.\u{2028}Section  6.5.4\u{2028}6.5.5\n"))
   }
 
+  /// A chip that opens a cell's second line starts a line, as one that opens the
+  /// cell does, and has no room made before it: the line separator is not kerned.
+  @Test func `the line separator before a chip is not kerned`() throws {
+    let chip = Inline.crossReference(CrossReference(target: .document(.rfc(9110), section: nil)))
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [RFCKit.Table.Row(cells: [[.text("first"), .lineBreak, chip], [.text("next")]])])
+    let built = DocumentTextBuilder.build(document(table), style: ReadingStyle())
+    let separator = try Fixtures.offset(of: "\u{2028}", in: built.text)
+    #expect(built.text.attribute(.kern, at: separator, effectiveRange: nil) == nil)
+  }
+
   /// Laid out, a cell's second line starts where its first does: the first
   /// column's at the row's indent, another's at its tab stop.
   @Test func `a cell's second line is laid out under its first`() throws {

@@ -197,9 +197,10 @@ public enum QuoteCitation {
         blocks.append(Block(lines: isLabel ? [] : [line], box: box))
       } else {
         // A table row whose cell has a line break is one paragraph (#506), and its
-        // lines are quoted as the lines they are.
-        for part in line.split(separator: "\n") where !part.isEmpty {
-          blocks.append(Block(lines: [String(part)], box: nil))
+        // lines are quoted as the lines they are, each trimmed as a paragraph is.
+        for part in line.split(separator: "\n") {
+          let part = String(part).trimmingTrailingSpaces()
+          if !part.isEmpty { blocks.append(Block(lines: [part], box: nil)) }
         }
       }
     }
