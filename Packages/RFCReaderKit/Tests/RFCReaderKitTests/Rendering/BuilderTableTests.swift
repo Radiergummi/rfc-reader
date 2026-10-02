@@ -289,9 +289,10 @@ struct BuilderTableTests {
   @Test func `a line break in a stacked cell keeps the cell one paragraph`() {
     var table = prose
     table.rows[0].cells[2] = [.text("6.5.4"), .lineBreak, .text("6.5.5")]
+    table.header[0].cells[2] = [.text("Ref."), .lineBreak, .text("Section")]
     #expect(shape(table) == .stacked)
     let text = DocumentTextBuilder.build(document(table), style: ReadingStyle()).text.string
-    #expect(text.contains("6.5.4\u{2028}6.5.5\n"))
+    #expect(text.contains("Ref.\u{2028}Section  6.5.4\u{2028}6.5.5\n"))
   }
 
   /// Laid out, a cell's second line starts where its first does: the first

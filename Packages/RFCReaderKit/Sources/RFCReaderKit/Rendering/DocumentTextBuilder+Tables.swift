@@ -184,18 +184,24 @@ extension DocumentTextBuilder {
       mark(row.anchor)
       for (column, cell) in row.cells.enumerated() {
         if column < headers.count {
-          output.append(inlineRuns(headers[column], base: labelAttributes))
+          appendCell(headers[column], attributes: labelAttributes)
           append("  ", attributes)
         }
-        for (line, text) in Self.lines(of: inlineRuns(cell, base: attributes)).enumerated() {
-          if line > 0 { append(Self.cellLineSeparator, attributes) }
-          output.append(text)
-        }
+        appendCell(cell, attributes: attributes)
         append("\n", attributes)
       }
       // A blank line separates one row's cells from the next row's. It needs no
       // decoration of its own: `appendTable` decorates the whole emitted range.
       append("\n", separatorAttributes)
+    }
+  }
+
+  /// A stacked cell, or its label, with its lines set apart by line separators, so
+  /// the cell is one paragraph however many lines it has (#506).
+  private func appendCell(_ cell: [Inline], attributes: [NSAttributedString.Key: Any]) {
+    for (line, text) in Self.lines(of: inlineRuns(cell, base: attributes)).enumerated() {
+      if line > 0 { append(Self.cellLineSeparator, attributes) }
+      output.append(text)
     }
   }
 

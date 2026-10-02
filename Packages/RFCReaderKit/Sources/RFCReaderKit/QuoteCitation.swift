@@ -195,8 +195,12 @@ public enum QuoteCitation {
         // The label is the first line of its block, and reads as the type uppercased.
         let isLabel = box.content.kind == .sourceCode && line == box.content.type?.uppercased()
         blocks.append(Block(lines: isLabel ? [] : [line], box: box))
-      } else if !line.isEmpty {
-        blocks.append(Block(lines: [line], box: nil))
+      } else {
+        // A table row whose cell has a line break is one paragraph (#506), and its
+        // lines are quoted as the lines they are.
+        for part in line.split(separator: "\n") where !part.isEmpty {
+          blocks.append(Block(lines: [String(part)], box: nil))
+        }
       }
     }
     return blocks.filter { !$0.lines.isEmpty }
