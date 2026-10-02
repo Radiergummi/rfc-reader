@@ -5,8 +5,8 @@ import Testing
 
 @testable import RFCReaderKit
 
-/// The macOS reader's hover, force-click and preview rules (ARCHITECTURE.md, "a
-/// reference previews on hover and force click on macOS").
+/// The macOS reader's hover, force-click and preview rules
+/// (`docs/decisions/2026-09-26-a-reference-previews-on-hover-and-force-click-on-macos-and-on-long-press-on-ios.md`).
 @Suite("Reference hover")
 struct ReferenceHoverTests {
   private let first = HoverTarget(

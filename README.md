@@ -17,6 +17,7 @@ Every RFC, beautifully readable, instantly searchable, and one tap from any refe
 | `project.yml` | XcodeGen spec for the app project. |
 | `docs/VISION.md` | Why, for whom, the feature brainstorm in tiers, data sources, risks, roadmap. |
 | `docs/ARCHITECTURE.md` | The document model, how each format is parsed, data flow in the app, known gaps. |
+| `docs/decisions/` | One dated record per decision: what was decided, why, and what was measured first. |
 | `docs/DATA_PIPELINE.md` | What is precomputed offline (legacy XML, search indexes, graph), pack sizes, delivery via Background Assets. |
 
 ## Quick start

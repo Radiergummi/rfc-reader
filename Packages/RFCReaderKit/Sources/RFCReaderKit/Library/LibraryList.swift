@@ -16,12 +16,22 @@ extension String {
   }
 }
 
+/// Where the inputs a list may list from are read: each only when a filter asks
+/// for it (`LibraryList.reading`).
+public protocol ListSources {
+  var bookmarked: Set<DocumentID> { get }
+  var recentlyRead: [DocumentID] { get }
+  var downloaded: Set<Int> { get }
+  func members(of collection: UUID) -> [Int]
+}
+
 /// Everything a library list is a function of, and the list it makes.
 ///
 /// The filter and the query are passed in rather than read off the library: they
 /// belong to one tab (`NavigationModel`), and two tabs may be listing different
-/// things at the same time. Gathering them into one value also gives the library's
-/// cache its key. The one input not in it is the index, handed to `rows(in:search:)`.
+/// things at the same time. Gathering them into one value also says when a tab has
+/// to list again: when the list it asks for is not the one it shows (#597). The one
+/// input not in it is the index, handed to `rows(in:search:)`.
 public struct LibraryList: Hashable, Sendable {
   public let filter: LibraryFilter
   /// Normalized, so a query differing only in the spaces around it is the same list.
@@ -32,8 +42,8 @@ public struct LibraryList: Hashable, Sendable {
   public let recentlyRead: [DocumentID]
   public let downloaded: Set<Int>
   public let options: ListOptions
-  /// A collection's members in order, so adding, removing or reordering changes
-  /// the key and a cache cannot serve a stale list (#349).
+  /// A collection's members in order, so adding, removing or reordering makes a
+  /// different list (#349).
   public let members: [Int]
 
   public init(
@@ -50,10 +60,32 @@ public struct LibraryList: Hashable, Sendable {
     self.members = members
   }
 
+  /// The list `filter` shows, reading from `sources` only the input it lists from.
+  /// The others are never read, so a caller whose reads are observed is not asked
+  /// to list again for a change it does not show: every tab searched again for a
+  /// bookmark toggled.
+  public static func reading(
+    _ filter: LibraryFilter, query: String, options: ListOptions, from sources: some ListSources
+  ) -> LibraryList {
+    var members: [Int] {
+      guard case .collection(let identifier) = filter else { return [] }
+      return sources.members(of: identifier)
+    }
+    return LibraryList(
+      filter: filter,
+      query: query,
+      bookmarked: filter == .bookmarks ? sources.bookmarked : [],
+      recentlyRead: filter == .recent ? sources.recentlyRead : [],
+      downloaded: filter == .downloaded ? sources.downloaded : [],
+      options: options,
+      members: members
+    )
+  }
+
   /// The rows, as the options show them. `search` is the index's own; without one,
   /// a query finds nothing more than the filter already lists. `hits` are its hits
-  /// for `query`, best first, when they were searched ahead, off the main actor
-  /// (#124); without them the query is searched here.
+  /// for `query`, best first, when they are known already (`ListedRows`); without
+  /// them the query is searched here.
   public func rows(
     in index: RFCIndex, search: IndexSearch?, hits: [RFCMetadata]? = nil
   ) -> [LibraryRow] {

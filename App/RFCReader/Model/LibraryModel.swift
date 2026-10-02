@@ -63,8 +63,15 @@ final class LibraryModel {
   }
 
   private(set) var index: RFCIndex? {
-    didSet { groupRFCs = [:] }
+    didSet {
+      groupRFCs = [:]
+      indexVersion += 1
+    }
   }
+  /// Which index is installed, counted: what a tab compares to tell whether the
+  /// rows and hits it has were made over the index there is now (#597), where
+  /// comparing two indexes would compare 9,842 entries.
+  private(set) var indexVersion = 0
   /// Each working group's RFCs, worked out once per index for its card (#363): the
   /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
@@ -508,9 +515,6 @@ final class LibraryModel {
     self.topWorkingGroups = prepared.topWorkingGroups
     self.knownWorkingGroups = prepared.knownWorkingGroups
     self.indexCounts = prepared.counts
-    listCache = RecentValues(capacity: Self.listCacheCapacity)
-    hitCache = RecentValues(capacity: Self.listCacheCapacity)
-    indexGeneration += 1
     indexState = .ready(updatedAt: updatedAt)
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
@@ -641,29 +645,6 @@ final class LibraryModel {
   /// the same reason `topWorkingGroups` is (#344).
   private(set) var indexCounts: [LibraryFilter: Int] = [:]
 
-  /// Answers remembered against their inputs.
-  ///
-  /// `list` is read from `RFCListView.body` — and by the toolbar's count and by
-  /// scripts — and SwiftUI evaluates that body far more often than any of these
-  /// inputs change -- twice per pass, several passes per click.
-  /// Uncached, one filter change ran the full-text scan a dozen times over, and that
-  /// scan measures 107 ms against the real index.
-  ///
-  /// A dictionary rather than a single slot because tabs have their own filters now:
-  /// with one slot, two tabs listing different things evict each other on every pass
-  /// and the hit rate collapses to zero. Bounded, forgetting the list used longest
-  /// ago -- this is a cache, so losing an entry costs time, never correctness.
-  ///
-  /// Not observed: `list` writes it from a view's body on a miss, and a write to
-  /// a property the running body read invalidated that body, so every miss rendered
-  /// the list twice (#126). It is a memo of state that is observed, not state itself.
-  /// That makes a hit read nothing observable, though, so `list` reads `index`
-  /// before looking here: the key carries every other input, and those the caller
-  /// reads for itself.
-  @ObservationIgnored private var listCache = RecentValues<LibraryList, [LibraryRow]>(
-    capacity: listCacheCapacity)
-  private static let listCacheCapacity = 8
-
   /// What force-click previews showed, kept for the next preview of the same
   /// document in the same style (#374), which then shows its text at once rather
   /// than a spinner. Four, at 4.5 to 8 MB a build.
@@ -673,8 +654,7 @@ final class LibraryModel {
   /// evicted (`forgetPreviews`), as the store's parse of it does, so what is gone
   /// from the disk is gone from memory too. Empty on iOS, which has no such preview.
   ///
-  /// Not observed, for the reason `listCache` is not: it is a memo, and nothing is
-  /// drawn from it.
+  /// Not observed: it is a memo, and nothing is drawn from it.
   @ObservationIgnored private var previews = RecentValues<BuildKey, DocumentPreview.Loaded>(
     capacity: 4)
 
@@ -696,117 +676,60 @@ final class LibraryModel {
     previews.removeAll { documents.contains($0.document) }
   }
 
-  /// What `scene`'s list shows: its filter and search, over the inputs it took on
-  /// entering the filter and the bookmarks as they stand.
-  func list(for scene: NavigationModel) -> [LibraryRow] {
-    // Observed on every call, hit or miss: this is what re-renders the list when
-    // `refreshIndex` lands a new index, since a hit reads nothing else of ours.
-    guard let index else { return [] }
-    // Only the inputs this filter reads: in the key, the rest would make a list
-    // that cannot have changed miss the cache — every tab's search re-run for a
-    // bookmark toggled, and an order hashed on every lookup for a filter that
-    // ignores it.
-    let filter = scene.filter
-    let key = LibraryList(
-      filter: filter,
-      query: scene.appliedQuery,
-      bookmarked: filter == .bookmarks ? bookmarkedDocuments : [],
-      recentlyRead: filter == .recent ? scene.recentOrder : [],
-      downloaded: filter == .downloaded ? scene.downloaded : [],
-      options: scene.listOptions,
-      members: members(of: filter)
-    )
-    return list(key, in: index)
+  /// `list` over the index as it stands, made off the main actor: what a tab stores
+  /// and its list reads (#597). `hits` are the search's for `list.query` over this
+  /// index, if a listing found them already. Nil while there is no index.
+  func listed(_ list: LibraryList, hits: [RFCMetadata]? = nil) async -> ListedRows? {
+    guard let index else { return nil }
+    return await Self.listed(
+      list, in: index, indexVersion: indexVersion, search: search, hits: hits)
   }
 
-  /// The whole library searched for `query`, whatever filter a scene is on: what the
-  /// sidebar lists while it is searched on an iPhone, where the list is not on
-  /// screen beside it (#345).
-  func librarySearch(_ query: String) -> [LibraryRow] {
-    // Observed on every call, for the reason `list(for:)` gives.
-    guard let index else { return [] }
-    let key = LibraryList(filter: .all, query: query)
-    return list(key, in: index)
-  }
-
-  /// A collection's members, read here — an observed read — so a change to them
-  /// re-renders the list showing it.
-  private func members(of filter: LibraryFilter) -> [Int] {
-    guard case .collection(let identifier) = filter else { return [] }
-    return collections[identifier]?.rfcNumbers ?? []
-  }
-
-  /// Every input is read off the key, so the cache cannot go stale against something
-  /// the list consults but the key does not carry. The one input not in the key is
-  /// `index` (and `search`, which `apply` replaces with it), which is why `apply`
-  /// empties the cache: that keeps the cache correct, and the read of `index` at the
-  /// top of `list` is what gets the view to ask again. The index is handed in from
-  /// that read rather than read again here, so the observed read is the only one.
-  private func list(_ key: LibraryList, in index: RFCIndex) -> [LibraryRow] {
-    if let hit = listCache.value(for: key) { return hit }
-    let computed = signposter.withIntervalSignpost(
-      "List", id: signposter.makeSignpostID(), "\(key.query, privacy: .public)"
-    ) {
-      key.rows(in: index, search: search, hits: hitCache.value(for: key.query))
+  /// `listed(_:hits:)` on the main actor, for a script, which reads the list
+  /// straight after changing what it lists.
+  func listedNow(_ list: LibraryList, hits: [RFCMetadata]? = nil) -> ListedRows? {
+    guard let index else { return nil }
+    return Self.signposted(list) {
+      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
     }
-    listCache.store(computed, for: key)
-    return computed
-  }
-
-  /// The subtitle under the list's title: how many documents it shows. Empty while
-  /// the index loads — "0 Documents" would be a claim about the library, not about a
-  /// list that has not arrived yet.
-  func listSubtitle(for scene: NavigationModel) -> String {
-    indexState.isReady ? DocumentCount.label(list(for: scene).count) : ""
-  }
-
-  /// Every hit for a query, best first, searched off the main actor by
-  /// `prepareSearch(_:)` before a scene applies the query (#124), so a list
-  /// computed for it only filters. The scan measures 7–11 ms in Release and up to
-  /// 98 ms in Debug. A query that is not here, as after `apply` or for a script,
-  /// is searched on the spot.
-  ///
-  /// Not observed, for the reason `listCache` gives; applying the query is what
-  /// the list observes.
-  @ObservationIgnored private var hitCache = RecentValues<String, [RFCMetadata]>(
-    capacity: listCacheCapacity)
-  /// Counts the indexes `apply` has installed, so a search that outlived its index
-  /// is not kept.
-  @ObservationIgnored private var indexGeneration = 0
-
-  /// Searches for `query` off the main actor, so the list can apply it without
-  /// scanning the index in a view update.
-  func prepareSearch(_ query: String) async {
-    guard !query.isEmpty, hitCache.value(for: query) == nil, let search else { return }
-    let generation = indexGeneration
-    let hits = await Self.hits(in: search, for: query)
-    // A new index landed meanwhile, so these are hits in the old one; or typing
-    // moved on, and a query nobody applies would push out one that is applied.
-    guard indexGeneration == generation, !Task.isCancelled else { return }
-    hitCache.store(hits, for: query)
   }
 
   @concurrent
-  private static func hits(in search: IndexSearch, for query: String) async -> [RFCMetadata] {
-    signposter.withIntervalSignpost(
-      "Search", id: signposter.makeSignpostID(), "\(query, privacy: .public)"
-    ) {
-      search.search(query, limit: .max).map(\.rfc)
+  private static func listed(
+    _ list: LibraryList, in index: RFCIndex, indexVersion: Int, search: IndexSearch?,
+    hits: [RFCMetadata]?
+  ) async -> ListedRows {
+    signposted(list) {
+      ListedRows(list, in: index, indexVersion: indexVersion, search: search, hits: hits)
     }
+  }
+
+  private nonisolated static func signposted(
+    _ list: LibraryList, _ make: () -> ListedRows
+  ) -> ListedRows {
+    signposter.withIntervalSignpost(
+      "List", id: signposter.makeSignpostID(), "\(list.query, privacy: .public)", around: make)
+  }
+
+  /// The subtitle under the list's title: how many documents it shows. Empty until
+  /// the list is first made — "0 Documents" would be a claim about the library, not a
+  /// list that has not arrived yet.
+  func listSubtitle(for scene: NavigationModel) -> String {
+    scene.listed.map { DocumentCount.label($0.rows.count) } ?? ""
   }
 
   /// The Go to RFC palette's candidates for what was typed, best first.
   ///
-  /// Off the main actor: a short query like `http` scans every title and abstract,
-  /// measured at 107 ms (#22), and this runs as the reader types.
+  /// Off the main actor: a short query like `http` scans every title and abstract
+  /// (the "Search: http" benchmark of `make benchmark`), and this runs as the reader
+  /// types.
   func suggestions(for query: String, limit: Int) async -> [DocumentID] {
     guard let search else { return [] }
     return await Self.suggestions(in: search, for: query, limit: limit)
   }
 
   /// What the Go to RFC palette and sheet list under what was typed, once the reader
-  /// has paused: run per change of the query and canceled by the next, which is the
-  /// debounce, so only a pause long enough to outlast the sleep reaches the search.
+  /// has paused: run per change of the query and canceled by the next (`Debounce`).
   ///
   /// - Returns: nil for nothing typed, or when the reader typed on first; no hits,
   ///   without searching, for a link, which names its document outright and which
@@ -815,11 +738,7 @@ final class LibraryModel {
     guard !query.isEmpty else { return nil }
     if query.contains("://"), DocumentReference.link(from: query) != nil { return [] }
     guard index != nil else { return [] }
-    do {
-      try await Task.sleep(for: .milliseconds(120))
-    } catch {
-      return nil
-    }
+    guard await Debounce.outlasted(.milliseconds(120)) else { return nil }
     let hits = await suggestions(for: query, limit: QuickOpenResults.limit)
     return Task.isCancelled ? nil : hits
   }

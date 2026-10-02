@@ -122,7 +122,7 @@ struct DocumentPreview: View {
       } else {
         let document = try await library.document(for: id)
         shown = Loaded(
-          document: document, built: await DocumentView.build(document, style: style),
+          document: document, built: await DocumentSession.built(document, style: style),
           bibliography: ReferenceGroup.groups(in: document))
       }
       loaded = shown

@@ -20,6 +20,19 @@ struct SelectionTextTests {
     #expect(copied([.text("hello world")]) == "hello world")
   }
 
+  /// A table cell's line break is set as a line separator, to keep its row one
+  /// paragraph (#506), but is copied as the newline it was before.
+  @Test func `a table cell's line break is copied as a newline`() throws {
+    let table = RFCKit.Table(
+      title: nil, header: [],
+      rows: [RFCKit.Table.Row(cells: [[.text("first"), .lineBreak, .text("second")]])])
+    let built = DocumentTextBuilder.build(Fixtures.document(.table(table)), style: ReadingStyle())
+    let start = try Fixtures.offset(of: "first", in: built.text)
+    let selection = built.text.attributedSubstring(
+      from: NSRange(location: start, length: ("first\u{2028}second" as NSString).length))
+    #expect(SelectionText.plainText(of: selection) == "first\nsecond")
+  }
+
   /// The whole reason this exists: the chip's symbol rides in the text as an
   /// object-replacement character, which means nothing off the screen.
   @Test func `no object replacement character reaches the pasteboard`() {

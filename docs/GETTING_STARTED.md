@@ -29,7 +29,7 @@ curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 
 ## Where to go next
 
-`docs/VISION.md` has the feature tiers and the principles the UI is held to; `docs/ARCHITECTURE.md` is the decision record for the document model, the two parsers and the reader; `docs/DATA_PIPELINE.md` covers the corpus packs. `CLAUDE.md` lists the standing constraints that are easy to break by accident, and how to work on the legacy text heuristics. Work in progress is tracked in the GitHub issues.
+`docs/VISION.md` has the feature tiers and the principles the UI is held to; `docs/ARCHITECTURE.md` describes the document model, the two parsers and the reader, and `docs/decisions/` has the dated decisions behind them; `docs/DATA_PIPELINE.md` covers the corpus packs. `CLAUDE.md` lists the standing constraints that are easy to break by accident, and how to work on the legacy text heuristics. Work in progress is tracked in the GitHub issues.
 
 ## The corpus pipeline
 

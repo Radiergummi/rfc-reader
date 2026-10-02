@@ -611,3 +611,23 @@ struct CorpusBackedBibliographyEntryTests {
     }
   }
 }
+
+@Suite("Corpus-backed: joined artwork", .enabled(if: CorpusText.isAvailable))
+struct CorpusBackedJoinedArtworkTests {
+  /// RFC 793's state diagram has blank lines in it, and came out as a block per
+  /// stretch between them (#437).
+  @Test func `a drawing with blank lines in it is one artwork`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc793"))
+    #expect(document.artworkText.contains { $0.contains("LISTEN") && $0.contains("TIME WAIT") })
+  }
+
+  /// RFC 3407's attribute registrations are one-line definitions a blank line
+  /// apart, which a hanging list below takes back as the blocks they made; joined
+  /// as artwork, they were left out of it.
+  @Test func `one-line definitions a blank line apart are still a list`() throws {
+    let document = LegacyTextParser.parse(try CorpusText.text("rfc3407"))
+    let terms = document.definitionLists.flatMap { $0 }.map(\.term.plainText)
+    #expect(terms.filter { $0.hasPrefix("Attribute name") }.count >= 3)
+    #expect(!document.artworkText.contains { $0.contains("Attribute name") })
+  }
+}

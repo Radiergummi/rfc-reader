@@ -312,8 +312,9 @@ struct ReferencesView: View {
   let open: (DocumentID) -> Void
   let openInNewWindow: ((DocumentID) -> Void)?
 
-  /// The revealed entry, marked for a moment so the eye finds it in the list.
-  @State private var highlighted: String?
+  /// The revealed entry, marked for a moment so the eye finds it in the list. The
+  /// reveal rather than its anchor, so revealing the same entry again marks it anew.
+  @State private var highlighted: ReaderState.RevealedReference?
 
   var body: some View {
     if groups.isEmpty {
@@ -328,7 +329,7 @@ struct ReferencesView: View {
                 // what the reveal scrolls to.
                 ReferenceRow(entry: entry, open: open, openInNewWindow: openInNewWindow)
                   .listRowBackground(
-                    highlighted == entry.anchor
+                    highlighted?.anchor == entry.anchor
                       ? RoundedRectangle(cornerRadius: 6).fill(.tint.opacity(0.2)) : nil)
               }
             }
@@ -345,11 +346,9 @@ struct ReferencesView: View {
           // tab, which waits for the same reason.
           await Task.yield()
           withAnimation { proxy.scrollTo(revealed.anchor, anchor: .center) }
-          highlighted = revealed.anchor
-          try? await Task.sleep(for: .seconds(1.5))
-          guard !Task.isCancelled else { return }
-          withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
+          highlighted = revealed
         }
+        .resets($highlighted, to: nil, after: .seconds(1.5), animation: .easeOut(duration: 0.6))
       }
     }
   }
