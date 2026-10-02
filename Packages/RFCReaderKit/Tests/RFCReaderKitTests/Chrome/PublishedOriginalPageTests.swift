@@ -49,6 +49,19 @@ struct PublishedOriginalPageTests {
         == nil)
   }
 
+  /// The installed pack lists it as a pointer (#316), so the page needs no text,
+  /// online or off. Original Text still shows the text as published.
+  @Test func `a pointer the pack lists is its original without the text`() {
+    let page = PublishedOriginalPage(
+      .rfc(1119), formats: pointerFormats, showsOriginal: false, text: nil, pointerInPack: true)
+    #expect(page?.original.format == .pdf)
+    #expect(page?.explanation == "The text of RFC 1119 only says where its original is.")
+    #expect(
+      PublishedOriginalPage(
+        .rfc(1119), formats: pointerFormats, showsOriginal: true, text: nil, pointerInPack: true)
+        == nil)
+  }
+
   @Test func `an original is offered by the name the Info pane gives its format`() {
     #expect(FileFormat.pdf.displayName == "PDF")
     #expect(FileFormat.postScript.displayName == "PostScript")
@@ -75,6 +88,10 @@ struct PublishedOriginalActionsTests {
         .kind == .pointer)
     #expect(
       PublishedOriginalPage.Status(.rfc(1119), formats: [.text, .postScript], text: nil) == nil)
+    #expect(
+      PublishedOriginalPage.Status(
+        .rfc(1119), formats: [.text, .postScript], text: nil, pointerInPack: true)?.kind
+        == .pointer)
   }
 
   /// What the panel says in place of its lists: why there are none, not that the
@@ -93,10 +110,18 @@ struct PublishedOriginalActionsTests {
 
   /// A scan has no text to fetch; an index that does not know the document yet, or
   /// lists a text, leaves the load to find out.
-  @Test func `only a scan skips the load`() {
+  @Test func `a scan skips the load`() {
     #expect(!PublishedOriginalPage.loadsText(.rfc(8), formats: [.pdf]))
     #expect(PublishedOriginalPage.loadsText(.rfc(8), formats: nil))
     #expect(PublishedOriginalPage.loadsText(.rfc(1119), formats: [.text, .postScript, .pdf]))
+  }
+
+  /// Nor does a text the installed pack lists as only pointing to its original
+  /// (#316): the pack has no XML of it, and offline there would be no text either.
+  @Test func `a pointer the pack lists skips the load`() {
+    #expect(
+      !PublishedOriginalPage.loadsText(
+        .rfc(1119), formats: [.text, .postScript, .pdf], pointerInPack: true))
   }
 
   @Test func `a document read as its text is printed and exported`() {

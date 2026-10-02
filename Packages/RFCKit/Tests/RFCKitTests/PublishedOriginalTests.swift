@@ -86,6 +86,15 @@ struct PublishedOriginalTests {
     }
   }
 
+  /// A data pack lists the RFC as a text that only points to its original (#316),
+  /// so it is one without the text being read; what to open is still the index's.
+  @Test func `a text known to be a pointer is its original unread`() {
+    #expect(PublishedOriginal(pointer: .rfc(1119), formats: pointerFormats)?.format == .pdf)
+    #expect(
+      PublishedOriginal(pointer: .rfc(1119), formats: [.text, .postScript])?.format == .postScript)
+    #expect(PublishedOriginal(pointer: .rfc(1119), formats: [.text]) == nil)
+  }
+
   @Test func `an empty text beside an original is a pointer to it`() {
     let empty = RFCDocument(header: DocumentHeader(title: ""), sections: [], source: .text)
     #expect(PublishedOriginal(.rfc(570), formats: pointerFormats, text: empty)?.format == .pdf)

@@ -292,7 +292,7 @@ struct DocumentView: View {
     if let metadata,
       let page = PublishedOriginalPage(
         id, formats: metadata.formats, showsOriginal: reader.showOriginal,
-        text: session.state.document)
+        text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
     {
       originalOnly(page, metadata: metadata)
     } else if reader.showOriginal {
@@ -573,8 +573,12 @@ struct DocumentView: View {
     // Before the fetch, not after: the index knows the document before its body
     // arrives, so the tab is ready the moment the panel is.
     deriveInfo()
-    // A scan has no text to fetch (#207): its page is the index's.
-    guard PublishedOriginalPage.loadsText(id, formats: metadata?.formats) else {
+    // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
+    // the pack lists (#316), whose XML it left out.
+    guard
+      PublishedOriginalPage.loadsText(
+        id, formats: metadata?.formats, pointerInPack: library.pointersInPack.contains(id))
+    else {
       session.skipLoad()
       reader.isLoading = false
       return
@@ -631,7 +635,9 @@ struct DocumentView: View {
     _ id: DocumentID, text document: RFCDocument?, in library: LibraryModel
   ) -> PublishedOriginalPage.Status? {
     library.metadata(id).flatMap {
-      PublishedOriginalPage.Status(id, formats: $0.formats, text: document)
+      PublishedOriginalPage.Status(
+        id, formats: $0.formats, text: document,
+        pointerInPack: library.pointersInPack.contains(id))
     }
   }
 

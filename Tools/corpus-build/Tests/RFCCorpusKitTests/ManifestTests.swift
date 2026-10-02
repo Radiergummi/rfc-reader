@@ -38,6 +38,37 @@ struct ManifestTests {
       version: "2026.09", files: [Manifest.Entry(path: "rfc1.xml", data: Data("x".utf8))])
     let encoded = try JSONEncoder().encode(manifest)
     let object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    #expect(Set(object.keys) == ["version", "files"])
+    #expect(Set(object.keys) == ["version", "files", "skipped"])
+  }
+
+  /// The documents a pack leaves out on purpose, so the app knows without the
+  /// network what it would otherwise only learn from their text (#316).
+  @Test func `a manifest names each document it skips and why`() throws {
+    let manifest = Manifest(
+      version: "2026.09", files: [],
+      skipped: [Manifest.Skip(document: "rfc1119", reason: .publishedOnlyAsPDF)])
+    let encoded = String(decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
+    #expect(encoded.contains(#""document":"rfc1119""#))
+    #expect(encoded.contains(#""reason":"published-only-as-pdf""#))
+    #expect(try JSONDecoder().decode(Manifest.self, from: Data(encoded.utf8)) == manifest)
+  }
+
+  /// The skips are the convert run's, read from its report, in its order.
+  @Test func `the skipped documents are the report's`() throws {
+    let empty = RFCDocument(header: DocumentHeader(title: ""), sections: [], source: .text)
+    func report(_ id: String, skipped: Manifest.SkipReason?) -> DocumentReport {
+      var report = DocumentReport(document: empty, id: id, overridden: false)
+      report.skipped = skipped
+      return report
+    }
+    let converted = report("rfc1149", skipped: nil)
+    let first = report("rfc570", skipped: .publishedOnlyAsPDF)
+    let second = report("rfc1119", skipped: .publishedOnlyAsPDF)
+    let report = try JSONEncoder().encode([first, converted, second])
+    #expect(
+      try Manifest.skips(inReport: report) == [
+        Manifest.Skip(document: "rfc570", reason: .publishedOnlyAsPDF),
+        Manifest.Skip(document: "rfc1119", reason: .publishedOnlyAsPDF),
+      ])
   }
 }

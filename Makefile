@@ -402,7 +402,7 @@ corpus-score: corpus-fetch-xml
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool
 	$(CORPUS_BIN) manifest --dir $(CORPUS)/xml.noindex --out $(CORPUS)/manifest.json \
-	  --version $(CORPUS_VERSION)
+	  --version $(CORPUS_VERSION) --report $(CORPUS)/report.json
 
 ## Rebuild the cross-reference judgment set used to measure search ranking
 # Not part of `corpus`: it reads the converted corpus rather than producing it, and

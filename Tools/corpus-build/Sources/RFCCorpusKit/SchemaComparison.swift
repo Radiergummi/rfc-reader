@@ -7,7 +7,7 @@
 public struct SchemaComparison: Equatable, Sendable {
   /// The documents that validated in the previous report and do not now, in report
   /// order. A document skipped now is not among them: it has no XML to validate, by a
-  /// decision of its own (`DocumentConverter.Skip`).
+  /// decision of its own (`Manifest.Skip`).
   public var stoppedValidating: [String]
   /// How many documents validate now that did not in the previous report, or were not
   /// in it.

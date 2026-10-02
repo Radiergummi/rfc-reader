@@ -21,6 +21,9 @@ struct ManifestCommand: ParsableCommand {
   @Option(help: "The data packs' version, such as 2026.09.")
   var version: String
 
+  @Option(help: "A convert run's report, whose skipped documents the manifest lists.")
+  var report: String?
+
   func run() throws {
     let directory = URL(fileURLWithPath: dir)
     let output = URL(fileURLWithPath: out)
@@ -31,9 +34,16 @@ struct ManifestCommand: ParsableCommand {
       let data = try Data(contentsOf: directory.appending(path: name))
       entries.append(Manifest.Entry(path: name, data: data))
     }
-    let manifest = Manifest(version: version, files: entries)
+    var skipped: [Manifest.Skip] = []
+    if let report {
+      skipped = try Manifest.skips(inReport: Data(contentsOf: URL(fileURLWithPath: report)))
+    }
+    let manifest = Manifest(version: version, files: entries, skipped: skipped)
     try writeJSON(manifest, to: output.path)
     Self.logger.info(
-      "wrote manifest", metadata: ["entries": "\(entries.count)", "path": "\(output.path)"])
+      "wrote manifest",
+      metadata: [
+        "entries": "\(entries.count)", "skipped": "\(skipped.count)", "path": "\(output.path)",
+      ])
   }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import RFCCorpusKit
+import RFCKit
 import Testing
 
 /// What a convert run makes of its schema results against the report it replaced. A

@@ -121,9 +121,13 @@ jobs:
           done
           cd "$GITHUB_WORKSPACE"
           # Written outside the folder and then moved in, so it does not list itself.
+          # The legacy pack's also lists what convert skipped, from its report (#316).
           for pack in legacy-xml modern-xml; do
+            report=
+            if [ "$pack" = legacy-xml ]; then report="--report corpus/report.json"; fi
+            # shellcheck disable=SC2086 # $report is two words, or none.
             Tools/corpus-build/.build/release/corpus-build manifest \
-              --dir "packs/$pack" --out "packs/$pack.json" --version "$VERSION"
+              --dir "packs/$pack" --out "packs/$pack.json" --version "$VERSION" $report
             mv "packs/$pack.json" "packs/$pack/manifest.json"
           done
 

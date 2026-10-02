@@ -477,6 +477,12 @@ public actor DocumentStore {
     return pack
   }
 
+  /// The RFCs the installed legacy pack lists as text that only points to its
+  /// original (#316), shown as their original without a load.
+  public func pointersInPack() -> Set<DocumentID> {
+    legacyPack?.pointers ?? []
+  }
+
   /// Off the actor: a whole pack is unpacked and every file hashed.
   @concurrent
   private static func install(_ source: URL, as name: String, in packs: URL) async throws

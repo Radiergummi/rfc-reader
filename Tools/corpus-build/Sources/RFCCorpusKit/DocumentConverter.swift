@@ -23,16 +23,6 @@ public struct DocumentConverter: Sendable {
     self.samplesBoundary = samplesBoundary
   }
 
-  /// Why a document is not converted, as `report.json` records it.
-  public enum Skip: String, Codable, Sendable {
-    /// The text only says where the RFC's PDF or PostScript original is (#316): RFC
-    /// 570, 1119, 1124, 1128, 1129 and 1131. Converted, it is a document with nothing
-    /// in it, which the schema refuses for two of them and takes for the other four; a
-    /// section saying where the original is would be words the RFC does not have. The
-    /// app opens the original instead, by the same test (`PublishedOriginal`, #207).
-    case publishedOnlyAsPDF = "published-only-as-pdf"
-  }
-
   /// One converted document.
   public struct Conversion: Sendable {
     /// Nil when the document is skipped, and the report says why.
@@ -101,7 +91,9 @@ public struct DocumentConverter: Sendable {
   /// Why `document`, parsed from the text `metadata` indexes, is not converted, if it
   /// is not. Only a run with an index can tell: whether the RFC has an original is the
   /// index's to say.
-  public static func skip(_ document: RFCDocument, metadata: RFCMetadata?) -> Skip? {
+  public static func skip(_ document: RFCDocument, metadata: RFCMetadata?)
+    -> Manifest.SkipReason?
+  {
     guard let metadata,
       PublishedOriginal(metadata.id, formats: metadata.formats, text: document) != nil
     else { return nil }

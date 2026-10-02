@@ -88,11 +88,21 @@ public enum PackVerification {
 public struct InstalledPack: Sendable {
   public let directory: URL
   public let manifest: Manifest
+  /// The RFCs whose text only says where their PDF or PostScript original is, which
+  /// the pack has no XML of (#316). The reader shows their original without loading
+  /// anything.
+  public let pointers: Set<DocumentID>
   private let listed: Set<String>
 
   public init(directory: URL, manifest: Manifest) {
     self.directory = directory
     self.manifest = manifest
+    pointers = Set(
+      manifest.skipped.compactMap { skip in
+        switch skip.reason {
+        case .publishedOnlyAsPDF: DocumentID(fileStem: skip.document)
+        }
+      })
     listed = Set(manifest.files.map(\.path))
   }
 
