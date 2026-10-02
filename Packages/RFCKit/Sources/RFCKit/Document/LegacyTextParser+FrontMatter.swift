@@ -190,12 +190,12 @@ extension LegacyTextParser {
   /// The acronyms a title set in capitals keeps in capitals: a fixed list, not a
   /// length rule, because the words to keep are names, and `TIP` and `TOP` are the
   /// same length (#219).
-  static let titleAcronyms: Set<String> = [
+  private static let titleAcronyms: Set<String> = [
     "ARPA", "ARPANET", "BBN", "FTP", "HTTP", "IANA", "IMP", "IP", "MIT", "NCP", "NIC",
     "NICNAME", "TCP", "TENEX", "TIP", "TIPUG", "UCLA", "WHOIS",
   ]
 
-  /// The words a title sets lower case but at its start or after a dash.
+  /// The words a title sets lower case but at the start of it or of a part.
   private static let titleSmallWords: Set<String> = [
     "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "nor", "of",
     "on", "or", "over", "the", "to", "via", "with",
@@ -206,7 +206,7 @@ extension LegacyTextParser {
   /// `titleSmallWords` past the start, a number's suffix (`21st`), and initials
   /// (`M.I.T`). Each side of a slash or hyphen is a word, and a spaced dash, single
   /// or double, or a colon starts the title again.
-  static func titleCased(_ title: String) -> String {
+  private static func titleCased(_ title: String) -> String {
     var startsPart = true
     return title.split(separator: " ", omittingEmptySubsequences: false).map { word in
       if word == "-" || word == "--" {
