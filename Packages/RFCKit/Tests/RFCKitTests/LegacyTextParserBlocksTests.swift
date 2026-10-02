@@ -581,4 +581,45 @@ struct LegacyTextParserBlocksTests {
     #expect(blocks.count == 1)
     #expect(try #require(blocks.first?.definitionItems).count == 5)
   }
+
+  /// A caption below a drawing, a blank line apart, draws nothing and stays its
+  /// own: joined, it made the drawing mostly words, and the drawing was read.
+  @Test func `a caption is not joined to the drawing above it`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
+
+  /// A packet diagram is recognized from the bit ruler on its first line, so a
+  /// title above it, a blank line apart, is not joined to it.
+  @Test func `a packet diagram is not joined to the title above it`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["        Probe Layout ----"]),
+        LegacyTextParser.RawBlock(lines: [
+          "     0                   1",
+          "     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5",
+          "    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+          "    |     Kind      |    Width      |",
+          "    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+        ]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+    let diagram = try #require(blocks.last?.preformatted)
+    #expect(PacketDiagram.recognize(diagram.text) != nil)
+  }
+
+  /// RFC 796 indents its subsections deeper than its body, so their titles,
+  /// underlined with dashes, and their prose are set as artwork, between the
+  /// drawings. Joined, each subsection was one block, its prose inside (#437).
+  @Test func `prose set as artwork is not joined to the drawings beside it`() throws {
+    let document = try Fixtures.document("rfc796.txt")
+    let artwork = document.artworkText
+    #expect(!artwork.contains { $0.contains("SATNET") && $0.contains("WBCNET") })
+  }
 }

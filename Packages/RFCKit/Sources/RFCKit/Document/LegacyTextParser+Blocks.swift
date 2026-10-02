@@ -252,19 +252,27 @@ extension LegacyTextParser {
         // RFC 1927 starts each of its lists at `1)`, a blank line apart.
         // And artwork into the artwork just above: a drawing with blank lines in
         // it, such as a message ladder, arrives as a block per stretch between
-        // them (#437). Kept as one, with its blank lines and its stretches where
-        // they stand against each other. Not across a page break: what starts the
+        // them (#437). Kept as one, a blank line between its stretches (how many
+        // there were, a raw block does not say) and its stretches where they
+        // stand against each other. Not across a page break: what starts the
         // next page is as often an underlined heading set as artwork (RFC 796).
         // Nor one-line definitions, which a hanging list below may yet take back
-        // as the blocks they made (RFC 3407's attribute registrations).
-        if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
-          let above = artworkAbove, case .preformatted(let previous)? = result.last,
-          previous.kind == .artwork, hanging == nil, joinsArtwork(block.lines)
+        // as the blocks they made (RFC 3407's attribute registrations). And only
+        // a stretch that draws joins one above it: a caption below a drawing is
+        // its own, as is a title above one, which it may follow.
+        let joinable =
+          if case .preformatted(let artwork) = parsed, artwork.kind == .artwork, hanging == nil {
+            joinsArtwork(block.lines)
+          } else {
+            false
+          }
+        if joinable, let above = artworkAbove, draws(block.lines),
+          case .preformatted(let previous)? = result.last, previous.kind == .artwork
         {
           let lines = above + [""] + block.lines
           result[result.count - 1] = .preformatted(
             Preformatted(kind: .artwork, text: verbatimText(lines)))
-          openArtwork = block.followedByPageBreak ? nil : lines
+          openArtwork = joinable && !block.followedByPageBreak ? lines : nil
         } else if case .list(let list) = parsed, case .list(var previous)? = result.last,
           list.continues(previous)
         {
@@ -283,11 +291,7 @@ extension LegacyTextParser {
           result[result.count - 1] = .definitionList(previous)
         } else {
           result.append(parsed)
-          if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
-            !block.followedByPageBreak, hanging == nil, joinsArtwork(block.lines)
-          {
-            openArtwork = block.lines
-          }
+          openArtwork = joinable && !block.followedByPageBreak ? block.lines : nil
         }
       }
       openListIndent = if case .list? = result.last { marker?.indent } else { nil }
@@ -818,13 +822,24 @@ extension LegacyTextParser {
   /// line apart (#437). Not when it is prose the prose test refused, as a document
   /// indented deeper than its body sets whole paragraphs (RFC 796), nor a title
   /// underlined with dashes: joined, each took its section's drawings with it into
-  /// one block.
+  /// one block. Nor a packet diagram, which is recognized from its bit ruler on
+  /// its first line: a title joined above it hid the ruler, and the diagram was
+  /// no longer drawn.
   static func joinsArtwork(_ lines: [String]) -> Bool {
     let underlined =
       lines.count == 2
       && lines[1].trimmingCharacters(in: .whitespaces).allSatisfy { $0 == "-" || $0 == "=" }
     return !underlined && !readsLikeSentences(lines, minimumWords: 4)
+      && PacketDiagram.recognize(verbatimText(lines)) == nil
   }
+
+  /// Whether any line has a character a drawing is drawn with: what a stretch of
+  /// a drawing has and its caption, `Figure 3: …`, does not.
+  static func draws(_ lines: [String]) -> Bool {
+    lines.contains { line in line.contains { drawingCharacters.contains($0) } }
+  }
+
+  private static let drawingCharacters = Set("+-|/\\_=<>^*~")
 
   /// Lines as a verbatim block holds them: less the indentation every line that is
   /// not blank shares.
