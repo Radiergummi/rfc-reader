@@ -64,6 +64,14 @@ public enum PinRecipe {
   /// it, and the viewport in coordinates that the layout from the start later
   /// replaces: on an iPhone, that moved the text under the reader 73,000 characters
   /// of RFC 5661. Laying out to the middle of that document costs about 0.35 s there.
+  ///
+  /// The viewport goes to the document's start first. UIKit moves its viewport from
+  /// the fragment it last put at the top, by the distance scrolled from the y it put
+  /// it at, and the layout from the start moves that fragment wherever what was above
+  /// it was estimated. Scrolled from there, an iPhone showed text up to 80,000
+  /// characters from the line that the pin, the caret and the reader's place all put
+  /// at the top (#625). At the start both agree: the first fragment is at 0. The Mac
+  /// landed every jump without it.
   @MainActor
   @discardableResult
   public static func settle(
@@ -74,6 +82,8 @@ public enum PinRecipe {
       let above = NSTextRange(
         location: layout.documentRange.location, end: paragraph.rangeInElement.endLocation)
     else { return 0 }
+    surface.scroll(toContainerY: 0)
+    surface.layOutViewport()
     layout.ensureLayout(for: above)
     return pin(anchor, in: layout, on: surface)
   }

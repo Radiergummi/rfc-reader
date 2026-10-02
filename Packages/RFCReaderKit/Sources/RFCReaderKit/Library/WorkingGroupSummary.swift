@@ -17,7 +17,9 @@ public struct WorkingGroupSummary: Sendable, Equatable {
   public let facts: [String]
   /// The current chairs, by name. None for a group that has concluded.
   public let chairs: [String]
-  /// "93 RFCs, 1997–2026"; nil when the index has none.
+  /// "93 RFCs, 1997–2026", naming how many are obsolete when some are: "93 RFCs, 12
+  /// obsolete, 1997–2026", "3 RFCs, all obsolete, 2001–2004", "1 RFC, obsolete, 2003".
+  /// Nil when the index has none.
   public let publications: String?
   public let links: [Link]
 
@@ -56,7 +58,17 @@ public struct WorkingGroupSummary: Sendable, Equatable {
     let years = rfcs.map(\.date.year)
     guard let first = years.min(), let latest = years.max() else { return nil }
     let count = rfcs.count == 1 ? "1 RFC" : "\(rfcs.count) RFCs"
-    return first == latest ? "\(count), \(first)" : "\(count), \(first)–\(latest)"
+    // Obsolete as the list's Show Obsolete means it, counted whatever that hides.
+    let obsolete = rfcs.count(where: \.isObsolete)
+    let span = first == latest ? "\(first)" : "\(first)–\(latest)"
+    if obsolete == 0 {
+      return "\(count), \(span)"
+    }
+    if obsolete < rfcs.count {
+      return "\(count), \(obsolete) obsolete, \(span)"
+    }
+    let all = rfcs.count == 1 ? "obsolete" : "all obsolete"
+    return "\(count), \(all), \(span)"
   }
 
   /// Datatracker's name for a group type, for the slugs the index's groups have; any
