@@ -89,6 +89,8 @@ struct DocumentMenusTests {
 struct DocumentMenuEffectsTests {
   private let metadata = Fixtures.metadata(9110, title: "HTTP Semantics", year: 2022)
   private let errata = URL(string: "https://www.rfc-editor.org/errata/rfc9110")!
+  private let precedingDraft = URL(
+    string: "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics-19")!
 
   private func effect(_ action: DocumentMenus.Action) -> DocumentMenus.Effect? {
     action.effect(for: .rfc(9110), metadata: metadata, section: "4.2")
@@ -117,7 +119,14 @@ struct DocumentMenuEffectsTests {
     #expect(effect(.openInfoPage) == .open(RFCEditorEndpoints.infoPage(.rfc(9110))))
     #expect(effect(.openDatatracker) == .open(RFCEditorEndpoints.datatracker(.rfc(9110))))
     #expect(effect(.openErrata(errata)) == .open(errata))
-    #expect(effect(.openPrecedingDraft(errata)) == .open(errata))
+    #expect(effect(.openPrecedingDraft(precedingDraft)) == .open(precedingDraft))
+  }
+
+  @Test(arguments: [
+    DocumentMenus.Action.copySectionLink, .toggleOriginalText, .openInfoPage, .openDatatracker,
+  ])
+  func `only a citation needs the document's metadata`(action: DocumentMenus.Action) {
+    #expect(action.effect(for: .rfc(9110), metadata: nil, section: nil) != nil)
   }
 
   @Test func `original text toggles`() {

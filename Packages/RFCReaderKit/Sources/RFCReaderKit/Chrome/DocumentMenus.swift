@@ -6,7 +6,8 @@ import RFCKit
 /// Both platforms show them — iOS as SwiftUI menus in the reader's toolbar, macOS
 /// as `NSMenu`s on the window's toolbar items — and each wrote its own copy, which
 /// had to agree item for item. This is the one list; each renderer walks it, and
-/// what an action does is `Action.effect`, which each platform carries out (#600).
+/// what an item of Cite or More does is `Action.effect`, which each platform
+/// carries out (#600).
 public enum DocumentMenus {
   /// What an item of Cite or More does.
   public enum Action: Hashable, Sendable {

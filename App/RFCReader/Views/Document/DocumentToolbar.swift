@@ -129,7 +129,7 @@ import SwiftUI
     }
 
     /// What an item of Cite or More does. Add to Collection's are
-    /// `AddToCollectionItems`' own.
+    /// `CollectionActionPerformer`'s.
     private func perform(_ action: DocumentMenus.Action) {
       DocumentActionPerformer(
         id: id, metadata: metadata, reader: reader, open: { openURL($0) }

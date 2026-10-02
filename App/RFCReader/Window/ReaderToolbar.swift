@@ -364,7 +364,7 @@
     }
 
     /// Each item carries its action, which `performMenuAction` carries out.
-    private func add<Action>(_ sections: DocumentMenus.Sections<Action>, to menu: NSMenu) {
+    private func add<Performed>(_ sections: DocumentMenus.Sections<Performed>, to menu: NSMenu) {
       for (index, items) in sections.enumerated() {
         if index > 0 { menu.addItem(.separator()) }
         for entry in items {
