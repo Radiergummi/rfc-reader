@@ -76,11 +76,14 @@ public struct PublishedOriginalPage: Hashable, Sendable {
 
   /// Whether the reader fetches the RFC's text: not a scan's, which the index says
   /// has none, nor a pointer's the installed pack lists, which it has no XML of
-  /// (#316). An index without the document yet (`nil`) leaves it to the fetch.
+  /// (#316). An index without the document yet (`nil`) leaves it to the fetch, as
+  /// does one listing no original for a pointer: there would be no page to show.
   public static func loadsText(
     _ id: DocumentID, formats: [FileFormat]?, pointerInPack: Bool = false
   ) -> Bool {
-    !pointerInPack && formats.flatMap { PublishedOriginal(id, formats: $0) } == nil
+    guard let formats else { return true }
+    return PublishedOriginal(id, formats: formats) == nil
+      && (!pointerInPack || PublishedOriginal(pointer: id, formats: formats) == nil)
   }
 
   /// The original a text that only points to it stands for: known from the

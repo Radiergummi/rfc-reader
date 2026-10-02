@@ -124,6 +124,14 @@ struct PublishedOriginalActionsTests {
         .rfc(1119), formats: [.text, .postScript, .pdf], pointerInPack: true))
   }
 
+  /// Only where the page can show the original instead: an index without the
+  /// document yet, or one listing no original, leaves it to the fetch, rather than to
+  /// a reader with neither a load nor a page.
+  @Test func `a pointer the pack lists loads when there is no original to show`() {
+    #expect(PublishedOriginalPage.loadsText(.rfc(1119), formats: nil, pointerInPack: true))
+    #expect(PublishedOriginalPage.loadsText(.rfc(1119), formats: [.text], pointerInPack: true))
+  }
+
   @Test func `a document read as its text is printed and exported`() {
     #expect(PublishedOriginalPage.offersPrintAndExport(hasDocument: true, kind: nil))
   }

@@ -243,6 +243,8 @@ struct DocumentView: View {
         deriveInfo()
         markPublishedOriginal()
       }
+      // A pack installed while the document is open can make it a pointer (#316).
+      .onChange(of: library.pointersInPack) { markPublishedOriginal() }
       .onChange(of: library.revisions) { deriveInfo() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is

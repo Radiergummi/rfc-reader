@@ -110,8 +110,9 @@ final class DocumentSession {
     }
   }
 
-  /// Starts no fetch, for a scan or a pointer the pack lists, and counts as started: appearing again, which a
-  /// collapsed split view does spuriously, does not try the load after all.
+  /// Starts no fetch, for a scan or a pointer the pack lists, and counts as started:
+  /// appearing again, which a collapsed split view does spuriously, does not try the
+  /// load after all.
   func skipLoad() {
     load?.cancel()
     load = nil
