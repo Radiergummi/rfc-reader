@@ -48,18 +48,22 @@ public enum Citations {
     let own = citing ?? document.header.id
     var kindByEntry: [String: ReferenceList.Kind] = [:]
     var kindByDocument: [DocumentID: ReferenceList.Kind] = [:]
-    var listed: [(id: DocumentID, kind: ReferenceList.Kind)] = []
+    var listed: [(entry: String, citation: Citation)] = []
     for case .references(let list) in document.blocks {
       for entry in list.entries {
         kindByEntry[entry.anchor] = list.kind
         guard let id = entry.documentID else { continue }
         if kindByDocument[id] == nil { kindByDocument[id] = list.kind }
-        listed.append((id, list.kind))
+        listed.append(
+          (entry.anchor, Citation(cited: id, place: .bibliography, count: 1, kind: list.kind)))
       }
     }
 
     var citations: [Citation] = []
     var cited: Set<DocumentID> = []
+    // A `<referencegroup>` cited through a member is cited by the member's ID, under
+    // the group's entry, so the entries are what say a listed group was cited.
+    var citedEntries: Set<String> = []
     for (anchor, inlines) in document.drawnProseBySection {
       let place = anchor.map(Citation.Place.section) ?? .abstract
       var found: [Citation] = []
@@ -67,6 +71,7 @@ public enum Citations {
         guard case .crossReference(let xref) = inline,
           case .document(let id, _, let entry) = xref.target, id != own
         else { continue }
+        if let entry { citedEntries.insert(entry) }
         if let index = found.firstIndex(where: { $0.cited == id }) {
           found[index].count += 1
         } else {
@@ -79,9 +84,12 @@ public enum Citations {
     }
 
     var seen: Set<DocumentID> = []
-    for (id, kind) in listed where id != own && !cited.contains(id) {
-      guard seen.insert(id).inserted else { continue }
-      citations.append(Citation(cited: id, place: .bibliography, count: 1, kind: kind))
+    for (entry, citation) in listed
+    where citation.cited != own && !cited.contains(citation.cited)
+      && !citedEntries.contains(entry)
+    {
+      guard seen.insert(citation.cited).inserted else { continue }
+      citations.append(citation)
     }
     return citations
   }

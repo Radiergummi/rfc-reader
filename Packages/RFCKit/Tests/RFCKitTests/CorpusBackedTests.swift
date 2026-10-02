@@ -577,6 +577,21 @@ struct CorpusBackedDefinedTermsTests {
   }
 }
 
+@Suite("Corpus-backed: citations", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedCitationsTests {
+  /// RFC 9393 lists BCP 26 and BCP 178 as groups and cites each only through its
+  /// member, RFC 8126 and RFC 6648: the prose cites the group's entry, so the
+  /// bibliography adds no row for it (#174).
+  @Test func `a group cited through its member is not cited from the bibliography`() throws {
+    let citations = Citations.of(try RFCXMLParser.parse(try CorpusText.xml("rfc9393")))
+    #expect(citations.contains { $0.cited == .rfc(8126) && $0.place != .bibliography })
+    #expect(citations.contains { $0.cited == .rfc(6648) && $0.place != .bibliography })
+    let bibliography = citations.filter { $0.place == .bibliography }.map(\.cited)
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 26)))
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 178)))
+  }
+}
+
 /// What a converted citation points at: its entry's document, read from outside the
 /// entry's title, and the entry itself, kept through the XML (#424).
 @Suite("Corpus-backed: bibliography entries", .enabled(if: CorpusText.isAvailable))
