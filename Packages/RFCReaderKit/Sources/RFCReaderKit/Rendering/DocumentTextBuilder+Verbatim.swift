@@ -75,6 +75,9 @@ extension DocumentTextBuilder {
     if let decorated {
       decorate(decorated, from: bodyStart)
     }
+    if style.emitsLinks, AccessibleReading.isDiagram(box) {
+      setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
+    }
     if shown != .plain, style.emitsLinks {
       output.addAttribute(
         .rfcFigureItem, value: FigureMenu.itemTag(of: box),
@@ -94,6 +97,20 @@ extension DocumentTextBuilder {
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+  }
+
+  /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
+  /// the text, since `UITextView` has no per-range accessor to override (#308).
+  /// AppKit reads no such key, and `ReaderTextView` says a diagram there itself.
+  /// Only in a build for the reader, the one with live links: a printed page is not
+  /// read by VoiceOver.
+  func setDiagramSpeech(_ body: NSRange) {
+    #if canImport(UIKit)
+      for line in AccessibleReading.diagramSpeech(ofDiagram: body, in: output.mutableString) {
+        output.addAttribute(
+          .accessibilitySpeechIPANotation, value: line.pronunciation, range: line.range)
+      }
+    #endif
   }
 
   /// Sets a decorated block's strokes on all of it, its ruler in the secondary
