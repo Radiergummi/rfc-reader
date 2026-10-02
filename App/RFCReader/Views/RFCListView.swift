@@ -13,7 +13,16 @@ struct RFCListView: View {
   @State private var addingTo: PickerTarget?
 
   private var rfcs: [RFCMetadata] {
-    library.list(for: navigation)
+    navigation.listed?.rows ?? []
+  }
+
+  /// What the rows on show were made for. The tab's own filter, options and query
+  /// change first and the rows follow (#597), so whatever is shaped by the rows —
+  /// sections, moving, the card, the empty state — reads these, and the title and
+  /// the controls read the tab's.
+  private var shown: LibraryList {
+    navigation.listed?.list
+      ?? LibraryList(filter: navigation.filter, query: "", options: navigation.listOptions)
   }
 
   @Environment(\.undoManager) private var undoManager
@@ -23,14 +32,13 @@ struct RFCListView: View {
 
   /// The collection the list shows, if it shows one.
   private var collection: UUID? {
-    if case .collection(let identifier) = navigation.filter { identifier } else { nil }
+    if case .collection(let identifier) = shown.filter { identifier } else { nil }
   }
 
   /// The working group whose card heads the list (#363): while its RFCs are listed
   /// unsearched.
   private var workingGroupCardAcronym: String? {
-    guard case .workingGroup(let acronym) = navigation.filter,
-      navigation.appliedQuery.isUnsearchedQuery
+    guard case .workingGroup(let acronym) = shown.filter, shown.query.isUnsearchedQuery
     else { return nil }
     return acronym
   }
@@ -48,6 +56,7 @@ struct RFCListView: View {
       try CollectionStore.move(
         drop.moved, in: collection, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
+    navigation.listNow()
   }
 
   /// Out of the collection, undoably, back to the same place.
@@ -56,6 +65,7 @@ struct RFCListView: View {
     library.editCollections {
       try CollectionStore.remove(document, from: collection, undoManager: undoManager, in: $0)
     }
+    navigation.listNow()
   }
 
   /// VoiceOver's Move Up and Move Down, one row at a time.
@@ -69,9 +79,7 @@ struct RFCListView: View {
     // itself, which is a linear search per row over a list that can be 9,842 rows
     // long.
     let bookmarked = library.bookmarkedNumbers
-    // Once, and shared by everything below: `rfcs` was read twice per body pass —
-    // here and in the overlay — which is half of why the memoized list was worth
-    // memoizing.
+    // Once, and shared by everything below and the overlay.
     let rows = rfcs
     let trigger = ListWindow.triggerRow(limit: limit, total: rows.count).map { rows[$0].id }
     // Selecting a row is a navigation: the setter goes through the history. Not
@@ -82,7 +90,7 @@ struct RFCListView: View {
     let row = { (rfc: RFCMetadata, showsYear: Bool) in
       RFCRow(
         rfc: rfc, isBookmarked: bookmarked.contains(rfc.number), showsYear: showsYear,
-        filter: navigation.filter
+        filter: shown.filter
       )
       .tag(rfc.id)
       // A combined element with no trait has the role AXUnknown on macOS, which
@@ -109,8 +117,7 @@ struct RFCListView: View {
     }
     // A collection in its own order can be rearranged and emptied (#349). Never
     // sectioned by year, so this is the branch a collection uses.
-    let allowsMoving = navigation.listOptions.allowsMoving(
-      in: navigation.filter, query: navigation.appliedQuery)
+    let allowsMoving = shown.options.allowsMoving(in: shown.filter, query: shown.query)
     let visible = Array(window)
     let unsectioned = ForEach(window) { rfc in
       row(rfc, true)
@@ -140,7 +147,7 @@ struct RFCListView: View {
         // By year where the list is in order of publication, as Notes sections
         // its lists by date (#347). Over the window only: a later page's row may
         // join a year already on screen, which is above the reader by then.
-        if YearSections.apply(to: navigation.filter, query: navigation.appliedQuery) {
+        if YearSections.apply(to: shown.filter, query: shown.query) {
           ForEach(YearSections.sections(of: window)) { section in
             Section {
               ForEach(section.rfcs) { row($0, false) }
@@ -158,7 +165,7 @@ struct RFCListView: View {
       // partial page it would read as the end of a list that goes on — and not
       // under an empty search, where the overlay already says what there is to
       // say.
-      if limit >= rows.count, !(rows.isEmpty && library.indexState.isReady) {
+      if limit >= rows.count, !(rows.isEmpty && navigation.listed != nil) {
         IndexStatusView()
           .frame(maxWidth: .infinity)
           .padding(.vertical, 8)
@@ -177,10 +184,12 @@ struct RFCListView: View {
       .headerProminence(.increased)
     #endif
     .overlay {
-      if rows.isEmpty, library.indexState.isReady {
+      // Once the list is made: before, "No Documents" was a claim about a list
+      // that had not arrived.
+      if rows.isEmpty, navigation.listed != nil {
         // "No Results" only for a search: an empty Bookmarks list was told to
         // check its spelling.
-        let isUnsearched = navigation.appliedQuery.isUnsearchedQuery
+        let isUnsearched = shown.query.isUnsearchedQuery
         if isUnsearched, let collection {
           ContentUnavailableView {
             Label("No Documents", systemImage: "folder")
@@ -192,10 +201,10 @@ struct RFCListView: View {
         } else if isUnsearched, workingGroupCardAcronym == nil {
           // Not over a working group's card, which says what the group has.
           ContentUnavailableView(
-            "No \(library.title(for: navigation.filter))",
-            systemImage: navigation.filter.systemImage)
+            "No \(library.title(for: shown.filter))",
+            systemImage: shown.filter.systemImage)
         } else {
-          ContentUnavailableView.search(text: navigation.appliedQuery)
+          ContentUnavailableView.search(text: shown.query)
         }
       }
     }
@@ -231,15 +240,24 @@ struct RFCListView: View {
         }
       }
     #endif
-    .onChange(of: navigation.filter, initial: true) {
-      limit = ListWindow.initialLimit(covering: selectedRow())
-      #if !os(macOS)
+    #if !os(macOS)
+      .onChange(of: navigation.filter) {
         // Edit belongs to a collection's list, and its button goes with it: left
         // on, a list beside the sidebar stayed in Edit with no way out.
         editMode?.wrappedValue = .inactive
-      #endif
+      }
+    #endif
+    // On the rows' own filter, options and query rather than the tab's: those
+    // change first, and the rows the window covers arrive after them (#597).
+    .onChange(of: shown.filter, initial: true) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
     }
-    .onChange(of: navigation.listOptions) {
+    // A new tab's first rows arrive after it appears, for the filter it already had
+    // and maybe under a document it was opened on, which the window has to reach.
+    .onChange(of: navigation.listed == nil) {
+      limit = ListWindow.initialLimit(covering: selectedRow())
+    }
+    .onChange(of: shown.options) {
       limit = ListWindow.initialLimit(covering: selectedRow())
     }
     .onChange(of: navigation.appliedQuery) {
@@ -267,7 +285,8 @@ struct RFCListView: View {
       .toolbar {
         LibraryBottomBar(navigation: navigation)
         ToolbarItem(placement: .primaryAction) { optionsMenu }
-        if let collection {
+        // The tab's collection rather than the rows': a control follows the tab.
+        if case .collection(let collection) = navigation.filter {
           ToolbarItem(placement: .primaryAction) {
             Button {
               addingTo = PickerTarget(id: collection)

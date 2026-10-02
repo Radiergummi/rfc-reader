@@ -144,7 +144,9 @@
 
     @objc var scriptListedRFCs: [ScriptableRFC] {
       guard let navigation = controller?.navigation else { return [] }
-      return LibraryModel.shared.list(for: navigation).map { ScriptableRFC($0.id) }
+      // Not the rows on show: the script may have changed the collection a moment
+      // ago, and they follow a turn later.
+      return navigation.rowsNow().map { ScriptableRFC($0.id) }
     }
 
     @objc var scriptInspectorVisible: Bool {

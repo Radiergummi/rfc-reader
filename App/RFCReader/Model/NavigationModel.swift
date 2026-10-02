@@ -56,11 +56,22 @@ final class NavigationModel: Identifiable {
   var searchText = "" {
     didSet { followSearchText(pausing: true) }
   }
-  /// The query the list, its count and the sidebar's results are computed for: the
-  /// search text, trimmed, once typing pauses and its hits are ready (#124). Until
-  /// then the list keeps the results it has, as Mail and Finder do.
-  private(set) var appliedQuery = ""
+  /// The search text, trimmed, once typing pauses (#124): what the list is asked to
+  /// search for. Read only to make the list; views read `appliedQuery`.
+  private var requestedQuery = ""
   @ObservationIgnored private var pendingSearch: Task<Void, Never>?
+
+  /// What the list shows, made off the main actor whenever one of its inputs changes
+  /// (#597): this tab's filter, query, options and the inputs it took on entering the
+  /// filter, and the library's index, bookmarks and collections. Views only read it.
+  /// Until the next arrives the list keeps what it has, as Mail and Finder do; nil
+  /// until the first, so an empty list is never claimed before it was made.
+  private(set) var listed: ListedRows?
+  @ObservationIgnored private var listing: Task<Void, Never>?
+
+  /// The query the list, its count and the sidebar's results are for: the one whose
+  /// rows are on show.
+  var appliedQuery: String { listed?.list.query ?? "" }
   /// The iOS list's view options, for this tab (#348).
   var listOptions = ListOptions()
   var isShowingGoToSheet = false
@@ -79,6 +90,12 @@ final class NavigationModel: Identifiable {
 
   init(library: LibraryModel) {
     self.library = library
+    followListInputs()
+  }
+
+  isolated deinit {
+    listing?.cancel()
+    pendingSearch?.cancel()
   }
 
   /// The Recently Read order, taken once when the filter is entered.
@@ -217,8 +234,8 @@ final class NavigationModel: Identifiable {
   // MARK: - Search
 
   /// Applies the search text without waiting for a pause in typing: Return in the
-  /// field, or a search asked for with a click. The list still follows once the
-  /// query's hits are ready.
+  /// field, or a search asked for with a click. The list still follows once its
+  /// rows are made.
   func applySearchWithoutPause() {
     followSearchText(pausing: false)
   }
@@ -229,7 +246,27 @@ final class NavigationModel: Identifiable {
     searchText = text
     pendingSearch?.cancel()
     pendingSearch = nil
-    appliedQuery = AppliedSearch.query(for: text)
+    requestedQuery = AppliedSearch.query(for: text)
+    listNow()
+  }
+
+  /// Lists what the inputs ask for before returning, on the main actor: for a
+  /// script, and for a drag or a delete in a collection's list, whose rows `List`
+  /// must have before the gesture ends or it puts the row back and moves it again.
+  func listNow() {
+    guard let request = request(), !shows(request),
+      let made = library.listedNow(request.list, hits: knownHits(for: request))
+    else { return }
+    listed = made
+  }
+
+  /// The rows the inputs ask for, for a script, which reads the list straight after
+  /// changing it: the rows on show when they are those, and otherwise made on the
+  /// spot, leaving the list on show to its own listing.
+  func rowsNow() -> [RFCMetadata] {
+    guard let request = request() else { return [] }
+    if shows(request), let listed { return listed.rows }
+    return library.listedNow(request.list, hits: knownHits(for: request))?.rows ?? []
   }
 
   /// Applies the search text as `AppliedSearch` says to: after a pause in typing,
@@ -237,18 +274,62 @@ final class NavigationModel: Identifiable {
   private func followSearchText(pausing: Bool) {
     pendingSearch?.cancel()
     pendingSearch = nil
-    switch AppliedSearch.step(applying: searchText, over: appliedQuery, pausing: pausing) {
+    switch AppliedSearch.step(applying: searchText, over: requestedQuery, pausing: pausing) {
     case nil:
-      // Typed back to the query on show: nothing is left to apply.
+      // Typed back to the query asked for: nothing is left to apply.
       return
     case .apply(let query):
-      appliedQuery = query
+      requestedQuery = query
     case .search(let query, let delay):
-      pendingSearch = Task(name: "Apply search") { [library] in
+      pendingSearch = Task(name: "Apply search") { [weak self] in
         guard await Debounce.outlasted(delay) else { return }
-        await library.prepareSearch(query)
-        guard !Task.isCancelled else { return }
-        appliedQuery = query
+        self?.requestedQuery = query
+      }
+    }
+  }
+
+  // MARK: - The list
+
+  /// A list asked for, over the index it is to be made over.
+  private struct ListRequest: Equatable, Sendable {
+    let list: LibraryList
+    let indexVersion: Int
+  }
+
+  /// What the inputs ask for, read so that only what this filter lists from is
+  /// observed (`LibraryList.reading`). Nil while there is no index.
+  private func request() -> ListRequest? {
+    guard library.index != nil else { return nil }
+    return ListRequest(
+      list: LibraryList.reading(filter, query: requestedQuery, options: listOptions, from: self),
+      indexVersion: library.indexVersion)
+  }
+
+  /// Whether the list on show is what `request` asks for (`ListedRows.shows`).
+  private func shows(_ request: ListRequest) -> Bool {
+    listed?.shows(request.list, indexVersion: request.indexVersion) ?? false
+  }
+
+  /// The hits the list on show found, if `request` can list from them
+  /// (`ListedRows.hits(for:indexVersion:)`).
+  private func knownHits(for request: ListRequest) -> [RFCMetadata]? {
+    listed?.hits(for: request.list, indexVersion: request.indexVersion)
+  }
+
+  /// Lists again whenever an input of the list changes: `Observations` yields what
+  /// is asked for after each change, and the latest when a listing ends, so typing
+  /// or clicking through filters faster than a listing takes makes one per pause
+  /// rather than one per change.
+  private func followListInputs() {
+    let requests = Observations { [weak self] in self?.request() }
+    listing = Task(name: "List") { [weak self] in
+      for await request in requests {
+        guard let request, let self, !self.shows(request) else { continue }
+        let made = await self.library.listed(request.list, hits: self.knownHits(for: request))
+        // Overtaken by a newer request, which comes next, or by `listNow()`.
+        guard let made, !Task.isCancelled, self.request() == request, !self.shows(request)
+        else { continue }
+        self.listed = made
       }
     }
   }
@@ -261,7 +342,7 @@ final class NavigationModel: Identifiable {
   /// the whole library with that one row highlighted somewhere inside it.
   ///
   /// It also skips the BCP/STD resolution `open` does, because every row the list
-  /// can emit is already an RFC: `LibraryModel.list` draws from `index.rfcs` and,
+  /// can emit is already an RFC: `LibraryList.rows` draws from `index.rfcs` and,
   /// for `.series`, from the members those entries resolve to. A list that could
   /// show a series row would have to come back through `open`.
   func select(_ id: DocumentID) {
@@ -328,5 +409,16 @@ final class NavigationModel: Identifiable {
   private func arrive(at place: HistoryEntry, animated: Bool = true) {
     scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
+  }
+}
+
+/// What this tab's list may list from: the inputs it took on entering the filter,
+/// and the library's bookmarks and collections as they stand.
+extension NavigationModel: ListSources {
+  var bookmarked: Set<Int> { library.bookmarkedNumbers }
+  var recentlyRead: [Int] { recentOrder }
+
+  func members(of collection: UUID) -> [Int] {
+    library.collections[collection]?.rfcNumbers ?? []
   }
 }
