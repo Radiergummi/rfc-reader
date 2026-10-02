@@ -2,15 +2,27 @@ name: Corpus-backed tests
 
 # The RFCKit and corpus-build suites that read whole legacy RFCs (`Corpus-backed:
 # ...`), which `make check` and CI skip because the documents are fetched, not
-# committed. Weekly and on demand: the parser changes rarely enough that a week is
-# the most a regression waits, and the dozen documents are fetched fresh each time.
+# committed. On every pull request that changes what they test or read, so a
+# heuristic change cannot merge without them (#243); weekly, for what changes on
+# the RFC Editor's side; and on demand. The documents are fetched fresh each time.
 on:
+  pull_request:
+    paths:
+      - Packages/RFCKit/**
+      - Tools/corpus-build/**
+      - Makefile
+      - .github/workflows/corpus-tests.yml
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A new push to a pull request supersedes the run before it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test-corpus:
