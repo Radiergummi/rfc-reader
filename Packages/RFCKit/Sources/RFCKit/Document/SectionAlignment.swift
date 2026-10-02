@@ -47,7 +47,7 @@ public struct AlignedSection: Sendable, Hashable, Codable {
 /// pair is new, or gone.
 public enum SectionAlignment {
   /// The least score a pair is kept with. It and the weights were set against the
-  /// hand-labelled predecessors of RFC 9110's sections (#388), for the most recall
+  /// hand-labeled predecessors of RFC 9110's sections (#388), for the most recall
   /// that keeps precision at 90% or more, since a wrong successor misleads where a
   /// missing one only leaves the document-level status: 31 of 33 pairs right, 31 of
   /// 35 found. Weighed equally, the parts reach 29 of 29 right, but only 29 found.

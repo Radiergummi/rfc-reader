@@ -29,12 +29,14 @@ struct SectionAlignmentTests {
   /// one's, and the order of the two documents is no clue either.
   @Test func `a renumbered section is aligned by its title`() {
     let old = Self.document(
-      1, [
+      1,
+      [
         Self.section("1", "Widget Requests", "A client asks for a widget by sending its name."),
         Self.section("2", "Gadget Responses", "A server answers with the gadget it holds."),
       ])
     let new = Self.document(
-      2, [
+      2,
+      [
         Self.section("1", "Overview", "This document describes gizmos and their uses."),
         Self.section("4", "Gadget Responses", "A server answers with the gadget it holds now."),
         Self.section("7", "Widget Requests", "A client asks for a widget by name."),
@@ -52,12 +54,14 @@ struct SectionAlignmentTests {
       + " delimited by its length. A recipient that cannot determine the length closes"
       + " the connection. Framing is independent of the media type."
     let old = Self.document(
-      1, [
+      1,
+      [
         Self.section("3", "Payload Semantics", framing),
         Self.section("4", "Request Methods", "A method names what the client wants done."),
       ])
     let new = Self.document(
-      2, [
+      2,
+      [
         Self.section("2", "Methods", "A method names what the client wants done to a resource."),
         Self.section("6", "Content", framing),
       ])
@@ -70,17 +74,21 @@ struct SectionAlignmentTests {
   /// either half finds where it came from.
   @Test func `a split section is aligned with each part`() {
     let old = Self.document(
-      1, [
+      1,
+      [
         Self.section(
           "5", "Validators",
           "A modification date validator compares timestamps. An entity tag validator compares opaque tags."
         )
       ])
     let new = Self.document(
-      2, [
+      2,
+      [
         Self.section(
-          "8.1", "Modification Date Validators", "A modification date validator compares timestamps."),
-        Self.section("8.2", "Entity Tag Validators", "An entity tag validator compares opaque tags."),
+          "8.1", "Modification Date Validators",
+          "A modification date validator compares timestamps."),
+        Self.section(
+          "8.2", "Entity Tag Validators", "An entity tag validator compares opaque tags."),
       ])
     let pairs = SectionAlignment.pairs(old: old, new: new)
     #expect(Self.numbers(pairs) == ["section-5 -> section-8.1", "section-5 -> section-8.2"])
@@ -92,9 +100,11 @@ struct SectionAlignmentTests {
     let old = Self.document(
       1, [Self.section("1", "Widget Requests", "A client asks for a widget by sending its name.")])
     let new = Self.document(
-      2, [
+      2,
+      [
         Self.section("1", "Widget Requests", "A client asks for a widget by sending its name."),
-        Self.section("2", "Telemetry Export", "Counters are exported over a separate channel daily."),
+        Self.section(
+          "2", "Telemetry Export", "Counters are exported over a separate channel daily."),
       ])
     let pairs = SectionAlignment.pairs(old: old, new: new)
     #expect(!pairs.contains { $0.newSection == "section-2" })
@@ -116,10 +126,10 @@ struct SectionAlignmentTests {
 /// 9110 that changed, and names only 9110's: the predecessor of each was looked up
 /// by hand in the old document, and only section numbers are written here (#388).
 /// A section the appendix names under a document that has no counterpart for it is
-/// labelled as having none, and so is any pair claimed for it a wrong one. A section
+/// labeled as having none, and so is any pair claimed for it a wrong one. A section
 /// that merges two old ones has both, such as 9110 §2.2, which is RFC 7230's
 /// "Requirements Notation" and its conformance section. The few whose counterpart is
-/// unclear are left out, rather than labelled either way: 4.1, 4.3.1 and 5.5, and
+/// unclear are left out, rather than labeled either way: 4.1, 4.3.1 and 5.5, and
 /// 5.6.6 under RFC 7231.
 ///
 /// The floors are what `SectionAlignment.threshold` was set to reach, measured
@@ -128,53 +138,30 @@ struct SectionAlignmentTests {
   "Corpus-backed: section alignment",
   .enabled(if: CorpusText.isAvailable && CorpusText.isXMLAvailable))
 struct CorpusBackedSectionAlignmentTests {
-  /// Old document, its section, and the 9110 section that replaces it.
-  private static let predecessors: [(old: Int, section: String, new: String)] = [
-    (7230, "1.1", "2.2"),
-    (7230, "2.5", "2.2"),
-    (7230, "2.7.1", "4.2.1"),
-    (7230, "2.7.2", "4.2.2"),
-    (7230, "3.2.6", "5.6.6"),
-    (7230, "3.2", "6.3"),
-    (7230, "4.1.2", "6.5.1"),
-    (7230, "5.1", "7.1"),
-    (7230, "5.5", "7.1"),
-    (7230, "5.4", "7.2"),
-    (7230, "5.2", "7.3.3"),
-    (7230, "5.7.1", "7.6.3"),
-    (7231, "3.3", "6.4"),
-    (7231, "4.2.2", "9.2.2"),
-    (7231, "4.3.1", "9.3.1"),
-    (7231, "4.3.2", "9.3.2"),
-    (7231, "4.3.4", "9.3.4"),
-    (7231, "4.3.5", "9.3.5"),
-    (7231, "4.3.7", "9.3.7"),
-    (7231, "4.3.8", "9.3.8"),
-    (7231, "5.1.1", "10.1.1"),
-    (7231, "5.3", "12.3"),
-    (7231, "5.3.2", "12.5.1"),
-    (7231, "5.3.3", "12.5.2"),
-    (7231, "7.1.4", "12.5.5"),
-    (7231, "6.4", "15.4"),
-    (7232, "2.2.2", "8.8.2.2"),
-    (7232, "3.1", "13.1.1"),
-    (7232, "3.4", "13.1.4"),
-    (7232, "5", "13.2"),
-    (7233, "2", "14.1"),
-    (7233, "2.2", "14.1"),
-    (7233, "3.1", "14.2"),
-    (7233, "2.3", "14.3"),
-    (7538, "3", "15.4.9"),
+  /// For each old document, its sections and the 9110 sections that replace them.
+  private static let predecessors: [Int: [(old: String, new: String)]] = [
+    7230: [
+      ("1.1", "2.2"), ("2.5", "2.2"), ("2.7.1", "4.2.1"), ("2.7.2", "4.2.2"), ("3.2.6", "5.6.6"),
+      ("3.2", "6.3"), ("4.1.2", "6.5.1"), ("5.1", "7.1"), ("5.5", "7.1"), ("5.4", "7.2"),
+      ("5.2", "7.3.3"), ("5.7.1", "7.6.3"),
+    ],
+    7231: [
+      ("3.3", "6.4"), ("4.2.2", "9.2.2"), ("4.3.1", "9.3.1"), ("4.3.2", "9.3.2"),
+      ("4.3.4", "9.3.4"), ("4.3.5", "9.3.5"), ("4.3.7", "9.3.7"), ("4.3.8", "9.3.8"),
+      ("5.1.1", "10.1.1"), ("5.3", "12.3"), ("5.3.2", "12.5.1"), ("5.3.3", "12.5.2"),
+      ("7.1.4", "12.5.5"), ("6.4", "15.4"),
+    ],
+    7232: [("2.2.2", "8.8.2.2"), ("3.1", "13.1.1"), ("3.4", "13.1.4"), ("5", "13.2")],
+    7233: [("2", "14.1"), ("2.2", "14.1"), ("3.1", "14.2"), ("2.3", "14.3")],
+    7538: [("3", "15.4.9")],
   ]
 
-  /// Old document, and a 9110 section that has no counterpart in it.
-  private static let newcomers: [(old: Int, new: String)] = [
-    (7230, "7.4"),
-    (7231, "6"),
-    (7231, "15.4.9"),
-    (7231, "15.5.20"),
-    (7231, "15.5.21"),
-    (7233, "14.5"),
+  /// For each old document, the 9110 sections the appendix names under it that have no
+  /// counterpart in it.
+  private static let newcomers: [Int: [String]] = [
+    7230: ["7.4"],
+    7231: ["6", "15.4.9", "15.5.20", "15.5.21"],
+    7233: ["14.5"],
   ]
 
   private static func old(_ number: Int) throws -> RFCDocument {
@@ -191,14 +178,12 @@ struct CorpusBackedSectionAlignmentTests {
     var found = 0
     var wrong: [String] = []
     var missed: [String] = []
-    for number in Set(Self.predecessors.map(\.old)) {
+    for (number, labeled) in Self.predecessors {
       let old = try Self.old(number)
       let oldNumbers = Dictionary(
         old.allSections.compactMap { section in section.number.map { (section.anchor, $0) } },
         uniquingKeysWith: { first, _ in first })
-      let labelled = Self.predecessors.filter { $0.old == number }
-      let labelledSections =
-        Set(labelled.map(\.new)).union(Self.newcomers.filter { $0.old == number }.map(\.new))
+      let labeledSections = Set(labeled.map(\.new)).union(Self.newcomers[number] ?? [])
       let pairs = SectionAlignment.pairs(old: old, new: new).compactMap {
         pair -> (old: String, new: String)? in
         guard let oldNumber = oldNumbers[pair.oldSection],
@@ -206,29 +191,30 @@ struct CorpusBackedSectionAlignmentTests {
         else { return nil }
         return (oldNumber, newNumber)
       }
-      for pair in pairs where labelledSections.contains(pair.new) {
+      for pair in pairs where labeledSections.contains(pair.new) {
         claimed += 1
-        if labelled.contains(where: { $0.section == pair.old && $0.new == pair.new }) {
+        if labeled.contains(where: { $0.old == pair.old && $0.new == pair.new }) {
           right += 1
         } else {
           wrong.append("\(number) §\(pair.old) -> 9110 §\(pair.new)")
         }
       }
-      for label in labelled {
-        if pairs.contains(where: { $0.old == label.section && $0.new == label.new }) {
+      for label in labeled {
+        if pairs.contains(where: { $0.old == label.old && $0.new == label.new }) {
           found += 1
         } else {
-          missed.append("\(number) §\(label.section) -> 9110 §\(label.new)")
+          missed.append("\(number) §\(label.old) -> 9110 §\(label.new)")
         }
       }
       // The pass over the whole corpus has this edge too: every document 9110
       // obsoletes is one its header names.
       #expect(new.header.obsoletes.contains(.rfc(number)))
     }
+    let labels = Self.predecessors.values.map(\.count).reduce(0, +)
     let precision = Double(right) / Double(max(claimed, 1))
-    let recall = Double(found) / Double(Self.predecessors.count)
+    let recall = Double(found) / Double(labels)
     let report =
-      "precision \(right)/\(claimed), recall \(found)/\(Self.predecessors.count); "
+      "precision \(right)/\(claimed), recall \(found)/\(labels); "
       + "wrong: \(wrong.sorted()); missed: \(missed.sorted())"
     print(report)
     #expect(precision >= 0.9, "\(report)")

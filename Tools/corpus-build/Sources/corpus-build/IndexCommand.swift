@@ -38,6 +38,9 @@ struct IndexCommand: ParsableCommand {
     var indexed = 0
     var citations = 0
     var failed: [String] = []
+    // The documents that obsolete others, for the second pass, which needs both of a
+    // pair at once: holding every parsed document for it would hold the corpus.
+    var obsoleting: [(id: DocumentID, file: URL)] = []
     for (index, file) in files.enumerated() {
       let stem = file.deletingPathExtension().lastPathComponent
       // A document is the one its file names: a converted header may lack its number,
@@ -59,9 +62,32 @@ struct IndexCommand: ParsableCommand {
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
+      if !document.header.obsoletes.isEmpty {
+        obsoleting.append((id, file))
+      }
       if (index + 1) % 2000 == 0 {
         Self.logger.info(
           "progress", metadata: ["completed": "\(index + 1)", "total": "\(files.count)"])
+      }
+    }
+
+    var successions = 0
+    for successor in obsoleting {
+      let new = try Self.document(successor.id, at: successor.file)
+      for oldID in new.header.obsoletes {
+        let file = URL(fileURLWithPath: input).appending(path: "\(oldID.fileStem).xml")
+        // An obsoleted number with no file is one the corpus does not hold, such as
+        // an RFC never issued; one that failed to parse is already reported above.
+        guard FileManager.default.fileExists(atPath: file.path),
+          let old = try? Self.document(oldID, at: file)
+        else {
+          Self.logger.info(
+            "obsoleted document not read", metadata: ["new": "\(successor.id)", "old": "\(oldID)"])
+          continue
+        }
+        let pairs = SectionAlignment.pairs(old: old, new: new)
+        try database.insert(pairs)
+        successions += pairs.count
       }
     }
     try database.setMeta("documents", to: String(indexed))
@@ -71,7 +97,8 @@ struct IndexCommand: ParsableCommand {
     Self.logger.info(
       "wrote index",
       metadata: [
-        "documents": "\(indexed)", "citations": "\(citations)", "bytes": "\(size)",
+        "documents": "\(indexed)", "citations": "\(citations)",
+        "successions": "\(successions)", "bytes": "\(size)",
         "duration": "\(clock.now - started)", "path": "\(out)",
       ])
     // An RFC left out is a gap in the graph nothing else would show, so the run fails
@@ -81,5 +108,13 @@ struct IndexCommand: ParsableCommand {
         "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
       throw ExitCode.failure
     }
+  }
+
+  /// The document at `file`, as the one its file names, for the same reason the
+  /// first pass takes that number: `SectionAlignment` writes it into each row.
+  private static func document(_ id: DocumentID, at file: URL) throws -> RFCDocument {
+    var document = try RFCXMLParser.parse(Data(contentsOf: file))
+    document.header.id = id
+    return document
   }
 }

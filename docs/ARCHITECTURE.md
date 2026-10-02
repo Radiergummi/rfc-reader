@@ -153,12 +153,13 @@ is that way, and what was measured or tried first.
 - [The reader lays out its viewport, and holds the reader's line](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)
 - [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
 - [On iOS, a diagram is said by a pronunciation in the text](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)
+- [A section is aligned with its successor by title and prose, not by order](decisions/2026-10-03-a-section-is-aligned-with-its-successor-by-title-and-prose-not-by-order.md)
 
 ## Planned engines
 
 - **Search.** As [the search decision](decisions/2026-09-24-full-text-search-ranks-by-measurement-and-was-measured-before-it-was-built.md) says, served from SQLite FTS5 (via GRDB), with snippets from `snippet()`. Metadata search moves into the same database.
 - **Highlighting.** A tokenizer per language (ABNF, JSON, HTTP messages, YANG, ASN.1, C-like) in RFCKit producing `[Token]` with kinds; the renderer maps kinds to colors. Heuristic language detection for legacy text (`rulename = ` lines → ABNF).
-- **Diff.** Section alignment by title similarity and position, LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
+- **Diff.** Section alignment from `SectionAlignment` (title and prose, ties broken by position; the `successions` table for an obsoletes edge), LCS over paragraphs within aligned sections, word-level diff (`CollectionDifference` or Myers) inside changed paragraphs. Output is a diff document rendered with the same block views plus insert/delete styling. Works for draft revisions and for obsoleted RFC → successor.
 - **Diagrams.** Box-art to Unicode box-drawing conversion per block; packet-diagram parser producing a bit-field model rendered natively.
 
 ## The TextKit 2 traps this reader already fell into
