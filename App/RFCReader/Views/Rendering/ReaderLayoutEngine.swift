@@ -174,8 +174,7 @@ final class ReaderLayoutEngine: PinSurface {
     completionInterval = signposter.beginInterval(
       "Lay out document", id: signposter.makeSignpostID(), "\(self.documentName, privacy: .public)")
     completion = Task { [weak self] in
-      // Ends with the text view, too: without one no slice is laid out and the
-      // planner never completes, and iOS dismantles its view without `stop()`.
+      // Ends with the text view, too: there is nothing left to lay out in.
       while let self, self.textView != nil, !self.planner.isComplete {
         await Task.yield()
         guard !Task.isCancelled else { return }
@@ -220,14 +219,16 @@ final class ReaderLayoutEngine: PinSurface {
     #endif
   }
 
-  /// Returns when the text view's window ends its live resize, or the completion is
-  /// canceled. Called only while one is under way, with no suspension since the
-  /// check, so the end cannot have been posted already.
+  /// Returns when the text view's live resize ends, or the completion is canceled.
+  /// The view's rather than the window's: dragging a split view's divider is a live
+  /// resize of the views beside it, and the window posts nothing at its end. Called
+  /// only while one is under way, with no suspension since the check, so the end
+  /// cannot have been posted already.
   private func liveResizeEnded() async {
     #if !canImport(UIKit)
-      guard let window = textView?.window else { return }
+      guard let textView else { return }
       let ends = NotificationCenter.default.notifications(
-        named: NSWindow.didEndLiveResizeNotification, object: window)
+        named: ReaderTextView.didEndLiveResizeNotification, object: textView)
       for await _ in ends { break }
     #endif
   }

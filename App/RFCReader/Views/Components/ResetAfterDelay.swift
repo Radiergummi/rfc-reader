@@ -14,9 +14,9 @@ extension View {
 }
 
 /// The wait is a task per value, so a new value starts it again and it ends with the
-/// view. A wait cut short still resets, as the sites it replaced did, but only the
-/// value it was waiting on: a newer one has a wait of its own, and resetting it from
-/// here would take it off screen the moment it was shown.
+/// view. A wait cut short still resets, as the flashes it first replaced did, but
+/// only the value it was waiting on: a newer one has a wait of its own, and
+/// resetting it from here would take it off screen the moment it was shown.
 private struct ResetAfterDelay<Value: Equatable>: ViewModifier {
   @Binding var value: Value
   let resting: Value
