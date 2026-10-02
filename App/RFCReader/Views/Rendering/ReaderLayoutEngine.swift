@@ -157,15 +157,16 @@ final class ReaderLayoutEngine: PinSurface {
   /// The signpost interval of the completion running now; see `Signposts`.
   private var completionInterval: OSSignpostIntervalState?
 
-  /// How long one turn of the main actor lays out before it lets the run loop draw
-  /// and take input: a slice is 3–5 ms, so a turn is one or two slices.
+  /// How long this engine's completion lays out before it yields to let the run loop
+  /// draw and take input: a slice is 3–5 ms and the budget is checked before each,
+  /// so a turn is one or two slices. Each text view's engine has a budget of its own.
   private static let turnBudget = Duration.milliseconds(4)
 
   /// Lays the document out from its start in the background, a turn's budget at a
   /// time, so the scroller's height is exact. It moves nothing on screen: what is
   /// above the place is laid out already, and the scroll view keeps the place where
   /// it is as the rest arrives. Paused through a live resize, whose every step
-  /// re-wraps it, until the window says the resize ended.
+  /// re-wraps it, until the text view says the resize ended.
   private func startCompletion() {
     stop()
     planner = SlicePlanner(length: built?.text.length ?? 0)
