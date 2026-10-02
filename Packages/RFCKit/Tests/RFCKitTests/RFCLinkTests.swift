@@ -195,20 +195,20 @@ struct RFCLinkTests {
 
   /// What a citation can say of a URL: the document, or one of its sections. A page
   /// about the document, or an anchor that names no section, is a link (#683).
-  @Test(
-    arguments: [
-      ("https://www.rfc-editor.org/rfc/rfc4321", "4321", nil),
-      ("http://www.rfc-editor.org/info/rfc4321", "4321", nil),
-      ("https://www.rfc-editor.org/rfc/rfc4321.html#section-4.2", "4321", "4.2"),
-      ("https://datatracker.ietf.org/doc/html/rfc4321", "4321", nil),
-    ] as [(String, String, String?)])
-  func `a URL to a document or its section can be cited`(
-    address: String, number: String, section: String?
-  ) throws {
+  @Test(arguments: [
+    ("https://www.rfc-editor.org/rfc/rfc4321", RFCLink(id: .rfc(4321))),
+    ("http://www.rfc-editor.org/info/rfc4321", RFCLink(id: .rfc(4321))),
+    (
+      "https://www.rfc-editor.org/rfc/rfc4321.html#section-4.2",
+      RFCLink(id: .rfc(4321), section: "4.2")
+    ),
+    ("https://datatracker.ietf.org/doc/html/rfc4321", RFCLink(id: .rfc(4321))),
+  ])
+  func `a URL to a document or its section can be cited`(address: String, expected: RFCLink)
+    throws
+  {
     let url = try #require(URL(string: address))
-    let link = try #require(RFCLink(citing: url))
-    #expect(link.id == .rfc(Int(number)!))
-    #expect(link.section == section)
+    #expect(RFCLink(citing: url) == expected)
   }
 
   @Test(arguments: [
