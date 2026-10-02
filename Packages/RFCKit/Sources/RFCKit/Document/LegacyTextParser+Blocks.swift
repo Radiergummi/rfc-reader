@@ -255,9 +255,11 @@ extension LegacyTextParser {
         // them (#437). Kept as one, with its blank lines and its stretches where
         // they stand against each other. Not across a page break: what starts the
         // next page is as often an underlined heading set as artwork (RFC 796).
+        // Nor one-line definitions, which a hanging list below may yet take back
+        // as the blocks they made (RFC 3407's attribute registrations).
         if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
           let above = artworkAbove, case .preformatted(let previous)? = result.last,
-          previous.kind == .artwork, joinsArtwork(block.lines)
+          previous.kind == .artwork, hanging == nil, joinsArtwork(block.lines)
         {
           let lines = above + [""] + block.lines
           result[result.count - 1] = .preformatted(
@@ -282,7 +284,7 @@ extension LegacyTextParser {
         } else {
           result.append(parsed)
           if case .preformatted(let artwork) = parsed, artwork.kind == .artwork,
-            !block.followedByPageBreak, joinsArtwork(block.lines)
+            !block.followedByPageBreak, hanging == nil, joinsArtwork(block.lines)
           {
             openArtwork = block.lines
           }

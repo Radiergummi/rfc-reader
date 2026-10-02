@@ -560,4 +560,25 @@ struct LegacyTextParserBlocksTests {
       ], proseIndent: 3, linker: linker)
     #expect(blocks.count == 2)
   }
+
+  /// One-line definitions a blank line apart are set as artwork until a hanging
+  /// one below says they are a list, and it takes them back as the blocks they
+  /// made: joined as artwork, they were left out of it (#437).
+  @Test func `one-line definitions are not joined as artwork`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let entry = { (name: String) in
+      LegacyTextParser.RawBlock(lines: [
+        "   Field label:     \(name)",
+        "   Value kind:      Text only.",
+      ])
+    }
+    let hanging = LegacyTextParser.RawBlock(lines: [
+      "   Field label:     gamma, which this entry goes on to explain over",
+      "                    a second line under the first.",
+    ])
+    let blocks = LegacyTextParser.blocks(
+      from: [entry("alpha"), entry("beta"), hanging], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 1)
+    #expect(try #require(blocks.first?.definitionItems).count == 5)
+  }
 }

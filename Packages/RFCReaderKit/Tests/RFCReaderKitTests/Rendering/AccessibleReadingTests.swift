@@ -190,12 +190,15 @@ struct AccessibleReadingTests {
   /// under a label, a diagram's or a backlink chip's (#183): nothing is skipped,
   /// nothing is read twice.
   ///
-  /// RFC 793 has ten drawings: its layering and header diagrams, the sequence
-  /// spaces, the state diagram. RFC 8999's artworks are packet notation, RFC 5234's
+  /// RFC 793 has nine drawings: its protocol relationships and header diagrams,
+  /// the sequence spaces, the state diagram. Its layering diagram is set with its
+  /// title and its "Figure 1" line, a blank line apart, which make one block of
+  /// it (#437), and with them more of its lines are words than borders, so it is
+  /// read: its four boxes say what they hold. RFC 8999's artworks are packet notation, RFC 5234's
   /// are grammar rules and RFC 2119 has none, so those check that what is not a
   /// diagram comes back whole.
   @Test(arguments: [
-    ("rfc793.txt", 10), ("rfc5234.txt", 0), ("rfc8999.xml", 0), ("rfc2119.txt", 0),
+    ("rfc793.txt", 9), ("rfc5234.txt", 0), ("rfc8999.xml", 0), ("rfc2119.txt", 0),
   ])
   func `nothing is skipped or read twice`(fixture: String, diagrams: Int) throws {
     let text = built(try Fixtures.document(named: fixture))
