@@ -4,8 +4,7 @@ name: Corpus-backed tests
 # ...`), which `make check` and CI skip because the documents are fetched, not
 # committed. On every pull request that changes what they test or read, so a
 # heuristic change cannot merge without them (#243); weekly, for what changes on
-# the RFC Editor's side; and on demand. The dozen documents are fetched fresh each
-# time.
+# the RFC Editor's side; and on demand. The documents are fetched fresh each time.
 on:
   pull_request:
     paths:
@@ -19,6 +18,11 @@ on:
 
 permissions:
   contents: read
+
+# A new push to a pull request supersedes the run before it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test-corpus:

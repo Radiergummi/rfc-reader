@@ -107,9 +107,10 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9114
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
 # RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
-# `make test`; CI runs them weekly (.github/workflows/corpus-tests.yml). Filtered by
-# their type names, all `CorpusBacked...`: --filter matches a test's identifier, not
-# the `Corpus-backed: ...` name its suite displays.
+# `make test`; CI runs them on pull requests that touch them and weekly
+# (.github/workflows/corpus-tests.yml). Filtered by their type names, all
+# `CorpusBacked...`: --filter matches a test's identifier, not the `Corpus-backed:
+# ...` name its suite displays.
 #
 # The lists above are kept by hand. A test that reads a document not on them fails
 # saying so, from `CorpusText`, rather than on a missing file.
