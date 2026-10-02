@@ -28,7 +28,7 @@ struct SkipTests {
 
   @Test func `a text that points to its original is skipped`() {
     let skip = DocumentConverter.skip(
-      Self.pointer, stem: "rfc1119", metadata: Self.metadata(1119, formats: Self.pointerFormats))
+      Self.pointer, metadata: Self.metadata(1119, formats: Self.pointerFormats))
     #expect(skip == .publishedOnlyAsPDF)
     #expect(skip?.rawValue == "published-only-as-pdf")
   }
@@ -36,10 +36,10 @@ struct SkipTests {
   /// Whether the RFC has an original is the index's to say, so a run without one
   /// converts everything, and so does one whose entry lists no PostScript.
   @Test func `without an index entry listing an original, nothing is skipped`() {
-    #expect(DocumentConverter.skip(Self.pointer, stem: "rfc1119", metadata: nil) == nil)
+    #expect(DocumentConverter.skip(Self.pointer, metadata: nil) == nil)
     #expect(
       DocumentConverter.skip(
-        Self.pointer, stem: "rfc1119", metadata: Self.metadata(1119, formats: [.text, .pdf]))
+        Self.pointer, metadata: Self.metadata(1119, formats: [.text, .pdf]))
         == nil)
   }
 
@@ -75,7 +75,7 @@ struct CorpusBackedSkipTests {
     let conversion = DocumentConverter().convert(
       text: try CorpusText.text("rfc\(number)"), stem: "rfc\(number)", metadata: metadata)
     #expect(conversion.xml == nil)
-    #expect(conversion.report.skipped == "published-only-as-pdf")
+    #expect(conversion.report.skipped == .publishedOnlyAsPDF)
     #expect(conversion.report.warnings == [])
   }
 

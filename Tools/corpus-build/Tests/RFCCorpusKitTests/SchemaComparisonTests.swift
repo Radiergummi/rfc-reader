@@ -62,7 +62,7 @@ struct SchemaComparisonTests {
   @Test func `a skipped document is no regression`() throws {
     var reports = try Self.reports(["rfc1119": []])
     reports[0].schema = nil
-    reports[0].skipped = "published-only-as-pdf"
+    reports[0].skipped = .publishedOnlyAsPDF
     let comparison = SchemaComparison(reports: reports, previouslyValid: ["rfc1119"])
     #expect(!comparison.isRegression)
     #expect(comparison.startedValidating == 0)
