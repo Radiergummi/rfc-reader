@@ -15,7 +15,7 @@ import Testing
 /// it reaches the main actor.
 @Suite("Builder: handover")
 struct BuilderHandoverTests {
-  /// The app's own shape: `DocumentView` builds off the main actor, in an
+  /// The app's own shape: `DocumentSession` builds off the main actor, in an
   /// `@concurrent` function, and awaits the value. A build that quietly came to
   /// need the main actor would trap or diverge here rather than pass.
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt"])

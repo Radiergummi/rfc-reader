@@ -88,3 +88,13 @@ public struct BuildKey: Hashable, Sendable {
     self.style = style
   }
 }
+
+extension BuiltDocument {
+  /// The sections of `document` this build holds, in the document's order: what the
+  /// contents panel lists (#599). Read off the index the builder emitted rather than
+  /// worked out again from the model — "is this a bibliography?" — so the two cannot
+  /// disagree, and a row without an anchor would be one the reader cannot scroll to.
+  public func reachableSections(of document: RFCDocument) -> [Section] {
+    document.allSections.filter { anchors.sections.offset(of: $0.anchor) != nil }
+  }
+}
