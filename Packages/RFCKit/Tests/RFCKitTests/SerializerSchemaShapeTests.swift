@@ -277,4 +277,32 @@ struct SerializerSchemaShapeTests {
     #expect(RFCXMLSerializer.backStart([Self.appendix("A"), Self.appendix("B")]) == 2)
     #expect(RFCXMLSerializer.backStart([]) == 0)
   }
+
+  /// An appendix written unnumbered, because an earlier one took its number, reads
+  /// back as no appendix, and so ends the trailing run (#683).
+  @Test func `an appendix written unnumbered ends the trailing appendices`() {
+    let sections = [
+      Self.chapter("1"), Self.appendix("A"), Self.appendix("B"),
+      Section(anchor: "appendix-B-2", number: "B", title: "Again", isAppendix: true),
+      Self.appendix("C"),
+    ]
+    let start = RFCXMLSerializer.backStart(sections) { $0.anchor != "appendix-B-2" }
+    #expect(start == 4)
+  }
+
+  /// The second of two appendices numbered alike is written unnumbered and stays in
+  /// the middle, so the XML reads back as it was written.
+  @Test func `an unnumbered appendix is not written into the back`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Test"),
+      sections: [
+        Self.chapter("1"), Self.appendix("A"),
+        Section(anchor: "appendix-A-2", number: "A", title: "Again", isAppendix: true),
+      ],
+      source: .text)
+    let serializer = RFCXMLSerializer()
+    let xml = serializer.serialize(document)
+    #expect(!xml.contains("<back>"), "\(xml)")
+    #expect(serializer.serialize(try RFCXMLParser.parse(Data(xml.utf8))) == xml)
+  }
 }
