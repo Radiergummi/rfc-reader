@@ -32,8 +32,10 @@
       guard let data = state.decodeObject(of: NSData.self, forKey: Self.sceneKey),
         let snapshot = SceneSnapshot.decoded(from: data as Data)
       else { return }
-      navigation.restore(snapshot)
-      reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
+      navigation.restore(snapshot, into: reader)
+      // Ordered into its tab group by now, which copies the group's inspector state
+      // onto it, as `AppDelegate.openWindow(tabbedWith:inBackground:)` puts back.
+      closePanelWithoutDocument()
     }
   }
 
@@ -44,8 +46,10 @@
       withIdentifier identifier: NSUserInterfaceItemIdentifier, state: NSCoder,
       completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
     ) {
+      // `shared`, not `NSApp.delegate`: under `@NSApplicationDelegateAdaptor` that is
+      // SwiftUI's own delegate, which forwards to ours.
       guard identifier == ReaderWindowController.restorationIdentifier,
-        let delegate = NSApp.delegate as? AppDelegate
+        let delegate = AppDelegate.shared
       else {
         completionHandler(nil, nil)
         return

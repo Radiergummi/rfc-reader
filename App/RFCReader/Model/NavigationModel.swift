@@ -418,11 +418,14 @@ final class NavigationModel: Identifiable {
     SceneSnapshot(history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue)
   }
 
-  /// Puts the tab back as `snapshot` left it. Nothing is asked to scroll: the
-  /// document opens at its reading position, which is kept with it.
-  func restore(_ snapshot: SceneSnapshot) {
+  /// Puts the tab back as `snapshot` left it, and its inspector tab into `reader`.
+  /// Nothing is asked to scroll: the document opens at its reading position, which
+  /// is kept with it. A collection deleted since leaves for the fallback, as one
+  /// deleted while the tab is open does.
+  func restore(_ snapshot: SceneSnapshot, into reader: ReaderState) {
     history = NavigationHistory(snapshot.history)
-    sidebarSelection = snapshot.filter
+    sidebarSelection = KeptFilter.filter(snapshot.filter, keeping: library.collections)
+    reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
   }
 }
 

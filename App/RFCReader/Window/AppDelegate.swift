@@ -24,22 +24,22 @@
     /// through `restoredWindow()` between this and `applicationDidFinishLaunching`.
     func applicationWillFinishLaunching(_ notification: Notification) {
       Self.shared = self
+      signposter.emitEvent("Launched")
       // Before anything can route a link, since routing may need a window.
       LibraryModel.shared.windows = self
+      // The scene's `.task` did this; there is no scene on macOS any more.
+      // Immediate, so that the bootstrap has started reading the cached index by
+      // the time the first window is made (#367), restored or not. A plain task
+      // waited for the window, and the list for both, one after the other.
+      Task.immediate(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-      signposter.emitEvent("Launched")
-      // The scene's `.task` did this; there is no scene on macOS any more.
-      // Immediate, so that the bootstrap has started reading the cached index by
-      // the time the window below is made (#367). A plain task waited for the
-      // window, and the list for both, one after the other.
-      Task.immediate(name: "Bootstrap library") { await LibraryModel.shared.bootstrap() }
       // A window of its own only when none came back from the last session.
       if controllers.isEmpty {
         openWindow(tabbedWith: nil, inBackground: false)
+        signposter.emitEvent("First window made")
       }
-      signposter.emitEvent("First window made")
       warnIfTheStoreDidNotOpen()
     }
 
@@ -148,6 +148,7 @@
     /// gives it its frame and its tab group, and shows it.
     func restoredWindow() -> NSWindow? {
       let controller = ReaderWindowController(library: LibraryModel.shared)
+      if controllers.isEmpty { signposter.emitEvent("First window made") }
       controllers.append(controller)
       return controller.window
     }

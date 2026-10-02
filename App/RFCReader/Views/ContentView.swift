@@ -108,8 +108,7 @@ import SwiftUI
         if !hasAppeared, let data = sceneSnapshot,
           let snapshot = SceneSnapshot.decoded(from: data)
         {
-          navigation.restore(snapshot)
-          reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
+          navigation.restore(snapshot, into: reader)
         }
         // Collapsed, the sidebar is a list of push rows, and a filter selected
         // before anything was tapped reads as a tap left behind. The list still

@@ -14,6 +14,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.scenePhase) private var scenePhase
   #endif
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
@@ -199,17 +200,25 @@ struct DocumentView: View {
           }
         }
       }
-      .onReceive(NotificationCenter.default.publisher(for: Self.appWillGo)) { _ in
+      #if os(macOS)
+        // Hosted outside any scene, so no `scenePhase` reaches here: the app's quit.
+        .onReceive(
+          NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
+        ) { _ in saveNow() }
+      #else
+        // The scene's phase, not the app's: an iPad window swiped away goes to the
+        // background alone.
+        .onChange(of: scenePhase) {
+          if scenePhase == .background { saveNow() }
+        }
+      #endif
+      .onDisappear {
+        // A report after this, during the fade-out, would save the document left
+        // over the one now read.
+        lastVisibleAnchor.placeDidChange = {}
         saveNow()
       }
-      .onDisappear { saveNow() }
   }
-
-  #if os(macOS)
-    private static let appWillGo = NSApplication.willTerminateNotification
-  #else
-    private static let appWillGo = UIApplication.didEnterBackgroundNotification
-  #endif
 
   private func saveNow() {
     placeSaver.cancel()
