@@ -476,7 +476,17 @@ public struct RFCXMLSerializer: Sendable {
         result += "<sup>\(Writer.escape(text))</sup>"
       case .subscript(let text):
         result += "<sub>\(Writer.escape(text))</sub>"
+      // A link into the RFC series reads back as a citation of the document it names,
+      // so it is written as one (#683).
       case .link(let url, let inner):
+        if let link = RFCLink(url: url), link.id.series == .rfc {
+          let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
+          let authored = text.flatMap { CrossReference.isCanonicalTag($0, for: link.id) ? nil : $0 }
+          let citation = CrossReference(
+            target: .document(link.id, section: link.section), text: authored)
+          result += crossReferenceXML(citation, context: &context)
+          continue
+        }
         result +=
           "<eref target=\"\(Writer.escapeAttribute(url.absoluteString))\">\(inlineXML(inner, context: &context))</eref>"
       case .crossReference(let xref):
