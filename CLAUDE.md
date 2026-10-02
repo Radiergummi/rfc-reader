@@ -85,5 +85,4 @@ The line is the entry point, not the size of the input. If a test calls `parse`,
 
 `.swiftlint.yml` is tuned so that `--strict` is clean on the whole tree: a warning means the current change introduced it. Long lines are capped at 200 characters; a line that has to run past the cap carries a per-line `// swiftlint:disable:next line_length`. A blanket file-level disable is itself a violation.
 
-
 Layout belongs to swift-format, on its defaults: `.swift-format` sets nothing else, and a deviation needs a reason good enough to write down. Where a SwiftLint rule disagrees with swift-format's output, the SwiftLint rule gives way.
