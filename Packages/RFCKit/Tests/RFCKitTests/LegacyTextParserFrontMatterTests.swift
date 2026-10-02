@@ -327,6 +327,24 @@ struct LegacyTextParserFrontMatterTests {
     #expect(
       title("NICNAME/WHOIS EXAMPLE NOTES") == "NICNAME/WHOIS Example Notes", "each side of a slash")
     #expect(title("X.Y.Z") == "X.Y.Z", "initials are left as they are")
+    #expect(
+      title("EXAMPLE TRANSFER PROTOCOL (TCP)") == "Example Transfer Protocol (TCP)",
+      "punctuation around a word leaves it a word")
+    #expect(title("THE TCP, THE IMP: A SURVEY.") == "The TCP, the IMP: A Survey.")
+    #expect(
+      title("EXAMPLE HOST NOTES -- A SUMMARY") == "Example Host Notes -- A Summary",
+      "a double dash starts a part as a single one does")
+  }
+
+  /// A page with no title, or another line in capitals, says nothing of how the
+  /// title is spelled, so the index's capitals stay where the title page does not
+  /// set the title in capitals as well.
+  @Test func `a page with no title in capitals leaves the index's capitals`() {
+    let capitals = "EXAMPLE TRANSFER PROTOCOL"
+    #expect(LegacyTextParser.title(page: "", index: capitals, titlePage: []) == capitals)
+    #expect(
+      LegacyTextParser.title(page: "NETWORK WORKING GROUP", index: capitals, titlePage: [])
+        == capitals)
   }
 
   /// The front matter can take another line for the page's title, a heading above it

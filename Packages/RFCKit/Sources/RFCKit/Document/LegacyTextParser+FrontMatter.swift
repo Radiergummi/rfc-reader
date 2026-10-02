@@ -147,9 +147,17 @@ extension LegacyTextParser {
   static func title(page: String, index: String, titlePage: [[String]]) -> String {
     let chosen = chosenTitle(page: page, index: index, titlePage: titlePage)
     guard chosen == index, !index.contains(where: \.isLowercase),
-      !page.contains(where: \.isLowercase) || setsInCapitals(index, titlePage: titlePage)
+      setsInCapitals(index, page: page) || setsInCapitals(index, titlePage: titlePage)
     else { return chosen }
     return titleCased(index)
+  }
+
+  /// Whether the page's title is the index's, or part of it, set in capitals: a page
+  /// with no title, or with another line in capitals, says nothing of this one.
+  private static func setsInCapitals(_ title: String, page: String) -> Bool {
+    let pageWords = titleWords(page)
+    return !pageWords.isEmpty && !page.contains(where: \.isLowercase)
+      && sharedWordCount(titleWords(title), pageWords) == pageWords.count
   }
 
   /// Whether the title page sets `title` in capitals: some of its runs repeat the
@@ -196,12 +204,12 @@ extension LegacyTextParser {
   /// A title set in capitals, in title case: each word with a capital and the rest
   /// lower case, except the acronyms of `titleAcronyms`, the small words of
   /// `titleSmallWords` past the start, a number's suffix (`21st`), and initials
-  /// (`M.I.T`). Each side of a slash or hyphen is a word, and a spaced dash starts
-  /// the title again.
+  /// (`M.I.T`). Each side of a slash or hyphen is a word, and a spaced dash, single
+  /// or double, or a colon starts the title again.
   static func titleCased(_ title: String) -> String {
     var startsPart = true
     return title.split(separator: " ", omittingEmptySubsequences: false).map { word in
-      if word == "-" {
+      if word == "-" || word == "--" {
         startsPart = true
         return String(word)
       }
@@ -222,17 +230,32 @@ extension LegacyTextParser {
         }
       }
       flush()
+      // A colon ends a part, as a dash does: `FTP: The Example`.
+      if word.hasSuffix(":") { startsPart = true }
       return cased
     }
     .joined(separator: " ")
   }
 
+  /// One word, cased, with the punctuation around it -- a parenthesis, a comma, a
+  /// closing period -- left where it is.
   private static func titleCasedWord(_ word: String, startsPart: Bool) -> String {
-    if titleAcronyms.contains(word) || word.contains(".") { return word }
-    if word.first?.isNumber == true { return word.lowercased() }
-    let lowered = word.lowercased()
-    if !startsPart, titleSmallWords.contains(lowered) { return lowered }
-    return lowered.prefix(1).uppercased() + lowered.dropFirst()
+    let isWordCharacter = { (character: Character) in character.isLetter || character.isNumber }
+    guard let first = word.firstIndex(where: isWordCharacter),
+      let last = word.lastIndex(where: isWordCharacter)
+    else { return word }
+    let core = String(word[first...last])
+    let cased: String
+    if titleAcronyms.contains(core) || core.contains(".") {
+      cased = core
+    } else if core.first?.isNumber == true {
+      cased = core.lowercased()
+    } else if !startsPart, titleSmallWords.contains(core.lowercased()) {
+      cased = core.lowercased()
+    } else {
+      cased = core.prefix(1).uppercased() + core.dropFirst().lowercased()
+    }
+    return word[..<first] + cased + word[word.index(after: last)...]
   }
 
   /// How many words the two have in common, in the same order: the longest run of
