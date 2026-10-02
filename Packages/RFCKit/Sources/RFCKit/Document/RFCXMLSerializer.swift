@@ -83,7 +83,7 @@ public struct RFCXMLSerializer: Sendable {
     let abstractFits = document.header.abstract.allSatisfy(Self.fitsInAbstract)
     writeFront(document.header, writer: &writer, context: &context, abstract: abstractFits)
 
-    let backStart = Self.backStart(document.sections)
+    let backStart = Self.backStart(document.sections) { context.isNumbered($0) }
     writer.open("middle")
     if !abstractFits {
       let abstract = Section(
@@ -123,15 +123,20 @@ public struct RFCXMLSerializer: Sendable {
   /// whose `pn` still names it one. With no references, the back is the appendices
   /// the document ends with, and when that would leave the middle empty, as in the
   /// legacy documents whose first chapter, `I.`, reads as an appendix, there is no
-  /// back.
-  static func backStart(_ sections: [Section]) -> Int {
+  /// back. An appendix written unnumbered, because an earlier one took its number,
+  /// reads back as no appendix, so it does not count as one (#683).
+  static func backStart(
+    _ sections: [Section], isNumbered: (Section) -> Bool = { $0.number != nil }
+  ) -> Int {
     if let last = sections.lastIndex(where: isReferences) {
       var first = last
       while first > 0, isReferences(sections[first - 1]) { first -= 1 }
       return first
     }
     var first = sections.count
-    while first > 0, sections[first - 1].isAppendix { first -= 1 }
+    while first > 0, sections[first - 1].isAppendix, isNumbered(sections[first - 1]) {
+      first -= 1
+    }
     return first == 0 ? sections.count : first
   }
 
@@ -599,6 +604,11 @@ public struct RFCXMLSerializer: Sendable {
     /// a `pn`, which is an ID. The second is written unnumbered, its number in its
     /// name, so it reads the same and names nothing twice (#65). Given once: a second
     /// section of the same anchor gets none.
+    /// Whether `partNumber(of:)` will give the section a `pn`, before it is asked.
+    func isNumbered(_ section: Section) -> Bool {
+      section.number != nil && partNumbers[section.anchor] != nil
+    }
+
     mutating func partNumber(of section: Section) -> String? {
       guard section.number != nil else { return nil }
       return partNumbers.removeValue(forKey: section.anchor)
