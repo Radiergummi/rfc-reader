@@ -43,7 +43,7 @@ public enum Backlinks {
     for place in document.drawnProseBySection {
       var counts: [String: Int] = [:]
       var order: [String] = []
-      for inline in place.runs.flatMap(\.flattened) {
+      for inline in place.inlines {
         guard case .crossReference(let xref) = inline, case .anchor(let anchor) = xref.target,
           let section = holder[anchor], section != place.sectionAnchor
         else { continue }

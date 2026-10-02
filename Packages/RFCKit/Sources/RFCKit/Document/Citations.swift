@@ -34,9 +34,10 @@ public struct Citation: Sendable, Hashable, Codable {
 ///
 /// A citation is a cross reference to another document in what the reader draws as
 /// prose, `RFCDocument.drawnProseBySection`, where `Backlinks` counts too: the
-/// abstract, the headings and the body, but not a bibliography's annotations. A document the bibliography lists and the prose never
-/// cites is still cited, from `.bibliography`. Never the document itself, which its
-/// abstract and headings are the likeliest to name.
+/// abstract, the headings and the body, but not a bibliography's annotations. A
+/// document the bibliography lists and the prose never cites is still cited, from
+/// `.bibliography`. Never the document itself, which its abstract and headings are
+/// the likeliest to name.
 public enum Citations {
   /// In document order: the places as the reader meets them, and within one place the
   /// documents in the order it first cites them; the bibliography last, in its order.
@@ -59,10 +60,10 @@ public enum Citations {
 
     var citations: [Citation] = []
     var cited: Set<DocumentID> = []
-    for (anchor, runs) in document.drawnProseBySection {
+    for (anchor, inlines) in document.drawnProseBySection {
       let place = anchor.map(Citation.Place.section) ?? .abstract
       var found: [Citation] = []
-      for inline in runs.flatMap(\.flattened) {
+      for inline in inlines {
         guard case .crossReference(let xref) = inline,
           case .document(let id, _, let entry) = xref.target, id != own
         else { continue }
