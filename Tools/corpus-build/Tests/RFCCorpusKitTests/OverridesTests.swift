@@ -3,13 +3,14 @@ import RFCCorpusKit
 import RFCKit
 import Testing
 
-/// The committed overrides in `corpus/overrides/`, which `convert` publishes in place of
-/// its own output. It checks them only during a corpus run, so this is what notices a
-/// broken one before then. Whether a scripted override is still what its script makes
-/// is `make corpus-overrides-check`, which needs the source text.
+/// The committed overrides in `corpus/overrides/`: RFC 5261 patches, and the one
+/// snapshot, `rfc1142.xml`. `convert` reads them only during a corpus run, so this is
+/// what notices a broken one before then. Whether a patch still applies to the
+/// converter's output needs the source text: `make corpus-overrides-check`, and the
+/// corpus-backed suite below.
 @Suite("Corpus overrides")
 struct OverridesTests {
-  private static let directory = URL(fileURLWithPath: #filePath)
+  static let directory = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().appending(path: "../../../../corpus/overrides")
 
   private static let overrides: [String] = {
@@ -17,8 +18,12 @@ struct OverridesTests {
     return names.filter { $0.hasSuffix(".xml") }.sorted()
   }()
 
-  private static func document(_ name: String) throws -> RFCDocument {
-    try RFCXMLParser.parse(try Data(contentsOf: directory.appending(path: name)))
+  private static func data(_ name: String) throws -> Data {
+    try Data(contentsOf: directory.appending(path: name))
+  }
+
+  private static func isPatch(_ name: String) throws -> Bool {
+    String(decoding: try data(name), as: UTF8.self).contains("<diff>")
   }
 
   @Test func `there are overrides`() {
@@ -26,18 +31,75 @@ struct OverridesTests {
   }
 
   @Test(arguments: overrides)
-  func `each parses with no known schema cause`(name: String) throws {
-    let data = try Data(contentsOf: Self.directory.appending(path: name))
-    #expect(try !RFCXMLParser.parse(data).allSections.isEmpty)
-    #expect(SchemaCheck.causes(in: data) == [])
+  func `each is a patch that reads, or a snapshot that parses with no known schema cause`(
+    name: String
+  ) throws {
+    let data = try Self.data(name)
+    if try Self.isPatch(name) {
+      _ = try XMLPatch(parsing: data, name: name)
+    } else {
+      #expect(try !RFCXMLParser.parse(data).allSections.isEmpty)
+      #expect(SchemaCheck.causes(in: data) == [])
+    }
+  }
+
+  /// RFC 1142 is the one snapshot (#197): its correction rejoins words in the plain
+  /// text, which a patch on the output cannot do.
+  @Test func `only rfc1142 is a snapshot`() throws {
+    #expect(try Self.overrides.filter { try !Self.isPatch($0) } == ["rfc1142.xml"])
   }
 
   /// RFC 1142's headings are recovered by `rfc1142.py`: every numbered heading of the
   /// standard, and none of the fragments a form feed used to cut a title into.
   @Test func `rfc1142 has every numbered heading`() throws {
-    let sections = try Self.document("rfc1142.xml").allSections
+    let sections = try RFCXMLParser.parse(try Self.data("rfc1142.xml")).allSections
     #expect(sections.count { $0.number != nil } == 255)
     let short = sections.map(\.titleText).filter { $0.count < 4 }
     #expect(short.isEmpty, "\(short)")
+  }
+}
+
+/// The committed patches, applied to the documents they correct, as a corpus run
+/// applies them: with the index's metadata (#197, #218).
+@Suite("Corpus-backed: overrides", .enabled(if: CorpusText.isAvailable && CorpusText.hasIndex))
+struct CorpusBackedOverridesTests {
+  private static func patched(_ stem: String) throws -> RFCDocument {
+    let patch = try XMLPatch(
+      parsing: try Data(contentsOf: OverridesTests.directory.appending(path: "\(stem).xml")),
+      name: "\(stem).xml")
+    let metadata = try ConversionPlan.rfcNumber(of: stem).flatMap { try CorpusText.index()[$0] }
+    let conversion = DocumentConverter().convert(
+      text: try CorpusText.text(stem), stem: stem, metadata: metadata, patch: patch)
+    let xml = try #require(conversion.xml, "\(conversion.report.failure ?? "")")
+    return try RFCXMLParser.parse(xml)
+  }
+
+  private static func preamble(_ document: RFCDocument) throws -> [Block] {
+    try #require(document.section(anchor: "preamble")).blocks
+  }
+
+  /// RFC 5's title page states the day, and its NLS file header goes (#172).
+  @Test func `rfc5 has its day and no file header`() throws {
+    let document = try Self.patched("rfc5")
+    #expect(document.header.date?.day == 2)
+    let blocks = try Self.preamble(document)
+    #expect(blocks.count == 1)
+    guard case .paragraph = blocks.first else {
+      Issue.record("the preamble is \(blocks)")
+      return
+    }
+  }
+
+  /// RFC 822's title page states the day, and its blocks no longer stand ahead of the
+  /// preface (#171).
+  @Test func `rfc822 opens with its preface`() throws {
+    let document = try Self.patched("rfc822")
+    #expect(document.header.date?.day == 13)
+    let first = try #require(try Self.preamble(document).first)
+    guard case .preformatted(let artwork) = first else {
+      Issue.record("the preamble opens with \(first)")
+      return
+    }
+    #expect(artwork.text.trimmingCharacters(in: .whitespacesAndNewlines) == "PREFACE")
   }
 }
