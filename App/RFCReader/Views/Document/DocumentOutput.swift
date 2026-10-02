@@ -68,8 +68,8 @@
         controller.printInfo = info
         controller.printingItem = data
         // False when it cannot present, and then its handler never runs.
-        let presented = controller.present(animated: true) { [weak self] _, _, _ in
-          self?.isPrinting = false
+        let presented = controller.present(animated: true) { _, _, _ in
+          self.isPrinting = false
         }
         if !presented { isPrinting = false }
       }
