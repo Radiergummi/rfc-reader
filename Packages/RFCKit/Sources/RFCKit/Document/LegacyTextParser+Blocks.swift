@@ -272,7 +272,7 @@ extension LegacyTextParser {
           let lines = above + [""] + block.lines
           result[result.count - 1] = .preformatted(
             Preformatted(kind: .artwork, text: verbatimText(lines)))
-          openArtwork = joinable && !block.followedByPageBreak ? lines : nil
+          openArtwork = block.followedByPageBreak ? nil : lines
         } else if case .list(let list) = parsed, case .list(var previous)? = result.last,
           list.continues(previous)
         {
@@ -829,12 +829,23 @@ extension LegacyTextParser {
     let underlined =
       lines.count == 2
       && lines[1].trimmingCharacters(in: .whitespaces).allSatisfy { $0 == "-" || $0 == "=" }
-    return !underlined && !readsLikeSentences(lines, minimumWords: 4)
+    return !underlined && !isCaption(lines) && !readsLikeSentences(lines, minimumWords: 4)
       && PacketDiagram.recognize(verbatimText(lines)) == nil
   }
 
+  /// Whether a block is a figure's or a table's caption, `Figure 3: …` on a line or
+  /// two. It is told by its label, because `draws` cannot tell it: a hyphen or a
+  /// slash in its words (`Client-Server`, `TCP/IP`) draws, and it joined the drawing
+  /// above it; one without opened the drawing below it, whose title it is not.
+  static func isCaption(_ lines: [String]) -> Bool {
+    guard lines.count <= 2, let first = lines.first else { return false }
+    return first.trimmingCharacters(in: .whitespaces).firstMatch(of: captionLabel) != nil
+  }
+
+  private static let captionLabel = Pattern(#/^(Figure|Fig\.|Table)\s+\d/#)
+
   /// Whether any line has a character a drawing is drawn with: what a stretch of
-  /// a drawing has and its caption, `Figure 3: …`, does not.
+  /// a drawing has and a line of words below it, such as a title, does not.
   static func draws(_ lines: [String]) -> Bool {
     lines.contains { line in line.contains { drawingCharacters.contains($0) } }
   }

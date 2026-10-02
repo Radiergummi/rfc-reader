@@ -594,6 +594,34 @@ struct LegacyTextParserBlocksTests {
     #expect(blocks.count == 2)
   }
 
+  /// A caption with a hyphen or a slash in its words draws, and is still its own:
+  /// a caption is told by its label.
+  @Test(arguments: ["Figure 4: Front-Box Layout", "Figure 5: Probe/Echo Exchange"])
+  func `a caption with a hyphen or a slash is not joined to the drawing above it`(
+    caption: String
+  ) {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 \(caption)"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 2)
+  }
+
+  /// A caption below one drawing, with the next drawing a blank line below it, is
+  /// the first one's: it does not open the second.
+  @Test func `a caption below a drawing is not joined to the next drawing`() {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let blocks = LegacyTextParser.blocks(
+      from: [
+        LegacyTextParser.RawBlock(lines: ["      +-------+", "      | Front |", "      +-------+"]),
+        LegacyTextParser.RawBlock(lines: ["                 Figure 4: Front Box"]),
+        LegacyTextParser.RawBlock(lines: ["      +------+", "      | Back |", "      +------+"]),
+      ], proseIndent: 3, linker: linker)
+    #expect(blocks.count == 3)
+  }
+
   /// A packet diagram is recognized from the bit ruler on its first line, so a
   /// title above it, a blank line apart, is not joined to it.
   @Test func `a packet diagram is not joined to the title above it`() throws {
