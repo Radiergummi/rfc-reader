@@ -153,6 +153,7 @@ is that way, and what was measured or tried first.
 - [The reader lays out its viewport, and holds the reader's line](decisions/2026-09-30-the-reader-lays-out-its-viewport-and-holds-the-readers-line.md)
 - [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
 - [On iOS, a diagram is said by a pronunciation in the text](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)
+- [Overrides are RFC 5261 patches on the converter's output](decisions/2026-10-03-overrides-are-rfc-5261-patches.md)
 
 ## Planned engines
 
