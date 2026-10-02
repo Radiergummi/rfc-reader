@@ -102,6 +102,22 @@ let benchmarks: @Sendable () -> Void = {
       try RFCXMLParser.parse(corpus.data("rfc\(number).xml"))
     }
   }
+  // Every block RFC 8727 highlights, its 53 KB JSON block among them.
+  Benchmark("Highlight: RFC 8727") { benchmark, blocks in
+    for _ in benchmark.scaledIterations {
+      for (text, type) in blocks {
+        blackHole(Lexers.highlight(text, as: type))
+      }
+    }
+  } setup: {
+    try RFCXMLParser.parse(corpus.data("rfc8727.xml")).blocks.compactMap {
+      block -> (String, ArtworkType)? in
+      guard case .preformatted(let content) = block,
+        let type = ArtworkType.canonical(content.type), Lexers.language(of: type) != nil
+      else { return nil }
+      return (content.text, type)
+    }
+  }
   Benchmark("Build: RFC 5661") { benchmark, document in
     for _ in benchmark.scaledIterations {
       blackHole(DocumentTextBuilder.build(document, style: style))
