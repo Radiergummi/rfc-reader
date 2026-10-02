@@ -573,12 +573,21 @@ struct DocumentView: View {
     deriveInfo()
     // A scan has no text to fetch (#207): its page is the index's. Nor has a pointer
     // the pack lists (#316), whose XML it left out.
+    let pointerInPack = library.pointersInPack.contains(id)
     guard
       PublishedOriginalPage.loadsText(
-        id, formats: metadata?.formats, pointerInPack: library.pointersInPack.contains(id))
+        id, formats: metadata?.formats, pointerInPack: pointerInPack)
     else {
       session.skipLoad()
       reader.isLoading = false
+      // Recorded as its loaded text would be, so Recently Read lists it with a pack
+      // or without; here, so once per opening, like a load's.
+      if PublishedOriginalPage.recordsOpeningWithoutText(
+        id, formats: metadata?.formats, pointerInPack: pointerInPack)
+      {
+        Self.markOpened(id, in: modelContext)
+        Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
+      }
       return
     }
     // Captures what it writes to, not the view; see `DocumentSession.startLoad`.
@@ -591,13 +600,7 @@ struct DocumentView: View {
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
       // document is here, so one that failed to open is not listed as read.
-      do {
-        try ReadingPositionStore.markOpened(id, in: modelContext)
-      } catch {
-        readerLog.error(
-          "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
-        )
-      }
+      Self.markOpened(id, in: modelContext)
       reader.documentTitle = loaded.header.title
       reader.precedingDraft = loaded.header.precedingDraft
       reader.hasDocument = true
@@ -616,6 +619,18 @@ struct DocumentView: View {
       reader.documentFailedToLoad()
       // A jump waiting for the text is not coming.
       if let request = navigation.scrollRequest { navigation.settle(request) }
+    }
+  }
+
+  /// Lists the RFC in Recently Read. Static, so the load's callback can call it
+  /// without capturing the view.
+  private static func markOpened(_ id: DocumentID, in modelContext: ModelContext) {
+    do {
+      try ReadingPositionStore.markOpened(id, in: modelContext)
+    } catch {
+      readerLog.error(
+        "marking \(id.displayName, privacy: .public) as read failed: \(String(describing: error), privacy: .public)"
+      )
     }
   }
 

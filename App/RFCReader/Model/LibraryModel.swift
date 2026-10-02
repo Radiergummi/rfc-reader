@@ -1047,6 +1047,12 @@ final class LibraryModel {
     return document
   }
 
+  /// Records an RFC opened without a load as `document(for:)` records a loaded one:
+  /// a pointer the pack lists, shown as its original (#316).
+  func markOpened(_ id: DocumentID) async {
+    await store.markOpened(id)
+  }
+
   /// Installs the legacy XML pack from an `.aar`, a folder or a URL; see
   /// `DocumentStore.installLegacyPack(from:)`. A developer's path for now (#36).
   func installLegacyPack(from source: URL) async throws -> InstalledPack {
