@@ -191,6 +191,7 @@ public struct Lexer: Highlighter {
         // No rule matched these: plain. Inside a state, the state has lost its
         // place, and at a newline among them lexing starts again from the root.
         var gap = NSRange(location: position, length: found - position)
+        var gaveUp = false
         if stack.count > 1 {
           recovering = true
           let newline = source.range(of: "\n", options: .literal, range: gap)
@@ -198,12 +199,14 @@ public struct Lexer: Highlighter {
             gap.length = NSMaxRange(newline) - position
             stack = ["root"]
             recovering = false
+            gaveUp = true
           }
         }
         output.append(gap, .plain)
         position = NSMaxRange(gap)
         emptySteps = 0
-        if position < found { continue }
+        // The match was the lost state's: from the root, search again.
+        if gaveUp || position < found { continue }
       }
       guard let match, let matched = state.rule(matching: match) else { break }
       if match.range.length == 0,
@@ -241,10 +244,11 @@ public struct Lexer: Highlighter {
   private static func tokens(in text: String, length: Int, state: CompiledState) -> [SyntaxToken] {
     var output = TokenRun()
     var position = 0
-    state.expression.enumerateMatches(
-      in: text, options: matching, range: NSRange(location: 0, length: length)
-    ) { match, _, _ in
-      guard let match, let matched = state.rule(matching: match) else { return }
+    // `matches` rather than `enumerateMatches`, whose block takes an unsafe pointer.
+    let matches = state.expression.matches(
+      in: text, options: matching, range: NSRange(location: 0, length: length))
+    for match in matches {
+      guard let matched = state.rule(matching: match) else { continue }
       output.append(NSRange(location: position, length: match.range.location - position), .plain)
       emit(match, rule: matched.rule, group: matched.group, into: &output)
       position = NSMaxRange(match.range)

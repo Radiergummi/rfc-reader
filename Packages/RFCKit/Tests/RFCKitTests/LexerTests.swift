@@ -139,6 +139,23 @@ struct LexerTests {
     #expect(tokens.kind(of: "b", in: text) == .keyword)
   }
 
+  /// When the newline that gives a state up is the last unmatched character, the
+  /// match the lost state found after it is not taken: it is searched for again from
+  /// the root.
+  @Test func `a state given up at a newline does not take its own match after it`() throws {
+    let states: [String: [Lexer.Rule]] = [
+      "root": [
+        Lexer.Rule("<", .punctuation, .push("tag")), Lexer.Rule("[a-z]++", .keyword),
+      ],
+      "tag": [Lexer.Rule("[a-z]++", .name), Lexer.Rule(">", .punctuation, .pop(1))],
+    ]
+    let text = "<a !\nb"
+    let tokens = try lexer(states).tokens(in: text)
+    #expect(tokens.cover(text))
+    #expect(tokens.kind(of: "a", in: text) == .name)
+    #expect(tokens.kind(of: "b", in: text) == .keyword)
+  }
+
   @Test func `a lookahead may change state without consuming`() throws {
     let states: [String: [Lexer.Rule]] = [
       "root": [Lexer.Rule("[a-z]++", .plain), Lexer.Rule("(?=<)", .plain, .push("tag"))],
