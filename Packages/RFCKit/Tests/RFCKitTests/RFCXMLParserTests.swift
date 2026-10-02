@@ -86,6 +86,34 @@ struct RFCXMLParserTests {
     #expect(Set(anchors).count == anchors.count)
   }
 
+  /// A legacy conversion writes a numbered section that follows the references into
+  /// `<back>`, with a section's `pn`. It is announced as the section it is, and so are
+  /// its subsections; a section without a `pn` there is still an appendix (#683).
+  @Test func `a section in the back with a section's part number is no appendix`() throws {
+    let xml = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rfc number="9999" version="3">
+        <front><title>Legacy</title></front>
+        <middle><section pn="section-1"><name>Introduction</name></section></middle>
+        <back>
+          <references pn="section-2"><name>References</name></references>
+          <section pn="section-3"><name>Security Considerations</name>
+            <section pn="section-3.1"><name>Threats</name></section>
+          </section>
+          <section pn="section-appendix.a"><name>Examples</name></section>
+          <section><name>Unprepped</name></section>
+        </back>
+      </rfc>
+      """
+    let document = try RFCXMLParser.parse(Data(xml.utf8))
+    let security = try #require(document.section(anchor: "section-3"))
+    #expect(!security.isAppendix)
+    #expect(security.displayTitle == "3. Security Considerations")
+    #expect(security.subsections.map(\.isAppendix) == [false])
+    #expect(document.section(anchor: "section-appendix.a")?.isAppendix == true)
+    #expect(document.sections.last?.isAppendix == true)
+  }
+
   /// Two anchorless reference lists -- normative and informative, in unprepped XML --
   /// would otherwise share one fallback anchor, and a link to the second would land on
   /// the first.

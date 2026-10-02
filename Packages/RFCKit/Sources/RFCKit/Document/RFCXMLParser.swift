@@ -326,8 +326,14 @@ public enum RFCXMLParser {
       let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
       let blocks = parseBlocks(in: element)
-      let subsections = parseSections(
-        in: element, appendix: appendix || numbering.isAppendix, position: position)
+      // A `pn` says which it is. Where there is none, as in unprepped XML, a section is
+      // an appendix by where it sits: in `<back>`, or in an appendix. Prepped RFCXML
+      // gives every section in `<back>` an appendix's `pn`, but a legacy conversion
+      // writes a numbered section that follows the references there too, because the
+      // schema puts every `<references>` ahead of the back's sections (#315). Its `pn`
+      // is a section's, and it is announced as one: `11.`, not `Appendix 11.` (#683).
+      let isAppendixByPlace = numbering.number == nil ? appendix : numbering.isAppendix
+      let subsections = parseSections(in: element, appendix: isAppendixByPlace, position: position)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
@@ -335,7 +341,7 @@ public enum RFCXMLParser {
         blocks: blocks,
         subsections: subsections,
         // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
-        isAppendix: isNumbered && (appendix || numbering.isAppendix)
+        isAppendix: isNumbered && isAppendixByPlace
       )
     }
 
