@@ -147,6 +147,8 @@ struct XMLPatchTests {
     "<replace sel=\"/rfc/front/title\" ws=\"both\"><title>No.</title></replace>",
     "<rename sel=\"/rfc/front\"/>",
     "<remove/>",
+    // Not well-formed: libxml2 would drop the bare ampersand and select something else.
+    "<remove sel=\"//t[contains(., 'a & b')]\"/>",
   ])
   func `a malformed operation is refused before anything applies`(operation: String) throws {
     #expect(throws: XMLPatch.Failure.self) { try Self.patch(operation) }

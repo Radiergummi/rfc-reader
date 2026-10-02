@@ -69,6 +69,13 @@ public struct XMLPatch: Sendable {
     func failure(_ reason: String, operation: Int? = nil, summary: String? = nil) -> Failure {
       Failure(patch: name, operation: operation, summary: summary, reason: reason)
     }
+    // XMLDocument recovers from what is not well-formed on Linux, where libxml2 drops a
+    // bare `&` from a selector and the operation then selects something else.
+    // XMLParser refuses it on both platforms.
+    let parser = XMLParser(data: data)
+    guard parser.parse() else {
+      throw failure("not XML: \(parser.parserError.map { "\($0)" } ?? "malformed")")
+    }
     let document: XMLDocument
     do {
       document = try XMLDocument(data: data, options: .nodePreserveWhitespace)
