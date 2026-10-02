@@ -56,6 +56,7 @@ struct RFCListView: View {
       try CollectionStore.move(
         drop.moved, in: collection, afterVisible: drop.above, beforeVisible: drop.below, in: $0)
     }
+    navigation.listNow()
   }
 
   /// Out of the collection, undoably, back to the same place.
@@ -64,6 +65,7 @@ struct RFCListView: View {
     library.editCollections {
       try CollectionStore.remove(document, from: collection, undoManager: undoManager, in: $0)
     }
+    navigation.listNow()
   }
 
   /// VoiceOver's Move Up and Move Down, one row at a time.

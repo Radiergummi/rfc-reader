@@ -250,8 +250,10 @@ final class NavigationModel: Identifiable {
     listNow()
   }
 
-  /// Lists what the inputs ask for before returning, on the main actor.
-  private func listNow() {
+  /// Lists what the inputs ask for before returning, on the main actor: for a
+  /// script, and for a drag or a delete in a collection's list, whose rows `List`
+  /// must have before the gesture ends or it puts the row back and moves it again.
+  func listNow() {
     guard let request = request(), !shows(request),
       let made = library.listedNow(request.list, hits: knownHits(for: request))
     else { return }
