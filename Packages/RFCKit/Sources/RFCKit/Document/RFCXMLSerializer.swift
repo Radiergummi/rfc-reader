@@ -41,10 +41,10 @@ public struct RFCXMLSerializer: Sendable {
 
   public func serialization(of document: RFCDocument) -> Serialization {
     var writer = Writer()
-    let (referenceAnchors, entryDocuments, entryAnchors) = Self.referenceIndex(in: document)
+    let (referenceAnchors, entryDocuments) = Self.referenceIndex(in: document)
     var context = Context(
       referenceAnchors: referenceAnchors, entryDocuments: entryDocuments,
-      entryAnchors: entryAnchors,
+      entryAnchors: Self.entryAnchors(in: document),
       sections: document.sections)
 
     writer.raw("<?xml version='1.0' encoding='utf-8'?>")
@@ -626,16 +626,11 @@ public struct RFCXMLSerializer: Sendable {
   /// `[RFC7159]`, and a bare "RFC 7159" in its prose went to the erratum (#424).
   private static func referenceIndex(
     in document: RFCDocument
-  ) -> (
-    referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID],
-    entryAnchors: Set<String>
-  ) {
+  ) -> (referenceAnchors: [DocumentID: String], entryDocuments: [String: DocumentID]) {
     var anchors: [DocumentID: String] = [:]
     var documents: [String: DocumentID] = [:]
-    var entryAnchors: Set<String> = []
     for case .references(let list) in document.blocks {
       for reference in list.entries {
-        entryAnchors.insert(reference.anchor)
         guard let id = reference.documentID else { continue }
         if let first = anchors[id] {
           if DocumentID(label: first) != id, DocumentID(label: reference.anchor) == id {
@@ -647,7 +642,16 @@ public struct RFCXMLSerializer: Sendable {
         if documents[reference.anchor] == nil { documents[reference.anchor] = id }
       }
     }
-    return (anchors, documents, entryAnchors)
+    return (anchors, documents)
+  }
+
+  /// Every entry's anchor, whether or not it names a document.
+  private static func entryAnchors(in document: RFCDocument) -> Set<String> {
+    var anchors: Set<String> = []
+    for case .references(let list) in document.blocks {
+      anchors.formUnion(list.entries.map(\.anchor))
+    }
+    return anchors
   }
 
   static func isReferences(_ section: Section) -> Bool {
