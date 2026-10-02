@@ -87,9 +87,6 @@ extension DocumentTextBuilder {
     if let decorated {
       decorate(decorated, from: bodyStart)
     }
-    if case .styled(let styled)? = rendition {
-      highlight(styled, from: bodyStart)
-    }
     if style.emitsLinks, AccessibleReading.isDiagram(box) {
       setDiagramSpeech(NSRange(location: bodyStart, length: output.length - bodyStart))
     }
@@ -112,6 +109,10 @@ extension DocumentTextBuilder {
     decorate(from: start, with: .artwork)
     let block = NSRange(location: start, length: output.length - start)
     output.addAttribute(.rfcContentWidth, value: contentWidth, range: block)
+    // Last, so no pass above walks the runs the colors cut the block into.
+    if case .styled(let styled)? = rendition {
+      highlight(styled, from: bodyStart)
+    }
   }
 
   /// What VoiceOver says in place of a diagram's lines, where UIKit reads it: in
@@ -147,13 +148,41 @@ extension DocumentTextBuilder {
   /// Colors a highlighted block's tokens from the theme. Plain tokens keep the
   /// body color the block was set in, which a quote or an aside sets. The text is
   /// unchanged.
+  ///
+  /// As few runs as the colors need: white space shows no color, so it joins the
+  /// colored run before it, and so does a token of the same color after it. A block
+  /// of JSON is otherwise cut into a run for every token and every space between
+  /// two, and every later pass over the storage walks them (`Build: RFC 8727` in
+  /// `make benchmark`).
   func highlight(_ styled: StyledText, from bodyStart: Int) {
+    let text = output.mutableString
+    var run: (range: NSRange, color: PlatformColor)?
     for token in styled.tokens {
-      guard let color = SyntaxTheme.standard.color(for: token.kind) else { continue }
-      output.addAttribute(
-        .foregroundColor, value: color,
-        range: NSRange(location: bodyStart + token.range.location, length: token.range.length))
+      let range = NSRange(location: bodyStart + token.range.location, length: token.range.length)
+      let color = SyntaxTheme.standard.color(for: token.kind)
+      if let current = run, color == nil || color === current.color,
+        color != nil || Self.isWhitespace(range, in: text)
+      {
+        run = (
+          NSRange(
+            location: current.range.location, length: NSMaxRange(range) - current.range.location),
+          current.color
+        )
+        continue
+      }
+      if let current = run {
+        output.addAttribute(.foregroundColor, value: current.color, range: current.range)
+      }
+      run = color.map { (range, $0) }
     }
+    if let current = run {
+      output.addAttribute(.foregroundColor, value: current.color, range: current.range)
+    }
+  }
+
+  private static func isWhitespace(_ range: NSRange, in text: NSString) -> Bool {
+    text.rangeOfCharacter(from: CharacterSet.whitespacesAndNewlines.inverted, range: range)
+      .location == NSNotFound
   }
 
   /// How wide a verbatim block's widest line is set. An ASCII line is its columns at

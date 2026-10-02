@@ -61,6 +61,20 @@ struct BuilderHighlightingTests {
     #expect(try color(of: "2", in: built) == SyntaxTheme.standard.color(for: .number))
   }
 
+  /// White space shows no color, so it joins the run before it: a block has a run
+  /// per colored token rather than two, which every later pass over the storage
+  /// walks (`Build: RFC 8727` in `make benchmark`).
+  @Test func `white space between tokens takes no run of its own`() throws {
+    let built = build(Self.listing)
+    let body = (built.text.string as NSString).range(of: Self.json)
+    var blankRuns: [String] = []
+    built.text.enumerateAttribute(.foregroundColor, in: body) { _, range, _ in
+      let run = (built.text.string as NSString).substring(with: range)
+      if run.allSatisfy(\.isWhitespace) { blankRuns.append(run) }
+    }
+    #expect(blankRuns.isEmpty, "\(blankRuns)")
+  }
+
   @Test func `plain text keeps the body color`() throws {
     let message = Preformatted(
       kind: .sourceCode, text: "HTTP/1.1 200 OK\n\nhello", type: "http-message",

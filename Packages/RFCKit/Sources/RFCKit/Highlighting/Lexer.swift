@@ -67,6 +67,9 @@ public struct Lexer: Highlighter {
     let expression: NSRegularExpression
     let rules: [Rule]
     let groups: [Int]
+    /// Whether any rule changes state. One that none does is never left, and is
+    /// lexed in one pass over the matches rather than a search per token.
+    var changesState: Bool { rules.contains { $0.transition != nil } }
 
     func rule(matching match: NSTextCheckingResult) -> (rule: Rule, group: Int)? {
       for (index, rule) in rules.enumerated()
@@ -175,6 +178,9 @@ public struct Lexer: Highlighter {
     var position = 0
     var recovering = false
     var emptySteps = 0
+    if !root.changesState {
+      return Self.tokens(in: text, length: length, state: root)
+    }
     while position < length {
       let state = states[stack[stack.count - 1]] ?? root
       let match = state.expression.firstMatch(
@@ -226,6 +232,24 @@ public struct Lexer: Highlighter {
         recovering = false
       }
     }
+    return output.tokens
+  }
+
+  /// A state no rule leaves, lexed in one pass: what lies between two matches is
+  /// plain, as in the loop above, and no rule can match nothing, since one that
+  /// could and changes no state is refused when the lexer is built.
+  private static func tokens(in text: String, length: Int, state: CompiledState) -> [SyntaxToken] {
+    var output = TokenRun()
+    var position = 0
+    state.expression.enumerateMatches(
+      in: text, options: matching, range: NSRange(location: 0, length: length)
+    ) { match, _, _ in
+      guard let match, let matched = state.rule(matching: match) else { return }
+      output.append(NSRange(location: position, length: match.range.location - position), .plain)
+      emit(match, rule: matched.rule, group: matched.group, into: &output)
+      position = NSMaxRange(match.range)
+    }
+    output.append(NSRange(location: position, length: length - position), .plain)
     return output.tokens
   }
 
