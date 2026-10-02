@@ -35,8 +35,7 @@ enum SpotlightIndexer {
         let end = min(start + batchSize, entries.count)
         let items = entries[start..<end].map { item($0, expiring: expiration) }
         index.beginBatch()
-        // No completion to wait for inside a batch: `endBatch` reports the outcome.
-        index.indexSearchableItems(items, completionHandler: nil)
+        add(items, to: index)
         // The state only with the last batch: an indexing cut short is done again
         // at the next launch rather than taken for finished.
         try await index.endBatch(withClientState: end == entries.count ? state : Data())
@@ -46,6 +45,13 @@ enum SpotlightIndexer {
       spotlightLog.error(
         "indexing for Spotlight failed: \(String(describing: error), privacy: .public)")
     }
+  }
+
+  /// No completion to wait for inside a batch: `endBatch` reports the outcome. Not
+  /// the async variant, which waits for one; synchronous, so the compiler doesn't
+  /// suggest it.
+  nonisolated private static func add(_ items: [CSSearchableItem], to index: CSSearchableIndex) {
+    index.indexSearchableItems(items, completionHandler: nil)
   }
 
   nonisolated private static func item(_ entry: SpotlightEntry, expiring expiration: Date)

@@ -209,6 +209,11 @@ SIGNING := CODE_SIGNING_ALLOWED=$(CODE_SIGNING_ALLOWED) \
 # Debug for everything but `install`, which puts a Release build in /Applications.
 CONFIGURATION ?= Debug
 
+# The Mac the app builds and runs on. With its architecture named, since a Mac
+# that has Rosetta matches `platform=macOS` twice, and xcodebuild warns that it
+# picks the first.
+MAC_DESTINATION := platform=macOS,arch=$(shell uname -m)
+
 # The iPhone `run-device` installs on, by the name `xcrun devicectl list devices`
 # shows. `ios-app` alone builds for any iOS device.
 IOS_DEVICE      ?=
@@ -229,7 +234,7 @@ built_app = $(shell xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
 ## Build the app for macOS
 build-app: xcodeproj
 	xcodebuild build -project $(PROJECT) -scheme $(SCHEME) \
-	  -destination 'platform=macOS' -configuration $(CONFIGURATION) -quiet $(SIGNING)
+	  -destination '$(MAC_DESTINATION)' -configuration $(CONFIGURATION) -quiet $(SIGNING)
 
 ## Build the app for the iOS Simulator
 ios-sim: xcodeproj
@@ -281,7 +286,7 @@ run-sim: ios-app
 # A running copy is quit first, or `open` would just bring the old build back to
 # the front.
 run: build-app
-	@app='$(call built_app,platform=macOS)'; \
+	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  echo "launching $$app"; \
@@ -290,7 +295,7 @@ run: build-app
 ## Install a Release build into /Applications
 install: CONFIGURATION := Release
 install: build-app
-	@app='$(call built_app,platform=macOS)'; \
+	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  test -d "$$app" || { echo "no app at $$app -- did the build fail?"; exit 1; }; \
 	  pkill -x $(SCHEME) >/dev/null 2>&1 || true; \
 	  rm -rf '/Applications/$(SCHEME).app'; \
@@ -318,7 +323,7 @@ TRACE_SCENARIO ?=
 export TRACE_SCENARIO
 trace: CONFIGURATION := Release
 trace: build-app
-	@app='$(call built_app,platform=macOS)'; \
+	@app='$(call built_app,$(MAC_DESTINATION))'; \
 	  Tools/trace/trace.py --app "$$app" \
 	    --output "traces/$$(date +%Y%m%d-%H%M%S)-$$(git rev-parse --short HEAD).trace" \
 	    $(if $(TRACE_SCENARIO),--scenario "$$TRACE_SCENARIO")
