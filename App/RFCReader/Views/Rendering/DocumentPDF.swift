@@ -60,7 +60,7 @@ nonisolated enum DocumentPDF {
   }
 
   /// Builds, lays out and draws, off the main actor, all of it in the light
-  /// appearance: whether a dynamic colour resolves when a line is laid out or when
+  /// appearance: whether a dynamic color resolves when a line is laid out or when
   /// it is drawn is TextKit's to decide, and either way it has to be paper's.
   @concurrent
   static func render(_ content: Content, paperSize: CGSize) async -> Data {
@@ -212,7 +212,7 @@ nonisolated enum DocumentPDF {
 
   // MARK: - Drawing environment
 
-  /// The reader's colours are dynamic; paper is white, so they resolve as they do
+  /// The reader's colors are dynamic; paper is white, so they resolve as they do
   /// in the light appearance.
   private static func inLightAppearance<Result>(_ body: () -> Result) -> Result {
     // Both platforms run `body` before they return, so `result` is always set.
@@ -255,7 +255,7 @@ nonisolated private struct RunningLines {
   let fixed: [Placed]
   let footer: CGRect
   let attributes: [NSAttributedString.Key: Any]
-  let colour: CGColor
+  let color: CGColor
 
   init(_ furniture: PrintFurniture, layout: PrintLayout) {
     let attributes: [NSAttributedString.Key: Any] = [
@@ -278,7 +278,7 @@ nonisolated private struct RunningLines {
     ].compactMap { $0 }
     self.attributes = attributes
     self.footer = footer
-    colour = RFCColors.secondaryLabel.cgColor
+    color = RFCColors.secondaryLabel.cgColor
   }
 
   func draw(page: Int, in context: CGContext) {
@@ -286,7 +286,7 @@ nonisolated private struct RunningLines {
       PrintFurniture.pageLabel(page), in: footer, alignment: .right, attributes: attributes,
       token: nil)
     context.saveGState()
-    context.setFillColor(colour)
+    context.setFillColor(color)
     // The context is flipped, and CoreText sets glyphs upright only in an
     // unflipped one, so the text matrix flips them back.
     context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
@@ -299,7 +299,7 @@ nonisolated private struct RunningLines {
     context.restoreGState()
   }
 
-  /// One line of furniture, in the context's fill colour. The middle of the line
+  /// One line of furniture, in the context's fill color. The middle of the line
   /// gets half its width and each end a quarter, so a long title is truncated
   /// rather than run over the date.
   private static func place(

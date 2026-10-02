@@ -35,16 +35,16 @@ struct BuilderChipTests {
   /// number, and not the section mark from its number.
   @Test func `a section label is bound together`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
-    #expect(xref.displayLabel == "RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
-    #expect(!xref.displayLabel.contains(" "), "an ordinary space would let the chip wrap mid-label")
+    #expect(xref.display.text == "RFC\u{00A0}9110\u{00A0}§\u{00A0}4.2")
+    #expect(!xref.display.text.contains(" "), "an ordinary space would let the chip wrap mid-label")
   }
 
   /// The screen and a copied selection say the same thing.
   @Test func `what is copied is what is shown`() {
     let xref = CrossReference(target: .document(.rfc(9110), section: "4.2"))
-    // The rendered run is the display label plus the chip's own symbol and joiner.
-    #expect(run(xref).string == Self.chipPrefix + xref.displayLabel)
-    #expect([Inline.crossReference(xref)].plainText == xref.displayLabel)
+    // The rendered run is the display text plus the chip's own symbol and joiner.
+    #expect(run(xref).string == Self.chipPrefix + xref.display.text)
+    #expect([Inline.crossReference(xref)].plainText == xref.display.text)
   }
 
   /// An author's own words for a link are not a composed label, so they are left
@@ -52,7 +52,7 @@ struct BuilderChipTests {
   @Test func `an authors own link text is left alone`() {
     let xref = CrossReference(
       target: .document(.rfc(9110), section: "4.2"), text: "the caching rules")
-    #expect(xref.displayLabel == "the caching rules")
+    #expect(xref.display.text == "the caching rules")
     #expect(run(xref).string == "the caching rules")
     #expect(run(xref).attribute(.rfcChip, at: 0, effectiveRange: nil) == nil)
   }

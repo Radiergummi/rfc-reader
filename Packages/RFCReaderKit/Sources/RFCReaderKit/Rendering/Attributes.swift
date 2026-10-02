@@ -41,7 +41,7 @@ extension NSAttributedString.Key {
   public static let rfcCaption = NSAttributedString.Key("rfcCaption")
   /// Where a link goes, in a build whose style emits no live links
   /// (`ReadingStyle.emitsLinks`): a key TextKit does not know, so it neither
-  /// underlines nor recolours the run, which an exported PDF still turns into a
+  /// underlines nor recolors the run, which an exported PDF still turns into a
   /// link annotation (#376). The value is the URL the reader's `.link` would carry.
   public static let rfcLinkTarget = NSAttributedString.Key("rfcLinkTarget")
   /// The strokes a decorated block draws over its text (`DecoratedText`), set on

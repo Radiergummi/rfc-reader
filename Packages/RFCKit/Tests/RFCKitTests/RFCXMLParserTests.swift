@@ -224,7 +224,7 @@ struct RFCXMLParserTests {
       xrefs.first { $0.target == .document(.rfc(2119), section: nil, entry: "RFC2119") })
     #expect(bcp14.isCanonicalLabel, "a canonical series id may be restyled as a chip")
     #expect(
-      bcp14.displayLabel == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
+      bcp14.display.text == "RFC\u{00A0}2119", "the brackets are ours, so the reader drops them")
     #expect(bcp14.display.isChip)
 
     let transport = try #require(
