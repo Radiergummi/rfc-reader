@@ -92,13 +92,9 @@ final class LibraryModel {
   @ObservationIgnored private var activations: (any NSObjectProtocol)?
 
   /// Every bookmarked document, fetched again on every save of a bookmark: one set
-  /// for the toolbars and scripts alike, which ask about the document on screen, so
-  /// BCP 14 is not answered for by RFC 14 (#152).
+  /// for the toolbars, scripts and lists alike, so BCP 14 is not answered for by
+  /// RFC 14 (#152), and is listed as itself (#321).
   private(set) var bookmarkedDocuments: Set<DocumentID> = []
-
-  /// The bookmarked RFCs' numbers, for the lists, which list RFCs. Kept beside
-  /// `bookmarkedDocuments` rather than derived from it: every list body reads it.
-  private(set) var bookmarkedNumbers: Set<Int> = []
 
   /// The presentation the reader chose from a block's menu, per document, for the
   /// app's session. Here rather than in `DocumentSession`, which goes when the
@@ -135,8 +131,8 @@ final class LibraryModel {
   /// Kept here so the reader can ask while it lays out, not across the store's actor.
   private(set) var pointersInPack: Set<DocumentID> = []
 
-  /// How many RFCs Recently Read lists, for the sidebar's count (#344): the length
-  /// of `recentlyReadNumbers()`, kept current on every save of a reading position
+  /// How many documents Recently Read lists, for the sidebar's count (#344): the
+  /// length of `recentlyRead()`, kept current on every save of a reading position
   /// rather than by a live query of every reading position in the view.
   private(set) var recentlyReadCount = 0
 
@@ -193,7 +189,7 @@ final class LibraryModel {
   private func refreshRecentlyReadCount() {
     let count: Int
     do {
-      count = try ReadingPositionStore.recentlyReadRFCCount(in: container.mainContext)
+      count = try ReadingPositionStore.recentlyReadCount(in: container.mainContext)
     } catch {
       // The last count read stands until a fetch succeeds, which the next save tries.
       failedMirrors.insert(.recentlyReadCount)
@@ -271,7 +267,6 @@ final class LibraryModel {
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
-    bookmarkedNumbers = Set(documents.filter { $0.series == .rfc }.map(\.number))
   }
 
   private func refreshDownloadedNumbers() async {
@@ -1032,7 +1027,8 @@ final class LibraryModel {
     await store.downloadedSize(id)
   }
 
-  /// The documents the reader has opened, most recent first.
+  /// The documents the reader has opened, most recent first, a BCP, STD or FYI
+  /// among them as itself (#321).
   ///
   /// Fetched on demand rather than observed, and that is the point: the Recently
   /// read list is history as of the moment the filter is entered, and a live query
@@ -1041,16 +1037,14 @@ final class LibraryModel {
   ///
   /// Empty when the fetch fails, which is logged: the list is only shown, and
   /// nothing is decided by its being empty.
-  func recentlyReadNumbers() -> [Int] {
-    let documents: [DocumentID]
+  func recentlyRead() -> [DocumentID] {
     do {
-      documents = try ReadingPositionStore.recentlyRead(in: container.mainContext)
+      return try ReadingPositionStore.recentlyRead(in: container.mainContext)
     } catch {
       libraryLog.error(
         "reading the recently read list failed: \(String(describing: error), privacy: .public)")
       return []
     }
-    return documents.filter { $0.series == .rfc }.map(\.number)
   }
 
   func download(_ id: DocumentID) async throws {

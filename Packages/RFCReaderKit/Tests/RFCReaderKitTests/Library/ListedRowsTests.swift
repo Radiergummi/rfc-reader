@@ -22,16 +22,16 @@ struct ListedRowsTests {
   }
 
   @Test func `the rows are the list's own`() {
-    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [2, 3])
+    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2), .rfc(3)])
     #expect(
-      listed(list).rows.map(\.number)
-        == list.rows(in: index, search: IndexSearch(index: index)).map(\.number))
+      listed(list).rows.map(\.id.number)
+        == list.rows(in: index, search: IndexSearch(index: index)).map(\.id.number))
   }
 
   @Test func `the library's results ignore the filter`() {
-    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [2])
-    #expect(listed(list).rows.map(\.number) == [2])
-    #expect(Set(listed(list).librarySearch.map(\.number)) == [1, 2])
+    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2)])
+    #expect(listed(list).rows.map(\.id.number) == [2])
+    #expect(Set(listed(list).librarySearch.map(\.id.number)) == [1, 2])
   }
 
   @Test func `an unsearched list has no library results`() {
@@ -46,7 +46,7 @@ struct ListedRowsTests {
     let again = ListedRows(
       LibraryList(filter: .all, query: "host"), in: index, indexVersion: 1,
       search: IndexSearch(index: index), hits: known)
-    #expect(again.rows.map(\.number) == [4, 3])
+    #expect(again.rows.map(\.id.number) == [4, 3])
   }
 
   @Test func `an unsearched listing keeps no hits`() {
@@ -54,7 +54,7 @@ struct ListedRowsTests {
   }
 
   @Test func `a list is on show only when it was made over the same index`() {
-    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [2])
+    let list = LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2)])
     let shown = listed(list, indexVersion: 3)
     #expect(shown.shows(list, indexVersion: 3))
     #expect(!shown.shows(list, indexVersion: 4))
@@ -63,7 +63,7 @@ struct ListedRowsTests {
 
   @Test func `hits are reused for the same query over the same index`() {
     let shown = listed(
-      LibraryList(filter: .bookmarks, query: "host", bookmarked: [2]), indexVersion: 3)
+      LibraryList(filter: .bookmarks, query: "host", bookmarked: [.rfc(2)]), indexVersion: 3)
     let otherFilter = LibraryList(filter: .all, query: "host")
     #expect(
       shown.hits(for: otherFilter, indexVersion: 3)?.map(\.number) == shown.hits.map(\.number))
@@ -79,13 +79,13 @@ struct LibraryListInputsTests {
   /// Records which inputs were read.
   private final class Sources: ListSources {
     var reads: [String] = []
-    var bookmarked: Set<Int> {
+    var bookmarked: Set<DocumentID> {
       reads.append("bookmarked")
-      return [1]
+      return [.rfc(1)]
     }
-    var recentlyRead: [Int] {
+    var recentlyRead: [DocumentID] {
       reads.append("recentlyRead")
-      return [2]
+      return [.rfc(2)]
     }
     var downloaded: Set<Int> {
       reads.append("downloaded")
@@ -124,7 +124,7 @@ struct LibraryListInputsTests {
     let sources = Sources()
     #expect(
       reading(.bookmarks, from: sources)
-        == LibraryList(filter: .bookmarks, query: "", bookmarked: [1]))
+        == LibraryList(filter: .bookmarks, query: "", bookmarked: [.rfc(1)]))
     #expect(
       reading(.downloaded, from: sources)
         == LibraryList(filter: .downloaded, query: "", downloaded: [3]))

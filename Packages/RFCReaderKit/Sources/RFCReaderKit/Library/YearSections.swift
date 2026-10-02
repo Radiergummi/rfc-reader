@@ -6,7 +6,7 @@ import RFCKit
 public enum YearSections {
   public struct Section: Identifiable, Sendable {
     public let year: Int
-    public let rfcs: [RFCMetadata]
+    public let rows: [LibraryRow]
 
     public var id: Int { year }
   }
@@ -29,14 +29,14 @@ public enum YearSections {
   /// By year rather than in runs: numbers are assigned before publication, so a list
   /// in number order can put a year out of place, and a second header for it would
   /// read as a bug.
-  public static func sections(of rows: some Sequence<RFCMetadata>) -> [Section] {
+  public static func sections(of rows: some Sequence<LibraryRow>) -> [Section] {
     var years: [Int] = []
-    var rowsByYear: [Int: [RFCMetadata]] = [:]
-    for rfc in rows {
-      let year = rfc.date.year
+    var rowsByYear: [Int: [LibraryRow]] = [:]
+    for row in rows {
+      let year = row.date.year
       if rowsByYear[year] == nil { years.append(year) }
-      rowsByYear[year, default: []].append(rfc)
+      rowsByYear[year, default: []].append(row)
     }
-    return years.map { Section(year: $0, rfcs: rowsByYear[$0] ?? []) }
+    return years.map { Section(year: $0, rows: rowsByYear[$0] ?? []) }
   }
 }

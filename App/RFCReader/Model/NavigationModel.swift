@@ -106,13 +106,13 @@ final class NavigationModel: Identifiable {
   /// entering instead, the order is whatever it was on arrival and stays put while
   /// it is being read through; coming back to the filter takes a fresh one, the
   /// same way `downloaded` beside it does.
-  private(set) var recentOrder: [Int] = []
+  private(set) var recentOrder: [DocumentID] = []
   /// The RFCs available offline, as of entering the filter.
   private(set) var downloaded: Set<Int> = []
 
   /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
-    recentOrder = library.recentlyReadNumbers()
+    recentOrder = library.recentlyRead()
     takeDownloaded()
   }
 
@@ -203,11 +203,7 @@ final class NavigationModel: Identifiable {
   /// A link from outside the current document: the sidebar, a deep link, a citation
   /// in the prose, or Go to RFC.
   func open(_ link: RFCLink, in index: RFCIndex?) {
-    var id = link.id
-    // BCP/STD links open their first member RFC.
-    if id.series != .rfc, let first = index?.series(id)?.members.first {
-      id = first
-    }
+    let id = Self.resolved(link.id, in: index)
     // A place in the document on screen is a jump within it, which the reader
     // resolves: an anchor may name nothing in its body, as the RFC Editor's
     // `#page-12` doesn't, or an entry the reader shows rather than scrolls to (#276),
@@ -269,7 +265,7 @@ final class NavigationModel: Identifiable {
   /// The rows the inputs ask for, for a script, which reads the list straight after
   /// changing it: the rows on show when they are those, and otherwise made on the
   /// spot, leaving the list on show to its own listing.
-  func rowsNow() -> [RFCMetadata] {
+  func rowsNow() -> [LibraryRow] {
     guard let request = request() else { return [] }
     if shows(request), let listed { return listed.rows }
     return library.listedNow(request.list, hits: knownHits(for: request))?.rows ?? []
@@ -347,12 +343,16 @@ final class NavigationModel: Identifiable {
   /// resetting to `.all` would swap the Bookmarks list they were working in for
   /// the whole library with that one row highlighted somewhere inside it.
   ///
-  /// It also skips the BCP/STD resolution `open` does, because every row the list
-  /// can emit is already an RFC: `LibraryList.rows` draws from `index.rfcs` and,
-  /// for `.series`, from the members those entries resolve to. A list that could
-  /// show a series row would have to come back through `open`.
+  /// A series row, which Bookmarks and Recently Read can show (#321), opens its
+  /// first member RFC, as `open` does: the series has no document of its own.
   func select(_ id: DocumentID) {
-    go(to: HistoryEntry(id: id))
+    go(to: HistoryEntry(id: Self.resolved(id, in: library.index)))
+  }
+
+  /// A BCP, STD or FYI as the RFC it opens: its first member.
+  private static func resolved(_ id: DocumentID, in index: RFCIndex?) -> DocumentID {
+    guard id.series != .rfc, let first = index?.series(id)?.members.first else { return id }
+    return first
   }
 
   /// A jump within the document already open — a section link in the prose, a row
@@ -438,8 +438,8 @@ final class NavigationModel: Identifiable {
 /// What this tab's list may list from: the inputs it took on entering the filter,
 /// and the library's bookmarks and collections as they stand.
 extension NavigationModel: ListSources {
-  var bookmarked: Set<Int> { library.bookmarkedNumbers }
-  var recentlyRead: [Int] { recentOrder }
+  var bookmarked: Set<DocumentID> { library.bookmarkedDocuments }
+  var recentlyRead: [DocumentID] { recentOrder }
 
   func members(of collection: UUID) -> [Int] {
     library.collections[collection]?.rfcNumbers ?? []
