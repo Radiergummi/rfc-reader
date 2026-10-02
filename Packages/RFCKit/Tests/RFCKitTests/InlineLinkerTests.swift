@@ -41,15 +41,12 @@ struct InlineLinkerTests {
 
   /// A bracket naming a reference the document lists goes where the list says,
   /// under the document's own tag.
-  @Test func `a bracketed tag the references list resolves to its target`() {
+  @Test func `a bracketed tag the references list resolves to its target`() throws {
     let target = reference(9000)
     let linker = InlineLinker(sectionNumbers: [], referenceTargets: ["TRANSPORT": target])
     let inlines = linker.link("see [TRANSPORT] for streams")
     #expect(inlines.count == 3)
-    guard case .crossReference(let found) = inlines[1] else {
-      Issue.record("the tag is not a reference: \(inlines)")
-      return
-    }
+    let found = try #require(inlines[1].crossReference, "the tag is not a reference: \(inlines)")
     #expect(found.target == target)
     #expect(found.text == CrossReference.nonBreakingLabel("[TRANSPORT]"))
   }

@@ -184,7 +184,7 @@ struct RequirementsTests {
   func `every keyword the author tagged is found`(fixture: String) throws {
     let xml = try Fixtures.string(fixture)
     let tagged = xml.matches(of: /<bcp14>/).count
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let requirements = Requirements.extract(from: document)
     let boilerplate = BCP14Keyword.allCases.count
     #expect(requirements.flatMap(\.keywords).count == tagged - boilerplate)
@@ -193,7 +193,7 @@ struct RequirementsTests {
   }
 
   @Test func `a requirement knows its section and lands on its paragraph`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9197.xml"))
+    let document = try Fixtures.document("rfc9197.xml")
     let requirement = try #require(Requirements.extract(from: document).first)
     let section = try #require(document.section(anchor: requirement.sectionAnchor))
     #expect(requirement.sectionTitle == section.titleText)
@@ -205,7 +205,7 @@ struct RequirementsTests {
   /// A document that never invokes BCP 14 states no requirements, however it
   /// capitalizes its words.
   @Test func `a document that does not cite BCP 14 has no requirements`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     #expect(!document.referencedDocuments.contains(.rfc(2119)))
     #expect(Requirements.extract(from: document).isEmpty)
   }
@@ -213,7 +213,7 @@ struct RequirementsTests {
   @Test func `requirements read from legacy text are marked heuristic`() throws {
     var found: [Requirement] = []
     for name in try Fixtures.legacyTexts() where found.isEmpty {
-      found = Requirements.extract(from: LegacyTextParser.parse(try Fixtures.data(name)))
+      found = Requirements.extract(from: try Fixtures.document(name))
     }
     #expect(!found.isEmpty)
     #expect(found.allSatisfy { $0.isHeuristic })

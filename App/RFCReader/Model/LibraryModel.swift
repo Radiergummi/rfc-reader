@@ -43,7 +43,13 @@ nonisolated private let libraryLog = Logger(
 @Observable
 final class LibraryModel {
   /// One instance per process so App Intents and URL handlers reach the same state.
-  static let shared = LibraryModel()
+  ///
+  /// Reached directly only where nothing can hand it over: the composition roots
+  /// that make the app's state (`RFCReaderApp`, `AppDelegate`, iOS `ContentView`'s
+  /// `@State`), and the entry points the system instantiates (`OpenRFCIntent`, the
+  /// `Scripting` objects). Everything else is given it, and a hosted root is given it
+  /// in a `ReaderEnvironment`.
+  static let shared = LibraryModel(container: AppData.container)
 
   enum IndexState: Equatable {
     case idle
@@ -132,7 +138,12 @@ final class LibraryModel {
   /// read every mirror, rather than on the next save of the same entity (#603).
   @ObservationIgnored private var failedMirrors: UserDataMirrors = []
 
-  private init() {
+  /// The user's data: what the sets above are read from, and where a bookmark or a
+  /// collection is changed.
+  @ObservationIgnored let container: ModelContainer
+
+  private init(container: ModelContainer) {
+    self.container = container
     refresh(.all)
     storeSaves = NotificationCenter.default.addObserver(
       forName: ModelContext.didSave, object: nil, queue: .main
@@ -175,7 +186,7 @@ final class LibraryModel {
   private func refreshRecentlyReadCount() {
     let count: Int
     do {
-      count = try ReadingPositionStore.recentlyReadRFCCount(in: AppData.container.mainContext)
+      count = try ReadingPositionStore.recentlyReadRFCCount(in: container.mainContext)
     } catch {
       // The last count read stands until a fetch succeeds, which the next save tries.
       failedMirrors.insert(.recentlyReadCount)
@@ -188,7 +199,7 @@ final class LibraryModel {
   }
 
   private func refreshCollections() {
-    let snapshot = CollectionSnapshot.fetch(in: AppData.container.mainContext)
+    let snapshot = CollectionSnapshot.fetch(in: container.mainContext)
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard snapshot != collections else { return }
     collections = snapshot
@@ -217,7 +228,7 @@ final class LibraryModel {
   /// and an empty name is refused before it gets here.
   func editCollections(_ change: (ModelContext) throws -> Void) {
     do {
-      try change(AppData.container.mainContext)
+      try change(container.mainContext)
     } catch {
       libraryLog.error(
         "changing a collection failed: \(String(describing: error), privacy: .public)")
@@ -233,7 +244,7 @@ final class LibraryModel {
     let title = DocumentActions.bookmarkTitle(
       metadata: metadata(id), documentTitle: documentTitle, id: id)
     do {
-      try BookmarkStore.toggle(id, title: title, in: AppData.container.mainContext)
+      try BookmarkStore.toggle(id, title: title, in: container.mainContext)
     } catch {
       libraryLog.error(
         "toggling a bookmark failed: \(String(describing: error), privacy: .public)")
@@ -243,7 +254,7 @@ final class LibraryModel {
   private func refreshBookmarks() {
     let documents: Set<DocumentID>
     do {
-      documents = try BookmarkStore.bookmarkedDocuments(in: AppData.container.mainContext)
+      documents = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
     } catch {
       // The last set read stands until a fetch succeeds, which the next save tries.
       failedMirrors.insert(.bookmarks)
@@ -842,9 +853,9 @@ final class LibraryModel {
     @ObservationIgnored weak var windows: (any WindowOpening)?
   #endif
 
-  /// Registers a new scene, and gives it the link it was opened for if it was
-  /// opened for one and the index has arrived. Nil for a window from the menu or at
-  /// launch, which lands on the library as before.
+  /// Registers a new scene, and gives it the link it was opened for if it was opened
+  /// for one and needs nothing more (`SceneRegistry`). Nil for a window from the menu
+  /// or at launch, which lands on the library as before.
   func register(_ scene: NavigationModel) {
     if let delivery = sceneRegistry.register(scene) { carryOut(delivery) }
   }
@@ -883,8 +894,9 @@ final class LibraryModel {
   /// window was key last, which a tab opened in the background does not displace --
   /// and failing that the most recently used tab.
   ///
-  /// A link that arrives before any scene has registered, or before the index has, is
-  /// held by the registry and delivered once both are there (#140, #241).
+  /// A link that arrives before any scene has registered, or a BCP or STD link that
+  /// arrives before the index has, is held by the registry and delivered once what it
+  /// needs is there (#140, #241).
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
@@ -1074,7 +1086,7 @@ final class LibraryModel {
   /// keep the document offline; what was read in the last month; and whatever a
   /// window has open, which includes the document just fetched.
   private func pinnedDocuments() throws -> Set<DocumentID> {
-    let context = AppData.container.mainContext
+    let context = container.mainContext
     let monthAgo = Date.now.addingTimeInterval(-30 * 86_400)
     let read = try ReadingPositionStore.read(since: monthAgo, in: context)
     let bookmarked = try BookmarkStore.bookmarkedDocuments(in: context)
@@ -1102,7 +1114,7 @@ final class LibraryModel {
   func recentlyReadNumbers() -> [Int] {
     let documents: [DocumentID]
     do {
-      documents = try ReadingPositionStore.recentlyRead(in: AppData.container.mainContext)
+      documents = try ReadingPositionStore.recentlyRead(in: container.mainContext)
     } catch {
       libraryLog.error(
         "reading the recently read list failed: \(String(describing: error), privacy: .public)")

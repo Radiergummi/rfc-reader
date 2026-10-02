@@ -7,12 +7,9 @@ import Testing
 @Suite("Legacy text parser: references")
 struct LegacyTextParserReferencesTests {
   @Test func `references and links`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let informative = try #require(document.section(number: "6.2"))
-    guard case .references(let list)? = informative.blocks.first else {
-      Issue.record("expected reference list")
-      return
-    }
+    let list = try #require(informative.blocks.first?.references, "expected reference list")
     #expect(list.entries.map(\.anchor) == ["RFC733", "RFC822"])
     #expect(list.entries[1].documentID == .rfc(822))
     #expect(list.entries[1].title == "Standard for the format of ARPA Internet text messages")
@@ -35,7 +32,7 @@ struct LegacyTextParserReferencesTests {
   /// swallowed as continuation text of whatever came before -- RFC 2290 and RFC
   /// 2535 produced no bibliography at all. 782 entries across 205 documents.
   @Test func `reference anchors may hold spaces`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2606.txt"))
+    let document = try Fixtures.document("rfc2606.txt")
     let lists = document.referenceLists
     let list = try #require(lists.first, "the bibliography is lost entirely without this")
     #expect(list.entries.map(\.displayAnchor) == ["RFC 1034", "RFC 1035", "RFC 1591"])
@@ -51,7 +48,7 @@ struct LegacyTextParserReferencesTests {
   /// under it, as RFC 2049 does, the label spelled `RFC-822` (September 2026's first
   /// full corpus run).
   @Test func `a label alone on its line opens an entry`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let document = try Fixtures.document("rfc2049.txt")
     let entries = document.referenceLists.flatMap(\.entries)
     let entry = try #require(entries.first { $0.anchor == "RFC-822" })
     #expect(entry.documentID == .rfc(822))
@@ -63,7 +60,7 @@ struct LegacyTextParserReferencesTests {
   /// happened to be: RFC 2013's `[1]` is ISO 8824, and it and its citation became RFC 1.
   /// 6,887 entries in 1,381 converted documents. `[2]`, which says RFC 1902, still is.
   @Test func `a numbered entry is not the RFC of its number`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2013.txt"))
+    let document = try Fixtures.document("rfc2013.txt")
     let entries = document.referenceLists.flatMap(\.entries)
     let asn1 = try #require(entries.first { $0.displayAnchor == "1" })
     #expect(asn1.documentID == nil)
@@ -76,7 +73,7 @@ struct LegacyTextParserReferencesTests {
   /// An entry names its RFC however the document spells it. RFC 1041 writes every entry
   /// `[1] RFC-854, ...`; read as no RFC, its numbered entries named nothing at all.
   @Test func `an entry names an RFC written with a hyphen`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+    let document = try Fixtures.document("rfc1041.txt")
     let entries = document.referenceLists.flatMap(\.entries)
     #expect(entries.first { $0.displayAnchor == "1" }?.documentID == .rfc(854))
     #expect(entries.first { $0.displayAnchor == "3" }?.documentID == .rfc(885))
@@ -86,7 +83,7 @@ struct LegacyTextParserReferencesTests {
 
     // But a title names RFCs too, and the hyphenated spelling is only the fallback:
     // RFC 1494's `[1]` is "Mapping between X.400 and RFC-822 Message Bodies", RFC 1495.
-    let mapping = LegacyTextParser.parse(try Fixtures.string("rfc1494.txt")).referenceLists.flatMap(
+    let mapping = try Fixtures.document("rfc1494.txt").referenceLists.flatMap(
       \.entries)
     #expect(mapping.first { $0.displayAnchor == "1" }?.documentID == .rfc(1495))
   }
@@ -95,17 +92,17 @@ struct LegacyTextParserReferencesTests {
   /// RFC 1275 `Request for Comments 1006`, RFC 1005 `Request For Comments 990`, broken
   /// across a line.
   @Test func `an entry names an RFC in the series earliest spellings`() throws {
-    let rfc338 = LegacyTextParser.parse(try Fixtures.string("rfc338.txt")).referenceLists.flatMap(
+    let rfc338 = try Fixtures.document("rfc338.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc338.first { $0.displayAnchor == "1" }?.documentID == .rfc(189))
     #expect(rfc338.first { $0.displayAnchor == "4" }?.documentID == .rfc(183))
     #expect(rfc338.first { $0.displayAnchor == "2" }?.documentID == nil, "a note names no RFC")
 
-    let rfc1275 = LegacyTextParser.parse(try Fixtures.string("rfc1275.txt")).referenceLists.flatMap(
+    let rfc1275 = try Fixtures.document("rfc1275.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc1275.first { $0.displayAnchor == "RC87" }?.documentID == .rfc(1006))
 
-    let rfc1005 = LegacyTextParser.parse(try Fixtures.string("rfc1005.txt")).referenceLists.flatMap(
+    let rfc1005 = try Fixtures.document("rfc1005.txt").referenceLists.flatMap(
       \.entries)
     #expect(rfc1005.first { $0.displayAnchor == "3" }?.documentID == .rfc(990))
     #expect(rfc1005.first { $0.displayAnchor == "5" }?.documentID == .rfc(796))
@@ -114,7 +111,7 @@ struct LegacyTextParserReferencesTests {
   /// A label listed twice is cited as its first entry, whether that names a document or
   /// not: RFC 2023 lists RFCs 1883 and 1884 both as `[2]`.
   @Test func `a repeated label is cited as its first entry`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2023.txt"))
+    let document = try Fixtures.document("rfc2023.txt")
     let cited = document.everyCrossReference.filter { $0.text == "[2]" || $0.label == "[2]" }.map(
       \.target)
     #expect(!cited.isEmpty)

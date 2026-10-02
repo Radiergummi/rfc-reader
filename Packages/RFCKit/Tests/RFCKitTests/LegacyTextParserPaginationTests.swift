@@ -24,7 +24,7 @@ struct LegacyTextParserPaginationTests {
   /// columns its figure shares were never stripped, and the tabs themselves reached
   /// the reader, whose verbatim style sets no tab stops.
   @Test func `tabs are columns before any indent is read`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc717.txt"))
+    let document = try Fixtures.document("rfc717.txt")
     let artwork = document.artworkText
     #expect(!artwork.contains { $0.contains("\t") }, "a tab survived into artwork")
     #expect(
@@ -45,7 +45,7 @@ struct LegacyTextParserPaginationTests {
   /// which is a heading: ~33 sections called `Functional Specification`, and every
   /// paragraph that crossed a page break cut in two by one of them.
   @Test func `recurring page headers are furniture not sections`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let furniture = ["Transmission Control Protocol", "Functional Specification", "September 1981"]
     let spurious = document.allSections.filter { furniture.contains($0.titleText) }
     #expect(spurious.isEmpty, "\(spurious.count) sections are page headers")
@@ -74,7 +74,7 @@ struct LegacyTextParserPaginationTests {
   /// a centered `REFERENCES` that is no heading, and a running `References` on each of
   /// its pages; dropping every one of those lost all 58 entries.
   @Test func `a section running header still opens its section`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc770.txt"))
+    let document = try Fixtures.document("rfc770.txt")
     let lists = document.referenceLists
     #expect(lists.flatMap(\.entries).count == 58)
     #expect(document.allSections.filter { $0.titleText == "References" }.count == 1)
@@ -100,7 +100,7 @@ struct LegacyTextParserPaginationTests {
   /// and four of them land at a page edge; masking every digit made `[RFC-1522]` and
   /// `[RFC-1524]` the same line recurring across pages, and both were dropped.
   @Test func `numbers inside a word do not make two lines the same`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc2049.txt"))
+    let document = try Fixtures.document("rfc2049.txt")
     let anchors = document.referenceLists.flatMap { $0.entries.map(\.anchor) }
     #expect(anchors.contains("RFC-1522"))
     #expect(anchors.contains("RFC-1524"))
@@ -115,7 +115,7 @@ struct LegacyTextParserPaginationTests {
   /// section, set off by a blank line -- and is rarer anywhere else than at the edge.
   @Test func `a line the body repeats is not furniture`() throws {
     let text = try Fixtures.string("rfc2013.txt")
-    let document = LegacyTextParser.parse(text)
+    let document = try Fixtures.document("rfc2013.txt")
     func count(_ line: String, in text: String) -> Int {
       text.split(separator: "\n").filter {
         $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") == line
@@ -152,7 +152,7 @@ struct LegacyTextParserPaginationTests {
   /// parts 6 and 8 as one anchor each, word for word the same up to the part number
   /// on the entry's third line, and the pair straddles a page break.
   @Test func `the same line at opposite edges is not a running header`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1556.txt"))
+    let document = try Fixtures.document("rfc1556.txt")
     let labels = document.referenceLists.flatMap { $0.entries.map(\.displayAnchor) }
     #expect(labels.filter { $0 == "ISO-8859" }.count == 2)
     #expect(labels.count == 7)

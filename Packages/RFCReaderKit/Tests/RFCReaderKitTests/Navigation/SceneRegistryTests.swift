@@ -3,8 +3,8 @@ import RFCReaderKit
 import Testing
 
 /// The open tabs a link is routed through, and the links waiting for one (#137): held
-/// until there is a tab to take them and the index has arrived, so a BCP or STD opens
-/// its first RFC rather than selecting the series itself (#241).
+/// until there is a tab to take them, and a BCP or STD link until the index has arrived
+/// too, so it opens its first RFC rather than selecting the series itself (#241).
 @Suite("Scene registry")
 @MainActor
 struct SceneRegistryTests {
@@ -15,7 +15,7 @@ struct SceneRegistryTests {
 
   private let bcp14 = RFCLink(id: DocumentID(series: .bcp, number: 14))
   private let rfc9110 = RFCLink(id: .rfc(9110))
-  private let rfc2119 = RFCLink(id: .rfc(2119))
+  private let std97 = RFCLink(id: DocumentID(series: .std, number: 97))
 
   private func registry(ready: Bool = true) -> SceneRegistry<Tab> {
     var registry = SceneRegistry<Tab>()
@@ -77,16 +77,40 @@ struct SceneRegistryTests {
     #expect(registry.indexSettled().isEmpty)
   }
 
-  /// Every link waits while the index is on its way, a tab already open or not, and is
-  /// delivered when it arrives, to the tab it would have gone to.
-  @Test func `a link routed before the index arrives is delivered when it does`() {
+  /// A series link waits while the index is on its way, a tab already open or not, and
+  /// is delivered when it arrives, to the tab it would have gone to: here the one
+  /// showing its document, the later of two series links taking the slot.
+  @Test func `a series link routed before the index arrives is delivered when it does`() {
     var registry = registry(ready: false)
-    let showing = Tab(showing: .rfc(9110))
+    let showing = Tab(showing: bcp14.id)
     let recent = Tab()
     _ = registry.register(showing)
     _ = registry.register(recent)
-    #expect(route(rfc9110, in: &registry) == .wait)
-    #expect(registry.indexSettled().map(Delivery.init) == [Delivery(rfc9110, to: showing)])
+    #expect(route(std97, in: &registry) == .wait)
+    #expect(route(bcp14, in: &registry) == .wait)
+    #expect(registry.indexSettled().map(Delivery.init) == [Delivery(bcp14, to: showing)])
+  }
+
+  /// A plain RFC link needs no index to resolve, so it does not wait for one: not with a
+  /// tab open, nor for the first tab a window makes.
+  @Test func `a plain RFC link routed before the index arrives is delivered at once`() {
+    var registry = registry(ready: false)
+    #expect(route(rfc9110, in: &registry) == .openWindow)
+    let first = Tab()
+    #expect(registry.register(first).map(Delivery.init) == Delivery(rfc9110, to: first))
+    #expect(route(rfc9110, in: &registry) == .deliver(Delivery(rfc9110, to: first)))
+    #expect(registry.indexSettled().isEmpty)
+  }
+
+  /// One slot: a plain link delivered at once is the later ask, so a series link still
+  /// waiting for the index does not land on top of it when the index arrives.
+  @Test func `a plain RFC link delivered at once replaces a series link still waiting`() {
+    var registry = registry(ready: false)
+    let reading = Tab()
+    _ = registry.register(reading)
+    #expect(route(bcp14, in: &registry) == .wait)
+    #expect(route(rfc9110, in: &registry) == .deliver(Delivery(rfc9110, to: reading)))
+    #expect(registry.indexSettled().isEmpty)
   }
 
   /// #140: one slot, so of two links before the first tab the later wins. The first
@@ -112,21 +136,58 @@ struct SceneRegistryTests {
     #expect(delivery?.bringsForward == false)
   }
 
+  /// A plain RFC link held for a new tab goes to it as it registers, index or not.
+  @Test func `a plain RFC link held for a new tab does not wait for the index`() {
+    var registry = registry(ready: false)
+    _ = registry.register(Tab())
+    registry.hold(rfc9110, bringsForward: true)
+    let made = Tab()
+    #expect(registry.register(made).map(Delivery.init) == Delivery(rfc9110, to: made))
+    #expect(registry.indexSettled().isEmpty)
+  }
+
+  /// A plain RFC link opened in front after a series link was is the later ask: when the
+  /// index arrives, the series link goes to its tab without pulling the reader back.
+  @Test func `a held series link yields the front to a later link delivered at once`() {
+    var registry = registry(ready: false)
+    _ = registry.register(Tab())
+    registry.hold(bcp14, bringsForward: true)
+    let earlier = Tab()
+    #expect(registry.register(earlier) == nil)
+    registry.hold(rfc9110, bringsForward: true)
+    let later = Tab()
+    #expect(registry.register(later).map(Delivery.init) == Delivery(rfc9110, to: later))
+    #expect(
+      registry.indexSettled().map(Delivery.init) == [
+        Delivery(bcp14, to: earlier, bringsForward: false)
+      ])
+  }
+
+  /// A series link held for a new tab waits for the index, then goes to that tab (#241).
+  @Test func `a series link held for a new tab waits for the index`() {
+    var registry = registry(ready: false)
+    _ = registry.register(Tab())
+    registry.hold(bcp14, bringsForward: true)
+    let made = Tab()
+    #expect(registry.register(made) == nil)
+    #expect(registry.indexSettled().map(Delivery.init) == [Delivery(bcp14, to: made)])
+  }
+
   /// Two kinds of waiting link do not displace each other: a tab opened behind while
   /// the index loads keeps its link when a link arrives from outside.
   @Test func `a new tab's link and a routed link both arrive`() {
     var registry = registry(ready: false)
     let reading = Tab()
     _ = registry.register(reading)
-    registry.hold(rfc2119, bringsForward: false)
+    registry.hold(std97, bringsForward: false)
     let behind = Tab()
     _ = registry.register(behind)
     registry.activate(reading)
-    #expect(route(rfc9110, in: &registry) == .wait)
+    #expect(route(bcp14, in: &registry) == .wait)
     let delivered = registry.indexSettled().map(Delivery.init)
     #expect(
       delivered == [
-        Delivery(rfc2119, to: behind, bringsForward: false), Delivery(rfc9110, to: reading),
+        Delivery(std97, to: behind, bringsForward: false), Delivery(bcp14, to: reading),
       ])
   }
 
@@ -136,7 +197,7 @@ struct SceneRegistryTests {
     var registry = registry(ready: false)
     let reading = Tab()
     _ = registry.register(reading)
-    registry.hold(rfc9110, bringsForward: false)
+    registry.hold(bcp14, bringsForward: false)
     do {
       let behind = Tab()
       _ = registry.register(behind)
@@ -156,11 +217,11 @@ struct SceneRegistryTests {
     do {
       let closing = Tab()
       _ = registry.register(closing)
-      _ = route(rfc9110, in: &registry)
+      _ = route(bcp14, in: &registry)
       registry.unregister(closing)
     }
     let delivered = registry.indexSettled(preferring: { $0 === preferred })
-    #expect(delivered.map(Delivery.init) == [Delivery(rfc9110, to: preferred)])
+    #expect(delivered.map(Delivery.init) == [Delivery(bcp14, to: preferred)])
   }
 
   /// A routed link whose tab closed, with no other tab open when the index arrived, goes
@@ -170,12 +231,12 @@ struct SceneRegistryTests {
     do {
       let closing = Tab()
       _ = registry.register(closing)
-      #expect(route(rfc9110, in: &registry) == .wait)
+      #expect(route(bcp14, in: &registry) == .wait)
       registry.unregister(closing)
     }
     #expect(registry.indexSettled().isEmpty)
     let made = Tab()
-    #expect(registry.register(made).map(Delivery.init) == Delivery(rfc9110, to: made))
+    #expect(registry.register(made).map(Delivery.init) == Delivery(bcp14, to: made))
     #expect(registry.indexSettled().isEmpty)
   }
 

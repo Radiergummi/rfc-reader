@@ -11,10 +11,12 @@ import SwiftUI
 /// The `GeometryReader` is the width channel: it is what makes a window resize reach
 /// the representable at all, and the column is centered from it.
 struct RFCTextView: View {
-  // The coordinator builds the hover/long-press preview's hosting controller
-  // itself, which sits outside SwiftUI's environment chain — so it needs the
-  // library handed to it explicitly, the same way it is here.
+  // The header's hosting controller and the previews' are outside SwiftUI's
+  // environment chain, so what they read is gathered here, where it is in reach,
+  // and handed to the coordinator that makes them as a `ReaderEnvironment`.
   @Environment(LibraryModel.self) private var library
+  @Environment(NavigationModel.self) private var navigation
+  @Environment(ReaderState.self) private var reader
   /// Everything else, gathered once here; see `ReaderInputs` for each.
   let inputs: ReaderInputs
 
@@ -64,7 +66,11 @@ struct RFCTextView: View {
 
   var body: some View {
     GeometryReader { geometry in
-      Representable(inputs: inputs, library: library, width: geometry.size.width)
+      Representable(
+        inputs: inputs,
+        environment: ReaderEnvironment(
+          library: library, navigation: navigation, reader: reader),
+        width: geometry.size.width)
     }
   }
 }
@@ -84,8 +90,8 @@ struct ReaderScrollTarget: Equatable {
 /// Everything the reader is given, and the one place it is handed to the shared
 /// coordinator. `RFCTextView` holds one of these rather than a copy of each field,
 /// and the two representables pass it on, so an input is declared here and named
-/// again only in `RFCTextView.init`'s labels. The library is not in it: it is the
-/// environment's, which `RFCTextView` reads, and passed beside it.
+/// again only in `RFCTextView.init`'s labels. The `ReaderEnvironment` is not in it:
+/// it is the environment's, which `RFCTextView` reads, and passed beside it.
 struct ReaderInputs {
   let built: BuiltDocument
   /// The document's bibliographies, which the body leaves out: what a citation
@@ -130,7 +136,9 @@ struct ReaderInputs {
 
   /// Called on every SwiftUI update pass, so it does the cheap assignments first
   /// and only installs when the document itself changed.
-  func apply(to coordinator: RFCTextViewCoordinator, library: LibraryModel, width: CGFloat) {
+  func apply(
+    to coordinator: RFCTextViewCoordinator, environment: ReaderEnvironment, width: CGFloat
+  ) {
     coordinator.onScrollHandled = onScrollHandled
     coordinator.onVisibleAnchorChange = onVisibleAnchorChange
     coordinator.onLink = onLink
@@ -149,18 +157,14 @@ struct ReaderInputs {
       coordinator.heading = heading
       heading.didChange = { [weak coordinator] in coordinator?.updateToolbarTitle() }
     }
-    coordinator.library = library
+    coordinator.environment = environment
     // Only when it actually changed: the hosting controller is outside SwiftUI's
     // diffing, so assigning `rootView` re-renders the whole header subtree, and
     // this runs on every update pass — including one per section crossing while
     // scrolling.
     if coordinator.headerIdentity != headerIdentity {
       coordinator.headerIdentity = headerIdentity
-      #if canImport(UIKit)
-        coordinator.headerHost?.rootView = coordinator.hostedHeader(header)
-      #else
-        coordinator.headerHost?.rootView = header
-      #endif
+      coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
     coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
@@ -198,7 +202,7 @@ struct ReaderInputs {
 #if canImport(UIKit)
   private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
-    let library: LibraryModel
+    let environment: ReaderEnvironment
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -235,7 +239,8 @@ struct ReaderInputs {
         return revealed
       }
 
-      let host = UIHostingController(rootView: context.coordinator.hostedHeader(inputs.header))
+      let host = UIHostingController(
+        rootView: context.coordinator.hostedHeader(inputs.header, in: environment))
       host.view.backgroundColor = .clear
       // No safe area: the reader runs under the top bar, and the header scrolled
       // under it would otherwise be padded down by the overlap, and measured with
@@ -257,7 +262,7 @@ struct ReaderInputs {
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-      inputs.apply(to: context.coordinator, library: library, width: width)
+      inputs.apply(to: context.coordinator, environment: environment, width: width)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -273,7 +278,7 @@ struct ReaderInputs {
 #else
   private struct Representable: NSViewRepresentable {
     let inputs: ReaderInputs
-    let library: LibraryModel
+    let environment: ReaderEnvironment
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -331,7 +336,8 @@ struct ReaderInputs {
         coordinator?.mouseDownInText() ?? false
       }
 
-      let host = NSHostingController(rootView: inputs.header)
+      let host = NSHostingController(
+        rootView: context.coordinator.hostedHeader(inputs.header, in: environment))
       textView.addSubview(host.view)
       textView.header = host.view
 
@@ -357,7 +363,7 @@ struct ReaderInputs {
     }
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
-      inputs.apply(to: context.coordinator, library: library, width: width)
+      inputs.apply(to: context.coordinator, environment: environment, width: width)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

@@ -44,12 +44,12 @@ struct ReferenceKindTests {
   }
 
   @Test func `an XML document's split references have their kinds`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let document = try Fixtures.document("rfc8999.xml")
     #expect(Self.kinds(in: document) == [.normative, .informative])
   }
 
   @Test func `a legacy document's split references have their kinds`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     #expect(Self.kinds(in: document) == [.normative, .informative])
   }
 
@@ -59,14 +59,14 @@ struct ReferenceKindTests {
   /// RFC 1041, not RFC 793: the only list RFC 793 had was its contents entry
   /// `REFERENCES ..... 85` read as a section, whose entries were page numbers (#403).
   @Test func `a single list of references has no kind`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1041.txt"))
+    let document = try Fixtures.document("rfc1041.txt")
     #expect(Self.kinds(in: document) == [.unknown])
   }
 
   /// The entry a citation resolved to is recorded on its target, so its kind can be
   /// read from the list that holds the entry.
   @Test func `an XML citation records the entry it resolved to`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8999.xml"))
+    let document = try Fixtures.document("rfc8999.xml")
     #expect(
       Self.targets(in: document).contains(
         .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT")))
@@ -76,7 +76,7 @@ struct ReferenceKindTests {
   /// members resolves to the group's entry: RFC 9682 cites RFC 8949, which its
   /// normative references hold only as a member of STD 94.
   @Test func `a citation of a reference group's member records the group as its entry`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9682.xml"))
+    let document = try Fixtures.document("rfc9682.xml")
     #expect(
       Self.targets(in: document).contains(.document(.rfc(8949), section: "3.3", entry: "STD94")))
   }
@@ -84,7 +84,7 @@ struct ReferenceKindTests {
   /// A group names only its own series, so it keeps its members' documents: what a
   /// bare mention of a member, which records no entry, finds the group by.
   @Test func `a reference group keeps the documents its members are`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9682.xml"))
+    let document = try Fixtures.document("rfc9682.xml")
     let entries = Self.entries(in: document)
     #expect(entries.first { $0.anchor == "STD94" }?.members == [.rfc(8949)])
     #expect(entries.first { $0.anchor == "STD68" }?.members == [.rfc(5234)])
@@ -92,7 +92,7 @@ struct ReferenceKindTests {
   }
 
   @Test func `a legacy citation records the entry it resolved to`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let entry = try #require(Self.entries(in: document).first { $0.documentID == .rfc(733) })
     #expect(
       Self.targets(in: document).contains(.document(.rfc(733), section: nil, entry: entry.anchor)))

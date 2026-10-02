@@ -35,20 +35,20 @@ struct AnchorResolutionTests {
     "rfc9682.xml",
   ])
   func `every cited anchor is held`(fixture: String) throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let dangling = Self.citedAnchors(in: document).subtracting(Self.anchors(in: document))
     #expect(dangling.isEmpty, "cited but not held: \(dangling.sorted())")
   }
 
   @Test func `a definition keeps its own anchor`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9197.xml"))
+    let document = try Fixtures.document("rfc9197.xml")
     let anchors = Self.anchors(in: document)
     #expect(anchors.contains("TraceFlags"))
     #expect(anchors.contains("IOAMTraceType"))
   }
 
   @Test func `a row keeps its anchor`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
+    let document = try Fixtures.document("rfc9271.xml")
     #expect(Self.anchors(in: document).contains("EventFSD"))
   }
 
@@ -66,7 +66,7 @@ struct AnchorResolutionTests {
   /// a header is given one, and the anchor has to come back through the serializer
   /// and the parser on the header row, not on a body row.
   @Test func `a header row keeps its anchor`() throws {
-    var document = try RFCXMLParser.parse(try Fixtures.data("rfc9271.xml"))
+    var document = try Fixtures.document("rfc9271.xml")
     func anchorFirstHeaderRow(in sections: inout [Section]) -> Bool {
       for section in sections.indices {
         for index in sections[section].blocks.indices {
@@ -94,7 +94,7 @@ struct AnchorResolutionTests {
   /// The serializer writes both back, so a round trip keeps the links whole.
   @Test(arguments: ["rfc9197.xml", "rfc9271.xml"])
   func `the anchors survive a round trip`(fixture: String) throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let xml = RFCXMLSerializer().serialize(document)
     let reparsed = try RFCXMLParser.parse(Data(xml.utf8))
     #expect(Self.anchors(in: reparsed).isSuperset(of: Self.citedAnchors(in: document)))

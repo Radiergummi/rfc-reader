@@ -387,7 +387,7 @@ struct PacketDiagramTests {
 
   /// RFC 793's TCP header, as the parser hands it over, caption and all.
   @Test func `the TCP header in RFC 793 is recognized with every field`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.data("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let artwork = try #require(
       document.blocks.lazy.compactMap { block -> String? in
         guard case .preformatted(let content) = block, content.text.contains("Source Port")

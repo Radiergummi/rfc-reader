@@ -351,17 +351,14 @@ struct DocumentView: View {
         onChromeHidden: setBarsHidden,
         heading: heading,
         headerIdentity: headerIdentity,
-        // Hosted outside the storage, so it needs the environment handed to
-        // it: the banner's links to newer RFCs go through `LibraryModel`.
+        // Hosted outside the storage, given the environment by the text view.
         header: {
-          DocumentHeaderView(
-            library: library, navigation: navigation, identity: headerIdentity, heading: heading
-          )
-          .padding(.top, 16)
-          .padding(.bottom, 12)
-          // Outside the padding, so the heading is measured from the top of the
-          // hosted view, which is where the coordinator places it.
-          .coordinateSpace(.named(DocumentHeaderView.coordinateSpace))
+          DocumentHeaderView(identity: headerIdentity, heading: heading)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+            // Outside the padding, so the heading is measured from the top of the
+            // hosted view, which is where the coordinator places it.
+            .coordinateSpace(.named(DocumentHeaderView.coordinateSpace))
         }
       )
       #if !os(macOS)
@@ -431,7 +428,6 @@ struct DocumentView: View {
     return ScrollView {
       VStack(alignment: .leading, spacing: 0) {
         DocumentHeaderView(
-          library: library, navigation: navigation,
           identity: DocumentHeaderView.Identity(
             header: DocumentHeader(id: id, title: metadata.title),
             metadata: metadata,

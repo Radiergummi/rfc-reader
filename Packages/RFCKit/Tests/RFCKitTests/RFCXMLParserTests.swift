@@ -184,10 +184,7 @@ struct RFCXMLParserTests {
   @Test func `cross references resolve to RFCs`() throws {
     let document = try Self.document()
     let fixed = try #require(document.section(number: "2"))
-    guard case .paragraph(let paragraph)? = fixed.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(fixed.blocks.first?.paragraph, "expected a paragraph")
     let xrefs = paragraph.inlines.compactMap(\.crossReference)
     let transport = try #require(xrefs.first)
     #expect(transport.target == .document(.rfc(9000), section: nil, entry: "QUIC-TRANSPORT"))
@@ -259,10 +256,7 @@ struct RFCXMLParserTests {
       """
     let document = try RFCXMLParser.parse(Data(xml.utf8))
     let intro = try #require(document.section(anchor: "intro"))
-    guard case .paragraph(let paragraph)? = intro.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(intro.blocks.first?.paragraph, "expected a paragraph")
     let xref = try #require(
       paragraph.inlines.compactMap(\.crossReference).first)
     #expect(xref.text == nil, "the whole phrasing is ours to compose")
@@ -286,10 +280,7 @@ struct RFCXMLParserTests {
       """
     let document = try RFCXMLParser.parse(Data(xml.utf8))
     let intro = try #require(document.section(anchor: "intro"))
-    guard case .paragraph(let paragraph)? = intro.blocks.first else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(intro.blocks.first?.paragraph, "expected a paragraph")
     #expect(paragraph.plainText == "RFC\u{00A0}9110 wraps as one unit.")
   }
 
@@ -339,10 +330,8 @@ struct RFCXMLParserTests {
     #expect(references.number == "8")
     #expect(
       references.subsections.map(\.titleText) == ["Normative References", "Informative References"])
-    guard case .references(let normative)? = references.subsections[0].blocks.first else {
-      Issue.record("expected a reference list")
-      return
-    }
+    let normative = try #require(
+      references.subsections[0].blocks.first?.references, "expected a reference list")
     #expect(normative.entries.map(\.anchor) == ["RFC2119", "RFC8174"])
     let bcp = normative.entries[0]
     #expect(bcp.title == "Key words for use in RFCs to Indicate Requirement Levels")
@@ -353,7 +342,7 @@ struct RFCXMLParserTests {
   }
 
   static func entries(in name: String) throws -> [Reference] {
-    let document = try RFCXMLParser.parse(try Fixtures.data(name))
+    let document = try Fixtures.document(name)
     return document.allSections.flatMap { section in
       section.blocks.flatMap { block -> [Reference] in
         if case .references(let list) = block { return list.entries }
@@ -420,7 +409,7 @@ struct RFCXMLParserTests {
   /// number the prep tool gives them; it reads "[14]", as the RFC Editor renders it,
   /// not a bare "14" (#275). A link to one of its own tables stays "Table 7".
   @Test func `a citation of an entry outside the series keeps its brackets`() throws {
-    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc8761.xml")).everyCrossReference
+    let xrefs = try Fixtures.document("rfc8761.xml").everyCrossReference
     let draft = try #require(xrefs.first { $0.target == .anchor("I-D.ietf-netvc-testing") })
     #expect(draft.label == "[14]")
     let codec = try #require(xrefs.first { $0.target == .anchor("HEVC") })
@@ -445,7 +434,7 @@ struct RFCXMLParserTests {
   func `a citation of a section of an entry outside the series names the section`(
     fixture: String, entry: String, labels: [String]
   ) throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let xrefs = document.everyCrossReference.filter { xref in
       switch xref.target {
       case .anchor(let anchor): anchor == entry
@@ -462,7 +451,7 @@ struct RFCXMLParserTests {
   @Test func `a citation of a section of an entry outside the series links to the section`()
     throws
   {
-    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml")).everyCrossReference
+    let xrefs = try Fixtures.document("rfc9842.xml").everyCrossReference
     let page = try #require(URL(string: "https://fetch.spec.whatwg.org/#cors-check"))
     let cors = try #require(
       xrefs.first {
@@ -475,7 +464,7 @@ struct RFCXMLParserTests {
   /// RFC 9220 cites RFC 8441 with `format="title"`, whose `derivedContent` is the
   /// entry's title. A title is not a tag, so it reads as the title, not in brackets.
   @Test func `a citation by title reads as the title, unbracketed`() throws {
-    let xrefs = try RFCXMLParser.parse(try Fixtures.data("rfc9220.xml")).everyCrossReference
+    let xrefs = try Fixtures.document("rfc9220.xml").everyCrossReference
     let labels = xrefs.filter { $0.target == .document(.rfc(8441), section: nil, entry: "RFC8441") }
       .map(\.label)
     #expect(labels.contains("Bootstrapping WebSockets with HTTP/2"))
@@ -551,7 +540,7 @@ struct RFCXMLParserTests {
   /// related YANG types its own: six in Table 1, of 6, 2, 5, 11, 2 and 6 rows.
   /// Reading only the first kept the six counters and dropped the rest.
   @Test func `every table body is read`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9911.xml"))
+    let document = try Fixtures.document("rfc9911.xml")
     let tables = document.everyBlock.flattened.compactMap(\.table)
     let table = try #require(tables.first { $0.anchor == "T1" })
     #expect(table.header.count == 1)
@@ -565,7 +554,7 @@ struct RFCXMLParserTests {
   /// beside the `rel="alternate"` links for its DOI and the series ISSN, which are not
   /// lineage and must not be taken for it.
   @Test func `the draft an RFC came from is read`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9842.xml"))
+    let document = try Fixtures.document("rfc9842.xml")
     #expect(
       document.header.precedingDraft?.absoluteString
         == "https://datatracker.ietf.org/doc/draft-ietf-httpbis-compression-dictionary-19")
@@ -643,7 +632,7 @@ struct RFCXMLParserTests {
   /// RFC 9601 sets off the reasoning behind a rule as `<t indent="3">` under the list
   /// that states it. Every other paragraph says `indent="0"`, which is no indent at all.
   @Test func `a paragraph keeps its indent`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc9601.xml"))
+    let document = try Fixtures.document("rfc9601.xml")
     let paragraphs = document.nestedParagraphs
     let reasoning = try #require(paragraphs.first { $0.plainText.hasPrefix("Reasoning:") })
     #expect(reasoning.anchor == "section-5-5")
@@ -663,7 +652,7 @@ struct RFCXMLParserTests {
   func `a definition list keeps its newline and spacing`(
     fixture: String, section: String, shape: String
   ) throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data(fixture))
+    let document = try Fixtures.document(fixture)
     let list = try #require(
       document.section(number: section)?.blocks.compactMap(\.definitionList).first)
     #expect(

@@ -8,6 +8,9 @@
   // events and the models the menus and toolbar already drive, and what needs
   // deciding — which collection a name means, which document a reference names —
   // is in `RFCReaderKit`, where it is tested.
+  //
+  // They reach `LibraryModel.shared` because AppKit's scripting bridge makes them,
+  // and has no way to hand them the library.
 
   /// An RFC as a script sees it, named by its number: `rfc id 9110`.
   @objc(ScriptableRFC)

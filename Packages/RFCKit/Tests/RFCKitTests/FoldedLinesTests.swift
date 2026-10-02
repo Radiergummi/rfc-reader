@@ -22,7 +22,7 @@ struct FoldedLinesTests {
 
   /// Every verbatim block the document folds, in document order.
   private static func foldedBlocks(in name: String) throws -> [Preformatted] {
-    let document = try RFCXMLParser.parse(try Fixtures.data(name))
+    let document = try Fixtures.document(name)
     return document.blocks.compactMap {
       guard case .preformatted(let content) = $0, FoldedLines.strategy(of: content.text) != nil
       else { return nil }

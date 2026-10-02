@@ -7,8 +7,7 @@ import SwiftUI
 /// reader header's `UIHostingController` is a subview of the text view, not a child
 /// controller. Such a view hands the term to its tab's `NavigationModel`, and
 /// `ReaderScene`, which is in the window, presents it. Required of every button, so
-/// a hosted view that forgets is a compile error rather than a tap that does nothing,
-/// as `StatusBanner` takes its models as properties for the compiler to check.
+/// a hosted view that forgets is a compile error rather than a tap that does nothing.
 enum GlossaryPresentation {
   /// By the button itself: a view in the window.
   case here

@@ -15,7 +15,7 @@ struct UnicodeNotationTests {
   // MARK: Through the parser
 
   private static func paragraphs(in name: String) throws -> [Paragraph] {
-    let document = try RFCXMLParser.parse(try Fixtures.data(name))
+    let document = try Fixtures.document(name)
     return document.allSections.flatMap(\.blocks).flatMap(paragraphs(in:))
   }
 
@@ -68,7 +68,7 @@ struct UnicodeNotationTests {
   }
 
   @Test func `table cells are spelled out too`() throws {
-    let document = try RFCXMLParser.parse(try Fixtures.data("rfc8771.xml"))
+    let document = try Fixtures.document("rfc8771.xml")
     let tables = document.everyBlock.compactMap(\.table)
     let table = try #require(tables.first { $0.header.first?.cells.first?.plainText == "Bit Seq." })
     #expect(

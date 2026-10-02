@@ -205,7 +205,7 @@ struct ABNFTests {
   /// RFC 5234 sets its own grammar and its core rules as ABNF: both come out as
   /// source code typed `abnf`, as RFCXML writes it.
   @Test func `RFC 5234's grammars are source code typed abnf`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let verbatim = document.blocks.compactMap { block -> Preformatted? in
       guard case .preformatted(let preformatted) = block else { return nil }
       return preformatted
@@ -218,7 +218,7 @@ struct ABNFTests {
 
   /// A diagram stays artwork.
   @Test func `RFC 793's diagrams stay artwork`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc793.txt"))
+    let document = try Fixtures.document("rfc793.txt")
     let typed = document.blocks.filter { block in
       if case .preformatted(let preformatted) = block { return preformatted.type == "abnf" }
       return false

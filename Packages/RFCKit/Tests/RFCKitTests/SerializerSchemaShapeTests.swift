@@ -11,7 +11,7 @@ import Testing
 @Suite("Serializer: schema shape")
 struct SerializerSchemaShapeTests {
   private static func converted(_ name: String) throws -> (RFCDocument, XMLTree.Element) {
-    let document = LegacyTextParser.parse(try Fixtures.data(name))
+    let document = try Fixtures.document(name)
     let xml = RFCXMLSerializer().serialize(document)
     return (document, try XMLTree.parse(Data(xml.utf8)))
   }

@@ -7,7 +7,7 @@ import Testing
 @Suite("Legacy text parser: blocks")
 struct LegacyTextParserBlocksTests {
   @Test func `paragraphs split across pages are rejoined`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1149.txt"))
+    let document = try Fixtures.document("rfc1149.txt")
     let discussion = try #require(document.sections.first { $0.titleText == "Discussion" })
     let paragraphs = discussion.blocks.compactMap(\.paragraph?.plainText)
     #expect(paragraphs.count == 1)
@@ -18,7 +18,7 @@ struct LegacyTextParserBlocksTests {
   }
 
   @Test func `prose versus artwork`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let terminals = try #require(document.section(number: "2.3"))
     var paragraphs: [String] = []
     var artworks: [String] = []
@@ -45,7 +45,7 @@ struct LegacyTextParserBlocksTests {
   }
 
   @Test func `lists are detected`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc5234.txt"))
+    let document = try Fixtures.document("rfc5234.txt")
     let grammar = try #require(document.section(number: "4"))
     let lists = grammar.blocks.compactMap(\.list)
     #expect(lists.count == 1)
@@ -65,7 +65,7 @@ struct LegacyTextParserBlocksTests {
   /// preserved as artwork. Artwork is never linkified, and the list was shredded
   /// into one single-item list per item.
   @Test func `list continuation paragraphs stay prose`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc234.txt"))
+    let document = try Fixtures.document("rfc234.txt")
     let lists = document.lists
     let carrying = try #require(
       lists.first { $0.items.contains { $0.blocks.count > 1 } },
@@ -78,10 +78,7 @@ struct LegacyTextParserBlocksTests {
       },
       "the continuation is prose, not artwork")
     let continuation = try #require(item.blocks.dropFirst().first)
-    guard case .paragraph(let paragraph) = continuation else {
-      Issue.record("expected a paragraph")
-      return
-    }
+    let paragraph = try #require(continuation.paragraph, "expected a paragraph")
     #expect(paragraph.plainText.contains("Commences at"))
   }
 
@@ -139,7 +136,7 @@ struct LegacyTextParserBlocksTests {
   /// The same through a whole document: RFC 1540's standards summaries are catalogs,
   /// and every one of them is compact and hangs its numbers, merged entries included.
   @Test func `a document's catalogs are compact and hang their numbers`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc1540.txt"))
+    let document = try Fixtures.document("rfc1540.txt")
     let catalogs = document.everyBlock.compactMap(\.definitionList)
     #expect(catalogs.count > 1)
     #expect(catalogs.allSatisfy { $0.isCompact && $0.hangsTerms })
@@ -400,7 +397,7 @@ struct LegacyTextParserBlocksTests {
   /// to reach a common right margin. Those runs of spaces are what tells prose from
   /// artwork everywhere else, so all 60-odd of its paragraphs were preformatted blocks.
   @Test func `justified prose is not artwork`() throws {
-    let document = LegacyTextParser.parse(try Fixtures.string("rfc757.txt"))
+    let document = try Fixtures.document("rfc757.txt")
     #expect(
       document.header.title
         == "A Suggested Solution to the Naming, Addressing, and Delivery Problem for ARPAnet Message Systems"
@@ -421,10 +418,8 @@ struct LegacyTextParserBlocksTests {
 
     // The padding is collapsed on reflow, so the text reads normally.
     let introduction = try #require(document.section(number: "1"))
-    guard case .paragraph(let first)? = introduction.blocks.first else {
-      Issue.record("expected the introduction to start with a paragraph")
-      return
-    }
+    let first = try #require(
+      introduction.blocks.first?.paragraph, "expected the introduction to start with a paragraph")
     #expect(!first.plainText.contains("  "), "the padding is collapsed")
     #expect(first.plainText.hasPrefix("The current ARPAnet"))
     #expect(first.plainText.hasSuffix("shortcomings."))
