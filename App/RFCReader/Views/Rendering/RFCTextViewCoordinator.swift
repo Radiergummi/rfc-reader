@@ -1,7 +1,6 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
-import os
 
 #if canImport(UIKit)
   import UIKit
