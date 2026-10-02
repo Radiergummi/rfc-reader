@@ -841,9 +841,9 @@ final class LibraryModel {
     @ObservationIgnored weak var windows: (any WindowOpening)?
   #endif
 
-  /// Registers a new scene, and gives it the link it was opened for if it was
-  /// opened for one and the index has arrived. Nil for a window from the menu or at
-  /// launch, which lands on the library as before.
+  /// Registers a new scene, and gives it the link it was opened for if it was opened
+  /// for one and needs nothing more (`SceneRegistry`). Nil for a window from the menu
+  /// or at launch, which lands on the library as before.
   func register(_ scene: NavigationModel) {
     if let delivery = sceneRegistry.register(scene) { carryOut(delivery) }
   }
@@ -882,8 +882,9 @@ final class LibraryModel {
   /// window was key last, which a tab opened in the background does not displace --
   /// and failing that the most recently used tab.
   ///
-  /// A link that arrives before any scene has registered, or before the index has, is
-  /// held by the registry and delivered once both are there (#140, #241).
+  /// A link that arrives before any scene has registered, or a BCP or STD link that
+  /// arrives before the index has, is held by the registry and delivered once what it
+  /// needs is there (#140, #241).
   ///
   /// On macOS the app makes every window itself, so the tab that takes the link is
   /// also brought forward: `makeKeyAndOrderFront` selects a tab within its group.
