@@ -30,6 +30,8 @@ public struct FoldingIndex: Sendable {
     public let offset: Int
     /// Where the heading's paragraph starts, which is where its disclosure is.
     public let paragraph: Int
+    /// How deep it is nested, 1 for a top-level section or the abstract.
+    public let depth: Int
   }
 
   /// Every paragraph, in order.
@@ -55,7 +57,9 @@ public struct FoldingIndex: Sendable {
       .map { entry in
         Entry(
           anchor: entry.anchor, offset: entry.offset,
-          paragraph: string.paragraphRange(for: NSRange(location: entry.offset, length: 0)).location
+          paragraph: string.paragraphRange(for: NSRange(location: entry.offset, length: 0))
+            .location,
+          depth: entry.depth ?? 1
         )
       }
   }
@@ -85,21 +89,25 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// The paragraphs this folding hides: in the outline, every one but the headings and
-  /// an expanded entry's own text, which runs to the next heading of any level.
+  /// an expanded entry's own text, which runs to the next heading of any level; a
+  /// heading only where every section it is nested in is expanded (`outline(in:)`).
   public func hidden(in index: FoldingIndex) -> HiddenText {
     guard mode == .outline else { return HiddenText() }
-    let headings = Set(index.entries.map(\.paragraph))
+    let outline = outline(in: index)
+    let headings = Dictionary(
+      zip(index.entries, outline).map { ($0.paragraph, $1.headingShown) },
+      uniquingKeysWith: { first, _ in first })
     var next = 0
-    var shown = false
+    var textShown = false
     var paragraphs: [(range: NSRange, isHidden: Bool)] = []
     paragraphs.reserveCapacity(index.paragraphs.count)
     for paragraph in index.paragraphs {
       // The entries are in order, as the paragraphs are: one pass over both.
       while next < index.entries.count, index.entries[next].offset <= paragraph.location {
-        shown = expanded.contains(index.entries[next].anchor)
+        textShown = outline[next].textShown
         next += 1
       }
-      paragraphs.append((paragraph, !(shown || headings.contains(paragraph.location))))
+      paragraphs.append((paragraph, !(headings[paragraph.location] ?? textShown)))
     }
     return HiddenText(paragraphs: paragraphs, length: index.length)
   }
@@ -109,11 +117,13 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// The headings that have a disclosure, by where their paragraph starts, each open
-  /// or not: in the outline, every one; in Normal, none.
+  /// or not: in the outline, every one it shows; in Normal, none.
   public func disclosures(in index: FoldingIndex) -> [Int: Bool] {
     guard mode == .outline else { return [:] }
     return Dictionary(
-      index.entries.map { ($0.paragraph, expanded.contains($0.anchor)) },
+      zip(index.entries, outline(in: index)).filter(\.1.headingShown).map { entry, _ in
+        (entry.paragraph, expanded.contains(entry.anchor))
+      },
       uniquingKeysWith: { first, _ in first })
   }
 
@@ -141,13 +151,46 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored
-  /// place inside a folded section, or in the abstract, expands it. Unchanged in a
-  /// mode that folds nothing.
+  /// place inside a folded section, or in the abstract, expands it and every section
+  /// it is nested in. Unchanged in a mode that folds nothing.
   public func expanding(toShow offset: Int, in index: FoldingIndex) -> Folding {
     guard mode != .normal, let entry = index.entry(covering: offset) else { return self }
     var expanded = self
-    expanded.expanded.insert(entry.anchor)
+    expanded.expanded.formUnion(index.anchors(enclosing: entry) + [entry.anchor])
     return expanded
+  }
+
+  /// Each outline entry, in order: whether its heading is shown, which is where every
+  /// section it is nested in is expanded, and whether its own text is, which is where
+  /// its heading is shown and it is expanded itself.
+  private func outline(in index: FoldingIndex) -> [(headingShown: Bool, textShown: Bool)] {
+    // The sections the entry is nested in, outermost first, each with whether what
+    // it holds is shown.
+    var enclosing: [(depth: Int, isOpen: Bool)] = []
+    return index.entries.map { entry in
+      while let last = enclosing.last, last.depth >= entry.depth {
+        enclosing.removeLast()
+      }
+      let headingShown = enclosing.last?.isOpen ?? true
+      let textShown = headingShown && expanded.contains(entry.anchor)
+      enclosing.append((entry.depth, textShown))
+      return (headingShown, textShown)
+    }
+  }
+}
+
+extension FoldingIndex {
+  /// The anchors of the sections `entry` is nested in: each shallower heading
+  /// before it, back to the top level.
+  func anchors(enclosing entry: Entry) -> [String] {
+    guard let position = entries.firstIndex(of: entry) else { return [] }
+    var depth = entry.depth
+    var anchors: [String] = []
+    for earlier in entries[..<position].reversed() where earlier.depth < depth {
+      anchors.append(earlier.anchor)
+      depth = earlier.depth
+    }
+    return anchors
   }
 }
 

@@ -33,44 +33,110 @@ struct ReadingModeTests {
       })
   }
 
+  /// The outline's entries, the abstract's and the sections', in order.
+  private static func outlineEntries(of built: BuiltDocument) -> [AnchorIndex.Entry] {
+    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
+    return (abstract + built.anchors.sections.entries).sorted { $0.offset < $1.offset }
+  }
+
+  /// The anchors of the entries the one at `position` is nested in, walking back to
+  /// each shallower heading.
+  private static func ancestors(of position: Int, in entries: [AnchorIndex.Entry]) -> Set<String> {
+    var depth = entries[position].depth ?? 1
+    var ancestors: Set<String> = []
+    for earlier in entries[..<position].reversed() where (earlier.depth ?? 1) < depth {
+      ancestors.insert(earlier.anchor)
+      depth = earlier.depth ?? 1
+    }
+    return ancestors
+  }
+
+  /// The paragraphs the outline shows with `expanded` open: a heading whose every
+  /// ancestor is open, and the own text of a shown heading that is open itself.
+  private static func outlineShown(of built: BuiltDocument, expanded: Set<String>) -> Set<Int> {
+    let entries = outlineEntries(of: built)
+    let string = built.text.string as NSString
+    var shown: Set<Int> = []
+    for paragraph in paragraphs(of: built) {
+      guard let owner = entries.lastIndex(where: { $0.offset <= paragraph.location }) else {
+        continue
+      }
+      let headingShown = ancestors(of: owner, in: entries).isSubset(of: expanded)
+      let heading = string.paragraphRange(
+        for: NSRange(location: entries[owner].offset, length: 0)
+      ).location
+      let isHeading = heading == paragraph.location
+      if headingShown, isHeading || expanded.contains(entries[owner].anchor) {
+        shown.insert(paragraph.location)
+      }
+    }
+    return shown
+  }
+
+  /// A section with subsections, and a subsection of it that has its own.
+  private static func nestedSections(of built: BuiltDocument) throws -> (
+    parent: AnchorIndex.Entry, child: AnchorIndex.Entry
+  ) {
+    let entries = outlineEntries(of: built)
+    let parent = try #require(
+      entries.indices.dropLast().first { (entries[$0 + 1].depth ?? 1) > (entries[$0].depth ?? 1) })
+    return (entries[parent], entries[parent + 1])
+  }
+
   @Test func `normal reading hides nothing`() throws {
     let built = try Self.rfc8999()
     #expect(Folding(mode: .normal).hidden(in: built).isEmpty)
   }
 
-  /// Outline: headings only.
-  @Test func `the outline shows every heading and nothing else`() throws {
+  /// Outline, all closed: the top-level headings and the abstract's, and nothing
+  /// else; a subsection's heading is inside its closed parent.
+  @Test func `closed, the outline shows the top-level headings only`() throws {
     let built = try Self.rfc8999()
-    let hidden = Folding(mode: .outline).hidden(in: built)
-    let headings = Self.headingParagraphs(of: built)
-    #expect(headings.count > 10)
+    let hidden = Folding(mode: .outline).hidden(in: FoldingIndex(built))
+    let topLevel = Set(
+      Self.outlineEntries(of: built).filter { ($0.depth ?? 1) == 1 }.map(\.offset))
+    #expect(topLevel.count > 5)
+    #expect(topLevel.count < Self.headingParagraphs(of: built).count)
     for paragraph in Self.paragraphs(of: built) {
       #expect(
-        hidden.contains(paragraph.location) != headings.contains(paragraph.location),
+        hidden.contains(paragraph.location) != topLevel.contains(paragraph.location),
         "paragraph at \(paragraph.location)")
     }
   }
 
-  /// A heading's disclosure shows its section's own text, up to the next heading:
-  /// its subsections stay folded, as headings.
-  @Test func `an expanded section shows its text up to the next heading`() throws {
+  /// Opening a section shows its own text and its subsections' headings, each closed;
+  /// a subsection opened inside a closed section stays hidden with it.
+  @Test func `an open section shows its text and its subsections closed`() throws {
     let built = try Self.rfc8999()
-    let sections = built.anchors.sections.entries
-    let index = try #require(
-      sections.indices.dropLast().first { index in
-        sections[index + 1].offset - sections[index].offset > 200
-      })
-    let expanded = Folding(mode: .outline, expanded: [sections[index].anchor]).hidden(in: built)
-    let start = sections[index].offset
-    let end = sections[index + 1].offset
-    for paragraph in Self.paragraphs(of: built) where paragraph.location >= start {
-      #expect(
-        expanded.contains(paragraph.location)
-          == (paragraph.location >= end
-            && !Self.headingParagraphs(of: built).contains(paragraph.location)),
-        "paragraph at \(paragraph.location)")
-      if paragraph.location > end + 2000 { break }
+    let index = FoldingIndex(built)
+    let (parent, child) = try Self.nestedSections(of: built)
+    let open = Folding(mode: .outline, expanded: [parent.anchor]).hidden(in: index)
+    #expect(!open.contains(parent.offset))
+    #expect(!open.contains(child.offset))
+    #expect(open.contains(child.offset + child.heading!.utf16.count + 2))
+    for expanded: Set<String> in [
+      [parent.anchor], [child.anchor], [parent.anchor, child.anchor], [],
+    ] {
+      let hidden = Folding(mode: .outline, expanded: expanded).hidden(in: index)
+      let shown = Self.outlineShown(of: built, expanded: expanded)
+      for paragraph in Self.paragraphs(of: built) {
+        #expect(
+          hidden.contains(paragraph.location) != shown.contains(paragraph.location),
+          "paragraph at \(paragraph.location), \(expanded)")
+      }
     }
+  }
+
+  /// Closing a section hides everything in it, its subsections' headings too, even
+  /// those left open.
+  @Test func `closing a section hides its whole subtree`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let (parent, child) = try Self.nestedSections(of: built)
+    let hidden = Folding(mode: .outline, expanded: [child.anchor]).hidden(in: index)
+    #expect(!hidden.contains(parent.offset))
+    #expect(hidden.contains(child.offset))
+    #expect(hidden.contains(child.offset + child.heading!.utf16.count + 2))
   }
 
   /// The reader's line in a folded paragraph is kept at the nearest shown one before
@@ -83,7 +149,9 @@ struct ReadingModeTests {
       Self.paragraphs(of: built).first {
         $0.location > sections[3].offset && hidden.contains($0.location)
       })
-    let heading = try #require(sections.last { $0.offset <= body.location })
+    // Its section's heading, or the shown one it is nested in.
+    let heading = try #require(
+      sections.last { $0.offset <= body.location && ($0.depth ?? 1) == 1 })
     #expect(hidden.shownOffset(near: body.location) == heading.offset)
     #expect(hidden.shownOffset(near: heading.offset) == heading.offset)
   }
@@ -93,22 +161,45 @@ struct ReadingModeTests {
     let built = try Self.rfc8999()
     let folding = Folding(mode: .outline)
     let sections = built.anchors.sections.entries
-    let section = sections[4]
+    let section = try #require(sections.first { ($0.depth ?? 1) == 1 })
     let inside = section.offset + 10
     #expect(folding.expanding(toShow: inside, in: built).expanded == [section.anchor])
     #expect(Folding(mode: .normal).expanding(toShow: inside, in: built).expanded.isEmpty)
   }
 
-  /// Every heading in the outline has a disclosure, open where its section is
-  /// expanded; Normal has none.
-  @Test func `every heading has a disclosure in the outline`() throws {
+  /// A jump into the deepest subsection opens it and every section it is nested in,
+  /// so it lands on text that is shown.
+  @Test func `a jump into a subsection opens every section around it`() throws {
     let built = try Self.rfc8999()
-    let section = built.anchors.sections.entries[2]
-    let disclosures = Folding(mode: .outline, expanded: [section.anchor]).disclosures(in: built)
-    let headings = Self.headingParagraphs(of: built)
-    #expect(Set(disclosures.keys) == headings)
+    let index = FoldingIndex(built)
+    let entries = Self.outlineEntries(of: built)
+    let deepest = try #require(
+      entries.indices.max { (entries[$0].depth ?? 1) < (entries[$1].depth ?? 1) })
+    #expect((entries[deepest].depth ?? 1) > 1)
+    let inside = entries[deepest].offset + entries[deepest].heading!.utf16.count + 2
+    let opened = Folding(mode: .outline).expanding(toShow: inside, in: index)
+    #expect(
+      opened.expanded
+        == Self.ancestors(of: deepest, in: entries).union([entries[deepest].anchor]))
+    #expect(!opened.hidden(in: index).contains(inside))
+  }
+
+  /// Every heading the outline shows has a disclosure, open where its section is
+  /// expanded; a hidden heading has none, and Normal has none.
+  @Test func `every shown heading has a disclosure in the outline`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let (parent, child) = try Self.nestedSections(of: built)
+    let expanded: Set<String> = [parent.anchor]
+    let disclosures = Folding(mode: .outline, expanded: expanded).disclosures(in: index)
+    let shownHeadings = Self.outlineShown(of: built, expanded: expanded)
+      .intersection(Self.headingParagraphs(of: built))
+    #expect(Set(disclosures.keys) == shownHeadings)
+    #expect(disclosures[child.offset] == false)
     let open = disclosures.filter(\.value).keys
-    #expect(Array(open) == [section.offset])
+    #expect(Array(open) == [parent.offset])
+    #expect(
+      Folding(mode: .outline, expanded: [child.anchor]).disclosures(in: index)[child.offset] == nil)
     #expect(Folding(mode: .normal).disclosures(in: built).isEmpty)
   }
 
