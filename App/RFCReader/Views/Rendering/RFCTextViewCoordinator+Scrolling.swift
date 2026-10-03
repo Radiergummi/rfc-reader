@@ -22,6 +22,7 @@ extension RFCTextViewCoordinator {
       let offset = ReadingPlace(anchor: anchor, offset: extra).documentOffset(
         in: built.anchors, length: built.text.length)
     else { return }
+    show(offset)
     #if canImport(UIKit)
       chrome.jumped()
       reportChrome()

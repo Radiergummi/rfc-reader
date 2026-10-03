@@ -97,6 +97,20 @@ final class ReaderLayoutEngine: PinSurface {
     }
   }
 
+  /// The reading mode folded or unfolded paragraphs (#698): the layout is made again,
+  /// and the reader's line kept, at the shown paragraph before it where it was folded.
+  func refold(_ hidden: HiddenText) {
+    guard let layout = textView?.textLayoutManager else { return }
+    if case .line(let anchor) = keeper.place, hidden.contains(anchor.characterOffset) {
+      keeper.jumped(
+        to: ReaderAnchor(
+          characterOffset: hidden.shownOffset(atOrBefore: anchor.characterOffset) ?? 0))
+    }
+    layout.invalidateLayout(for: layout.documentRange)
+    putBack()
+    startCompletion()
+  }
+
   func jump(toOffset offset: Int) {
     keeper.jumped(to: ReaderAnchor(characterOffset: offset))
     settle()

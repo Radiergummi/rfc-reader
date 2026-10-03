@@ -221,6 +221,12 @@ final class RFCTextViewCoordinator: NSObject {
   var lastReportedAnchor: String?
   /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
   let engine = ReaderLayoutEngine()
+  /// Skips the paragraphs the reading mode folds; the content storage's delegate.
+  let foldingDelegate = FoldingDelegate()
+  /// The reading mode and expanded sections last applied (#698).
+  var folding = Folding()
+  /// Tells the scene that a jump into folded text expanded a section.
+  var onFoldingChange: (Folding) -> Void = { _ in }
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the

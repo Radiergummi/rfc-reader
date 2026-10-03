@@ -13,7 +13,7 @@ extension RFCTextViewCoordinator {
 
   /// Swaps in a document and puts the reader's place back on it; the engine lays out
   /// what that needs and the rest in the background (`ReaderLayoutEngine`).
-  func install(_ built: BuiltDocument) {
+  func install(_ built: BuiltDocument, folding: Folding = Folding()) {
     guard let textView,
       let layout = textView.textLayoutManager,
       let storage = layout.textContentManager as? NSTextContentStorage
@@ -31,12 +31,40 @@ extension RFCTextViewCoordinator {
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
     // `StorageInstallTests` pins it.
+    // Before the text, so the first layout skips what the reading mode folds.
+    self.folding = folding
+    foldingDelegate.hidden = folding.hidden(in: built)
     signposter.withIntervalSignpost("Install document") {
       storage.install(built.text)
     }
     reportSelection()
     engine.installed(built, document: documentID)
     reportVisibleAnchor()
+  }
+
+  // MARK: - Reading modes
+
+  /// Folds what `folding` hides and unfolds the rest (#698): the storage stays as it
+  /// is, the layout is made again, and the reader's line stays on top, or moves to
+  /// the shown paragraph before it where its own is folded.
+  func apply(_ folding: Folding) {
+    guard folding != self.folding, let built else { return }
+    self.folding = folding
+    let hidden = folding.hidden(in: built)
+    guard hidden != foldingDelegate.hidden else { return }
+    foldingDelegate.hidden = hidden
+    engine.refold(hidden)
+    reportVisibleAnchor()
+  }
+
+  /// A jump to `offset`, which the reading mode may have folded away: its section is
+  /// expanded first, here and in the scene.
+  func show(_ offset: Int) {
+    guard let built, foldingDelegate.hidden.contains(offset) else { return }
+    let expanded = folding.expanding(toShow: offset, in: built)
+    apply(expanded)
+    // Deferred: a jump can run inside SwiftUI's update, where mutating state is illegal.
+    Task { self.onFoldingChange(expanded) }
   }
 
   // MARK: - Geometry

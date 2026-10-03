@@ -26,6 +26,9 @@ final class ReaderState {
   /// What the open RFC can be saved as: PDF, and its grammar where it has one
   /// (#185). Set once the document has loaded.
   var exportFormats: [ExportFormat] = [.pdf]
+  /// The window's reading mode and the sections it has expanded in place (#698). The
+  /// mode stays from one document to the next; what was expanded does not.
+  var folding = Folding()
   /// What the Info pane shows, derived once per document by `DocumentView` (#25).
   var info: DocumentInfo?
   /// Which pane the inspector shows: the document's navigation, or what is known
@@ -170,6 +173,7 @@ final class ReaderState {
     groups = []
     requirements = nil
     exportFormats = [.pdf]
+    folding.expanded = []
     info = nil
     revealedReference = nil
     currentAnchor = nil
