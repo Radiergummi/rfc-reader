@@ -149,7 +149,10 @@ struct LegacyTextParserReferencesTests {
   /// protocol's object references -- is one only when its entries outnumber the blocks
   /// before them, or its prose is read as one entry's text (#686).
   @Test func `a title that mentions references is a bibliography only by its entries`() {
-    for title in ["References", "Normative References", "INFORMATIVE REFERENCES:", "References."] {
+    for title in [
+      "References", "Normative References", "INFORMATIVE REFERENCES:", "References.",
+      "Informative References (Alphabetical)",
+    ] {
       #expect(
         LegacyTextParser.isBibliography(title: title, entries: 1, blocksBefore: 4), "\(title)")
     }

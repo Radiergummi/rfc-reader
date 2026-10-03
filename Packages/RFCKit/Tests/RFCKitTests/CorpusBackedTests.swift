@@ -375,7 +375,17 @@ struct CorpusBackedReferencesSectionTests {
   }
 
   private static func holdsList(_ section: Section) -> Bool {
-    section.blocks.contains { if case .references = $0 { true } else { false } }
+    section.blocks.contains(where: holdsEntries)
+  }
+
+  /// A plain references title is a bibliography whatever the parser makes of it: RFC
+  /// 1716's and 2315's read as one entry each, beside text before it.
+  @Test func `a plain references title stays a bibliography`() throws {
+    for (stem, number) in [("rfc1716", "11"), ("rfc2315", "2")] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let section = try #require(document.section(number: number), "\(stem)")
+      #expect(Self.holdsList(section), "\(stem) \(number)")
+    }
   }
 
   /// A section that only mentions references is not a bibliography: RFC 7322's

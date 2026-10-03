@@ -315,10 +315,16 @@ extension LegacyTextParser {
   /// and References)` in RFC 3275 is an example, and its lines of XML read as 26
   /// entries (#686).
   static func isReferencesTitle(_ title: String) -> Bool {
-    title.lowercased().replacing(#/\([^)]*\)/#, with: "").contains(#/\breferences\b/#)
+    withoutAsides(title).lowercased().contains(#/\breferences\b/#)
   }
 
-  /// A references section by its title alone: `References`, `Normative References:`.
+  private static func withoutAsides(_ title: String) -> String {
+    title.replacing(#/\([^)]*\)/#, with: "").collapsingWhitespace()
+      .trimmingCharacters(in: .whitespaces)
+  }
+
+  /// A references section by its title alone: `References`, `Normative References:`,
+  /// `Informative References (Alphabetical)`.
   private static let plainReferencesTitle = Pattern(
     #/(?i)(?:(?:normative|informative|informational|non-normative) )?references[.:]?/#)
 
@@ -330,9 +336,11 @@ extension LegacyTextParser {
   /// and is a bibliography when its entries outnumber the blocks before the first of
   /// them. Read as one, such a section's text was taken for a single entry's, and
   /// its subsections had no place in the XML (#686).
-  static func isBibliography(title: String, entries: Int, blocksBefore: Int) -> Bool {
-    if title.collapsingWhitespace().wholeMatch(of: plainReferencesTitle) != nil { return true }
-    return entries > blocksBefore
+  static func isBibliography(
+    title: String, entries: Int, blocksBefore: @autoclosure () -> Int
+  ) -> Bool {
+    if withoutAsides(title).wholeMatch(of: plainReferencesTitle) != nil { return true }
+    return entries > blocksBefore()
   }
 
   static func nest(_ flat: [Section]) -> [Section] {
