@@ -52,6 +52,9 @@ public struct SpotlightEntry: Sendable {
   /// that stays offline, is still renewed before its items reach their `lifetime`.
   public static func clientState(for entries: [SpotlightEntry], now: Date) -> Data {
     var digest = SHA256()
+    // What else an item carries: from #192, the RFC's App Intents entity, which
+    // items indexed before then lack, so they are indexed again once.
+    digest.update(data: Data(format.utf8))
     // Each field ends with a unit separator and each entry with a record
     // separator, so text moved from one field into the next is a change.
     for entry in entries {
@@ -71,6 +74,10 @@ public struct SpotlightEntry: Sendable {
   public static func isRecheckDue(lastCheckedAt: Date, now: Date) -> Bool {
     week(of: now) != week(of: lastCheckedAt)
   }
+
+  /// Changed whenever what an item carries beside its entry changes, so the items
+  /// indexed before are indexed again.
+  static let format = "app-entity"
 
   private static func week(of date: Date) -> Int {
     Int(date.timeIntervalSince1970) / (7 * 86_400)

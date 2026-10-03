@@ -410,6 +410,15 @@ final class LibraryModel {
     RegistryLookup.matches(query, in: registryEntries)
   }
 
+  /// The registry entries an App Intent asks for (#192), reading the registries
+  /// first when this launch has not: only the Mac reads them at launch, and an
+  /// intent may be the first to ask on either platform. One that asks while the
+  /// launch's check is still reading them gets what has been read so far.
+  func loadedRegistryEntries() async -> [RegistryEntry] {
+    if registriesCheckedAt == nil { await refreshRegistries() }
+    return registryEntries
+  }
+
   #if DEBUG
     /// `-installPack <url>`, a developer's way to install a pack from a URL or a
     /// path (#36). Logged, not shown: nothing on screen asked for it.
@@ -524,6 +533,52 @@ final class LibraryModel {
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
     settleIndex()
+    // The RFCs a phrase can name are the ones read recently, which need the index.
+    RFCReaderShortcuts.refreshParameters()
+  }
+
+  // MARK: - App Intents
+
+  /// What waits in `settledSearch()` for the index to arrive or fail, resumed by
+  /// `settleIndex()`.
+  @ObservationIgnored private var indexWaiters: [CheckedContinuation<Void, Never>] = []
+
+  /// The index's search once the index has loaded, or nil if it could not: what an
+  /// App Intent's queries run against (#192). The app may have been launched for the
+  /// intent alone, before anything started the load, so this starts it then.
+  func settledSearch() async -> IndexSearch? {
+    switch indexState {
+    case .idle:
+      await bootstrap()
+    case .loading where search == nil:
+      await withCheckedContinuation { indexWaiters.append($0) }
+    default:
+      break
+    }
+    return search
+  }
+
+  /// A tab of the navigation pane an App Intent asked to show beside a document
+  /// (#192), which the reader showing that document takes once it can describe it.
+  struct InspectorRequest: Equatable {
+    let id: DocumentID
+    let tab: InspectorTab
+  }
+
+  private(set) var inspectorRequest: InspectorRequest?
+
+  /// Routes `link` as `route(_:)` does, and asks its reader to show `tab`.
+  func route(_ link: RFCLink, showing tab: InspectorTab) {
+    inspectorRequest = InspectorRequest(id: link.id, tab: tab)
+    route(link)
+  }
+
+  /// The tab asked for beside `id`, which is then no longer asked for; nil if none
+  /// was, or it was asked for beside another document.
+  func takeInspectorRequest(for id: DocumentID) -> InspectorTab? {
+    guard let request = inspectorRequest, request.id == id else { return nil }
+    inspectorRequest = nil
+    return request.tab
   }
 
   // MARK: - Spotlight
@@ -794,6 +849,9 @@ final class LibraryModel {
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
   private func settleIndex() {
+    let waiters = indexWaiters
+    indexWaiters = []
+    for waiter in waiters { waiter.resume() }
     let preferred = preferredScene
     sceneRegistry.indexSettled(preferring: { $0 === preferred }).forEach(carryOut)
   }

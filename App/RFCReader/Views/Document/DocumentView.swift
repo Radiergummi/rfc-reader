@@ -219,6 +219,10 @@ struct DocumentView: View {
       .onChange(of: library.revisions) {
         session.deriveInfo(into: reader, library: library, navigation: navigation)
       }
+      // A tab an App Intent asked to show beside this document (#192), once there is
+      // a document to describe: the macOS panel refuses to open over nothing.
+      .onChange(of: library.inspectorRequest, initial: true) { showRequestedTab() }
+      .onChange(of: reader.canDescribe) { showRequestedTab() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
         // the selected document's.
@@ -494,6 +498,16 @@ struct DocumentView: View {
     session.open(
       into: reader, library: library, navigation: navigation, positions: positions,
       showsOriginal: preferOriginalText)
+  }
+
+  /// Shows the tab an App Intent asked for beside this document, if it asked and the
+  /// panel has something to describe (#192). Not while fading out over the next
+  /// document's reader: the request would be taken by the wrong one.
+  private func showRequestedTab() {
+    guard navigation.selection == id, reader.canDescribe,
+      let tab = library.takeInspectorRequest(for: id)
+    else { return }
+    reader.show(tab)
   }
 
   /// Resolves a section number or an anchor to the anchor the reader scrolls to.
