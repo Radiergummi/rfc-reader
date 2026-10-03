@@ -20,6 +20,10 @@
 
     private(set) var controllers: [ReaderWindowController] = []
 
+    /// The Services' provider (#195), kept here because `NSApp.servicesProvider` does
+    /// not retain it.
+    private let citationServices = CitationServices()
+
     /// Before AppKit restores the last session's windows (#155), which come back
     /// through `restoredWindow()` between this and `applicationDidFinishLaunching`.
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -27,6 +31,7 @@
       signposter.emitEvent("Launched")
       // Before anything can route a link, since routing may need a window.
       LibraryModel.shared.windows = self
+      NSApp.servicesProvider = citationServices
       // The scene's `.task` did this; there is no scene on macOS any more.
       // Immediate, so that the bootstrap has started reading the cached index by
       // the time the first window is made (#367), restored or not. A plain task

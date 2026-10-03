@@ -24,7 +24,8 @@ curl -o App/RFCReader/rfc-index.xml https://www.rfc-editor.org/rfc-index.xml
 - In RFC 9110 click any `[RFC7231]`; note the "Obsoleted by RFC 9110" banner on the old document, and click it to come back.
 - Open RFC 1149 (text only) and choose *Original Text* from the ⋯ menu to compare the reflowed rendering with the file as published.
 - Search `wg:httpbis status:current cache`.
-- From Terminal: `open "rfc://9110#section-9.3.1"`.
+- From Terminal: `open "rfc://9110#section-9.3.1"`. The same link in a code comment is one an editor can open; see "Links from code" in the [README](../README.md#links-from-code).
+- Select `RFC 9110 §8.3` in any app and choose *Services ▸ Replace with RFC Link*.
 - Ask Siri "Open an RFC in RFC Reader"; it asks which number. (App Shortcuts need one launch to register. Siri cannot hear the number in the phrase itself until there is an `RFCEntity`, #192.)
 
 ## Where to go next
