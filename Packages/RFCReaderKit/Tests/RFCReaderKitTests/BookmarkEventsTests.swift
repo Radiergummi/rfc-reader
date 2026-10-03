@@ -109,6 +109,14 @@ struct BookmarkEventsTests {
     #expect(Self.events(from: old, to: new).isEmpty)
   }
 
+  @Test func `a draft that drops out of the file and comes back is not reported again`() {
+    let first = Self.baseline(Self.index(), Self.revisions(["draft-a": .inGroup]))
+    let second = Self.baseline(Self.index(), Self.revisions([:]), after: first)
+    let third = Self.baseline(Self.index(), Self.revisions(["draft-a": .inGroup]), after: second)
+    #expect(Self.events(from: first, to: second).isEmpty)
+    #expect(Self.events(from: second, to: third).isEmpty)
+  }
+
   @Test func `an RFC that is not bookmarked is no event`() {
     let old = Self.baseline(Self.index())
     let new = Self.baseline(Self.index(obsoletedBy: [.rfc(9999)]))

@@ -15,7 +15,9 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
   /// What the index says of a bookmarked document: its entry's obsoleted-by,
   /// updated-by and errata. A document the index does not list has no entry.
   public var index: [DocumentID: IndexRecord]?
-  /// Each bookmarked RFC's revising drafts, by name; empty when none is listed.
+  /// Each bookmarked RFC's revising drafts, by name; empty when none is listed. A
+  /// draft the file stops listing is kept at the stage it was last seen at, so one
+  /// that drops out of a day's file and comes back is not reported again.
   public var revisions: [DocumentID: [String: RevisionRecord]]?
 
   public struct IndexRecord: Codable, Sendable, Equatable {
@@ -54,7 +56,7 @@ public struct BookmarkBaseline: Codable, Sendable, Equatable {
       var records: [DocumentID: [String: RevisionRecord]] = [:]
       // Only an RFC: the file is keyed by RFC number, and BCP 14 is not RFC 14.
       for document in bookmarks where document.series == .rfc {
-        var drafts: [String: RevisionRecord] = [:]
+        var drafts = previous?.revisions?[document] ?? [:]
         for revision in revisions.revisions[document.number] ?? [] {
           drafts[revision.draft] = RevisionRecord(
             relation: revision.relation, stage: revision.stage, stream: revision.stream)
@@ -187,7 +189,7 @@ public struct BookmarkNotice: Equatable, Sendable {
   /// "RFC 9997", "RFC 9997 and RFC 9998", "RFC 9996, RFC 9997 and RFC 9998".
   private static func list(_ documents: [DocumentID]) -> String {
     let names = documents.map(\.displayName)
-    guard names.count > 1 else { return names.first ?? "" }
-    return names.dropLast().joined(separator: ", ") + " and " + names.last!
+    guard let last = names.last, names.count > 1 else { return names.first ?? "" }
+    return names.dropLast().joined(separator: ", ") + " and " + last
   }
 }

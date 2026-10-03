@@ -24,8 +24,12 @@ enum BookmarkNotifications {
   static let refreshIdentifier = "me.mazetti.rfc-reader.bookmark-refresh"
   /// The `rfc://` link a notification opens, in its `userInfo`.
   nonisolated static let urlKey = "url"
-  /// How often the bookmarks are compared when nothing else refreshes them.
+  /// How long after the last refresh iOS is asked for the next.
   static let refreshInterval: TimeInterval = 86_400
+  /// How often macOS looks whether the index or the revisions are due, each by its
+  /// own daily rule. An hour, not a day: a loop of exactly a day wakes a few seconds
+  /// before what the last one fetched is a day old, and finds nothing due.
+  static let checkInterval: TimeInterval = 3_600
 
   /// Held here: the notification center keeps its delegate weakly.
   private static let delegate = NotificationDelegate()
@@ -41,10 +45,10 @@ enum BookmarkNotifications {
     if isEnabled { scheduleRefresh() }
     #if os(macOS)
       Task(name: "Refresh bookmarks daily") {
-        // The continuous clock, which runs on while the Mac sleeps, so a day
-        // asleep is due on waking rather than a day later.
+        // The continuous clock, which runs on while the Mac sleeps, so a refresh
+        // that fell due while it slept is made within the hour of waking.
         while true {
-          try? await Task.sleep(for: .seconds(refreshInterval))
+          try? await Task.sleep(for: .seconds(checkInterval))
           guard isEnabled else { continue }
           await LibraryModel.shared.refreshForBookmarks()
         }
@@ -57,9 +61,10 @@ enum BookmarkNotifications {
   static func requestPermission() async -> Bool {
     do {
       let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [
-        .alert, .sound,
+        .alert
       ])
-      if granted { scheduleRefresh() }
+      // Unless the reader turned it off again while the system asked.
+      if granted, isEnabled { scheduleRefresh() }
       return granted
     } catch {
       notificationLog.error(
@@ -135,7 +140,7 @@ nonisolated private final class NotificationDelegate: NSObject, UNUserNotificati
   func userNotificationCenter(
     _ center: UNUserNotificationCenter, willPresent notification: UNNotification
   ) async -> UNNotificationPresentationOptions {
-    [.banner, .list, .sound]
+    [.banner, .list]
   }
 
   func userNotificationCenter(

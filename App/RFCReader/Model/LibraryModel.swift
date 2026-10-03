@@ -75,7 +75,17 @@ final class LibraryModel {
   /// Each working group's RFCs, worked out once per index for its card (#363): the
   /// list's body asks on every pass, and the index is 9,842 RFCs to scan.
   @ObservationIgnored private var groupRFCs: [String: [RFCMetadata]] = [:]
-  private(set) var indexState: IndexState = .idle
+  private(set) var indexState: IndexState = .idle {
+    didSet {
+      guard indexState != .loading, indexState != .idle else { return }
+      let waiting = indexWaiters
+      indexWaiters = []
+      waiting.forEach { $0.resume() }
+    }
+  }
+  /// What waits for the index to be ready or to have failed: a background refresh
+  /// that arrived while launch was still loading it (#191).
+  @ObservationIgnored private var indexWaiters: [CheckedContinuation<Void, Never>] = []
   private(set) var recent: [RecentRFC] = []
 
   /// `revisions.json`: adopted drafts that intend to obsolete or update an RFC. Nil
@@ -83,7 +93,8 @@ final class LibraryModel {
   private(set) var revisions: RFCRevisions?
   /// When this launch last fetched it; nil until it has.
   @ObservationIgnored private var revisionsFetchedAt: Date?
-  @ObservationIgnored private var isRefreshingRevisions = false
+  /// The refresh under way, which a second call joins rather than repeats.
+  @ObservationIgnored private var revisionsRefresh: Task<Void, Never>?
   /// `groups.json`: the groups the index names, for a working group's card (#363).
   /// Nil until the cached copy or a fetch has arrived.
   private(set) var workingGroups: WorkingGroups?
@@ -267,6 +278,9 @@ final class LibraryModel {
     // Only a change is news: an unknown save reads every mirror (`UserDataMirrors`).
     guard documents != bookmarkedDocuments else { return }
     bookmarkedDocuments = documents
+    // So that the baseline holds a new bookmark from now on, and reports a change to
+    // it from the next refresh rather than taking it for one from before (#191).
+    compareBookmarks()
   }
 
   private func refreshDownloadedNumbers() async {
@@ -562,10 +576,18 @@ final class LibraryModel {
   /// launch and again when the last fetch is a day old: launch and every activation
   /// call this, and the first to get here does the fetch. A failure keeps the cached
   /// copy, leaves the next call to try again, and is logged, not shown (#125).
+  ///
+  /// A call while one is under way waits for that one, so that a background refresh
+  /// that asks returns only once the file is in (#191).
   func refreshRevisions() async {
-    guard !isRefreshingRevisions else { return }
-    isRefreshingRevisions = true
-    defer { isRefreshingRevisions = false }
+    if let revisionsRefresh { return await revisionsRefresh.value }
+    let refresh = Task(name: "Refresh revisions") { await loadRevisions() }
+    revisionsRefresh = refresh
+    await refresh.value
+    revisionsRefresh = nil
+  }
+
+  private func loadRevisions() async {
     if revisions == nil, let cached = await store.cachedRevisions() {
       revisions = cached
       compareBookmarks()
@@ -606,9 +628,17 @@ final class LibraryModel {
   /// has posted.
   func refreshForBookmarks() async {
     await bootstrap()
+    if indexState == .loading {
+      await withCheckedContinuation { indexWaiters.append($0) }
+    }
     await indexRefresh?.value
-    if case .ready(let checkedAt) = indexState, IndexCheck.isDue(checkedAt: checkedAt, now: .now) {
+    switch indexState {
+    case .ready(let checkedAt) where IndexCheck.isDue(checkedAt: checkedAt, now: .now):
       await refreshIndex(onExpensiveNetworks: false)
+    case .failed:
+      await refreshIndex(onExpensiveNetworks: false)
+    default:
+      break
     }
     await refreshRevisions()
     await bookmarkComparison?.value
