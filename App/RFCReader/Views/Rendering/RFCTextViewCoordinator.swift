@@ -311,6 +311,9 @@ final class RFCTextViewCoordinator: NSObject {
         reference: reference, library: library, kind: bibliography.kind(of: reference.target))
     // A section of an entry outside the series previews the entry (#473).
     case .anchor(let anchor), .entrySection(let anchor, _, _, _):
+      if let definition = built?.grammar.definition(of: anchor) {
+        return ReferencePreview(reference: reference, library: library, definition: definition)
+      }
       if let heading = built?.anchors.heading(of: anchor) {
         return ReferencePreview(reference: reference, library: library, heading: heading)
       }
