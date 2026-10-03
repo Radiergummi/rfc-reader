@@ -127,6 +127,19 @@ struct LexerTests {
     #expect(tokens.text(of: .name, in: text) == ["a"])
   }
 
+  @Test func `a character of two UTF-16 code units is never split`() throws {
+    let states: [String: [Lexer.Rule]] = [
+      "root": [Lexer.Rule("[a-z]++", .name), Lexer.Rule("<", .punctuation, .push("tag"))],
+      "tag": [Lexer.Rule("[^>]++", .string), Lexer.Rule(">", .punctuation, .pop(1))],
+    ]
+    let faces = String(repeating: "😀", count: 300)
+    let text = "<x" + faces + ">a<" + faces + ">"
+    let tokens = try lexer(states).tokens(in: text)
+    #expect(tokens.cover(text))
+    #expect(tokens.text(of: .string, in: text) == ["x" + faces, faces])
+    #expect(tokens.text(of: .name, in: text) == ["a"])
+  }
+
   @Test func `a caret matches only at the start of a line`() throws {
     let states: [String: [Lexer.Rule]] = [
       "root": [
