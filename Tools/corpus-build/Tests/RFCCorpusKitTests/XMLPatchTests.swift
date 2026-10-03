@@ -121,6 +121,26 @@ struct XMLPatchTests {
     #expect(paragraph.plainText.hasSuffix("apart words"), "\(paragraph.plainText)")
   }
 
+  /// Between block elements, the kept whitespace is nothing the document holds.
+  @Test func `blocks added laid out over lines are those blocks alone`() throws {
+    let unpatched = try RFCXMLParser.parse(try #require(Self.xml))
+    let before = try #require(unpatched.section(anchor: "section-6")).blocks.count
+    let document = try Self.patched(
+      """
+      <add sel="//section[@pn='section-6']">
+        <t>First.</t>
+        <t>Second.</t>
+      </add>
+      """)
+    let section = try #require(document.section(anchor: "section-6"))
+    #expect(section.blocks.count == before + 2)
+    let paragraphs = section.blocks.suffix(2).compactMap { block -> String? in
+      guard case .paragraph(let paragraph) = block else { return nil }
+      return paragraph.plainText
+    }
+    #expect(paragraphs == ["First.", "Second."])
+  }
+
   /// An attribute's value laid out over lines would keep the layout, which the parser
   /// cannot read, and the attribute would be lost without a word said.
   @Test func `an attribute's value laid out over lines is its text alone`() throws {

@@ -236,14 +236,14 @@ jobs:
       - name: Month
         id: month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-      # The index and the patched documents, fetched once a month. What the check
+      # The index and the overridden documents, fetched once a month. What the check
       # reads from them was fixed when each document was published.
-      - name: Cache the index and the patched texts
+      - name: Cache the index and the overridden texts
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             corpus/rfc-index.xml
-            corpus/text.noindex
+            corpus/overrides-check.noindex
           key: corpus-overrides-${{ steps.month.outputs.month }}-${{ hashFiles('corpus/overrides/*.xml') }}
           restore-keys: corpus-overrides-${{ steps.month.outputs.month }}-
       # Every patch in corpus/overrides applied to the converter's output with
