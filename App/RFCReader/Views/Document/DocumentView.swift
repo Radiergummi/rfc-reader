@@ -38,6 +38,8 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
+  /// The text of the build the reader's folding index was made of (#699).
+  @State private var foldedText: NSAttributedString?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
 
@@ -123,6 +125,36 @@ struct DocumentView: View {
       choices: library.presentationChoices(for: id, drawsDiagrams: drawDiagrams))
   }
 
+  /// The folding index of the build on screen, and in Focus the References tab's
+  /// groups, filtered to what its section cites (#699). Only for the selected
+  /// document, whose the reader state is, and only in Focus, which alone needs them;
+  /// not over the original text, which nothing folds.
+  private func updateFolding() {
+    guard navigation.selection == id else { return }
+    guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
+    else {
+      // Only where there is something to clear: every write notifies, and the panel
+      // would redraw on every disclosure the outline turns.
+      if reader.foldingIndex != nil { reader.foldingIndex = nil }
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      foldedText = nil
+      return
+    }
+    // Held, and compared by reference: a new build can be allocated where the old
+    // one was, and an identifier alone would take it for the old one.
+    if reader.foldingIndex == nil || foldedText !== built.text {
+      reader.foldingIndex = FoldingIndex(built)
+      foldedText = built.text
+    }
+    guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
+    else { return }
+    let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+    let groups = FocusCitations.groups(reader.groups, citing: cited)
+    // A section that cites nothing lists the whole bibliography, rather than saying
+    // the document has none.
+    reader.focusGroups = groups.isEmpty ? nil : groups
+  }
+
   /// The reader, and on macOS only the reader.
   ///
   /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
@@ -155,6 +187,15 @@ struct DocumentView: View {
           }
         #endif
       }
+      // What Focus needs of the build: its folding index, and what its section cites
+      // (#699).
+      // By identifier, as a trigger only: comparing the texts themselves would compare
+      // every character on every update. `updateFolding` compares the build itself.
+      .onChange(of: session.state.built.map { ObjectIdentifier($0.text) }, initial: true) {
+        updateFolding()
+      }
+      .onChange(of: reader.folding) { updateFolding() }
+      .onChange(of: reader.showOriginal) { updateFolding() }
       // Into the window's reader state, for the panel beside the reader (#325):
       // how a load ends. `startLoad` says it began, after clearing that state.
       .onChange(of: session.state.isLoading) { _, isLoading in

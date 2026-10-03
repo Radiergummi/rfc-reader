@@ -191,7 +191,10 @@ struct PanelHost: View {
     if reader.canDescribe {
       DocumentInspector(
         sections: reader.sections,
-        groups: reader.groups,
+        // In Focus, what the focused section cites, pinned beside it (#699); the whole
+        // bibliography for an entry asked for that the section does not cite.
+        groups: FocusCitations.shown(
+          reader.focusGroups, revealing: reader.revealedReference?.anchor) ?? reader.groups,
         requirements: reader.requirements,
         info: reader.info,
         hasBody: reader.hasDocument,

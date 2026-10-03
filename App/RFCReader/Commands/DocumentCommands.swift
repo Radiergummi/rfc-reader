@@ -160,6 +160,8 @@ struct DocumentCommands: Commands {
         if let reader {
           ReadingModePicker(reader: reader)
             .disabled(!showsDocument)
+          FocusSteps(reader: reader)
+            .disabled(!showsDocument)
         }
       #endif
     }

@@ -60,6 +60,16 @@ extension RFCTextViewCoordinator {
       if folding == reported.after { reportedFolding = nil }
     }
     guard folding != self.folding, let foldingIndex else { return }
+    // Focus with no section yet: the one the reader's line is in, told to the scene
+    // as a change of the coordinator's own. Unless there is none, which leaves
+    // nothing to tell, and nothing to clear the report.
+    let resolved = folding.focusingOnLine(at: engine.placeOffset ?? 0, in: foldingIndex)
+    if resolved != folding {
+      reportedFolding = (folding, resolved)
+      Task { self.onFoldingChange(resolved) }
+    }
+    let folding = resolved
+    let place = place ?? folding.placeOfFocus(after: self.folding, in: foldingIndex)
     self.folding = folding
     // A new layout even when only a disclosure turned: its chevron is drawn by the
     // heading's fragment, which has to be drawn again.
