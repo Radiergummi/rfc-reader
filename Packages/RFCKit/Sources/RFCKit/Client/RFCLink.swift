@@ -84,6 +84,24 @@ public struct RFCLink: Hashable, Sendable {
     self = link
   }
 
+  /// The link `url` makes where it is the document's own page, which the Safari
+  /// extension may send to the app on its own (#194): its text at the RFC Editor in
+  /// any format, or its page at Datatracker, with the section or anchor it was
+  /// opened at. Nil for a page about the document, its info page, errata or history,
+  /// which someone following the link wants to read on the web.
+  public init?(documentPage url: URL) {
+    guard url.scheme?.lowercased() != Self.scheme, let link = RFCLink(url: url),
+      !url.pathComponents.contains(where: { ["info", "errata"].contains($0) }),
+      DocumentID(parsing: Self.stem(of: url.lastPathComponent)) == link.id
+    else { return nil }
+    self = link
+  }
+
+  /// A file name without any of its extensions: `rfc4321` of `rfc4321.txt.pdf`.
+  private static func stem(of name: String) -> String {
+    String(name.prefix { $0 != "." })
+  }
+
   public init?(url: URL) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
@@ -107,12 +125,11 @@ public struct RFCLink: Hashable, Sendable {
 
     switch host {
     case "www.rfc-editor.org", "rfc-editor.org":
-      // /rfc/rfc9110.html, /rfc/rfc9110, /info/rfc9110, /rfc/rfc9110.txt, /errata/rfc9110
-      guard components.count >= 2, ["rfc", "info", "errata"].contains(components[0]) else {
-        return nil
-      }
-      let stem = (components[1] as NSString).deletingPathExtension
-      guard let id = DocumentID(parsing: stem) else { return nil }
+      // /rfc/rfc9110.html, /rfc/rfc9110, /info/rfc9110, /rfc/rfc9110.txt, /errata/rfc9110,
+      // and the PDF, /rfc/rfc9110.pdf or a legacy RFC's /rfc/pdfrfc/rfc2616.txt.pdf
+      guard components.count >= 2, ["rfc", "info", "errata"].contains(components[0]),
+        let id = DocumentID(parsing: Self.stem(of: components[components.count - 1]))
+      else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":
       // /doc/html/rfc9110, /doc/rfc9110/, /html/rfc9110
