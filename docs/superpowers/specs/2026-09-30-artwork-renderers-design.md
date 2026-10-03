@@ -8,6 +8,12 @@ own implementation plan. Grows out of #31, whose remaining items stay bug fixes 
 path; relates to #47 (packet recognizer, landed as #441), #48 and #49 (traced diagrams), #45/#393
 (ABNF), #46 (offline classification), #197 (overrides), #361, #496, and #12/#308 (VoiceOver).*
 
+*Amended 2 October 2026 by the syntax highlighting design (`2026-10-02-syntax-highlighting-design.md`):
+the styled-text rendition is `Rendition.styled`, not `.text`; colors are stored in the text as dynamic
+colors at build time, as every other color the builder sets is, rather than as roles resolved at draw
+time; and highlighted code is outside the presentation choices — "Draw diagrams" and "Show as Text"
+are about drawings.*
+
 ## Why
 
 Every verbatim block is set the same way today: monospaced, never wrapped, scaled to fit the

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<diff>
+  <!-- The page dates RFC 822 August 13, 1982; the index gives only the month (#171). -->
+  <add sel="/rfc/front/date" type="@day">13</add>
+  <!-- Ahead of the preface, the title page converts as artwork, though the front
+       matter holds what it says (#171): the reviser's credit, -->
+  <remove sel="//section[@anchor='preamble']/artwork[starts-with(normalize-space(), 'Revised by')]"/>
+  <!-- and the reviser's address, by its first line. -->
+  <remove sel="//section[@anchor='preamble']/artwork[starts-with(normalize-space(), 'David H. Crocker')]"/>
+  <!-- The contents are dropped as boilerplate but for their last line, which converts
+       as artwork with the footer of their page (#171). -->
+  <remove sel="//section[@anchor='preamble']/artwork[starts-with(normalize-space(), 'APPENDIX')][contains(., '- i -')]"/>
+</diff>

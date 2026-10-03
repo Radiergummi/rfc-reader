@@ -36,7 +36,7 @@ public enum PinRecipe {
   public static func pin(
     _ anchor: ReaderAnchor, in layout: NSTextLayoutManager, on surface: some PinSurface
   ) -> Int {
-    guard let location = layout.location(atOffset: anchor.characterOffset),
+    guard let location = layout.location(atOffset: placeable(anchor, in: layout)),
       let paragraph = layout.textLayoutFragment(for: location)
     else { return 0 }
     layout.ensureLayout(for: paragraph.rangeInElement)
@@ -58,6 +58,15 @@ public enum PinRecipe {
     return passes
   }
 
+  /// Where `anchor` is looked for: its character, or the last one for the end of the
+  /// text, where TextKit lays out no fragment, so a jump there placed nothing and a
+  /// reveal then scrolled from wherever the top was (#726).
+  @MainActor
+  static func placeable(_ anchor: ReaderAnchor, in layout: NSTextLayoutManager) -> Int {
+    let length = layout.offset(of: layout.documentRange.endLocation)
+    return min(anchor.characterOffset, max(0, length - 1))
+  }
+
   /// Lays out the document from its start through `anchor`'s paragraph, then pins
   /// it. The line is then where the layout of the whole document puts it, so laying
   /// out what follows never moves it. A pin alone leaves it where TextKit estimated
@@ -77,7 +86,7 @@ public enum PinRecipe {
   public static func settle(
     _ anchor: ReaderAnchor, in layout: NSTextLayoutManager, on surface: some PinSurface
   ) -> Int {
-    guard let location = layout.location(atOffset: anchor.characterOffset),
+    guard let location = layout.location(atOffset: placeable(anchor, in: layout)),
       let paragraph = layout.textLayoutFragment(for: location),
       let above = NSTextRange(
         location: layout.documentRange.location, end: paragraph.rangeInElement.endLocation)

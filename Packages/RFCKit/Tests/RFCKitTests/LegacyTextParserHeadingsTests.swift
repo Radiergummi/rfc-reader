@@ -135,6 +135,15 @@ struct LegacyTextParserHeadingsTests {
         })
   }
 
+  /// A section's title is the words of its heading, not the columns they were set in,
+  /// as reading it back from the XML gives (#683). RFC 757's contents-style headings
+  /// end in a page number set far to the right.
+  @Test func `a section's title has its whitespace collapsed`() throws {
+    let titles = try Fixtures.document("rfc757.txt").allSections.map(\.titleText)
+    #expect(!titles.isEmpty)
+    #expect(titles.filter { $0 != $0.collapsingWhitespace() } == [])
+  }
+
   /// An appendix numbered like a section, `APPENDIX 3`, is named `appendix-3`, not
   /// `section-3`: a document may have a section 3 as well, and `Section 3` in its
   /// prose cites that one, never the appendix.
