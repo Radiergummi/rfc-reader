@@ -164,7 +164,7 @@ import SwiftUI
       Menu {
         ControlGroup {
           Button {
-            $settings.fontSize.wrappedValue = ReaderPreferences.fontSize(steppingDown: fontSize)
+            settings.fontSize = ReaderPreferences.fontSize(steppingDown: fontSize)
           } label: {
             Label("Smaller", systemImage: "textformat.size.smaller")
           }
@@ -173,7 +173,7 @@ import SwiftUI
           // The size the steps reached, between them. A tap on it goes back to the
           // system's size, as one on Safari's does.
           Button(ReaderPreferences.percentage(of: fontSize)) {
-            $settings.fontSize.wrappedValue = ReaderPreferences.defaultFontSize
+            settings.fontSize = ReaderPreferences.defaultFontSize
           }
           .accessibilityLabel("Text Size")
           .accessibilityValue(ReaderPreferences.percentage(of: fontSize))
@@ -182,7 +182,7 @@ import SwiftUI
           .accessibilityHint("Goes back to the system's size")
 
           Button {
-            $settings.fontSize.wrappedValue = ReaderPreferences.fontSize(steppingUp: fontSize)
+            settings.fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
           } label: {
             Label("Bigger", systemImage: "textformat.size.larger")
           }
@@ -193,7 +193,7 @@ import SwiftUI
         .menuActionDismissBehavior(.disabled)
 
         Button("Use System Size", systemImage: "arrow.counterclockwise") {
-          $settings.fontSize.wrappedValue = ReaderPreferences.defaultFontSize
+          settings.fontSize = ReaderPreferences.defaultFontSize
         }
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
 

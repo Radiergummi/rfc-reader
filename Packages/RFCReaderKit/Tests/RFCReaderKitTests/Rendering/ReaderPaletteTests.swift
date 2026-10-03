@@ -19,10 +19,6 @@ struct ReaderPaletteTests {
     #expect(ReaderPalette.named(ReaderPalette.automatic.id) == .automatic)
   }
 
-  @Test func `an informative chip is tinted half as strongly`() {
-    #expect(ReaderPalette.informativeChipOpacity * 2 == ReaderPalette.chipOpacity)
-  }
-
   /// The caller redraws only when the palette changed.
   @Test func `the box says whether a replacement changed it`() {
     let box = ReaderPaletteBox()

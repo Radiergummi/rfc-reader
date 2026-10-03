@@ -71,7 +71,7 @@ private struct ReadingSettings: View {
   private var usesFullWidth: Binding<Bool> {
     Binding(
       get: { settings.measure == .fullWidth },
-      set: { $settings.measure.wrappedValue = $0 ? .fullWidth : .recommended }
+      set: { settings.measure = $0 ? .fullWidth : .recommended }
     )
   }
 

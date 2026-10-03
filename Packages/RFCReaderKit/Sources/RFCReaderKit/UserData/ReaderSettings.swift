@@ -107,6 +107,7 @@ public struct ReaderSettings: Sendable, Hashable {
 ///     @ReaderSettingsValue private var settings
 ///     …
 ///     Toggle("Underline links", isOn: $settings.underlineLinks)
+///     settings.fontSize = ReaderPreferences.defaultFontSize
 ///
 /// Each key is an `@AppStorage`, which is what tells SwiftUI to update the view;
 /// the value is decoded from them in one place, `ReaderSettings.init`, as
@@ -139,11 +140,17 @@ public struct ReaderSettingsValue: DynamicProperty {
     _palette = AppStorage(wrappedValue: Keys.defaultPalette, Keys.paletteKey, store: defaults)
   }
 
+  /// The settings. Setting them writes what changed to user defaults.
   @MainActor public var wrappedValue: ReaderSettings {
-    ReaderSettings(
-      fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
-      preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
-      syntaxTheme: .named(syntaxTheme), palette: .named(palette))
+    get {
+      ReaderSettings(
+        fontSize: fontSize, underlineLinks: underlineLinks, measure: measure,
+        preferOriginalText: preferOriginalText, drawDiagrams: drawDiagrams,
+        syntaxTheme: .named(syntaxTheme), palette: .named(palette))
+    }
+    nonmutating set {
+      newValue.write(to: defaults, replacing: ReaderSettings(defaults: defaults))
+    }
   }
 
   /// A binding to the settings, and through it to each one
