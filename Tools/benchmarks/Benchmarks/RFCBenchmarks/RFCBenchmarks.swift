@@ -89,15 +89,33 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
-  // The reader's column, 712 pt, as #357 measured the builds.
+  // The reader's column, 712 pt, as #357 measured the builds. RFC 8927 and RFC 8727
+  // are mostly source code, so they are what syntax highlighting is measured on;
+  // RFC 8727 holds the corpus's largest JSON block, 53 KB.
   let style = ReadingStyle(measure: ReaderLayout.idealMeasure)
-  for number in [9110, 9000] {
+  for number in [9110, 9000, 8927, 8727] {
     Benchmark("Build: RFC \(number)") { benchmark, document in
       for _ in benchmark.scaledIterations {
         blackHole(DocumentTextBuilder.build(document, style: style))
       }
     } setup: {
       try RFCXMLParser.parse(corpus.data("rfc\(number).xml"))
+    }
+  }
+  // Every block RFC 8727 highlights, its 53 KB JSON block among them.
+  Benchmark("Highlight: RFC 8727") { benchmark, blocks in
+    for _ in benchmark.scaledIterations {
+      for (text, type) in blocks {
+        blackHole(Lexers.highlight(text, as: type))
+      }
+    }
+  } setup: {
+    try RFCXMLParser.parse(corpus.data("rfc8727.xml")).blocks.compactMap {
+      block -> (String, ArtworkType)? in
+      guard case .preformatted(let content) = block,
+        let type = ArtworkType.canonical(content.type), Lexers.language(of: type) != nil
+      else { return nil }
+      return (content.text, type)
     }
   }
   Benchmark("Build: RFC 5661") { benchmark, document in

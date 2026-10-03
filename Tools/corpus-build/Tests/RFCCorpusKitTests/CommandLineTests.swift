@@ -177,6 +177,42 @@ struct CommandLineTests {
     #expect(sqlite3_column_int(statement, 0) == 4)
   }
 
+  /// `index` aligns every document with each one it obsoletes. RFC 9911 obsoletes RFC
+  /// 6991, which no fixture holds, so the run copies 9911 in under that number too:
+  /// a document aligned with itself pairs each section with its own, and each row
+  /// names the two documents by their files, as the first pass does.
+  @Test func `index writes the successions of every obsoletes edge`() throws {
+    let out = Self.temporaryDirectory()
+    let input = out.appending(path: "xml")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    for stem in ["rfc9911", "rfc6991"] {
+      try FileManager.default.copyItem(
+        at: Fixtures.url("rfc9911.xml"), to: input.appending(path: "\(stem).xml"))
+    }
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", input.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status == 0, "\(result.standardError)")
+
+    var connection: OpaquePointer?
+    #expect(sqlite3_open_v2(database.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
+    defer { sqlite3_close(connection) }
+    var statement: OpaquePointer?
+    let sql = """
+      SELECT count(*), sum(old_section = new_section) FROM successions
+      WHERE old = 'RFC6991' AND new = 'RFC9911'
+      """
+    #expect(sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK)
+    defer { sqlite3_finalize(statement) }
+    #expect(sqlite3_step(statement) == SQLITE_ROW)
+    let rows = sqlite3_column_int(statement, 0)
+    #expect(rows > 0)
+    #expect(sqlite3_column_int(statement, 1) == rows, "every section pairs with itself")
+  }
+
   /// An RFC that does not parse would leave a hole in the graph that nothing else
   /// shows, so the run fails, naming it, after writing the rest.
   @Test func `index fails on an RFC it cannot read`() throws {
