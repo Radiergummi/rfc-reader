@@ -265,16 +265,25 @@ struct SidebarView: View {
   private func row(_ filter: LibraryFilter) -> some View {
     HStack {
       Label(library.title(for: filter), systemImage: filter.systemImage)
-      #if os(macOS)
-        accessories(count: nil)
-      #else
-        accessories(count: count(filter))
-      #endif
+      accessories(count: count(filter))
     }
+    #if os(macOS)
+      .badge(badge(count(filter)))
+    #endif
     .tag(filter)
   }
 
-  /// The count and, collapsed, the chevron, after a row's label. Nothing on a Mac.
+  #if os(macOS)
+    /// A row's count as its badge. Text rather than the number, which `.badge` hides
+    /// at zero: an empty collection says 0, as it does on iOS. Nil while the index
+    /// loads, which draws no badge.
+    private func badge(_ count: Int?) -> Text? {
+      count.map { Text($0, format: .number) }
+    }
+  #endif
+
+  /// The count and, collapsed, the chevron, after a row's label. Nothing on a Mac,
+  /// where the row's `.badge` is the count and there is no chevron to draw after.
   @ViewBuilder
   private func accessories(count: Int?) -> some View {
     #if !os(macOS)
@@ -307,12 +316,11 @@ struct SidebarView: View {
       } icon: {
         CollectionFolderIcon(color: entry.color)
       }
-      #if os(macOS)
-        accessories(count: nil)
-      #else
-        accessories(count: library.count(of: entry))
-      #endif
+      accessories(count: library.count(of: entry))
     }
+    #if os(macOS)
+      .badge(badge(library.count(of: entry)))
+    #endif
     // List rows dropped here join the collection at its end.
     .dropDestination(for: String.self) { keys, _ in
       // A collection holds RFCs: a series row dragged here is not taken (#321).
@@ -345,19 +353,17 @@ struct SidebarView: View {
     }
   }
 
-  #if !os(macOS)
-    /// How many documents a row leads to (#344): the index's own count, or the
-    /// reader's data for the Library rows. Nil while the index loads, and for a
-    /// filter it lists nothing in.
-    private func count(_ filter: LibraryFilter) -> Int? {
-      switch filter {
-      case .bookmarks: library.bookmarkedDocuments.count
-      case .downloaded: library.downloadedNumbers.count
-      case .recent: library.recentlyReadCount
-      default: library.indexCounts[filter]
-      }
+  /// How many documents a row leads to (#344): the index's own count, or the
+  /// reader's data for the Library rows. Nil while the index loads, and for a
+  /// filter it lists nothing in.
+  private func count(_ filter: LibraryFilter) -> Int? {
+    switch filter {
+    case .bookmarks: library.bookmarkedDocuments.count
+    case .downloaded: library.downloadedNumbers.count
+    case .recent: library.recentlyReadCount
+    default: library.indexCounts[filter]
     }
-  #endif
+  }
 
   #if os(macOS)
     @ViewBuilder

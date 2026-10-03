@@ -104,6 +104,7 @@ Run all of these, and read their output rather than assuming it:
 - `make xcodeproj build-app`, when anything under `App/` or `project.yml` changed.
 - **A user-visible change in the app:** `make run`, look at it (the `run` skill), and describe what you saw in the pull request. If you couldn't check it visually, say so plainly.
 - **A user-visible change on iOS:** `make run-sim CODE_SIGNING_ALLOWED=NO`, then look at a screenshot (`xcrun simctl io booted screenshot`). The Simulator runs headless and nothing can tap in it: `xcrun simctl openurl` stops at an "Open in RFC Reader?" prompt. So what launch doesn't show needs the iPhone (`devicectl … --payload-url` opens a link without asking) or the maintainer. Use the iPhone also for what the Simulator can't show, such as TextKit's layout or timing on real hardware.
+- `make test-corpus`, when `LegacyTextParser` or a classifier it calls changed. The corpus-backed suites run `parse` over the fetched documents the committed fixtures don't cover, and `make check` skips them.
 - A wide legacy-parser change: `make corpus CORPUS_LIMIT=` before and after, then compare `corpus/report.json` between the two runs.
 
 Then run `/code-review` on the branch's diff against `origin/main`, and fix what holds up.

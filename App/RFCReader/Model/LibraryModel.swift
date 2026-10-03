@@ -315,6 +315,11 @@ final class LibraryModel {
       }
     }
     await refreshDownloadedNumbers()
+    // A tab restored onto Available Offline (#155) entered it before there was a
+    // set to take, and took an empty one.
+    for scene in sceneRegistry.open {
+      scene.takeDownloaded()
+    }
     await refreshPointersInPack()
     do {
       if let (prepared, updatedAt) = try await cached {
