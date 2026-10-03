@@ -132,9 +132,9 @@ struct SelectionTextTests {
   )
     throws -> NSAttributedString
   {
-    let from = try Fixtures.offset(of: start, in: text)
-    let to = try Fixtures.offset(of: end, in: text) + (end as NSString).length
-    return text.attributedSubstring(from: NSRange(location: from, length: to - from))
+    let first = try Fixtures.offset(of: start, in: text)
+    let last = try Fixtures.offset(of: end, in: text) + (end as NSString).length
+    return text.attributedSubstring(from: NSRange(location: first, length: last - first))
   }
 
   @Test func `a block too wide for the column is stored folded`() {

@@ -35,7 +35,7 @@ public enum SelectionText {
       guard let box = value as? ReferenceBox else {
         // A table cell's line break is set as a line separator, to keep its row
         // one paragraph (#506); on the pasteboard it is the newline it stands for.
-        result += attributed.attributedSubstring(from: range).string
+        result += unfolded(attributed.attributedSubstring(from: range))
           .replacing(DocumentTextBuilder.cellLineSeparator, with: "\n")
         return
       }
@@ -44,6 +44,27 @@ public enum SelectionText {
       // is also the only way a run that begins after the symbol still yields a
       // label rather than a fragment of one.
       result += pasteboardLabel(for: box.reference)
+    }
+    return result
+  }
+
+  /// `run`'s text, with the folds undone in any part of it that is a block RFC 8792
+  /// folded (#212). A block too wide for the column is shown as published, folds and
+  /// header included, and a selection over it would otherwise paste code that works
+  /// or not depending on the window's width; Copy Figure always unfolds. A block
+  /// already shown unfolded has no fold left, so it copies as it is.
+  private static func unfolded(_ run: NSAttributedString) -> String {
+    var result = ""
+    run.enumerateAttribute(.rfcVerbatim, in: NSRange(location: 0, length: run.length)) {
+      value, range, _ in
+      let text = run.attributedSubstring(from: range).string
+      guard let box = value as? VerbatimBox,
+        let strategy = FoldedLines.strategy(of: box.content.text)
+      else {
+        result += text
+        return
+      }
+      result += FoldedLines.unfold(selection: text, strategy: strategy)
     }
     return result
   }
