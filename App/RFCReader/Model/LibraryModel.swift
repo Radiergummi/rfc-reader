@@ -80,7 +80,7 @@ final class LibraryModel {
       guard indexState != .loading, indexState != .idle else { return }
       let waiting = indexWaiters
       indexWaiters = []
-      waiting.forEach { $0.resume() }
+      for waiter in waiting { waiter.resume() }
     }
   }
   /// What waits for the index to be ready or to have failed: a background refresh
