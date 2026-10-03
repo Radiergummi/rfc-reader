@@ -14,6 +14,7 @@ struct DocumentView: View {
   #if !os(macOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.scenePhase) private var scenePhase
   #endif
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
@@ -73,6 +74,7 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var placeSaver = ReadingPlaceSaver()
   /// Where the reader was when the text view last went — turning Original Text on
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
@@ -186,7 +188,41 @@ struct DocumentView: View {
           jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
         }
       }
-      .onDisappear { positions.save(lastVisibleAnchor) }
+      // Not only on the way out: quitting, or iOS ending an app in the background,
+      // takes the reader with no `onDisappear` (#155). So the place is saved once
+      // the reader stops, and when the app goes.
+      .onAppear {
+        // Not the view, and the box weakly: the box holds this.
+        let box = lastVisibleAnchor
+        box.placeDidChange = { [positions, placeSaver, weak box] in
+          placeSaver.schedule {
+            if let box { positions.save(box) }
+          }
+        }
+      }
+      #if os(macOS)
+        // Hosted outside any scene, so no `scenePhase` reaches here: the app's quit.
+        .onReceive(
+          NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
+        ) { _ in saveNow() }
+      #else
+        // The scene's phase, not the app's: an iPad window swiped away goes to the
+        // background alone.
+        .onChange(of: scenePhase) {
+          if scenePhase == .background { saveNow() }
+        }
+      #endif
+      .onDisappear {
+        // A report after this, during the fade-out, would save the document left
+        // over the one now read.
+        lastVisibleAnchor.placeDidChange = {}
+        saveNow()
+      }
+  }
+
+  private func saveNow() {
+    placeSaver.cancel()
+    positions.save(lastVisibleAnchor)
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
