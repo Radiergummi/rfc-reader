@@ -44,7 +44,7 @@ public struct ReferenceHover {
     case card
     /// A document preview (#29), which the pointer is meant to travel into.
     case documentPreview
-    /// A heading's backlinks (#183), opened by a click on its chip, which the
+    /// A heading's backlinks (#183), opened by a click on its caption, which the
     /// pointer travels into as it does a document preview: its rows are buttons.
     case backlinks
 
@@ -79,7 +79,7 @@ public struct ReferenceHover {
     case cardShown
     /// The document preview the last `showDocumentPreview` asked for is on screen.
     case documentPreviewShown
-    /// A heading's backlinks are on screen, opened by the click on its chip.
+    /// A heading's backlinks are on screen, opened by the click on its caption.
     case backlinksShown
     /// The popover closed by itself: Esc, a click elsewhere, the app going inactive.
     case popoverClosedItself

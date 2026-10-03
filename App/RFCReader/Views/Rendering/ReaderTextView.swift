@@ -120,6 +120,17 @@ import RFCReaderKit
     /// The link, and the character it is on, that a click at a mouse-down follows
     /// when the mouse-down is on a reference, or nil anywhere else.
     var referenceLink: (NSEvent) -> (link: Any, characterIndex: Int)? = { _ in nil }
+    /// Whether a code block's copy button is under the pointer of an event, which
+    /// shows the arrow; and copying the block for a click on it, answering whether
+    /// there was one.
+    var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
+    var copyCode: (NSEvent) -> Bool = { _ in false }
+    /// Opens or closes the section of a heading clicked in the outline (#698);
+    /// answers whether the click was on one.
+    var toggleSection: (NSEvent) -> Bool = { _ in false }
+    /// Where a click would toggle a heading's section in the outline, in this view's
+    /// coordinates: where the pointer is the arrow (`resetCursorRects()`).
+    var disclosureCursorRects: () -> [CGRect] = { [] }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -174,6 +185,18 @@ import RFCReaderKit
     /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
     /// view does not handle arrives here through the responder chain, and every move
     /// resets it.
+    /// The arrow beside a heading the outline discloses (#698), in two halves that
+    /// both have to hold, as a run of the app showed: a cursor rect, added after
+    /// `super`'s as `NSTextView` adds a link's pointing hand over its I-beam, sets it
+    /// on the way in; and `wantsArrow`, which answers for the same rects, keeps
+    /// `mouseMoved` from putting the I-beam back on every move.
+    override func resetCursorRects() {
+      super.resetCursorRects()
+      for rect in disclosureCursorRects() {
+        addCursorRect(rect, cursor: .arrow)
+      }
+    }
+
     override func cursorUpdate(with event: NSEvent) {
       guard !wantsArrow(event) else {
         NSCursor.arrow.set()
@@ -194,6 +217,11 @@ import RFCReaderKit
       if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
         return true
       }
+      if isOverCopyButton(event) { return true }
+      // Beside a heading the outline discloses: the cursor rects show the arrow on the
+      // way in, and every move reaches here, where `super` would put the I-beam back.
+      let point = convert(event.locationInWindow, from: nil)
+      if disclosureCursorRects().contains(where: { $0.contains(point) }) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }
@@ -207,6 +235,15 @@ import RFCReaderKit
     /// both `NSTextView`'s as they were before.
     override func mouseDown(with event: NSEvent) {
       guard !willTrackMouseDown() else { return }
+      // A copy button is a button: a click on it copies, and selects nothing.
+      if event.clickCount == 1, !event.modifierFlags.contains(.control), copyCode(event) {
+        return
+      }
+      if event.clickCount == 1, event.modifierFlags.isDisjoint(with: [.control, .shift, .command]),
+        toggleSection(event)
+      {
+        return
+      }
       guard event.clickCount == 1, !event.modifierFlags.contains(.control),
         let (link, index) = referenceLink(event)
       else {
@@ -264,7 +301,7 @@ import RFCReaderKit
     /// mail body or a code editor reads, and the one the chip's characters are wrong
     /// for. The rich flavors stay AppKit's, because a rich target receives the
     /// attachment as an image, which is the chip's symbol and is what it looks like
-    /// on screen. Two exceptions. A heading's backlink chip (#183) is the reader's,
+    /// on screen. Two exceptions. A heading's backlink caption (#183) is the reader's,
     /// not the document's, so a selection holding one writes its RTF and RTFD without
     /// it. A rendered diagram's borders are characters in a clear color that its
     /// strokes stand in for, and the strokes do not travel, so they are written in
@@ -281,14 +318,14 @@ import RFCReaderKit
         return pboard.setString(SelectionText.plainText(of: selection), forType: type)
       case .rtf, .rtfd:
         let selection = attributedString().attributedSubstring(from: selectedRange())
-        let withoutChips = SelectionText.withoutBacklinkChips(of: selection)
-        let revealed = SelectionText.richText(of: withoutChips)
+        let withoutReaderText = SelectionText.withoutReaderText(of: selection)
+        let revealed = SelectionText.richText(of: withoutReaderText)
         guard selectedRanges.count == 1,
-          revealed != nil || withoutChips.length != selection.length
+          revealed != nil || withoutReaderText.length != selection.length
         else {
           return super.writeSelection(to: pboard, type: type)
         }
-        let copied = revealed ?? withoutChips
+        let copied = revealed ?? withoutReaderText
         let whole = NSRange(location: 0, length: copied.length)
         let data =
           flavor == .rtf

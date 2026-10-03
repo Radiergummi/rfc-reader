@@ -203,7 +203,9 @@ public enum LegacyTextParser {
         }
         titlePage += leadIn.map(\.lines)
       }
+      // The words, not the columns the title page set them in (#683).
       header.title = Self.title(page: header.title, index: title, titlePage: titlePage)
+        .collapsingWhitespace()
     }
     // The lead-in, which is the only section with no heading, loses what the title page
     // left in it here rather than in `parse`, so the diagnosis never sees it either: a
@@ -570,7 +572,14 @@ public enum LegacyTextParser {
         guard let heading = sections[index].heading, Self.isReferencesHeading(heading) else {
           return
         }
-        lists[index] = Self.parseReferences(sections[index].blocks)
+        let blocks = sections[index].blocks
+        let entries = Self.parseReferences(blocks)
+        guard
+          Self.isBibliography(
+            title: heading.title, entries: entries.count,
+            blocksBefore: Self.blocksBeforeFirstEntry(blocks).count)
+        else { return }
+        lists[index] = entries
       },
       reserved: Self.reservedAnchors(Self.sectionAnchorCandidates(sections))
     )
@@ -642,8 +651,9 @@ public enum LegacyTextParser {
         // "Differences from RFC 793" -- and roughly 3,500 headings in the
         // corpus name a document. The number is not part of the words, so
         // the linker never sees it and cannot mistake it for a section
-        // cross reference.
-        title: linker.link(heading.title),
+        // cross reference. The words, not the columns they were set in: a classifier
+        // reads a heading's gaps, a title does not (#683).
+        title: linker.link(heading.title.collapsingWhitespace()),
         isAppendix: heading.isAppendix
       )
       if let references = bibliographies[index] {

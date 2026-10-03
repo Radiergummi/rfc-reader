@@ -104,7 +104,7 @@ extension DocumentTextBuilder {
   /// for one (`ReadingStyle.underlinesLinks`). For a style that emits no live
   /// links (`ReadingStyle.emitsLinks`), where it goes, as `.rfcLinkTarget`, and
   /// the link color with the underline, since nothing else colors it there.
-  private func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+  func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
     guard style.emitsLinks else {
       guard style.underlinesLinks else { return [.rfcLinkTarget: url] }
       return [
@@ -130,13 +130,13 @@ extension DocumentTextBuilder {
   /// (`[RFC9110][RFC9111]`) sharing one effective range would draw as a single
   /// rounded rect. Each chip therefore carries a value no other chip has.
   private func chipRun(
-    _ text: String, symbol: String = "doc.text", attributes: [NSAttributedString.Key: Any]
+    _ text: String, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString {
     var chip = attributes
     nextChipID += 1
     chip[.rfcChip] = nextChipID
     let result = NSMutableAttributedString()
-    if let symbol = chipSymbolRun(symbol, attributes: chip) {
+    if let symbol = chipSymbolRun("doc.text", attributes: chip) {
       result.append(symbol)
       // U+2060 WORD JOINER: an attachment character is its own grapheme and
       // offers a line-break opportunity on either side, so in a narrow column
@@ -195,51 +195,130 @@ extension DocumentTextBuilder {
     output.addAttribute(.kern, value: existing + amount, range: NSRange(location: index, length: 1))
   }
 
-  /// A heading's backlink chip (#183): an arrow back and how many sections refer to
-  /// the section, after a space. It goes nowhere itself: its link names the section,
-  /// and the reader lists the sections that refer there. The space and the chip are
-  /// both `.rfcBacklinks`, so a copied heading leaves them out. They are set like the
-  /// heading but are not part of it: the headings rotor would read them in its label.
-  func backlinkChip(
-    _ anchor: String, count: Int, base: [NSAttributedString.Key: Any]
-  ) -> NSAttributedString {
-    var attributes = Self.outsideHeading(base)
-    attributes[.rfcBacklinks] = anchor
-    let result = NSMutableAttributedString(string: " ", attributes: attributes)
-    attributes[.rfcSpoken] = AccessibleReading.backlinksLabel(count: count)
+  /// A heading's backlink caption (#183, #584): a paragraph of its own under the
+  /// heading, an arrow and how many sections refer to the section, in the
+  /// secondary style of a caption, so it does not read as part of the heading. It
+  /// goes nowhere itself: its link names the section, and the reader lists the
+  /// sections that refer there. Every character of it is `.rfcBacklinks` and
+  /// `.rfcReaderOnly`, its line break too, so a copied heading leaves the whole line
+  /// out; the line break is neither link nor label, so the caption's extent is its
+  /// words alone.
+  func backlinkCaption(_ anchor: String, count: Int) -> NSAttributedString {
+    var attributes: [NSAttributedString.Key: Any] = [
+      .font: style.backlinksFont,
+      .foregroundColor: RFCColors.secondaryLabel,
+      // Set solid: the body's line height would add leading above one short line,
+      // between the caption and its heading.
+      .paragraphStyle: paragraphStyle(
+        spacingAfter: style.paragraphSpacing * 0.6, lineHeightMultiple: 1),
+      .rfcBacklinks: anchor,
+      .rfcReaderOnly: "",
+    ]
+    let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
+    let words = Self.backlinksCaption(count: count)
+    attributes[.rfcSpoken] = words
     if let url = Self.url(anchor, scheme: Self.backlinksScheme) {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
-    result.append(chipRun(String(count), symbol: "arrow.turn.up.left", attributes: attributes))
+    let result = NSMutableAttributedString()
+    // A few points under the words' size: a diagonal arrow fills its whole square,
+    // and at the words' size it outweighs them.
+    if let symbol = chipSymbolRun(
+      "arrow.down.backward", color: RFCColors.secondaryLabel, smallerBy: 4,
+      attributes: attributes)
+    {
+      result.append(symbol)
+      // NO-BREAK SPACE: the arrow never wraps away from the words it introduces.
+      result.append(NSAttributedString(string: "\u{00A0}", attributes: attributes))
+    }
+    result.append(NSAttributedString(string: words, attributes: attributes))
+    result.append(lineBreak)
     return result
   }
 
-  /// A heading's attributes less what makes a run the heading: its anchor and its
-  /// level, which the headings rotor reads as one stop per run.
-  static func outsideHeading(
-    _ attributes: [NSAttributedString.Key: Any]
-  ) -> [NSAttributedString.Key: Any] {
-    var outside = attributes
-    outside[.rfcAnchor] = nil
-    for key in headingLevel(depth: 1).keys {
-      outside[key] = nil
+  /// How large the copy button's symbol is against its label's font: smaller than
+  /// the capitals beside it, so it does not outweigh them. The checkmark shown after
+  /// a copy takes the same size.
+  public static let copyButtonScale: CGFloat = 0.85
+
+  /// A code block's copy button: its symbol alone, a chip so the attachment is one
+  /// the reader allows, drawn without the chip's tint and in the color of the text
+  /// beside it. No link: a link is a web page's control, with its pointing hand, and
+  /// the reader takes a click on the button itself (`copyButton(at:)`).
+  func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+    var attributes = base
+    attributes[.rfcCopyCode] = ""
+    attributes[.rfcSpoken] = "Copy code"
+    nextChipID += 1
+    attributes[.rfcChip] = nextChipID
+    return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
+  }
+
+  /// What a backlink caption says, and VoiceOver says for it: the number of
+  /// sections that refer to the section — not of references, of which one section
+  /// may make several — in words up to three.
+  public static func backlinksCaption(count: Int) -> String {
+    switch count {
+    case 1: "One Backlink"
+    case 2: "Two Backlinks"
+    case 3: "Three Backlinks"
+    default: "\(count) Backlinks"
     }
-    return outside
+  }
+
+  /// A text view's link attributes, `defaults`, for a link on a card: in
+  /// `RFCColors.cardLink`, since the text view's color may fall below the minimum
+  /// contrast on a card's fill in dark (#694). Made once, with the text view's.
+  public static func cardLinkAttributes(
+    _ defaults: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any] {
+    var attributes = defaults
+    attributes[.foregroundColor] = RFCColors.cardLink(
+      over: defaults[.foregroundColor] as? PlatformColor ?? RFCColors.link)
+    return attributes
+  }
+
+  /// The attributes a text view draws the link `link` with, given its own
+  /// `defaults`: a text view colors every link itself, over the storage's color,
+  /// which a backlink caption has to keep to stay in the background. The caption
+  /// is drawn with `caption` on top: on macOS the ordinary pointer, not a link's
+  /// pointing hand, since it opens a list beside it as a control does. Passed in
+  /// rather than made here, because a cursor is AppKit's to make on the main
+  /// thread and TextKit may ask from another. Every other link is drawn as the
+  /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
+  public static func linkRenderingAttributes(
+    for link: Any, defaults: [NSAttributedString.Key: Any],
+    caption: [NSAttributedString.Key: Any] = [:]
+  ) -> [NSAttributedString.Key: Any] {
+    // The scheme alone: asked of every link TextKit draws, where decoding the
+    // anchor would allocate for an answer nobody reads.
+    guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }
+    var attributes = defaults
+    attributes[.foregroundColor] = nil
+    attributes.merge(caption) { _, caption in caption }
+    return attributes
   }
 
   /// The leading glyph -- `doc.text` for a reference -- that rides inside the chip's
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size and its bounds are centered on that font's cap height,
+  /// the run's own font size, or `scale` of it, and its bounds are centered on that
+  /// font's cap height,
   /// to the nearest whole point: a symbol that hangs below the line's descender
   /// makes its line that much taller, even past a fixed line height, and a
-  /// fraction there puts every fragment below it off the pixel grid (#273).
+  /// fraction there puts every fragment below it off the pixel grid (#273). A
+  /// backlink caption's arrow is set the same way, in the caption's `color` and
+  /// `smallerBy` points under its font's size.
   private func chipSymbolRun(
-    _ name: String, attributes: [NSAttributedString.Key: Any]
+    _ name: String, color: PlatformColor = RFCColors.accent, scale: CGFloat = 1,
+    smallerBy: CGFloat = 0, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    guard let symbol = chipSymbol(name, pointSize: font.pointSize) else { return nil }
+    let pointSize = font.pointSize * scale - smallerBy
+    guard let symbol = chipSymbol(name, pointSize: pointSize, color: color) else {
+      return nil
+    }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
     // after the default initializer instead, which UIKit also accepts.
     let attachment = NSTextAttachment()
@@ -255,16 +334,18 @@ extension DocumentTextBuilder {
   /// Rendering the symbol is the expensive part and depends only on which symbol and
   /// the point size, of which a build sees a few — but there is a chip per cross reference, and
   /// RFCs are full of them. The attachment itself stays per run.
-  private func chipSymbol(_ name: String, pointSize: CGFloat) -> PlatformImage? {
-    let key = ChipSymbolKey(name: name, pointSize: pointSize)
+  private func chipSymbol(_ name: String, pointSize: CGFloat, color: PlatformColor)
+    -> PlatformImage?
+  {
+    let key = ChipSymbolKey(name: name, pointSize: pointSize, color: color)
     if let cached = chipSymbols[key] { return cached }
     guard let template = PlatformImage.symbol(named: name, pointSize: pointSize) else {
       return nil
     }
     #if canImport(UIKit)
       // UIKit draws an attachment's template symbol untinted, black on a dark page,
-      // where AppKit tints it; colored as the chip's own label is.
-      let symbol = template.withTintColor(RFCColors.accent, renderingMode: .alwaysOriginal)
+      // where AppKit tints it; colored as the text beside it is.
+      let symbol = template.withTintColor(color, renderingMode: .alwaysOriginal)
     #else
       let symbol = template
     #endif
@@ -285,7 +366,7 @@ extension DocumentTextBuilder {
     decoded(url, scheme: referenceScheme)
   }
 
-  /// The same for `backlinksScheme`: the section whose backlinks a chip lists.
+  /// The same for `backlinksScheme`: the section whose backlinks a caption lists.
   public static func backlinks(from url: URL) -> String? {
     decoded(url, scheme: backlinksScheme)
   }

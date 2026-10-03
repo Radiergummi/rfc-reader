@@ -80,6 +80,25 @@ struct FigureCopyTests {
     #expect(FigureCopy.pasteboardText(for: figure) == "{\"key\": \"a long value\"}")
   }
 
+  /// The same through a parsed RFC (#210): Copy Figure on RFC 9985's folded YANG
+  /// example and on RFC 9783's folded key gives the unfolded text, header and folds
+  /// gone, whichever way the column shows it.
+  @Test(arguments: [("rfc9985.xml", "xmlns:bfd-mki="), ("rfc9783.xml", "\"k\":")])
+  func `a parsed folded figure is copied unfolded`(name: String, locator: String) throws {
+    let document = try Fixtures.document(named: name)
+    for measure: CGFloat in [300, 4000] {
+      let text = DocumentTextBuilder.build(document, style: ReadingStyle(measure: measure)).text
+      let figure = try #require(
+        FigureCopy.box(at: try Fixtures.offset(of: locator, in: text), in: text)?.content)
+      let copied = FigureCopy.pasteboardText(for: figure)
+      #expect(FoldedLines.strategy(of: figure.text) != nil, "the figure is the folded block")
+      #expect(copied == figure.unfoldedText)
+      #expect(copied.contains(locator))
+      #expect(!copied.contains("line wrapping per RFC 8792"))
+      #expect(!copied.contains("\\\n"), "no fold is left")
+    }
+  }
+
   @Test func `an unfolded figure is copied as it is`() {
     #expect(FigureCopy.pasteboardText(for: Self.diagram) == Self.diagram.text)
   }

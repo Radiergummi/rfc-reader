@@ -252,9 +252,11 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   /// The `4.2. ` or `Appendix A. ` a heading is announced by, which is the reader's
   /// to compose: the number lives in `number`, not in the words.
+  /// With no words after it, nothing follows the number (#683).
   private var numberPrefix: String {
     guard let number else { return "" }
-    return isAppendix ? "Appendix \(number). " : "\(number). "
+    let prefix = isAppendix ? "Appendix \(number)." : "\(number)."
+    return titleText.isEmpty ? prefix : prefix + " "
   }
 
   /// `4.2. Title` or `Appendix A. Title` or just the title.
@@ -262,7 +264,8 @@ public struct Section: Sendable, Identifiable, Hashable, Codable {
 
   /// `displayTitle` with its links intact, for a reader that draws them.
   public var displayTitleInlines: [Inline] {
-    numberPrefix.isEmpty ? title : [.text(numberPrefix)] + title
+    if numberPrefix.isEmpty { return title }
+    return titleText.isEmpty ? [.text(numberPrefix)] : [.text(numberPrefix)] + title
   }
 
   public var depth: Int {
@@ -507,7 +510,7 @@ public struct ReferenceList: Sendable, Hashable, Codable {
 
   /// Whether the documents a list names are part of the specification or background
   /// to it: what "read this next" means for a citation (#184).
-  public enum Kind: Sendable, Hashable {
+  public enum Kind: String, Sendable, Hashable, Codable {
     case normative
     case informative
     /// A list whose title says neither: the single `References` of a document from
