@@ -30,14 +30,35 @@ enum ABNF {
     /// (`%x41`): the syntax no listing of settings or message layout has, which says a
     /// block defining a name twice is a grammar with an error in it.
     var usesRepetitionOrNumericValue: Bool
+    /// Where the name is defined, in UTF-16 code units of the text as given (#185).
+    var nameRange: NSRange
+    /// Every mention of a rule name in the definition, in order, each with its range in
+    /// the text as given: what the reader links to the rule's definition (#185).
+    var uses: [Use]
+    /// Whether a count runs into a name made only of hex digits, as in `4c0ffee`: valid
+    /// ABNF by the letter, and a reason not to take the block for a grammar.
+    var readsAsHexNumber: Bool
+  }
+
+  /// One mention of a rule name.
+  struct Use: Sendable, Hashable {
+    var name: String
+    var range: NSRange
   }
 
   /// Whether `text` is a grammar: it parses, and a rule uses syntax only a grammar has,
   /// or there are two rules or more and one refers to another. `token = 1*tchar` is one;
   /// `count = max;` is not, although it parses, and neither is a list of assignments in
   /// pseudocode (`smallest = unbounded`), whose rules refer to nothing among them.
+  ///
+  /// A hex number read as a count and a name, and a name defined twice in a block with
+  /// no repetition or numeric value, parse but are not recognized: test vectors,
+  /// listings of settings and message layouts read that way.
   static func recognizes(_ text: String) -> Bool {
-    guard let rules = parse(text) else { return false }
+    guard let (rules, definesANameTwice) = parsed(text),
+      !rules.contains(where: \.readsAsHexNumber),
+      !definesANameTwice || rules.contains(where: \.usesRepetitionOrNumericValue)
+    else { return false }
     if rules.contains(where: \.usesGrammarSyntax) { return true }
     let names = Set(rules.map { $0.name.lowercased() })
     return rules.count >= 2
@@ -52,20 +73,26 @@ enum ABNF {
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
   /// only a comment are skipped; every other line either starts a rule at column 0 or
   /// continues the one before it, set deeper.
-  ///
-  /// A name is defined with `=` once, whatever its case, and added to only with `=/`:
-  /// listings of settings and message layouts assign one name twice. Grammars in the
-  /// legacy series do too, where `=/` or another name was meant, so a repeated
-  /// definition is refused only in a block without a repetition or a numeric value.
   static func parse(_ text: String) -> [Rule]? {
+    parsed(text)?.rules
+  }
+
+  /// The rules, and whether a name is defined with `=` twice, whatever its case: a
+  /// grammar adds to a rule only with `=/`, but listings of settings and message
+  /// layouts assign one name twice. Grammars in the legacy series do too, where `=/`
+  /// or another name was meant, so `recognizes` refuses a repeated definition only in
+  /// a block without a repetition or a numeric value.
+  private static func parsed(_ text: String) -> (rules: [Rule], definesANameTwice: Bool)? {
     var rules: [Rule] = []
     var defined: Set<String> = []
     var definesANameTwice = false
-    var current: String?
+    // The rule being read: its lines joined, and where each character of it is in
+    // `text`, in UTF-16 code units; nil for the space that joins two lines.
+    var current: (source: [Character], offsets: [Int?])?
     func finishRule() -> Bool {
       guard let source = current else { return true }
       current = nil
-      var parser = RuleParser(source)
+      var parser = RuleParser(source.source, offsets: source.offsets)
       guard let rule = parser.rule() else { return false }
       if !rule.isIncremental, !defined.insert(rule.name.lowercased()).inserted {
         definesANameTwice = true
@@ -82,21 +109,26 @@ enum ABNF {
         !line.isBlank && line.first { $0 != " " } != ";"
       }
       .map(\.leadingSpaceCount).min() ?? 0
+    var lineStart = 0
     for line in lines {
+      defer { lineStart += line.utf16.count + 1 }
       let unindented = line.dropFirst(min(indent, line.leadingSpaceCount))
       guard let content = withoutComment(unindented) else { return nil }
       guard content.contains(where: { !$0.isWhitespace }) else { continue }
+      let offsets = content.indices.map { index -> Int? in
+        lineStart + line.utf16.distance(from: line.startIndex, to: index)
+      }
       if content.first?.isWhitespace == true {
         guard current != nil else { return nil }
-        current? += " " + content
+        current?.source += [" "] + Array(content)
+        current?.offsets += [nil] + offsets
       } else {
         guard finishRule() else { return nil }
-        current = String(content)
+        current = (Array(content), offsets)
       }
     }
     guard finishRule(), !rules.isEmpty else { return nil }
-    if definesANameTwice, !rules.contains(where: \.usesRepetitionOrNumericValue) { return nil }
-    return rules
+    return (rules, definesANameTwice)
   }
 
   /// The line up to a `;` that is not inside a quoted literal or a prose value, or nil
@@ -123,18 +155,25 @@ enum ABNF {
   /// A recursive-descent parser for one rule, its continuation lines joined into it.
   private struct RuleParser {
     private let characters: [Character]
+    /// Where each character is in the text as given; nil for a joining space.
+    private let offsets: [Int?]
     private var position = 0
     private var references: [String] = []
+    private var uses: [Use] = []
     private var usesGrammarSyntax = false
     private var usesRepetitionOrNumericValue = false
+    private var readsAsHexNumber = false
 
-    init(_ source: String) {
-      characters = Array(source)
+    init(_ characters: [Character], offsets: [Int?]) {
+      self.characters = characters
+      self.offsets = offsets
     }
 
     /// `rulename defined-as elements`, and nothing after it.
     mutating func rule() -> Rule? {
+      let start = position
       guard let name = ruleName() else { return nil }
+      let nameRange = range(from: start)
       skipSpace()
       guard take("=") else { return nil }
       let isIncremental = take("/")
@@ -145,7 +184,14 @@ enum ABNF {
       return Rule(
         name: name, isIncremental: isIncremental, references: references,
         usesGrammarSyntax: usesGrammarSyntax,
-        usesRepetitionOrNumericValue: usesRepetitionOrNumericValue)
+        usesRepetitionOrNumericValue: usesRepetitionOrNumericValue,
+        nameRange: nameRange, uses: uses, readsAsHexNumber: readsAsHexNumber)
+    }
+
+    /// The text as given from the character at `start` to the one before `position`:
+    /// a name, which is ASCII and on one line, so one code unit a character.
+    private func range(from start: Int) -> NSRange {
+      NSRange(location: offsets[start] ?? 0, length: position - start)
     }
 
     private var next: Character? {
@@ -239,7 +285,7 @@ enum ABNF {
         usesGrammarSyntax = true
         usesRepetitionOrNumericValue = true
       } else if counted {
-        if startsHexNumber() { return false }
+        if startsHexNumber() { readsAsHexNumber = true }
         usesGrammarSyntax = true
         usesRepetitionOrNumericValue = true
       }
@@ -276,7 +322,9 @@ enum ABNF {
       case "<":
         return delimitedValue(opening: "<", closing: ">")
       default:
+        let start = position
         guard let name = ruleName() else { return false }
+        uses.append(Use(name: name, range: range(from: start)))
         // Rule names are case-insensitive: one name in two spellings is one reference.
         if !references.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
           references.append(name)
