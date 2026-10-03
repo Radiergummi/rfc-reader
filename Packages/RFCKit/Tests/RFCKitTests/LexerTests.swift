@@ -176,6 +176,17 @@ struct LexerTests {
     #expect(try lexer(states).tokens(in: text).cover(text))
   }
 
+  /// A rule matching nothing only in context, at a word's end, passes the
+  /// definition's check, and may match where the text ends.
+  @Test func `a match of nothing at the end of the text ends lexing`() throws {
+    let states: [String: [Lexer.Rule]] = [
+      "root": [Lexer.Rule(#"\b"#, .plain), Lexer.Rule(#"\("#, .punctuation, .push("inner"))],
+      "inner": [Lexer.Rule(#"\)"#, .punctuation, .pop(1))],
+    ]
+    let text = "ab"
+    #expect(try lexer(states).tokens(in: text).cover(text))
+  }
+
   @Test func `a definition without a root state is refused`() {
     #expect(throws: Lexer.DefinitionError.noRootState) {
       try lexer(["other": [Lexer.Rule("a", .name)]])
@@ -203,6 +214,18 @@ struct LexerTests {
   @Test func `nested groups are refused`() {
     #expect(throws: Lexer.DefinitionError.nestedGroups("((a)b)")) {
       try lexer(["root": [Lexer.Rule("((a)b)", groups: [.name, .string])]])
+    }
+  }
+
+  @Test func `a named group nested in a group is refused`() {
+    #expect(throws: Lexer.DefinitionError.nestedGroups("((?<k>a)b)")) {
+      try lexer(["root": [Lexer.Rule("((?<k>a)b)", groups: [.name, .string])]])
+    }
+  }
+
+  @Test func `a group nested in a named group is refused`() {
+    #expect(throws: Lexer.DefinitionError.nestedGroups("(?<k>(a)b)")) {
+      try lexer(["root": [Lexer.Rule("(?<k>(a)b)", groups: [.name, .string])]])
     }
   }
 

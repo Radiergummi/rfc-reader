@@ -212,7 +212,8 @@ public struct Lexer: Highlighter {
       if match.range.length == 0,
         matched.rule.transition == nil || emptySteps >= Self.emptyStepLimit
       {
-        // Nothing can move lexing on here: one character is plain.
+        // Nothing can move lexing on here: one character is plain, if one is left.
+        guard position < length else { break }
         let character = source.rangeOfComposedCharacterSequence(at: position)
         output.append(character, .plain)
         position = NSMaxRange(character)
@@ -320,7 +321,11 @@ struct PatternShape {
       } else if character == "[" {
         inClass = true
       } else if character == "(" {
-        let captures = !(index + 1 < characters.count && characters[index + 1] == "?")
+        // `(?` opens a group that does not capture, except `(?<name>`.
+        let next = characters[(index + 1)...].prefix(3)
+        let captures =
+          !next.starts(with: "?")
+          || (next.starts(with: "?<") && !next.starts(with: "?<=") && !next.starts(with: "?<!"))
         if captures, open.contains(true) { hasNestedCaptureGroups = true }
         open.append(captures)
       } else if character == ")" {
