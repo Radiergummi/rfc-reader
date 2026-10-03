@@ -185,11 +185,11 @@ import RFCReaderKit
     /// pointer is the arrow. Both overrides are needed: a cursor update the hosting
     /// view does not handle arrives here through the responder chain, and every move
     /// resets it.
-    /// The arrow beside a heading the outline discloses (#698). As cursor rects,
-    /// because that is how `NSTextView` sets its I-beam: its own tracking area asks
-    /// for neither moves nor cursor updates, so `mouseMoved` and `cursorUpdate` here
-    /// see only what a subview such as the header passes up. Added after `super`'s,
-    /// as `NSTextView` adds a link's pointing hand over its I-beam.
+    /// The arrow beside a heading the outline discloses (#698), in two halves that
+    /// both have to hold, as a run of the app showed: a cursor rect, added after
+    /// `super`'s as `NSTextView` adds a link's pointing hand over its I-beam, sets it
+    /// on the way in; and `wantsArrow`, which answers for the same rects, keeps
+    /// `mouseMoved` from putting the I-beam back on every move.
     override func resetCursorRects() {
       super.resetCursorRects()
       for rect in disclosureCursorRects() {
@@ -218,6 +218,10 @@ import RFCReaderKit
         return true
       }
       if isOverCopyButton(event) { return true }
+      // Beside a heading the outline discloses: the cursor rects show the arrow on the
+      // way in, and every move reaches here, where `super` would put the I-beam back.
+      let point = convert(event.locationInWindow, from: nil)
+      if disclosureCursorRects().contains(where: { $0.contains(point) }) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }
