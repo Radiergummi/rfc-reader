@@ -283,7 +283,78 @@ struct ReadingModeTests {
     #expect(folding.disclosures(in: index) == folding.disclosures(in: built))
   }
 
+  // MARK: Focus (#699)
+
+  /// A section with subsections, and where its subtree ends: at the next heading at its
+  /// own depth or shallower.
+  private static func sectionWithSubsections(in built: BuiltDocument) throws
+    -> (anchor: String, start: Int, end: Int)
+  {
+    let sections = built.anchors.sections.entries
+    let index = try #require(
+      sections.indices.dropLast().first {
+        (sections[$0 + 1].depth ?? 0) > (sections[$0].depth ?? 0)
+      })
+    let depth = try #require(sections[index].depth)
+    let next = sections[(index + 1)...].first { ($0.depth ?? 0) <= depth }
+    return (sections[index].anchor, sections[index].offset, next?.offset ?? built.text.length)
+  }
+
+  /// Focus: one section and its subsections, and nothing else.
+  @Test func `focus shows one section and its subsections`() throws {
+    let built = try Self.rfc8999()
+    let section = try Self.sectionWithSubsections(in: built)
+    let hidden = Folding(focusingOn: section.anchor).hidden(in: built)
+    for paragraph in Self.paragraphs(of: built) {
+      let inside = paragraph.location >= section.start && paragraph.location < section.end
+      #expect(hidden.contains(paragraph.location) == !inside, "paragraph at \(paragraph.location)")
+    }
+    #expect(Folding(focusingOn: section.anchor).disclosures(in: built).isEmpty)
+  }
+
+  /// Next Section goes past the focused subtree; Previous goes to the section before
+  /// at its depth or shallower: its sibling, or its parent.
+  @Test func `next and previous move the focus`() throws {
+    let built = try Self.rfc8999()
+    let section = try Self.sectionWithSubsections(in: built)
+    let index = FoldingIndex(built)
+    let focus = Folding(focusingOn: section.anchor)
+    let next = try #require(focus.focusing(.next, in: index)?.focused)
+    #expect(built.anchors.offset(of: next) == section.end)
+    let back = try #require(focus.focusing(.next, in: index)?.focusing(.previous, in: index))
+    #expect(back.focused == section.anchor)
+    #expect(Folding(mode: .outline).focusing(.next, in: index) == nil)
+  }
+
+  /// A jump outside the focused section moves the focus to the section it lands in.
+  @Test func `a jump elsewhere moves the focus`() throws {
+    let built = try Self.rfc8999()
+    let section = try Self.sectionWithSubsections(in: built)
+    let elsewhere = built.anchors.sections.entries.last { $0.offset >= section.end }
+    let target = try #require(elsewhere)
+    let moved = Folding(focusingOn: section.anchor).expanding(toShow: target.offset + 1, in: built)
+    #expect(moved.focused == target.anchor)
+    #expect(!moved.hidden(in: built).contains(target.offset + 1))
+  }
+
+  /// The References tab shows what the focused section cites, and only that.
+  @Test func `the focused section's citations are what it cites`() throws {
+    let built = try Self.rfc8999()
+    let everything = Set(
+      built.anchors.sections.entries.flatMap {
+        FocusCitations.entries(citedIn: $0.anchor, in: built, index: FoldingIndex(built))
+      })
+    let citing = try #require(
+      built.anchors.sections.entries.first {
+        !FocusCitations.entries(citedIn: $0.anchor, in: built, index: FoldingIndex(built)).isEmpty
+      })
+    let cited = FocusCitations.entries(
+      citedIn: citing.anchor, in: built, index: FoldingIndex(built))
+    #expect(cited.isSubset(of: everything))
+    #expect(cited.count < everything.count, "one section cites less than the whole document")
+  }
+
   @Test func `the modes are named for the menu`() {
-    #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline"])
+    #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus"])
   }
 }
