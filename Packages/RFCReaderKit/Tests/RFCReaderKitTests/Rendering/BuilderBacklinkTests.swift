@@ -59,7 +59,7 @@ struct BuilderBacklinkTests {
     for offset in caption.range.location..<NSMaxRange(caption.range) {
       #expect(built.text.attribute(.rfcChip, at: offset, effectiveRange: nil) == nil)
       let font = built.text.attribute(.font, at: offset, effectiveRange: nil) as? PlatformFont
-      #expect(font == style.captionFont)
+      #expect(font == style.backlinksFont)
       let color = built.text.attribute(.foregroundColor, at: offset, effectiveRange: nil)
       #expect(color as? PlatformColor == RFCColors.secondaryLabel)
     }

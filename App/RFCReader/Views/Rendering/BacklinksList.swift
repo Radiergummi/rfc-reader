@@ -39,6 +39,9 @@ struct BacklinksList: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // The popover takes focus as it opens, which put a focus ring around the
+            // first row before anyone had pressed a key.
+            .focusEffectDisabled()
           }
         }
       }

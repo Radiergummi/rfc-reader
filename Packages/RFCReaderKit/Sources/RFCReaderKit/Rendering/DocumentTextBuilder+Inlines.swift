@@ -204,7 +204,7 @@ extension DocumentTextBuilder {
   /// neither link nor label, so the caption's extent is its words alone.
   func backlinkCaption(_ anchor: String, count: Int) -> NSAttributedString {
     var attributes: [NSAttributedString.Key: Any] = [
-      .font: style.captionFont,
+      .font: style.backlinksFont,
       .foregroundColor: RFCColors.secondaryLabel,
       .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6),
       .rfcBacklinks: anchor,
@@ -216,8 +216,10 @@ extension DocumentTextBuilder {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
     let result = NSMutableAttributedString()
+    // A size under the words': a diagonal arrow fills its whole square, and at
+    // the words' size it outweighs them.
     if let symbol = chipSymbolRun(
-      "arrow.down.backward", color: RFCColors.secondaryLabel, attributes: attributes)
+      "arrow.down.backward", color: RFCColors.secondaryLabel, scale: 0.8, attributes: attributes)
     {
       result.append(symbol)
       // NO-BREAK SPACE: the arrow never wraps away from the words it introduces.
@@ -263,13 +265,15 @@ extension DocumentTextBuilder {
   /// to the nearest whole point: a symbol that hangs below the line's descender
   /// makes its line that much taller, even past a fixed line height, and a
   /// fraction there puts every fragment below it off the pixel grid (#273). A
-  /// backlink caption's arrow is set the same way, in the caption's `color`.
+  /// backlink caption's arrow is set the same way, in the caption's `color` and at
+  /// `scale` of its font's size.
   private func chipSymbolRun(
-    _ name: String, color: PlatformColor = RFCColors.accent,
+    _ name: String, color: PlatformColor = RFCColors.accent, scale: CGFloat = 1,
     attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    guard let symbol = chipSymbol(name, pointSize: font.pointSize, color: color) else {
+    let pointSize = font.pointSize * scale
+    guard let symbol = chipSymbol(name, pointSize: pointSize, color: color) else {
       return nil
     }
     // AppKit's `NSTextAttachment` has no `init(image:)`; `image` is assigned
