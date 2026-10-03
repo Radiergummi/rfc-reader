@@ -206,8 +206,9 @@ final class NavigationModel: Identifiable {
   // MARK: - Navigation
 
   /// A link from outside the current document: the sidebar, a deep link, a citation
-  /// in the prose, or Go to RFC.
-  func open(_ link: RFCLink, in index: RFCIndex?) {
+  /// in the prose, or Go to RFC. A citation, or anything else followed inside the
+  /// reader, arrives as `.citation`, which on iOS pushes a reader (#263).
+  func open(_ link: RFCLink, in index: RFCIndex?, arrival: HistoryEntry.Arrival = .root) {
     let id = Self.resolved(link.id, in: index)
     // A place in the document on screen is a jump within it, which the reader
     // resolves: an anchor may name nothing in its body, as the RFC Editor's
@@ -218,7 +219,7 @@ final class NavigationModel: Identifiable {
       jump(toSection: place)
       guard link.section != nil else { return }
     } else {
-      go(to: HistoryEntry(id: id, section: link.place))
+      go(to: HistoryEntry(id: id, section: link.place, arrival: arrival))
     }
     // As before the split: an explicit open reveals the document in the list,
     // which a narrowed filter may be hiding.
@@ -389,12 +390,25 @@ final class NavigationModel: Identifiable {
   /// section's number and its anchor are one place (#482).
   func recordJump(to section: String, in places: DocumentPlaces, animated: Bool = true) {
     guard let id = selection else { return }
-    go(to: HistoryEntry(id: id, section: section), in: places, animated: animated)
+    go(
+      to: HistoryEntry(id: id, section: section, arrival: .citation), in: places,
+      animated: animated)
   }
 
   func goBack() {
+    let path = readerPath
     guard let place = history.goBack(leaving: visiblePosition) else { return }
-    arrive(at: place)
+    #if os(macOS)
+      arrive(at: place)
+    #else
+      // A step back to the reader below pops the one on top, and shows that reader
+      // where it was left (#263).
+      if path.pops(to: readerPath) {
+        arriveKept(at: place)
+      } else {
+        arrive(at: place)
+      }
+    #endif
   }
 
   func goForward() {
@@ -420,6 +434,36 @@ final class NavigationModel: Identifiable {
   private func arrive(at place: HistoryEntry, animated: Bool = true) {
     scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
+  }
+
+  /// At a place in a reader the stack kept, which is where it was left: there is
+  /// nothing to scroll to.
+  private func arriveKept(at place: HistoryEntry) {
+    scrollRequest = nil
+    visiblePosition = place.section
+  }
+
+  // MARK: - The readers stacked on iOS (#263)
+
+  /// The readers stacked in this tab's detail column on iOS: the root, and one for
+  /// each citation of another RFC followed since. The Mac has one reader.
+  var readerPath: ReaderPath { ReaderPath(history) }
+
+  /// Whether the reader of `id` at `depth` in the stack is the one on screen, whose
+  /// the window's reader state is. `depth` is nil for a reader that is not stacked,
+  /// the Mac's, which is on screen while its document is selected.
+  func shows(_ id: DocumentID, at depth: Int?) -> Bool {
+    guard selection == id else { return false }
+    guard let depth else { return true }
+    return history.stackedDocuments.count - 1 == depth
+  }
+
+  /// The stack's own back, the system back button or a swipe from the edge, which
+  /// leaves `count` readers: the history steps back past each reader popped, and the
+  /// one shown is where it was left.
+  func popReaders(to count: Int) {
+    guard let place = history.popReaders(to: count, leaving: visiblePosition) else { return }
+    arriveKept(at: place)
   }
 
   // MARK: - Across launches

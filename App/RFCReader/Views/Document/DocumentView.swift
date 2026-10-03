@@ -34,6 +34,9 @@ struct DocumentView: View {
   @Environment(\.legibilityWeight) private var legibilityWeight
 
   let id: DocumentID
+  /// The reader's place in the tab's stack of readers on iOS (#263), from 0 at the
+  /// root; nil on the Mac, whose one reader is not stacked.
+  let depth: Int?
 
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
@@ -43,12 +46,48 @@ struct DocumentView: View {
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
 
-  init(id: DocumentID) {
-    self.id = id
-    _session = State(initialValue: DocumentSession(id: id))
+  /// Whether the window's reader state is this reader's. On the Mac it is while the
+  /// reader is selected. On iOS a reader the stack keeps below its top gives it up
+  /// to the readers pushed over it, and takes it back once it is on top again
+  /// (#263): until then it shows what it showed, the original text or not and what
+  /// was unfolded, kept in `keptOriginal` and `keptFolding`.
+  @State private var ownsReader: Bool
+  @State private var keptOriginal = false
+  @State private var keptFolding = Folding()
+  /// Whether the text view went from view under a reader pushed over it, rather than
+  /// going: it stays where it was, and coming back into view is not arriving.
+  @State private var isCovered = false
+
+  #if os(macOS)
+    init(id: DocumentID) {
+      self.id = id
+      depth = nil
+      _session = State(initialValue: DocumentSession(id: id, depth: nil))
+      _ownsReader = State(initialValue: true)
+    }
+  #else
+    /// A reader in the tab's stack. The panel is the stack's, so that an open panel
+    /// stays open from one reader to the next.
+    init(id: DocumentID, depth: Int, showsInspector: Binding<Bool>) {
+      self.id = id
+      self.depth = depth
+      _session = State(initialValue: DocumentSession(id: id, depth: depth))
+      _ownsReader = State(initialValue: false)
+      _showsInspector = showsInspector
+    }
+  #endif
+
+  /// Whether this is the reader on screen, whose the window's reader state is.
+  private var isShown: Bool { navigation.shows(id, at: depth) }
+
+  /// The original text or the rendered document: the window's choice while the
+  /// reader state is this reader's, and what it last was otherwise.
+  private var showsOriginal: Bool {
+    ownsReader && isShown ? reader.showOriginal : keptOriginal
   }
+
   #if !os(macOS)
-    @State private var showsInspector = false
+    @Binding private var showsInspector: Bool
     /// Export and Print, and the sheets they present.
     @State private var output = DocumentOutput()
 
@@ -126,11 +165,11 @@ struct DocumentView: View {
   }
 
   /// The folding index of the build on screen, and in Focus the References tab's
-  /// groups, filtered to what its section cites (#699). Only for the selected
-  /// document, whose the reader state is, and only in Focus, which alone needs them;
+  /// groups, filtered to what its section cites (#699). Only for the reader on
+  /// screen, whose the reader state is, and only in Focus, which alone needs them;
   /// not over the original text, which nothing folds.
   private func updateFolding() {
-    guard navigation.selection == id else { return }
+    guard ownsReader, isShown else { return }
     guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
@@ -177,10 +216,15 @@ struct DocumentView: View {
           IOSDocumentChrome(
             id: id, metadata: metadata, document: session.state.document, library: library,
             navigation: navigation, reader: reader, showsInspector: $showsInspector,
-            barsHidden: $barsHidden, output: output))
+            barsHidden: $barsHidden, output: output, isShown: ownsReader && isShown))
       #endif
       .onAppear {
-        if !session.hasStartedLoading { startLoad() }
+        if !session.hasStartedLoading {
+          startLoad()
+          if isShown { ownsReader = true }
+        } else {
+          takeReaderState()
+        }
         #if !os(macOS)
           reader.openPanel = { [isPresented = $showsInspector] in
             withAnimation(.snappy) { isPresented.wrappedValue = true }
@@ -194,11 +238,30 @@ struct DocumentView: View {
       .onChange(of: session.state.built.map { ObjectIdentifier($0.text) }, initial: true) {
         updateFolding()
       }
-      .onChange(of: reader.folding) { updateFolding() }
-      .onChange(of: reader.showOriginal) { updateFolding() }
+      .onChange(of: reader.folding) {
+        if ownsReader, isShown { keptFolding = reader.folding }
+        updateFolding()
+      }
+      .onChange(of: reader.showOriginal) {
+        if ownsReader, isShown { keptOriginal = reader.showOriginal }
+        updateFolding()
+      }
+      // On iOS, covered by a reader pushed over it, or on top again once that one
+      // is popped (#263).
+      .onChange(of: isShown) { _, shown in
+        guard depth != nil else { return }
+        if shown {
+          takeReaderState()
+        } else {
+          ownsReader = false
+        }
+      }
       // Into the window's reader state, for the panel beside the reader (#325):
-      // how a load ends. `startLoad` says it began, after clearing that state.
+      // how a load ends. `startLoad` says it began, after clearing that state. Not
+      // for a reader under the top of the stack, which says it on top again
+      // (`DocumentSession.reinstate`).
       .onChange(of: session.state.isLoading) { _, isLoading in
+        guard isShown else { return }
         reader.isLoading = isLoading
       }
       .onChange(of: buildInputs, initial: true) {
@@ -220,9 +283,9 @@ struct DocumentView: View {
         session.deriveInfo(into: reader, library: library, navigation: navigation)
       }
       .onChange(of: navigation.scrollRequest) { _, request in
-        // Not while fading out over the next document's reader: the request is
-        // the selected document's.
-        guard navigation.selection == id, let request else { return }
+        // Not while fading out over the next document's reader, nor under the top
+        // of the stack: the request is the reader on screen's.
+        guard isShown, let request else { return }
         if request.isUnrecorded {
           follow(request, animated: true)
         } else {
@@ -300,11 +363,11 @@ struct DocumentView: View {
   private var states: some View {
     if let metadata,
       let page = PublishedOriginalPage(
-        id, formats: metadata.formats, showsOriginal: reader.showOriginal,
+        id, formats: metadata.formats, showsOriginal: showsOriginal,
         text: session.state.document, pointerInPack: library.pointersInPack.contains(id))
     {
       originalOnly(page, metadata: metadata)
-    } else if reader.showOriginal {
+    } else if showsOriginal {
       // At the size the reader sets its body, the system's text size included, so
       // switching to the original does not drop someone back to 17 pt.
       OriginalTextView(
@@ -329,8 +392,9 @@ struct DocumentView: View {
         scrollTarget: scrollTarget,
         onScrollHandled: { scrollTarget = nil },
         onVisibleAnchorChange: {
-          // Not while fading out: the reader state is the selected document's.
-          guard navigation.selection == id else { return }
+          // Not while fading out, nor under the top of the stack: the reader state
+          // is the reader on screen's.
+          guard isShown else { return }
           reader.currentAnchor = $0
           // Resolved here, where the document is: the toolbar's citation and
           // section link need the place, and on macOS the toolbar is in the
@@ -347,23 +411,25 @@ struct DocumentView: View {
         // Not while fading out over the next document's reader, as the load's
         // and the build's callbacks guard: the title is the selected document's.
         onToolbarTitle: { state, source in
-          guard navigation.selection == id else { return }
+          guard isShown else { return }
           reader.report(title: state, from: source)
         },
         onToolbarTitleReleased: { reader.releaseTitle(from: $0) },
         onSelectionChange: {
-          guard navigation.selection == id else { return }
+          guard isShown else { return }
           reader.hasSelection = $0
         },
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
-        // Not while fading out: the reader state is the selected document's.
-        folding: navigation.selection == id ? reader.folding : nil,
+        // Not while fading out, nor under the top of the stack until the reader
+        // state is this reader's again: it is the reader on screen's.
+        folding: ownsReader && isShown ? reader.folding : nil,
         onFoldingChange: {
-          guard navigation.selection == id else { return }
+          guard isShown else { return }
           reader.folding = $0
         },
+        isShown: ownsReader && isShown,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
@@ -386,6 +452,12 @@ struct DocumentView: View {
         .ignoresSafeArea(.container, edges: .vertical)
       #endif
       .onAppear {
+        // Back on top of the stack, the text view is the one that was covered,
+        // where it was left (#263).
+        if isCovered {
+          isCovered = false
+          return
+        }
         // Deep link or restored reading position — or, when the text view is made
         // again, where the reader was (#449).
         let arrival = ReaderArrival.onAppear(
@@ -412,6 +484,11 @@ struct DocumentView: View {
         }
       }
       .onDisappear {
+        // Covered by a reader pushed over it, the text view stays (#263).
+        if depth != nil, !isShown {
+          isCovered = true
+          return
+        }
         placeLeft =
           lastVisibleAnchor.isAheadOfSections ? .top : lastVisibleAnchor.anchor.map { .section($0) }
       }
@@ -425,9 +502,13 @@ struct DocumentView: View {
         Button("Try Again") { startLoad() }
         Link("Open on rfc-editor.org", destination: RFCEditorEndpoints.infoPage(id))
       }
-    } else {
+    } else if session.state.showsProgress(isDue: session.isProgressDue) {
       ProgressView("Loading \(id.displayName)…")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      // Nothing yet, for a moment: a document in the cache normally builds before
+      // the delay is up, and appears with no flash of progress (#263).
+      Color.clear
     }
   }
 
@@ -491,6 +572,7 @@ struct DocumentView: View {
 
   /// Fetches the document, with the reader's panel made ready for it first.
   private func startLoad() {
+    keptOriginal = preferOriginalText
     session.open(
       into: reader, library: library, navigation: navigation, positions: positions,
       showsOriginal: preferOriginalText)
@@ -520,9 +602,9 @@ struct DocumentView: View {
   /// leaves the history as it is. False while there is no build to look in.
   @discardableResult
   private func follow(_ place: String, animated: Bool = true) -> Bool {
-    // Not while fading out over the next document's reader: the place is the
-    // selected document's.
-    guard navigation.selection == id, let document = session.state.document,
+    // Not while fading out over the next document's reader, nor under the top of
+    // the stack: the place is the reader on screen's.
+    guard isShown, let document = session.state.document,
       let built = session.state.built
     else { return false }
     switch landing(at: place) {
@@ -544,6 +626,17 @@ struct DocumentView: View {
     if follow(request.section, animated: animated) {
       navigation.settle(request)
     }
+  }
+
+  /// Takes the window's reader state back, for a reader the stack kept below its top
+  /// that is on top again (#263): the readers pushed over it had it.
+  private func takeReaderState() {
+    guard !ownsReader, isShown, session.hasStartedLoading else { return }
+    session.reinstate(
+      into: reader, library: library, navigation: navigation, showsOriginal: keptOriginal,
+      folding: keptFolding)
+    ownsReader = true
+    updateFolding()
   }
 
   /// Nil while there is no build to find the place in.
@@ -573,7 +666,7 @@ struct DocumentView: View {
     case .reference(let anchor):
       reader.reveal(reference: anchor)
     case .document(let link):
-      library.open(link, activation: activation, in: navigation)
+      library.open(link, activation: activation, in: navigation, arrival: .citation)
     case .unhandled:
       return false
     }

@@ -61,12 +61,9 @@ import SwiftUI
         // reader's floor comes from its own frame, inside `DocumentView`. Put
         // here it would bound the reader and its panel together, which is how the
         // contents panel came to leave the text 190 pt wide.
-        if let selection = navigation.selection {
-          DocumentView(id: selection)
-            .id(selection)
-        } else {
-          EmptyDetailView()
-        }
+        //
+        // A stack of readers, which a citation of another RFC pushes onto (#263).
+        ReaderStack()
       }
       .environment(\.sceneChrome, chrome)
       // The scene's title, for the app switcher and iPad's window controls. It

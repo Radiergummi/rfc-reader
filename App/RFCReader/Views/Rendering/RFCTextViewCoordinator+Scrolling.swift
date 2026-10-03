@@ -65,6 +65,15 @@ extension RFCTextViewCoordinator {
     Task { self.onVisibleAnchorChange(anchor) }
   }
 
+  /// Reports where the reader is and where the title is, as if neither had been
+  /// reported: for a reader back on top of the stack on iOS, whose reports the
+  /// readers pushed over it replaced (#263).
+  func reportAgain() {
+    lastToolbarTitle = nil
+    lastReportedAnchor = nil
+    reportVisibleAnchor()
+  }
+
   func updateToolbarTitle() {
     guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
       return

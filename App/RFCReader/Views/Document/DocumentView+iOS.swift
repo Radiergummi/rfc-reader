@@ -17,6 +17,8 @@
     @Binding var showsInspector: Bool
     @Binding var barsHidden: Bool
     let output: DocumentOutput
+    /// Whether the window's reader state is this reader's; see `DocumentTitle`.
+    let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -35,8 +37,8 @@
             DocumentTitle(
               title: id.displayName,
               subtitle: DocumentActions.subtitle(
-                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
-              reader: reader)
+                metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
+              reader: reader, isShown: isShown)
           }
         }
         .toolbar {
