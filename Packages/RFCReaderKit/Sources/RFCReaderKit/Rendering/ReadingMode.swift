@@ -10,8 +10,13 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
   case outline
   /// One section and its subsections (#699).
   case focus
+  /// The whole document, its BCP 14 requirements banded (#700).
+  case implementer
 
   public var id: String { rawValue }
+
+  /// Whether the mode draws a band behind each requirement (`RequirementBands`).
+  public var bandsRequirements: Bool { self == .implementer }
 
   /// What the Reading Mode menu calls it.
   public var name: String {
@@ -19,6 +24,7 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
     case .normal: "Normal"
     case .outline: "Outline"
     case .focus: "Focus"
+    case .implementer: "Implementer"
     }
   }
 }
@@ -162,6 +168,21 @@ public struct Folding: Sendable, Equatable {
     guard self.mode == .focus, mode == .outline, let entry = focusedEntry(in: index) else {
       return Folding(mode: mode)
     }
+    return Folding(
+      mode: .outline, expanded: Set(index.anchors(enclosing: entry) + [entry.anchor]))
+  }
+
+  /// Implementer becoming the outline, which starts with nothing open, opens the
+  /// section the reader's line at `line` is in, and every section it is nested in,
+  /// so the line stays shown, as Focus becoming the outline keeps its section open
+  /// (`switching(to:in:)`). Implementer folds none of the document, so the line can
+  /// be anywhere; anything else is unchanged.
+  public func keepingLine(at line: Int, after previous: Folding, in index: FoldingIndex)
+    -> Folding
+  {
+    guard previous.mode == .implementer, mode == .outline, expanded.isEmpty,
+      let entry = index.entry(covering: line)
+    else { return self }
     return Folding(
       mode: .outline, expanded: Set(index.anchors(enclosing: entry) + [entry.anchor]))
   }
