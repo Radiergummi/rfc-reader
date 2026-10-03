@@ -1,14 +1,30 @@
 import CoreGraphics
 
 extension FragmentGeometry {
+  /// Where a heading's text sits on its first line, in the fragment's coordinates:
+  /// its baseline, and how tall its capitals are, which is what the eye centers a
+  /// mark beside a heading on.
+  public struct HeadingText: Sendable, Equatable {
+    public var baseline: CGFloat
+    public var capHeight: CGFloat
+
+    public init(baseline: CGFloat, capHeight: CGFloat) {
+      self.baseline = baseline
+      self.capHeight = capHeight
+    }
+  }
+
   /// The three points of a heading's disclosure chevron in the outline (#698), in the
-  /// fragment's coordinates: in the gutter, left of the column, centered on the
-  /// heading's first line, and sized by it. Closed, it points right, at the heading;
-  /// open, it points down, at the section it shows.
-  public static func disclosureChevron(open: Bool, firstLine: CGRect) -> [CGPoint] {
-    let size = firstLine.height * 0.16
-    // Close to the heading: an iPhone's gutter is barely wider than the chevron.
-    let center = CGPoint(x: firstLine.minX - size * 1.8, y: firstLine.midY)
+  /// fragment's coordinates: in the gutter, left of the column and clear of it,
+  /// centered on the middle of the heading's capitals, and sized by them. Closed, it
+  /// points right, at the heading; open, it points down, at the section it shows.
+  public static func disclosureChevron(open: Bool, firstLine: CGRect, text: HeadingText)
+    -> [CGPoint]
+  {
+    let size = text.capHeight * 0.32
+    // Far enough from the heading to read as its own mark, near enough for an
+    // iPhone's gutter, which is barely wider than the chevron.
+    let center = CGPoint(x: firstLine.minX - size * 2.6, y: text.baseline - text.capHeight / 2)
     if open {
       return [
         CGPoint(x: center.x - size, y: center.y - size / 2),
@@ -26,8 +42,10 @@ extension FragmentGeometry {
   /// What the fragment draws the chevron in: its points, with the slack its stroke's
   /// width and antialiasing need. Everything a fragment draws outside its glyphs has to
   /// be inside its rendering surface, or it is clipped away.
-  public static func disclosureBounds(open: Bool, firstLine: CGRect) -> CGRect {
-    let points = disclosureChevron(open: open, firstLine: firstLine)
+  public static func disclosureBounds(open: Bool, firstLine: CGRect, text: HeadingText)
+    -> CGRect
+  {
+    let points = disclosureChevron(open: open, firstLine: firstLine, text: text)
     let across = points.map(\.x)
     let down = points.map(\.y)
     return CGRect(

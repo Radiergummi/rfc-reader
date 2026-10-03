@@ -8,38 +8,58 @@ import Testing
 @Suite("Disclosure geometry")
 struct DisclosureGeometryTests {
   private let line = CGRect(x: 0, y: 40, width: 300, height: 24)
+  /// The heading's text on that line: its baseline, and how tall its capitals are.
+  private let text = FragmentGeometry.HeadingText(baseline: 60, capHeight: 12)
 
-  @Test func `the chevron hangs in the gutter, centered on the first line`() {
+  private func chevron(open: Bool, line: CGRect? = nil, text: FragmentGeometry.HeadingText? = nil)
+    -> [CGPoint]
+  {
+    FragmentGeometry.disclosureChevron(
+      open: open, firstLine: line ?? self.line, text: text ?? self.text)
+  }
+
+  /// Centered on the middle of the heading's capitals, not on the line box, whose
+  /// leading puts its middle lower than the text's.
+  @Test func `the chevron hangs in the gutter, centered on the heading's capitals`() {
     for open in [false, true] {
-      let points = FragmentGeometry.disclosureChevron(open: open, firstLine: line)
+      let points = chevron(open: open)
       #expect(points.count == 3)
       #expect(points.allSatisfy { $0.x < line.minX }, "left of the column")
       let heights = points.map(\.y)
-      #expect(abs((heights.min()! + heights.max()!) / 2 - line.midY) < 0.5)
+      let middle = text.baseline - text.capHeight / 2
+      #expect(abs((heights.min()! + heights.max()!) / 2 - middle) < 0.01)
+    }
+  }
+
+  /// Clear of the text: at least half a capital's height between its tip and the
+  /// column, open or closed.
+  @Test func `the chevron keeps its distance from the heading`() {
+    for open in [false, true] {
+      let rightmost = chevron(open: open).map(\.x).max()!
+      #expect(line.minX - rightmost >= text.capHeight / 2)
     }
   }
 
   /// Closed, it points right, at the text; open, it points down, at what it shows.
   @Test func `closed points right and open points down`() {
-    let closed = FragmentGeometry.disclosureChevron(open: false, firstLine: line)
+    let closed = chevron(open: false)
     #expect(closed[1].x > closed[0].x && closed[1].x > closed[2].x)
-    let open = FragmentGeometry.disclosureChevron(open: true, firstLine: line)
+    let open = chevron(open: true)
     #expect(open[1].y > open[0].y && open[1].y > open[2].y)
   }
 
-  /// It scales with the heading: a bigger line, a bigger chevron.
-  @Test func `the chevron scales with the line`() {
-    let small = FragmentGeometry.disclosureChevron(open: false, firstLine: line)
-    let big = FragmentGeometry.disclosureChevron(
-      open: false, firstLine: CGRect(x: 0, y: 40, width: 300, height: 48))
+  /// It scales with the heading: bigger capitals, a bigger chevron.
+  @Test func `the chevron scales with the heading`() {
+    let small = chevron(open: false)
+    let big = chevron(open: false, text: FragmentGeometry.HeadingText(baseline: 60, capHeight: 24))
     #expect(big[2].y - big[0].y > small[2].y - small[0].y)
   }
 
   /// The surface the fragment draws in holds the chevron, stroke and all.
   @Test func `the chevron's bounds hold its points`() {
     for open in [false, true] {
-      let bounds = FragmentGeometry.disclosureBounds(open: open, firstLine: line)
-      for point in FragmentGeometry.disclosureChevron(open: open, firstLine: line) {
+      let bounds = FragmentGeometry.disclosureBounds(open: open, firstLine: line, text: text)
+      for point in chevron(open: open) {
         #expect(bounds.insetBy(dx: 1, dy: 1).contains(point))
       }
     }
@@ -74,14 +94,13 @@ struct DisclosureGeometryTests {
     #expect(FragmentGeometry.disclosureHit(atContainerPoint: inColumn) == nil)
   }
 
-  /// The chevron fits well inside the gutter's share of the line: smaller than a
-  /// third of the line's height across.
+  /// The chevron is smaller than the heading's capitals.
   @Test func `the chevron is small beside its heading`() {
     for open in [false, true] {
-      let points = FragmentGeometry.disclosureChevron(open: open, firstLine: line)
+      let points = chevron(open: open)
       let across = points.map(\.x).max()! - points.map(\.x).min()!
       let down = points.map(\.y).max()! - points.map(\.y).min()!
-      #expect(max(across, down) < line.height / 3)
+      #expect(max(across, down) < text.capHeight)
     }
   }
 }

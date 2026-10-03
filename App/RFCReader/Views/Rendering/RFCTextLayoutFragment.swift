@@ -56,7 +56,8 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     }
     if let disclosure {
       bounds = bounds.union(
-        FragmentGeometry.disclosureBounds(open: disclosure.open, firstLine: disclosure.firstLine))
+        FragmentGeometry.disclosureBounds(
+          open: disclosure.open, firstLine: disclosure.firstLine, text: disclosure.text))
     }
     // A point of slack all round: a stroke is a line a point wide, centered on its
     // path, and antialiasing puts ink just outside it.
@@ -224,22 +225,39 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   // MARK: - Disclosure
 
-  /// Whether this fragment is a heading the outline discloses, and if so whether its
-  /// section is open, with its first line: from the folding its layout manager's
-  /// content holds (#698).
-  private var disclosure: (open: Bool, firstLine: CGRect)? {
+  /// A heading's disclosure, as the outline draws it: whether its section is open,
+  /// the heading's first line, and where its text sits on that line.
+  private struct Disclosure {
+    let open: Bool
+    let firstLine: CGRect
+    let text: FragmentGeometry.HeadingText
+  }
+
+  /// Whether this fragment is a heading the outline discloses, and if so its
+  /// disclosure: from the folding its layout manager's content holds (#698).
+  private var disclosure: Disclosure? {
     guard let range = documentRange,
       let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
       let open = folding.disclosure(at: range.location),
       let line = textLineFragments.first
     else { return nil }
-    return (open, line.typographicBounds)
+    let bounds = line.typographicBounds
+    let font =
+      line.attributedString.length > line.characterRange.location
+      ? line.attributedString.attribute(
+        .font, at: line.characterRange.location, effectiveRange: nil)
+        as? PlatformFont : nil
+    // Without a font, the line's own height stands in for the capitals'.
+    let capHeight = font?.capHeight ?? bounds.height * 0.5
+    let text = FragmentGeometry.HeadingText(
+      baseline: bounds.minY + line.glyphOrigin.y, capHeight: capHeight)
+    return Disclosure(open: open, firstLine: bounds, text: text)
   }
 
   private func drawDisclosure(at point: CGPoint, in context: CGContext) {
     guard let disclosure else { return }
     let chevron = FragmentGeometry.disclosureChevron(
-      open: disclosure.open, firstLine: disclosure.firstLine)
+      open: disclosure.open, firstLine: disclosure.firstLine, text: disclosure.text)
     guard let first = chevron.first else { return }
     context.saveGState()
     context.setStrokeColor(RFCColors.secondaryLabel.cgColor)
