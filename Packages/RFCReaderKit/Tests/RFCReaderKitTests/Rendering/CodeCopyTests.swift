@@ -1,0 +1,72 @@
+import Foundation
+import RFCKit
+import Testing
+
+@testable import RFCReaderKit
+
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
+/// A code block is copied three ways -- its copy button, Copy Figure and a selection
+/// over the whole block -- and all three give the same text: unfolded, its tabs
+/// expanded as the reader sets them, and without the indent its lines share.
+@Suite("Copying code")
+struct CodeCopyTests {
+  /// Folded once per RFC 8792 and indented by the text format's three spaces, with
+  /// a tab inside a line.
+  private static let indented = Preformatted(
+    kind: .sourceCode,
+    text: "   " + Fixtures.foldingHeader + "\n\n"
+      + "   {\"key\": \"a long \\\n      value\",\n    \"b\":\t1}",
+    type: "json")
+
+  /// What all three copy: the fold undone, the tab as far as the eighth column, and
+  /// the shared indent gone.
+  private static let copied = "{\"key\": \"a long value\",\n \"b\":        1}"
+
+  private static func built(measure: CGFloat) -> NSAttributedString {
+    DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(indented)), style: ReadingStyle(measure: measure)
+    ).text
+  }
+
+  /// The whole extent of the block that holds `locator`, its language label
+  /// included, as a selection.
+  private static func wholeBlock(
+    holding locator: String = "value", of text: NSAttributedString
+  ) throws -> NSAttributedString {
+    let block = try #require(
+      text.extent(ofBox: .rfcVerbatim, at: try Fixtures.offset(of: locator, in: text)))
+    return text.attributedSubstring(from: block)
+  }
+
+  @Test func `copy figure copies the block unfolded without its shared indent`() {
+    #expect(FigureCopy.pasteboardText(for: Self.indented) == Self.copied)
+  }
+
+  /// A column wide enough shows the block unfolded, a narrow one as published;
+  /// either way a selection over all of it pastes what Copy Figure does. The storage
+  /// ends the block with a line break.
+  @Test(arguments: [(CGFloat(4000), false), (CGFloat(120), true)])
+  func `a selection over the whole block copies as copy figure does`(
+    measure: CGFloat, shownFolded: Bool
+  ) throws {
+    let text = Self.built(measure: measure)
+    #expect(text.string.contains("line wrapping per RFC 8792") == shownFolded)
+    #expect(SelectionText.plainText(of: try Self.wholeBlock(of: text)) == Self.copied + "\n")
+  }
+
+  #if !canImport(UIKit)
+    @Test(arguments: [CGFloat(4000), CGFloat(120)])
+    func `the copy button copies as copy figure does`(measure: CGFloat) throws {
+      let text = Self.built(measure: measure)
+      let button = (text.string as NSString).range(of: "\u{FFFC}").location
+      try #require(button != NSNotFound)
+      #expect(text.copyButton(at: button) != nil)
+      #expect(text.code(ofCopyButtonAt: button) == Self.copied)
+    }
+  #endif
+}
