@@ -315,7 +315,7 @@ extension DocumentTextBuilder {
     // the heading keeps only enough to sit close above the caption it belongs to.
     let attributes = headingAttributes(
       depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
-      spacingAfter: style.paragraphSpacing * (citing == nil ? 0.6 : 0.15))
+      spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15)
     output.append(inlineRuns(section.displayTitleInlines, base: attributes))
     append("\n", attributes)
     if let citing {

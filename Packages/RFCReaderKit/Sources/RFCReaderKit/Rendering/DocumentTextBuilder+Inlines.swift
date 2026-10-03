@@ -247,7 +247,9 @@ extension DocumentTextBuilder {
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any] {
-    guard let url = link as? URL, backlinks(from: url) != nil else { return defaults }
+    // The scheme alone: asked of every link TextKit draws, where decoding the
+    // anchor would allocate for an answer nobody reads.
+    guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }
     var attributes = defaults
     attributes[.foregroundColor] = nil
     return attributes
@@ -317,7 +319,7 @@ extension DocumentTextBuilder {
     decoded(url, scheme: referenceScheme)
   }
 
-  /// The same for `backlinksScheme`: the section whose backlinks a chip lists.
+  /// The same for `backlinksScheme`: the section whose backlinks a caption lists.
   public static func backlinks(from url: URL) -> String? {
     decoded(url, scheme: backlinksScheme)
   }
