@@ -16,10 +16,13 @@ The vectors are sorted by word and summed in that order, so two runs over the sa
 |---|---|---|
 | chosen: titles 0.4, prose 0.6, threshold 0.3, each edge on its own | 31 of 33 | 31 of 35 |
 | equal weights, threshold 0.35, each edge on its own | 29 of 29 | 29 of 35 |
-| chosen, aligned as a group, with the prose floor (**built**) | 31 of 32 | 31 of 35 |
+| chosen, aligned as a group, with the prose floor | 31 of 32 | 31 of 35 |
+| the same, the prose without the titles' words (**built**, see below) | 30 of 30 | 30 of 35 |
 
 The weights and threshold were chosen for the most recall that keeps precision at 90% or more. Precision was put first because a wrong "replaced by" misleads, while a missing one falls back to the document-level status. The test holds precision at 90% and recall at 85%. A second test checks that none of eleven 7230 sections that moved to 9112, such as the request line, chunked coding and pipelining, is paired with a section of 9110.
 
 Precision here means precision over the sections Appendix B names. A pair claimed for any other 9110 section is not checked. Neither is any edge outside 9110's group. Most edges in the corpus are a new revision of the same document, where alignment is easy, but the first consumer that shows a marker should check a sample of other pairs.
 
 Over the whole corpus (9,835 documents), `corpus-build index` writes 46,168 rows for 1,393 obsoletes edges. The whole run, both passes, takes 72 seconds in a release build. The table adds 4.5 MB to the database, and 1.1 MB to its LZFSE archive (3.5 to 4.5 MB).
+
+**The prose floor measured the titles too (October 3, 2026).** As first built, a section's term vector counted its title's words with its prose. So the floor was not over the two sections' own prose, as stated above. In a short section the title is most of the vector, and two sections titled "Examples" whose prose shares no word were paired at 0.49. The vector now holds the prose alone, and the title counts only through its Jaccard part. A section with no prose of its own, a heading over its subsections, has nothing to measure, so it is left out and pairs with nothing. Against the labels, this removed the one wrong pair, 7233 §4 → 9110 §14.2, where 7233 §4 is such a heading. It also lost one labeled pair, 7232 §5 → 9110 §13.2. 9110 §13.2 is a heading too, and 7232 §5 is now paired with 9110 §13.2.1, which holds its prose. That section is not labeled, so neither side counts it. Recall is 30 of 35, just over the 85% the test holds. The corpus-wide row count above predates the change.
