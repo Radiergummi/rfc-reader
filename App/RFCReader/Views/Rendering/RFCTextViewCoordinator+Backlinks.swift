@@ -7,15 +7,15 @@ import SwiftUI
   import AppKit
 #endif
 
-// A heading's backlink chip (#183): a click or a tap lists the sections that refer
-// to the section, beside the chip, and a row goes there. What the list holds is
-// `BuiltDocument.backlinks(of:)`, and where the chip is `backlinkChip(at:)`; this is
-// only where it is shown.
+// A heading's backlink caption (#183, #584): a click or a tap lists the sections that
+// refer to the section, beside the caption, and a row goes there. What the list holds
+// is `BuiltDocument.backlinks(of:)`, and where the caption is `backlinkCaption(at:)`;
+// this is only where it is shown.
 
 extension RFCTextViewCoordinator {
-  /// The chip at `offset` in the reader's text.
-  func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
-    textView?.textLayoutManager?.attributedText?.backlinkChip(at: offset)
+  /// The caption at `offset` in the reader's text.
+  func backlinkCaption(at offset: Int) -> (anchor: String, range: NSRange)? {
+    textView?.textLayoutManager?.attributedText?.backlinkCaption(at: offset)
   }
 
   /// The list for the section at `anchor`, whose rows call `follow` with where
@@ -35,11 +35,11 @@ extension RFCTextViewCoordinator {
 
 #if canImport(UIKit)
   extension RFCTextViewCoordinator: UIPopoverPresentationControllerDelegate {
-    /// A popover pointing at the chip, on iPad as on iPhone, where it would
+    /// A popover pointing at the caption, on iPad as on iPhone, where it would
     /// otherwise become a sheet for a list of a few rows.
     func showBacklinks(at offset: Int) {
       guard let textView, var presenter = textView.window?.rootViewController,
-        let (anchor, range) = backlinkChip(at: offset),
+        let (anchor, range) = backlinkCaption(at: offset),
         let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
         let end = textView.position(from: start, offset: range.length),
         let textRange = textView.textRange(from: start, to: end)
@@ -73,10 +73,10 @@ extension RFCTextViewCoordinator {
 #else
   extension RFCTextViewCoordinator {
     /// In the popover a reference card uses, but opened by the click, and kept open
-    /// as the pointer leaves the chip for it, as a document preview is: its rows are
+    /// as the pointer leaves the caption for it, as a document preview is: its rows are
     /// buttons.
     func showBacklinks(at offset: Int) {
-      guard let (anchor, range) = backlinkChip(at: offset),
+      guard let (anchor, range) = backlinkCaption(at: offset),
         let rect = referenceRect(for: range),
         let list = backlinksList(
           of: anchor,

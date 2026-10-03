@@ -1,10 +1,10 @@
 import RFCReaderKit
 import SwiftUI
 
-/// What a heading's backlink chip opens (#183): the sections that refer to the one
-/// under it, each a button that goes there. Opened by a click or a tap on the chip,
+/// What a heading's backlink caption opens (#183): the sections that refer to the one
+/// under it, each a button that goes there. Opened by a click or a tap on the caption,
 /// not by a hover, because its rows are to be pressed: a hover card closes as the
-/// pointer leaves the chip for it (`ReferencePreview`).
+/// pointer leaves the caption for it (`ReferencePreview`).
 struct BacklinksList: View {
   let entries: [BacklinkEntry]
   let onSelect: (String) -> Void

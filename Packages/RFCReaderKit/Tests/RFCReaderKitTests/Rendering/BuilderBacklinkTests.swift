@@ -186,7 +186,8 @@ struct BuilderBacklinkTests {
     let kept = DocumentTextBuilder.linkRenderingAttributes(for: caption, defaults: defaults)
     #expect(kept[.foregroundColor] == nil)
     #expect(kept[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
-    let jump = try #require(DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
+    let jump = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
     let other = DocumentTextBuilder.linkRenderingAttributes(for: jump, defaults: defaults)
     #expect(other[.foregroundColor] as? PlatformColor == RFCColors.accent)
   }

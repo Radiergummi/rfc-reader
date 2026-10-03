@@ -308,8 +308,8 @@ final class RFCTextViewCoordinator: NSObject {
       // action UIKit opens the menu on a tap, and that took the tap from the bars.
       if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: offset) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: offset) != nil {
         return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
           self?.showBacklinks(at: offset)
         }
@@ -337,9 +337,9 @@ final class RFCTextViewCoordinator: NSObject {
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
       if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
-      // A backlink chip's link is ours alone, and nothing in the default menu —
+      // A backlink caption's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
-      if backlinkChip(at: textItem.range.location) != nil { return nil }
+      if backlinkCaption(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let environment, let documentID,
@@ -537,8 +537,8 @@ final class RFCTextViewCoordinator: NSObject {
       let box = textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box
       let effects = hover.send(.clickedLink(reference: box, pointer: NSEvent.mouseLocation))
       guard !effects.contains(.swallowClick) else { return true }
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: charIndex) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: charIndex) != nil {
         showBacklinks(at: charIndex)
         return true
       }
@@ -558,9 +558,9 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink chip's link is ours alone, and Copy Link would copy a URL
+      // A backlink caption's link is ours alone, and Copy Link would copy a URL
       // nothing else can open; the rest of the menu stays.
-      if backlinkChip(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
+      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
       return menu
     }
 
@@ -643,5 +643,16 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
     RFCTextLayoutFragment.make(for: textElement)
+  }
+
+  /// The text view draws every link in its own color, over the storage's; a
+  /// heading's backlink caption keeps the caption's (#584).
+  nonisolated func textLayoutManager(
+    _ textLayoutManager: NSTextLayoutManager,
+    renderingAttributesForLink link: Any,
+    at location: any NSTextLocation,
+    defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any]? {
+    DocumentTextBuilder.linkRenderingAttributes(for: link, defaults: renderingAttributes)
   }
 }
