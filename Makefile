@@ -144,8 +144,8 @@ benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 
 # The benchmarks' inputs have a directory of their own, fetched once and then
 # left alone: a baseline compares only while its inputs stay the same, and the
-# corpus pipeline refetches its rfc-index.xml and converts whatever lies in
-# text.noindex. Written to a partial file first, like the legacy RFCs below.
+# corpus pipeline fetches its rfc-index.xml again whenever it is removed and
+# converts whatever lies in text.noindex. Written to a partial file first, like the legacy RFCs below.
 $(BENCHMARK_CORPUS)/rfc-index.xml:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
@@ -393,7 +393,7 @@ corpus-fetch-xml: corpus-tool $(CORPUS)/rfc-index.xml
 # baseline, so rerunning passes: read the documents it names first. A patch that
 # fails fails the step too, after every document is converted; the overrides check
 # before it stops a broken patch in seconds rather than twenty minutes.
-corpus-convert: corpus-overrides-check corpus-fetch
+corpus-convert: corpus-overrides-check $(CORPUS)/rfc-index.xml
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
@@ -422,7 +422,7 @@ $(CORPUS)/schema-control.noindex/%.xml:
 # index are fetched once, by the file rules above, and never again. Run on every
 # pull request (.github/workflows/ci.yml), so a parser change that breaks a patch
 # fails its own pull request.
-PATCHED := $(shell grep -l '<diff>' $(CORPUS)/overrides/rfc*.xml 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.xml$$//')
+PATCHED := $(shell grep -lE '<diff[[:space:]>]' $(CORPUS)/overrides/rfc*.xml 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.xml$$//')
 
 corpus-overrides-check: corpus-tool $(CORPUS)/rfc-index.xml $(PATCHED:%=$(CORPUS)/text.noindex/%.txt)
 ifneq ($(PATCHED),)

@@ -16,7 +16,7 @@ struct SchemaComparisonTests {
       let causes = schema.map { "\"\($0)\"" }.joined(separator: ", ")
       return """
         {"id": "\(id)", "title": "", "sections": 0, "paragraphs": 0, "lists": 0, "artwork": 0, \
-        "references": 0, "resolvedDocuments": 0, "overridden": false, "warnings": [], \
+        "references": 0, "resolvedDocuments": 0, "warnings": [], \
         "schema": [\(causes)]}
         """
     }

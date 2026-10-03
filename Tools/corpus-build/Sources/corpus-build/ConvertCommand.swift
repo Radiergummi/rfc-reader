@@ -4,10 +4,6 @@ import Logging
 import RFCCorpusKit
 import RFCKit
 
-#if canImport(FoundationXML)
-  import FoundationXML
-#endif
-
 struct ConvertCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "convert",
@@ -204,17 +200,17 @@ struct ConvertCommand: AsyncParsableCommand {
     for failure in failed {
       Self.logger.error("patch failed", metadata: ["failure": "\(failure)"])
     }
-    // Last, so the report is written and everything above logged before the run fails.
     if !failed.isEmpty {
       Self.logger.error("patches failed", metadata: ["documents": "\(failed.count)"])
-      throw ExitCode.failure
     }
-    if let comparison, comparison.isRegression {
+    let isRegression = comparison?.isRegression ?? false
+    if let comparison, isRegression {
       Self.logger.error(
         "documents stopped validating",
         metadata: ["documents": "\(comparison.stoppedValidating.count)"])
-      throw ExitCode.failure
     }
+    // Last, so the report is written and everything above logged before the run fails.
+    if !failed.isEmpty || isRegression { throw ExitCode.failure }
   }
 
   /// Converts one document and writes its XML. A snapshot is published as it is, and
@@ -230,8 +226,7 @@ struct ConvertCommand: AsyncParsableCommand {
     {
       let data = try Data(contentsOf: overrideURL)
       // An override that is not XML is a patch that failed, not a run that stops.
-      let root = (try? XMLDocument(data: data))?.rootElement()?.name
-      if root == nil || root == "diff" {
+      if XMLPatch.isPatch(data) {
         do {
           patch = try XMLPatch(parsing: data, name: "\(stem).xml")
         } catch {

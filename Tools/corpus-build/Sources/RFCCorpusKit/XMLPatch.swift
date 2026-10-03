@@ -62,6 +62,13 @@ public struct XMLPatch: Sendable {
     }
   }
 
+  /// Whether the override `data` is a patch rather than a snapshot: its root is
+  /// `<diff>`, or it is not XML at all, which reading it as a patch then reports.
+  public static func isPatch(_ data: Data) -> Bool {
+    let root = (try? XMLDocument(data: data))?.rootElement()?.name
+    return root == nil || root == "diff"
+  }
+
   /// Reads the patch file `data`, named `name` in what fails.
   public init(parsing data: Data, name: String) throws(Failure) {
     self.name = name
@@ -130,6 +137,8 @@ public struct XMLPatch: Sendable {
     var content: [Content] = []
     let children = (element.children ?? []).filter { $0.kind != .comment }
     let holdsElements = children.contains { $0.kind == .element }
+    // Nothing but whitespace: an empty operation, laid out over lines.
+    let isBlank = children.allSatisfy { $0.kind == .text && isWhitespace($0.stringValue) }
     for child in children {
       switch child.kind {
       case .element:
@@ -146,7 +155,7 @@ public struct XMLPatch: Sendable {
     let kind: OperationKind
     switch name {
     case "remove":
-      guard content.isEmpty else { throw Malformed(message: "<remove> holds nothing") }
+      guard isBlank else { throw Malformed(message: "<remove> must be empty") }
       kind = .remove
     case "replace":
       kind = .replace
@@ -165,6 +174,7 @@ public struct XMLPatch: Sendable {
         guard let parsed = Position(rawValue: position ?? "append") else {
           throw Malformed(message: "pos \(position ?? "") is not append, prepend, before or after")
         }
+        guard !isBlank else { throw Malformed(message: "<add> has nothing to add") }
         kind = .add(parsed)
       }
     }
@@ -266,11 +276,19 @@ public struct XMLPatch: Sendable {
     for item in content {
       switch item {
       case .element(let xml):
+        // `XMLElement(xmlString:)` drops a text node that is only whitespace, such as
+        // the space between two inline elements, and runs their words together.
+        let document: XMLDocument
         do {
-          nodes.append(try XMLElement(xmlString: xml))
+          document = try XMLDocument(xmlString: xml, options: .nodePreserveWhitespace)
         } catch {
           throw Malformed(message: "content does not parse: \(error)")
         }
+        guard let element = document.rootElement() else {
+          throw Malformed(message: "content is not an element")
+        }
+        element.detach()
+        nodes.append(element)
       case .text(let text):
         if let node = XMLNode.text(withStringValue: text) as? XMLNode { nodes.append(node) }
       }

@@ -91,6 +91,20 @@ struct XMLPatchTests {
     #expect(paragraphs.suffix(2) == ["Appended.", "After."])
   }
 
+  /// The space between two inline elements is a text node of its own, and the words
+  /// either side run together without it.
+  @Test func `added content keeps the space between inline elements`() throws {
+    let document = try Self.patched(
+      "<add sel=\"//section[@pn='section-6']\"><t>Kept <em>apart</em> <strong>words</strong>.</t></add>"
+    )
+    let section = try #require(document.section(anchor: "section-6"))
+    guard case .paragraph(let paragraph) = section.blocks.last else {
+      Issue.record("the section ends with \(String(describing: section.blocks.last))")
+      return
+    }
+    #expect(paragraph.plainText == "Kept apart words.")
+  }
+
   @Test func `add with a type sets an attribute`() throws {
     let document = try Self.patched(
       "<add sel=\"/rfc/front/date\" type=\"@day\">7</add>")
@@ -147,11 +161,20 @@ struct XMLPatchTests {
     "<replace sel=\"/rfc/front/title\" ws=\"both\"><title>No.</title></replace>",
     "<rename sel=\"/rfc/front\"/>",
     "<remove/>",
+    // An add with nothing to add would change nothing without a word said.
+    "<add sel=\"/rfc/front\"/>",
+    "<add sel=\"/rfc/front\" pos=\"before\">\n</add>",
     // Not well-formed: libxml2 would drop the bare ampersand and select something else.
     "<remove sel=\"//t[contains(., 'a & b')]\"/>",
   ])
   func `a malformed operation is refused before anything applies`(operation: String) throws {
     #expect(throws: XMLPatch.Failure.self) { try Self.patch(operation) }
+  }
+
+  /// A blank line inside an operation only lays the patch out.
+  @Test func `a remove laid out over two lines reads`() throws {
+    let document = try Self.patched("<remove sel=\"//section[@pn='section-9']\">\n</remove>")
+    #expect(document.section(anchor: "section-9") == nil)
   }
 
   @Test func `a patch file's root is diff`() {
