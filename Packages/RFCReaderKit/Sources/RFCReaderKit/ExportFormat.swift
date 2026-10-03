@@ -39,8 +39,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var contentType: UTType {
     switch self {
     case .pdf: .pdf
-    // No system type declares ABNF: plain text, saved as `.abnf`.
-    case .abnf: .plainText
+    // No system type declares ABNF: plain text by the `.abnf` extension, which a save
+    // panel and a file exporter keep only for a type that is the extension's.
+    case .abnf: UTType(filenameExtension: "abnf", conformingTo: .plainText) ?? .plainText
     }
   }
 
@@ -56,7 +57,10 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public static func available(for document: RFCDocument, hints: ArtworkHints = .bundled)
     -> [ExportFormat]
   {
-    GrammarExport.text(for: document, hints: hints) == nil ? [.pdf] : [.pdf, .abnf]
+    let hasGrammar = DocumentGrammar.blocks(of: document, hints: hints).contains {
+      ABNF.parse($0.content.text) != nil
+    }
+    return hasGrammar ? [.pdf, .abnf] : [.pdf]
   }
 
   /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a

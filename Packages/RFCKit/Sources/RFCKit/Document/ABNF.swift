@@ -55,7 +55,7 @@ public enum ABNF {
   /// no repetition or numeric value, parse but are not recognized: test vectors,
   /// listings of settings and message layouts read that way.
   static func recognizes(_ text: String) -> Bool {
-    guard let (rules, definesANameTwice) = parsed(text),
+    guard let (rules, definesANameTwice) = parsed(text, locatingNames: false),
       !rules.contains(where: \.readsAsHexNumber),
       !definesANameTwice || rules.contains(where: \.usesRepetitionOrNumericValue)
     else { return false }
@@ -74,7 +74,7 @@ public enum ABNF {
   /// only a comment are skipped; every other line either starts a rule at column 0 or
   /// continues the one before it, set deeper.
   public static func parse(_ text: String) -> [Rule]? {
-    parsed(text)?.rules
+    parsed(text, locatingNames: true)?.rules
   }
 
   /// The rules, and whether a name is defined with `=` twice, whatever its case: a
@@ -82,7 +82,12 @@ public enum ABNF {
   /// layouts assign one name twice. Grammars in the legacy series do too, where `=/`
   /// or another name was meant, so `recognizes` refuses a repeated definition only in
   /// a block without a repetition or a numeric value.
-  private static func parsed(_ text: String) -> (rules: [Rule], definesANameTwice: Bool)? {
+  ///
+  /// `locatingNames` is what the ranges cost: recognizing, which the legacy parser
+  /// asks of every candidate block in the corpus, reads none, and gets empty ones.
+  private static func parsed(_ text: String, locatingNames: Bool)
+    -> (rules: [Rule], definesANameTwice: Bool)?
+  {
     var rules: [Rule] = []
     var defined: Set<String> = []
     var definesANameTwice = false
@@ -115,13 +120,16 @@ public enum ABNF {
       let unindented = line.dropFirst(min(indent, line.leadingSpaceCount))
       guard let content = withoutComment(unindented) else { return nil }
       guard content.contains(where: { !$0.isWhitespace }) else { continue }
-      let offsets = content.indices.map { index -> Int? in
-        lineStart + line.utf16.distance(from: line.startIndex, to: index)
-      }
+      let offsets =
+        !locatingNames
+        ? []
+        : content.indices.map { index -> Int? in
+          lineStart + line.utf16.distance(from: line.startIndex, to: index)
+        }
       if content.first?.isWhitespace == true {
         guard current != nil else { return nil }
         current?.source += [" "] + Array(content)
-        current?.offsets += [nil] + offsets
+        if locatingNames { current?.offsets += [nil] + offsets }
       } else {
         guard finishRule() else { return nil }
         current = (Array(content), offsets)
@@ -191,7 +199,8 @@ public enum ABNF {
     /// The text as given from the character at `start` to the one before `position`:
     /// a name, which is ASCII and on one line, so one code unit a character.
     private func range(from start: Int) -> NSRange {
-      NSRange(location: offsets[start] ?? 0, length: position - start)
+      guard start < offsets.count else { return NSRange(location: 0, length: 0) }
+      return NSRange(location: offsets[start] ?? 0, length: position - start)
     }
 
     private var next: Character? {

@@ -33,14 +33,14 @@ extension DocumentTextBuilder {
       : nil
     let showsSource =
       choices.presentation(of: PresentationKey(anchor: content.anchor, ordinal: ordinal)) == .text
-    let shown: VerbatimBox.Shown = rendition == nil ? .plain : showsSource ? .source : .rendered
+    // A grammar's links change nothing that is drawn, so there is nothing to show
+    // other than as written: it is plain, with no presentation to switch, and its
+    // links and anchors are there whatever the reader prefers for figures (#185).
+    let linked: LinkedText? = if case .linked(let linked)? = rendition { linked } else { nil }
+    let shown: VerbatimBox.Shown =
+      rendition == nil || linked != nil ? .plain : showsSource ? .source : .rendered
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
-    let linked: LinkedText? =
-      if shown == .rendered, case .linked(let linked)? = rendition { linked } else { nil }
-    // A grammar is text with links, not a drawing: it keeps its indent, rendered or
-    // shown as text.
-    let isLinkedText = if case .linked? = rendition { true } else { false }
     let box = VerbatimBox(
       content, ordinal: ordinal, classification: classification, shown: shown,
       spokenLabel: decorated?.spokenLabel)
@@ -65,7 +65,7 @@ extension DocumentTextBuilder {
     // strokes follow. The scale fitted the block at `indent`, which this never
     // narrows.
     let bodyIndent =
-      content.kind == .artwork && shown != .plain && !isLinkedText
+      content.kind == .artwork && shown != .plain
       ? max(indent, (style.measure - contentWidth) / 2) : indent
     let body = text.hasSuffix("\n") ? text : text + "\n"
     let bodyStart = output.length

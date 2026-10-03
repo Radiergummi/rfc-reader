@@ -1,6 +1,7 @@
 import Foundation
 import RFCKit
 import Testing
+import UniformTypeIdentifiers
 
 @testable import RFCReaderKit
 
@@ -79,6 +80,23 @@ struct GrammarExportTests {
   @Test func `the file is named for the document, as abnf`() {
     #expect(ExportFormat.abnf.fileName(for: .rfc(9682)) == "RFC-9682.abnf")
     #expect(ExportFormat.abnf.source == .rendered)
+  }
+
+  /// The save panel and the file exporter name a file by its type's extension: a
+  /// plain-text type would save `.txt`.
+  @Test func `the grammar's type is the abnf extension's`() {
+    #expect(ExportFormat.abnf.contentType.preferredFilenameExtension == "abnf")
+    #expect(ExportFormat.abnf.contentType.conforms(to: .plainText))
+  }
+
+  /// A rule starts at column 0 in the file. A comment may sit left of the rules it
+  /// heads (RFC 9271), and does not hold them where the document set them.
+  @Test func `rules are unindented past a comment set further left`() {
+    let block = [" ; the records", "   record = 1*field", "   field  = ALPHA"]
+      .joined(separator: "\n")
+    #expect(
+      GrammarExport.unindented(block)
+        == ["; the records", "record = 1*field", "field  = ALPHA"].joined(separator: "\n"))
   }
 
   /// Changing the format in the save panel changes `.abnf`, which no system type

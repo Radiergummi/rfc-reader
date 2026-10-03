@@ -95,6 +95,30 @@ struct GrammarLinksTests {
     #expect(try Self.linked(third, grammar: grammar).definitions.isEmpty)
   }
 
+  /// `=/` extends a rule another document defines, as `method =/` would RFC 9110's:
+  /// with no definition here, its name stays plain rather than going nowhere.
+  @Test func `an incremental rule of another document's stays plain`() throws {
+    let linked = try Self.linked("method =/ \"FOO\"")
+    #expect(linked.links.isEmpty)
+    #expect(linked.definitions.isEmpty)
+  }
+
+  /// A block shown other than as written, folded per RFC 8792 or set with tabs, is
+  /// left out of the grammar: its rules could not be anchored in its own text.
+  @Test func `a folded or tabbed grammar block is left out`() {
+    let folded = Preformatted(
+      kind: .sourceCode,
+      text:
+        "=============== NOTE: '\\' line wrapping per RFC 8792 ================\n\nfirst = 1*\\\n  ALPHA",
+      type: "abnf")
+    let tabbed = Preformatted(kind: .sourceCode, text: "second\t= 1*DIGIT", type: "abnf")
+    let plain = Preformatted(kind: .sourceCode, text: "third = 1*DIGIT", type: "abnf")
+    let document = Fixtures.document(
+      .preformatted(folded), .preformatted(tabbed), .preformatted(plain))
+    let blocks = DocumentGrammar.blocks(of: document, hints: .empty)
+    #expect(blocks.map(\.content) == [plain])
+  }
+
   @Test func `what is not a grammar is not linked`() {
     #expect(ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [])) == nil)
   }
@@ -159,13 +183,30 @@ struct GrammarLinksTests {
     }
   }
 
-  /// Links and anchors are attributes: the text is the block's, character for
-  /// character, as it is shown as text.
+  /// Links and anchors are attributes: each grammar block's text is in the storage
+  /// as the document has it, character for character.
   @Test func `the grammar's text is unchanged`() throws {
-    let linked = try Self.rfc9682()
-    let plain = try Self.rfc9682(PresentationChoices(preferred: .text))
-    #expect(linked.text.string == plain.text.string)
-    #expect(Self.grammarLinks(in: plain).isEmpty, "shown as text, the grammar is plain")
+    let document = try Fixtures.document(named: "rfc9682.xml")
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let blocks = DocumentGrammar.blocks(of: document, hints: .bundled)
+    #expect(blocks.count == 12)
+    for block in blocks {
+      #expect(built.text.string.contains(block.content.text))
+    }
+  }
+
+  /// A grammar's links draw nothing, so it has no presentation to switch: it is
+  /// plain, with no figure item over it (which on iOS would take a press from its
+  /// links), and keeps its links when the reader prefers figures as text.
+  @Test func `a grammar is plain, and linked whatever the preference`() throws {
+    let built = try Self.rfc9682(PresentationChoices(preferred: .text))
+    let link = try #require(Self.grammarLinks(in: built).first)
+    let box = try #require(
+      built.text.attribute(.rfcVerbatim, at: link.range.location, effectiveRange: nil)
+        as? VerbatimBox)
+    #expect(box.shown == .plain)
+    #expect(
+      built.text.attribute(.rfcFigureItem, at: link.range.location, effectiveRange: nil) == nil)
   }
 
   /// A copy of a grammar is its text, not its rule links' labels.

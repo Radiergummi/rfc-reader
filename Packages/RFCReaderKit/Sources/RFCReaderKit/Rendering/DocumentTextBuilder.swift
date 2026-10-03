@@ -225,14 +225,7 @@ extension DocumentTextBuilder {
     let bibliography = ReferenceGroup.groups(in: document)
     referenceKinds = ReferenceKinds(bibliography)
     referenceAnchors = Set(bibliography.flatMap { $0.entries.map(\.anchor) })
-    grammar = DocumentGrammar(
-      blocks: document.blocks.compactMap { block in
-        guard case .preformatted(let content) = block,
-          let type = ArtworkClassifier.classify(content, in: documentID, hints: hints).type,
-          ABNFPresentation.types.contains(type.name)
-        else { return nil }
-        return content.text
-      })
+    grammar = DocumentGrammar(of: document, hints: hints)
     if style.emitsLinks {
       backlinks = Backlinks.within(document)
     }

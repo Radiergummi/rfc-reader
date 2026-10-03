@@ -36,8 +36,11 @@ enum ABNFPresentation {
     for rule in rules {
       let anchor = anchor(for: rule.name)
       if rule.isIncremental {
-        // `=/` adds to a rule defined before it: a use of the name.
-        links.append(LinkedText.Link(range: rule.nameRange, target: .anchor(anchor)))
+        // `=/` adds to a rule defined before it: a use of the name, which stays plain
+        // where the rule is another document's, as `method =/` of RFC 9110's would.
+        if let target = grammar.target(of: rule.name) {
+          links.append(LinkedText.Link(range: rule.nameRange, target: target))
+        }
       } else if grammar.definesHere(anchor, in: text, at: rule.nameRange.location) {
         definitions.append(LinkedText.Definition(range: rule.nameRange, anchor: anchor))
       }
@@ -65,6 +68,34 @@ public struct DocumentGrammar: Sendable, Equatable {
   private var definitions: [String: Definition] = [:]
 
   public init() {}
+
+  /// The document's grammar blocks, each with the section it is in (nil for the
+  /// abstract), in document order: a block the document or a hint types `abnf` or
+  /// `abnf9110`. One the reader shows other than as written, folded by RFC 8792 or
+  /// set with tabs, is left out: its rules could not be anchored in its own text, and
+  /// a link to an anchor that is never set would go nowhere.
+  static func blocks(of document: RFCDocument, hints: ArtworkHints)
+    -> [(section: Section?, content: Preformatted)]
+  {
+    let sections: [(Section?, [Block])] =
+      [(nil, document.header.abstract)] + document.allSections.map { ($0, $0.blocks) }
+    return sections.flatMap { section, blocks in
+      blocks.flattened.compactMap { block -> (Section?, Preformatted)? in
+        guard case .preformatted(let content) = block,
+          let type = ArtworkClassifier.statedType(
+            of: content, in: document.header.id, hints: hints),
+          ABNFPresentation.types.contains(type.name),
+          !content.text.contains("\t"), FoldedLines.strategy(of: content.text) == nil
+        else { return nil }
+        return (section, content)
+      }
+    }
+  }
+
+  /// The grammar of `document`'s grammar blocks.
+  init(of document: RFCDocument, hints: ArtworkHints) {
+    self.init(blocks: Self.blocks(of: document, hints: hints).map(\.content.text))
+  }
 
   /// The grammar of `blocks`, the texts of a document's grammar blocks in order.
   public init(blocks: [String]) {

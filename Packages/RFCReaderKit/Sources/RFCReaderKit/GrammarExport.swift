@@ -11,16 +11,10 @@ import RFCKit
 public enum GrammarExport {
   /// The file's text, or nil for a document with no grammar.
   public static func text(for document: RFCDocument, hints: ArtworkHints = .bundled) -> String? {
-    var blocks: [(heading: String?, text: String)] = []
-    for section in document.allSections {
-      for block in section.blocks.flattened {
-        guard case .preformatted(let content) = block,
-          let type = ArtworkClassifier.classify(content, in: document.header.id, hints: hints).type,
-          ABNFPresentation.types.contains(type.name),
-          ABNF.parse(content.text) != nil
-        else { continue }
-        blocks.append((heading(of: section), unindented(content.text)))
-      }
+    let blocks = DocumentGrammar.blocks(of: document, hints: hints).compactMap {
+      section, content -> (heading: String?, text: String)? in
+      guard ABNF.parse(content.text) != nil else { return nil }
+      return (section.flatMap(heading(of:)) ?? "Abstract", unindented(content.text))
     }
     guard !blocks.isEmpty else { return nil }
 
@@ -70,12 +64,17 @@ public enum GrammarExport {
     return "Section \(number). \(title)"
   }
 
-  /// The block without the indentation all its lines share: a rule starts at column 0
-  /// in an ABNF file, wherever the document set the block.
-  private static func unindented(_ text: String) -> String {
+  /// The block without the indentation its rules share: a rule starts at column 0 in
+  /// an ABNF file, wherever the document set the block. Measured on the lines that are
+  /// not only a comment, as `ABNF.parse` measures it: a comment may sit further left
+  /// than the rules it heads (RFC 9271), and goes as far left as it can.
+  static func unindented(_ text: String) -> String {
     let lines = text.components(separatedBy: "\n")
     let indent =
-      lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+      lines.filter { line in
+        let content = line.trimmingCharacters(in: .whitespaces)
+        return !content.isEmpty && !content.hasPrefix(";")
+      }
       .map { $0.prefix { $0 == " " }.count }.min() ?? 0
     return lines.map { String($0.dropFirst(min(indent, $0.prefix { $0 == " " }.count))) }
       .joined(separator: "\n")
