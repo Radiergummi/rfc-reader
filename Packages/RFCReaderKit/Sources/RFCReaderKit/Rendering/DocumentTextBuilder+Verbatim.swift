@@ -228,7 +228,7 @@ extension DocumentTextBuilder {
     }
   }
 
-  /// Colors a highlighted block's tokens from the theme. Plain tokens keep the
+  /// Colors a highlighted block's tokens from the style's theme. Plain tokens keep the
   /// body color the block was set in, which a quote or an aside sets. The text is
   /// unchanged.
   ///
@@ -242,7 +242,7 @@ extension DocumentTextBuilder {
     var run: (range: NSRange, color: PlatformColor)?
     for token in tokens {
       let range = NSRange(location: bodyStart + token.range.location, length: token.range.length)
-      let color = SyntaxTheme.standard.color(for: token.kind)
+      let color = style.syntaxTheme.color(for: token.kind)
       if let current = run, color == nil || color === current.color,
         color != nil || Self.isWhitespace(range, in: text)
       {

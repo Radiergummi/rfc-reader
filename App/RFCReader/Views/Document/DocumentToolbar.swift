@@ -150,24 +150,24 @@ import SwiftUI
     }
   }
 
-  /// The reader's own text size on iOS, which has no Settings scene to put the
-  /// slider in (#153), and how diagrams are shown: "Aa" opens a menu, as Safari's
-  /// page menu does. Its first row is a small "A", the size as a percentage of the
-  /// system's, and a large "A", and stays open while the size is stepped; below it
-  /// are Use System Size and Draw diagrams. The platform's own menu rather than a
-  /// popover: a compact control group is the small-element row of a `UIMenu`. The
-  /// keyboard's ⌘+, ⌘− and ⌘0 are `DocumentCommands`'.
+  /// The reader's own text size on iOS, and how diagrams are shown: "Aa" opens a
+  /// menu, as Safari's page menu does. Its first row is a small "A", the size as a
+  /// percentage of the system's, and a large "A", and stays open while the size is
+  /// stepped; below it are Use System Size, Draw diagrams, and Reading Settings,
+  /// which opens the rest of the settings (#703), iOS having no Settings scene. The
+  /// platform's own menu rather than a popover: a compact control group is the
+  /// small-element row of a `UIMenu`. The keyboard's ⌘+, ⌘− and ⌘0 are
+  /// `DocumentCommands`'. #708 replaces it with a quick panel.
   private struct TextSizeButton: View {
-    @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
-      .defaultFontSize
-    @AppStorage(ReaderPreferences.drawDiagramsKey) private var drawDiagrams =
-      ReaderPreferences.defaultDrawDiagrams
+    @ReaderSettingsValue private var settings
+    @State private var showsSettings = false
 
     var body: some View {
+      let fontSize = settings.fontSize
       Menu {
         ControlGroup {
           Button {
-            fontSize = ReaderPreferences.fontSize(steppingDown: fontSize)
+            settings.fontSize = ReaderPreferences.fontSize(steppingDown: fontSize)
           } label: {
             Label("Smaller", systemImage: "textformat.size.smaller")
           }
@@ -176,7 +176,7 @@ import SwiftUI
           // The size the steps reached, between them. A tap on it goes back to the
           // system's size, as one on Safari's does.
           Button(ReaderPreferences.percentage(of: fontSize)) {
-            fontSize = ReaderPreferences.defaultFontSize
+            settings.fontSize = ReaderPreferences.defaultFontSize
           }
           .accessibilityLabel("Text Size")
           .accessibilityValue(ReaderPreferences.percentage(of: fontSize))
@@ -185,7 +185,7 @@ import SwiftUI
           .accessibilityHint("Goes back to the system's size")
 
           Button {
-            fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
+            settings.fontSize = ReaderPreferences.fontSize(steppingUp: fontSize)
           } label: {
             Label("Bigger", systemImage: "textformat.size.larger")
           }
@@ -196,13 +196,20 @@ import SwiftUI
         .menuActionDismissBehavior(.disabled)
 
         Button("Use System Size", systemImage: "arrow.counterclockwise") {
-          fontSize = ReaderPreferences.defaultFontSize
+          settings.fontSize = ReaderPreferences.defaultFontSize
         }
         .disabled(fontSize == ReaderPreferences.defaultFontSize)
 
-        Toggle("Draw Diagrams", systemImage: "square.grid.3x3", isOn: $drawDiagrams)
+        Toggle("Draw Diagrams", systemImage: "square.grid.3x3", isOn: $settings.drawDiagrams)
+
+        Button("Reading Settings…", systemImage: "gearshape") {
+          showsSettings = true
+        }
       } label: {
         Label("Text Size", systemImage: "textformat.size")
+      }
+      .sheet(isPresented: $showsSettings) {
+        SettingsScreen()
       }
     }
   }

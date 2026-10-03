@@ -13,6 +13,19 @@ import Testing
 @Suite("Syntax theme")
 @MainActor
 struct SyntaxThemeTests {
+  /// A theme is part of `ReadingStyle`, which keys the preview cache, and its colors
+  /// compare by identity: it is the theme its identifier says.
+  @Test func `themes are equal by identifier`() {
+    #expect(SyntaxTheme(id: "a", [:]) == SyntaxTheme(id: "a", [.keyword: RFCColors.label]))
+    #expect(SyntaxTheme(id: "a", [:]) != SyntaxTheme(id: "b", [:]))
+  }
+
+  @Test func `an unknown theme is the standard one`() {
+    #expect(SyntaxTheme.named("solarized-2031") == .standard)
+    #expect(SyntaxTheme.named(nil) == .standard)
+    #expect(SyntaxTheme.all.first == .standard)
+  }
+
   @Test func `plain text keeps the body color`() {
     #expect(SyntaxTheme.standard.color(for: .plain) == nil)
   }

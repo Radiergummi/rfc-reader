@@ -2,11 +2,11 @@ import Foundation
 
 /// The reader's settings as user defaults hold them: each key and its default, once.
 ///
-/// The reader, the document preview and Settings each declare their own
-/// `@AppStorage` for these, and wrote the keys and defaults out by hand every
-/// time; a key misspelled in one of them is a setting that silently does nothing
-/// there. The keys are what user defaults hold, so renaming one resets everyone's
-/// choice.
+/// Read through `ReaderSettings`, which decodes them all into one value, and in a
+/// view through `@ReaderSettingsValue`, rather than through an `@AppStorage` of each
+/// key in every view that needs one: a key misspelled in one of those was a setting
+/// that silently did nothing there. The keys are what user defaults hold, so
+/// renaming one resets everyone's choice.
 public enum ReaderPreferences {
   /// The reader's body size, as it reads at the system's default text size.
   public static let fontSizeKey = "readingFontSize"
@@ -42,7 +42,7 @@ public enum ReaderPreferences {
     defaults.set(fontSize(steppingUp: size), forKey: fontSizeKey)
   }
 
-  private static func clamped(_ size: Double) -> Double {
+  static func clamped(_ size: Double) -> Double {
     min(max(size, fontSizes.lowerBound), fontSizes.upperBound)
   }
 
@@ -67,9 +67,16 @@ public enum ReaderPreferences {
   public static let notifyAboutBookmarksKey = "notifyAboutBookmarks"
   public static let defaultNotifyAboutBookmarks = false
 
-  /// The preference, for what reads it outside a view and so has no `@AppStorage`:
-  /// a print and an export.
+  /// The preference, for what reads it outside a view: a print and an export.
   public static func drawsDiagrams(in defaults: UserDefaults) -> Bool {
-    defaults.object(forKey: drawDiagramsKey) as? Bool ?? defaultDrawDiagrams
+    ReaderSettings(defaults: defaults).drawDiagrams
   }
+
+  /// The syntax theme's `SyntaxTheme.id`.
+  public static let syntaxThemeKey = "syntaxTheme"
+  public static let defaultSyntaxTheme = SyntaxTheme.standard.id
+
+  /// The page palette's `ReaderPalette.id`.
+  public static let paletteKey = "readerPalette"
+  public static let defaultPalette = ReaderPalette.automatic.id
 }

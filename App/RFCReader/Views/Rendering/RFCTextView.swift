@@ -17,6 +17,9 @@ struct RFCTextView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   @Environment(ReaderState.self) private var reader
+  /// For the palette, the draw-time half of the settings, which reaches the text
+  /// view on every update and only redraws.
+  @ReaderSettingsValue private var settings
   /// Everything else, gathered once here; see `ReaderInputs` for each.
   let inputs: ReaderInputs
 
@@ -74,6 +77,7 @@ struct RFCTextView: View {
         inputs: inputs,
         environment: ReaderEnvironment(
           library: library, navigation: navigation, reader: reader),
+        palette: settings.palette,
         width: geometry.size.width)
     }
   }
@@ -214,6 +218,7 @@ struct ReaderInputs {
   private struct Representable: UIViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
+    let palette: ReaderPalette
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -281,6 +286,7 @@ struct ReaderInputs {
 
     func updateUIView(_ textView: UITextView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
+      context.coordinator.apply(palette: palette)
     }
 
     /// Brings the bars back if this reader had put them away: the next one, after a
@@ -300,6 +306,7 @@ struct ReaderInputs {
   private struct Representable: NSViewRepresentable {
     let inputs: ReaderInputs
     let environment: ReaderEnvironment
+    let palette: ReaderPalette
     let width: CGFloat
 
     func makeCoordinator() -> RFCTextViewCoordinator { RFCTextViewCoordinator() }
@@ -401,6 +408,7 @@ struct ReaderInputs {
 
     func updateNSView(_ scroll: ReaderScrollView, context: Context) {
       inputs.apply(to: context.coordinator, environment: environment, width: width)
+      context.coordinator.apply(palette: palette)
     }
 
     /// The hover preview's timer is self-cleaning (its `[weak self]` capture on

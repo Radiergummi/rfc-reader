@@ -114,7 +114,7 @@ import RFCReaderKit
         feedback.layer?.backgroundColor = textView.backgroundColor.cgColor
         let tint = CALayer()
         tint.frame = feedback.bounds
-        tint.backgroundColor = RFCColors.cardFill.cgColor
+        tint.backgroundColor = paletteBox.palette.cardFill.cgColor
         feedback.layer?.addSublayer(tint)
       }
       let font =

@@ -13,6 +13,8 @@ struct ReaderPreferencesTests {
     #expect(ReaderPreferences.measureKey == "readerMeasure")
     #expect(ReaderPreferences.preferOriginalTextKey == "preferOriginalText")
     #expect(ReaderPreferences.drawDiagramsKey == "drawDiagrams")
+    #expect(ReaderPreferences.syntaxThemeKey == "syntaxTheme")
+    #expect(ReaderPreferences.paletteKey == "readerPalette")
   }
 
   @Test func `the default size is the style's own default`() {

@@ -14,6 +14,7 @@ struct RFCListView: View {
   #if !os(macOS)
     /// Whether the notices of the code the app adapts are on show.
     @State private var showsAcknowledgements = false
+    @State private var showsSettings = false
   #endif
 
   private var rows: [LibraryRow] {
@@ -305,6 +306,7 @@ struct RFCListView: View {
       // end (#348).
       .refreshable { await library.refreshIndex() }
       .sheet(isPresented: $showsAcknowledgements) { AcknowledgementsView() }
+      .sheet(isPresented: $showsSettings) { SettingsScreen() }
     #endif
   }
 
@@ -314,6 +316,11 @@ struct RFCListView: View {
       Menu {
         ListViewOptions(navigation: navigation)
         Section {
+          // iOS has no Settings scene, and the reader's settings are the app's own
+          // rather than the Settings app's (#703).
+          Button("Settings", systemImage: "gearshape") {
+            showsSettings = true
+          }
           Button("Acknowledgements", systemImage: "doc.text") {
             showsAcknowledgements = true
           }
