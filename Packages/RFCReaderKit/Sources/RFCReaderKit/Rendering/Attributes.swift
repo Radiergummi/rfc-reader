@@ -34,13 +34,14 @@ extension NSAttributedString.Key {
   /// merge; only its presence is meaningful.
   public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
   /// Set on a code block's copy button (macOS), whose click copies the block's text
-  /// (`copyButton(at:)`), and which is drawn as a chip without its tint. A `String`;
-  /// only its presence is meaningful.
+  /// (`code(ofCopyButtonAt:)`): a symbol's attachment, and no chip, which the
+  /// attachment guard allows in this run as in a chip's. A `String`; only its
+  /// presence is meaningful.
   public static let rfcCopyCode = NSAttributedString.Key("rfcCopyCode")
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow
   /// would otherwise be read out, carried by every character of the caption but its
-  /// line break, and a code block's copy button. A `String`.
+  /// line break. A `String`. A code block's copy button has none, and is not read.
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
@@ -138,17 +139,23 @@ public final class VerbatimBox: Sendable {
   /// What VoiceOver says in place of a rendered block's drawing, from its
   /// rendition (`DecoratedText.spokenLabel`); nil unless it is shown rendered.
   public let spokenLabel: String?
+  /// The RFC 8792 strategy the text shown is still folded with: set only where the
+  /// column was too narrow to show the block unfolded (`displayedText`), and what a
+  /// selection over it is unfolded by (#212). Nil for a block shown unfolded, which
+  /// unfolding again could join two of the author's own lines.
+  public let shownFolding: FoldedLines.Strategy?
 
   public init(
     _ content: Preformatted, ordinal: Int = 0,
     classification: ArtworkClassification = .unclassified, shown: Shown = .plain,
-    spokenLabel: String? = nil
+    spokenLabel: String? = nil, shownFolding: FoldedLines.Strategy? = nil
   ) {
     self.content = content
     self.ordinal = ordinal
     self.classification = classification
     self.shown = shown
     self.spokenLabel = spokenLabel
+    self.shownFolding = shownFolding
   }
 }
 
@@ -236,19 +243,28 @@ extension NSAttributedString {
     return (anchor, caption)
   }
 
-  /// The code block's copy button at this character offset: what it copies, the
-  /// block as written less the indent its lines share, as it is shown, and the
-  /// button's own extent, where its feedback is shown. Nil anywhere but on the
-  /// button.
-  public func copyButton(at offset: Int) -> (code: String, range: NSRange)? {
+  /// The extent of the code block's copy button at this character offset, where its
+  /// feedback is shown; nil anywhere but on the button. Asked on every pointer
+  /// move, so it only looks: what the button copies is `code(ofCopyButtonAt:)`.
+  public func copyButton(at offset: Int) -> NSRange? {
     guard offset >= 0, offset < length,
-      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
-      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil
     else { return nil }
     var button = NSRange(location: 0, length: 0)
     _ = attribute(
       .rfcCopyCode, at: offset, longestEffectiveRange: &button,
       in: NSRange(location: 0, length: length))
-    return (DocumentTextBuilder.removingSharedIndent(box.content.text), button)
+    return button
+  }
+
+  /// What the copy button at this character offset copies: its block as Copy
+  /// Figure copies it (`FigureCopy.pasteboardText(for:)`). Nil anywhere but on the
+  /// button. Asked on a click.
+  public func code(ofCopyButtonAt offset: Int) -> String? {
+    guard offset >= 0, offset < length,
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
+      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+    else { return nil }
+    return FigureCopy.pasteboardText(for: box.content)
   }
 }
