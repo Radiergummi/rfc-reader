@@ -90,12 +90,18 @@ public struct RFCLink: Hashable, Sendable {
   /// opened at. Nil for a page about the document, its info page, errata or history,
   /// which someone following the link wants to read on the web.
   public init?(documentPage url: URL) {
+    let name = url.lastPathComponent
     guard url.scheme?.lowercased() != Self.scheme, let link = RFCLink(url: url),
-      !url.pathComponents.contains(where: { ["info", "errata"].contains($0) }),
-      DocumentID(parsing: Self.stem(of: url.lastPathComponent)) == link.id
+      !url.pathComponents.contains(where: { ["info", "errata", "inline-errata"].contains($0) }),
+      DocumentID(parsing: Self.stem(of: name)) == link.id,
+      Self.documentExtensions.contains(String(name.dropFirst(Self.stem(of: name).count)))
     else { return nil }
     self = link
   }
+
+  /// The formats a document's own page comes in; any other, such as the RFC Editor's
+  /// `.json` of its metadata, is a page about it.
+  private static let documentExtensions: Set = ["", ".html", ".txt", ".xml", ".pdf", ".txt.pdf"]
 
   /// A file name without any of its extensions: `rfc4321` of `rfc4321.txt.pdf`.
   private static func stem(of name: String) -> String {
@@ -132,11 +138,13 @@ public struct RFCLink: Hashable, Sendable {
       else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     case "datatracker.ietf.org", "tools.ietf.org":
-      // /doc/html/rfc9110, /doc/rfc9110/, /html/rfc9110
-      guard let stem = components.last(where: { DocumentID(parsing: $0) != nil }) else {
-        return nil
-      }
-      guard let id = DocumentID(parsing: stem) else { return nil }
+      // /doc/html/rfc9110, /doc/rfc9110/, /html/rfc9110. Spelled with its series: a
+      // bare number here is a draft's revision, a meeting or an IPR disclosure.
+      guard
+        let id = components.lazy.reversed()
+          .filter({ $0.first?.isLetter == true })
+          .compactMap(DocumentID.init(parsing:)).first
+      else { return nil }
       self.init(id: id, section: fragmentSection, anchor: fragmentAnchor)
     default:
       return nil
