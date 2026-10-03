@@ -250,8 +250,10 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
-        // A find hit in folded text opens its section first (#698).
-        _ = coordinator.show(range.location)
+        // A find hit in folded text, or ⌘↓ to its end, opens its section and puts the
+        // line there (#698), which leaves the reveal nothing to do: its own jump to
+        // the end of the text would find no fragment and scroll from where it was.
+        if coordinator.show(range.location) { return true }
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
@@ -363,8 +365,10 @@ struct ReaderInputs {
       }
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
-        // A find hit in folded text opens its section first (#698).
-        _ = coordinator.show(range.location)
+        // A find hit in folded text, or ⌘↓ to its end, opens its section and puts the
+        // line there (#698), which leaves the reveal nothing to do: its own jump to
+        // the end of the text would find no fragment and scroll from where it was.
+        if coordinator.show(range.location) { return true }
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed

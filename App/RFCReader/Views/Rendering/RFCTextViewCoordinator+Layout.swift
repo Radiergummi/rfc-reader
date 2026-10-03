@@ -90,7 +90,7 @@ extension RFCTextViewCoordinator {
     guard let foldingIndex, foldingDelegate.hidden.contains(offset) else { return false }
     let before = folding
     let expanded = folding.expanding(toShow: offset, in: foldingIndex)
-    apply(expanded, placeAt: offset)
+    apply(expanded, placeAt: foldingIndex.lineOffset(for: offset))
     // After `apply`, which would take `expanded` for the scene catching up and forget
     // the report before it was made.
     reportedFolding = (before, expanded)
