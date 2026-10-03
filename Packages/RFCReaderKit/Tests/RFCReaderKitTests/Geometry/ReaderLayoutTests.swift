@@ -82,4 +82,30 @@ struct ReaderLayoutTests {
       ReaderLayout.headerHeight(
         measured: .greatestFiniteMagnitude, offered: .greatestFiniteMagnitude) == 0)
   }
+
+  /// A scroll is kept to what the scroll view can show: never above the top, under
+  /// the toolbar's inset, nor past the end of the text. Text that fits sits at the
+  /// top, whatever a jump or a reveal asked for: a reveal of the end of a short
+  /// Focus section had scrolled its title up under the toolbar.
+  @Test func `a scroll stays within what the text can show`() {
+    // Taller than the viewport: from under the toolbar to the end, less the viewport.
+    func origin(_ target: CGFloat, height: CGFloat?) -> CGFloat {
+      ReaderLayout.scrollOrigin(
+        target, contentHeight: height, viewportHeight: 1001, topInset: 52, bottomInset: 0)
+    }
+    #expect(origin(500, height: 5000) == 500)
+    #expect(origin(-200, height: 5000) == -52)
+    #expect(origin(4800, height: 5000) == 3999)
+    // Text that fits: the top, wherever the target was.
+    #expect(origin(42.9, height: 943) == -52)
+    #expect(origin(359.28, height: 943) == -52)
+    // The bottom inset is room to scroll into.
+    #expect(
+      ReaderLayout.scrollOrigin(
+        4800, contentHeight: 5000, viewportHeight: 1001, topInset: 52, bottomInset: 30) == 4029)
+    // An end not yet known, under viewport layout, holds only the top: the
+    // estimate must not pull a jump short (the layout engine's design).
+    #expect(origin(4800, height: nil) == 4800)
+    #expect(origin(-200, height: nil) == -52)
+  }
 }

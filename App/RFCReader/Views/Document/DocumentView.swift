@@ -12,8 +12,9 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.scenePhase) private var scenePhase
   #endif
   @AppStorage(ReaderPreferences.fontSizeKey) private var fontSize = ReaderPreferences
     .defaultFontSize
@@ -37,6 +38,8 @@ struct DocumentView: View {
   /// The fetch, the build, and the state they leave the reader in. The document is
   /// built only there — never in `body`, which would rebuild on every redraw.
   @State private var session: DocumentSession
+  /// The text of the build the reader's folding index was made of (#699).
+  @State private var foldedText: NSAttributedString?
   /// Whether a new column comes from a resize still under way; see `ReaderResize`.
   @State private var resize = ReaderResize()
 
@@ -50,7 +53,7 @@ struct DocumentView: View {
     @State private var output = DocumentOutput()
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
-    private var isCompact: Bool { horizontalSizeClass == .compact }
+    private var isCompact: Bool { chrome.isCollapsed }
     /// Whether reading on has put the bars away; see `ReaderChrome`.
     @State private var barsHidden = false
   #endif
@@ -73,6 +76,7 @@ struct DocumentView: View {
   /// reading position on the way out — reads the box. The place across a rebuild
   /// is finer than a section, and the coordinator keeps that itself.
   @State private var lastVisibleAnchor = VisibleAnchorBox()
+  @State private var placeSaver = ReadingPlaceSaver()
   /// Where the reader was when the text view last went — turning Original Text on
   /// takes it away — so that it comes back there (#449). Nil until it has gone with
   /// a place, which it has once the text has shown.
@@ -121,6 +125,36 @@ struct DocumentView: View {
       choices: library.presentationChoices(for: id, drawsDiagrams: drawDiagrams))
   }
 
+  /// The folding index of the build on screen, and in Focus the References tab's
+  /// groups, filtered to what its section cites (#699). Only for the selected
+  /// document, whose the reader state is, and only in Focus, which alone needs them;
+  /// not over the original text, which nothing folds.
+  private func updateFolding() {
+    guard navigation.selection == id else { return }
+    guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
+    else {
+      // Only where there is something to clear: every write notifies, and the panel
+      // would redraw on every disclosure the outline turns.
+      if reader.foldingIndex != nil { reader.foldingIndex = nil }
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      foldedText = nil
+      return
+    }
+    // Held, and compared by reference: a new build can be allocated where the old
+    // one was, and an identifier alone would take it for the old one.
+    if reader.foldingIndex == nil || foldedText !== built.text {
+      reader.foldingIndex = FoldingIndex(built)
+      foldedText = built.text
+    }
+    guard let index = reader.foldingIndex, let anchor = reader.folding.focusedAnchor(in: index)
+    else { return }
+    let cited = FocusCitations.entries(citedIn: anchor, in: built, index: index)
+    let groups = FocusCitations.groups(reader.groups, citing: cited)
+    // A section that cites nothing lists the whole bibliography, rather than saying
+    // the document has none.
+    reader.focusGroups = groups.isEmpty ? nil : groups
+  }
+
   /// The reader, and on macOS only the reader.
   ///
   /// There is no `.toolbar` and no panel in this view on macOS: both belong to the
@@ -153,6 +187,15 @@ struct DocumentView: View {
           }
         #endif
       }
+      // What Focus needs of the build: its folding index, and what its section cites
+      // (#699).
+      // By identifier, as a trigger only: comparing the texts themselves would compare
+      // every character on every update. `updateFolding` compares the build itself.
+      .onChange(of: session.state.built.map { ObjectIdentifier($0.text) }, initial: true) {
+        updateFolding()
+      }
+      .onChange(of: reader.folding) { updateFolding() }
+      .onChange(of: reader.showOriginal) { updateFolding() }
       // Into the window's reader state, for the panel beside the reader (#325):
       // how a load ends. `startLoad` says it began, after clearing that state.
       .onChange(of: session.state.isLoading) { _, isLoading in
@@ -186,7 +229,41 @@ struct DocumentView: View {
           jump(toSection: request.section, animated: request.isAnimated, revealingReferences: true)
         }
       }
-      .onDisappear { positions.save(lastVisibleAnchor) }
+      // Not only on the way out: quitting, or iOS ending an app in the background,
+      // takes the reader with no `onDisappear` (#155). So the place is saved once
+      // the reader stops, and when the app goes.
+      .onAppear {
+        // Not the view, and the box weakly: the box holds this.
+        let box = lastVisibleAnchor
+        box.placeDidChange = { [positions, placeSaver, weak box] in
+          placeSaver.schedule {
+            if let box { positions.save(box) }
+          }
+        }
+      }
+      #if os(macOS)
+        // Hosted outside any scene, so no `scenePhase` reaches here: the app's quit.
+        .onReceive(
+          NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
+        ) { _ in saveNow() }
+      #else
+        // The scene's phase, not the app's: an iPad window swiped away goes to the
+        // background alone.
+        .onChange(of: scenePhase) {
+          if scenePhase == .background { saveNow() }
+        }
+      #endif
+      .onDisappear {
+        // A report after this, during the fade-out, would save the document left
+        // over the one now read.
+        lastVisibleAnchor.placeDidChange = {}
+        saveNow()
+      }
+  }
+
+  private func saveNow() {
+    placeSaver.cancel()
+    positions.save(lastVisibleAnchor)
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
@@ -281,6 +358,12 @@ struct DocumentView: View {
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
+        // Not while fading out: the reader state is the selected document's.
+        folding: navigation.selection == id ? reader.folding : nil,
+        onFoldingChange: {
+          guard navigation.selection == id else { return }
+          reader.folding = $0
+        },
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.

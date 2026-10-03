@@ -16,8 +16,10 @@ struct BuilderCompletenessTests {
 
   /// The guard on the central decision. An attachment character outside a chip's
   /// own run means a block kind quietly became a hosted view, which is the hole
-  /// in the storage this design exists to avoid; the chip's leading doc.text
-  /// symbol is the one sanctioned exception, and only inside its own `.rfcChip` run.
+  /// in the storage this design exists to avoid. There are two sanctioned
+  /// exceptions, each a symbol inside its own run: a chip's leading doc.text, in
+  /// its `.rfcChip` run, and a heading's backlink caption's arrow, in its
+  /// `.rfcBacklinks` run (#584).
   @Test(arguments: ["rfc8999.xml", "rfc2119.txt", "rfc9197.xml"])
   func `nothing becomes an attachment`(fixture: String) throws {
     let document = try Fixtures.document(named: fixture)
@@ -33,9 +35,12 @@ struct BuilderCompletenessTests {
       let found = text.range(
         of: "\u{FFFC}", range: NSRange(location: searchStart, length: text.length - searchStart))
       guard found.location != NSNotFound else { break }
+      let sanctioned =
+        built.text.attribute(.rfcChip, at: found.location, effectiveRange: nil) != nil
+        || built.text.attribute(.rfcBacklinks, at: found.location, effectiveRange: nil) != nil
       #expect(
-        built.text.attribute(.rfcChip, at: found.location, effectiveRange: nil) != nil,
-        "\(fixture) has an attachment character outside a chip run at offset \(found.location)"
+        sanctioned,
+        "\(fixture) has an attachment character outside a chip or caption at offset \(found.location)"
       )
       searchStart = NSMaxRange(found)
     }

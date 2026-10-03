@@ -41,8 +41,51 @@ public struct SRGBColor: Hashable, Sendable {
     return (lighter + 0.05) / (darker + 0.05)
   }
 
+  /// This color drawn at `opacity` over `page`: what a translucent fill looks like
+  /// where it is drawn, blended in sRGB as the platforms composite.
+  public func composited(opacity: Double, over page: SRGBColor) -> SRGBColor {
+    SRGBColor(
+      red: red * opacity + page.red * (1 - opacity),
+      green: green * opacity + page.green * (1 - opacity),
+      blue: blue * opacity + page.blue * (1 - opacity))
+  }
+
+  /// This color, darkened just enough to contrast `minimum` with `other`, a lighter
+  /// color; itself when it already does. Darkened by scaling its linear-light
+  /// channels equally, which keeps the hue, as the badge palette was made (#516).
+  public func darkened(toContrast minimum: Double, against other: SRGBColor) -> SRGBColor {
+    guard contrast(with: other) < minimum else { return self }
+    let channels = linearChannels
+    func scaled(_ factor: Double) -> SRGBColor {
+      SRGBColor(
+        red: Self.encoded(channels[0] * factor), green: Self.encoded(channels[1] * factor),
+        blue: Self.encoded(channels[2] * factor))
+    }
+    // The largest factor that still clears it: contrast with a lighter color only
+    // grows as the factor falls, so a bisection finds it.
+    var clears = 0.0
+    var fails = 1.0
+    for _ in 0..<50 {
+      let factor = (clears + fails) / 2
+      if scaled(factor).contrast(with: other) >= minimum {
+        clears = factor
+      } else {
+        fails = factor
+      }
+    }
+    return scaled(clears)
+  }
+
+  /// The channels with the sRGB curve undone.
+  var linearChannels: [Double] { [red, green, blue].map(Self.linear) }
+
   /// The sRGB transfer function undone: linear below 0.04045, a 2.4 power above.
   private static func linear(_ channel: Double) -> Double {
     channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+  }
+
+  /// The sRGB transfer function, the inverse of `linear`.
+  private static func encoded(_ linear: Double) -> Double {
+    linear <= 0.0031308 ? linear * 12.92 : 1.055 * pow(linear, 1 / 2.4) - 0.055
   }
 }

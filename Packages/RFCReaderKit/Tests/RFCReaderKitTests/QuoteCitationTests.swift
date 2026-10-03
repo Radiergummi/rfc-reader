@@ -166,6 +166,25 @@ struct QuoteCitationTests {
         """))
   }
 
+  /// A quote is taken line by line, and a fold needs two lines to undo, so a folded
+  /// block shown folded is quoted as published: its folds and the header that says
+  /// how to undo them, together. Unfolding a plain copy (#212) dropped the header
+  /// alone.
+  @Test func `a folded block is quoted with its header and its folds`() throws {
+    let text =
+      "=============== NOTE: '\\' line wrapping per RFC 8792 ================\n\n{\"key\": \"a long \\\n      value\"}"
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: text))),
+      style: ReadingStyle(measure: 120))
+    let quote = try #require(
+      QuoteCitation.quote(
+        of: NSRange(location: 0, length: built.text.length), in: built, document: .rfc(9110)))
+    let quoted = text.split(separator: "\n", omittingEmptySubsequences: false)
+      .map { $0.isEmpty ? ">" : "> \($0)" }
+      .joined(separator: "\n")
+    #expect(quote.markdown.contains(quoted), "\(quote.markdown)")
+  }
+
   /// GitHub drops what reads as an HTML tag, a `<field-name>` among them, so the
   /// Markdown writes a `<` in prose as an entity. A fence takes its lines literally,
   /// and the rich flavor is not Markdown, so neither is escaped.

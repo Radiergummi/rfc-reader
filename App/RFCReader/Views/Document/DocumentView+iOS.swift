@@ -18,11 +18,11 @@
     @Binding var barsHidden: Bool
     let output: DocumentOutput
 
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
-    private var isCompact: Bool { horizontalSizeClass == .compact }
+    private var isCompact: Bool { chrome.isCollapsed }
 
     func body(content: Content) -> some View {
       content
@@ -104,7 +104,7 @@
     /// In a single column only: beside other columns, the back/forward pair is in
     /// the bar.
     private var visibleReturn: HistoryEntry? {
-      horizontalSizeClass == .compact ? navigation.returnOffer : nil
+      chrome.isCollapsed ? navigation.returnOffer : nil
     }
 
     /// "Back to § 4.2" after following a link within the document (#254). In a

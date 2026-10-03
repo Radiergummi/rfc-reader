@@ -15,7 +15,11 @@ public struct DocumentReport: Codable, Sendable {
   /// Lines dropped as page furniture. Compared across runs, this is what shows
   /// a furniture rule deleting the body: the block counts cannot.
   public var furniture: Int?
-  public var overridden: Bool
+  /// How the document was corrected by hand, nil when it was not.
+  public var override: Override?
+  /// Why its patch could not be applied, nil when it has none or it applied. A
+  /// document whose patch failed has no output, and the run fails at its end.
+  public var failure: String?
   public var warnings: [String]
   /// Why the output is not RFCXML: `[]` when it validates, nil when the run was not
   /// asked to check (`--schema`). See `SchemaCheck.Cause` for what each entry means.
@@ -25,9 +29,17 @@ public struct DocumentReport: Codable, Sendable {
   /// pack's manifest lists it (`Manifest.skips(inReport:)`).
   public var skipped: Manifest.SkipReason?
 
+  /// The kinds of hand correction in `corpus/overrides/` (#197).
+  public enum Override: String, Codable, Sendable {
+    /// An RFC 5261 patch, applied to the converter's output.
+    case patch
+    /// A whole document published in place of the converter's output.
+    case snapshot
+  }
+
   /// Counts the blocks of `document`, and warns about the shapes a failed conversion
   /// leaves: no number, no title, no sections, no prose, more artwork than prose.
-  public init(document: RFCDocument, id: String, overridden: Bool) {
+  public init(document: RFCDocument, id: String, override: Override? = nil) {
     var paragraphs = 0
     var lists = 0
     var artwork = 0
@@ -61,7 +73,7 @@ public struct DocumentReport: Codable, Sendable {
     self.artwork = artwork
     self.references = references
     self.resolvedDocuments = document.referencedDocuments.count
-    self.overridden = overridden
+    self.override = override
     self.warnings = warnings
   }
 
