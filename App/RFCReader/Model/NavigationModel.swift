@@ -113,6 +113,12 @@ final class NavigationModel: Identifiable {
   /// Takes the inputs a list is computed from on entering a filter.
   private func takeListInputs() {
     recentOrder = library.recentlyRead()
+    takeDownloaded()
+  }
+
+  /// Takes the RFCs available offline again, without the rest of the list inputs:
+  /// for the first set the library reads, which a tab made before it took empty.
+  func takeDownloaded() {
     downloaded = library.downloadedNumbers
   }
 
@@ -409,6 +415,23 @@ final class NavigationModel: Identifiable {
   private func arrive(at place: HistoryEntry, animated: Bool = true) {
     scrollRequest = place.section.map { ScrollRequest(section: $0, isAnimated: animated) }
     visiblePosition = place.section
+  }
+
+  // MARK: - Across launches
+
+  /// What this tab keeps across launches (#155), with its reader's inspector tab.
+  func snapshot(inspectorTab: InspectorTab) -> SceneSnapshot {
+    SceneSnapshot(history: history.snapshot(), filter: filter, inspectorTab: inspectorTab.rawValue)
+  }
+
+  /// Puts the tab back as `snapshot` left it, and its inspector tab into `reader`.
+  /// Nothing is asked to scroll: the document opens at its reading position, which
+  /// is kept with it. A collection deleted since leaves for the fallback, as one
+  /// deleted while the tab is open does.
+  func restore(_ snapshot: SceneSnapshot, into reader: ReaderState) {
+    history = NavigationHistory(snapshot.history)
+    sidebarSelection = KeptFilter.filter(snapshot.filter, keeping: library.collections)
+    reader.tab = snapshot.inspectorTab.flatMap(InspectorTab.init(rawValue:)) ?? reader.tab
   }
 }
 

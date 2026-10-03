@@ -131,4 +131,38 @@ public struct NavigationHistory: Sendable {
   public mutating func hide() {
     isHidden = true
   }
+
+  // MARK: - Across launches
+
+  /// The history as a tab keeps it across launches (#155): the places on either
+  /// side of the current one, and whether it is hidden.
+  public struct Snapshot: Codable, Equatable, Sendable {
+    /// Oldest first, as `backward` and `forward` are: each is a stack whose last
+    /// entry is the place next to the current one.
+    var backward: [HistoryEntry]
+    var current: HistoryEntry?
+    var forward: [HistoryEntry]
+    var isHidden: Bool
+  }
+
+  /// Restores a history from `snapshot`. Restoring is not arriving, so there is no
+  /// jump to offer a way back from.
+  public init(_ snapshot: Snapshot) {
+    backward = snapshot.backward
+    current = snapshot.current
+    forward = snapshot.forward
+    isHidden = snapshot.isHidden
+  }
+
+  /// At most `limit` places, the current one and those nearest it: as many ahead as
+  /// fit beside half the rest behind, and the rest behind. A tab read in all day
+  /// keeps a snapshot of the same size as one opened a minute ago.
+  public func snapshot(limit: Int = SceneSnapshot.historyLimit) -> Snapshot {
+    let room = max(limit - (current == nil ? 0 : 1), 0)
+    let ahead = min(forward.count, max(room - backward.count, room / 2))
+    let behind = min(backward.count, room - ahead)
+    return Snapshot(
+      backward: Array(backward.suffix(behind)), current: current,
+      forward: Array(forward.suffix(ahead)), isHidden: isHidden)
+  }
 }

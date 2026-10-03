@@ -1,7 +1,7 @@
 import RFCKit
 import RFCReaderKit
 import SwiftUI
-import os
+import Synchronization
 
 #if canImport(UIKit)
   import UIKit
@@ -26,7 +26,12 @@ final class VisibleAnchorBox {
   var anchor: String?
   /// The reader's line, as a place that survives a rebuild: what the reading
   /// position saves (#322). Nil at the top of the document.
-  var place: ReadingPlace?
+  var place: ReadingPlace? {
+    didSet { if place != oldValue { placeDidChange() } }
+  }
+  /// Told when `place` moves, on every scroll tick that moves it: `DocumentView`
+  /// saves the place once the reader stops (#155).
+  var placeDidChange: () -> Void = {}
   /// Whether the top of the viewport is ahead of section one, which `anchor`
   /// reports as section one.
   var isAheadOfSections = false
@@ -59,11 +64,38 @@ final class RFCTextViewCoordinator: NSObject {
   weak var textView: PlatformTextView? {
     didSet {
       engine.textView = textView
-      #if !canImport(UIKit)
+      #if canImport(UIKit)
+        // UIKit's are a link color only, the tint as it was when asked; the dynamic
+        // tint follows the view's as UIKit's own link coloring does.
+        let attributes = LinkAttributes(
+          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
+      #else
         setUpHover()
+        // A backlink caption opens a list beside it, as a control does, under the
+        // ordinary pointer rather than a link's pointing hand. Made here, on the
+        // main thread, where AppKit makes cursors.
+        let attributes = LinkAttributes(
+          attributes: textView?.linkTextAttributes ?? [:], caption: [.cursor: NSCursor.arrow])
       #endif
+      linkAttributes.withLock { $0 = attributes }
       setUpAccessibilityRotors()
     }
+  }
+
+  /// The text view's own link attributes, taken when it is handed over, after it is
+  /// configured. A layout manager whose delegate answers for a link's rendering
+  /// stops reading them and starts from TextKit's (link-colored and underlined), so
+  /// the delegate starts from these instead (#584). Behind a lock because TextKit
+  /// may ask off the main thread.
+  nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
+
+  /// A text view's link attributes, and what a backlink caption is drawn with on
+  /// top of them, handed across threads. `@unchecked Sendable` because the
+  /// dictionaries are made once and never written to, and their values, colors and
+  /// cursors, are only read to draw.
+  nonisolated struct LinkAttributes: @unchecked Sendable {
+    let attributes: [NSAttributedString.Key: Any]
+    let caption: [NSAttributedString.Key: Any]
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -139,7 +171,7 @@ final class RFCTextViewCoordinator: NSObject {
   var onToolbarTitle: (ToolbarTitleState, _ reader: AnyObject) -> Void = { _, _ in }
   var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
   var heading: HeadingBox?
-  private var lastToolbarTitle: ToolbarTitleState?
+  var lastToolbarTitle: ToolbarTitleState?
 
   #if canImport(UIKit)
     /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by
@@ -171,23 +203,23 @@ final class RFCTextViewCoordinator: NSObject {
   /// main-actor hop, which `onDisappear` cannot afford to wait for.
   var lastVisibleAnchor: VisibleAnchorBox?
 
-  private(set) var built: BuiltDocument?
+  var built: BuiltDocument?
   /// The anchors tracking may report. The full index covers *every* anchor —
   /// paragraphs, figures, tables, reference rows — because `scroll(to:)` has to
   /// reach all of them, but every consumer of the reader's visible anchor resolves
   /// it with `RFCDocument.section(anchor:)`, so reporting a paragraph anchor would
   /// silently break all of them. The builder marks which entries are sections; this
   /// is just that subset.
-  private var sectionIndex = AnchorIndex([])
-  private var lastReportedAnchor: String?
+  var sectionIndex = AnchorIndex([])
+  var lastReportedAnchor: String?
   /// The reader's geometry under viewport layout; see `ReaderLayoutEngine`.
   let engine = ReaderLayoutEngine()
-  private var laidOutColumn: CGFloat?
+  var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the
   /// whole resize. The inset is the gutter, so the gutter is what invalidates it.
-  private var laidOutGutter: CGFloat?
-  private var laidOutHeaderHeight: CGFloat?
+  var laidOutGutter: CGFloat?
+  var laidOutHeaderHeight: CGFloat?
 
   /// The header as hosted: given `environment`, and on iOS with a tap on its blank
   /// space for the bars.
@@ -219,217 +251,6 @@ final class RFCTextViewCoordinator: NSObject {
     static let documentCrossFade = Animation.easeInOut(duration: 0.1)
   #endif
 
-  // MARK: - Storage
-
-  /// Swaps in a document and puts the reader's place back on it; the engine lays out
-  /// what that needs and the rest in the background (`ReaderLayoutEngine`).
-  func install(_ built: BuiltDocument) {
-    guard let textView,
-      let layout = textView.textLayoutManager,
-      let storage = layout.textContentManager as? NSTextContentStorage
-    else { return }
-    #if !canImport(UIKit)
-      // A preview timing or shown belongs to the document being replaced, and its
-      // range means nothing in the new one.
-      hover.send(.reset)
-    #endif
-    self.built = built
-    lastReportedAnchor = nil
-    sectionIndex = built.anchors.sections
-    deriveAccessibilityItems()
-    // Through `install`, never by assigning `storage.attributedString`, which
-    // discards the text storage that selection and link clicks go through while
-    // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
-    // `StorageInstallTests` pins it.
-    signposter.withIntervalSignpost("Install document") {
-      storage.install(built.text)
-    }
-    reportSelection()
-    engine.installed(built, document: documentID)
-    reportVisibleAnchor()
-  }
-
-  // MARK: - Geometry
-
-  /// Centers the column and hangs the header in the top inset.
-  ///
-  /// This runs on every update pass — and an update pass happens on every section
-  /// crossing, because `visibleAnchor` is `@State` — so nothing is written unless
-  /// the gutter, the column or the header's height moved. A relayout costs more
-  /// still, and only the column can force one: under the recommended measure, a
-  /// window wider than it moves the gutters, not the text. Full width has no such
-  /// slack — every change of width is a change of column, and re-wraps.
-  ///
-  /// `measure` is the live preference, which runs ahead of the storage for as long
-  /// as a flip takes to rebuild, exactly as the width does during a resize: the
-  /// text re-wraps at the new column at once and the rebuild re-measures artwork
-  /// and tables for it when it lands.
-  func layOut(width: CGFloat, measure: MeasurePreference) {
-    guard let textView, width > 0 else { return }
-    let gutter = ReaderLayout.gutter(forWidth: width, measure: measure)
-    let column = ReaderLayout.column(forWidth: width, measure: measure)
-    // Measured every pass, deliberately: the height depends on the width, on the
-    // content size category, and on metadata that can arrive after the first
-    // layout, and a cache keyed on any one of those goes stale as a header
-    // overlapping the first paragraph. Only the writes below are conditional.
-    let offered = CGFloat.greatestFiniteMagnitude
-    let measured =
-      headerHost?.sizeThatFits(in: CGSize(width: column, height: offered)).height ?? 0
-    let headerHeight = ReaderLayout.headerHeight(measured: measured, offered: offered)
-    guard column != laidOutColumn || gutter != laidOutGutter || headerHeight != laidOutHeaderHeight
-    else { return }
-    let columnChanged = column != laidOutColumn
-    laidOutColumn = column
-    laidOutGutter = gutter
-    laidOutHeaderHeight = headerHeight
-
-    #if canImport(UIKit)
-      textView.textContainerInset = UIEdgeInsets(
-        top: headerHeight, left: gutter, bottom: ReaderLayout.margin, right: gutter)
-    #else
-      // AppKit's inset is symmetric, so the header's height is echoed as padding
-      // under the last line. NSTextView has no asymmetric equivalent.
-      textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
-      textView.textContainerInset = NSSize(width: gutter, height: headerHeight)
-    #endif
-    headerHost?.view.frame = CGRect(x: gutter, y: 0, width: column, height: headerHeight)
-
-    // The container is the column, set here and nowhere else. Tracking the text
-    // view's width instead re-wrapped the storage on *every* resize: the frame
-    // and the inset cannot change in one step, so the container passed through a
-    // width that was neither the old column nor the new one, and TextKit threw
-    // away the whole document's layout for it — measured on RFC 9000, a resize
-    // that only moved the gutters left the reader 39,000 characters further on,
-    // with no rebuild coming to put it back.
-    //
-    // `DocumentView` derives the column from the same width and rebuilds, which
-    // lands in `install()`; until it does, the engine holds the reader's line on
-    // the storage re-wrapped at the new column.
-    if columnChanged {
-      #if canImport(UIKit)
-        textView.textContainer.size = CGSize(width: column, height: .greatestFiniteMagnitude)
-      #else
-        textView.textContainer?.size = NSSize(width: column, height: .greatestFiniteMagnitude)
-      #endif
-      engine.columnChanged()
-    } else {
-      // The gutter or the header moved the container in the view: the same line stays on top.
-      engine.pin()
-    }
-  }
-
-  // MARK: - Scrolling
-
-  /// Puts the anchor's line at the top of the viewport.
-  ///
-  /// A jump can arrive — as a deep link, or as the reading position restored on
-  /// the way in — before background completion has reached the section it names.
-  /// So the jump pays for its own target: the engine settles it, laying out
-  /// everything above it first, which is what makes its y the real one.
-  /// `extra` characters past the anchor, as a saved reading position has it; a
-  /// stale one stays inside the anchor's block (`ReadingPlace.documentOffset`).
-  func scroll(to anchor: String, offset extra: Int = 0, animated: Bool) {
-    // Deferred: this runs inside SwiftUI's update, where mutating state is illegal.
-    defer { Task { self.onScrollHandled() } }
-    guard let built,
-      let offset = ReadingPlace(anchor: anchor, offset: extra).documentOffset(
-        in: built.anchors, length: built.text.length)
-    else { return }
-    #if canImport(UIKit)
-      chrome.jumped()
-      reportChrome()
-    #endif
-    engine.jump(toOffset: offset)
-    reportVisibleAnchor()
-  }
-
-  /// Reads the reader's place from the engine, which reads it from the viewport's
-  /// own fragments, and reports the section it is in.
-  func reportVisibleAnchor() {
-    // Everything that reports where the viewport is comes through here — scrolls,
-    // jumps, restored places — which is every time the title's position can move.
-    updateToolbarTitle()
-    guard let built, textView?.textLayoutManager != nil else { return }
-    let offset = engine.userScrolled() ?? 0
-    lastVisibleAnchor?.place = engine.keeper.readingPlace(in: built.anchors)
-    // The abstract is the first prose in the storage and sits ahead of section
-    // one, so while it is on screen the reader is, as far as every consumer of
-    // this is concerned, in section one — which is what the old view reported too.
-    // The box tells the two apart for the one that must not scroll there: the
-    // reader's text made again, which starts at the top (#449).
-    let section = sectionIndex.anchor(at: offset)
-    lastVisibleAnchor?.isAheadOfSections = section == nil
-    guard let anchor = section ?? sectionIndex.entries.first?.anchor,
-      anchor != lastReportedAnchor
-    else { return }
-    lastReportedAnchor = anchor
-    lastVisibleAnchor?.anchor = anchor
-    // Deferred for the same reason as `onScrollHandled`: installing a document
-    // reports from inside SwiftUI's update, where mutating state is illegal.
-    Task { self.onVisibleAnchorChange(anchor) }
-  }
-
-  func updateToolbarTitle() {
-    guard let textView, let header = headerHost?.view, let bottom = heading?.bottom else {
-      return
-    }
-    let edge = textView.unobscuredTop
-    let state = ToolbarTitleState(
-      reveal: ToolbarTitleReveal.progress(
-        headingBottom: header.frame.minY + bottom,
-        visibleTop: edge,
-        distance: headingLineHeight
-      ),
-      runningHeading: runningHeading(
-        atEdge: edge - textView.containerTop, in: textView.textLayoutManager)
-    )
-    // Steady for almost all of a document; only a change is news.
-    guard state != lastToolbarTitle else { return }
-    lastToolbarTitle = state
-    onToolbarTitle(state, self)
-  }
-
-  /// The section the toolbar's subtitle names, from the paragraph under the
-  /// toolbar's edge — `edge` is in container coordinates.
-  private func runningHeading(atEdge edge: CGFloat, in layout: NSTextLayoutManager?)
-    -> RunningHeading.State
-  {
-    // Above the container is the header, which belongs to no section.
-    guard edge >= 0, let layout,
-      let fragment = layout.textLayoutFragment(for: CGPoint(x: 0, y: edge))
-    else { return .steady(nil) }
-    let frame = fragment.layoutFragmentFrame
-    return RunningHeading.state(
-      in: sectionIndex,
-      topFragmentStart: layout.offset(of: fragment.rangeInElement.location),
-      crossing: RunningHeading.crossing(
-        edge: edge,
-        fragmentTop: frame.minY,
-        fragmentHeight: frame.height,
-        lastLine: fragment.textLineFragments.last?.typographicBounds
-      )
-    )
-  }
-
-  /// The height of one line of the header's heading, which is set in the large
-  /// title style (`DocumentHeaderView`): the distance the reveal runs over.
-  private var headingLineHeight: CGFloat {
-    #if canImport(UIKit)
-      // Per tick, against the view's traits: Dynamic Type changes the style's size
-      // while the app runs. UIKit caches the font for a trait collection.
-      let font = UIFont.preferredFont(
-        forTextStyle: .largeTitle, compatibleWith: textView?.traitCollection)
-    #else
-      let font = Self.largeTitle
-    #endif
-    return ceil(font.ascender - font.descender + font.leading)
-  }
-
-  #if !canImport(UIKit)
-    /// Once, not per scroll tick: macOS text styles do not change size at run time.
-    private static let largeTitle = NSFont.preferredFont(forTextStyle: .largeTitle)
-  #endif
-
   /// Hit-tests a point in text-container coordinates down to a character offset,
   /// fragment → line → glyph, or nil beside the text. `NSTextView`'s older
   /// `characterIndex(for:)` goes through the TextKit 1 compatibility shim and is
@@ -437,7 +258,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// `closestPosition(to:)` snaps a point beside the text onto the nearest
   /// character; this walks the same TextKit 2 object graph `RFCTextLayoutFragment`
   /// draws against, in reverse.
-  private func characterOffset(atContainerPoint containerPoint: CGPoint) -> Int? {
+  func characterOffset(atContainerPoint containerPoint: CGPoint) -> Int? {
     guard let layout = textView?.textLayoutManager,
       let fragment = layout.textLayoutFragment(for: containerPoint)
     else { return nil }
@@ -459,14 +280,14 @@ final class RFCTextViewCoordinator: NSObject {
   /// The cross reference at this absolute character offset, and its whole
   /// extent. Shared by the iOS long-press lookup and the macOS hover hit test
   /// below; the lookup itself is `NSAttributedString.reference(at:)`.
-  private func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
+  func reference(at offset: Int) -> (box: ReferenceBox, range: NSRange)? {
     textView?.textLayoutManager?.attributedText?.reference(at: offset)
   }
 
   /// The link a reference's runs carry. Read from the storage rather than from
   /// what the platform says was pressed: a chip's leading glyph is an attachment,
   /// which UIKit reports as one, not as the link it is part of.
-  private func link(at offset: Int) -> URL? {
+  func link(at offset: Int) -> URL? {
     let value = textView?.textLayoutManager?.attributedText?.attribute(
       .link, at: offset, effectiveRange: nil)
     return value.flatMap(Self.url(fromLink:))
@@ -482,7 +303,7 @@ final class RFCTextViewCoordinator: NSObject {
   /// abstract; a place in this one has only its section's heading; a bibliography
   /// entry that names no RFC has its title, authors and where it was published
   /// (#198); and a figure or a table has none of those.
-  private func preview(for reference: CrossReference) -> ReferencePreview? {
+  func preview(for reference: CrossReference) -> ReferencePreview? {
     guard let library = environment?.library else { return nil }
     switch reference.target {
     case .document:
@@ -515,8 +336,8 @@ final class RFCTextViewCoordinator: NSObject {
       // action UIKit opens the menu on a tap, and that took the tap from the bars.
       if case .tag = textItem.content { return UIAction { _ in } }
       let offset = textItem.range.location
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: offset) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: offset) != nil {
         return UIAction(title: defaultAction.title, image: defaultAction.image) { [weak self] _ in
           self?.showBacklinks(at: offset)
         }
@@ -544,9 +365,9 @@ final class RFCTextViewCoordinator: NSObject {
       _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
     ) -> UITextItem.MenuConfiguration? {
       if case .tag = textItem.content { return figureMenu(for: textItem, in: textView) }
-      // A backlink chip's link is ours alone, and nothing in the default menu —
+      // A backlink caption's link is ours alone, and nothing in the default menu —
       // Copy Link, Share — means anything for it.
-      if backlinkChip(at: textItem.range.location) != nil { return nil }
+      if backlinkCaption(at: textItem.range.location) != nil { return nil }
       // `UITextItem.range` is a plain `NSRange` — already the absolute character
       // offset `reference(at:)` wants, no `NSTextLocation` translation needed.
       guard let environment, let documentID,
@@ -744,8 +565,8 @@ final class RFCTextViewCoordinator: NSObject {
       let box = textView.textLayoutManager?.attributedText?.reference(at: charIndex)?.box
       let effects = hover.send(.clickedLink(reference: box, pointer: NSEvent.mouseLocation))
       guard !effects.contains(.swallowClick) else { return true }
-      // A backlink chip goes nowhere: it lists what refers to its section.
-      if backlinkChip(at: charIndex) != nil {
+      // A backlink caption goes nowhere: it lists what refers to its section.
+      if backlinkCaption(at: charIndex) != nil {
         showBacklinks(at: charIndex)
         return true
       }
@@ -765,9 +586,9 @@ final class RFCTextViewCoordinator: NSObject {
       -> NSMenu?
     {
       hover.send(.contextMenu)
-      // A backlink chip's link is ours alone, and Copy Link would copy a URL
+      // A backlink caption's link is ours alone, and Copy Link would copy a URL
       // nothing else can open; the rest of the menu stays.
-      if backlinkChip(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
+      if backlinkCaption(at: charIndex) != nil { return BacklinkMenu.withoutCopyLink(menu) }
       return menu
     }
 
@@ -797,32 +618,6 @@ final class RFCTextViewCoordinator: NSObject {
       else { return false }
       commitsOnClick()
       return true
-    }
-
-    // MARK: - Hover preview
-
-    /// Hands the controller the text view and what only the document knows: where a
-    /// reference is, what its card says, and what rests under the pointer.
-    private func setUpHover() {
-      guard let textView else { return }
-      hover.attach(to: textView)
-      hover.target = { [weak self] point in self?.reference(atWindowPoint: point) }
-      hover.restingTarget = { [weak self] in self?.referenceUnderRestingPointer() }
-      hover.card = { [weak self] target in
-        guard let self, let environment = self.environment,
-          let preview = self.preview(for: target.box.reference),
-          let rect = self.referenceRect(for: target.range)
-        else { return nil }
-        return ReferenceHoverController.Popover(
-          content: NSHostingController(rootView: preview.readerEnvironment(environment)),
-          anchor: rect)
-      }
-      hover.documentPreview = { [weak self] target in self?.documentPreview(for: target) }
-    }
-
-    /// Called from `dismantleNSView`.
-    func tearDownHoverTracking() {
-      hover.tearDown()
     }
 
     /// Detaches the text view from its text container, so what AppKit keeps of the
@@ -860,121 +655,6 @@ final class RFCTextViewCoordinator: NSObject {
       // The window's models, which nothing that outlives the window should hold.
       environment = nil
     }
-
-    private func referenceUnderRestingPointer() -> HoverTarget? {
-      guard NSApp.isActive, NSEvent.pressedMouseButtons == 0, let textView,
-        let window = textView.window
-      else { return nil }
-      let point = window.mouseLocationOutsideOfEventStream
-      guard textView.visibleRect.contains(textView.convert(point, from: nil)) else { return nil }
-      return reference(atWindowPoint: point)
-    }
-
-    /// Force click on a reference: Safari's link preview, for documents (#29) — the
-    /// document it names, readable and scrollable, at the place it names. A
-    /// bibliography entry that names no RFC has no document of ours to show, and
-    /// gets its card instead. Anywhere else, and on a reference with neither, it
-    /// returns false and `ReaderTextView` hands the event on to AppKit's Look Up.
-    /// So does Look Up from the keyboard, which means the selection, not whatever
-    /// the pointer happens to rest on — and a key event has no location to test.
-    /// So does an event from any other window, such as a menu's: its location is
-    /// in that window's coordinates, not the text view's.
-    func quickLookReference(with event: NSEvent) -> Bool {
-      guard commitsOnClick == nil, event.type != .keyDown,
-        let textView, event.window === textView.window,
-        let target = reference(atWindowPoint: event.locationInWindow),
-        let documentID,
-        let url = link(at: target.range.location),
-        let resolved = LinkPreview.resolve(
-          target.box.reference, linkedTo: url, from: documentID, in: environment?.library.index)
-      else { return false }
-      switch resolved {
-      case .card:
-        guard preview(for: target.box.reference) != nil else { return false }
-        hover.send(.forceClickCard(target))
-      case .document:
-        guard environment != nil, referenceRect(for: target.range) != nil else { return false }
-        hover.send(.forceClickDocument(target))
-      }
-      return true
-    }
-
-    /// The link a click on the reference under `event` follows, and the character
-    /// it is on, or nil when the mouse-down is on no reference. `ReaderTextView`
-    /// tracks a click on a reference itself, to see its force click (#29). Not in a
-    /// link preview's reader, whose clicks commit the preview.
-    func referenceLink(under event: NSEvent) -> (link: Any, characterIndex: Int)? {
-      guard commitsOnClick == nil, let textView, event.window === textView.window,
-        let target = reference(atWindowPoint: event.locationInWindow),
-        let url = link(at: target.range.location)
-      else { return nil }
-      return (url, target.range.location)
-    }
-
-    /// The preview is a reader of its own — its own text view and storage, built by
-    /// `DocumentTextBuilder` — in a popover beside the reference. A click in it does
-    /// what a click on the reference would have, with the modifiers held for it,
-    /// and closes it. Nil for a reference that names no document of ours.
-    private func documentPreview(for target: HoverTarget) -> ReferenceHoverController.Popover? {
-      guard let documentID, let environment, let url = link(at: target.range.location),
-        case .document(let id, let place)? = LinkPreview.resolve(
-          url, from: documentID, in: environment.library.index),
-        let rect = referenceRect(for: target.range)
-      else { return nil }
-      let preview = DocumentPreview(library: environment.library, id: id, place: place) {
-        [weak self] in
-        guard let self else { return }
-        let sameDocument = id == self.documentID
-        // The popover fades out as the reader moves, not before it: waiting for the
-        // fade to finish left the reader standing still behind it. And a click, as
-        // far as the reader is concerned: the scroll it causes must not preview
-        // whatever lands under the pointer, which is now over the reader.
-        self.hover.send(.previewCommitted(pointer: NSEvent.mouseLocation))
-        if sameDocument {
-          // The reader's own jump is animated already.
-          _ = self.onLink(url, .current)
-        } else {
-          // Another document replaces this one; `ReaderHost` cross-fades the two.
-          withAnimation(Self.documentCrossFade) { _ = self.onLink(url, .current) }
-        }
-      }
-      let host = NSHostingController(rootView: preview.readerEnvironment(environment))
-      return ReferenceHoverController.Popover(
-        content: host, size: preview.size, anchor: rect)
-    }
-
-    /// The reference under a point in window coordinates. `textContainerOrigin` is
-    /// the inset: the view is flipped, so subtracting it is all it takes to reach
-    /// container space.
-    private func reference(atWindowPoint point: NSPoint) -> HoverTarget? {
-      guard let textView else { return nil }
-      let viewPoint = textView.convert(point, from: nil)
-      return reference(
-        at: CGPoint(
-          x: viewPoint.x - textView.textContainerOrigin.x,
-          y: viewPoint.y - textView.textContainerOrigin.y)
-      ).map { HoverTarget(box: $0.box, range: $0.range) }
-    }
-
-    private func reference(at containerPoint: CGPoint) -> (box: ReferenceBox, range: NSRange)? {
-      characterOffset(atContainerPoint: containerPoint).flatMap { reference(at: $0) }
-    }
-
-    /// The rect of a reference's run, in text-container coordinates — the
-    /// popover's anchor. `enumerateTextSegments` folds a run that wraps across
-    /// lines into the right set of rects on its own, the same as it does for
-    /// selection rendering.
-    func referenceRect(for range: NSRange) -> CGRect? {
-      guard let layout = textView?.textLayoutManager,
-        let textRange = layout.textRange(for: range)
-      else { return nil }
-      var union: CGRect?
-      layout.enumerateTextSegments(in: textRange, type: .standard) { _, frame, _, _ in
-        union = union.map { $0.union(frame) } ?? frame
-        return true
-      }
-      return union
-    }
   }
 
 #endif
@@ -991,5 +671,19 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     in textElement: NSTextElement
   ) -> NSTextLayoutFragment {
     RFCTextLayoutFragment.make(for: textElement)
+  }
+
+  /// Every link as the text view draws it, over the storage's color, but a
+  /// heading's backlink caption, which keeps the caption's (#584). Not
+  /// `renderingAttributes`, which are TextKit's and not the text view's.
+  nonisolated func textLayoutManager(
+    _ textLayoutManager: NSTextLayoutManager,
+    renderingAttributesForLink link: Any,
+    at location: any NSTextLocation,
+    defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any]? {
+    let textView = linkAttributes.withLock { $0 }
+    return DocumentTextBuilder.linkRenderingAttributes(
+      for: link, defaults: textView.attributes, caption: textView.caption)
   }
 }
