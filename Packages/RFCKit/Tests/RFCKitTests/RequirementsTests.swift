@@ -218,4 +218,35 @@ struct RequirementsTests {
     #expect(!found.isEmpty)
     #expect(found.allSatisfy { $0.isHeuristic })
   }
+
+  // MARK: - Within a section
+
+  /// "The requirements in Section 6.1" (#192): the section's own and its
+  /// subsections', however deep, and no other section's.
+  @Test func `a section's requirements include its subsections'`() throws {
+    let document = try Fixtures.document("rfc9601.xml")
+    let all = Requirements.extract(from: document)
+    let section = try #require(document.section(number: "6.1"))
+    let within = Requirements.within(section, all)
+    #expect(
+      Set(within.compactMap(\.sectionNumber))
+        == ["6.1.1", "6.1.1.1", "6.1.1.2.1", "6.1.2", "6.1.2.1", "6.1.3", "6.1.4", "6.1.4.1", "6.1.4.2"])
+    // In document order, as the whole list has them.
+    #expect(within == all.filter(within.contains))
+    let parent = try #require(document.section(number: "6"))
+    #expect(Requirements.within(parent, all).contains { $0.sectionNumber == "6" })
+    #expect(!Requirements.within(section, all).contains { $0.sectionNumber == "6" })
+  }
+
+  /// One line of the text the requirements intent returns: where, then what.
+  @Test func `a requirement's line leads with its section`() {
+    let numbered = Requirement(
+      keywords: [.must], sentence: "A client MUST retry.", anchor: "section-4.2-1",
+      sectionAnchor: "section-4.2", sectionNumber: "4.2", sectionTitle: "Retries",
+      isHeuristic: false)
+    #expect(numbered.line == "4.2: A client MUST retry.")
+    var unnumbered = numbered
+    unnumbered.sectionNumber = nil
+    #expect(unnumbered.line == "Retries: A client MUST retry.")
+  }
 }
