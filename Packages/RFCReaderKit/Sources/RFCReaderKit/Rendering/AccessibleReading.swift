@@ -217,7 +217,7 @@ public enum AccessibleReading {
 
 extension AccessibleReading {
   /// One rotor stop: the run's extent, and — for diagrams and a heading's backlink
-  /// chip only — what VoiceOver says about it. Headings and other links keep
+  /// caption only — what VoiceOver says about it. Headings and other links keep
   /// `label` nil and let VoiceOver read the text at `range`, which already says the
   /// right thing.
   public struct RotorItem: Equatable, Sendable {
