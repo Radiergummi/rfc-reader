@@ -32,12 +32,13 @@ struct FocusSteps: View {
   let reader: ReaderState
 
   var body: some View {
-    // Not over the original text, which nothing folds.
+    // Not over the original text, which nothing folds: there is no folding index
+    // then, so nowhere to step (`DocumentView.updateFolding`).
     if reader.folding.mode == .focus {
       Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
-        .disabled(!reader.canStepFocus(.next) || reader.showOriginal)
+        .disabled(!reader.canStepFocus(.next))
       Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
-        .disabled(!reader.canStepFocus(.previous) || reader.showOriginal)
+        .disabled(!reader.canStepFocus(.previous))
     }
   }
 }

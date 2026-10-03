@@ -133,8 +133,11 @@ struct DocumentView: View {
     guard navigation.selection == id else { return }
     guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
     else {
-      reader.foldingIndex = nil
-      reader.focusGroups = nil
+      // Only where there is something to clear: every write notifies, and the panel
+      // would redraw on every disclosure the outline turns.
+      if reader.foldingIndex != nil { reader.foldingIndex = nil }
+      if reader.focusGroups != nil { reader.focusGroups = nil }
+      foldedText = nil
       return
     }
     // Held, and compared by reference: a new build can be allocated where the old
