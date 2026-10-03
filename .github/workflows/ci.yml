@@ -3,10 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-  # A draft skips the macOS jobs, the slow and costly ones; marking it ready
-  # for review runs them.
+  # The default types: marking a draft ready for review starts no run here, as
+  # nothing changed since its last push. The macOS jobs are in ci-macos.yml.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
 
 # Every job only checks out and builds; none writes to the repository.
 permissions:
@@ -59,133 +58,6 @@ jobs:
           # (whether each pinned commit really belongs to its action) are on by default.
           advanced-security: false
 
-  rfckit-macos:
-    name: RFCKit tests (macOS)
-    if: ${{ !github.event.pull_request.draft }}
-    # Xcode 26.4 on purpose, not the runner's newest: it is the first to ship
-    # Swift 6.3, the swift-tools-version every package declares and the swift:6.3
-    # image the Linux jobs run, and this is what holds the packages to it.
-    runs-on: macos-26
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
-      # In the SwiftPM keys, so a new Xcode starts from a clean .build rather than
-      # restoring one another compiler made.
-      - name: Toolchain
-        id: toolchain
-        run: |
-          swift --version
-          echo "hash=$(swift --version 2>&1 | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
-      # Each package's .build, from main's newest run; see the Linux job.
-      - name: Restore the SwiftPM builds
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            Packages/RFCKit/.build
-            Packages/RFCReaderKit/.build
-            Tools/corpus-build/.build
-          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
-          restore-keys: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
-      - run: swift test --package-path Packages/RFCKit
-      - run: make test-app
-      # The pipeline runs on a Mac as often as on Linux (`make corpus`), so its tests
-      # run on both.
-      - run: swift test --package-path Tools/corpus-build
-      - name: Save the SwiftPM builds
-        if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            Packages/RFCKit/.build
-            Packages/RFCReaderKit/.build
-            Tools/corpus-build/.build
-          key: swiftpm-macos-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
-
-  app-build:
-    name: App build (macOS + iOS)
-    if: ${{ !github.event.pull_request.draft }}
-    # Xcode 26.6, the newest the macos-26 image has, with iOS 26 simulators: what
-    # project.yml's deployment targets need. Selected by path rather than left to
-    # the image's default, so a runner update cannot change the toolchain.
-    runs-on: macos-26
-    timeout-minutes: 30
-    env:
-      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/compilation-cache.xcconfig
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
-      - name: Install XcodeGen
-        # The release the Makefile pins, checked against its SHA-256 (#165), into
-        # .build/xcodegen, which `make xcodeproj` runs in preference to the PATH's.
-        run: make xcodegen-install
-      # The newest cache any earlier run saved: entries are keyed on their inputs,
-      # so a stale one is never used, only not hit.
-      - name: Restore the compilation cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode-compilation-cache-${{ github.sha }}
-          restore-keys: xcode-compilation-cache-
-      # Compiling is the point, so both builds go unsigned: the runner has no
-      # certificate for the team project.yml names.
-      - name: Build for macOS
-        run: make build-app CODE_SIGNING_ALLOWED=NO
-      - name: Build for the iOS Simulator
-        run: make ios-sim CODE_SIGNING_ALLOWED=NO
-      # Saved from main only: a pull request restores main's newest cache, and
-      # one saved per pull request would only crowd main's out of the quota.
-      - name: Save the compilation cache
-        if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode-compilation-cache-${{ github.sha }}
-
-  app-build-xcode-27:
-    name: App build (Xcode 27, preview)
-    if: ${{ !github.event.pull_request.draft }}
-    # The Xcode the app is developed with, and the only one that compiles
-    # AppIcon-27 (project.yml, APP_ICON_2700). Unsigned like the job above, so it
-    # needs no certificate. It runs on GitHub's `xcode-27` image, a preview outside
-    # the Actions SLA, so a failure is reported without failing the run.
-    runs-on: xcode-27
-    continue-on-error: true
-    timeout-minutes: 30
-    env:
-      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/compilation-cache.xcconfig
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_27.app && xcodebuild -version
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      # Its own kind, so neither Xcode's cache is pruned for the other's.
-      - name: Restore the compilation cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode27-compilation-cache-${{ github.sha }}
-          restore-keys: xcode27-compilation-cache-
-      - name: Build for macOS
-        run: make build-app CODE_SIGNING_ALLOWED=NO
-      - name: Build for the iOS Simulator
-        run: make ios-sim CODE_SIGNING_ALLOWED=NO
-      - name: Save the compilation cache
-        if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
-          key: xcode27-compilation-cache-${{ github.sha }}
-
   rfckit-linux:
     name: RFCKit tests (Linux)
     runs-on: ubuntu-24.04
@@ -203,7 +75,7 @@ jobs:
           swift --version
           echo "hash=$(swift --version 2>&1 | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       # Each package's .build, restored from main's newest run and saved only from
-      # main, like the compilation cache above. Keyed on the manifests and pins, so a
+      # main, like ci-macos.yml's compilation cache. Keyed on the manifests and pins, so a
       # dependency change starts cold rather than from a build of other versions;
       # sources are not in the key, since SwiftPM rebuilds what changed on its own.
       # Older entries are deleted by the prune job below.
@@ -235,9 +107,10 @@ jobs:
     # per job, and the repository's 10 GB went to 36 compilation caches with nothing
     # pruned. A restore only ever takes the newest entry of a kind, so the rest are
     # deleted. After the saves, and on main only, where the saves happen. The corpus
-    # workflow's fetched text (corpus-text-, about 450 MB a run) is pruned here too.
+    # workflow's fetched text (corpus-text-, about 450 MB a run) is pruned here too;
+    # ci-macos.yml prunes its own caches.
     if: ${{ !cancelled() && github.event_name == 'push' }}
-    needs: [rfckit-macos, app-build, app-build-xcode-27, rfckit-linux]
+    needs: [rfckit-linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -249,7 +122,7 @@ jobs:
     steps:
       - name: Keep the newest cache of each kind
         run: |
-          for prefix in xcode-compilation-cache- xcode27-compilation-cache- swiftpm-macos- swiftpm-linux- corpus-text-; do
+          for prefix in swiftpm-linux- corpus-text-; do
             gh cache list --key "$prefix" --ref refs/heads/main --sort created_at --order desc \
               --limit 100 --json id --jq '.[1:][].id' |
               xargs -r -n1 gh cache delete
