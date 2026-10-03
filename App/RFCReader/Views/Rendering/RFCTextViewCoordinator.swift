@@ -233,6 +233,13 @@ final class RFCTextViewCoordinator: NSObject {
   var reportedFolding: (before: Folding, after: Folding)?
   /// Tells the scene that a jump into folded text expanded a section.
   var onFoldingChange: (Folding) -> Void = { _ in }
+  /// The document's requirements, which Implementer bands (#700).
+  var requirements: [Requirement] = []
+  /// Where the requirements are in the installed build: found in Implementer only,
+  /// once per build and requirements.
+  var requirementBands: RequirementBands?
+  /// Finding the bands, off the main actor.
+  var bandsTask: Task<Void, Never>?
   var laidOutColumn: CGFloat?
   /// Tracked separately from the column, because above the breakpoint the two move
   /// independently: the column pins at the ideal measure and the gutter takes the

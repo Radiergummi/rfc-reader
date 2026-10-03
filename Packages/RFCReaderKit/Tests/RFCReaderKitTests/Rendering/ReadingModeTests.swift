@@ -493,6 +493,40 @@ struct ReadingModeTests {
   }
 
   @Test func `the modes are named for the menu`() {
-    #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus"])
+    #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus", "Implementer"])
+  }
+
+  // MARK: - Implementer (#700)
+
+  /// Implementer reads the whole document, its requirements banded: the band is
+  /// drawn, so nothing is folded for it and nothing has a disclosure.
+  @Test func `implementer folds nothing and bands the requirements`() throws {
+    let index = FoldingIndex(try Self.rfc8999())
+    let implementer = Folding(mode: .implementer)
+    #expect(implementer.hidden(in: index).isEmpty)
+    #expect(implementer.disclosures(in: index).isEmpty)
+    #expect(ReadingMode.allCases.filter(\.bandsRequirements) == [.implementer])
+  }
+
+  /// Implementer becoming the outline keeps the section the reader's line is in
+  /// open, and every section it is nested in, as Focus does, so the line stays
+  /// shown; the outline from anywhere else starts closed, as it did.
+  @Test func `implementer becomes an outline with the line's section open`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let sections = built.anchors.sections.entries
+    let child = try #require(sections.first { ($0.depth ?? 1) > 1 })
+    let parent = try #require(sections.last { $0.offset < child.offset && ($0.depth ?? 1) == 1 })
+    let line = child.offset + child.heading!.utf16.count + 2
+    let outline = Folding(mode: .outline).keepingLine(
+      at: line, after: Folding(mode: .implementer), in: index)
+    #expect(outline == Folding(mode: .outline, expanded: [parent.anchor, child.anchor]))
+    #expect(!outline.hidden(in: index).contains(line))
+    let fromNormal = Folding(mode: .outline).keepingLine(
+      at: line, after: Folding(mode: .normal), in: index)
+    #expect(fromNormal == Folding(mode: .outline))
+    // An outline already opened is the reader's own, and stays as it is.
+    let opened = Folding(mode: .outline, expanded: [parent.anchor])
+    #expect(opened.keepingLine(at: line, after: Folding(mode: .implementer), in: index) == opened)
   }
 }

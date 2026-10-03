@@ -105,6 +105,27 @@ public enum RFCColors {
   /// An aside's card, a step stronger than a figure's.
   public static var asideFill: PlatformColor { pageTint(light: 0.045, dark: 0.12) }
 
+  /// Implementer's band behind a requirement (#700): `RequirementBands.tint`,
+  /// translucent, so it tints the page or a card under it.
+  public static var requirementBand: PlatformColor {
+    let tint = RequirementBands.tint
+    #if canImport(UIKit)
+      return UIColor { traits in
+        let band = traits.userInterfaceStyle == .dark ? tint.dark : tint.light
+        return UIColor(
+          red: band.color.red, green: band.color.green, blue: band.color.blue, alpha: band.opacity)
+      }
+    #else
+      return NSColor(name: nil) { appearance in
+        let band =
+          appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? tint.dark : tint.light
+        return NSColor(
+          srgbRed: band.color.red, green: band.color.green, blue: band.color.blue,
+          alpha: band.opacity)
+      }
+    #endif
+  }
+
   /// Black at `light` on a light page, white at `dark` on a dark one. Translucent,
   /// so it tints whatever the page is rather than assuming its color.
   private static func pageTint(light: CGFloat, dark: CGFloat) -> PlatformColor {
