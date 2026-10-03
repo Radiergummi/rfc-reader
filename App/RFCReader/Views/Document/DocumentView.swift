@@ -170,7 +170,7 @@ struct DocumentView: View {
   /// that by a different route: the reader's frame spans the panel, and the inset
   /// it reports is ignored in the representable.
   var body: some View {
-    content
+    requestingContent
       .navigationTitle(id.displayName)
       #if !os(macOS)
         .modifier(
@@ -219,10 +219,6 @@ struct DocumentView: View {
       .onChange(of: library.revisions) {
         session.deriveInfo(into: reader, library: library, navigation: navigation)
       }
-      // A tab an App Intent asked to show beside this document (#192), once there is
-      // a document to describe: the macOS panel refuses to open over nothing.
-      .onChange(of: library.inspectorRequest, initial: true) { showRequestedTab() }
-      .onChange(of: reader.canDescribe) { showRequestedTab() }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader: the request is
         // the selected document's.
@@ -271,6 +267,17 @@ struct DocumentView: View {
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
+
+  /// `content`, taking a tab an App Intent asked to show beside this document (#192)
+  /// once there is a document to describe: the macOS panel refuses to open over
+  /// nothing. Apart from `body`, whose chain of modifiers is as long as the compiler
+  /// type-checks in time.
+  private var requestingContent: some View {
+    content.modifier(
+      RequestedTab(
+        request: library.inspectorRequest, canDescribe: reader.canDescribe,
+        show: showRequestedTab))
+  }
 
   /// The width channel. It wraps everything, including the loading state, so the
   /// column is known before there is a document to build.
@@ -625,3 +632,17 @@ struct DocumentView: View {
     }
   }
 #endif
+
+/// Calls `show` when an App Intent's request arrives, and when the reader comes to
+/// have a document it could show it beside; see `DocumentView.requestingContent`.
+private struct RequestedTab: ViewModifier {
+  let request: DocumentRequest<InspectorTab>?
+  let canDescribe: Bool
+  let show: () -> Void
+
+  func body(content: Content) -> some View {
+    content
+      .onChange(of: request, initial: true) { show() }
+      .onChange(of: canDescribe) { show() }
+  }
+}
