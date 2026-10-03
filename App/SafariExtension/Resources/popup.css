@@ -1,0 +1,30 @@
+:root {
+  color-scheme: light dark;
+  font: -apple-system-body;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+}
+
+label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.note {
+  margin: 0;
+  font: -apple-system-footnote;
+  color: GrayText;
+}
