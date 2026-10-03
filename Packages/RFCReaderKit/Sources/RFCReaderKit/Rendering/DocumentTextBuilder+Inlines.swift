@@ -206,7 +206,10 @@ extension DocumentTextBuilder {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: style.backlinksFont,
       .foregroundColor: RFCColors.secondaryLabel,
-      .paragraphStyle: paragraphStyle(spacingAfter: style.paragraphSpacing * 0.6),
+      // Set solid: the body's line height would add leading above one short line,
+      // between the caption and its heading.
+      .paragraphStyle: paragraphStyle(
+        spacingAfter: style.paragraphSpacing * 0.6, lineHeightMultiple: 1),
       .rfcBacklinks: anchor,
     ]
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
