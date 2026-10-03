@@ -213,7 +213,9 @@ struct PanelHost: View {
           didNavigate()
         },
         openDocument: { id in
-          leave { library.open(id, activation: .current, in: navigation) }
+          leave {
+            library.open(id, activation: .current, in: navigation, arrival: .citation)
+          }
         },
         search: { text in
           leave {

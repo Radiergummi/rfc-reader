@@ -179,6 +179,8 @@ final class RFCTextViewCoordinator: NSObject {
   var onToolbarTitleReleased: (_ reader: AnyObject) -> Void = { _ in }
   var heading: HeadingBox?
   var lastToolbarTitle: ToolbarTitleState?
+  /// See `ReaderInputs.isShown`.
+  var isShown = true
 
   #if canImport(UIKit)
     /// Whether the bars are out of the way on iPhone; see `ReaderChrome`. Driven by

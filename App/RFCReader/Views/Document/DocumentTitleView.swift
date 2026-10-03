@@ -15,19 +15,32 @@
     let title: String
     let subtitle: String
     let reader: ReaderState
+    /// Whether the window's reader state is this title's reader's. One reader's
+    /// title of several in a stack is moved by it: the top one's (#263).
+    let isShown: Bool
     @Environment(\.sceneChrome) private var chrome
 
     func makeUIView(context: Context) -> DocumentTitleView {
-      let view = DocumentTitleView()
-      // A callback rather than observation, as on the Mac: the title is coupled to
-      // the scroll, and observation delivers each change a run-loop turn late.
-      reader.updateToolbarTitle = { [weak view] in view?.update($0) }
-      return view
+      DocumentTitleView()
     }
 
     func updateUIView(_ view: DocumentTitleView, context: Context) {
       view.isCompact = chrome.hasShortBars
       view.show(title, subtitle: subtitle)
+      // Installed when its reader is shown, and again when it is shown again, after
+      // a reader pushed over it installed its own title. A callback rather than
+      // observation, as on the Mac: the title is coupled to the scroll, and
+      // observation delivers each change a run-loop turn late.
+      if isShown, !context.coordinator.isInstalled {
+        reader.updateToolbarTitle = { [weak view] in view?.update($0) }
+      }
+      context.coordinator.isInstalled = isShown
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+      var isInstalled = false
     }
 
     /// All the width the bar offers its middle, so a running heading changing

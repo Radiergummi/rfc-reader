@@ -17,6 +17,8 @@
     @Binding var showsInspector: Bool
     @Binding var barsHidden: Bool
     let output: DocumentOutput
+    /// Whether the window's reader state is this reader's; see `DocumentTitle`.
+    let isShown: Bool
 
     @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -35,8 +37,8 @@
             DocumentTitle(
               title: id.displayName,
               subtitle: DocumentActions.subtitle(
-                metadata: metadata, documentTitle: reader.documentTitle) ?? "",
-              reader: reader)
+                metadata: metadata, documentTitle: isShown ? reader.documentTitle : nil) ?? "",
+              reader: reader, isShown: isShown)
           }
         }
         .toolbar {
@@ -79,11 +81,14 @@
         // rather than the one `.inspector` turns itself into: that one, swiped
         // away, set the binding back to false but dropped the next request to
         // show it, so the panel's buttons opened it only on every other tap.
-        .inspector(isPresented: isCompact ? .constant(false) : $showsInspector) {
+        //
+        // The panel is the stack's, and only the reader on top presents it (#263):
+        // the readers below would present it too, out of sight.
+        .inspector(isPresented: isCompact || !isShown ? .constant(false) : $showsInspector) {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: false)
             .inspectorColumnWidth(min: 260, ideal: 320)
         }
-        .sheet(isPresented: isCompact ? $showsInspector : .constant(false)) {
+        .sheet(isPresented: isCompact && isShown ? $showsInspector : .constant(false)) {
           PanelHost(isPresented: $showsInspector, closesAfterChoice: true)
             .presentationDetents([.medium, .large])
         }

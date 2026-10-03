@@ -88,10 +88,12 @@ struct StatusBanner: View {
           Text(title).fontWeight(.medium)
         }
         ForEach(ids, id: \.self) { id in
-          Button(id.displayName) { library.open(id, activation: .current, in: navigation) }
-            .buttonStyle(.plain)
-            .foregroundStyle(Self.link)
-            .lineLimit(1)
+          Button(id.displayName) {
+            library.open(id, activation: .current, in: navigation, arrival: .citation)
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(Self.link)
+          .lineLimit(1)
         }
       }
     }

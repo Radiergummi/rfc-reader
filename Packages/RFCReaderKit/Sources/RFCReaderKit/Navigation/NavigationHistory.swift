@@ -66,21 +66,27 @@ public struct NavigationHistory: Sendable {
   ) -> HistoryEntry? {
     defer { isHidden = false }
     let anchor = { (section: String) in places?.anchor(for: section) ?? section }
-    let place = HistoryEntry(id: place.id, section: place.section.map(anchor))
+    let place = HistoryEntry(
+      id: place.id, section: place.section.map(anchor), arrival: place.arrival)
     let position = position.map(anchor)
-    if let current, place == HistoryEntry(id: current.id, section: current.section.map(anchor)) {
+    // Reopening the hidden document from its row, which names no section: back
+    // where it was, and not a jump to offer a way back from. A row is from outside
+    // the reader, so the readers are stacked again from here (#263).
+    if isHidden, place.section == nil, let current, place.id == current.id {
+      arrivedByGoing = false
+      self.current = HistoryEntry(id: current.id, section: current.section, arrival: place.arrival)
+      return nil
+    }
+    if let current, place.id == current.id, place.section == current.section.map(anchor) {
       guard let section = place.section else { return nil }
       let reported = places?.section(of: section) ?? section
       if position == nil || position == section || position == reported {
-        self.current = place
-        return place
+        // Not a navigation, so not a new way of arriving either: a jump to where
+        // the reader is must not reach back past an arrival from outside (#263).
+        let arrived = HistoryEntry(id: place.id, section: section, arrival: current.arrival)
+        self.current = arrived
+        return arrived
       }
-    }
-    // Reopening the hidden document from its row, which names no section: back
-    // where it was, and not a jump to offer a way back from.
-    if isHidden, place.section == nil, place.id == current?.id {
-      arrivedByGoing = false
-      return nil
     }
     if var previous = current {
       previous.section = position ?? previous.section.map(anchor)
@@ -120,6 +126,58 @@ public struct NavigationHistory: Sendable {
     arrivedByGoing = false
     isHidden = false
     return arrived
+  }
+
+  // MARK: - The readers stacked on iOS (#263)
+
+  /// The documents of the readers stacked for what is on screen, oldest first: one
+  /// for each run of places in one document since the tab last arrived somewhere
+  /// from outside, and none while nothing is on screen. `ReaderPath` makes the
+  /// stack of them.
+  ///
+  /// From the history rather than beside it, so that the system back button and
+  /// Back cannot disagree about where they go.
+  public var stackedDocuments: [DocumentID] {
+    guard let shown else { return [] }
+    var documents = [shown.id]
+    var arrival = shown.arrival
+    for entry in backward.reversed() {
+      guard arrival == .citation else { break }
+      if entry.id != documents.last { documents.append(entry.id) }
+      arrival = entry.arrival
+    }
+    return documents.reversed()
+  }
+
+  /// Steps back until `count` readers are stacked, recording `position` as the spot
+  /// left in the reader on top, and returns the place arrived at: nil when there
+  /// were no more than that, or no fewer than one is asked for.
+  ///
+  /// The stack's own back, the system back button or a swipe from the edge: a reader
+  /// popped goes with every jump made in it, and forward returns to it, where it was
+  /// left.
+  @discardableResult
+  public mutating func popReaders(to count: Int, leaving position: String? = nil)
+    -> HistoryEntry?
+  {
+    guard count >= 1 else { return nil }
+    var arrived: HistoryEntry?
+    var position = position
+    while stackedDocuments.count > count, let place = goBack(leaving: position) {
+      arrived = place
+      // Only the reader on top was somewhere other than where its entry says.
+      position = nil
+    }
+    return arrived
+  }
+
+  /// `popReaders(to:leaving:)` for the stack's path cut back to `pushed`, the readers
+  /// over the root it still shows.
+  @discardableResult
+  public mutating func popReaders(
+    toPushed pushed: [ReaderPath.Reader], leaving position: String? = nil
+  ) -> HistoryEntry? {
+    popReaders(to: pushed.count + 1, leaving: position)
   }
 
   /// Put the current place away without leaving it: going back to the list on an

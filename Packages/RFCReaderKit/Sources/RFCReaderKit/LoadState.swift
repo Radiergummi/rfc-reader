@@ -66,6 +66,18 @@ public struct LoadState {
     phase = .loaded(document, built)
   }
 
+  /// How long a reader on iOS has nothing to show before it says it is loading
+  /// (#263). A document in the cache normally builds within it, so a reader pushed
+  /// for a citation slides in with its text rather than after a flash of progress;
+  /// one that has to be fetched says so a moment later.
+  public static let progressDelay = Duration.milliseconds(400)
+
+  /// Whether the reader says it is loading: while there is neither a build nor a
+  /// failure to show, once `isDue`, which the delay passing since it began makes it.
+  public func showsProgress(isDue: Bool) -> Bool {
+    isDue && built == nil && failure == nil
+  }
+
   /// How long a build waits before it starts.
   ///
   /// A rebuild costs the whole attributed string plus a full relayout — 650 ms on
