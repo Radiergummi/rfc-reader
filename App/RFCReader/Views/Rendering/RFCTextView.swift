@@ -323,6 +323,12 @@ struct ReaderInputs {
       textView.referenceLink = { [weak coordinator = context.coordinator] event in
         coordinator?.referenceLink(under: event)
       }
+      textView.isOverCopyButton = { [weak coordinator = context.coordinator] event in
+        coordinator?.copyButton(under: event) != nil
+      }
+      textView.copyCode = { [weak coordinator = context.coordinator] event in
+        coordinator?.copyCode(under: event) ?? false
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }

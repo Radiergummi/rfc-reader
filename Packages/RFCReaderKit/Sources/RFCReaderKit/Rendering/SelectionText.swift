@@ -28,7 +28,7 @@ public enum SelectionText {
   /// The plain text for `attributed`, which is expected to be a selection taken out
   /// of the reader's storage.
   public static func plainText(of selection: NSAttributedString) -> String {
-    let attributed = withoutBacklinkCaptions(of: selection)
+    let attributed = withoutReaderText(of: selection)
     var result = ""
     let whole = NSRange(location: 0, length: attributed.length)
     attributed.enumerateAttribute(.rfcReference, in: whole, options: []) { value, range, _ in
@@ -48,23 +48,22 @@ public enum SelectionText {
     return result
   }
 
-  /// A heading's backlink caption counts what refers to the section (#183, #584):
-  /// the reader's, not the document's words, so a copied heading is the heading
-  /// alone, in the rich flavors as in the plain one, with no line where the
-  /// caption was.
-  public static func withoutBacklinkCaptions(of selection: NSAttributedString)
-    -> NSAttributedString
-  {
-    var captions: [NSRange] = []
+  /// What the reader adds to the document's words (`.rfcReaderOnly`) — a heading's
+  /// backlink caption (#183, #584), a code block's language and copy button — is
+  /// not part of what was copied: a copied heading is the heading alone, with no
+  /// line where the caption was, and copied code is the code, in the rich flavors
+  /// as in the plain one.
+  public static func withoutReaderText(of selection: NSAttributedString) -> NSAttributedString {
+    var runs: [NSRange] = []
     selection.enumerateAttribute(
-      .rfcBacklinks, in: NSRange(location: 0, length: selection.length)
+      .rfcReaderOnly, in: NSRange(location: 0, length: selection.length)
     ) { value, range, _ in
-      if value != nil { captions.append(range) }
+      if value != nil { runs.append(range) }
     }
-    guard !captions.isEmpty else { return selection }
+    guard !runs.isEmpty else { return selection }
     let result = NSMutableAttributedString(attributedString: selection)
-    for caption in captions.reversed() {
-      result.deleteCharacters(in: caption)
+    for run in runs.reversed() {
+      result.deleteCharacters(in: run)
     }
     return result
   }
