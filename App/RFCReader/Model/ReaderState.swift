@@ -28,7 +28,13 @@ final class ReaderState {
   var exportFormats: [ExportFormat] = [.pdf]
   /// The window's reading mode and the sections it has expanded in place (#698). The
   /// mode stays from one document to the next; what was expanded does not.
-  var folding = Folding()
+  var folding = Folding() {
+    didSet {
+      // An entry revealed in one section's references is done with once the focus
+      // moves: left, it would keep the next section's list the whole bibliography.
+      if folding.focused != oldValue.focused { revealedReference = nil }
+    }
+  }
   /// What folding needs of the document on screen, for Next and Previous Section.
   var foldingIndex: FoldingIndex?
   /// In Focus, the References tab's groups with only what the focused section cites

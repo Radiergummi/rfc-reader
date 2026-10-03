@@ -38,4 +38,14 @@ public enum FocusCitations {
       return entries.isEmpty ? nil : ReferenceGroup(title: group.title, entries: entries)
     }
   }
+
+  /// What the References tab lists in Focus: `focusGroups`, unless the entry being
+  /// revealed is not among them, which only the whole bibliography can show. Nil for
+  /// the whole bibliography.
+  public static func shown(_ focusGroups: [ReferenceGroup]?, revealing anchor: String?)
+    -> [ReferenceGroup]?
+  {
+    guard let focusGroups, let anchor else { return focusGroups }
+    return focusGroups.contains { $0.entries.contains { $0.anchor == anchor } } ? focusGroups : nil
+  }
 }

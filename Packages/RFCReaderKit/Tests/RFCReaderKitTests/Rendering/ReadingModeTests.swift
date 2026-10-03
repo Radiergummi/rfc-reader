@@ -405,6 +405,55 @@ struct ReadingModeTests {
     #expect(FocusCitations.groups(groups, citing: []).isEmpty)
   }
 
+  /// Entering Focus focuses the section the reader's line is in, the abstract
+  /// included; a focus already chosen, another mode, or a line in no section stays.
+  @Test func `entering focus focuses the section the line is in`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let section = built.anchors.sections.entries[4]
+    let entering = Folding(mode: .focus)
+    #expect(entering.focusingOnLine(at: section.offset + 10, in: index).focused == section.anchor)
+    let abstract = try #require(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor))
+    #expect(
+      entering.focusingOnLine(at: abstract + 10, in: index).focused
+        == DocumentTextBuilder.abstractAnchor)
+    let chosen = Folding(focusingOn: section.anchor)
+    #expect(chosen.focusingOnLine(at: abstract + 10, in: index) == chosen)
+    #expect(Folding(mode: .outline).focusingOnLine(at: section.offset, in: index).focused == nil)
+  }
+
+  /// A move of the focus to another section puts the line at its heading; entering
+  /// Focus keeps it, since the focused section is the one it is in.
+  @Test func `only a move of the focus puts the line at the heading`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let sections = built.anchors.sections.entries
+    let moved = Folding(focusingOn: sections[5].anchor)
+    #expect(
+      moved.placeOfFocus(after: Folding(focusingOn: sections[2].anchor), in: index)
+        == sections[5].offset)
+    #expect(moved.placeOfFocus(after: Folding(mode: .focus), in: index) == sections[5].offset)
+    #expect(moved.placeOfFocus(after: moved, in: index) == nil)
+    #expect(moved.placeOfFocus(after: Folding(mode: .normal), in: index) == nil)
+    #expect(moved.placeOfFocus(after: Folding(mode: .outline), in: index) == nil)
+    #expect(Folding(mode: .outline).placeOfFocus(after: moved, in: index) == nil)
+  }
+
+  /// The References tab lists what the section cites, unless an entry it does not
+  /// cite is being revealed, which only the whole bibliography shows.
+  @Test func `a revealed entry the section does not cite shows the whole bibliography`() throws {
+    let groups = ReferenceGroup.groups(in: try Fixtures.rfc8999())
+    let entries = groups.flatMap(\.entries)
+    try #require(entries.count > 1)
+    let cited = FocusCitations.groups(groups, citing: [entries[0].anchor])
+    #expect(FocusCitations.shown(cited, revealing: nil)?.map(\.title) == cited.map(\.title))
+    #expect(
+      FocusCitations.shown(cited, revealing: entries[0].anchor)?.flatMap(\.entries).map(\.anchor)
+        == [entries[0].anchor])
+    #expect(FocusCitations.shown(cited, revealing: entries[1].anchor) == nil)
+    #expect(FocusCitations.shown(nil, revealing: entries[0].anchor) == nil)
+  }
+
   @Test func `the modes are named for the menu`() {
     #expect(ReadingMode.allCases.map(\.name) == ["Normal", "Outline", "Focus"])
   }

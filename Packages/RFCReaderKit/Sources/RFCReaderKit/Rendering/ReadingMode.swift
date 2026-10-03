@@ -74,7 +74,7 @@ public struct FoldingIndex: Sendable {
   }
 
   /// Where the entry `anchor` names is: its heading.
-  public func offset(of anchor: String) -> Int? {
+  func offset(of anchor: String) -> Int? {
     entries.first { $0.anchor == anchor }?.offset
   }
 
@@ -132,6 +132,27 @@ public struct Folding: Sendable, Equatable {
     }
     guard let target else { return nil }
     return Folding(focusingOn: target.anchor)
+  }
+
+  /// Focus with no section yet focuses the one the reader's line at `line` is in,
+  /// the abstract included; anything else, or a document with no section, is
+  /// unchanged.
+  public func focusingOnLine(at line: Int, in index: FoldingIndex) -> Folding {
+    guard mode == .focus, focused == nil, let entry = index.entry(covering: line) else {
+      return self
+    }
+    return Folding(focusingOn: entry.anchor)
+  }
+
+  /// Where the reader's line goes when `previous` gives way to this folding: the
+  /// heading of the section Focus has moved to, since the line's old place is folded
+  /// away and the paragraph nearest it is the end of the section before. Nil to keep
+  /// the line, as on entering Focus, whose section is the one the line is in.
+  public func placeOfFocus(after previous: Folding, in index: FoldingIndex) -> Int? {
+    guard mode == .focus, previous.mode == .focus, focused != previous.focused,
+      let focused
+    else { return nil }
+    return index.offset(of: focused)
   }
 
   /// The section Focus shows: the focused one, or the first where none is yet.

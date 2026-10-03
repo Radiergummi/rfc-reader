@@ -184,14 +184,6 @@ struct PanelHost: View {
     let closesAfterChoice: Bool
   #endif
 
-  /// The References tab's groups in Focus, unless an entry it leaves out is being
-  /// revealed.
-  private func focusGroups(revealing anchor: String?) -> [ReferenceGroup]? {
-    guard let groups = reader.focusGroups else { return nil }
-    guard let anchor else { return groups }
-    return groups.contains { $0.entries.contains { $0.anchor == anchor } } ? groups : nil
-  }
-
   var body: some View {
     @Bindable var reader = reader
     // On what the index describes, not only the body: a document still loading, or
@@ -201,7 +193,8 @@ struct PanelHost: View {
         sections: reader.sections,
         // In Focus, what the focused section cites, pinned beside it (#699); the whole
         // bibliography for an entry asked for that the section does not cite.
-        groups: focusGroups(revealing: reader.revealedReference?.anchor) ?? reader.groups,
+        groups: FocusCitations.shown(
+          reader.focusGroups, revealing: reader.revealedReference?.anchor) ?? reader.groups,
         requirements: reader.requirements,
         info: reader.info,
         hasBody: reader.hasDocument,
