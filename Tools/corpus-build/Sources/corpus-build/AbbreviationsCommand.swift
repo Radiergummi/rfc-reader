@@ -23,26 +23,14 @@ struct AbbreviationsCommand: ParsableCommand {
   var out: String
 
   func run() throws {
-    let files = try FileManager.default.contentsOfDirectory(
-      at: URL(fileURLWithPath: input), includingPropertiesForKeys: nil
-    )
-    .filter { $0.pathExtension == "xml" }
-    .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    Self.logger.info("reading", metadata: ["documents": "\(files.count)"])
+    let corpus = try ConvertedCorpus(directory: URL(fileURLWithPath: input))
+    Self.logger.info("reading", metadata: ["documents": "\(corpus.files.count)"])
 
     var report = AbbreviationReport()
-    var failed: [String] = []
-    for file in files {
-      let stem = file.deletingPathExtension().lastPathComponent
-      do {
-        let document = try RFCXMLParser.parse(Data(contentsOf: file))
-        report.add(document.abbreviations, document: stem)
-      } catch {
-        Self.logger.error(
-          "unreadable", metadata: ["file": "\(file.lastPathComponent)", "error": "\(error)"])
-        failed.append(stem)
-      }
+    let reading = try corpus.read { _, _, id, document in
+      report.add(document.abbreviations, document: id.fileStem)
     }
+    Self.logger.report(reading)
     try writeJSON(report, to: out)
 
     let totals = report.totals
@@ -54,10 +42,6 @@ struct AbbreviationsCommand: ParsableCommand {
       ])
     // A document left out would be missing from the measure without a trace, so the
     // run fails once the rest is written, for the files to be looked at.
-    guard failed.isEmpty else {
-      Self.logger.error(
-        "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
-      throw ExitCode.failure
-    }
+    try Self.logger.failOnLeftOut(reading)
   }
 }
