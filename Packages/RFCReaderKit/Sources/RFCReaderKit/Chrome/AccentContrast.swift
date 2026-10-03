@@ -47,6 +47,14 @@ public enum AccentContrast {
   /// on a white page.
   public static let readerLink = (light: SRGBColor(hex: 0x00_68DA), dark: SRGBColor(hex: 0x41_9CFF))
 
+  /// The link color on a card: an aside's, a table's or a figure's (#694). The
+  /// reader's link in light, where it clears the cards as it does the page. In dark
+  /// the reader's link falls below the minimum on the Mac's aside and only just
+  /// clears its table card, which leaves a chip there no tint to speak of, so on a
+  /// card it is lightened, towards white, to the least that lets the default
+  /// accent's chips keep the full ``chipTint`` on every card, as they do on the page.
+  public static let cardLink = (light: readerLink.light, dark: SRGBColor(hex: 0x70_B4FF))
+
   /// The status banner's row symbols, stated as `StatusPalette`'s colors are.
   public enum BannerSymbol: Sendable, CaseIterable {
     /// Red: the system red, which already clears 3:1 on the banner.

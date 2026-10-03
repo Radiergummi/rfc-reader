@@ -192,6 +192,47 @@ struct BuilderBacklinkTests {
     #expect(other[.foregroundColor] as? PlatformColor == RFCColors.accent)
   }
 
+  /// A link on a card is drawn in the link color for a card, which clears the
+  /// minimum contrast on the card's fill where the text view's may not (#694). In
+  /// light it is the text view's own color, as on the page, whatever the system
+  /// makes of it. Stand-in color: what is pinned is that light keeps it.
+  @Test func `a link on a card takes the card's link color in dark only`() throws {
+    let own = PlatformColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1)
+    let defaults: [NSAttributedString.Key: Any] = [
+      .foregroundColor: own, .underlineStyle: NSUnderlineStyle.single.rawValue,
+    ]
+    let card = DocumentTextBuilder.cardLinkAttributes(defaults)
+    let color = try #require(card[.foregroundColor] as? PlatformColor)
+    let dark = try #require(Self.resolved(color, dark: true))
+    let light = try #require(Self.resolved(color, dark: false))
+    #expect(Self.matches(dark, AccentContrast.cardLink.dark), "\(dark)")
+    #expect(Self.matches(light, SRGBColor(red: 0.2, green: 0.4, blue: 0.6)), "\(light)")
+    #expect(card[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
+    let caption = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
+    let kept = DocumentTextBuilder.linkRenderingAttributes(for: caption, defaults: card)
+    #expect(kept[.foregroundColor] == nil)
+  }
+
+  private static func matches(_ color: SRGBColor, _ other: SRGBColor) -> Bool {
+    abs(color.red - other.red) < 0.002 && abs(color.green - other.green) < 0.002
+      && abs(color.blue - other.blue) < 0.002
+  }
+
+  private static func resolved(_ color: PlatformColor, dark: Bool) -> SRGBColor? {
+    var resolved: SRGBColor?
+    #if canImport(UIKit)
+      UITraitCollection(userInterfaceStyle: dark ? .dark : .light).performAsCurrent {
+        resolved = SRGBColor(resolving: color)
+      }
+    #else
+      NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+        resolved = SRGBColor(resolving: color)
+      }
+    #endif
+    return resolved
+  }
+
   /// The caption is drawn with its own attributes on top of the text view's, which
   /// on macOS is the ordinary pointer in place of a link's pointing hand; every
   /// other link keeps the text view's. Stand-in values: the merge is what is

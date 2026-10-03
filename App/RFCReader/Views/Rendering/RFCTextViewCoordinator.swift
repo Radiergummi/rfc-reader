@@ -89,13 +89,20 @@ final class RFCTextViewCoordinator: NSObject {
   /// may ask off the main thread.
   nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
-  /// A text view's link attributes, and what a backlink caption is drawn with on
-  /// top of them, handed across threads. `@unchecked Sendable` because the
-  /// dictionaries are made once and never written to, and their values, colors and
-  /// cursors, are only read to draw.
+  /// A text view's link attributes, the same for a link on a card (#694), and what
+  /// a backlink caption is drawn with on top of them, handed across threads.
+  /// `@unchecked Sendable` because the dictionaries are made once and never written
+  /// to, and their values, colors and cursors, are only read to draw.
   nonisolated struct LinkAttributes: @unchecked Sendable {
     let attributes: [NSAttributedString.Key: Any]
+    let card: [NSAttributedString.Key: Any]
     let caption: [NSAttributedString.Key: Any]
+
+    init(attributes: [NSAttributedString.Key: Any], caption: [NSAttributedString.Key: Any]) {
+      self.attributes = attributes
+      self.card = DocumentTextBuilder.cardLinkAttributes(attributes)
+      self.caption = caption
+    }
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -666,8 +673,9 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   // TextKit 2's background-layout design permits this delegate to be called off
   // the main thread; `nonisolated` keeps the conformance honest about that rather
   // than binding it to the main actor, which approachable concurrency would infer
-  // for a main-actor type. The body only reads its parameters and
-  // allocates, so it needs no isolation.
+  // for a main-actor type. The bodies read their parameters, the storage as the
+  // fragments do while they lay out, and a locked copy of the text view's link
+  // attributes, so they need no isolation.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     textLayoutFragmentFor location: any NSTextLocation,
@@ -677,8 +685,9 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   }
 
   /// Every link as the text view draws it, over the storage's color, but a
-  /// heading's backlink caption, which keeps the caption's (#584). Not
-  /// `renderingAttributes`, which are TextKit's and not the text view's.
+  /// heading's backlink caption, which keeps the caption's (#584), and a link on a
+  /// card, which takes the card's link color (#694). Not `renderingAttributes`,
+  /// which are TextKit's and not the text view's.
   nonisolated func textLayoutManager(
     _ textLayoutManager: NSTextLayoutManager,
     renderingAttributesForLink link: Any,
@@ -687,6 +696,8 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
     return DocumentTextBuilder.linkRenderingAttributes(
-      for: link, defaults: textView.attributes, caption: textView.caption)
+      for: link,
+      defaults: textLayoutManager.drawsCard(at: location) ? textView.card : textView.attributes,
+      caption: textView.caption)
   }
 }

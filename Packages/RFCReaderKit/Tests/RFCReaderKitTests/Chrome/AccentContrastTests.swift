@@ -23,16 +23,12 @@ struct AccentContrastTests {
 
   /// What else a chip is drawn on: a table's or figure's card (black at 3% in light,
   /// white at 8.5% in dark) and an aside's (4.5%, 12%), over each page.
-  static let lightBackdrops =
-    lightPages.map(color)
-    + lightPages.flatMap { page in
-      [0.03, 0.045].map { color(0x00_0000).composited(opacity: $0, over: color(page)) }
-    }
-  static let darkBackdrops =
-    darkPages.map(color)
-    + darkPages.flatMap { page in
-      [0.085, 0.12].map { color(0xFF_FFFF).composited(opacity: $0, over: color(page)) }
-    }
+  static let lightCards = lightPages.flatMap { page in
+    [0.03, 0.045].map { color(0x00_0000).composited(opacity: $0, over: color(page)) }
+  }
+  static let darkCards = darkPages.flatMap { page in
+    [0.085, 0.12].map { color(0xFF_FFFF).composited(opacity: $0, over: color(page)) }
+  }
 
   private static func color(_ hex: UInt32) -> SRGBColor { SRGBColor(hex: hex) }
 
@@ -80,26 +76,31 @@ struct AccentContrastTests {
 
   // MARK: - Chips
 
-  /// A link on its chip's tint, for every accent on every page the reader draws.
-  /// On a page and on a card: the tint is worked out against what the chip is drawn
-  /// on. Only where the link itself clears the minimum there; one that does not is a
-  /// problem of the link color, not of a chip.
+  /// A link on its chip's tint, for every accent on everything the reader draws a
+  /// chip on: the page with the reader's link color, and a card with the link color
+  /// for a card (#694). The tint is worked out against what the chip is drawn on.
   @Test(arguments: lightAccents)
   func `a link clears the minimum on its chip in light`(hex: UInt32) {
-    for backdrop in Self.lightBackdrops {
-      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.light, on: backdrop)
+    for page in Self.lightPages {
+      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.light, on: Self.color(page))
+    }
+    for card in Self.lightCards {
+      Self.expectLegibleChip(hex, link: AccentContrast.cardLink.light, on: card)
     }
   }
 
   @Test(arguments: darkAccents)
   func `a link clears the minimum on its chip in dark`(hex: UInt32) {
-    for backdrop in Self.darkBackdrops {
-      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.dark, on: backdrop)
+    for page in Self.darkPages {
+      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.dark, on: Self.color(page))
+    }
+    for card in Self.darkCards {
+      Self.expectLegibleChip(hex, link: AccentContrast.cardLink.dark, on: card)
     }
   }
 
   private static func expectLegibleChip(_ hex: UInt32, link: SRGBColor, on backdrop: SRGBColor) {
-    guard link.contrast(with: backdrop) >= AccentContrast.minimumContrast else { return }
+    #expect(link.contrast(with: backdrop) >= AccentContrast.minimumContrast, "\(backdrop)")
     let accent = color(hex)
     let opacity = AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
     #expect(opacity >= 0 && opacity <= AccentContrast.chipTint)
@@ -126,9 +127,9 @@ struct AccentContrastTests {
     #expect(opacity > 0)
   }
 
-  /// Where the link fails on what is behind the chip before any tint, as in a dark
-  /// aside on the Mac (#694), no tint can fix it, and the chip keeps its full tint
-  /// rather than disappearing.
+  /// Where the link fails on what is behind the chip before any tint, as the
+  /// reader's link did in a dark aside on the Mac before #694, no tint can fix it,
+  /// and the chip keeps its full tint rather than disappearing.
   @Test func `a chip keeps its tint where the link fails without one`() {
     let aside = Self.color(0xFF_FFFF).composited(opacity: 0.12, over: Self.color(0x1E_1E1E))
     let link = AccentContrast.readerLink.dark
@@ -136,6 +137,17 @@ struct AccentContrastTests {
     let opacity = AccentContrast.chipTintOpacity(
       accent: Self.color(0x00_91FF), link: link, page: aside)
     #expect(opacity == AccentContrast.chipTint)
+  }
+
+  /// What the link color for a card is chosen for (#694): in dark, the default
+  /// accent's chips keep their full tint on every card, as they do on the page,
+  /// rather than the sliver the reader's link left them on the Mac's table cards.
+  @Test func `in dark, the default accent keeps its full tint on every card`() {
+    for card in Self.darkCards {
+      let opacity = AccentContrast.chipTintOpacity(
+        accent: Self.color(0x00_91FF), link: AccentContrast.cardLink.dark, page: card)
+      #expect(opacity == AccentContrast.chipTint, "\(card)")
+    }
   }
 
   // MARK: - The reader's links
@@ -146,6 +158,19 @@ struct AccentContrastTests {
     }
     for page in Self.darkPages {
       #expect(AccentContrast.readerLink.dark.contrast(with: Self.color(page)) >= 4.5)
+    }
+  }
+
+  /// On every card, where the reader's link fell below it in a dark aside on the
+  /// Mac (#694).
+  @Test func `the link clears the minimum on every card`() {
+    for card in Self.lightCards {
+      #expect(AccentContrast.cardLink.light.contrast(with: card) >= AccentContrast.minimumContrast)
+    }
+    for card in Self.darkCards {
+      #expect(
+        AccentContrast.cardLink.dark.contrast(with: card) >= AccentContrast.minimumContrast,
+        "\(card)")
     }
   }
 
