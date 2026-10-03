@@ -113,6 +113,19 @@ final class ReaderLayoutEngine: PinSurface {
       }
     }
     layout.invalidateLayout(for: layout.documentRange)
+    // With paragraphs skipped, TextKit's usage bounds stay at height 0 until the whole
+    // document is laid out, and the text view sizes itself from them: a probe run
+    // showed the view 943 pt tall over a viewport laid out to 1,219 pt, and what fell
+    // below its bottom stayed blank. Laid out first, so the view is its full height
+    // before the place is settled. Only what the folding shows is laid out, which in
+    // a mode that folds is a part of the document; with nothing folded, the background
+    // completion does it as after any change.
+    if !hidden.isEmpty, let textView {
+      layout.ensureLayout(for: layout.documentRange)
+      #if !canImport(UIKit)
+        textView.sizeToFit()
+      #endif
+    }
     putBack()
     startCompletion()
   }
