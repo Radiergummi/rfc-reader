@@ -195,17 +195,28 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
+  /// The chip tint's opacity for the accent as it resolves now: lighter than 15%
+  /// where the link would not clear the minimum contrast on it (#317).
+  private static func chipTintOpacity() -> Double {
+    guard let accent = SRGBColor(resolving: RFCColors.accent),
+      let link = SRGBColor(resolving: RFCColors.readerLink),
+      let page = SRGBColor(resolving: RFCColors.page)
+    else { return AccentContrast.chipTint }
+    return AccentContrast.chipTintOpacity(accent: accent, link: link, page: page)
+  }
+
   private func drawChips(at point: CGPoint, in context: CGContext) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
-    let tint = RFCColors.accent.withAlphaComponent(0.15).cgColor
+    let opacity = Self.chipTintOpacity()
+    let tint = RFCColors.accent.withAlphaComponent(opacity).cgColor
     // An informative citation is background to the specification rather than part
     // of it, and reads so beside a normative one (#184). Half the tint, not a
     // different shape: a chip whose kind no list says is drawn as a normative one.
-    let lighterTint = RFCColors.accent.withAlphaComponent(0.075).cgColor
+    let lighterTint = RFCColors.accent.withAlphaComponent(opacity / 2).cgColor
     for chip in chips {
       fill(
         chip.rect.offsetBy(dx: point.x, dy: point.y),
