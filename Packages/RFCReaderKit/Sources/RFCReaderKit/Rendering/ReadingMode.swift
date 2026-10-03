@@ -247,9 +247,14 @@ public struct HiddenText: Sendable, Equatable {
     return after < length ? after : nil
   }
 
+  /// The end of the text counts as in the last paragraph, as TextKit's location for it
+  /// is: ⌘↓ puts the insertion point there, and a reveal of it has to open what it is in.
   private func run(containing offset: Int) -> Int? {
     let after = runs.partitioningIndex { $0.range.location > offset }
-    guard after > 0, NSLocationInRange(offset, runs[after - 1].range) else { return nil }
+    guard after > 0 else { return nil }
+    let run = runs[after - 1].range
+    guard NSLocationInRange(offset, run) || (offset == length && NSMaxRange(run) == length)
+    else { return nil }
     return after - 1
   }
 }

@@ -248,6 +248,32 @@ struct ReadingModeTests {
     #expect(nothingShown.shownOffset(near: 3) == nil)
   }
 
+  /// The end of the text, where ⌘↓ puts the insertion point, is in the last
+  /// paragraph: folded with it, so a reveal there opens its section rather than
+  /// scrolling to a place nothing is laid out at.
+  @Test func `the end of the text is folded with the last paragraph`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let length = built.text.length
+    let hidden = Folding(mode: .outline).hidden(in: index)
+    #expect(hidden.contains(length - 1))
+    #expect(hidden.contains(length))
+    let opened = Folding(mode: .outline).expanding(toShow: length, in: index)
+    #expect(!opened.hidden(in: index).contains(length))
+    #expect(!Folding(mode: .normal).hidden(in: index).contains(length))
+  }
+
+  /// Past a run that ends before the text does, the end is shown.
+  @Test func `the end of the text is shown after a shown last paragraph`() {
+    let hidden = HiddenText(
+      paragraphs: [
+        (NSRange(location: 0, length: 10), true), (NSRange(location: 10, length: 5), false),
+      ],
+      length: 15)
+    #expect(!hidden.contains(15))
+    #expect(hidden.contains(9))
+  }
+
   /// What a build gives folding is worked out once, and the same folding comes of it.
   @Test func `the index answers as the build does`() throws {
     let built = try Self.rfc8999()
