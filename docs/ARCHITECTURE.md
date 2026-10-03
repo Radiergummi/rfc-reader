@@ -21,7 +21,7 @@ rfc-reader/
 │   │   └── Rendering/        RFCTextView, RFCTextViewCoordinator, RFCTextLayoutFragment — one TextKit 2 text view over one document text storage
 │   ├── Window/               macOS only: AppDelegate, ReaderWindowController, the toolbar
 │   ├── Scripting/            macOS only: the AppleScript dictionary
-│   └── Intents/              App Intents (Open RFC)
+│   └── Intents/              App Intents: the RFC, section and registry entry entities, and the intents over them
 ├── project.yml               XcodeGen spec that produces RFCReader.xcodeproj
 └── docs/
 ```
@@ -106,6 +106,7 @@ RFC Editor ──HTTP──▶ RFCEditorClient ──────────byt
 - Raw files are cached exactly as served. Re-parsing after a parser fix is free, and the "original text" mode needs no second download.
 - The index is cached to disk and checked in the background when it was last checked over a day ago: a conditional request with the kept `ETag`, so an unchanged index is a `304` that only records the check (`IndexCheck`). The `ETag` is sent for a week after the index was downloaded and then dropped, so a tag that failed to change cannot hide a new index for longer. Nobody is waiting for the check, so it waits for a network that is neither expensive nor constrained (#314); a bundled snapshot (drop `rfc-index.xml` into the app's resources) makes first launch work offline.
 - Navigation is data, and a tab's own. `NavigationModel.open(_:in:)` moves the tab's history to a `HistoryEntry` — a document and, optionally, a section — and sets `selection` and a `scrollRequest`; `DocumentView` scrolls once the document has loaded. A link from inside a tab goes through `LibraryModel.open(_:activation:in:)`, which opens it in that tab or in a new one ([the per-tab navigation decision](decisions/2026-09-22-per-tab-navigation-and-how-a-tab-gets-opened.md)). A link from outside — the URL scheme or the App Intent — has no tab, and `LibraryModel.route(_:)` picks one: the tab already showing the document, else on macOS the tab of the window that was key last (#277), else the one used last, else a new window (`LinkRouting`, in `RFCReaderKit`). Which tabs are open, most recently used first, and the one link waiting for a tab are `SceneRegistry`'s (#137): a link waits until there is a tab to take it, and a BCP or STD link until the index has arrived, or failed to, as well, so on a cold launch it opens its first RFC rather than selecting the series (#241). Only series links wait for the index because only they need it to resolve; making every link wait was set aside because no index is bundled with the app, and a first launch would hold every link for the index's whole download. The library never reaches for the window layer: on macOS it asks `WindowOpening`, which `AppDelegate` answers.
+- App Intents (#192) act on three entities: `RFCEntity`, `SectionEntity` (identified across documents as `rfc9110#section-4.2`, `SectionIdentifier`) and `RegistryEntryEntity`. Their queries are RFCKit's `DocumentLookup`, `SectionLookup`, `Requirements.within` and `RegistryLookup`, tested there; the App target holds only the conformances, which ask `LibraryModel` for the index once it has settled (`settledSearch()`), a document as the reader loads it, and the registries. Each Spotlight item carries its RFC's entity (`SpotlightIndexer`), so a Spotlight result is the RFC Shortcuts and Siri act on. An intent that shows something beside a document, as Find Requirements' button shows the Requirements tab, routes its link and leaves an `InspectorRequest`, which the reader of that document takes once its panel can open.
 - Cross references are `.link` attributes in the built text, with three private schemes: `rfc://…` for other documents, `rfc-anchor:…` for a place in the same one, and one for a bibliography entry, which the body leaves out and the inspector shows. The text view's delegate hands a clicked link to `DocumentView` with the click's `LinkActivation` — `clickedOnLink` on macOS, `primaryActionFor` on iOS — and `LinkDestination.resolve` decides where it goes; what it does not understand falls through to the system. `DocumentView` installs no `OpenURLAction` of its own: every other link under it is a page on the web, and one that did read rfc-editor.org's pages as the RFCs they name (#450).
 
 ## Testing
@@ -159,6 +160,7 @@ is that way, and what was measured or tried first.
 - [A section is aligned with its successor by title and prose, not by order](decisions/2026-10-03-a-section-is-aligned-with-its-successor-by-title-and-prose-not-by-order.md)
 - [A grammar's rule names are links](decisions/2026-10-03-a-grammars-rule-names-are-links.md)
 - [A reading mode folds paragraphs out of the layout, not out of the storage](decisions/2026-10-03-a-reading-mode-folds-paragraphs-out-of-the-layout.md)
+- [App Intents act on entities whose queries are RFCKit's](decisions/2026-10-03-app-intents-act-on-entities-whose-queries-are-rfckits.md)
 
 ## Planned engines
 
