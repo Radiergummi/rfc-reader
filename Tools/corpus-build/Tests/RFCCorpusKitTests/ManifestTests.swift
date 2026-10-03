@@ -57,7 +57,7 @@ struct ManifestTests {
   @Test func `the skipped documents are the report's`() throws {
     let empty = RFCDocument(header: DocumentHeader(title: ""), sections: [], source: .text)
     func report(_ id: String, skipped: Manifest.SkipReason?) -> DocumentReport {
-      var report = DocumentReport(document: empty, id: id, overridden: false)
+      var report = DocumentReport(document: empty, id: id)
       report.skipped = skipped
       return report
     }

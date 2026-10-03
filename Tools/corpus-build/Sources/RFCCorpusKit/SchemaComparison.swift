@@ -7,7 +7,8 @@
 public struct SchemaComparison: Equatable, Sendable {
   /// The documents that validated in the previous report and do not now, in report
   /// order. A document skipped now is not among them: it has no XML to validate, by a
-  /// decision of its own (`Manifest.Skip`).
+  /// decision of its own (`Manifest.Skip`). Nor is one whose patch failed, which has no
+  /// XML either and fails the run on its own (`DocumentReport.failure`).
   public var stoppedValidating: [String]
   /// How many documents validate now that did not in the previous report, or were not
   /// in it.
@@ -21,7 +22,10 @@ public struct SchemaComparison: Equatable, Sendable {
   public init(reports: [DocumentReport], previouslyValid: Set<String>) {
     stoppedValidating =
       reports
-      .filter { previouslyValid.contains($0.id) && $0.schema != [] && $0.skipped == nil }
+      .filter {
+        previouslyValid.contains($0.id) && $0.schema != [] && $0.skipped == nil
+          && $0.failure == nil
+      }
       .map(\.id)
     startedValidating =
       reports

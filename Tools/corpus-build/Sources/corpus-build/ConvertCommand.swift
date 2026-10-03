@@ -19,7 +19,9 @@ struct ConvertCommand: AsyncParsableCommand {
   var out: String
 
   @Option(
-    help: "A directory of rfcNNNN.xml files published in place of the converter's own output.")
+    help:
+      "A directory of rfcNNNN.xml corrections: an RFC 5261 patch (<diff>) applied to the converter's output, or a whole document (<rfc>) published in its place."
+  )
   var overrides: String?
 
   @Option(help: "Where to write the per-document report.")
@@ -180,9 +182,10 @@ struct ConvertCommand: AsyncParsableCommand {
     Self.logger.info(
       "done",
       metadata: [
-        "converted": "\(reports.count(where: { $0.skipped == nil }))",
+        "converted": "\(reports.count(where: { $0.skipped == nil && $0.failure == nil }))",
         "skipped": "\(reports.count(where: { $0.skipped != nil }))",
-        "overridden": "\(reports.filter(\.overridden).count)",
+        "patched": "\(reports.count(where: { $0.override == .patch && $0.failure == nil }))",
+        "snapshots": "\(reports.count(where: { $0.override == .snapshot }))",
         "withWarnings": "\(flagged.count)",
       ])
     for entry in flagged.prefix(40) {
@@ -192,30 +195,50 @@ struct ConvertCommand: AsyncParsableCommand {
           "document": "\(entry.id)", "warnings": .array(entry.warnings.map { .string($0) }),
         ])
     }
-    // Last, so the report is written and everything above logged before the run fails.
-    if let comparison, comparison.isRegression {
+    // Every failed patch, not only the first: each is its own fix.
+    let failed = reports.compactMap(\.failure)
+    for failure in failed {
+      Self.logger.error("patch failed", metadata: ["failure": "\(failure)"])
+    }
+    if !failed.isEmpty {
+      Self.logger.error("patches failed", metadata: ["documents": "\(failed.count)"])
+    }
+    let isRegression = comparison?.isRegression ?? false
+    if let comparison, isRegression {
       Self.logger.error(
         "documents stopped validating",
         metadata: ["documents": "\(comparison.stoppedValidating.count)"])
-      throw ExitCode.failure
     }
+    // Last, so the report is written and everything above logged before the run fails.
+    if !failed.isEmpty || isRegression { throw ExitCode.failure }
   }
 
-  /// Converts one document and writes its XML. Overridden documents are hand-corrected,
-  /// so they are never diagnosed.
+  /// Converts one document and writes its XML. A snapshot is published as it is, and
+  /// never diagnosed; a patch is applied to the converter's output.
   static func convert(_ file: String, offset: Int, job: Job) async throws -> Converted {
     let stem = String(file.dropLast(4))
     let outputURL = job.outDirectory.appending(path: "\(stem).xml")
 
+    var patch: XMLPatch?
+    var unreadablePatch: String?
     if let overrideURL = job.overrides?.appending(path: "\(stem).xml"),
       FileManager.default.fileExists(atPath: overrideURL.path)
     {
       let data = try Data(contentsOf: overrideURL)
-      let document = try RFCXMLParser.parse(data)  // overrides must at least parse
-      try data.write(to: outputURL, options: .atomic)
-      var entry = DocumentReport(document: document, id: stem, overridden: true)
-      try await checkSchema(outputURL, job: job, into: &entry)
-      return Converted(offset: offset, report: entry, prose: nil)
+      // An override that is not XML is a patch that failed, not a run that stops.
+      if XMLPatch.isPatch(data) {
+        do {
+          patch = try XMLPatch(parsing: data, name: "\(stem).xml")
+        } catch {
+          unreadablePatch = error.description
+        }
+      } else {
+        let document = try RFCXMLParser.parse(data)  // a snapshot must at least parse
+        try data.write(to: outputURL, options: .atomic)
+        var entry = DocumentReport(document: document, id: stem, override: .snapshot)
+        try await checkSchema(outputURL, job: job, into: &entry)
+        return Converted(offset: offset, report: entry, prose: nil)
+      }
     }
 
     let bytes = try Data(contentsOf: job.inDirectory.appending(path: file))
@@ -225,12 +248,17 @@ struct ConvertCommand: AsyncParsableCommand {
       // The header keeps the title page's values (#218). It should not happen for a legacy RFC.
       Self.logger.warning("no index entry", metadata: ["document": "\(stem)"])
     }
-    let conversion = job.converter.convert(text: text, stem: stem, metadata: metadata)
+    let conversion = job.converter.convert(
+      text: text, stem: stem, metadata: metadata, patch: patch)
+    if let unreadablePatch {
+      var entry = conversion.report
+      entry.override = .patch
+      entry.failure = unreadablePatch
+      try removeStaleOutput(outputURL)
+      return Converted(offset: offset, report: entry, prose: nil)
+    }
     guard let xml = conversion.xml else {
-      // An earlier run's output would be packed as though this one had written it.
-      if FileManager.default.fileExists(atPath: outputURL.path) {
-        try FileManager.default.removeItem(at: outputURL)
-      }
+      try removeStaleOutput(outputURL)
       return Converted(offset: offset, report: conversion.report, prose: nil)
     }
     try xml.write(to: outputURL, options: .atomic)
@@ -238,6 +266,14 @@ struct ConvertCommand: AsyncParsableCommand {
     try await checkSchema(outputURL, job: job, into: &entry)
     return Converted(
       offset: offset, report: entry, prose: conversion.prose, boundary: conversion.boundary)
+  }
+
+  /// A skipped or failed document's output from an earlier run would be packed as
+  /// though this one had written it.
+  static func removeStaleOutput(_ url: URL) throws {
+    if FileManager.default.fileExists(atPath: url.path) {
+      try FileManager.default.removeItem(at: url)
+    }
   }
 
   static func checkSchema(_ file: URL, job: Job, into entry: inout DocumentReport) async throws {
