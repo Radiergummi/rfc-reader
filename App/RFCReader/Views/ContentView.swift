@@ -13,6 +13,7 @@ import SwiftUI
     /// own state, as a `ReaderEnvironment` applied at the end of `body`.
     let library: LibraryModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// This scene's own navigation state. `@State` here is what makes a tab a tab:
     /// every window and tab instantiates `ContentView` afresh, so each gets its own
@@ -40,6 +41,12 @@ import SwiftUI
       navigation.selection?.displayName ?? library.title(for: navigation.filter)
     }
 
+    /// The scene's chrome, worked out here once and read by every view inside it
+    /// that lays itself out by it (#257).
+    private var chrome: SceneChrome {
+      SceneChrome(horizontal: horizontalSizeClass, vertical: verticalSizeClass)
+    }
+
     var body: some View {
       @Bindable var navigation = navigation
       NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -61,6 +68,7 @@ import SwiftUI
           EmptyDetailView()
         }
       }
+      .environment(\.sceneChrome, chrome)
       // The scene's title, for the app switcher and iPad's window controls. It
       // reaches no column's bar: each column titles itself, the list included
       // (#246).
@@ -114,7 +122,7 @@ import SwiftUI
         // before anything was tapped reads as a tap left behind. The list still
         // lists it: `filter` keeps its value. Before registering, which may open a
         // waiting link and reveal it in the list.
-        if horizontalSizeClass == .compact { navigation.sidebarSelection = nil }
+        if chrome.isCollapsed { navigation.sidebarSelection = nil }
         library.register(navigation)
         hasAppeared = true
         if let link = requestedLink {
