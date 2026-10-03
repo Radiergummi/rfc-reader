@@ -507,7 +507,7 @@ public struct ReferenceList: Sendable, Hashable, Codable {
 
   /// Whether the documents a list names are part of the specification or background
   /// to it: what "read this next" means for a citation (#184).
-  public enum Kind: Sendable, Hashable {
+  public enum Kind: String, Sendable, Hashable, Codable {
     case normative
     case informative
     /// A list whose title says neither: the single `References` of a document from
