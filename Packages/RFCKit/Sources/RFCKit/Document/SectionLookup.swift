@@ -41,10 +41,15 @@ public enum SectionLookup {
     let all = document.allSections
     let words = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     guard !words.isEmpty else { return all }
-    let number = words.drop { numberWords.contains($0.trimmingCharacters(in: ["."])) }
+    let announcement = words.prefix { numberWords.contains($0.trimmingCharacters(in: ["."])) }
+    let number = words.dropFirst(announcement.count)
       .joined(separator: " ").trimmingCharacters(in: ["."])
-    if let numbered = all.first(where: { $0.number?.lowercased() == number }) {
-      return [numbered]
+    let numbered = all.filter { $0.number?.lowercased() == number }
+    // An appendix numbered like a section (#429) is named by its word, and the
+    // section of that number by its number alone.
+    let namesAppendix = announcement.contains { $0.hasPrefix("appendix") }
+    if let named = numbered.first(where: { $0.isAppendix == namesAppendix }) ?? numbered.first {
+      return [named]
     }
     if let anchored = document.section(anchor: query.trimmingCharacters(in: .whitespaces)) {
       return [anchored]

@@ -37,6 +37,23 @@ struct SectionLookupTests {
     #expect(SectionLookup.sections(matching: "a", in: document).map(\.number) == ["A"])
   }
 
+  /// An appendix numbered like a section (#429) is not the section of that number:
+  /// "Appendix 1" names the appendix, and "1" still names the section.
+  @Test func `an appendix numbered like a section is named by its word`() {
+    let document = RFCDocument(
+      header: DocumentHeader(title: "Numbered appendices"),
+      sections: [
+        Section(anchor: "section-1", number: "1", title: "Introduction"),
+        Section(anchor: "appendix-1", number: "1", title: "State Tables", isAppendix: true),
+      ],
+      source: .text)
+    #expect(
+      SectionLookup.sections(matching: "Appendix 1", in: document).map(\.anchor) == ["appendix-1"])
+    #expect(SectionLookup.sections(matching: "1", in: document).map(\.anchor) == ["section-1"])
+    #expect(
+      SectionLookup.sections(matching: "Section 1", in: document).map(\.anchor) == ["section-1"])
+  }
+
   @Test func `an anchor names its section`() throws {
     let document = try Fixtures.document("rfc8999.xml")
     let found = SectionLookup.sections(matching: "long-header", in: document)
