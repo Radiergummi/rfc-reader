@@ -241,16 +241,16 @@ extension DocumentTextBuilder {
   /// a copy takes the same size.
   public static let copyButtonScale: CGFloat = 0.85
 
-  /// A code block's copy button: its symbol alone, a chip so the attachment is one
-  /// the reader allows, drawn without the chip's tint and in the color of the text
-  /// beside it. No link: a link is a web page's control, with its pointing hand, and
-  /// the reader takes a click on the button itself (`copyButton(at:)`).
+  /// A code block's copy button: its symbol alone, in the color of the text beside
+  /// it. Not a chip, which would be tinted and kerned for its tint, and set out of
+  /// line with the code under it: an attachment in its own `.rfcCopyCode` run, which
+  /// the attachment guard sanctions as it does a chip's. No link: a link is a web
+  /// page's control, with its pointing hand, and the reader takes a click on the
+  /// button itself (`copyButton(at:)`).
   func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     var attributes = base
     attributes[.rfcCopyCode] = ""
     attributes[.rfcSpoken] = "Copy code"
-    nextChipID += 1
-    attributes[.rfcChip] = nextChipID
     return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
   }
 

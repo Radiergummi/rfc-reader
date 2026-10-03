@@ -34,8 +34,9 @@ extension NSAttributedString.Key {
   /// merge; only its presence is meaningful.
   public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
   /// Set on a code block's copy button (macOS), whose click copies the block's text
-  /// (`copyButton(at:)`), and which is drawn as a chip without its tint. A `String`;
-  /// only its presence is meaningful.
+  /// (`code(ofCopyButtonAt:)`): a symbol's attachment, and no chip, which the
+  /// attachment guard allows in this run as in a chip's. A `String`; only its
+  /// presence is meaningful.
   public static let rfcCopyCode = NSAttributedString.Key("rfcCopyCode")
   /// What VoiceOver says in place of a run's characters, where the text view lets it
   /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow

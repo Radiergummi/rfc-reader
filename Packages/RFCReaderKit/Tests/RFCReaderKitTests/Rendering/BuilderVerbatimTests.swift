@@ -195,6 +195,19 @@ struct BuilderVerbatimTests {
       #expect(built.text.code(ofCopyButtonAt: button) == "{\n  \"a\": true\n}")
       #expect(built.text.copyButton(at: try Fixtures.offset(of: "JSON", in: built.text)) == nil)
     }
+
+    /// A chip is tinted, and kerned on either side to make room for its tint, which
+    /// would set the button out of line with the code under it.
+    @Test func `the copy button is no chip`() throws {
+      let content = Preformatted(kind: .sourceCode, text: #"{ "a": true }"#, type: "json")
+      let built = DocumentTextBuilder.build(document(content), style: style)
+      let button = (built.text.string as NSString).range(of: "\u{FFFC}").location
+      try #require(button != NSNotFound)
+      #expect(built.text.attribute(.rfcCopyCode, at: button, effectiveRange: nil) != nil)
+      #expect(built.text.attribute(.rfcChip, at: button, effectiveRange: nil) == nil)
+      #expect(built.text.attribute(.kern, at: button, effectiveRange: nil) == nil)
+      #expect(built.text.attribute(.kern, at: button - 1, effectiveRange: nil) == nil)
+    }
   #endif
 
   /// The XML of a converted RFC keeps the text format's three-space indent inside a
