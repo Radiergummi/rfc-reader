@@ -139,6 +139,28 @@ struct InlineLinkerTests {
       ])
   }
 
+  /// A URL into the RFC series cites the document it names, as an `<eref>` to it reads,
+  /// whichever site it points at, and keeps the words the prose spelled it in (#683).
+  @Test(arguments: [
+    "http://www.rfc-editor.org/info/rfc4321", "https://datatracker.ietf.org/doc/html/rfc4321",
+  ])
+  func `a URL into the RFC series cites its document`(address: String) {
+    #expect(
+      linker.link("Defined at \(address) for now.") == [
+        .text("Defined at "),
+        .crossReference(CrossReference(target: reference(4321), text: address)),
+        .text(" for now."),
+      ])
+  }
+
+  /// A URL a citation cannot say all of, its errata or an anchor, stays a link.
+  @Test func `a URL to a page about an RFC stays a link`() throws {
+    let address = "https://www.rfc-editor.org/errata/rfc4321"
+    let url = try #require(URL(string: address))
+    #expect(
+      linker.link("See \(address).") == [.text("See "), .link(url, [.text(address)]), .text(".")])
+  }
+
   // MARK: - Nothing to link
 
   @Test func `prose with nothing to link is one run of text`() {

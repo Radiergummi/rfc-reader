@@ -284,8 +284,8 @@ struct ReferenceHoverTests {
 
   // MARK: - A heading's backlinks
 
-  /// A backlink chip's list on screen, opened by a click on the chip, which is not
-  /// a reference.
+  /// A backlink caption's list on screen, opened by a click on the caption, which is
+  /// not a reference.
   private func showingBacklinks() -> ReferenceHover {
     var hover = ReferenceHover()
     _ = hover.handle(.clickedLink(reference: nil, pointer: here))

@@ -48,7 +48,7 @@ struct DocumentReportTests {
           ])
       ])
     let report = DocumentReport(
-      document: Self.document(sections: [introduction]), id: "rfc1000", overridden: false)
+      document: Self.document(sections: [introduction]), id: "rfc1000")
     #expect(report.sections == 2)
     #expect(report.paragraphs == 3)
     #expect(report.lists == 1)
@@ -66,14 +66,14 @@ struct DocumentReportTests {
     let report = DocumentReport(
       document: Self.document(
         abstract: [.paragraph(Paragraph(text: "Abstract prose."))], sections: [section]),
-      id: "rfc1000", overridden: false)
+      id: "rfc1000")
     #expect(report.paragraphs == 1)
   }
 
   @Test func `a document with nothing recovered warns about each missing part`() {
     let report = DocumentReport(
       document: RFCDocument(header: DocumentHeader(title: ""), sections: [], source: .text),
-      id: "rfc1", overridden: false)
+      id: "rfc1")
     #expect(
       report.warnings == [
         "no RFC number recognized in front matter", "no title", "no sections",
@@ -86,9 +86,9 @@ struct DocumentReportTests {
       anchor: "section-1", number: "1", title: "Diagrams",
       blocks: [.paragraph(Paragraph(text: "Prose.")), Self.artwork, Self.artwork])
     let report = DocumentReport(
-      document: Self.document(sections: [section]), id: "rfc1000", overridden: true)
+      document: Self.document(sections: [section]), id: "rfc1000", override: .snapshot)
     #expect(report.warnings == ["more artwork than prose (2 vs 1); check classification"])
-    #expect(report.overridden)
+    #expect(report.override == .snapshot)
   }
 }
 

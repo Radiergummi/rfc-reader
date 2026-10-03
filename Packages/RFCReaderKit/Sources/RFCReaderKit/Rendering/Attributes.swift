@@ -24,15 +24,23 @@ extension NSAttributedString.Key {
   /// drawn with a lighter tint than a normative one (#184). A `String`, so adjacent
   /// runs compare equal; only its presence is meaningful.
   public static let rfcInformative = NSAttributedString.Key("rfcInformative")
-  /// Set on a heading's backlink chip and the space before it (#183): the anchor of
-  /// the section the chip lists the backlinks of. A `String`, so the runs merge. A
-  /// copied selection leaves these runs out (`SelectionText`): they are the reader's,
-  /// not the document's words.
+  /// Set on every character of a heading's backlink caption, its line break
+  /// included (#183, #584): the anchor of the section the caption lists the
+  /// backlinks of. A `String`, so the runs merge.
   public static let rfcBacklinks = NSAttributedString.Key("rfcBacklinks")
+  /// Set on what the reader adds to the document's words: a heading's backlink
+  /// caption, its line break included, a code block's language and its copy button. A copied
+  /// selection leaves these runs out (`SelectionText`). A `String`, so the runs
+  /// merge; only its presence is meaningful.
+  public static let rfcReaderOnly = NSAttributedString.Key("rfcReaderOnly")
+  /// Set on a code block's copy button (macOS), whose click copies the block's text
+  /// (`copyButton(at:)`), and which is drawn as a chip without its tint. A `String`;
+  /// only its presence is meaningful.
+  public static let rfcCopyCode = NSAttributedString.Key("rfcCopyCode")
   /// What VoiceOver says in place of a run's characters, where the text view lets it
-  /// (`AccessibleReading`): a heading's backlink chip (#183), which would otherwise
-  /// read as its arrow and a bare number. A `String`, carried by every character of
-  /// the chip and nothing else.
+  /// (`AccessibleReading`): a heading's backlink caption (#183, #584), whose arrow
+  /// would otherwise be read out, carried by every character of the caption but its
+  /// line break, and a code block's copy button. A `String`.
   public static let rfcSpoken = NSAttributedString.Key("rfcSpoken")
   /// The enclosing figure's caption, set on a `.rfcVerbatim` run when the artwork
   /// sits inside a captioned figure: the Diagrams rotor's label for it
@@ -48,10 +56,14 @@ extension NSAttributedString.Key {
   /// every character of the block so each line's fragment finds them, and which of
   /// the block's lines it holds, through the box's extent (`StrokeGeometry`).
   public static let rfcStrokes = NSAttributedString.Key("rfcStrokes")
-  /// How wide a verbatim block's widest line is set, in points, on every character
-  /// of the block: where its card ends (`FragmentGeometry.Placement`). A number,
+  /// How wide a figure's widest line is set, in points, on every character of the
+  /// block: where its card ends (`FragmentGeometry.Placement`). A number,
   /// which compares by value, so the runs of one block coalesce.
   public static let rfcContentWidth = NSAttributedString.Key("rfcContentWidth")
+  /// How far a verbatim block's text is set in from where its card is measured
+  /// (`FragmentGeometry.cardInset`), on every character of a block that spans the
+  /// column: its card starts that much before the text's indent. A number.
+  public static let rfcCardInset = NSAttributedString.Key("rfcCardInset")
   /// Makes a block with a rendering one item for a long press, which shows the
   /// figure lifted with its menu (`FigureMenu`), on every character of its body, in
   /// a build with live links only: paper has nothing to press. On iOS it is UIKit's
@@ -98,15 +110,23 @@ extension RFCDecoration {
 /// Boxes a `Preformatted` so it can live in an `NSAttributedString` attribute, with
 /// what the build decided about it.
 public final class VerbatimBox: Sendable {
-  /// Whether the block is set as its source or rendered, and whether a rendering
-  /// exists to switch to: its menu offers "Show as Text" on a rendered block and
-  /// "Show as Figure" on one shown as its source.
+  /// Whether the block is set as its source, rendered, or highlighted, and whether a
+  /// rendering exists to switch to: its menu offers "Show as Text" on a rendered
+  /// block and "Show as Figure" on one shown as its source.
   public enum Shown: Sendable, Equatable {
     /// No presentation accepts the block.
     case plain
     case rendered
     /// A presentation accepts it, and the reader asked for the source.
     case source
+    /// Code, highlighted: always, with nothing to switch to, and never a figure.
+    case highlighted
+
+    /// Whether the block is a figure: one with a drawing to switch to and from, a
+    /// menu to do it in, and a card in the middle of the column.
+    public var isFigure: Bool {
+      self == .rendered || self == .source
+    }
   }
 
   public let content: Preformatted
@@ -141,7 +161,7 @@ extension VerbatimBox {
   /// How it is shown, or nil for a block with no rendering to switch to.
   public var presentation: PresentationChoices.Presentation? {
     switch shown {
-    case .plain: nil
+    case .plain, .highlighted: nil
     case .rendered: .figure
     case .source: .text
     }
@@ -195,14 +215,14 @@ extension NSAttributedString {
     return (box, range)
   }
 
-  /// The heading's backlink chip at this character offset (#183), the space before
-  /// it included: the section it lists the backlinks of, and the chip's own extent,
-  /// without that space -- what its list is anchored to. A heading can wrap at the
-  /// space, which would anchor the list to the end of the line above.
-  public func backlinkChip(at offset: Int) -> (anchor: String, range: NSRange)? {
+  /// The heading's backlink caption at this character offset (#183, #584), its line
+  /// break included: the section it lists the backlinks of, and the caption's own
+  /// extent, without that line break -- what its list is anchored to, which would
+  /// otherwise reach to the start of the line below.
+  public func backlinkCaption(at offset: Int) -> (anchor: String, range: NSRange)? {
     // Looked at before the extent is asked for: a longest range of nothing reaches
-    // out to the next chip or the end of the document, and this is asked of every
-    // click on a link and every context menu.
+    // out to the next caption or the end of the document, and this is asked of
+    // every click on a link and every context menu.
     guard offset >= 0, offset < length,
       let anchor = attribute(.rfcBacklinks, at: offset, effectiveRange: nil) as? String
     else { return nil }
@@ -210,8 +230,25 @@ extension NSAttributedString {
     _ = attribute(
       .rfcBacklinks, at: offset, longestEffectiveRange: &run,
       in: NSRange(location: 0, length: length))
-    var chip = run
-    _ = attribute(.rfcChip, at: NSMaxRange(run) - 1, longestEffectiveRange: &chip, in: run)
-    return (anchor, chip)
+    var caption = run
+    // Its words carry their label, as the line break does not.
+    _ = attribute(.rfcSpoken, at: run.location, longestEffectiveRange: &caption, in: run)
+    return (anchor, caption)
+  }
+
+  /// The code block's copy button at this character offset: what it copies, the
+  /// block as written less the indent its lines share, as it is shown, and the
+  /// button's own extent, where its feedback is shown. Nil anywhere but on the
+  /// button.
+  public func copyButton(at offset: Int) -> (code: String, range: NSRange)? {
+    guard offset >= 0, offset < length,
+      attribute(.rfcCopyCode, at: offset, effectiveRange: nil) != nil,
+      let box = attribute(.rfcVerbatim, at: offset, effectiveRange: nil) as? VerbatimBox
+    else { return nil }
+    var button = NSRange(location: 0, length: 0)
+    _ = attribute(
+      .rfcCopyCode, at: offset, longestEffectiveRange: &button,
+      in: NSRange(location: 0, length: length))
+    return (DocumentTextBuilder.removingSharedIndent(box.content.text), button)
   }
 }

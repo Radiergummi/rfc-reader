@@ -109,8 +109,9 @@ public enum RFCColors {
     #endif
   }
 
-  /// A stated color for each appearance, resolved when it is drawn.
-  static func byAppearance(light: SRGBColor, dark: SRGBColor) -> PlatformColor {
+  /// `light` in light appearance and `dark` in dark, drawn as exactly those sRGB
+  /// values and resolved when drawn: for colors whose contrast is measured.
+  public static func byAppearance(light: SRGBColor, dark: SRGBColor) -> PlatformColor {
     #if canImport(UIKit)
       UIColor { traits in
         let color = traits.userInterfaceStyle == .dark ? dark : light

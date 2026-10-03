@@ -250,40 +250,38 @@ struct PanelHost: View {
   }
 }
 
-/// The navigation pane's tabs, drawn the way an inspector's are rather than as a segmented
-/// control.
-///
-/// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which
-/// reads as a form field sitting on the panel rather than as the panel's own
-/// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
-/// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
-/// divider only between two unselected labels.
-///
-/// macOS only: in an iPhone's sheet the system's own segmented control sits in the
-/// panel's bar instead (#247).
-private struct InspectorTabBar: View {
-  @Binding var tab: InspectorTab
+#if os(macOS)
+  /// The navigation pane's tabs, drawn the way an inspector's are rather than as a segmented
+  /// control.
+  ///
+  /// `.pickerStyle(.segmented)` draws a bordered control sized to its labels, which
+  /// reads as a form field sitting on the panel rather than as the panel's own
+  /// navigation. Pages, Numbers and Keynote all use this shape instead: the full width
+  /// of the inspector, no enclosing border, the selected tab a filled pill, and a hair
+  /// divider only between two unselected labels.
+  ///
+  /// macOS only, and compiled for macOS only (#258): in an iPhone's sheet the
+  /// system's own segmented control sits in the panel instead (#247).
+  private struct InspectorTabBar: View {
+    @Binding var tab: InspectorTab
 
-  var body: some View {
-    // No rule between them: Pages draws one only between labels that are both
-    // unselected, and the pill sits between any two of these.
-    HStack(spacing: 0) {
-      ForEach(InspectorTab.allCases, id: \.self) { tab in
-        segment(tab, tab.title)
+    var body: some View {
+      // No rule between them: Pages draws one only between labels that are both
+      // unselected, and the pill sits between any two of these.
+      HStack(spacing: 0) {
+        ForEach(InspectorTab.allCases, id: \.self) { tab in
+          segment(tab, tab.title)
+        }
       }
+      // The track the segments sit in, and the inset that keeps the selected pill
+      // inside it rather than flush with its edge.
+      .padding(2)
+      .background(.quaternary.opacity(0.7), in: .capsule)
     }
-    // The track the segments sit in, and the inset that keeps the selected pill
-    // inside it rather than flush with its edge.
-    .padding(2)
-    .background(.quaternary.opacity(0.7), in: .capsule)
-  }
 
-  /// The accent, darkened in each appearance until the white label on it clears the
-  /// minimum contrast: macOS 27's blue carries white at 3.52:1, yellow at 1.51:1
-  /// (#317). Resolved when drawn, so it follows the accent the user picks.
-  /// iOS draws the system's segmented control instead (#247), and this bar is not
-  /// used there.
-  #if os(macOS)
+    /// The accent, darkened in each appearance until the white label on it clears the
+    /// minimum contrast: macOS 27's blue carries white at 3.52:1, yellow at 1.51:1
+    /// (#317). Resolved when drawn, so it follows the accent the user picks.
     private static let selectedFill = Color(
       nsColor: NSColor(name: nil) { appearance in
         var accent = SRGBColor(hex: 0x00_7AFF)
@@ -292,38 +290,36 @@ private struct InspectorTabBar: View {
         }
         return NSColor(AccentContrast.selectedTabFill(accent: accent))
       })
-  #else
-    private static let selectedFill = Color.accentColor
-  #endif
 
-  private func segment(_ value: InspectorTab, _ title: String) -> some View {
-    let isSelected = tab == value
-    return Button {
-      tab = value
-    } label: {
-      // A text style rather than a fixed 13 pt, so the tabs follow the text size;
-      // on macOS `.body` is the same 13 pt.
-      Text(title)
-        .font(.body.weight(isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-        .lineLimit(1)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 5)
-        .background {
-          if isSelected {
-            // Fully rounded, not a rounded rectangle: the selected tab in
-            // an inspector is a capsule, and at this height the difference
-            // between a 7 pt radius and a capsule is the whole look.
-            Capsule().fill(Self.selectedFill)
+    private func segment(_ value: InspectorTab, _ title: String) -> some View {
+      let isSelected = tab == value
+      return Button {
+        tab = value
+      } label: {
+        // A text style rather than a fixed 13 pt, so the tabs follow the text size;
+        // on macOS `.body` is the same 13 pt.
+        Text(title)
+          .font(.body.weight(isSelected ? .semibold : .regular))
+          .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+          .lineLimit(1)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 5)
+          .background {
+            if isSelected {
+              // Fully rounded, not a rounded rectangle: the selected tab in
+              // an inspector is a capsule, and at this height the difference
+              // between a 7 pt radius and a capsule is the whole look.
+              Capsule().fill(Self.selectedFill)
+            }
           }
-        }
-        .contentShape(.rect)
+          .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      // The pill shows which tab is chosen; this says so to VoiceOver (#156).
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
-    .buttonStyle(.plain)
-    // The pill shows which tab is chosen; this says so to VoiceOver (#156).
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
-}
+#endif
 
 struct ReferencesView: View {
   let groups: [ReferenceGroup]

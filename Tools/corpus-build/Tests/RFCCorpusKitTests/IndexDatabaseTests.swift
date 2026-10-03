@@ -86,6 +86,46 @@ final class IndexDatabaseTests {
         in: connection) == [["RFC9177"], ["RFC9290"]])
   }
 
+  @Test func `successions read back as they were written`() throws {
+    let successions = [
+      AlignedSection(
+        old: .rfc(7231), oldSection: "section-5.3.2", new: .rfc(9110), newSection: "field.accept",
+        score: 0.75),
+      AlignedSection(
+        old: .rfc(7230), oldSection: "section-5.4", new: .rfc(9110), newSection: "field.host",
+        score: 0.5),
+    ]
+    let connection = try written { try $0.insert(successions) }
+    defer { sqlite3_close(connection) }
+    #expect(
+      Self.rows(
+        "SELECT old, old_section, new, new_section, score FROM successions ORDER BY rowid",
+        in: connection)
+        == [
+          ["RFC7231", "section-5.3.2", "RFC9110", "field.accept", "0.75"],
+          ["RFC7230", "section-5.4", "RFC9110", "field.host", "0.5"],
+        ])
+  }
+
+  /// What the table is for: where the sections of an obsoleted document went.
+  @Test func `the successors of a document are a lookup`() throws {
+    let connection = try written { database in
+      try database.insert([
+        AlignedSection(
+          old: .rfc(7231), oldSection: "section-4.3.1", new: .rfc(9110), newSection: "GET",
+          score: 0.9),
+        AlignedSection(
+          old: .rfc(7232), oldSection: "section-3.1", new: .rfc(9110), newSection: "field.if-match",
+          score: 0.8),
+      ])
+    }
+    defer { sqlite3_close(connection) }
+    #expect(
+      Self.rows(
+        "SELECT old_section, new_section FROM successions WHERE old = 'RFC7231'", in: connection)
+        == [["section-4.3.1", "GET"]])
+  }
+
   @Test func `the schema version and the build's metadata are kept`() throws {
     let connection = try written { try $0.setMeta("version", to: "2026.10") }
     defer { sqlite3_close(connection) }

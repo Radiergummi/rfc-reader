@@ -571,7 +571,7 @@ extension LegacyTextParser {
       }
       index += 1
     }
-    header.title = titleLines.joined(separator: " ")
+    header.title = titleLines.joined(separator: " ").collapsingWhitespace()
     return header
   }
 

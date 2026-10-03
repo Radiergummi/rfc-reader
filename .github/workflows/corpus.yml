@@ -54,11 +54,11 @@ jobs:
           key: corpus-text-${{ github.run_id }}
           restore-keys: corpus-text-
 
-      # make for the Makefile, xmllint for the schema check, gh for the previous
+      # make for the Makefile, curl for its downloads, xmllint for the schema check, gh for the previous
       # report, SQLite's headers for the index database (#174). The image carries
       # none of them.
       - name: Install tools
-        run: apt-get update -qq && apt-get install -y -qq make libxml2-utils gh libsqlite3-dev >/dev/null
+        run: apt-get update -qq && apt-get install -y -qq make curl libxml2-utils gh libsqlite3-dev >/dev/null
 
       # The report of the last successful full run is this run's baseline: convert
       # compares its schema results with the report it replaces and fails on any

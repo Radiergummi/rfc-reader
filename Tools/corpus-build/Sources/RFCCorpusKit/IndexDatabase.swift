@@ -13,16 +13,19 @@ import RFCKit
 ///
 ///     meta (key, value)
 ///     citations (citing, cited, place, section, count, kind)
+///     successions (old, old_section, new, new_section, score)
 ///
 /// `meta` holds `schema` (`schemaVersion`) and whatever the build adds, such as the
 /// packs' version. A citation's documents are `DocumentID.description`s (`RFC9110`);
 /// its `place` is `abstract`, `section`, with the section's anchor in `section`, or
 /// `bibliography`; its `kind` is a `ReferenceList.Kind`, or null for a citation no
-/// entry names. See `Citation`.
+/// entry names. See `Citation`. A succession is a section of an obsoleted document
+/// and the section of the document obsoleting it that replaces it, both by anchor,
+/// with how alike the two are. See `AlignedSection`.
 public final class IndexDatabase {
   /// Raised when the tables change shape, so a reader can refuse a database it does
   /// not know.
-  public static let schemaVersion = 1
+  public static let schemaVersion = 2
 
   public struct Failure: Error, CustomStringConvertible {
     public let description: String
@@ -30,6 +33,7 @@ public final class IndexDatabase {
 
   private var connection: OpaquePointer?
   private var insertCitation: OpaquePointer?
+  private var insertSuccession: OpaquePointer?
 
   /// Creates the database at `url`, replacing any file there.
   public init(creatingAt url: URL) throws {
@@ -50,16 +54,27 @@ public final class IndexDatabase {
         count INTEGER NOT NULL,
         kind TEXT
       );
+      CREATE TABLE successions (
+        old TEXT NOT NULL,
+        old_section TEXT NOT NULL,
+        new TEXT NOT NULL,
+        new_section TEXT NOT NULL,
+        score REAL NOT NULL
+      );
       BEGIN;
       """)
     insertCitation = try prepare(
       "INSERT INTO citations (citing, cited, place, section, count, kind) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    insertSuccession = try prepare(
+      "INSERT INTO successions (old, old_section, new, new_section, score) VALUES (?, ?, ?, ?, ?)"
     )
     try setMeta("schema", to: String(Self.schemaVersion))
   }
 
   deinit {
     sqlite3_finalize(insertCitation)
+    sqlite3_finalize(insertSuccession)
     sqlite3_close(connection)
   }
 
@@ -95,6 +110,21 @@ public final class IndexDatabase {
     }
   }
 
+  /// The sections of an obsoleted document and their successors' sections, as
+  /// `SectionAlignment.pairs` lists them.
+  public func insert(_ successions: [AlignedSection]) throws {
+    let statement = insertSuccession
+    for succession in successions {
+      try check(sqlite3_reset(statement))
+      try bind(succession.old.description, at: 1, in: statement)
+      try bind(succession.oldSection, at: 2, in: statement)
+      try bind(succession.new.description, at: 3, in: statement)
+      try bind(succession.newSection, at: 4, in: statement)
+      try check(sqlite3_bind_double(statement, 5, succession.score))
+      try step(statement)
+    }
+  }
+
   /// Indexes what a reader looks up and commits: until this returns, the file holds
   /// nothing a reader should trust.
   public func close() throws {
@@ -102,6 +132,8 @@ public final class IndexDatabase {
       """
       CREATE INDEX citations_by_cited ON citations (cited);
       CREATE INDEX citations_by_citing ON citations (citing);
+      CREATE INDEX successions_by_old ON successions (old);
+      CREATE INDEX successions_by_new ON successions (new);
       COMMIT;
       VACUUM;
       """)

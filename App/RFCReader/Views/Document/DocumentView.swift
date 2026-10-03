@@ -12,7 +12,7 @@ struct DocumentView: View {
   @Environment(ReaderState.self) private var reader
   @Environment(\.modelContext) private var modelContext
   #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.scenePhase) private var scenePhase
   #endif
@@ -51,7 +51,7 @@ struct DocumentView: View {
     @State private var output = DocumentOutput()
 
     /// Whether the panel is a sheet over the reader rather than a column beside it.
-    private var isCompact: Bool { horizontalSizeClass == .compact }
+    private var isCompact: Bool { chrome.isCollapsed }
     /// Whether reading on has put the bars away; see `ReaderChrome`.
     @State private var barsHidden = false
   #endif
