@@ -39,6 +39,7 @@ struct RFCTextView: View {
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
     folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
+    requirements: [Requirement]? = nil,
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
     @ViewBuilder header: () -> some View
@@ -47,6 +48,7 @@ struct RFCTextView: View {
       built: built,
       folding: folding,
       onFoldingChange: onFoldingChange,
+      requirements: requirements,
       bibliography: bibliography,
       measure: measure,
       documentID: documentID,
@@ -102,6 +104,9 @@ struct ReaderInputs {
   /// text view has, as a reader fading out does while the scene has moved on.
   let folding: Folding?
   let onFoldingChange: (Folding) -> Void
+  /// The document's requirements, which Implementer bands (#700); nil to keep what
+  /// the text view has, as `folding` is.
+  let requirements: [Requirement]?
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
   let bibliography: [ReferenceGroup]
@@ -176,6 +181,7 @@ struct ReaderInputs {
       coordinator.headerHost?.rootView = coordinator.hostedHeader(header, in: environment)
     }
     coordinator.layOut(width: width, measure: measure)
+    if let requirements { coordinator.setRequirements(requirements) }
     if coordinator.built?.text !== built.text {
       coordinator.install(built, folding: folding ?? coordinator.folding)
     } else if let folding {
