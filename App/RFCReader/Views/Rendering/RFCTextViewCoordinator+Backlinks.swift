@@ -88,9 +88,15 @@ extension RFCTextViewCoordinator {
             self.followBacklink(to: section)
           })
       else { return }
-      hover.showBacklinks(
-        ReferenceHoverController.Popover(
-          content: NSHostingController(rootView: list), size: nil, anchor: rect))
+      // Measured before it is shown, as on iOS, and held at that size. Left to
+      // report its own size, the list was placed at a taller first guess; opened
+      // above a caption near the bottom of the window, it then shrank towards its
+      // top, and its arrow rose off the caption it points at.
+      let host = NSHostingController(rootView: list)
+      host.sizingOptions = []
+      let size = host.sizeThatFits(
+        in: CGSize(width: BacklinksList.width, height: .greatestFiniteMagnitude))
+      hover.showBacklinks(ReferenceHoverController.Popover(content: host, size: size, anchor: rect))
     }
   }
 #endif
