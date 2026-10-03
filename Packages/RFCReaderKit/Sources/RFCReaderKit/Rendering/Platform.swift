@@ -67,10 +67,23 @@ public enum RFCColors {
     byAppearance(light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark)
   }
 
-  /// A link on a card, drawn over the text view's own link color:
-  /// `AccentContrast.cardLink`, lighter than the reader's link in dark (#694).
-  public static var cardLink: PlatformColor {
-    byAppearance(light: AccentContrast.cardLink.light, dark: AccentContrast.cardLink.dark)
+  /// A link on a card, where `link` is the link color on the page: in dark,
+  /// `AccentContrast.cardLink`, lighter than the reader's link (#694); in light,
+  /// `link` itself, which clears the cards as it does the page, so that a card's
+  /// links and the page's stay one color whatever the system makes of it.
+  public static func cardLink(over link: PlatformColor) -> PlatformColor {
+    let dark = AccentContrast.cardLink.dark
+    #if canImport(UIKit)
+      return UIColor { traits in
+        guard traits.userInterfaceStyle == .dark else { return link.resolvedColor(with: traits) }
+        return UIColor(red: dark.red, green: dark.green, blue: dark.blue, alpha: 1)
+      }
+    #else
+      return NSColor(name: nil) { appearance in
+        guard appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua else { return link }
+        return NSColor(srgbRed: dark.red, green: dark.green, blue: dark.blue, alpha: 1)
+      }
+    #endif
   }
 
   /// The page the reader's text is drawn on, which a chip's tint is drawn over.

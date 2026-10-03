@@ -206,7 +206,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   /// contrast on it (#317). On a card the link is the card's link color (#694).
   private static func chipTintOpacity(on card: PlatformColor?) -> Double {
     guard let accent = SRGBColor(resolving: RFCColors.accent),
-      let link = SRGBColor(resolving: card == nil ? RFCColors.readerLink : RFCColors.cardLink),
+      let link = SRGBColor(
+        resolving: card == nil
+          ? RFCColors.readerLink : RFCColors.cardLink(over: RFCColors.readerLink)),
       var backdrop = SRGBColor(resolving: RFCColors.page)
     else { return AccentContrast.chipTint }
     if let card, let fill = SRGBColor.resolvingWithOpacity(card) {

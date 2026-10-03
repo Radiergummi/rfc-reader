@@ -141,7 +141,7 @@ struct AccentContrastTests {
 
   /// What the link color for a card is chosen for (#694): in dark, the default
   /// accent's chips keep their full tint on every card, as they do on the page,
-  /// rather than the 1.5% the reader's link left them on the Mac's table cards.
+  /// rather than the sliver the reader's link left them on the Mac's table cards.
   @Test func `in dark, the default accent keeps its full tint on every card`() {
     for card in Self.darkCards {
       let opacity = AccentContrast.chipTintOpacity(
@@ -161,14 +161,16 @@ struct AccentContrastTests {
     }
   }
 
-  /// On every card, where the reader's link fell to 4.08:1 in a dark aside on the
+  /// On every card, where the reader's link fell below it in a dark aside on the
   /// Mac (#694).
   @Test func `the link clears the minimum on every card`() {
     for card in Self.lightCards {
-      #expect(AccentContrast.cardLink.light.contrast(with: card) >= 4.5)
+      #expect(AccentContrast.cardLink.light.contrast(with: card) >= AccentContrast.minimumContrast)
     }
     for card in Self.darkCards {
-      #expect(AccentContrast.cardLink.dark.contrast(with: card) >= 4.5, "\(card)")
+      #expect(
+        AccentContrast.cardLink.dark.contrast(with: card) >= AccentContrast.minimumContrast,
+        "\(card)")
     }
   }
 

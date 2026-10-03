@@ -266,6 +266,18 @@ extension DocumentTextBuilder {
     }
   }
 
+  /// A text view's link attributes, `defaults`, for a link on a card: in
+  /// `RFCColors.cardLink`, since the text view's color may fall below the minimum
+  /// contrast on a card's fill in dark (#694). Made once, with the text view's.
+  public static func cardLinkAttributes(
+    _ defaults: [NSAttributedString.Key: Any]
+  ) -> [NSAttributedString.Key: Any] {
+    var attributes = defaults
+    attributes[.foregroundColor] = RFCColors.cardLink(
+      over: defaults[.foregroundColor] as? PlatformColor ?? RFCColors.link)
+    return attributes
+  }
+
   /// The attributes a text view draws the link `link` with, given its own
   /// `defaults`: a text view colors every link itself, over the storage's color,
   /// which a backlink caption has to keep to stay in the background. The caption
@@ -273,20 +285,14 @@ extension DocumentTextBuilder {
   /// pointing hand, since it opens a list beside it as a control does. Passed in
   /// rather than made here, because a cursor is AppKit's to make on the main
   /// thread and TextKit may ask from another. Every other link is drawn as the
-  /// text view would, but in `RFCColors.cardLink` when it is `onCard`, where the
-  /// text view's color may fall below the minimum contrast (#694).
+  /// text view would: `defaults`, which on a card are `cardLinkAttributes`.
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
-    caption: [NSAttributedString.Key: Any] = [:], onCard: Bool = false
+    caption: [NSAttributedString.Key: Any] = [:]
   ) -> [NSAttributedString.Key: Any] {
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
-    guard let url = link as? URL, url.scheme == backlinksScheme else {
-      guard onCard else { return defaults }
-      var attributes = defaults
-      attributes[.foregroundColor] = RFCColors.cardLink
-      return attributes
-    }
+    guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }
     var attributes = defaults
     attributes[.foregroundColor] = nil
     attributes.merge(caption) { _, caption in caption }
