@@ -85,7 +85,7 @@ struct ReadingModeTests {
 
   @Test func `normal reading hides nothing`() throws {
     let built = try Self.rfc8999()
-    #expect(Folding(mode: .normal).hidden(in: built).isEmpty)
+    #expect(Folding(mode: .normal).hidden(in: FoldingIndex(built)).isEmpty)
   }
 
   /// Outline, all closed: the top-level headings and the abstract's, and nothing
@@ -143,7 +143,7 @@ struct ReadingModeTests {
   /// it: in Outline, its section's heading.
   @Test func `a place in folded text is kept at its section's heading`() throws {
     let built = try Self.rfc8999()
-    let hidden = Folding(mode: .outline).hidden(in: built)
+    let hidden = Folding(mode: .outline).hidden(in: FoldingIndex(built))
     let sections = built.anchors.sections.entries
     let body = try #require(
       Self.paragraphs(of: built).first {
@@ -163,8 +163,9 @@ struct ReadingModeTests {
     let sections = built.anchors.sections.entries
     let section = try #require(sections.first { ($0.depth ?? 1) == 1 })
     let inside = section.offset + 10
-    #expect(folding.expanding(toShow: inside, in: built).expanded == [section.anchor])
-    #expect(Folding(mode: .normal).expanding(toShow: inside, in: built).expanded.isEmpty)
+    #expect(folding.expanding(toShow: inside, in: FoldingIndex(built)).expanded == [section.anchor])
+    #expect(
+      Folding(mode: .normal).expanding(toShow: inside, in: FoldingIndex(built)).expanded.isEmpty)
   }
 
   /// A jump into the deepest subsection opens it and every section it is nested in,
@@ -200,24 +201,27 @@ struct ReadingModeTests {
     #expect(Array(open) == [parent.offset])
     #expect(
       Folding(mode: .outline, expanded: [child.anchor]).disclosures(in: index)[child.offset] == nil)
-    #expect(Folding(mode: .normal).disclosures(in: built).isEmpty)
+    #expect(Folding(mode: .normal).disclosures(in: index).isEmpty)
   }
 
   /// A click on a heading opens its section, and a second closes it.
   @Test func `a heading toggles its section`() throws {
     let built = try Self.rfc8999()
     let section = built.anchors.sections.entries[2]
-    let opened = Folding(mode: .outline).toggling(heading: section.offset + 2, in: built)
+    let opened = Folding(mode: .outline).toggling(
+      heading: section.offset + 2, in: FoldingIndex(built))
     #expect(opened?.expanded == [section.anchor])
-    #expect(opened?.toggling(heading: section.offset, in: built)?.expanded == [])
+    #expect(opened?.toggling(heading: section.offset, in: FoldingIndex(built))?.expanded == [])
     // Body text is no heading; nor is anything in Normal.
     let headings = Self.headingParagraphs(of: built)
     let body = try #require(
       Self.paragraphs(of: built).first {
         !headings.contains($0.location) && $0.location > section.offset
       })
-    #expect(Folding(mode: .outline).toggling(heading: body.location, in: built) == nil)
-    #expect(Folding(mode: .normal).toggling(heading: section.offset, in: built) == nil)
+    #expect(
+      Folding(mode: .outline).toggling(heading: body.location, in: FoldingIndex(built)) == nil)
+    #expect(
+      Folding(mode: .normal).toggling(heading: section.offset, in: FoldingIndex(built)) == nil)
   }
 
   /// The abstract has a heading but no section: it is an entry of the outline of its
@@ -226,10 +230,10 @@ struct ReadingModeTests {
     let built = try Self.rfc8999()
     let abstract = try #require(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor))
     let folding = Folding(mode: .outline)
-    #expect(folding.disclosures(in: built)[abstract] == false)
-    let inside = folding.expanding(toShow: abstract + 40, in: built)
+    #expect(folding.disclosures(in: FoldingIndex(built))[abstract] == false)
+    let inside = folding.expanding(toShow: abstract + 40, in: FoldingIndex(built))
     #expect(inside.expanded == [DocumentTextBuilder.abstractAnchor])
-    #expect(!inside.hidden(in: built).contains(abstract + 40))
+    #expect(!inside.hidden(in: FoldingIndex(built)).contains(abstract + 40))
   }
 
   /// A place in a run of folded text at the very start, before any heading, is kept
@@ -274,15 +278,6 @@ struct ReadingModeTests {
     #expect(hidden.contains(9))
   }
 
-  /// What a build gives folding is worked out once, and the same folding comes of it.
-  @Test func `the index answers as the build does`() throws {
-    let built = try Self.rfc8999()
-    let index = FoldingIndex(built)
-    let folding = Folding(mode: .outline, expanded: [built.anchors.sections.entries[3].anchor])
-    #expect(folding.hidden(in: index) == folding.hidden(in: built))
-    #expect(folding.disclosures(in: index) == folding.disclosures(in: built))
-  }
-
   // MARK: Focus (#699)
 
   /// A section with subsections, and where its subtree ends: at the next heading at its
@@ -304,12 +299,12 @@ struct ReadingModeTests {
   @Test func `focus shows one section and its subsections`() throws {
     let built = try Self.rfc8999()
     let section = try Self.sectionWithSubsections(in: built)
-    let hidden = Folding(focusingOn: section.anchor).hidden(in: built)
+    let hidden = Folding(focusingOn: section.anchor).hidden(in: FoldingIndex(built))
     for paragraph in Self.paragraphs(of: built) {
       let inside = section.span.contains(paragraph.location)
       #expect(hidden.contains(paragraph.location) == !inside, "paragraph at \(paragraph.location)")
     }
-    #expect(Folding(focusingOn: section.anchor).disclosures(in: built).isEmpty)
+    #expect(Folding(focusingOn: section.anchor).disclosures(in: FoldingIndex(built)).isEmpty)
   }
 
   /// Next Section goes past the focused subtree; Previous goes to the section before
@@ -332,9 +327,10 @@ struct ReadingModeTests {
     let section = try Self.sectionWithSubsections(in: built)
     let elsewhere = built.anchors.sections.entries.last { $0.offset >= section.span.upperBound }
     let target = try #require(elsewhere)
-    let moved = Folding(focusingOn: section.anchor).expanding(toShow: target.offset + 1, in: built)
+    let moved = Folding(focusingOn: section.anchor).expanding(
+      toShow: target.offset + 1, in: FoldingIndex(built))
     #expect(moved.focused == target.anchor)
-    #expect(!moved.hidden(in: built).contains(target.offset + 1))
+    #expect(!moved.hidden(in: FoldingIndex(built)).contains(target.offset + 1))
   }
 
   /// The entries the model says a section and its subsections cite, walked through

@@ -144,11 +144,6 @@ public struct Folding: Sendable, Equatable {
     index.entries.first { $0.anchor == focused } ?? index.entries.first
   }
 
-  /// The paragraphs this folding hides in `built`.
-  public func hidden(in built: BuiltDocument) -> HiddenText {
-    hidden(in: FoldingIndex(built))
-  }
-
   /// The paragraphs this folding hides: in the outline, every one but the headings and
   /// an expanded entry's own text, which runs to the next heading of any level; a
   /// heading only where every section it is nested in is expanded (`outline(in:)`).
@@ -185,10 +180,6 @@ public struct Folding: Sendable, Equatable {
     return HiddenText(paragraphs: paragraphs, length: index.length)
   }
 
-  public func disclosures(in built: BuiltDocument) -> [Int: Bool] {
-    disclosures(in: FoldingIndex(built))
-  }
-
   /// The headings that have a disclosure, by where their paragraph starts, each open
   /// or not: in the outline, every one it shows; in Normal, none.
   public func disclosures(in index: FoldingIndex) -> [Int: Bool] {
@@ -198,10 +189,6 @@ public struct Folding: Sendable, Equatable {
         (entry.paragraph, expanded.contains(entry.anchor))
       },
       uniquingKeysWith: { first, _ in first })
-  }
-
-  public func toggling(heading offset: Int, in built: BuiltDocument) -> Folding? {
-    toggling(heading: offset, in: FoldingIndex(built))
   }
 
   /// This folding with the section of the heading whose paragraph `offset` is in
@@ -218,10 +205,6 @@ public struct Folding: Sendable, Equatable {
       toggled.expanded.insert(entry.anchor)
     }
     return toggled
-  }
-
-  public func expanding(toShow offset: Int, in built: BuiltDocument) -> Folding {
-    expanding(toShow: offset, in: FoldingIndex(built))
   }
 
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored
