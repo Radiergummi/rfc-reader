@@ -29,17 +29,13 @@ nonisolated final class FoldingDelegate: NSObject, NSTextContentStorageDelegate,
     state.withLock { $0.hidden }
   }
 
-  /// What `folding` hides and discloses in `built`; answers whether what is hidden
-  /// changed, which is what needs a new layout.
-  @discardableResult
-  func fold(_ built: BuiltDocument, by folding: Folding) -> Bool {
-    let hidden = folding.hidden(in: built)
-    let disclosures = folding.disclosures(in: built)
-    return state.withLock { state in
-      let changed = state.hidden != hidden
+  /// What `folding` hides and discloses in the build `index` was made of.
+  func fold(_ index: FoldingIndex, by folding: Folding) {
+    let hidden = folding.hidden(in: index)
+    let disclosures = folding.disclosures(in: index)
+    state.withLock { state in
       state.hidden = hidden
       state.disclosures = disclosures
-      return changed
     }
   }
 

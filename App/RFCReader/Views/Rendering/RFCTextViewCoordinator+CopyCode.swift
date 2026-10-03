@@ -26,18 +26,21 @@ import RFCReaderKit
       return textView.textLayoutManager?.attributedText?.copyButton(at: offset)
     }
 
-    /// Opens or closes the section of the heading under the pointer of `event`, in the
-    /// outline (#698); answers whether there was one. Its chevron hangs in the gutter,
-    /// left of the column, where a click finds the heading's first character.
+    /// Opens or closes the section of the heading whose chevron is under the pointer
+    /// of `event`, in the outline (#698); answers whether there was one. Only the
+    /// chevron, in the gutter: a click on the heading's text is the text view's, for
+    /// its links, a selection, a double-click on a word.
     func toggleSection(under event: NSEvent) -> Bool {
       guard folding.mode == .outline, let textView, event.window === textView.window else {
         return false
       }
       let viewPoint = textView.convert(event.locationInWindow, from: nil)
       let containerPoint = CGPoint(
-        x: max(0, viewPoint.x - textView.textContainerOrigin.x),
+        x: viewPoint.x - textView.textContainerOrigin.x,
         y: viewPoint.y - textView.textContainerOrigin.y)
-      guard let offset = characterOffset(atContainerPoint: containerPoint) else { return false }
+      guard let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
+        let offset = characterOffset(atContainerPoint: gutter)
+      else { return false }
       return toggleSection(atHeading: offset)
     }
 

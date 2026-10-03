@@ -225,6 +225,12 @@ final class RFCTextViewCoordinator: NSObject {
   let foldingDelegate = FoldingDelegate()
   /// The reading mode and expanded sections last applied (#698).
   var folding = Folding()
+  /// What folding needs of the installed build, made once per build.
+  var foldingIndex: FoldingIndex?
+  /// A folding this coordinator changed itself and reported to the scene, which has
+  /// not caught up yet: the one before, which the scene may still pass, and the one
+  /// after, which it will.
+  var reportedFolding: (before: Folding, after: Folding)?
   /// Tells the scene that a jump into folded text expanded a section.
   var onFoldingChange: (Folding) -> Void = { _ in }
   var laidOutColumn: CGFloat?
@@ -522,17 +528,19 @@ final class RFCTextViewCoordinator: NSObject {
       if headerHost?.view.frame.contains(point) == true { return }
       let inset = textView.textContainerInset
       let containerPoint = CGPoint(x: point.x - inset.left, y: point.y - inset.top)
-      if let offset = characterOffset(atContainerPoint: containerPoint) {
-        if link(at: offset) != nil { return }
-        // In the outline, a tap on a heading opens or closes its section (#698).
-        if folding.mode == .outline,
-          toggleSection(
-            atHeading: characterOffset(
-              atContainerPoint: CGPoint(x: max(0, containerPoint.x), y: containerPoint.y)) ?? offset
-          )
+      // In the outline, a tap on a heading's chevron in the gutter, or on the heading,
+      // opens or closes its section (#698); a link in a heading is followed first.
+      if folding.mode == .outline {
+        if let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
+          let offset = characterOffset(atContainerPoint: gutter),
+          toggleSection(atHeading: offset)
         {
           return
         }
+      }
+      if let offset = characterOffset(atContainerPoint: containerPoint) {
+        if link(at: offset) != nil { return }
+        if folding.mode == .outline, toggleSection(atHeading: offset) { return }
       }
       chrome.tapped()
       reportChrome()

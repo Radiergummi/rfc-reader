@@ -54,9 +54,9 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     for chip in chipRects {
       bounds = bounds.union(chip.rect)
     }
-    if let chevron = disclosureChevron {
-      // A point of slack all round, for the line's width and its antialiasing.
-      bounds = bounds.union(Self.boundingRect(of: chevron).insetBy(dx: -2, dy: -2))
+    if let disclosure {
+      bounds = bounds.union(
+        FragmentGeometry.disclosureBounds(open: disclosure.open, firstLine: disclosure.firstLine))
     }
     // A point of slack all round: a stroke is a line a point wide, centered on its
     // path, and antialiasing puts ink just outside it.
@@ -224,27 +224,23 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
 
   // MARK: - Disclosure
 
-  /// The heading's chevron in the outline (#698), from the folding its layout
-  /// manager's content holds; nil for a fragment that is no disclosed heading.
-  private var disclosureChevron: [CGPoint]? {
+  /// Whether this fragment is a heading the outline discloses, and if so whether its
+  /// section is open, with its first line: from the folding its layout manager's
+  /// content holds (#698).
+  private var disclosure: (open: Bool, firstLine: CGRect)? {
     guard let range = documentRange,
       let folding = textLayoutManager?.textContentManager?.delegate as? FoldingDelegate,
       let open = folding.disclosure(at: range.location),
       let line = textLineFragments.first
     else { return nil }
-    return FragmentGeometry.disclosureChevron(open: open, firstLine: line.typographicBounds)
-  }
-
-  private static func boundingRect(of points: [CGPoint]) -> CGRect {
-    let across = points.map(\.x)
-    let down = points.map(\.y)
-    return CGRect(
-      x: across.min() ?? 0, y: down.min() ?? 0, width: (across.max() ?? 0) - (across.min() ?? 0),
-      height: (down.max() ?? 0) - (down.min() ?? 0))
+    return (open, line.typographicBounds)
   }
 
   private func drawDisclosure(at point: CGPoint, in context: CGContext) {
-    guard let chevron = disclosureChevron, let first = chevron.first else { return }
+    guard let disclosure else { return }
+    let chevron = FragmentGeometry.disclosureChevron(
+      open: disclosure.open, firstLine: disclosure.firstLine)
+    guard let first = chevron.first else { return }
     context.saveGState()
     context.setStrokeColor(RFCColors.secondaryLabel.cgColor)
     context.setLineWidth(1.5)

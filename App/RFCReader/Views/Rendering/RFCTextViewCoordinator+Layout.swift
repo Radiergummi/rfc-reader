@@ -27,13 +27,16 @@ extension RFCTextViewCoordinator {
     lastReportedAnchor = nil
     sectionIndex = built.anchors.sections
     deriveAccessibilityItems()
+    // Before the text, so the first layout skips what the reading mode folds.
+    let foldingIndex = FoldingIndex(built)
+    self.foldingIndex = foldingIndex
+    self.folding = folding
+    reportedFolding = nil
+    foldingDelegate.fold(foldingIndex, by: folding)
     // Through `install`, never by assigning `storage.attributedString`, which
     // discards the text storage that selection and link clicks go through while
     // rendering perfectly. `NSTextContentStorage.install(_:)` has the story, and
     // `StorageInstallTests` pins it.
-    // Before the text, so the first layout skips what the reading mode folds.
-    self.folding = folding
-    foldingDelegate.fold(built, by: folding)
     signposter.withIntervalSignpost("Install document") {
       storage.install(built.text)
     }
@@ -46,36 +49,48 @@ extension RFCTextViewCoordinator {
 
   /// Folds what `folding` hides and unfolds the rest (#698): the storage stays as it
   /// is, the layout is made again, and the reader's line stays on top, or moves to
-  /// the shown paragraph before it where its own is folded.
-  func apply(_ folding: Folding) {
-    guard folding != self.folding, let built else { return }
+  /// the shown paragraph nearest it where its own is folded, or to `place`.
+  ///
+  /// From the scene, `folding` may be the one before a change this coordinator made
+  /// itself and reported (`show`), whose report has not landed yet: that is ignored,
+  /// or it would fold back what was just opened.
+  func apply(_ folding: Folding, placeAt place: Int? = nil) {
+    if let reported = reportedFolding {
+      if folding == reported.before { return }
+      if folding == reported.after { reportedFolding = nil }
+    }
+    guard folding != self.folding, let foldingIndex else { return }
     self.folding = folding
     // A new layout even when only a disclosure turned: its chevron is drawn by the
     // heading's fragment, which has to be drawn again.
-    foldingDelegate.fold(built, by: folding)
-    engine.refold(foldingDelegate.hidden)
+    foldingDelegate.fold(foldingIndex, by: folding)
+    engine.refold(foldingDelegate.hidden, placeAt: place)
     reportVisibleAnchor()
   }
 
   /// A click or tap on a heading in the outline opens its section, or closes it;
-  /// answers whether there was a heading to toggle there.
+  /// answers whether there was a heading to toggle there. From an event, not an
+  /// update, so the scene is told at once.
   func toggleSection(atHeading offset: Int) -> Bool {
-    guard let built, let toggled = folding.toggling(heading: offset, in: built) else {
-      return false
-    }
+    guard let foldingIndex, let toggled = folding.toggling(heading: offset, in: foldingIndex)
+    else { return false }
     apply(toggled)
-    Task { self.onFoldingChange(toggled) }
+    onFoldingChange(toggled)
     return true
   }
 
   /// A jump to `offset`, which the reading mode may have folded away: its section is
-  /// expanded first, here and in the scene.
-  func show(_ offset: Int) {
-    guard let built, foldingDelegate.hidden.contains(offset) else { return }
-    let expanded = folding.expanding(toShow: offset, in: built)
-    apply(expanded)
+  /// expanded and the line put there, in one layout. Answers whether it did, which
+  /// leaves the jump nothing to do.
+  func show(_ offset: Int) -> Bool {
+    guard let foldingIndex, foldingDelegate.hidden.contains(offset) else { return false }
+    let before = folding
+    let expanded = folding.expanding(toShow: offset, in: foldingIndex)
+    reportedFolding = (before, expanded)
+    apply(expanded, placeAt: offset)
     // Deferred: a jump can run inside SwiftUI's update, where mutating state is illegal.
     Task { self.onFoldingChange(expanded) }
+    return true
   }
 
   // MARK: - Geometry

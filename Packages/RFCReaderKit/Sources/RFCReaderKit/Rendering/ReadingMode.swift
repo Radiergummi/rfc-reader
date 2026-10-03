@@ -20,6 +20,53 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
   }
 }
 
+/// What folding needs to know of a build, worked out once per build rather than on
+/// every toggle: where each paragraph starts, and the outline's entries, which are
+/// the sections and the abstract, each with where its heading's paragraph starts.
+public struct FoldingIndex: Sendable {
+  public struct Entry: Sendable, Equatable {
+    public let anchor: String
+    /// Where the anchor is: the heading.
+    public let offset: Int
+    /// Where the heading's paragraph starts, which is where its disclosure is.
+    public let paragraph: Int
+  }
+
+  /// Every paragraph, in order.
+  let paragraphs: [NSRange]
+  /// The sections and the abstract, in order.
+  let entries: [Entry]
+  let length: Int
+
+  public init(_ built: BuiltDocument) {
+    let string = built.text.string as NSString
+    var paragraphs: [NSRange] = []
+    string.enumerateSubstrings(
+      in: NSRange(location: 0, length: string.length),
+      options: [.byParagraphs, .substringNotRequired]
+    ) { _, _, enclosing, _ in paragraphs.append(enclosing) }
+    self.paragraphs = paragraphs
+    length = string.length
+    // The abstract has a heading of its own but no section, so it is an entry of the
+    // outline beside the sections: otherwise nothing could open it.
+    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
+    entries = (abstract + built.anchors.sections.entries)
+      .sorted { $0.offset < $1.offset }
+      .map { entry in
+        Entry(
+          anchor: entry.anchor, offset: entry.offset,
+          paragraph: string.paragraphRange(for: NSRange(location: entry.offset, length: 0)).location
+        )
+      }
+  }
+
+  /// The entry whose text `offset` is in: the last at or before it.
+  func entry(covering offset: Int) -> Entry? {
+    let after = entries.partitioningIndex { $0.offset > offset }
+    return after > 0 ? entries[after - 1] : nil
+  }
+}
+
 /// A window's reading mode and the sections it has expanded in place. Window state:
 /// nothing of it is kept.
 public struct Folding: Sendable, Equatable {
@@ -34,86 +81,94 @@ public struct Folding: Sendable, Equatable {
 
   /// The paragraphs this folding hides in `built`.
   public func hidden(in built: BuiltDocument) -> HiddenText {
+    hidden(in: FoldingIndex(built))
+  }
+
+  /// The paragraphs this folding hides: in the outline, every one but the headings and
+  /// an expanded entry's own text, which runs to the next heading of any level.
+  public func hidden(in index: FoldingIndex) -> HiddenText {
     guard mode == .outline else { return HiddenText() }
-    let string = built.text.string as NSString
-    let sections = built.anchors.sections.entries
-    // A heading's paragraph is shown; so is a paragraph in an expanded section's own
-    // text, which runs to the next heading of any level.
-    let headings = Set(
-      sections.map { string.paragraphRange(for: NSRange(location: $0.offset, length: 0)).location })
-    let shownSpans: [Range<Int>] = sections.indices.compactMap { index in
-      guard expanded.contains(sections[index].anchor) else { return nil }
-      let end = index + 1 < sections.count ? sections[index + 1].offset : string.length
-      return sections[index].offset..<end
-    }
+    let headings = Set(index.entries.map(\.paragraph))
+    var next = 0
+    var shown = false
     var paragraphs: [(range: NSRange, isHidden: Bool)] = []
-    string.enumerateSubstrings(
-      in: NSRange(location: 0, length: string.length),
-      options: [.byParagraphs, .substringNotRequired]
-    ) { _, _, enclosing, _ in
-      let start = enclosing.location
-      let isShown = headings.contains(start) || shownSpans.contains { $0.contains(start) }
-      paragraphs.append((enclosing, !isShown))
+    paragraphs.reserveCapacity(index.paragraphs.count)
+    for paragraph in index.paragraphs {
+      // The entries are in order, as the paragraphs are: one pass over both.
+      while next < index.entries.count, index.entries[next].offset <= paragraph.location {
+        shown = expanded.contains(index.entries[next].anchor)
+        next += 1
+      }
+      paragraphs.append((paragraph, !(shown || headings.contains(paragraph.location))))
     }
-    return HiddenText(paragraphs: paragraphs)
+    return HiddenText(paragraphs: paragraphs, length: index.length)
+  }
+
+  public func disclosures(in built: BuiltDocument) -> [Int: Bool] {
+    disclosures(in: FoldingIndex(built))
   }
 
   /// The headings that have a disclosure, by where their paragraph starts, each open
-  /// or not: in the outline, every heading; in Normal, none.
-  public func disclosures(in built: BuiltDocument) -> [Int: Bool] {
+  /// or not: in the outline, every one; in Normal, none.
+  public func disclosures(in index: FoldingIndex) -> [Int: Bool] {
     guard mode == .outline else { return [:] }
-    let string = built.text.string as NSString
-    var disclosures: [Int: Bool] = [:]
-    for section in built.anchors.sections.entries {
-      let paragraph = string.paragraphRange(for: NSRange(location: section.offset, length: 0))
-      disclosures[paragraph.location] = expanded.contains(section.anchor)
-    }
-    return disclosures
+    return Dictionary(
+      index.entries.map { ($0.paragraph, expanded.contains($0.anchor)) },
+      uniquingKeysWith: { first, _ in first })
   }
 
-  /// This folding with the section of the heading at `offset` opened, or closed if it
-  /// was open; nil where `offset` is in no heading this mode discloses.
   public func toggling(heading offset: Int, in built: BuiltDocument) -> Folding? {
-    guard mode == .outline else { return nil }
-    let string = built.text.string as NSString
-    guard offset >= 0, offset < string.length else { return nil }
-    let paragraph = string.paragraphRange(for: NSRange(location: offset, length: 0))
-    guard
-      let section = built.anchors.sections.entries.first(where: {
-        NSLocationInRange($0.offset, paragraph)
-      })
-    else { return nil }
+    toggling(heading: offset, in: FoldingIndex(built))
+  }
+
+  /// This folding with the section of the heading whose paragraph `offset` is in
+  /// opened, or closed if it was open; nil where `offset` is in no heading this mode
+  /// discloses.
+  public func toggling(heading offset: Int, in index: FoldingIndex) -> Folding? {
+    guard mode == .outline, let entry = index.entry(covering: offset) else { return nil }
+    // In the heading's paragraph: from its start to the paragraph after it.
+    let paragraph = index.paragraphs.first { NSLocationInRange(entry.paragraph, $0) }
+    guard let paragraph, NSLocationInRange(offset, paragraph) else { return nil }
     var toggled = self
-    if toggled.expanded.remove(section.anchor) == nil {
-      toggled.expanded.insert(section.anchor)
+    if toggled.expanded.remove(entry.anchor) == nil {
+      toggled.expanded.insert(entry.anchor)
     }
     return toggled
   }
 
-  /// This folding with what `offset` is in shown: a jump, a find hit or a restored
-  /// place inside a folded section expands that section. Unchanged in a mode that
-  /// folds nothing.
   public func expanding(toShow offset: Int, in built: BuiltDocument) -> Folding {
-    guard mode != .normal, let section = built.anchors.sections.anchor(at: offset) else {
-      return self
-    }
+    expanding(toShow: offset, in: FoldingIndex(built))
+  }
+
+  /// This folding with what `offset` is in shown: a jump, a find hit or a restored
+  /// place inside a folded section, or in the abstract, expands it. Unchanged in a
+  /// mode that folds nothing.
+  public func expanding(toShow offset: Int, in index: FoldingIndex) -> Folding {
+    guard mode != .normal, let entry = index.entry(covering: offset) else { return self }
     var expanded = self
-    expanded.expanded.insert(section)
+    expanded.expanded.insert(entry.anchor)
     return expanded
   }
 }
 
 /// The text a folding hides, as runs of whole paragraphs: what the layout skips.
 public struct HiddenText: Sendable, Equatable {
-  /// Each run of hidden paragraphs, in order, with where the shown paragraph before it
-  /// starts (nil for a run at the start of the text).
-  private var runs: [(range: NSRange, shownBefore: Int?)] = []
+  /// A run of hidden paragraphs, and where the shown paragraph nearest it starts:
+  /// the one before it, or the one after it for a run at the start of the text.
+  private struct Run: Sendable, Equatable {
+    var range: NSRange
+    var shownBefore: Int?
+  }
+
+  private var runs: [Run] = []
+  private var length = 0
 
   public init() {}
 
   /// From every paragraph in order, each hidden or not: consecutive hidden ones are
   /// one run.
-  init(paragraphs: [(range: NSRange, isHidden: Bool)]) {
+  init(paragraphs: [(range: NSRange, isHidden: Bool)], length: Int) {
+    self.length = length
     var lastShown: Int?
     for paragraph in paragraphs {
       guard paragraph.isHidden else {
@@ -123,14 +178,9 @@ public struct HiddenText: Sendable, Equatable {
       if let last = runs.last, NSMaxRange(last.range) == paragraph.range.location {
         runs[runs.count - 1].range.length += paragraph.range.length
       } else {
-        runs.append((paragraph.range, lastShown))
+        runs.append(Run(range: paragraph.range, shownBefore: lastShown))
       }
     }
-  }
-
-  public static func == (lhs: HiddenText, rhs: HiddenText) -> Bool {
-    lhs.runs.map(\.range) == rhs.runs.map(\.range)
-      && lhs.runs.map(\.shownBefore) == rhs.runs.map(\.shownBefore)
   }
 
   public var isEmpty: Bool { runs.isEmpty }
@@ -143,12 +193,14 @@ public struct HiddenText: Sendable, Equatable {
     run(containing: offset) != nil
   }
 
-  /// `offset` where it is shown, otherwise where the shown paragraph before its run
-  /// starts: where a reader's line in folded text is kept. Nil only for a run at the
-  /// start of the text.
-  public func shownOffset(atOrBefore offset: Int) -> Int? {
+  /// `offset` where it is shown; otherwise where the shown paragraph before its run
+  /// starts, or, for a run at the start of the text, the first shown character after
+  /// it: where a reader's line in folded text is kept. Nil only when nothing is shown.
+  public func shownOffset(near offset: Int) -> Int? {
     guard let index = run(containing: offset) else { return offset }
-    return runs[index].shownBefore
+    if let before = runs[index].shownBefore { return before }
+    let after = NSMaxRange(runs[index].range)
+    return after < length ? after : nil
   }
 
   private func run(containing offset: Int) -> Int? {

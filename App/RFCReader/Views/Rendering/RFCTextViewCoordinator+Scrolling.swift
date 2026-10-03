@@ -22,12 +22,14 @@ extension RFCTextViewCoordinator {
       let offset = ReadingPlace(anchor: anchor, offset: extra).documentOffset(
         in: built.anchors, length: built.text.length)
     else { return }
-    show(offset)
     #if canImport(UIKit)
       chrome.jumped()
       reportChrome()
     #endif
-    engine.jump(toOffset: offset)
+    // Into folded text, the section opens and the line lands there in one layout.
+    if !show(offset) {
+      engine.jump(toOffset: offset)
+    }
     reportVisibleAnchor()
   }
 

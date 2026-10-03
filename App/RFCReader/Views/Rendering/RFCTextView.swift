@@ -37,7 +37,7 @@ struct RFCTextView: View {
     onChoosePresentation: ((PresentationKey, PresentationChoices.Presentation) -> Void)? = nil,
     hidesChrome: Bool = false,
     onChromeHidden: @escaping (Bool) -> Void = { _ in },
-    folding: Folding = Folding(),
+    folding: Folding? = nil,
     onFoldingChange: @escaping (Folding) -> Void = { _ in },
     heading: HeadingBox,
     headerIdentity: DocumentHeaderView.Identity,
@@ -98,8 +98,9 @@ struct ReaderScrollTarget: Equatable {
 /// it is the environment's, which `RFCTextView` reads, and passed beside it.
 struct ReaderInputs {
   let built: BuiltDocument
-  /// The reading mode and the sections it has expanded (#698).
-  let folding: Folding
+  /// The reading mode and the sections it has expanded (#698); nil to keep what the
+  /// text view has, as a reader fading out does while the scene has moved on.
+  let folding: Folding?
   let onFoldingChange: (Folding) -> Void
   /// The document's bibliographies, which the body leaves out: what a citation
   /// of an entry previews (#198).
@@ -176,8 +177,8 @@ struct ReaderInputs {
     }
     coordinator.layOut(width: width, measure: measure)
     if coordinator.built?.text !== built.text {
-      coordinator.install(built, folding: folding)
-    } else {
+      coordinator.install(built, folding: folding ?? coordinator.folding)
+    } else if let folding {
       coordinator.apply(folding)
     }
     if let scrollTarget {
@@ -250,7 +251,7 @@ struct ReaderInputs {
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // A find hit in folded text opens its section first (#698).
-        coordinator.show(range.location)
+        _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed
@@ -360,7 +361,7 @@ struct ReaderInputs {
       textView.revealRange = { [weak coordinator = context.coordinator] range in
         guard let coordinator else { return false }
         // A find hit in folded text opens its section first (#698).
-        coordinator.show(range.location)
+        _ = coordinator.show(range.location)
         let revealed = coordinator.engine.reveal(range)
         if revealed { coordinator.reportVisibleAnchor() }
         return revealed

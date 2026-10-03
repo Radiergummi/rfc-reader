@@ -23,10 +23,12 @@ struct ReadingModeTests {
     return paragraphs
   }
 
+  /// The paragraphs the outline shows: the sections' headings, and the abstract's.
   private static func headingParagraphs(of built: BuiltDocument) -> Set<Int> {
     let string = built.text.string as NSString
+    let abstract = built.anchors.entries.filter { $0.anchor == DocumentTextBuilder.abstractAnchor }
     return Set(
-      built.anchors.sections.entries.map {
+      (abstract + built.anchors.sections.entries).map {
         string.paragraphRange(for: NSRange(location: $0.offset, length: 0)).location
       })
   }
@@ -82,8 +84,8 @@ struct ReadingModeTests {
         $0.location > sections[3].offset && hidden.contains($0.location)
       })
     let heading = try #require(sections.last { $0.offset <= body.location })
-    #expect(hidden.shownOffset(atOrBefore: body.location) == heading.offset)
-    #expect(hidden.shownOffset(atOrBefore: heading.offset) == heading.offset)
+    #expect(hidden.shownOffset(near: body.location) == heading.offset)
+    #expect(hidden.shownOffset(near: heading.offset) == heading.offset)
   }
 
   /// A jump to a place inside a folded section expands it first.
@@ -125,6 +127,43 @@ struct ReadingModeTests {
       })
     #expect(Folding(mode: .outline).toggling(heading: body.location, in: built) == nil)
     #expect(Folding(mode: .normal).toggling(heading: section.offset, in: built) == nil)
+  }
+
+  /// The abstract has a heading but no section: it is an entry of the outline of its
+  /// own, so it can be opened, and a jump into it opens it.
+  @Test func `the abstract can be opened`() throws {
+    let built = try Self.rfc8999()
+    let abstract = try #require(built.anchors.offset(of: DocumentTextBuilder.abstractAnchor))
+    let folding = Folding(mode: .outline)
+    #expect(folding.disclosures(in: built)[abstract] == false)
+    let inside = folding.expanding(toShow: abstract + 40, in: built)
+    #expect(inside.expanded == [DocumentTextBuilder.abstractAnchor])
+    #expect(!inside.hidden(in: built).contains(abstract + 40))
+  }
+
+  /// A place in a run of folded text at the very start, before any heading, is kept
+  /// at the first shown character after it.
+  @Test func `a place before every heading is kept at the first shown one`() {
+    let paragraphs: [(range: NSRange, isHidden: Bool)] = [
+      (NSRange(location: 0, length: 10), true), (NSRange(location: 10, length: 5), false),
+      (NSRange(location: 15, length: 5), true),
+    ]
+    let hidden = HiddenText(paragraphs: paragraphs, length: 20)
+    #expect(hidden.shownOffset(near: 3) == 10)
+    #expect(hidden.shownOffset(near: 17) == 10)
+    #expect(hidden.shownOffset(near: 12) == 12)
+    let nothingShown = HiddenText(
+      paragraphs: [(NSRange(location: 0, length: 20), true)], length: 20)
+    #expect(nothingShown.shownOffset(near: 3) == nil)
+  }
+
+  /// What a build gives folding is worked out once, and the same folding comes of it.
+  @Test func `the index answers as the build does`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let folding = Folding(mode: .outline, expanded: [built.anchors.sections.entries[3].anchor])
+    #expect(folding.hidden(in: index) == folding.hidden(in: built))
+    #expect(folding.disclosures(in: index) == folding.disclosures(in: built))
   }
 
   @Test func `the modes are named for the menu`() {

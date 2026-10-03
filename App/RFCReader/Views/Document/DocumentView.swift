@@ -317,7 +317,8 @@ struct DocumentView: View {
         onChoosePresentation: { library.choose($1, for: $0, in: id) },
         hidesChrome: hidesChrome,
         onChromeHidden: setBarsHidden,
-        folding: reader.folding,
+        // Not while fading out: the reader state is the selected document's.
+        folding: navigation.selection == id ? reader.folding : nil,
         onFoldingChange: {
           guard navigation.selection == id else { return }
           reader.folding = $0

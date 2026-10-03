@@ -34,4 +34,23 @@ struct DisclosureGeometryTests {
       open: false, firstLine: CGRect(x: 0, y: 40, width: 300, height: 48))
     #expect(big[2].y - big[0].y > small[2].y - small[0].y)
   }
+
+  /// The surface the fragment draws in holds the chevron, stroke and all.
+  @Test func `the chevron's bounds hold its points`() {
+    for open in [false, true] {
+      let bounds = FragmentGeometry.disclosureBounds(open: open, firstLine: line)
+      for point in FragmentGeometry.disclosureChevron(open: open, firstLine: line) {
+        #expect(bounds.insetBy(dx: 1, dy: 1).contains(point))
+      }
+    }
+  }
+
+  /// A click in the gutter finds the heading beside it, on the column's edge; a click
+  /// in the column is the text's.
+  @Test func `a click in the gutter finds the heading beside it`() {
+    #expect(
+      FragmentGeometry.disclosureHit(atContainerPoint: CGPoint(x: -12, y: 50))
+        == CGPoint(x: 0, y: 50))
+    #expect(FragmentGeometry.disclosureHit(atContainerPoint: CGPoint(x: 4, y: 50)) == nil)
+  }
 }
