@@ -77,7 +77,9 @@ public struct DocumentConverter: Sendable {
     let prose = diagnosesProse ? ProseReport(diagnosed: blocks, id: stem) : nil
     let boundary =
       samplesBoundary ? BoundarySample.entries(for: blocks, in: text, document: stem) : nil
-    let sourceURL = DocumentID(parsing: stem).map { RFCEditorEndpoints.document($0, format: .text) }
+    let sourceURL = DocumentID(fileStem: stem).map {
+      RFCEditorEndpoints.document($0, format: .text)
+    }
     let source =
       patch.map { "\(stem).txt and patched by corpus/overrides/\($0.name)" } ?? "\(stem).txt"
     let serializer = RFCXMLSerializer(
