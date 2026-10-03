@@ -58,6 +58,38 @@ public struct Folding: Sendable, Equatable {
     return HiddenText(paragraphs: paragraphs)
   }
 
+  /// The headings that have a disclosure, by where their paragraph starts, each open
+  /// or not: in the outline, every heading; in Normal, none.
+  public func disclosures(in built: BuiltDocument) -> [Int: Bool] {
+    guard mode == .outline else { return [:] }
+    let string = built.text.string as NSString
+    var disclosures: [Int: Bool] = [:]
+    for section in built.anchors.sections.entries {
+      let paragraph = string.paragraphRange(for: NSRange(location: section.offset, length: 0))
+      disclosures[paragraph.location] = expanded.contains(section.anchor)
+    }
+    return disclosures
+  }
+
+  /// This folding with the section of the heading at `offset` opened, or closed if it
+  /// was open; nil where `offset` is in no heading this mode discloses.
+  public func toggling(heading offset: Int, in built: BuiltDocument) -> Folding? {
+    guard mode == .outline else { return nil }
+    let string = built.text.string as NSString
+    guard offset >= 0, offset < string.length else { return nil }
+    let paragraph = string.paragraphRange(for: NSRange(location: offset, length: 0))
+    guard
+      let section = built.anchors.sections.entries.first(where: {
+        NSLocationInRange($0.offset, paragraph)
+      })
+    else { return nil }
+    var toggled = self
+    if toggled.expanded.remove(section.anchor) == nil {
+      toggled.expanded.insert(section.anchor)
+    }
+    return toggled
+  }
+
   /// This folding with what `offset` is in shown: a jump, a find hit or a restored
   /// place inside a folded section expands that section. Unchanged in a mode that
   /// folds nothing.
