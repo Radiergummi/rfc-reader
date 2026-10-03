@@ -327,7 +327,9 @@ final class LibraryModel {
         // Check in the background if the index was last checked over a day ago:
         // only on a cheap network, since nobody is waiting for it (#314).
         if IndexCheck.isDue(checkedAt: updatedAt, now: .now) {
-          Task(name: "Refresh index") { await refreshIndex(onExpensiveNetworks: false) }
+          indexRefresh = Task(name: "Refresh index") {
+            await refreshIndex(onExpensiveNetworks: false)
+          }
         }
       } else {
         await refreshIndex()
@@ -524,6 +526,7 @@ final class LibraryModel {
     signposter.emitEvent("Index ready")
     indexForSpotlight(prepared.index.rfcs)
     settleIndex()
+    compareBookmarks()
   }
 
   // MARK: - Spotlight
@@ -565,6 +568,7 @@ final class LibraryModel {
     defer { isRefreshingRevisions = false }
     if revisions == nil, let cached = await store.cachedRevisions() {
       revisions = cached
+      compareBookmarks()
     }
     if let fetchedAt = revisionsFetchedAt, Date.now.timeIntervalSince(fetchedAt) < 86_400 {
       return
@@ -573,7 +577,10 @@ final class LibraryModel {
       let fetched = try await client.fetchRevisions()
       try await store.storeRevisions(fetched.data)
       revisionsFetchedAt = .now
-      if fetched.revisions != revisions { revisions = fetched.revisions }
+      if fetched.revisions != revisions {
+        revisions = fetched.revisions
+        compareBookmarks()
+      }
     } catch {
       libraryLog.error(
         "fetching revisions failed: \(String(describing: error), privacy: .public)")
@@ -583,6 +590,68 @@ final class LibraryModel {
   /// The drafts revising `id`.
   func revisionsSummary(for id: DocumentID) -> RevisionsSummary {
     RevisionsSummary(revisions, for: id, now: .now)
+  }
+
+  // MARK: - Bookmark notifications
+
+  /// The background check bootstrap started, so a background refresh can wait for it.
+  @ObservationIgnored private var indexRefresh: Task<Void, Never>?
+  /// The comparison under way. Each waits for the one before, so two never read the
+  /// same baseline and both report what changed since.
+  @ObservationIgnored private var bookmarkComparison: Task<Void, Never>?
+
+  /// What a background refresh does (#191): the index, when its daily check is due,
+  /// and the revisions, each of which compares the bookmarks when it changes; then
+  /// waits for that comparison, so the system does not suspend the app before it
+  /// has posted.
+  func refreshForBookmarks() async {
+    await bootstrap()
+    await indexRefresh?.value
+    if case .ready(let checkedAt) = indexState, IndexCheck.isDue(checkedAt: checkedAt, now: .now) {
+      await refreshIndex(onExpensiveNetworks: false)
+    }
+    await refreshRevisions()
+    await bookmarkComparison?.value
+  }
+
+  /// Compares the bookmarked RFCs with the last baseline, after every change to the
+  /// index or the revisions, and posts what changed (`BookmarkNotifications`). Runs
+  /// whether notifications are on or not, so the baseline is current when they are
+  /// turned on.
+  private func compareBookmarks() {
+    let previous = bookmarkComparison
+    bookmarkComparison = Task(name: "Compare bookmarks") {
+      await previous?.value
+      await compareBookmarksNow()
+    }
+  }
+
+  private func compareBookmarksNow() async {
+    let bookmarks: Set<DocumentID>
+    do {
+      // Read here rather than taken from `bookmarkedDocuments`, which a failed read
+      // leaves empty: a baseline of no bookmarks would start every one afresh.
+      bookmarks = try BookmarkStore.bookmarkedDocuments(in: container.mainContext)
+    } catch {
+      libraryLog.error(
+        "reading bookmarks to compare failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    let previous = await store.bookmarkBaseline()
+    let baseline = BookmarkBaseline(
+      bookmarks: bookmarks, index: index, revisions: revisions, carryingOver: previous)
+    guard baseline != previous else { return }
+    do {
+      // Kept before anything is posted: a baseline that cannot be kept would report
+      // the same changes on every refresh.
+      try await store.storeBookmarkBaseline(baseline)
+    } catch {
+      libraryLog.error(
+        "keeping the bookmark baseline failed: \(String(describing: error), privacy: .public)")
+      return
+    }
+    let events = BookmarkEvents.between(previous, baseline)
+    await BookmarkNotifications.post(BookmarkNotice.notices(for: events, index: index))
   }
 
   // MARK: - Working groups

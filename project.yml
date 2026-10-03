@@ -60,6 +60,11 @@ targets:
           - CFBundleURLName: org.rfc-editor.document
             CFBundleURLSchemes: [rfc]
         UILaunchScreen: {}
+        # The daily check of the bookmarked RFCs on iOS (#191), a `BGAppRefreshTask`
+        # (`BookmarkNotifications.refreshIdentifier`). macOS reads neither key.
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - me.mazetti.rfc-reader.bookmark-refresh
         # iPad opens an RFC in a window of its own (#158); an iPhone has one scene
         # whatever this says.
         UIApplicationSceneManifest:

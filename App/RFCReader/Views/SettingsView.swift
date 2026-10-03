@@ -12,6 +12,12 @@ struct SettingsView: View {
       Tab("General", systemImage: "gearshape") {
         GeneralSettings()
       }
+      Tab("Notifications", systemImage: "bell") {
+        Form {
+          NotificationSettings()
+        }
+        .formStyle(.grouped)
+      }
     }
     // A grouped form is scroll-backed and has no height of its own to offer, so
     // the window is told to size to it rather than left to guess.
@@ -70,5 +76,46 @@ private struct GeneralSettings: View {
       Toggle("Show the original text rendering by default", isOn: $preferOriginalText)
     }
     .formStyle(.grouped)
+  }
+}
+
+/// Notifications about bookmarked RFCs (#191), off until turned on here. Turning
+/// them on is when permission is asked for; refused, the toggle goes back off and
+/// says where to allow them.
+struct NotificationSettings: View {
+  @AppStorage(ReaderPreferences.notifyAboutBookmarksKey) private var isOn =
+    ReaderPreferences.defaultNotifyAboutBookmarks
+  @State private var wasRefused = false
+
+  private var toggle: Binding<Bool> {
+    Binding(
+      get: { isOn },
+      set: { turnedOn in
+        guard turnedOn else {
+          isOn = false
+          BookmarkNotifications.disable()
+          return
+        }
+        isOn = true
+        Task {
+          let granted = await BookmarkNotifications.requestPermission()
+          wasRefused = !granted
+          if !granted { isOn = false }
+        }
+      }
+    )
+  }
+
+  var body: some View {
+    Toggle(isOn: toggle) {
+      Text("Notify me about bookmarked RFCs")
+      Text(
+        "When one is obsoleted or updated, a draft starts to revise it or reaches the RFC Editor queue, or errata are listed for it."
+      )
+    }
+    if wasRefused {
+      Text("Notifications for RFC Reader are turned off in System Settings.")
+        .foregroundStyle(.secondary)
+    }
   }
 }
