@@ -246,11 +246,12 @@ extension DocumentTextBuilder {
   /// line with the code under it: an attachment in its own `.rfcCopyCode` run, which
   /// the attachment guard sanctions as it does a chip's. No link: a link is a web
   /// page's control, with its pointing hand, and the reader takes a click on the
-  /// button itself (`copyButton(at:)`).
+  /// button itself (`copyButton(at:)`). Nothing for VoiceOver to say, either: it
+  /// cannot press the button, and Copy Figure is in the block's menu
+  /// (`AccessibleReading` leaves it out).
   func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
     var attributes = base
     attributes[.rfcCopyCode] = ""
-    attributes[.rfcSpoken] = "Copy code"
     return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
   }
 
