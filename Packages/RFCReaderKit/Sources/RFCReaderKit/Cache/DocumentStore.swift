@@ -225,6 +225,22 @@ public actor DocumentStore {
     try data.write(to: revisionsURL, options: .atomic)
   }
 
+  // MARK: - Bookmark baseline
+
+  private var bookmarkBaselineURL: URL { directory.appending(path: "bookmark-baseline.json") }
+
+  /// What the bookmarked RFCs looked like at the last comparison (#191). Nil when
+  /// there is none, or it no longer decodes, which the next comparison takes as a
+  /// first one: it reports nothing and starts again from what it sees.
+  public func bookmarkBaseline() -> BookmarkBaseline? {
+    guard let data = try? Data(contentsOf: bookmarkBaselineURL) else { return nil }
+    return try? BookmarkBaseline.decode(data)
+  }
+
+  public func storeBookmarkBaseline(_ baseline: BookmarkBaseline) throws {
+    try baseline.encoded().write(to: bookmarkBaselineURL, options: .atomic)
+  }
+
   // MARK: - Working groups
 
   private var workingGroupsURL: URL { directory.appending(path: "groups.json") }
