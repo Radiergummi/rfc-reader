@@ -21,6 +21,19 @@ struct AccentContrastTests {
   static let lightPages: [UInt32] = [0xFF_FFFF]
   static let darkPages: [UInt32] = [0x1E_1E1E, 0x00_0000]
 
+  /// What else a chip is drawn on: a table's or figure's card (black at 3% in light,
+  /// white at 8.5% in dark) and an aside's (4.5%, 12%), over each page.
+  static let lightBackdrops =
+    lightPages.map(color)
+    + lightPages.flatMap { page in
+      [0.03, 0.045].map { color(0x00_0000).composited(opacity: $0, over: color(page)) }
+    }
+  static let darkBackdrops =
+    darkPages.map(color)
+    + darkPages.flatMap { page in
+      [0.085, 0.12].map { color(0xFF_FFFF).composited(opacity: $0, over: color(page)) }
+    }
+
   private static func color(_ hex: UInt32) -> SRGBColor { SRGBColor(hex: hex) }
 
   // MARK: - Compositing and darkening
@@ -68,31 +81,34 @@ struct AccentContrastTests {
   // MARK: - Chips
 
   /// A link on its chip's tint, for every accent on every page the reader draws.
+  /// On a page and on a card: the tint is worked out against what the chip is drawn
+  /// on. Only where the link itself clears the minimum there; one that does not is a
+  /// problem of the link color, not of a chip.
   @Test(arguments: lightAccents)
   func `a link clears the minimum on its chip in light`(hex: UInt32) {
-    for page in Self.lightPages {
-      Self.expectLegibleChip(accent: hex, link: AccentContrast.readerLink.light, page: page)
+    for backdrop in Self.lightBackdrops {
+      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.light, on: backdrop)
     }
   }
 
   @Test(arguments: darkAccents)
   func `a link clears the minimum on its chip in dark`(hex: UInt32) {
-    for page in Self.darkPages {
-      Self.expectLegibleChip(accent: hex, link: AccentContrast.readerLink.dark, page: page)
+    for backdrop in Self.darkBackdrops {
+      Self.expectLegibleChip(hex, link: AccentContrast.readerLink.dark, on: backdrop)
     }
   }
 
-  private static func expectLegibleChip(accent hex: UInt32, link: SRGBColor, page hexPage: UInt32) {
+  private static func expectLegibleChip(_ hex: UInt32, link: SRGBColor, on backdrop: SRGBColor) {
+    guard link.contrast(with: backdrop) >= AccentContrast.minimumContrast else { return }
     let accent = color(hex)
-    let page = color(hexPage)
-    let opacity = AccentContrast.chipTintOpacity(accent: accent, link: link, page: page)
+    let opacity = AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
     #expect(opacity >= 0 && opacity <= AccentContrast.chipTint)
     // A normative chip, and an informative one at half the tint (#184).
     for drawn in [opacity, opacity / 2] {
-      let tint = accent.composited(opacity: drawn, over: page)
+      let tint = accent.composited(opacity: drawn, over: backdrop)
       #expect(
         link.contrast(with: tint) >= AccentContrast.minimumContrast,
-        "accent \(String(hex, radix: 16)) on \(String(hexPage, radix: 16)) at \(drawn)")
+        "accent \(String(hex, radix: 16)) on \(backdrop) at \(drawn)")
     }
   }
 

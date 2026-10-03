@@ -144,19 +144,23 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   // MARK: - Drawing
 
   override func draw(at point: CGPoint, in context: CGContext) {
+    // What the chips are drawn on: the page, or a card's fill over it.
+    var card: PlatformColor?
     if let span = decorationSpan {
       context.saveGState()
       switch span.decoration {
       case .artwork, .table:
+        card = RFCColors.cardFill
         drawCard(at: point, span: span, color: RFCColors.cardFill, in: context)
       case .aside:
+        card = RFCColors.asideFill
         drawCard(at: point, span: span, color: RFCColors.asideFill, in: context)
       case .blockQuote:
         drawRule(at: point, span: span, in: context)
       }
       context.restoreGState()
     }
-    drawChips(at: point, in: context)
+    drawChips(at: point, on: card, in: context)
     drawStrokes(at: point, in: context)
     super.draw(at: point, in: context)
   }
@@ -195,23 +199,27 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
     context.restoreGState()
   }
 
-  /// The chip tint's opacity for the accent as it resolves now: lighter than 15%
-  /// where the link would not clear the minimum contrast on it (#317).
-  private static func chipTintOpacity() -> Double {
+  /// The chip tint's opacity for the accent as it resolves now, on the page or on
+  /// `card` over it: lighter than 15% where the link would not clear the minimum
+  /// contrast on it (#317).
+  private static func chipTintOpacity(on card: PlatformColor?) -> Double {
     guard let accent = SRGBColor(resolving: RFCColors.accent),
       let link = SRGBColor(resolving: RFCColors.readerLink),
-      let page = SRGBColor(resolving: RFCColors.page)
+      var backdrop = SRGBColor(resolving: RFCColors.page)
     else { return AccentContrast.chipTint }
-    return AccentContrast.chipTintOpacity(accent: accent, link: link, page: page)
+    if let card, let fill = SRGBColor.resolvingWithOpacity(card) {
+      backdrop = fill.color.composited(opacity: fill.opacity, over: backdrop)
+    }
+    return AccentContrast.chipTintOpacity(accent: accent, link: link, page: backdrop)
   }
 
-  private func drawChips(at point: CGPoint, in context: CGContext) {
+  private func drawChips(at point: CGPoint, on card: PlatformColor?, in context: CGContext) {
     let chips = chipRects
     guard !chips.isEmpty else { return }
     // Resolved once per draw rather than once per chip, but still per draw, so a
     // change of appearance or accent color is picked up. The geometry is not
     // appearance-dependent, so it comes from the cache and only moves.
-    let opacity = Self.chipTintOpacity()
+    let opacity = Self.chipTintOpacity(on: card)
     let tint = RFCColors.accent.withAlphaComponent(opacity).cgColor
     // An informative citation is background to the specification rather than part
     // of it, and reads so beside a normative one (#184). Half the tint, not a

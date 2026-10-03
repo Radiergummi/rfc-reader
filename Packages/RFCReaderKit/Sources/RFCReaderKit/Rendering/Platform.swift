@@ -232,6 +232,15 @@ extension SRGBColor {
   /// depends on a color the user picks, such as the accent (#317): on macOS the
   /// drawing appearance, on iOS the current trait collection. Its alpha is dropped.
   public init?(resolving color: PlatformColor) {
+    guard let resolved = Self.resolvingWithOpacity(color) else { return nil }
+    self = resolved.color
+  }
+
+  /// A platform color as the current appearance resolves it, with its opacity: a
+  /// translucent fill, such as a card's, to composite over what it is drawn on.
+  public static func resolvingWithOpacity(_ color: PlatformColor)
+    -> (color: SRGBColor, opacity: Double)?
+  {
     #if canImport(UIKit)
       var red: CGFloat = 0
       var green: CGFloat = 0
@@ -240,12 +249,15 @@ extension SRGBColor {
       guard
         color.resolvedColor(with: .current).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
       else { return nil }
-      self.init(red: Double(red), green: Double(green), blue: Double(blue))
+      return (SRGBColor(red: Double(red), green: Double(green), blue: Double(blue)), Double(alpha))
     #else
       guard let resolved = color.usingColorSpace(.sRGB) else { return nil }
-      self.init(
-        red: Double(resolved.redComponent), green: Double(resolved.greenComponent),
-        blue: Double(resolved.blueComponent))
+      return (
+        SRGBColor(
+          red: Double(resolved.redComponent), green: Double(resolved.greenComponent),
+          blue: Double(resolved.blueComponent)),
+        Double(resolved.alphaComponent)
+      )
     #endif
   }
 }
