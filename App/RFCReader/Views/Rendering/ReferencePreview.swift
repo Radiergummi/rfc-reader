@@ -56,7 +56,7 @@ struct ReferencePreview: View {
       } else if let definition {
         // A rule of this document's grammar: its definition says what it is, which
         // its section's heading would not.
-        Text(definition).font(.system(.caption, design: .monospaced))
+        Text(definition).font(.system(.caption, design: .monospaced)).lineLimit(12)
       } else if let heading {
         // A section of this document: "Section 4.2" says where, the heading
         // says what.

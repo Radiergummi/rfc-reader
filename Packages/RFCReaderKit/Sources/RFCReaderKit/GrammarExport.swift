@@ -14,7 +14,7 @@ public enum GrammarExport {
     let blocks = DocumentGrammar.blocks(of: document, hints: hints).compactMap {
       section, content -> (heading: String?, text: String)? in
       guard ABNF.parse(content.text) != nil else { return nil }
-      return (section.flatMap(heading(of:)) ?? "Abstract", unindented(content.text))
+      return (section.map(heading(of:)) ?? "Abstract", unindented(content.text))
     }
     guard !blocks.isEmpty else { return nil }
 

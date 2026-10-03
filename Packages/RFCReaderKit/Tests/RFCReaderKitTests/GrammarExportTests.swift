@@ -57,6 +57,18 @@ struct GrammarExportTests {
     }
   }
 
+  /// "Abstract" heads only the abstract's grammar: a section with neither number nor
+  /// title has no heading, and is not the abstract.
+  @Test func `a section with no heading is not headed as the abstract`() throws {
+    let grammar = Preformatted(kind: .sourceCode, text: "field = 1*DIGIT", type: "abnf")
+    let document = RFCDocument(
+      header: DocumentHeader(title: "T"),
+      sections: [Section(anchor: "s", number: nil, title: "", blocks: [.preformatted(grammar)])],
+      source: .xml)
+    let text = try #require(GrammarExport.text(for: document))
+    #expect(!text.contains("; Abstract"))
+  }
+
   /// RFC 5234's core rules are named and pointed to, not copied: their definitions are
   /// that RFC's text.
   @Test func `the core rules are named, not defined`() throws {
