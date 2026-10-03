@@ -59,15 +59,14 @@ public enum SelectionText {
   /// folded (#212). A block too wide for the column is shown as published, folds and
   /// header included, and a selection over it would otherwise paste code that works
   /// or not depending on the window's width; Copy Figure always unfolds. A block
-  /// already shown unfolded has no fold left, so it copies as it is.
+  /// already shown unfolded has no fold left, so it copies as it is: unfolded again,
+  /// two of the author's own lines could read as a fold (`VerbatimBox.shownFolding`).
   private static func unfolded(_ run: NSAttributedString) -> String {
     var result = ""
     run.enumerateAttribute(.rfcVerbatim, in: NSRange(location: 0, length: run.length)) {
       value, range, _ in
       let text = run.attributedSubstring(from: range).string
-      guard let box = value as? VerbatimBox,
-        let strategy = FoldedLines.strategy(of: box.content.text)
-      else {
+      guard let box = value as? VerbatimBox, let strategy = box.shownFolding else {
         result += text
         return
       }

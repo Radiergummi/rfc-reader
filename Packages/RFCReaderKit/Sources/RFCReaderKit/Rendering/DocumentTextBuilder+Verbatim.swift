@@ -50,9 +50,10 @@ extension DocumentTextBuilder {
       }
     let decorated: DecoratedText? =
       if shown == .rendered, case .decorated(let decorated)? = rendition { decorated } else { nil }
+    // Shown folded keeps the header, which a block shown unfolded has lost.
     let box = VerbatimBox(
       content, ordinal: ordinal, classification: classification, shown: shown,
-      spokenLabel: decorated?.spokenLabel)
+      spokenLabel: decorated?.spokenLabel, shownFolding: FoldedLines.strategy(of: text))
     // A figure's card hugs it; every other card's text is set in from its edges.
     let inset = shown.isFigure ? 0 : FragmentGeometry.cardInset
 

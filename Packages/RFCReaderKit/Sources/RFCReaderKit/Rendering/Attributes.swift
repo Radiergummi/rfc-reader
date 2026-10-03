@@ -138,17 +138,23 @@ public final class VerbatimBox: Sendable {
   /// What VoiceOver says in place of a rendered block's drawing, from its
   /// rendition (`DecoratedText.spokenLabel`); nil unless it is shown rendered.
   public let spokenLabel: String?
+  /// The RFC 8792 strategy the text shown is still folded with: set only where the
+  /// column was too narrow to show the block unfolded (`displayedText`), and what a
+  /// selection over it is unfolded by (#212). Nil for a block shown unfolded, which
+  /// unfolding again could join two of the author's own lines.
+  public let shownFolding: FoldedLines.Strategy?
 
   public init(
     _ content: Preformatted, ordinal: Int = 0,
     classification: ArtworkClassification = .unclassified, shown: Shown = .plain,
-    spokenLabel: String? = nil
+    spokenLabel: String? = nil, shownFolding: FoldedLines.Strategy? = nil
   ) {
     self.content = content
     self.ordinal = ordinal
     self.classification = classification
     self.shown = shown
     self.spokenLabel = spokenLabel
+    self.shownFolding = shownFolding
   }
 }
 

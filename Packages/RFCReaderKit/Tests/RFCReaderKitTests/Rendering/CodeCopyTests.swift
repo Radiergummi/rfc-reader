@@ -69,4 +69,40 @@ struct CodeCopyTests {
       #expect(text.code(ofCopyButtonAt: button) == Self.copied)
     }
   #endif
+
+  // MARK: - A block shown unfolded is not unfolded again
+
+  /// The box says whether the text shown is still folded, and how: what a
+  /// selection over it is unfolded by.
+  @Test(
+    arguments: [(4000, nil), (120, .singleBackslash)] as [(CGFloat, FoldedLines.Strategy?)])
+  func `the box records whether the block is shown folded`(
+    measure: CGFloat, folding: FoldedLines.Strategy?
+  ) throws {
+    let text = Self.built(measure: measure)
+    let box = try #require(
+      FigureCopy.box(at: try Fixtures.offset(of: "value", in: text), in: text))
+    #expect(box.shownFolding == folding)
+  }
+
+  /// Under RFC 8792's `'\\'` strategy a line of the author's may end in a
+  /// backslash: here one followed by a line that a tab indents before its own
+  /// backslash, which unfolding leaves alone. Shown, the tab is spaces, so the pair
+  /// reads as a fold a second unfolding would join.
+  private static let ownBackslashes = Preformatted(
+    kind: .sourceCode,
+    text: Fixtures.doubleBackslashFoldingHeader + "\n\n"
+      + "path\\\n\t\\more\nlong\\\n   \\tail")
+
+  @Test func `a block shown unfolded is copied as it is shown`() throws {
+    let text = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(Self.ownBackslashes)), style: ReadingStyle(measure: 4000)
+    ).text
+    let shown = "path\\\n        \\more\nlongtail"
+    #expect(text.string.contains(shown), "the block is shown unfolded")
+    #expect(
+      SelectionText.plainText(of: try Self.wholeBlock(holding: "longtail", of: text))
+        == shown + "\n")
+    #expect(FigureCopy.pasteboardText(for: Self.ownBackslashes) == shown)
+  }
 }
