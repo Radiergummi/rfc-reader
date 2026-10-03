@@ -49,9 +49,10 @@ public enum SelectionText {
   }
 
   /// What the reader adds to the document's words (`.rfcReaderOnly`) — a heading's
-  /// backlink chip (#183), a code block's language and copy button — is not part of
-  /// what was copied: a copied heading is the heading alone, and copied code is the
-  /// code, in the rich flavors as in the plain one.
+  /// backlink caption (#183, #584), a code block's language and copy button — is
+  /// not part of what was copied: a copied heading is the heading alone, with no
+  /// line where the caption was, and copied code is the code, in the rich flavors
+  /// as in the plain one.
   public static func withoutReaderText(of selection: NSAttributedString) -> NSAttributedString {
     var runs: [NSRange] = []
     selection.enumerateAttribute(

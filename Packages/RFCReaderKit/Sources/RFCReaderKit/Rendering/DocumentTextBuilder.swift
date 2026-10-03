@@ -26,7 +26,7 @@ public final class DocumentTextBuilder {
   /// scroll to, and goes to its entry there.
   public static let referenceScheme = "rfc-reference"
 
-  /// The scheme of a heading's backlink chip (#183), naming the section: a click
+  /// The scheme of a heading's backlink caption (#183), naming the section: a click
   /// lists the sections that refer to it rather than going anywhere.
   public static let backlinksScheme = "rfc-backlinks"
   /// The style the *current* region is emitted in. A `var` because a region can be
@@ -62,10 +62,11 @@ public final class DocumentTextBuilder {
   /// reference, and RFCs are full of them.
   var chipSymbols: [ChipSymbolKey: PlatformImage] = [:]
 
-  /// A chip's symbol is one of two: a reference's, or a backlink chip's.
+  /// A symbol is one of two: a reference chip's, or a backlink caption's.
   struct ChipSymbolKey: Hashable {
     let name: String
     let pointSize: CGFloat
+    let color: PlatformColor
   }
 
   /// The anchors of the document's bibliography entries, which `url(for:)` links
@@ -253,16 +254,17 @@ extension DocumentTextBuilder {
 
   /// A heading at `depth`, carrying the anchor it is the heading of. The abstract's
   /// has nothing above it, being the first thing in the storage; a section's is set
-  /// off from the prose before it by `spacingBefore`.
-  private func headingAttributes(depth: Int, anchor: String, spacingBefore: CGFloat = 0)
-    -> [NSAttributedString.Key: Any]
-  {
+  /// off from the prose before it by `spacingBefore`, and from what follows by
+  /// `spacingAfter`, the usual gap unless given.
+  private func headingAttributes(
+    depth: Int, anchor: String, spacingBefore: CGFloat = 0, spacingAfter: CGFloat? = nil
+  ) -> [NSAttributedString.Key: Any] {
     [
       .font: style.headingFont(depth: depth),
       .foregroundColor: RFCColors.label,
       .rfcAnchor: anchor,
       .paragraphStyle: paragraphStyle(
-        spacingBefore: spacingBefore, spacingAfter: style.paragraphSpacing * 0.6),
+        spacingBefore: spacingBefore, spacingAfter: spacingAfter ?? style.paragraphSpacing * 0.6),
     ].merging(Self.headingLevel(depth: depth)) { current, _ in current }
   }
 
@@ -306,17 +308,17 @@ extension DocumentTextBuilder {
     // Through the same inline path as prose, because a heading cites documents
     // the same way -- "8. Changes from [RFC 3066]". Everything the heading needs
     // is in `base`, so the anchor, the font and the spacing carry across the
-    // reference's own runs and the chip is set at heading size.
+    // reference's own runs.
+    let citing = backlinks[section.anchor]
+    // A backlink caption under the heading takes over the space after it, and
+    // the heading keeps only enough to sit close above the caption it belongs to.
     let attributes = headingAttributes(
-      depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6)
+      depth: depth, anchor: section.anchor, spacingBefore: style.paragraphSpacing * 1.6,
+      spacingAfter: citing == nil ? nil : style.paragraphSpacing * 0.15)
     output.append(inlineRuns(section.displayTitleInlines, base: attributes))
-    if let citing = backlinks[section.anchor] {
-      output.append(backlinkChip(section.anchor, count: citing.count, base: attributes))
-      // Nor is the line break after the chip the heading's, or the heading's run
-      // would resume on it: a second stop in the headings rotor, on an empty line.
-      append("\n", Self.outsideHeading(attributes))
-    } else {
-      append("\n", attributes)
+    append("\n", attributes)
+    if let citing {
+      output.append(backlinkCaption(section.anchor, count: citing.count))
     }
     appendBlocks(section.blocks, indent: 0)
     for subsection in section.subsections {

@@ -191,7 +191,7 @@ struct AccessibleReadingTests {
   }
 
   /// Over a whole real document, every character is either read as text or stands
-  /// under a label, a diagram's or a backlink chip's (#183): nothing is skipped,
+  /// under a label, a diagram's or a backlink caption's (#183): nothing is skipped,
   /// nothing is read twice.
   ///
   /// RFC 793 has ten drawings: its layering and header diagrams, the sequence
