@@ -216,10 +216,11 @@ extension DocumentTextBuilder {
       attributes.merge(linkAttributes(url)) { _, link in link }
     }
     let result = NSMutableAttributedString()
-    // A size under the words': a diagonal arrow fills its whole square, and at
-    // the words' size it outweighs them.
+    // A few points under the words' size: a diagonal arrow fills its whole square,
+    // and at the words' size it outweighs them.
     if let symbol = chipSymbolRun(
-      "arrow.down.backward", color: RFCColors.secondaryLabel, scale: 0.8, attributes: attributes)
+      "arrow.down.backward", color: RFCColors.secondaryLabel, smallerBy: 4,
+      attributes: attributes)
     {
       result.append(symbol)
       // NO-BREAK SPACE: the arrow never wraps away from the words it introduces.
@@ -244,16 +245,22 @@ extension DocumentTextBuilder {
 
   /// The attributes a text view draws the link `link` with, given its own
   /// `defaults`: a text view colors every link itself, over the storage's color,
-  /// which a backlink caption has to keep to stay in the background. Every other
-  /// link is drawn as the text view would.
+  /// which a backlink caption has to keep to stay in the background. The caption
+  /// is drawn with `caption` on top: on macOS the ordinary pointer, not a link's
+  /// pointing hand, since it opens a list beside it as a control does. Passed in
+  /// rather than made here, because a cursor is AppKit's to make on the main
+  /// thread and TextKit may ask from another. Every other link is drawn as the
+  /// text view would.
   public static func linkRenderingAttributes(
-    for link: Any, defaults: [NSAttributedString.Key: Any]
+    for link: Any, defaults: [NSAttributedString.Key: Any],
+    caption: [NSAttributedString.Key: Any] = [:]
   ) -> [NSAttributedString.Key: Any] {
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
     guard let url = link as? URL, url.scheme == backlinksScheme else { return defaults }
     var attributes = defaults
     attributes[.foregroundColor] = nil
+    attributes.merge(caption) { _, caption in caption }
     return attributes
   }
 
@@ -265,14 +272,14 @@ extension DocumentTextBuilder {
   /// to the nearest whole point: a symbol that hangs below the line's descender
   /// makes its line that much taller, even past a fixed line height, and a
   /// fraction there puts every fragment below it off the pixel grid (#273). A
-  /// backlink caption's arrow is set the same way, in the caption's `color` and at
-  /// `scale` of its font's size.
+  /// backlink caption's arrow is set the same way, in the caption's `color` and
+  /// `smallerBy` points under its font's size.
   private func chipSymbolRun(
-    _ name: String, color: PlatformColor = RFCColors.accent, scale: CGFloat = 1,
+    _ name: String, color: PlatformColor = RFCColors.accent, smallerBy: CGFloat = 0,
     attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    let pointSize = font.pointSize * scale
+    let pointSize = font.pointSize - smallerBy
     guard let symbol = chipSymbol(name, pointSize: pointSize, color: color) else {
       return nil
     }

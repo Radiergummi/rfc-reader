@@ -192,6 +192,25 @@ struct BuilderBacklinkTests {
     #expect(other[.foregroundColor] as? PlatformColor == RFCColors.accent)
   }
 
+  /// The caption is drawn with its own attributes on top of the text view's, which
+  /// on macOS is the ordinary pointer in place of a link's pointing hand; every
+  /// other link keeps the text view's. Stand-in values: the merge is what is
+  /// pinned, and a test process cannot make a cursor.
+  @Test func `the caption's link is drawn with its own attributes on top`() throws {
+    let cursor = NSAttributedString.Key("cursor")
+    let defaults: [NSAttributedString.Key: Any] = [cursor: "pointing hand"]
+    let caption = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
+    let kept = DocumentTextBuilder.linkRenderingAttributes(
+      for: caption, defaults: defaults, caption: [cursor: "arrow"])
+    #expect(kept[cursor] as? String == "arrow")
+    let jump = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
+    let other = DocumentTextBuilder.linkRenderingAttributes(
+      for: jump, defaults: defaults, caption: [cursor: "arrow"])
+    #expect(other[cursor] as? String == "pointing hand")
+  }
+
   /// What the caption's popover lists: each citing section by its heading, in
   /// document order, and the abstract by name.
   @Test func `the caption lists the citing sections by heading`() {

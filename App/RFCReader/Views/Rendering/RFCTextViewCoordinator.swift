@@ -67,10 +67,15 @@ final class RFCTextViewCoordinator: NSObject {
       #if canImport(UIKit)
         // UIKit's are a link color only, the tint as it was when asked; the dynamic
         // tint follows the view's as UIKit's own link coloring does.
-        let attributes = LinkAttributes(attributes: [.foregroundColor: RFCColors.accent])
+        let attributes = LinkAttributes(
+          attributes: [.foregroundColor: RFCColors.accent], caption: [:])
       #else
         setUpHover()
-        let attributes = LinkAttributes(attributes: textView?.linkTextAttributes ?? [:])
+        // A backlink caption opens a list beside it, as a control does, under the
+        // ordinary pointer rather than a link's pointing hand. Made here, on the
+        // main thread, where AppKit makes cursors.
+        let attributes = LinkAttributes(
+          attributes: textView?.linkTextAttributes ?? [:], caption: [.cursor: NSCursor.arrow])
       #endif
       linkAttributes.withLock { $0 = attributes }
       setUpAccessibilityRotors()
@@ -82,13 +87,15 @@ final class RFCTextViewCoordinator: NSObject {
   /// stops reading them and starts from TextKit's (link-colored and underlined), so
   /// the delegate starts from these instead (#584). Behind a lock because TextKit
   /// may ask off the main thread.
-  nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:]))
+  nonisolated let linkAttributes = Mutex(LinkAttributes(attributes: [:], caption: [:]))
 
-  /// A text view's link attributes, handed across threads. `@unchecked Sendable`
-  /// because the dictionary is a copy taken once and never written to, and its
-  /// values, a color and a cursor, are only read to draw.
+  /// A text view's link attributes, and what a backlink caption is drawn with on
+  /// top of them, handed across threads. `@unchecked Sendable` because the
+  /// dictionaries are made once and never written to, and their values, colors and
+  /// cursors, are only read to draw.
   nonisolated struct LinkAttributes: @unchecked Sendable {
     let attributes: [NSAttributedString.Key: Any]
+    let caption: [NSAttributedString.Key: Any]
   }
 
   /// Retained deliberately: `UIHostingController().view` does not keep its
@@ -676,6 +683,7 @@ extension RFCTextViewCoordinator: nonisolated NSTextLayoutManagerDelegate {
     defaultAttributes renderingAttributes: [NSAttributedString.Key: Any]
   ) -> [NSAttributedString.Key: Any]? {
     let textView = linkAttributes.withLock { $0 }
-    return DocumentTextBuilder.linkRenderingAttributes(for: link, defaults: textView.attributes)
+    return DocumentTextBuilder.linkRenderingAttributes(
+      for: link, defaults: textView.attributes, caption: textView.caption)
   }
 }
