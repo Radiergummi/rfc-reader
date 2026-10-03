@@ -267,6 +267,9 @@ struct DocumentView: View {
   }
 
   @State private var scrollTarget: ReaderScrollTarget?
+  /// The tab an App Intent asked to show beside this document, taken and waiting for
+  /// the panel to have something to describe; see `showRequestedTab()`.
+  @State private var requestedTab: InspectorTab?
 
   /// `content`, taking a tab an App Intent asked to show beside this document (#192)
   /// once there is a document to describe: the macOS panel refuses to open over
@@ -507,13 +510,16 @@ struct DocumentView: View {
       showsOriginal: preferOriginalText)
   }
 
-  /// Shows the tab an App Intent asked for beside this document, if it asked and the
-  /// panel has something to describe (#192). Not while fading out over the next
-  /// document's reader: the request would be taken by the wrong one.
+  /// Takes the tab an App Intent asked for beside this document in this tab (#192),
+  /// and shows it once the panel has something to describe. Taken at once and kept
+  /// here, so a document that never loads, or is left first, takes the request with
+  /// it rather than leaving it for the next reader of that RFC. Not while fading out
+  /// over the next document's reader: the request would be taken by the wrong one.
   private func showRequestedTab() {
-    guard navigation.selection == id, reader.canDescribe,
-      let tab = library.takeInspectorRequest(for: id)
-    else { return }
+    guard navigation.selection == id else { return }
+    if let tab = library.takeInspectorRequest(for: id, in: navigation) { requestedTab = tab }
+    guard reader.canDescribe, let tab = requestedTab else { return }
+    requestedTab = nil
     reader.show(tab)
   }
 

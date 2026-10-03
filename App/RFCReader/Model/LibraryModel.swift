@@ -343,9 +343,10 @@ final class LibraryModel {
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
-      // Unless an intent has read them already (#192).
+      // Unless an intent has read them already (#192). Immediate, as the intent's is,
+      // so the check is marked before either can look.
       if registriesCheckedAt == nil {
-        Task(name: "Load registries") { await refreshRegistries() }
+        Task.immediate(name: "Load registries") { await refreshRegistries() }
       }
     #endif
   }
@@ -438,8 +439,10 @@ final class LibraryModel {
   /// either platform, so this starts the read when nothing has, in a task of its own,
   /// as `settledSearch()` starts the index's.
   func loadedRegistryEntries() async -> [RegistryEntry] {
+    // Immediate, so the check is marked before this suspends and a second query
+    // asking meanwhile does not read them again.
     if registriesCheckedAt == nil {
-      Task(name: "Load registries") { await refreshRegistries() }
+      Task.immediate(name: "Load registries") { await refreshRegistries() }
     }
     if !areRegistriesReadable {
       await withCheckedContinuation { registryWaiters.append($0) }
@@ -591,19 +594,25 @@ final class LibraryModel {
   }
 
   /// A tab of the navigation pane an App Intent asked to show beside a document
-  /// (#192), which the reader showing that document takes once it can describe it.
+  /// (#192), which the reader showing that document in the tab the link went to
+  /// takes.
   private(set) var inspectorRequest: DocumentRequest<InspectorTab>?
+  /// The tab `inspectorRequest`'s link went to, once `carryOut` has sent it to one:
+  /// another window showing the same document leaves the request alone.
+  @ObservationIgnored private weak var inspectorRequestScene: NavigationModel?
 
   /// Routes `link` as `route(_:)` does, and asks its reader to show `tab`.
   func route(_ link: RFCLink, showing tab: InspectorTab) {
     inspectorRequest = DocumentRequest(id: link.id, value: tab)
+    inspectorRequestScene = nil
     route(link)
   }
 
-  /// The tab asked for beside `id`, which is then no longer asked for; nil if none
-  /// was, or it was asked for beside another document.
-  func takeInspectorRequest(for id: DocumentID) -> InspectorTab? {
-    DocumentRequest.take(&inspectorRequest, for: id)
+  /// The tab asked for beside `id` in `scene`, which is then no longer asked for; nil
+  /// if none was, or it was asked for beside another document or in another tab.
+  func takeInspectorRequest(for id: DocumentID, in scene: NavigationModel) -> InspectorTab? {
+    guard inspectorRequestScene === scene else { return nil }
+    return DocumentRequest.take(&inspectorRequest, for: id)
   }
 
   // MARK: - Spotlight
@@ -922,6 +931,7 @@ final class LibraryModel {
   }
 
   private func carryOut(_ delivery: SceneRegistry<NavigationModel>.Delivery) {
+    if inspectorRequest?.id == delivery.link.id { inspectorRequestScene = delivery.scene }
     if delivery.bringsForward {
       deliver(delivery.link, to: delivery.scene)
     } else {
