@@ -162,7 +162,7 @@
       send(.documentPreviewShown)
     }
 
-    /// A heading's backlinks (#183), opened by the click on its chip, which has
+    /// A heading's backlinks (#183), opened by the click on its caption, which has
     /// already ended whatever was timing or showing.
     func showBacklinks(_ list: Popover) {
       guard present(list) else { return }
