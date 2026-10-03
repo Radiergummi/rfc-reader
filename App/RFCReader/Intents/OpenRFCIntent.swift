@@ -41,9 +41,10 @@ nonisolated struct OpenSectionIntent: OpenIntent {
   static let description = IntentDescription("Opens a section of an RFC.")
   static let openAppWhenRun = true
 
-  /// Asked for first: the sections offered are this RFC's (`SectionEntityQuery`).
-  @Parameter(title: "RFC")
-  var document: RFCEntity
+  /// The sections offered are this RFC's (`SectionEntityQuery`). Optional: a
+  /// section handed over already names its RFC, and opens without one.
+  @Parameter(title: "RFC", default: nil)
+  var document: RFCEntity?
 
   @Parameter(title: "Section")
   var target: SectionEntity
@@ -77,8 +78,7 @@ struct RFCReaderShortcuts: AppShortcutsProvider {
     AppShortcut(
       intent: OpenSectionIntent(),
       phrases: [
-        "Open a section of \(\.$document) in \(.applicationName)",
-        "Open a section of an RFC in \(.applicationName)",
+        "Open a section of an RFC in \(.applicationName)"
       ],
       shortTitle: "Open Section",
       systemImageName: "text.line.first.and.arrowtriangle.forward"

@@ -13,8 +13,8 @@ nonisolated struct SectionEntity: AppEntity {
   let id: String
   let document: DocumentID
   let anchor: String
-  /// What a link names the section by (`Section.place`), nil for an unnumbered one.
-  let place: String?
+  /// Where the reader goes for it.
+  let link: RFCLink
 
   /// `4.2`, `A.1`; nil for an unnumbered section such as the acknowledgements.
   @Property(title: "Number")
@@ -31,7 +31,7 @@ nonisolated struct SectionEntity: AppEntity {
     id = SectionIdentifier(document: document, anchor: section.anchor).description
     self.document = document
     anchor = section.anchor
-    place = section.place
+    link = RFCLink(section, in: document)
     number = section.number
     title = section.displayTitle
     documentName = document.displayName
@@ -39,11 +39,6 @@ nonisolated struct SectionEntity: AppEntity {
 
   var displayRepresentation: DisplayRepresentation {
     DisplayRepresentation(title: "\(title)", subtitle: "\(documentName)")
-  }
-
-  /// Where the reader goes for it: its place, or its anchor where it has none.
-  var link: RFCLink {
-    RFCLink(id: document, section: place, anchor: place == nil ? anchor : nil)
   }
 }
 
@@ -59,7 +54,7 @@ nonisolated struct SectionEntityQuery: EntityStringQuery {
 
   /// The RFC the intent asking for sections was given, if it has been given one.
   private var document: DocumentID? {
-    openSection?.document.documentID ?? requirements?.document.documentID
+    openSection?.document?.documentID ?? requirements?.document.documentID
   }
 
   func entities(for identifiers: [SectionEntity.ID]) async throws -> [SectionEntity] {

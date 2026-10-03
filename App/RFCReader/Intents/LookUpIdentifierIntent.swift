@@ -1,5 +1,6 @@
 import AppIntents
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 /// "Look up TLS alert 70" (#192): a protocol identifier in the IANA registries the
@@ -22,16 +23,9 @@ struct LookUpIdentifierIntent: AppIntent {
   func perform() async throws
     -> some IntentResult & ReturnsValue<RegistryEntryEntity> & ProvidesDialog & ShowsSnippetView
   {
-    .result(value: entry, dialog: Self.dialog(for: entry), view: RegistryEntrySnippet(entry: entry))
-  }
-
-  /// `TLS alert 70, protocol_version, is defined in RFC 8446, Section 6.2.`
-  private static func dialog(for entry: RegistryEntryEntity) -> IntentDialog {
-    let named = entry.name.map { "\(entry.heading), \($0)," } ?? entry.heading
-    guard let definedIn = entry.definedIn else {
-      return "\(named) is in IANA's registry, which names no RFC for it."
-    }
-    return "\(named) is defined in \(definedIn)."
+    let answer = IntentAnswer.definition(
+      of: entry.heading, name: entry.name, definedIn: entry.definedIn)
+    return .result(value: entry, dialog: "\(answer)", view: RegistryEntrySnippet(entry: entry))
   }
 }
 

@@ -1,5 +1,6 @@
 import AppIntents
 import RFCKit
+import RFCReaderKit
 import SwiftUI
 
 /// "Find the requirements in Section 4 of RFC 9110" (#192): the BCP 14 sentences a
@@ -37,15 +38,17 @@ nonisolated struct RequirementsIntent: AppIntent {
     let loaded = try await IntentDocuments.load(id)
     var scope: RFCKit.Section?
     if let section {
-      guard let found = loaded.section(anchor: section.anchor) else {
+      // A section of another RFC, handed over by a shortcut, is not one of this one.
+      guard section.document == id, let found = loaded.section(anchor: section.anchor) else {
         throw IntentFailure.noSuchSection(SectionIdentifier(document: id, anchor: section.anchor))
       }
       scope = found
     }
     let lines = await Self.requirements(in: loaded, within: scope).map(\.line)
     let place = section.map { "\($0.title) of \(id.displayName)" } ?? id.displayName
+    let answer = IntentAnswer.requirements(lines.count, in: place)
     return .result(
-      value: lines, dialog: Self.dialog(count: lines.count, place: place),
+      value: lines, dialog: "\(answer)",
       view: RequirementsSnippet(lines: lines, document: document, section: section))
   }
 
@@ -56,14 +59,6 @@ nonisolated struct RequirementsIntent: AppIntent {
   {
     let all = Requirements.extract(from: document)
     return section.map { Requirements.within($0, all) } ?? all
-  }
-
-  private static func dialog(count: Int, place: String) -> IntentDialog {
-    switch count {
-    case 0: "There are no BCP 14 requirements in \(place)."
-    case 1: "There is one requirement in \(place)."
-    default: "There are \(count) requirements in \(place)."
-    }
   }
 }
 

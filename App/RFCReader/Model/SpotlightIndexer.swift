@@ -25,8 +25,8 @@ enum SpotlightIndexer {
   static func update(_ rfcs: [RFCMetadata]) async {
     guard CSSearchableIndex.isIndexingAvailable() else { return }
     let index = CSSearchableIndex(name: SpotlightEntry.domain)
-    let entries = rfcs.map { (entry: SpotlightEntry($0), entity: RFCEntity($0)) }
-    let state = SpotlightEntry.clientState(for: entries.map(\.entry), now: .now)
+    let entries = rfcs.map(SpotlightEntry.init)
+    let state = SpotlightEntry.clientState(for: entries, now: .now)
     do {
       if try await index.fetchLastClientState() == state { return }
       let expiration = Date.now.addingTimeInterval(SpotlightEntry.lifetime)
@@ -35,8 +35,9 @@ enum SpotlightIndexer {
         // the client state is left for it to write.
         guard !Task.isCancelled else { return }
         let end = min(start + batchSize, entries.count)
-        let items = entries[start..<end].map {
-          item($0.entry, for: $0.entity, expiring: expiration)
+        // The entities only here, past the check that most launches stop at.
+        let items = (start..<end).map {
+          item(entries[$0], for: RFCEntity(rfcs[$0]), expiring: expiration)
         }
         index.beginBatch()
         add(items, to: index)

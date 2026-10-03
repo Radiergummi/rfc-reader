@@ -55,3 +55,13 @@ public enum SectionLookup {
     }
   }
 }
+
+extension RFCLink {
+  /// The link to `section` of `document`: by its place, as a citation names it, or by
+  /// its anchor where it has no number, as the acknowledgements have none. What an
+  /// App Intent opens a section entity by (#192).
+  public init(_ section: Section, in document: DocumentID) {
+    let place = section.place
+    self.init(id: document, section: place, anchor: place == nil ? section.anchor : nil)
+  }
+}

@@ -39,10 +39,7 @@ nonisolated struct RegistryEntryEntity: AppEntity {
     registry = entry.registry.displayName
     value = entry.value
     name = entry.name
-    definedIn = reference.map { link in
-      [link.id.displayName, link.section.map { PlaceName.spelledOut($0) }]
-        .compactMap { $0 }.joined(separator: ", ")
-    }
+    definedIn = reference.map { CitationFormatter.shortCitation($0.id, section: $0.section) }
   }
 
   /// `TLS alert 70`.

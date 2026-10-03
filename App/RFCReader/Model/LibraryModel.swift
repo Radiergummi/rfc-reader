@@ -199,6 +199,8 @@ final class LibraryModel {
     }
     guard count != recentlyReadCount else { return }
     recentlyReadCount = count
+    // A document read for the first time: what a phrase can name (#192).
+    RFCReaderShortcuts.refreshParameters()
   }
 
   private func refreshCollections() {
@@ -341,7 +343,10 @@ final class LibraryModel {
     // Only the Mac's Go to RFC palette looks values up (#175); an iPhone would
     // fetch them for nothing.
     #if os(macOS)
-      Task(name: "Load registries") { await refreshRegistries() }
+      // Unless an intent has read them already (#192).
+      if registriesCheckedAt == nil {
+        Task(name: "Load registries") { await refreshRegistries() }
+      }
     #endif
   }
 
@@ -379,6 +384,8 @@ final class LibraryModel {
     registryEntries = IANARegistry.allCases.flatMap { cached.entries[$0] ?? [] }
     let fetches = RegistryRefresh.fetches(stale: cached.stale, cached: Set(cached.entries.keys))
     for fetch in fetches {
+      // The first fetches come first (`RegistryRefresh`): what is left are refreshes.
+      if !fetch.onExpensiveNetworks { registriesBecameReadable() }
       let registry = fetch.registry
       let fetched: (entries: [RegistryEntry], data: Data)
       do {
@@ -402,6 +409,7 @@ final class LibraryModel {
         )
       }
     }
+    registriesBecameReadable()
   }
 
   /// The registry values `query` names exactly: `425`, `tls alert 70`,
@@ -410,12 +418,32 @@ final class LibraryModel {
     RegistryLookup.matches(query, in: registryEntries)
   }
 
-  /// The registry entries an App Intent asks for (#192), reading the registries
-  /// first when this launch has not: only the Mac reads them at launch, and an
-  /// intent may be the first to ask on either platform. One that asks while the
-  /// launch's check is still reading them gets what has been read so far.
+  /// What waits in `loadedRegistryEntries()` for the registries to be readable.
+  @ObservationIgnored private var registryWaiters: [CheckedContinuation<Void, Never>] = []
+  /// Whether the registries are readable: the cached ones read, and the ones never
+  /// fetched fetched, or failed to be. Not the refreshes after them, which may wait
+  /// for a cheap network.
+  @ObservationIgnored private var areRegistriesReadable = false
+
+  private func registriesBecameReadable() {
+    guard !areRegistriesReadable else { return }
+    areRegistriesReadable = true
+    let waiters = registryWaiters
+    registryWaiters = []
+    for waiter in waiters { waiter.resume() }
+  }
+
+  /// The registry entries an App Intent asks for (#192), once they are readable.
+  /// Only the Mac reads them at launch, and an intent may be the first to ask on
+  /// either platform, so this starts the read when nothing has, in a task of its own,
+  /// as `settledSearch()` starts the index's.
   func loadedRegistryEntries() async -> [RegistryEntry] {
-    if registriesCheckedAt == nil { await refreshRegistries() }
+    if registriesCheckedAt == nil {
+      Task(name: "Load registries") { await refreshRegistries() }
+    }
+    if !areRegistriesReadable {
+      await withCheckedContinuation { registryWaiters.append($0) }
+    }
     return registryEntries
   }
 
@@ -542,43 +570,40 @@ final class LibraryModel {
   /// What waits in `settledSearch()` for the index to arrive or fail, resumed by
   /// `settleIndex()`.
   @ObservationIgnored private var indexWaiters: [CheckedContinuation<Void, Never>] = []
+  /// Whether the index has arrived or failed to, once: from then on an intent takes
+  /// what there is rather than waiting. Not `indexState`, which a launch whose fetch
+  /// answers nothing leaves loading.
+  @ObservationIgnored private var isIndexSettled = false
 
   /// The index's search once the index has loaded, or nil if it could not: what an
   /// App Intent's queries run against (#192). The app may have been launched for the
-  /// intent alone, before anything started the load, so this starts it then.
+  /// intent alone, before anything started the load, so this starts it then: in a
+  /// task of its own, since the load is the app's, and a query the system gives up
+  /// on must not cancel it.
   func settledSearch() async -> IndexSearch? {
-    switch indexState {
-    case .idle:
-      await bootstrap()
-    case .loading where search == nil:
+    if indexState == .idle {
+      Task(name: "Bootstrap library") { await bootstrap() }
+    }
+    if !isIndexSettled {
       await withCheckedContinuation { indexWaiters.append($0) }
-    default:
-      break
     }
     return search
   }
 
   /// A tab of the navigation pane an App Intent asked to show beside a document
   /// (#192), which the reader showing that document takes once it can describe it.
-  struct InspectorRequest: Equatable {
-    let id: DocumentID
-    let tab: InspectorTab
-  }
-
-  private(set) var inspectorRequest: InspectorRequest?
+  private(set) var inspectorRequest: DocumentRequest<InspectorTab>?
 
   /// Routes `link` as `route(_:)` does, and asks its reader to show `tab`.
   func route(_ link: RFCLink, showing tab: InspectorTab) {
-    inspectorRequest = InspectorRequest(id: link.id, tab: tab)
+    inspectorRequest = DocumentRequest(id: link.id, value: tab)
     route(link)
   }
 
   /// The tab asked for beside `id`, which is then no longer asked for; nil if none
   /// was, or it was asked for beside another document.
   func takeInspectorRequest(for id: DocumentID) -> InspectorTab? {
-    guard let request = inspectorRequest, request.id == id else { return nil }
-    inspectorRequest = nil
-    return request.tab
+    DocumentRequest.take(&inspectorRequest, for: id)
   }
 
   // MARK: - Spotlight
@@ -849,6 +874,7 @@ final class LibraryModel {
   /// (#241), where `NavigationModel.open(_:in:)` can resolve a BCP or STD to its first
   /// RFC.
   private func settleIndex() {
+    isIndexSettled = true
     let waiters = indexWaiters
     indexWaiters = []
     for waiter in waiters { waiter.resume() }

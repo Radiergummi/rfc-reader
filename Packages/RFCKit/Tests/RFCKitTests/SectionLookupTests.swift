@@ -56,4 +56,16 @@ struct SectionLookupTests {
     let all = SectionLookup.sections(matching: " ", in: document)
     #expect(all.map(\.anchor) == document.allSections.map(\.anchor))
   }
+
+  @Test func `a section is linked by its place, or by its anchor without one`() throws {
+    let document = try Fixtures.document("rfc8999.xml")
+    let numbered = try #require(document.section(number: "5.2"))
+    #expect(RFCLink(numbered, in: .rfc(8999)) == RFCLink(id: .rfc(8999), section: "5.2"))
+    let appendix = try #require(document.section(number: "A"))
+    #expect(RFCLink(appendix, in: .rfc(8999)).section == "A")
+    let unnumbered = try #require(document.section(anchor: "authors-addresses"))
+    #expect(
+      RFCLink(unnumbered, in: .rfc(8999))
+        == RFCLink(id: .rfc(8999), anchor: "authors-addresses"))
+  }
 }

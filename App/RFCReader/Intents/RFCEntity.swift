@@ -60,10 +60,14 @@ nonisolated struct RFCEntityQuery: EntityStringQuery {
     return DocumentLookup.rfcs(matching: string, in: search).map(RFCEntity.init)
   }
 
-  /// What was read recently: also what a phrase can name (`RFCReaderShortcuts`).
+  /// As many of the RFCs read last as a list to choose from takes in.
+  private static let suggestionCount = 20
+
+  /// What was read last: also what a phrase can name (`RFCReaderShortcuts`).
   func suggestedEntities() async throws -> [RFCEntity] {
     guard let search = await LibraryModel.shared.settledSearch() else { return [] }
     let read = await LibraryModel.shared.recentlyRead()
-    return read.compactMap { search.index[$0] }.map(RFCEntity.init)
+    return read.lazy.compactMap { search.index[$0] }.prefix(Self.suggestionCount)
+      .map(RFCEntity.init)
   }
 }
