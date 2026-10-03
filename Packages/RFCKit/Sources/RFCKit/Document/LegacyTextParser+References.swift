@@ -95,9 +95,9 @@ extension LegacyTextParser {
   private static let referenceTitlePattern = Pattern(#/"([^"]+)"/#)
   private static let referenceURLPattern = Pattern(#/https?:\/\/[^\s>,]+/#)
 
-  private static func reference(anchor label: String, text: String) -> Reference {
+  static func reference(anchor label: String, text: String) -> Reference {
     let titleMatch = text.firstMatch(of: referenceTitlePattern)
-    let title = titleMatch.map { String($0.1) } ?? ""
+    let title = titleMatch.map { String($0.1).collapsingWhitespace() } ?? ""
     // What the entry says outside its title, which is where its own series info is. A
     // title names other documents -- RFC 8174's is about the keywords of RFC 2119 --
     // and read from the whole entry, the title's number came first: RFC 8174's entry
@@ -131,7 +131,8 @@ extension LegacyTextParser {
       URL(string: String($0.output).trimmingTrailingPunctuation())
     }
     var reference = Reference(
-      anchor: label, title: title, date: date, seriesInfo: seriesInfo, url: url, rawText: text)
+      anchor: label, title: title, date: date, seriesInfo: seriesInfo, url: url,
+      rawText: text.isEmpty ? nil : text)
     reference.anchor = entryAnchor(label: label, documentID: reference.documentID)
     return reference
   }

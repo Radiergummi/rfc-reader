@@ -72,6 +72,18 @@ public struct RFCLink: Hashable, Sendable {
       RFCEditorEndpoints.base.appending(path: "rfc/\(id.fileStem)"), fragment: anchor)
   }
 
+  /// The link `url` makes, where a citation can say all of it: an RFC itself, or one
+  /// of its sections. Nil for a page about it, its errata or its history, and for an
+  /// anchor that names no section, which a citation has no place for and would open
+  /// at the document's top instead (#683).
+  public init?(citing url: URL) {
+    guard let link = RFCLink(url: url), link.id.series == .rfc, link.anchor == nil,
+      !url.pathComponents.contains("errata"),
+      DocumentID(parsing: url.deletingPathExtension().lastPathComponent) == link.id
+    else { return nil }
+    self = link
+  }
+
   public init?(url: URL) {
     let scheme = url.scheme?.lowercased()
     let host = url.host()?.lowercased() ?? ""
