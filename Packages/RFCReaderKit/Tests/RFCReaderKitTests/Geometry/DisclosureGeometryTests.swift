@@ -14,8 +14,8 @@ struct DisclosureGeometryTests {
       let points = FragmentGeometry.disclosureChevron(open: open, firstLine: line)
       #expect(points.count == 3)
       #expect(points.allSatisfy { $0.x < line.minX }, "left of the column")
-      let ys = points.map(\.y)
-      #expect(abs((ys.min()! + ys.max()!) / 2 - line.midY) < 0.5)
+      let heights = points.map(\.y)
+      #expect(abs((heights.min()! + heights.max()!) / 2 - line.midY) < 0.5)
     }
   }
 

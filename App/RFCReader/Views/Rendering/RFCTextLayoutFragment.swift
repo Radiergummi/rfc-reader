@@ -236,11 +236,11 @@ nonisolated final class RFCTextLayoutFragment: NSTextLayoutFragment {
   }
 
   private static func boundingRect(of points: [CGPoint]) -> CGRect {
-    let xs = points.map(\.x)
-    let ys = points.map(\.y)
+    let across = points.map(\.x)
+    let down = points.map(\.y)
     return CGRect(
-      x: xs.min() ?? 0, y: ys.min() ?? 0, width: (xs.max() ?? 0) - (xs.min() ?? 0),
-      height: (ys.max() ?? 0) - (ys.min() ?? 0))
+      x: across.min() ?? 0, y: down.min() ?? 0, width: (across.max() ?? 0) - (across.min() ?? 0),
+      height: (down.max() ?? 0) - (down.min() ?? 0))
   }
 
   private func drawDisclosure(at point: CGPoint, in context: CGContext) {
