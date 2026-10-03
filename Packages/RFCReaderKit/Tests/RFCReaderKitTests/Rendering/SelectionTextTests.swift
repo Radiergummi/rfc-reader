@@ -154,13 +154,13 @@ struct SelectionTextTests {
     #expect(SelectionText.plainText(of: selection) == "long value")
   }
 
-  /// The prose before a figure is copied as it is, and the figure unfolded after it.
+  /// The prose before a figure is copied as it is, and the figure unfolded after it,
+  /// without the block's language label, which is the reader's and not the document's.
   @Test func `prose and a folded block are copied together`() throws {
     let text = Self.narrowBuild()
     let selection = try Self.selection(from: "Before", through: "value\"}", in: text)
     #expect(
-      SelectionText.plainText(of: selection)
-        == "Before the figure.\nJSON\n" + Self.folded.unfoldedText)
+      SelectionText.plainText(of: selection) == "Before the figure.\n" + Self.folded.unfoldedText)
   }
 
   /// On a published RFC: RFC 9985's YANG example in a column too narrow to show it
