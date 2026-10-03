@@ -37,7 +37,7 @@ make xcodegen-install xcodeproj             # then open RFCReader.xcodeproj
 
 Editors that make URLs clickable (Xcode, VS Code, most terminals) open that link in RFC Reader. A link names a document, `rfc://9110`, `rfc://bcp14`, and optionally a place in it: a section, `#section-8.3`, or an appendix, `#appendix-B`, the RFC Editor's own fragments.
 
-To write one, select a citation such as `RFC 9110 §8.3`, `RFC 9110, Section 8.3`, `Section 8.3 of [RFC9110]` or `[RFC9110]`, and choose *Services ▸ Replace with RFC Link* from the app's menu or the context menu; it becomes `rfc://9110#section-8.3`. *Services ▸ Open in RFC Reader* opens the citation instead, from any app. Both are on macOS, and a keyboard shortcut for either can be set in System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Services. A selection that cites no single RFC, or names more than one place in it, is left as it was.
+To write one, select a citation such as `RFC 9110 §8.3`, `RFC 9110, Section 8.3`, `Section 8.3 of [RFC9110]` or `[RFC9110]`, and choose *Services ▸ Replace with RFC Link* from the app's menu or the context menu; it becomes `rfc://9110#section-8.3`, and any words selected around it stay. *Services ▸ Open in RFC Reader* opens the citation instead, from any app. Both are on macOS, and a keyboard shortcut for either can be set in System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Services. A selection that cites no single RFC, or names more than one place in it, is left as it was.
 
 ## Data
 
