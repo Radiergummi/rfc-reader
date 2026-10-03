@@ -163,6 +163,28 @@ struct SectionAlignmentTests {
     #expect(Self.pairs(old: old, new: new).isEmpty)
   }
 
+  /// The prose floor is over the two sections' own prose, without their titles: in a
+  /// short section the title's words would otherwise be most of the vector, and two
+  /// equal titles would clear the floor for each other.
+  @Test func `an equal title over short disjoint prose is no pair`() {
+    let old = Self.document(1, [Self.section("1", "Examples", "Widgets nest.")])
+    let new = Self.document(2, [Self.section("9", "Examples", "Counters reset.")])
+    #expect(Self.pairs(old: old, new: new).isEmpty)
+  }
+
+  /// A section with a title and no prose of its own, a heading over its subsections,
+  /// has nothing for the prose floor to measure, so its title alone pairs it with
+  /// nothing.
+  @Test func `a section with no prose of its own is no pair`() {
+    let old = Self.document(
+      1,
+      [Section(anchor: "section-1", number: "1", title: "Widget Requests", blocks: [])])
+    let new = Self.document(
+      2,
+      [Section(anchor: "section-1", number: "1", title: "Widget Requests", blocks: [])])
+    #expect(Self.pairs(old: old, new: new).isEmpty)
+  }
+
   /// An edge named twice is one edge, and a document naming itself is none.
   @Test func `a repeated or a self-naming edge writes nothing more`() {
     let old = Self.document(
