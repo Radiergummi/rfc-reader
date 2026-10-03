@@ -13,11 +13,11 @@ import Foundation
 /// Parsing alone is not quite enough: `count = max;` is a valid rule, with one element
 /// and a comment, and so is a line of C or of a configuration file. `recognizes(_:)`
 /// asks for more than one rule, or for syntax only a grammar has.
-enum ABNF {
-  struct Rule: Sendable, Hashable {
-    var name: String
+public enum ABNF {
+  public struct Rule: Sendable, Hashable {
+    public var name: String
     /// A `=/` rule, adding alternatives to one defined before it.
-    var isIncremental: Bool
+    public var isIncremental: Bool
     /// The rule names the definition refers to, each once whatever its case, as first
     /// spelled and in order of first mention.
     var references: [String]
@@ -31,19 +31,19 @@ enum ABNF {
     /// block defining a name twice is a grammar with an error in it.
     var usesRepetitionOrNumericValue: Bool
     /// Where the name is defined, in UTF-16 code units of the text as given (#185).
-    var nameRange: NSRange
+    public var nameRange: NSRange
     /// Every mention of a rule name in the definition, in order, each with its range in
     /// the text as given: what the reader links to the rule's definition (#185).
-    var uses: [Use]
+    public var uses: [Use]
     /// Whether a count runs into a name made only of hex digits, as in `4c0ffee`: valid
     /// ABNF by the letter, and a reason not to take the block for a grammar.
     var readsAsHexNumber: Bool
   }
 
   /// One mention of a rule name.
-  struct Use: Sendable, Hashable {
-    var name: String
-    var range: NSRange
+  public struct Use: Sendable, Hashable {
+    public var name: String
+    public var range: NSRange
   }
 
   /// Whether `text` is a grammar: it parses, and a rule uses syntax only a grammar has,
@@ -73,7 +73,7 @@ enum ABNF {
   /// The rules of `text`, or nil when it is not ABNF. Blank lines and lines holding
   /// only a comment are skipped; every other line either starts a rule at column 0 or
   /// continues the one before it, set deeper.
-  static func parse(_ text: String) -> [Rule]? {
+  public static func parse(_ text: String) -> [Rule]? {
     parsed(text)?.rules
   }
 
