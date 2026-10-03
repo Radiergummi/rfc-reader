@@ -78,6 +78,13 @@ struct ReadingPathTests {
     #expect(path.isCut)
   }
 
+  /// A document at the depth is not followed further, but what it cites that is
+  /// already on the path still comes before it.
+  @Test func `a document at the depth still comes after what it cites on the path`() {
+    let graph = Graph(normative: [1: [2, 3], 2: [3]])
+    #expect(numbers(graph.walk(from: 1, depth: 1)) == [3, 2, 1])
+  }
+
   @Test func `a walk that reaches every document is not cut`() {
     let graph = Graph(normative: [1: [2], 2: [3]])
     #expect(!graph.walk(from: 1, depth: 2).isCut)

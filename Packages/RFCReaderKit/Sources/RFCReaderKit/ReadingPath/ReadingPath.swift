@@ -91,13 +91,12 @@ public struct ReadingPath: Sendable, Equatable {
     var entered: Set<DocumentID> = []
     func visit(_ id: DocumentID) throws(Failure) {
       guard entered.insert(id).inserted else { return }
-      let distance = depths[id]!
-      if distance < depth {
-        for cited in try referencesOf(id).normative where depths[cited] != nil {
-          try visit(cited)
-        }
+      // Every edge between documents on the path, a document at the depth's too: it
+      // brings in nothing new, but what it cites still comes before it.
+      for cited in try referencesOf(id).normative where depths[cited] != nil {
+        try visit(cited)
       }
-      steps.append(Step(document: id, depth: distance))
+      steps.append(Step(document: id, depth: depths[id]!))
     }
     try visit(root)
 
@@ -134,8 +133,13 @@ extension ReadingPath {
   /// collection it is saved as.
   public var documents: [DocumentID] { assumed + steps.map(\.document) }
 
-  /// The name of the collection the path is saved as.
-  public var collectionName: String { "Reading Path: \(root.displayName)" }
+  /// The sheet's title for the path from `root`.
+  public static func title(for root: DocumentID) -> String {
+    "Reading Path: \(root.displayName)"
+  }
+
+  /// The name of the collection the path is saved as: the sheet's title.
+  public var collectionName: String { Self.title(for: root) }
 
   /// The sheet's rows: the assumed documents and the path's, each with what the
   /// index and the reading positions say of it.

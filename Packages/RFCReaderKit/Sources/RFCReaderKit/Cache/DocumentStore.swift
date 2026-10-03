@@ -469,10 +469,7 @@ public actor DocumentStore {
   public func installLegacyPack(from source: URL) async throws -> InstalledPack {
     // Checked and set without a suspension between them, so a second install
     // arriving while the first is off the actor is refused rather than raced.
-    guard !isInstallingPack else { throw AlreadyInstalling() }
-    isInstallingPack = true
-    defer { isInstallingPack = false }
-    let pack = try await Self.install(source, as: Self.legacyPackName, in: packsDirectory)
+    let pack = try await installPack(source, as: Self.legacyPackName)
     legacyPack = pack
     // Parsed again on their next open, from the pack; nothing else it could serve.
     parsed.removeAll { pack.file(for: $0) != nil }
@@ -483,10 +480,17 @@ public actor DocumentStore {
   /// one. A reader opens its database afresh for each question, so nothing here
   /// holds the one it replaces.
   public func installIndexesPack(from source: URL) async throws -> InstalledPack {
+    try await installPack(source, as: Self.indexesPackName)
+  }
+
+  /// One install at a time, whichever pack.
+  private func installPack(_ source: URL, as name: String) async throws -> InstalledPack {
+    // Checked and set without a suspension between them, so a second install
+    // arriving while the first is off the actor is refused rather than raced.
     guard !isInstallingPack else { throw AlreadyInstalling() }
     isInstallingPack = true
     defer { isInstallingPack = false }
-    return try await Self.install(source, as: Self.indexesPackName, in: packsDirectory)
+    return try await Self.install(source, as: name, in: packsDirectory)
   }
 
   /// The installed `indexes` pack's citation database, or nil when no pack is

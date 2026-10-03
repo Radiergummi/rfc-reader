@@ -228,13 +228,17 @@ final class LibraryModel {
 
   /// Runs a change to collections on the app's context. A failure is logged rather
   /// than shown (#125): every change the interface offers is one the store accepts,
-  /// and an empty name is refused before it gets here.
-  func editCollections(_ change: (ModelContext) throws -> Void) {
+  /// and an empty name is refused before it gets here. Answers whether it was made,
+  /// for a view that says it was.
+  @discardableResult
+  func editCollections(_ change: (ModelContext) throws -> Void) -> Bool {
     do {
       try change(container.mainContext)
+      return true
     } catch {
       libraryLog.error(
         "changing a collection failed: \(String(describing: error), privacy: .public)")
+      return false
     }
   }
 
@@ -420,23 +424,29 @@ final class LibraryModel {
       guard legacy != nil || indexes != nil else { return }
       // Installed on every launch the argument is set for, which is what a
       // developer setting it in a scheme wants while iterating on a pack. One after
-      // the other: the store installs one pack at a time.
+      // the other, since the store installs one pack at a time, and each whether or
+      // not the other failed.
       Task(name: "Install data pack") {
-        do {
-          if let legacy {
+        if let legacy {
+          do {
             let pack = try await installLegacyPack(from: PackInstaller.source(fromArgument: legacy))
             libraryLog.info(
               "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
             )
+          } catch {
+            libraryLog.error(
+              "installing a data pack failed: \(String(describing: error), privacy: .public)")
           }
-          if let indexes {
+        }
+        if let indexes {
+          do {
             let pack = try await store.installIndexesPack(
               from: PackInstaller.source(fromArgument: indexes))
             libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
+          } catch {
+            libraryLog.error(
+              "installing the indexes pack failed: \(String(describing: error), privacy: .public)")
           }
-        } catch {
-          libraryLog.error(
-            "installing a data pack failed: \(String(describing: error), privacy: .public)")
         }
       }
     }
@@ -1081,16 +1091,10 @@ final class LibraryModel {
     }
   }
 
-  /// Whether `id` has been opened, by its reading position. False when the fetch
-  /// fails, which is logged: the mark is only shown.
-  func hasBeenRead(_ id: DocumentID) -> Bool {
-    do {
-      return try ReadingPositionStore.position(for: id, in: container.mainContext) != nil
-    } catch {
-      libraryLog.error(
-        "reading a reading position failed: \(String(describing: error), privacy: .public)")
-      return false
-    }
+  /// Every document that has been opened, by its reading position, in one fetch.
+  /// Empty when the fetch fails, which is logged: the marks are only shown.
+  func readDocuments() -> Set<DocumentID> {
+    Set(recentlyRead())
   }
 
   func download(_ id: DocumentID) async throws {

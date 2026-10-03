@@ -35,7 +35,7 @@ struct ReadingPathSheet: View {
     case failed
   }
 
-  private var title: String { "Reading Path: \(root.displayName)" }
+  private var title: String { ReadingPath.title(for: root) }
 
   private var path: ReadingPath? {
     if case .path(let path, _, _) = loaded { path } else { nil }
@@ -44,11 +44,14 @@ struct ReadingPathSheet: View {
   var body: some View {
     form
       .task(id: depth) {
+        // A deeper path is another list, which can be saved again.
+        isSaved = false
         isWalking = true
         defer { isWalking = false }
         switch await library.readingPath(from: root, depth: depth) {
         case .path(let path):
-          let rows = path.rows(metadata: library.metadata, isRead: library.hasBeenRead)
+          let read = library.readDocuments()
+          let rows = path.rows(metadata: library.metadata, isRead: read.contains)
           loaded = .path(path, assumed: rows.assumed, steps: rows.steps)
         case .noIndex:
           loaded = .noIndex
@@ -204,11 +207,10 @@ struct ReadingPathSheet: View {
   /// the path, in order.
   private func save() {
     guard let path else { return }
-    library.editCollections { context in
+    isSaved = library.editCollections { context in
       try CollectionStore.create(
         named: path.collectionName, color: .default, documents: path.documents, in: context)
     }
-    isSaved = true
   }
 
   private func open(_ id: DocumentID) {
