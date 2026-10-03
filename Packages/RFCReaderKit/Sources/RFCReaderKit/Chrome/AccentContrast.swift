@@ -47,6 +47,9 @@ public enum AccentContrast {
   /// on a white page.
   public static let readerLink = (light: SRGBColor(hex: 0x00_68DA), dark: SRGBColor(hex: 0x41_9CFF))
 
+  /// The link color on a card: an aside's, a table's or a figure's (#694).
+  public static let cardLink = readerLink
+
   /// The status banner's row symbols, stated as `StatusPalette`'s colors are.
   public enum BannerSymbol: Sendable, CaseIterable {
     /// Red: the system red, which already clears 3:1 on the banner.

@@ -192,6 +192,44 @@ struct BuilderBacklinkTests {
     #expect(other[.foregroundColor] as? PlatformColor == RFCColors.accent)
   }
 
+  /// A link on a card is drawn in the link color for a card, which clears the
+  /// minimum contrast on the card's fill where the text view's may not (#694); the
+  /// caption keeps its own color there too.
+  @Test func `a link on a card is drawn in the card's link color`() throws {
+    let defaults: [NSAttributedString.Key: Any] = [
+      .foregroundColor: RFCColors.accent, .underlineStyle: NSUnderlineStyle.single.rawValue,
+    ]
+    let jump = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.anchorScheme))
+    let onCard = DocumentTextBuilder.linkRenderingAttributes(
+      for: jump, defaults: defaults, onCard: true)
+    let color = try #require(onCard[.foregroundColor] as? PlatformColor)
+    let dark = try #require(Self.resolvedInDark(color))
+    #expect(abs(dark.red - AccentContrast.cardLink.dark.red) < 0.002)
+    #expect(abs(dark.green - AccentContrast.cardLink.dark.green) < 0.002)
+    #expect(abs(dark.blue - AccentContrast.cardLink.dark.blue) < 0.002)
+    #expect(onCard[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue)
+    let caption = try #require(
+      DocumentTextBuilder.url("two", scheme: DocumentTextBuilder.backlinksScheme))
+    let kept = DocumentTextBuilder.linkRenderingAttributes(
+      for: caption, defaults: defaults, onCard: true)
+    #expect(kept[.foregroundColor] == nil)
+  }
+
+  private static func resolvedInDark(_ color: PlatformColor) -> SRGBColor? {
+    var resolved: SRGBColor?
+    #if canImport(UIKit)
+      UITraitCollection(userInterfaceStyle: .dark).performAsCurrent {
+        resolved = SRGBColor(resolving: color)
+      }
+    #else
+      NSAppearance(named: .darkAqua)?.performAsCurrentDrawingAppearance {
+        resolved = SRGBColor(resolving: color)
+      }
+    #endif
+    return resolved
+  }
+
   /// The caption is drawn with its own attributes on top of the text view's, which
   /// on macOS is the ordinary pointer in place of a link's pointing hand; every
   /// other link keeps the text view's. Stand-in values: the merge is what is

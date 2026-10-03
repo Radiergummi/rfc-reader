@@ -67,6 +67,11 @@ public enum RFCColors {
     byAppearance(light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark)
   }
 
+  /// A link on a card.
+  public static var cardLink: PlatformColor {
+    byAppearance(light: AccentContrast.cardLink.light, dark: AccentContrast.cardLink.dark)
+  }
+
   /// The page the reader's text is drawn on, which a chip's tint is drawn over.
   public static var page: PlatformColor {
     #if canImport(UIKit)

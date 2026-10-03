@@ -276,7 +276,7 @@ extension DocumentTextBuilder {
   /// text view would.
   public static func linkRenderingAttributes(
     for link: Any, defaults: [NSAttributedString.Key: Any],
-    caption: [NSAttributedString.Key: Any] = [:]
+    caption: [NSAttributedString.Key: Any] = [:], onCard: Bool = false
   ) -> [NSAttributedString.Key: Any] {
     // The scheme alone: asked of every link TextKit draws, where decoding the
     // anchor would allocate for an answer nobody reads.
