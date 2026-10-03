@@ -307,8 +307,8 @@ struct ReadingModeTests {
     #expect(Folding(focusingOn: section.anchor).disclosures(in: FoldingIndex(built)).isEmpty)
   }
 
-  /// Next Section goes past the focused subtree; Previous goes to the section before
-  /// at its depth or shallower: its sibling, or its parent.
+  /// Next Section goes past the focused subtree; Previous goes to the heading just
+  /// before, at any depth: from past a subtree, its last subsection.
   @Test func `next and previous move the focus`() throws {
     let built = try Self.rfc8999()
     let section = try Self.sectionWithSubsections(in: built)
@@ -317,7 +317,9 @@ struct ReadingModeTests {
     let next = try #require(focus.focusing(.next, in: index)?.focused)
     #expect(built.anchors.offset(of: next) == section.span.upperBound)
     let back = try #require(focus.focusing(.next, in: index)?.focusing(.previous, in: index))
-    #expect(back.focused == section.anchor)
+    let lastInside = built.anchors.sections.entries.last { section.span.contains($0.offset) }
+    #expect(back.focused == lastInside?.anchor)
+    #expect(back.focused != section.anchor)
     #expect(Folding(mode: .outline).focusing(.next, in: index) == nil)
   }
 
@@ -392,6 +394,22 @@ struct ReadingModeTests {
     let child = try #require(sections.first { $0.offset > section.span.lowerBound })
     #expect(
       Folding(focusingOn: child.anchor).focusing(.previous, in: index)?.focused == section.anchor)
+  }
+
+  /// Previous Section goes to the heading just before, at any depth, so that from a
+  /// last subsection Next and then Previous come back to it rather than its parent.
+  @Test func `next and then previous from a last subsection come back to it`() throws {
+    let built = try Self.rfc8999()
+    let index = FoldingIndex(built)
+    let sections = built.anchors.sections.entries
+    let last = try #require(
+      sections.indices.dropLast().first {
+        (sections[$0].depth ?? 1) > 1 && (sections[$0 + 1].depth ?? 1) < (sections[$0].depth ?? 1)
+      })
+    let focus = Folding(focusingOn: sections[last].anchor)
+    let next = try #require(focus.focusing(.next, in: index))
+    #expect(next.focused == sections[last + 1].anchor)
+    #expect(next.focusing(.previous, in: index)?.focused == sections[last].anchor)
   }
 
   /// The References tab in Focus: the cited entries, in their groups, and no group

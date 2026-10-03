@@ -116,8 +116,8 @@ public struct Folding: Sendable, Equatable {
   }
 
   /// This folding focused on the section after the focused one's subsections, or on
-  /// the one before it at its depth or shallower, its sibling or its parent; nil out
-  /// of Focus, or with nowhere to go.
+  /// the heading just before it at any depth, so that Next and then Previous come
+  /// back to where they started; nil out of Focus, or with nowhere to go.
   public func focusing(_ step: FocusStep, in index: FoldingIndex) -> Folding? {
     guard mode == .focus, let current = focusedEntry(in: index),
       let position = index.entries.firstIndex(of: current)
@@ -128,7 +128,7 @@ public struct Folding: Sendable, Equatable {
       let end = index.subtree(of: current.anchor)?.upperBound ?? index.length
       target = index.entries.first { $0.offset >= end }
     case .previous:
-      target = index.entries[..<position].last { $0.depth <= current.depth }
+      target = position > 0 ? index.entries[position - 1] : nil
     }
     guard let target else { return nil }
     return Folding(focusingOn: target.anchor)
