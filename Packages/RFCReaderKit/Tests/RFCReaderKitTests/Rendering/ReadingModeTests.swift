@@ -288,7 +288,7 @@ struct ReadingModeTests {
   /// A section with subsections, and where its subtree ends: at the next heading at its
   /// own depth or shallower.
   private static func sectionWithSubsections(in built: BuiltDocument) throws
-    -> (anchor: String, start: Int, end: Int)
+    -> (anchor: String, span: Range<Int>)
   {
     let sections = built.anchors.sections.entries
     let index = try #require(
@@ -297,7 +297,7 @@ struct ReadingModeTests {
       })
     let depth = try #require(sections[index].depth)
     let next = sections[(index + 1)...].first { ($0.depth ?? 0) <= depth }
-    return (sections[index].anchor, sections[index].offset, next?.offset ?? built.text.length)
+    return (sections[index].anchor, sections[index].offset..<(next?.offset ?? built.text.length))
   }
 
   /// Focus: one section and its subsections, and nothing else.
@@ -306,7 +306,7 @@ struct ReadingModeTests {
     let section = try Self.sectionWithSubsections(in: built)
     let hidden = Folding(focusingOn: section.anchor).hidden(in: built)
     for paragraph in Self.paragraphs(of: built) {
-      let inside = paragraph.location >= section.start && paragraph.location < section.end
+      let inside = section.span.contains(paragraph.location)
       #expect(hidden.contains(paragraph.location) == !inside, "paragraph at \(paragraph.location)")
     }
     #expect(Folding(focusingOn: section.anchor).disclosures(in: built).isEmpty)
@@ -320,7 +320,7 @@ struct ReadingModeTests {
     let index = FoldingIndex(built)
     let focus = Folding(focusingOn: section.anchor)
     let next = try #require(focus.focusing(.next, in: index)?.focused)
-    #expect(built.anchors.offset(of: next) == section.end)
+    #expect(built.anchors.offset(of: next) == section.span.upperBound)
     let back = try #require(focus.focusing(.next, in: index)?.focusing(.previous, in: index))
     #expect(back.focused == section.anchor)
     #expect(Folding(mode: .outline).focusing(.next, in: index) == nil)
@@ -330,7 +330,7 @@ struct ReadingModeTests {
   @Test func `a jump elsewhere moves the focus`() throws {
     let built = try Self.rfc8999()
     let section = try Self.sectionWithSubsections(in: built)
-    let elsewhere = built.anchors.sections.entries.last { $0.offset >= section.end }
+    let elsewhere = built.anchors.sections.entries.last { $0.offset >= section.span.upperBound }
     let target = try #require(elsewhere)
     let moved = Folding(focusingOn: section.anchor).expanding(toShow: target.offset + 1, in: built)
     #expect(moved.focused == target.anchor)
