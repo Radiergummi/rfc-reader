@@ -243,11 +243,38 @@ struct RFCLinkTests {
     "https://www.rfc-editor.org/errata/rfc4321",
     "https://datatracker.ietf.org/doc/rfc4321/history/",
     "https://datatracker.ietf.org/doc/rfc4321/bibtex/",
+    "https://www.rfc-editor.org/rfc/rfc4321.json",
+    "https://www.rfc-editor.org/rfc/inline-errata/rfc4321.html",
   ])
   func `a page about a document is no document page`(address: String) throws {
     let url = try #require(URL(string: address))
     #expect(RFCLink(url: url) == RFCLink(id: .rfc(4321)))
     #expect(RFCLink(documentPage: url) == nil)
+  }
+
+  /// A number in a Datatracker path is no RFC unless it is spelled as one: a draft's
+  /// revision, a meeting and an IPR disclosure are numbered too, and the extension
+  /// would open RFC 19, 118 or 6000 for them (#194).
+  @Test(arguments: [
+    "https://datatracker.ietf.org/doc/draft-ietf-httpbis-semantics/19/",
+    "https://datatracker.ietf.org/meeting/118",
+    "https://datatracker.ietf.org/ipr/6000/",
+  ])
+  func `a bare number on Datatracker names no RFC`(address: String) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(url: url) == nil)
+    #expect(RFCLink(documentPage: url) == nil)
+  }
+
+  /// The RFC Editor keeps a BCP's and an STD's text beside the RFCs', and the app
+  /// opens those as it opens an RFC.
+  @Test(arguments: [
+    ("https://www.rfc-editor.org/rfc/bcp/bcp14.txt", DocumentID(series: .bcp, number: 14)),
+    ("https://www.rfc-editor.org/rfc/std/std1.txt", DocumentID(series: .std, number: 1)),
+  ])
+  func `a BCP's or an STD's text is a document page`(address: String, id: DocumentID) throws {
+    let url = try #require(URL(string: address))
+    #expect(RFCLink(documentPage: url) == RFCLink(id: id))
   }
 
   /// Nor is the app's own link, which the extension never has to send anywhere.
