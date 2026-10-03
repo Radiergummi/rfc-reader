@@ -279,6 +279,18 @@ struct PanelHost: View {
       .background(.quaternary.opacity(0.7), in: .capsule)
     }
 
+    /// The accent, darkened in each appearance until the white label on it clears the
+    /// minimum contrast: macOS 27's blue carries white at 3.52:1, yellow at 1.51:1
+    /// (#317). Resolved when drawn, so it follows the accent the user picks.
+    private static let selectedFill = Color(
+      nsColor: NSColor(name: nil) { appearance in
+        var accent = SRGBColor(hex: 0x00_7AFF)
+        appearance.performAsCurrentDrawingAppearance {
+          if let resolved = SRGBColor(resolving: .controlAccentColor) { accent = resolved }
+        }
+        return NSColor(AccentContrast.selectedTabFill(accent: accent))
+      })
+
     private func segment(_ value: InspectorTab, _ title: String) -> some View {
       let isSelected = tab == value
       return Button {
@@ -297,7 +309,7 @@ struct PanelHost: View {
               // Fully rounded, not a rounded rectangle: the selected tab in
               // an inspector is a capsule, and at this height the difference
               // between a 7 pt radius and a capsule is the whole look.
-              Capsule().fill(Color.accentColor)
+              Capsule().fill(Self.selectedFill)
             }
           }
           .contentShape(.rect)

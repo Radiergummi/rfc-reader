@@ -60,6 +60,22 @@ public enum RFCColors {
     #endif
   }
 
+  /// The reader's links and the status banner's (#317): `AccentContrast.readerLink`,
+  /// which on macOS is the system's own link color and on iOS replaces the system
+  /// tint, 3.52:1 on a white page.
+  public static var readerLink: PlatformColor {
+    byAppearance(light: AccentContrast.readerLink.light, dark: AccentContrast.readerLink.dark)
+  }
+
+  /// The page the reader's text is drawn on, which a chip's tint is drawn over.
+  public static var page: PlatformColor {
+    #if canImport(UIKit)
+      .systemBackground
+    #else
+      .textBackgroundColor
+    #endif
+  }
+
   /// The card behind artwork and tables: a faint tint of the page, the way Apple's
   /// documentation sets a code listing. DocC darkens a white page to 247 and lifts a
   /// black one to 22, about 3% towards black and 9% towards white. A system fill
@@ -209,5 +225,51 @@ extension PlatformFont {
   /// `adding(traits:)` is one.
   func resized(to size: CGFloat) -> PlatformFont {
     CTFontCreateCopyWithAttributes(self as CTFont, size, nil, nil) as PlatformFont
+  }
+}
+
+extension SRGBColor {
+  /// A platform color as the current appearance resolves it, for a rule that
+  /// depends on a color the user picks, such as the accent (#317): on macOS the
+  /// drawing appearance, on iOS the current trait collection. Its alpha is dropped.
+  public init?(resolving color: PlatformColor) {
+    guard let resolved = Self.resolvingWithOpacity(color) else { return nil }
+    self = resolved.color
+  }
+
+  /// A platform color as the current appearance resolves it, with its opacity: a
+  /// translucent fill, such as a card's, to composite over what it is drawn on.
+  public static func resolvingWithOpacity(_ color: PlatformColor)
+    -> (color: SRGBColor, opacity: Double)?
+  {
+    #if canImport(UIKit)
+      var red: CGFloat = 0
+      var green: CGFloat = 0
+      var blue: CGFloat = 0
+      var alpha: CGFloat = 0
+      guard
+        color.resolvedColor(with: .current).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+      else { return nil }
+      return (SRGBColor(red: Double(red), green: Double(green), blue: Double(blue)), Double(alpha))
+    #else
+      guard let resolved = color.usingColorSpace(.sRGB) else { return nil }
+      return (
+        SRGBColor(
+          red: Double(resolved.redComponent), green: Double(resolved.greenComponent),
+          blue: Double(resolved.blueComponent)),
+        Double(resolved.alphaComponent)
+      )
+    #endif
+  }
+}
+
+extension PlatformColor {
+  /// A color RFCReaderKit has measured, as exactly those sRGB values.
+  public convenience init(_ color: SRGBColor) {
+    #if canImport(UIKit)
+      self.init(red: color.red, green: color.green, blue: color.blue, alpha: 1)
+    #else
+      self.init(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+    #endif
   }
 }
