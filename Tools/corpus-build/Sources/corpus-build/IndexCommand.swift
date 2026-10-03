@@ -38,6 +38,11 @@ struct IndexCommand: ParsableCommand {
     var indexed = 0
     var citations = 0
     var failed: [String] = []
+    // Every document read, and what it obsoletes, for the second pass, which needs
+    // the documents of an edge at once: holding every parsed document for it would
+    // hold the corpus.
+    var readFiles: [DocumentID: URL] = [:]
+    var obsoletes: [DocumentID: [DocumentID]] = [:]
     for (index, file) in files.enumerated() {
       let stem = file.deletingPathExtension().lastPathComponent
       // A document is the one its file names: a converted header may lack its number,
@@ -59,10 +64,28 @@ struct IndexCommand: ParsableCommand {
       try database.insert(cited, citing: id)
       indexed += 1
       citations += cited.count
+      readFiles[id] = file
+      if !document.header.obsoletes.isEmpty {
+        obsoletes[id] = document.header.obsoletes
+      }
       if (index + 1) % 2000 == 0 {
         Self.logger.info(
           "progress", metadata: ["completed": "\(index + 1)", "total": "\(files.count)"])
       }
+    }
+
+    // A section's best match is judged across every edge it is on, so the documents
+    // joined by obsoletes edges are aligned a group at a time, each parsed once. An
+    // obsoleted number the corpus does not hold, such as an RFC never issued, joins
+    // no group; one that failed to parse is reported above.
+    var successions = 0
+    for group in Self.groups(of: obsoletes, among: Set(readFiles.keys)) {
+      let documents = try group.compactMap { id in
+        try readFiles[id].map { try Self.document(id, at: $0) }
+      }
+      let pairs = SectionAlignment.pairs(among: documents)
+      try database.insert(pairs)
+      successions += pairs.count
     }
     try database.setMeta("documents", to: String(indexed))
     try database.close()
@@ -71,7 +94,8 @@ struct IndexCommand: ParsableCommand {
     Self.logger.info(
       "wrote index",
       metadata: [
-        "documents": "\(indexed)", "citations": "\(citations)", "bytes": "\(size)",
+        "documents": "\(indexed)", "citations": "\(citations)",
+        "successions": "\(successions)", "bytes": "\(size)",
         "duration": "\(clock.now - started)", "path": "\(out)",
       ])
     // An RFC left out is a gap in the graph nothing else would show, so the run fails
@@ -81,5 +105,43 @@ struct IndexCommand: ParsableCommand {
         "RFCs left out", metadata: ["documents": "\(failed.joined(separator: " "))"])
       throw ExitCode.failure
     }
+  }
+
+  /// The documents joined by obsoletes edges between documents in `read`, a group for
+  /// each connected set of two or more, in order.
+  private static func groups(
+    of obsoletes: [DocumentID: [DocumentID]], among read: Set<DocumentID>
+  ) -> [[DocumentID]] {
+    var parent: [DocumentID: DocumentID] = [:]
+    func root(_ id: DocumentID) -> DocumentID {
+      var current = id
+      while let next = parent[current], next != current {
+        current = next
+      }
+      return current
+    }
+    for (new, olds) in obsoletes {
+      for old in olds where old != new && read.contains(old) {
+        let (first, second) = (root(new), root(old))
+        if first != second {
+          parent[max(first, second)] = min(first, second)
+        }
+      }
+    }
+    let members = Dictionary(grouping: parent.keys.sorted() + Set(parent.values).sorted()) {
+      root($0)
+    }
+    return members.keys.sorted().compactMap { key in
+      let group = Set(members[key] ?? []).sorted()
+      return group.count > 1 ? group : nil
+    }
+  }
+
+  /// The document at `file`, as the one its file names, for the same reason the
+  /// first pass takes that number: `SectionAlignment` writes it into each row.
+  private static func document(_ id: DocumentID, at file: URL) throws -> RFCDocument {
+    var document = try RFCXMLParser.parse(Data(contentsOf: file))
+    document.header.id = id
+    return document
   }
 }

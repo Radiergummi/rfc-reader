@@ -15,7 +15,7 @@
     let title: String
     let subtitle: String
     let reader: ReaderState
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.sceneChrome) private var chrome
 
     func makeUIView(context: Context) -> DocumentTitleView {
       let view = DocumentTitleView()
@@ -26,7 +26,7 @@
     }
 
     func updateUIView(_ view: DocumentTitleView, context: Context) {
-      view.isCompact = verticalSizeClass == .compact
+      view.isCompact = chrome.hasShortBars
       view.show(title, subtitle: subtitle)
     }
 

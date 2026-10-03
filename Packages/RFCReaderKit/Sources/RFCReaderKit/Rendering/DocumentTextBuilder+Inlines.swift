@@ -199,9 +199,10 @@ extension DocumentTextBuilder {
   /// heading, an arrow and how many sections refer to the section, in the
   /// secondary style of a caption, so it does not read as part of the heading. It
   /// goes nowhere itself: its link names the section, and the reader lists the
-  /// sections that refer there. Every character of it is `.rfcBacklinks`, its line
-  /// break too, so a copied heading leaves the whole line out; the line break is
-  /// neither link nor label, so the caption's extent is its words alone.
+  /// sections that refer there. Every character of it is `.rfcBacklinks` and
+  /// `.rfcReaderOnly`, its line break too, so a copied heading leaves the whole line
+  /// out; the line break is neither link nor label, so the caption's extent is its
+  /// words alone.
   func backlinkCaption(_ anchor: String, count: Int) -> NSAttributedString {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: style.backlinksFont,
@@ -211,6 +212,7 @@ extension DocumentTextBuilder {
       .paragraphStyle: paragraphStyle(
         spacingAfter: style.paragraphSpacing * 0.6, lineHeightMultiple: 1),
       .rfcBacklinks: anchor,
+      .rfcReaderOnly: "",
     ]
     let lineBreak = NSAttributedString(string: "\n", attributes: attributes)
     let words = Self.backlinksCaption(count: count)
@@ -232,6 +234,24 @@ extension DocumentTextBuilder {
     result.append(NSAttributedString(string: words, attributes: attributes))
     result.append(lineBreak)
     return result
+  }
+
+  /// How large the copy button's symbol is against its label's font: smaller than
+  /// the capitals beside it, so it does not outweigh them. The checkmark shown after
+  /// a copy takes the same size.
+  public static let copyButtonScale: CGFloat = 0.85
+
+  /// A code block's copy button: its symbol alone, a chip so the attachment is one
+  /// the reader allows, drawn without the chip's tint and in the color of the text
+  /// beside it. No link: a link is a web page's control, with its pointing hand, and
+  /// the reader takes a click on the button itself (`copyButton(at:)`).
+  func copyButton(attributes base: [NSAttributedString.Key: Any]) -> NSAttributedString? {
+    var attributes = base
+    attributes[.rfcCopyCode] = ""
+    attributes[.rfcSpoken] = "Copy code"
+    nextChipID += 1
+    attributes[.rfcChip] = nextChipID
+    return chipSymbolRun("doc.on.doc", scale: Self.copyButtonScale, attributes: attributes)
   }
 
   /// What a backlink caption says, and VoiceOver says for it: the number of
@@ -271,18 +291,19 @@ extension DocumentTextBuilder {
   /// own run, so it falls inside both the drawn background and the hit region.
   /// `NSTextAttachment(image:)` sits the image's bottom edge on the text baseline by
   /// default, which reads low against the words around it, so the symbol is drawn at
-  /// the run's own font size and its bounds are centered on that font's cap height,
+  /// the run's own font size, or `scale` of it, and its bounds are centered on that
+  /// font's cap height,
   /// to the nearest whole point: a symbol that hangs below the line's descender
   /// makes its line that much taller, even past a fixed line height, and a
   /// fraction there puts every fragment below it off the pixel grid (#273). A
   /// backlink caption's arrow is set the same way, in the caption's `color` and
   /// `smallerBy` points under its font's size.
   private func chipSymbolRun(
-    _ name: String, color: PlatformColor = RFCColors.accent, smallerBy: CGFloat = 0,
-    attributes: [NSAttributedString.Key: Any]
+    _ name: String, color: PlatformColor = RFCColors.accent, scale: CGFloat = 1,
+    smallerBy: CGFloat = 0, attributes: [NSAttributedString.Key: Any]
   ) -> NSAttributedString? {
     let font = font(in: attributes)
-    let pointSize = font.pointSize - smallerBy
+    let pointSize = font.pointSize * scale - smallerBy
     guard let symbol = chipSymbol(name, pointSize: pointSize, color: color) else {
       return nil
     }

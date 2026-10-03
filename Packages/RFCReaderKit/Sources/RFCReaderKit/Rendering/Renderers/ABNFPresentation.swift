@@ -92,9 +92,15 @@ public struct DocumentGrammar: Sendable, Equatable {
     }
   }
 
-  /// The grammar of `document`'s grammar blocks.
+  /// The grammar of `document`'s grammar blocks, as the reader shows them: source
+  /// code without the indent all its lines share, so a definition's offset is into
+  /// the text a block is set as.
   init(of document: RFCDocument, hints: ArtworkHints) {
-    self.init(blocks: Self.blocks(of: document, hints: hints).map(\.content.text))
+    self.init(
+      blocks: Self.blocks(of: document, hints: hints).map { _, content in
+        content.kind == .sourceCode
+          ? DocumentTextBuilder.removingSharedIndent(content.text) : content.text
+      })
   }
 
   /// The grammar of `blocks`, the texts of a document's grammar blocks in order.

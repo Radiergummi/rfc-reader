@@ -84,11 +84,15 @@ public struct LinkedText: Equatable, Sendable {
   }
 }
 
-/// What a presentation makes of a block. Styled text and drawings join as cases
-/// when a renderer first needs them.
+/// What a presentation makes of a block. Drawings join as a case when a renderer
+/// first needs them.
 public enum Rendition: Equatable, Sendable {
   case decorated(DecoratedText)
   case linked(LinkedText)
+  /// Code highlighted: the block's own text, unchanged, and the tokens a lexer read
+  /// in it, colored by the reader's theme. Ranges are UTF-16, relative to the text
+  /// lexed.
+  case styled([SyntaxToken])
 }
 
 /// What a presentation may measure against, and what the document's blocks gave

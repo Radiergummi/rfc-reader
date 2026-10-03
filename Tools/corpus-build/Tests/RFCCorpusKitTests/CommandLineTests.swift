@@ -86,6 +86,64 @@ struct CommandLineTests {
     #expect(try Data(contentsOf: out.appending(path: "rfc2119.xml")) == expected)
   }
 
+  /// Converts the documents `only` names into `out`, with `override` as RFC 2119's
+  /// file in a directory of overrides of its own.
+  private static func convert(
+    only: [String], into out: URL, override: String
+  ) throws -> (status: Int32, standardError: String) {
+    let overrides = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: overrides) }
+    try FileManager.default.createDirectory(at: overrides, withIntermediateDirectories: true)
+    try Data(override.utf8).write(to: overrides.appending(path: "rfc2119.xml"))
+    return try run(
+      ["convert", "--in", Fixtures.directory.path, "--out", out.path, "--only"] + only
+        + ["--overrides", overrides.path])
+  }
+
+  /// A patch in `--overrides` is applied to the converter's output (#197).
+  @Test func `a patch in the overrides is applied`() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+
+    let result = try Self.convert(
+      only: ["2119"], into: out,
+      override: "<diff><remove sel=\"//section[@pn='section-9']\"/></diff>")
+    #expect(result.status == 0, "\(result.standardError)")
+    let document = try RFCXMLParser.parse(
+      try Data(contentsOf: out.appending(path: "rfc2119.xml")))
+    #expect(document.section(anchor: "section-9") == nil)
+  }
+
+  /// A patch that fails leaves no output, not even an earlier run's, and fails the
+  /// run once every document is converted, naming the operation.
+  @Test func `a failing patch fails the run and removes the stale output`() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+    try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    try Data("stale".utf8).write(to: out.appending(path: "rfc2119.xml"))
+
+    let result = try Self.convert(
+      only: ["2119", "1149"], into: out,
+      override: "<diff><remove sel=\"//section[@pn='section-99']\"/></diff>")
+    #expect(result.status == 1)
+    #expect(result.standardError.contains("operation 1"), "\(result.standardError)")
+    let written = try FileManager.default.contentsOfDirectory(atPath: out.path)
+    #expect(written == ["rfc1149.xml"])
+  }
+
+  /// An override that is not XML fails as a patch does, and the rest of the run goes on.
+  @Test func `an override that is not XML fails its document only`() throws {
+    let out = Self.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: out) }
+
+    let result = try Self.convert(
+      only: ["2119", "1149"], into: out,
+      override: "<diff><remove sel=\"//t[contains(., 'a & b')]\"/></diff>")
+    #expect(result.status == 1)
+    #expect(result.standardError.contains("rfc2119.xml: not XML"), "\(result.standardError)")
+    #expect(try FileManager.default.contentsOfDirectory(atPath: out.path) == ["rfc1149.xml"])
+  }
+
   /// `--out` is where both files go; without it there is nowhere to write, and
   /// nothing may be fetched first.
   @Test func `revisions requires out`() throws {
@@ -117,6 +175,42 @@ struct CommandLineTests {
     defer { sqlite3_finalize(statement) }
     #expect(sqlite3_step(statement) == SQLITE_ROW)
     #expect(sqlite3_column_int(statement, 0) == 4)
+  }
+
+  /// `index` aligns every document with each one it obsoletes. RFC 9911 obsoletes RFC
+  /// 6991, which no fixture holds, so the run copies 9911 in under that number too:
+  /// a document aligned with itself pairs each section with its own, and each row
+  /// names the two documents by their files, as the first pass does.
+  @Test func `index writes the successions of every obsoletes edge`() throws {
+    let out = Self.temporaryDirectory()
+    let input = out.appending(path: "xml")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: out) }
+    for stem in ["rfc9911", "rfc6991"] {
+      try FileManager.default.copyItem(
+        at: Fixtures.url("rfc9911.xml"), to: input.appending(path: "\(stem).xml"))
+    }
+    let database = out.appending(path: "indexes.sqlite")
+
+    let result = try Self.run([
+      "index", "--in", input.path, "--out", database.path, "--version", "test",
+    ])
+    #expect(result.status == 0, "\(result.standardError)")
+
+    var connection: OpaquePointer?
+    #expect(sqlite3_open_v2(database.path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK)
+    defer { sqlite3_close(connection) }
+    var statement: OpaquePointer?
+    let sql = """
+      SELECT count(*), sum(old_section = new_section) FROM successions
+      WHERE old = 'RFC6991' AND new = 'RFC9911'
+      """
+    #expect(sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK)
+    defer { sqlite3_finalize(statement) }
+    #expect(sqlite3_step(statement) == SQLITE_ROW)
+    let rows = sqlite3_column_int(statement, 0)
+    #expect(rows > 0)
+    #expect(sqlite3_column_int(statement, 1) == rows, "every section pairs with itself")
   }
 
   /// An RFC that does not parse would leave a hole in the graph that nothing else

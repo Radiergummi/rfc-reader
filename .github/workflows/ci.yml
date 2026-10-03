@@ -91,11 +91,28 @@ jobs:
           key: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-${{ github.sha }}
           restore-keys: swiftpm-linux-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved', 'Tools/*/Package.swift', 'Tools/*/Package.resolved', '!Tools/benchmarks/**') }}-
       # SQLite's headers, for corpus-build's index database (#174): the image has
-      # the library but not them.
-      - name: Install SQLite's headers
-        run: apt-get update -qq && apt-get install -y -qq libsqlite3-dev >/dev/null
+      # the library but not them. make and curl for the patch check below.
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq make curl libsqlite3-dev >/dev/null
       - run: swift test --package-path Packages/RFCKit
       - run: swift test --package-path Tools/corpus-build
+      - name: Month
+        id: month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # The index and the overridden documents, fetched once a month. What the check
+      # reads from them was fixed when each document was published.
+      - name: Cache the index and the overridden texts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            corpus/rfc-index.xml
+            corpus/overrides-check.noindex
+          key: corpus-overrides-${{ steps.month.outputs.month }}-${{ hashFiles('corpus/overrides/*.xml') }}
+          restore-keys: corpus-overrides-${{ steps.month.outputs.month }}-
+      # Every patch in corpus/overrides applied to the converter's output with
+      # FoundationXML's libxml2, so a parser change that breaks a patch fails its own
+      # pull request (#197). With the debug build the tests just made.
+      - run: make corpus-overrides-check CORPUS_CONFIGURATION=debug
       - name: Save the SwiftPM builds
         if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

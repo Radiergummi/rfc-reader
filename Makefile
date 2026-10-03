@@ -1,4 +1,4 @@
-.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-index corpus-manifest corpus-queries corpus-score revisions
+.PHONY: lint fmt build test check test-app test-corpus xcodegen-install xcodeproj build-app ios-sim ios-app run-device run-device-check run-sim run install trace benchmark corpus corpus-tool corpus-fetch corpus-fetch-xml corpus-convert corpus-schema-control corpus-overrides-check corpus-override-scripts-check corpus-index corpus-abbreviations corpus-manifest corpus-queries corpus-score revisions
 
 # The three Swift packages. RFCKit holds everything the app and the pipeline share
 # -- parsers, index, search, citations -- and builds anywhere a Swift 6.3 toolchain
@@ -9,7 +9,10 @@ RFCKIT       := Packages/RFCKit
 RFCREADERKIT := Packages/RFCReaderKit
 CORPUS_BUILD := Tools/corpus-build
 BENCHMARKS   := Tools/benchmarks
-CORPUS_BIN   := $(CORPUS_BUILD)/.build/release/corpus-build
+# Release for a corpus run. CI checks the patches with the debug build its tests
+# already made (CORPUS_CONFIGURATION=debug), rather than building again.
+CORPUS_CONFIGURATION ?= release
+CORPUS_BIN   := $(CORPUS_BUILD)/.build/$(CORPUS_CONFIGURATION)/corpus-build
 
 # Whether this machine has an Apple SDK, so RFCReaderKit can build here.
 DARWIN := $(filter Darwin,$(shell uname -s))
@@ -100,13 +103,14 @@ test-app:
 # The legacy RFCs the corpus-backed suites read. A finding about what the parser
 # makes of a whole document is tested on that document, and no more RFC text is
 # committed as fixtures, so these are fetched instead.
-CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2910 rfc3407 rfc355 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7231 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
+CORPUS_TEST_DOCUMENTS := rfc1012 rfc1043 rfc1119 rfc1122 rfc1124 rfc1128 rfc1129 rfc1131 rfc1140 rfc1142 rfc1178 rfc1198 rfc1276 rfc1343 rfc1415 rfc1441 rfc1581 rfc169 rfc1958 rfc206 rfc2196 rfc2223 rfc2300 rfc2326 rfc2569 rfc270 rfc2818 rfc2910 rfc3407 rfc355 rfc5 rfc5193 rfc5545 rfc570 rfc5735 rfc574 rfc6186 rfc6614 rfc6654 rfc674 rfc707 rfc708 rfc722 rfc7230 rfc7231 rfc7232 rfc7233 rfc7235 rfc7538 rfc7615 rfc7694 rfc775 rfc783 rfc791 rfc793 rfc798 rfc8011 rfc817 rfc822 rfc8259
 # The RFCs authored in RFCXML they read, for what no committed XML fixture shows.
-CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393
+CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393 rfc9457 rfc8927 rfc8727 rfc9635 rfc9022 rfc8935
 
 ## Run the corpus-backed suites of RFCKit and corpus-build, fetching the documents they read
 # Not part of `check`: it needs the network the first time. The suites read
-# RFC_CORPUS_TEXT and RFC_CORPUS_XML, and are skipped wherever they are unset, as in
+# RFC_CORPUS_TEXT and RFC_CORPUS_XML, and corpus-build's the RFC index as
+# RFC_CORPUS_INDEX; they are skipped wherever these are unset, as in
 # `make test`; CI runs them on pull requests that touch them and weekly
 # (.github/workflows/corpus-tests.yml). Filtered by their type names, all
 # `CorpusBacked...`: --filter matches a test's identifier, not the `Corpus-backed:
@@ -116,10 +120,10 @@ CORPUS_TEST_XML_DOCUMENTS := rfc9110 rfc9112 rfc9114 rfc9393
 # saying so, from `CorpusText`, rather than on a missing file. RFCReaderKit's suites
 # run on a Mac only, where the package builds; the weekly Linux job skips them.
 test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
-  $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml)
+  $(CORPUS_TEST_XML_DOCUMENTS:%=$(CORPUS)/xml.noindex/%.xml) $(CORPUS)/rfc-index.xml
 	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCKIT) --filter CorpusBacked
-	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) \
+	RFC_CORPUS_TEXT=$(abspath $(CORPUS)/text.noindex) RFC_CORPUS_INDEX=$(abspath $(CORPUS)/rfc-index.xml) \
 	  swift test --package-path $(CORPUS_BUILD) --filter CorpusBacked
 	$(if $(DARWIN),RFC_CORPUS_XML=$(abspath $(CORPUS)/xml.noindex) \
 	  swift test --package-path $(RFCREADERKIT) --filter CorpusBacked)
@@ -135,7 +139,7 @@ test-corpus: $(CORPUS_TEST_DOCUMENTS:%=$(CORPUS)/text.noindex/%.txt) \
 #   make benchmark BENCHMARK_ARGS='--filter "Index.*"'
 #
 BENCHMARK_CORPUS := $(CORPUS)/benchmarks
-BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc5661.txt rfc793.txt
+BENCHMARK_INPUTS := rfc-index.xml rfc9110.xml rfc9000.xml rfc8927.xml rfc8727.xml rfc5661.txt rfc793.txt
 BENCHMARK_ARGS ?=
 benchmark: $(BENCHMARK_INPUTS:%=$(BENCHMARK_CORPUS)/%)
 	RFC_CORPUS=$(abspath $(BENCHMARK_CORPUS)) \
@@ -152,6 +156,14 @@ $(BENCHMARK_CORPUS)/rfc-index.xml:
 $(BENCHMARK_CORPUS)/%:
 	@mkdir -p $(@D)
 	curl -fsS -o $@.part https://www.rfc-editor.org/rfc/$* && mv $@.part $@
+
+# The RFC index, fetched when it is missing, for what reads it without a corpus run:
+# the overrides check and `test-corpus`. What they take from it was fixed when each
+# document was published. `corpus-fetch` and `corpus-fetch-xml` download a fresh
+# one over it, so a corpus run sees every RFC published since.
+$(CORPUS)/rfc-index.xml:
+	@mkdir -p $(@D)
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc-index.xml && mv $@.part $@
 
 # One legacy RFC, fetched where `make corpus` would have put it. Written to a
 # partial file first, so an interrupted download is not taken for the document.
@@ -340,7 +352,7 @@ trace: build-app
 # and is a no-op when they have not changed, which make cannot say without
 # restating the package's file list here.
 corpus-tool:
-	swift build -c release --package-path $(CORPUS_BUILD)
+	swift build -c $(CORPUS_CONFIGURATION) --package-path $(CORPUS_BUILD)
 
 # Twenty documents by default, enough to exercise the pipeline in a minute. The
 # full set is the 8,457 legacy RFCs with a text file, roughly 450 MB and twenty
@@ -381,8 +393,10 @@ corpus-fetch-xml: corpus-tool
 # The report's `schema` field says, per document, why the output is not valid
 # RFCXML; `[]` is a document that validates. A regression is one that stops, and it
 # fails the step once the new report is written. That report is the next run's
-# baseline, so rerunning passes: read the documents it names first.
-corpus-convert: corpus-tool
+# baseline, so rerunning passes: read the documents it names first. A patch that
+# fails fails the step too, after every document is converted; the overrides check
+# before it stops a broken patch before the corpus is converted at all.
+corpus-convert: corpus-overrides-check $(CORPUS)/rfc-index.xml
 	$(CORPUS_BIN) convert --in $(CORPUS)/text.noindex --out $(CORPUS)/xml.noindex \
 	  --overrides $(CORPUS)/overrides --report $(CORPUS)/report.json --index $(CORPUS)/rfc-index.xml \
 	  --diagnostics $(CORPUS)/prose.json --schema $(CORPUS_SCHEMA)
@@ -403,24 +417,48 @@ $(CORPUS)/schema-control.noindex/%.xml:
 	@mkdir -p $(@D)
 	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.xml && mv $@.part $@
 
+## Check that every patch in corpus/overrides still applies to the converter's output
+# A patch (corpus/overrides/rfcNNNN.xml with a <diff> root) corrects what the
+# converter makes of one document, so a parser change can break it. This converts
+# only the overridden documents, with the index as a corpus run does, into a scratch
+# directory, and fails on a patch that no longer applies. Which override is a patch
+# is the convert step's to say, by its root element, so every override is converted.
+# The documents are fetched into a directory of their own, not the text directory: a
+# limited corpus run converts whatever lies there, and would take them in. Run on
+# every pull request (.github/workflows/ci.yml), so a parser change that breaks a
+# patch fails its own pull request.
+OVERRIDDEN := $(basename $(notdir $(wildcard $(CORPUS)/overrides/rfc*.xml)))
+OVERRIDES_CHECK := $(CORPUS)/overrides-check.noindex
+
+corpus-overrides-check: corpus-tool $(CORPUS)/rfc-index.xml $(OVERRIDDEN:%=$(OVERRIDES_CHECK)/%.txt)
+ifneq ($(OVERRIDDEN),)
+	out=$$(mktemp -d) && $(CORPUS_BIN) convert --in $(OVERRIDES_CHECK) --out "$$out" \
+	  --overrides $(CORPUS)/overrides --index $(CORPUS)/rfc-index.xml \
+	  --only $(OVERRIDDEN:rfc%=%); status=$$?; rm -rf "$$out"; exit $$status
+endif
+
+# One overridden RFC, for the overrides check.
+$(OVERRIDES_CHECK)/%.txt:
+	@mkdir -p $(@D)
+	$(CURL) -o $@.part https://www.rfc-editor.org/rfc/$*.txt && mv $@.part $@
+
 ## Check that each scripted override is still what its script makes
-# An override corrected by a script (corpus/overrides/rfcNNNN.py) is a snapshot of
-# the converter's output, so a converter change can leave it stale without anything
-# failing. This reruns every script against the current converter and compares.
-# Not part of `check`: it needs the source text, fetched here when it is missing,
-# and Python 3.9 or later.
-#
-# Informational until #197: it reports a stale override and does not fail. The
-# output is not committed, because it would be a fresh snapshot of RFC text, so
-# rfc1142.xml stays frozen and #197 decides what becomes of it (#243).
-corpus-overrides-check: corpus-tool
+# rfc1142.xml is the one snapshot left (#197): its script rejoins words in the plain
+# text, which a patch on the output cannot do. A snapshot is the converter's output
+# frozen, so a converter change can leave it stale without anything failing. This
+# reruns every script against the current converter and compares. Not part of
+# `check`: it needs the source text, fetched here when it is missing, and Python
+# 3.9 or later. Informational: it reports a stale snapshot and does not fail, and
+# the script's new output is not committed, because it would be a fresh snapshot of
+# RFC text (#243).
+corpus-override-scripts-check: corpus-tool
 	@for script in $(CORPUS)/overrides/rfc*.py; do \
 	  stem=$$(basename "$$script" .py); source=$(CORPUS)/text.noindex/$$stem.txt; \
 	  test -f "$$source" || { mkdir -p $(CORPUS)/text.noindex && \
 	    $(CURL) -o "$$source" "https://www.rfc-editor.org/rfc/$$stem.txt"; } || exit 1; \
 	  out=$$(mktemp); python3 "$$script" $(CORPUS_BIN) "$$source" "$$out" || exit 1; \
 	  if cmp -s "$$out" $(CORPUS)/overrides/$$stem.xml; then echo "$$stem.xml: up to date"; \
-	  else echo "$$stem.xml: stale -- frozen until #197, not regenerated"; fi; rm -f "$$out"; \
+	  else echo "$$stem.xml: stale -- frozen, not regenerated"; fi; rm -f "$$out"; \
 	done
 
 ## Score the legacy parser against the RFCs xml2rfc generated from XML
@@ -444,6 +482,13 @@ corpus-score: corpus-fetch-xml
 corpus-index: corpus-tool
 	$(CORPUS_BIN) index --in $(CORPUS)/xml.noindex --out $(CORPUS)/indexes.sqlite \
 	  --version $(CORPUS_VERSION)
+
+## Report the abbreviations the parser collects across the converted corpus
+# Each document's abbreviations and their totals, in corpus/abbreviations.json (#211):
+# what a precision check of the collection samples from before the reader shows
+# expansions (#67). Not part of `corpus`: it measures the corpus rather than builds it.
+corpus-abbreviations: corpus-tool
+	$(CORPUS_BIN) abbreviations --in $(CORPUS)/xml.noindex --out $(CORPUS)/abbreviations.json
 
 ## Write the pack manifest for the converted documents
 corpus-manifest: corpus-tool

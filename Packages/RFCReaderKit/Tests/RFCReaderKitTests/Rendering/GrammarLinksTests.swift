@@ -119,6 +119,23 @@ struct GrammarLinksTests {
     #expect(blocks.map(\.content) == [plain])
   }
 
+  /// Source code is set without the indent all its lines share, as a converted RFC's
+  /// grammar has, so the grammar is collected over that text: its definitions are
+  /// anchored, and its uses link to them.
+  @Test func `an indented grammar block is linked as it is set`() throws {
+    let grammar = Preformatted(
+      kind: .sourceCode, text: Self.text("   pair = item item", "   item = 1*DIGIT"), type: "abnf")
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(grammar)), style: ReadingStyle())
+    let offset = try #require(built.anchors.offset(of: "abnf-item"))
+    #expect(
+      (built.text.string as NSString).substring(with: NSRange(location: offset, length: 4))
+        == "item")
+    let use = (built.text.string as NSString).range(of: "pair = item").location + 7
+    let url = try #require(built.text.attribute(.link, at: use, effectiveRange: nil) as? URL)
+    #expect(DocumentTextBuilder.anchor(from: url) == "abnf-item")
+  }
+
   @Test func `what is not a grammar is not linked`() {
     #expect(ABNFPresentation.render("x = y + 1;", grammar: DocumentGrammar(blocks: [])) == nil)
   }
