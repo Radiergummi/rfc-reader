@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # A draft skips the macOS jobs, the slow and costly ones; marking it ready
+  # for review runs them.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 # Every job only checks out and builds; none writes to the repository.
 permissions:
@@ -58,6 +61,7 @@ jobs:
 
   rfckit-macos:
     name: RFCKit tests (macOS)
+    if: ${{ !github.event.pull_request.draft }}
     # Xcode 26.4 on purpose, not the runner's newest: it is the first to ship
     # Swift 6.3, the swift-tools-version every package declares and the swift:6.3
     # image the Linux jobs run, and this is what holds the packages to it.
@@ -103,6 +107,7 @@ jobs:
 
   app-build:
     name: App build (macOS + iOS)
+    if: ${{ !github.event.pull_request.draft }}
     # Xcode 26.6, the newest the macos-26 image has, with iOS 26 simulators: what
     # project.yml's deployment targets need. Selected by path rather than left to
     # the image's default, so a runner update cannot change the toolchain.
@@ -145,6 +150,7 @@ jobs:
 
   app-build-xcode-27:
     name: App build (Xcode 27, preview)
+    if: ${{ !github.event.pull_request.draft }}
     # The Xcode the app is developed with, and the only one that compiles
     # AppIcon-27 (project.yml, APP_ICON_2700). Unsigned like the job above, so it
     # needs no certificate. It runs on GitHub's `xcode-27` image, a preview outside
