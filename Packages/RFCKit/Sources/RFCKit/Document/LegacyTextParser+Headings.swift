@@ -318,8 +318,10 @@ extension LegacyTextParser {
     withoutAsides(title).lowercased().contains(#/\breferences\b/#)
   }
 
+  private static let aside = Pattern(#/\([^)]*\)/#)
+
   private static func withoutAsides(_ title: String) -> String {
-    title.replacing(#/\([^)]*\)/#, with: "").collapsingWhitespace()
+    title.replacing(aside, with: "").collapsingWhitespace()
       .trimmingCharacters(in: .whitespaces)
   }
 
