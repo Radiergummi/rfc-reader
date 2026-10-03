@@ -59,11 +59,21 @@ struct GrammarExportTests {
   /// RFC 5234's core rules are named and pointed to, not copied: their definitions are
   /// that RFC's text.
   @Test func `the core rules are named, not defined`() throws {
-    let text = try #require(GrammarExport.text(for: try Self.rfc9682()))
+    let document = Fixtures.document(
+      .preformatted(
+        Preformatted(
+          kind: .sourceCode, text: "message = 1*field CRLF\nfield = 1*ALPHA SP", type: "abnf")))
+    let text = try #require(GrammarExport.text(for: document))
     let line = try #require(text.split(separator: "\n").first { $0.contains("RFC 5234") })
     #expect(line.hasPrefix(";"))
     #expect(line.contains("Appendix B.1"))
-    #expect(!text.contains("%x41-5A"), "no core rule is defined in the file")
+    #expect(line.hasSuffix("CRLF, ALPHA, SP"))
+  }
+
+  /// RFC 9682 defines the core rules it uses itself, so it names none.
+  @Test func `core rules a document defines are its own`() throws {
+    let text = try #require(GrammarExport.text(for: try Self.rfc9682()))
+    #expect(!text.contains("RFC 5234"))
   }
 
   @Test func `the file is named for the document, as abnf`() {

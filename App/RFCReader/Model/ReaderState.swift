@@ -23,6 +23,9 @@ final class ReaderState {
   /// Every BCP 14 requirement the document states, extracted once per document by
   /// `DocumentView` (#180): nil until it has been, which is after the body shows.
   var requirements: [Requirement]?
+  /// What the open RFC can be saved as: PDF, and its grammar where it has one
+  /// (#185). Set once the document has loaded.
+  var exportFormats: [ExportFormat] = [.pdf]
   /// What the Info pane shows, derived once per document by `DocumentView` (#25).
   var info: DocumentInfo?
   /// Which pane the inspector shows: the document's navigation, or what is known
@@ -166,6 +169,7 @@ final class ReaderState {
     sections = []
     groups = []
     requirements = nil
+    exportFormats = [.pdf]
     info = nil
     revealedReference = nil
     currentAnchor = nil

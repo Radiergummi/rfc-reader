@@ -15,6 +15,8 @@ struct ReferencePreview: View {
   let library: LibraryModel
   /// The section heading an in-document reference points at.
   var heading: String?
+  /// The rule a grammar's rule link points at, as its block sets it (#185).
+  var definition: String?
   /// The bibliography entry a citation names, for one that names no RFC (#198).
   /// The body leaves the bibliography to the panel, so this card is the only place
   /// the entry shows beside its citation. The coordinator sets this or `heading`
@@ -51,6 +53,10 @@ struct ReferencePreview: View {
         Text(documentID.displayName).font(.headline)
         kindLine
         Text("Not available in the library.").font(.callout).foregroundStyle(.secondary)
+      } else if let definition {
+        // A rule of this document's grammar: its definition says what it is, which
+        // its section's heading would not.
+        Text(definition).font(.system(.caption, design: .monospaced))
       } else if let heading {
         // A section of this document: "Section 4.2" says where, the heading
         // says what.

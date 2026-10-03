@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 /// it ends in. A format is added as a case here, and every surface offers it.
 public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   case pdf
+  /// The document's grammar collected into one file (#185), for a document with one.
+  case abnf
 
   /// Where the file comes from.
   public enum Source: Sendable {
@@ -24,23 +26,37 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   public var name: String {
     switch self {
     case .pdf: "PDF"
+    case .abnf: "ABNF Grammar"
     }
   }
 
   public var source: Source {
     switch self {
-    case .pdf: .rendered
+    case .pdf, .abnf: .rendered
     }
   }
 
   public var contentType: UTType {
     switch self {
     case .pdf: .pdf
+    // No system type declares ABNF: plain text, saved as `.abnf`.
+    case .abnf: .plainText
     }
   }
 
   public var pathExtension: String {
-    contentType.preferredFilenameExtension ?? rawValue
+    switch self {
+    case .pdf: contentType.preferredFilenameExtension ?? rawValue
+    case .abnf: "abnf"
+    }
+  }
+
+  /// The formats `document` can be saved as: PDF always, and its grammar where it
+  /// has one.
+  public static func available(for document: RFCDocument, hints: ArtworkHints = .bundled)
+    -> [ExportFormat]
+  {
+    GrammarExport.text(for: document, hints: hints) == nil ? [.pdf] : [.pdf, .abnf]
   }
 
   /// `RFC-10042.pdf`, `BCP-14.pdf`: the document as it is cited, which reads as a
@@ -61,7 +77,9 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   /// the `.2` of `RFC-10042 v1.2` is part of the name, and stays.
   public func renaming(_ name: String) -> String {
     let suffix = (name as NSString).pathExtension
-    let isFileType = UTType(filenameExtension: suffix).map { !$0.isDynamic } ?? false
+    let isFileType =
+      Self.allCases.contains { $0.pathExtension == suffix.lowercased() }
+      || (UTType(filenameExtension: suffix).map { !$0.isDynamic } ?? false)
     let stem = isFileType ? (name as NSString).deletingPathExtension : name
     return "\(stem.isEmpty ? name : stem).\(pathExtension)"
   }
@@ -86,6 +104,14 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
   /// Mac's pop-up remembers the last format by its raw value, and a value from a
   /// build with a format this one does not have must not leave it with nothing.
   public init(remembered rawValue: String?) {
-    self = rawValue.flatMap(Self.init(rawValue:)) ?? Self.allCases[0]
+    self.init(remembered: rawValue, offered: Self.allCases)
+  }
+
+  /// The format a stored choice names, among those `offered` for one document, or
+  /// the first offered: a grammar remembered from one document is not one another
+  /// can be saved as.
+  public init(remembered rawValue: String?, offered: [ExportFormat]) {
+    let remembered = rawValue.flatMap(Self.init(rawValue:))
+    self = remembered.flatMap { offered.contains($0) ? $0 : nil } ?? offered.first ?? .pdf
   }
 }

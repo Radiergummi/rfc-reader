@@ -154,6 +154,7 @@ is that way, and what was measured or tried first.
 - [Artwork is classified once and rendered as decorated text](decisions/2026-10-01-artwork-is-classified-once-and-rendered-as-decorated-text.md)
 - [On iOS, a diagram is said by a pronunciation in the text](decisions/2026-10-02-on-ios-a-diagram-is-said-by-a-pronunciation-in-the-text.md)
 - [A cited heading has a backlink caption under it](decisions/2026-10-03-a-cited-heading-has-a-backlink-caption-under-it.md)
+- [A grammar's rule names are links](decisions/2026-10-03-a-grammars-rule-names-are-links.md)
 
 ## Planned engines
 

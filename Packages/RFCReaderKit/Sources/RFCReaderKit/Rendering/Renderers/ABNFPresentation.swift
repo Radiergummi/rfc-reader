@@ -54,9 +54,15 @@ enum ABNFPresentation {
 /// any is set, so that a use in one block links to a definition in another (#185).
 /// The first definition of a name is its anchor; a later one, in error, is not.
 public struct DocumentGrammar: Sendable, Equatable {
-  /// For each anchor, the block and offset where its name is first defined, and the
-  /// rule's lines.
-  private var definitions: [String: (block: String, offset: Int, lines: String)] = [:]
+  /// Where a rule's name is first defined, and the rule's lines.
+  private struct Definition: Sendable, Equatable {
+    var block: String
+    var offset: Int
+    var lines: String
+  }
+
+  /// For each anchor, its first definition.
+  private var definitions: [String: Definition] = [:]
 
   public init() {}
 
@@ -69,16 +75,11 @@ public struct DocumentGrammar: Sendable, Equatable {
         let anchor = ABNFPresentation.anchor(for: rule.name)
         guard definitions[anchor] == nil else { continue }
         let end = index + 1 < starts.count ? starts[index + 1] : (block as NSString).length
-        definitions[anchor] = (
-          block, rule.nameRange.location,
-          Self.lines(of: block, from: rule.nameRange.location, to: end)
-        )
+        definitions[anchor] = Definition(
+          block: block, offset: rule.nameRange.location,
+          lines: Self.lines(of: block, from: rule.nameRange.location, to: end))
       }
     }
-  }
-
-  public static func == (lhs: DocumentGrammar, rhs: DocumentGrammar) -> Bool {
-    lhs.definitions.mapValues(\.lines) == rhs.definitions.mapValues(\.lines)
   }
 
   /// Whether the anchor's definition is the one at `offset` in `block`.
