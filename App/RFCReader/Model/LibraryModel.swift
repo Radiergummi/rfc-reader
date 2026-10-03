@@ -412,18 +412,28 @@ final class LibraryModel {
 
   #if DEBUG
     /// `-installPack <url>`, a developer's way to install a pack from a URL or a
-    /// path (#36). Logged, not shown: nothing on screen asked for it.
+    /// path (#36), and `-installIndexesPack <url>` for the `indexes` pack (#189).
+    /// Logged, not shown: nothing on screen asked for it.
     private func installPackFromLaunchArgument() {
-      guard let argument = UserDefaults.standard.string(forKey: "installPack") else { return }
+      let legacy = UserDefaults.standard.string(forKey: "installPack")
+      let indexes = UserDefaults.standard.string(forKey: "installIndexesPack")
+      guard legacy != nil || indexes != nil else { return }
       // Installed on every launch the argument is set for, which is what a
-      // developer setting it in a scheme wants while iterating on a pack.
-      let source = PackInstaller.source(fromArgument: argument)
+      // developer setting it in a scheme wants while iterating on a pack. One after
+      // the other: the store installs one pack at a time.
       Task(name: "Install data pack") {
         do {
-          let pack = try await installLegacyPack(from: source)
-          libraryLog.info(
-            "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
-          )
+          if let legacy {
+            let pack = try await installLegacyPack(from: PackInstaller.source(fromArgument: legacy))
+            libraryLog.info(
+              "installed data pack \(pack.manifest.version, privacy: .public): \(pack.manifest.files.count) documents"
+            )
+          }
+          if let indexes {
+            let pack = try await store.installIndexesPack(
+              from: PackInstaller.source(fromArgument: indexes))
+            libraryLog.info("installed indexes pack \(pack.manifest.version, privacy: .public)")
+          }
         } catch {
           libraryLog.error(
             "installing a data pack failed: \(String(describing: error), privacy: .public)")
@@ -1044,6 +1054,42 @@ final class LibraryModel {
       libraryLog.error(
         "reading the recently read list failed: \(String(describing: error), privacy: .public)")
       return []
+    }
+  }
+
+  // MARK: - Reading paths (#189)
+
+  enum ReadingPathResult {
+    case path(ReadingPath)
+    /// No `indexes` pack is installed, which the sheet says rather than computing a
+    /// partial path from the documents in the cache.
+    case noIndex
+    /// The pack is there and did not read: logged, and said in a sentence.
+    case failed
+  }
+
+  /// The reading path from `root`, `depth` citations deep, read from the installed
+  /// `indexes` pack off the main actor.
+  func readingPath(from root: DocumentID, depth: Int) async -> ReadingPathResult {
+    guard let url = await store.citationIndexURL() else { return .noIndex }
+    do {
+      return .path(try await CitationIndex.readingPath(from: root, depth: depth, in: url))
+    } catch {
+      libraryLog.error(
+        "reading the citation index failed: \(String(describing: error), privacy: .public)")
+      return .failed
+    }
+  }
+
+  /// Whether `id` has been opened, by its reading position. False when the fetch
+  /// fails, which is logged: the mark is only shown.
+  func hasBeenRead(_ id: DocumentID) -> Bool {
+    do {
+      return try ReadingPositionStore.position(for: id, in: container.mainContext) != nil
+    } catch {
+      libraryLog.error(
+        "reading a reading position failed: \(String(describing: error), privacy: .public)")
+      return false
     }
   }
 

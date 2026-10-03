@@ -74,6 +74,8 @@ public actor DocumentStore {
   private lazy var legacyPack: InstalledPack? = Self.installedPack(
     in: packsDirectory.appending(path: Self.legacyPackName, directoryHint: .isDirectory))
   private static let legacyPackName = "legacy-xml"
+  /// The corpus's index database (#174), which reading paths read (#189).
+  private static let indexesPackName = "indexes"
   /// One install at a time: two would unpack into one destination and race to
   /// swap it in.
   private var isInstallingPack = false
@@ -475,6 +477,28 @@ public actor DocumentStore {
     // Parsed again on their next open, from the pack; nothing else it could serve.
     parsed.removeAll { pack.file(for: $0) != nil }
     return pack
+  }
+
+  /// Installs the `indexes` pack, as `installLegacyPack(from:)` installs the legacy
+  /// one. A reader opens its database afresh for each question, so nothing here
+  /// holds the one it replaces.
+  public func installIndexesPack(from source: URL) async throws -> InstalledPack {
+    guard !isInstallingPack else { throw AlreadyInstalling() }
+    isInstallingPack = true
+    defer { isInstallingPack = false }
+    return try await Self.install(source, as: Self.indexesPackName, in: packsDirectory)
+  }
+
+  /// The installed `indexes` pack's citation database, or nil when no pack is
+  /// installed or its manifest does not list one. Read from the disk on each call:
+  /// it is asked once per reading path.
+  public func citationIndexURL() -> URL? {
+    let directory = packsDirectory.appending(
+      path: Self.indexesPackName, directoryHint: .isDirectory)
+    guard let pack = Self.installedPack(in: directory),
+      pack.manifest.files.contains(where: { $0.path == CitationIndex.fileName })
+    else { return nil }
+    return directory.appending(path: CitationIndex.fileName)
   }
 
   /// The RFCs the installed legacy pack lists as text that only points to its

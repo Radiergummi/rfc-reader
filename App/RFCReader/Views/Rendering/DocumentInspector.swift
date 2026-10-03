@@ -55,13 +55,16 @@ struct DocumentInspector: View {
   let openDocument: (DocumentID) -> Void
   /// Searches the library, for a keyword chosen in the Info pane.
   let search: (String) -> Void
+  /// Shows the document's reading path (#189), from the Info pane.
+  let showReadingPath: (DocumentID) -> Void
 
   var body: some View {
     switch pane {
     case .navigation: navigation
     case .info:
       InfoView(
-        info: info, document: document, library: library, open: openDocument, search: search)
+        info: info, document: document, library: library, open: openDocument, search: search,
+        showReadingPath: showReadingPath)
     }
   }
 
@@ -224,6 +227,11 @@ struct PanelHost: View {
               if closesAfterChoice { navigation.selection = nil }
             #endif
           }
+        },
+        // Closes the panel first where it is a sheet, which the reading path's sheet
+        // would otherwise be presented over.
+        showReadingPath: { id in
+          leave { navigation.readingPath = ReadingPathRequest(root: id) }
         }
       )
     } else {

@@ -106,3 +106,48 @@ public struct ReadingPath: Sendable, Equatable {
       root: root, steps: steps, assumed: reachedAssumed, undeclared: undeclared, isCut: isCut)
   }
 }
+
+extension ReadingPath {
+  /// One row of the reading path's sheet.
+  public struct Row: Sendable, Equatable, Identifiable {
+    public var document: DocumentID
+    /// The index's title, or nil for a document it does not list, such as a BCP
+    /// cited as a whole.
+    public var title: String?
+    /// Kept on the path, since it is the text the citing document depends on, and
+    /// marked with what replaced it.
+    public var obsoletedBy: [DocumentID]
+    /// Opened before, by its reading position.
+    public var isRead: Bool
+
+    public var id: DocumentID { document }
+
+    public init(document: DocumentID, title: String?, obsoletedBy: [DocumentID], isRead: Bool) {
+      self.document = document
+      self.title = title
+      self.obsoletedBy = obsoletedBy
+      self.isRead = isRead
+    }
+  }
+
+  /// The assumed documents, then the path: the order of the sheet, and of the
+  /// collection it is saved as.
+  public var documents: [DocumentID] { assumed + steps.map(\.document) }
+
+  /// The name of the collection the path is saved as.
+  public var collectionName: String { "Reading Path: \(root.displayName)" }
+
+  /// The sheet's rows: the assumed documents and the path's, each with what the
+  /// index and the reading positions say of it.
+  public func rows(
+    metadata: (DocumentID) -> RFCMetadata?, isRead: (DocumentID) -> Bool
+  ) -> (assumed: [Row], steps: [Row]) {
+    func row(_ id: DocumentID) -> Row {
+      let entry = metadata(id)
+      return Row(
+        document: id, title: entry?.title, obsoletedBy: entry?.obsoletedBy ?? [],
+        isRead: isRead(id))
+    }
+    return (assumed.map(row), steps.map { row($0.document) })
+  }
+}

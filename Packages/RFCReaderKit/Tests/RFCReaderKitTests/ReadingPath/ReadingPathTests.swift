@@ -94,4 +94,28 @@ struct ReadingPathTests {
     let graph = Graph(normative: [1: [2], 2: [3]], undeclared: [3, 7])
     #expect(graph.walk(from: 1).undeclared == [.rfc(3)])
   }
+
+  @Test func `the assumed documents come first in the saved order`() {
+    let path = Graph(normative: [1: [9, 2]]).walk(from: 1, assumed: [9])
+    #expect(path.documents == [.rfc(9), .rfc(2), .rfc(1)])
+    #expect(path.collectionName == "Reading Path: RFC 1")
+  }
+
+  @Test func `a row says what the index and the reading positions know`() {
+    let path = Graph(normative: [1: [9, 2]]).walk(from: 1, assumed: [9])
+    let index = [
+      RFCMetadata(
+        id: .rfc(2), title: "Two", date: PublicationDate(year: 1990), obsoletedBy: [.rfc(3)]),
+      RFCMetadata(id: .rfc(9), title: "Nine", date: PublicationDate(year: 1990)),
+    ]
+    let rows = path.rows(
+      metadata: { id in index.first { $0.id == id } }, isRead: { $0 == .rfc(9) })
+    #expect(
+      rows.assumed == [.init(document: .rfc(9), title: "Nine", obsoletedBy: [], isRead: true)])
+    #expect(
+      rows.steps == [
+        .init(document: .rfc(2), title: "Two", obsoletedBy: [.rfc(3)], isRead: false),
+        .init(document: .rfc(1), title: nil, obsoletedBy: [], isRead: false),
+      ])
+  }
 }

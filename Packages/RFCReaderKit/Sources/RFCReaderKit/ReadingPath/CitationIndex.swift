@@ -50,7 +50,8 @@ public final class CitationIndex {
   /// its citations: document order, the bibliography's uncited entries last.
   public func references(of id: DocumentID) throws -> ReadingPath.References {
     let rows = try pairs(
-      "SELECT cited, kind FROM citations WHERE citing = ? ORDER BY rowid", binding: [id.description])
+      "SELECT cited, kind FROM citations WHERE citing = ? ORDER BY rowid", binding: [id.description]
+    )
     var normative: [DocumentID] = []
     var declares = false
     var hasUnknown = false
@@ -75,8 +76,9 @@ public final class CitationIndex {
   /// The documents cited normatively by more than `share` of the documents the index
   /// read.
   public func assumed(share: Double = assumedShare) throws -> Set<DocumentID> {
-    guard let documents = try strings("SELECT value FROM meta WHERE key = 'documents'").first
-      .flatMap(Int.init)
+    guard
+      let documents = try strings("SELECT value FROM meta WHERE key = 'documents'").first
+        .flatMap(Int.init)
     else { return [] }
     let threshold = Int((Double(documents) * share).rounded(.down))
     // The threshold is written into the query, not bound: a bound value is text, and

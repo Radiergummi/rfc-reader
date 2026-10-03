@@ -7,6 +7,23 @@ import Testing
 
 @Suite("Citation index")
 struct CitationIndexTests {
+  /// One row of the `citations` table; its section and count are never read.
+  struct Row {
+    var citing: String
+    var cited: String
+    var kind: String?
+    var place: String
+
+    init(_ citing: String, _ cited: String, _ kind: String?, place: String = "section") {
+      self.citing = citing
+      self.cited = cited
+      self.kind = kind
+      self.place = place
+    }
+  }
+
+  struct WriteFailed: Error {}
+
   /// An `indexes.sqlite` written in the test, in the shape corpus-build's
   /// `IndexDatabase` writes it, removed with the directory it is in.
   final class Database {
@@ -14,14 +31,14 @@ struct CitationIndexTests {
       path: "CitationIndexTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     var url: URL { directory.appending(path: CitationIndex.fileName) }
 
-    /// `rows` are `(citing, cited, place, kind)`, in the order the index writes them.
+    /// `rows` in the order the index writes them.
     init(
       schema: String = String(CitationIndex.schemaVersion), documents: Int,
-      rows: [(String, String, String, String?)]
+      rows: [Row]
     ) throws {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       var connection: OpaquePointer?
-      guard sqlite3_open(url.path, &connection) == SQLITE_OK else { throw Failure() }
+      guard sqlite3_open(url.path, &connection) == SQLITE_OK else { throw WriteFailed() }
       defer { sqlite3_close(connection) }
       var sql = """
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
@@ -30,28 +47,27 @@ struct CitationIndexTests {
           section TEXT, count INTEGER NOT NULL, kind TEXT);
         INSERT INTO meta VALUES ('schema', '\(schema)'), ('documents', '\(documents)');
         """
-      for (citing, cited, place, kind) in rows {
-        let kind = kind.map { "'\($0)'" } ?? "NULL"
-        sql += "INSERT INTO citations VALUES ('\(citing)', '\(cited)', '\(place)', NULL, 1, \(kind));\n"
+      for row in rows {
+        let kind = row.kind.map { "'\($0)'" } ?? "NULL"
+        sql +=
+          "INSERT INTO citations VALUES ('\(row.citing)', '\(row.cited)', '\(row.place)', NULL, 1, \(kind));\n"
       }
-      guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else { throw Failure() }
+      guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else { throw WriteFailed() }
     }
 
     deinit { try? FileManager.default.removeItem(at: directory) }
-
-    struct Failure: Error {}
   }
 
   @Test func `a document's normative references keep their citation order`() throws {
     let database = try Database(
       documents: 10,
       rows: [
-        ("RFC1", "RFC5", "section", "normative"),
-        ("RFC1", "RFC3", "section", "informative"),
-        ("RFC1", "RFC2", "section", "normative"),
-        ("RFC1", "RFC5", "bibliography", "normative"),
-        ("RFC1", "RFC4", "section", nil),
-        ("RFC2", "RFC1", "section", "normative"),
+        Row("RFC1", "RFC5", "normative"),
+        Row("RFC1", "RFC3", "informative"),
+        Row("RFC1", "RFC2", "normative"),
+        Row("RFC1", "RFC5", "normative", place: "bibliography"),
+        Row("RFC1", "RFC4", nil),
+        Row("RFC2", "RFC1", "normative"),
       ])
     let index = try CitationIndex(contentsOf: database.url)
     let references = try index.references(of: .rfc(1))
@@ -63,9 +79,9 @@ struct CitationIndexTests {
     let database = try Database(
       documents: 10,
       rows: [
-        ("RFC1", "RFC2", "section", "unknown"),
-        ("RFC3", "RFC2", "section", "unknown"),
-        ("RFC3", "RFC4", "section", "informative"),
+        Row("RFC1", "RFC2", "unknown"),
+        Row("RFC3", "RFC2", "unknown"),
+        Row("RFC3", "RFC4", "informative"),
       ])
     let index = try CitationIndex(contentsOf: database.url)
     #expect(try index.references(of: .rfc(1)) == .init(normative: [], isUndeclared: true))
@@ -78,16 +94,16 @@ struct CitationIndexTests {
     let database = try Database(
       documents: 100,
       rows: [
-        ("RFC10", "RFC2119", "section", "normative"),
-        ("RFC11", "RFC2119", "section", "normative"),
-        ("RFC12", "RFC2119", "bibliography", "normative"),
-        ("RFC12", "RFC2119", "section", "normative"),
-        ("RFC10", "RFC3986", "section", "normative"),
-        ("RFC11", "RFC3986", "section", "normative"),
-        ("RFC12", "RFC3986", "section", "informative"),
-        ("RFC10", "BCP14", "section", "normative"),
-        ("RFC11", "BCP14", "section", "normative"),
-        ("RFC13", "BCP14", "section", "normative"),
+        Row("RFC10", "RFC2119", "normative"),
+        Row("RFC11", "RFC2119", "normative"),
+        Row("RFC12", "RFC2119", "normative", place: "bibliography"),
+        Row("RFC12", "RFC2119", "normative"),
+        Row("RFC10", "RFC3986", "normative"),
+        Row("RFC11", "RFC3986", "normative"),
+        Row("RFC12", "RFC3986", "informative"),
+        Row("RFC10", "BCP14", "normative"),
+        Row("RFC11", "BCP14", "normative"),
+        Row("RFC13", "BCP14", "normative"),
       ])
     let index = try CitationIndex(contentsOf: database.url)
     #expect(try index.assumed(share: 0.02) == [.rfc(2119), DocumentID(series: .bcp, number: 14)])
@@ -111,11 +127,11 @@ struct CitationIndexTests {
     let database = try Database(
       documents: 100,
       rows: [
-        ("RFC1", "RFC2", "section", "normative"),
-        ("RFC1", "RFC2119", "section", "normative"),
-        ("RFC2", "RFC3", "section", "normative"),
-        ("RFC2", "RFC2119", "section", "normative"),
-        ("RFC3", "RFC2119", "section", "normative"),
+        Row("RFC1", "RFC2", "normative"),
+        Row("RFC1", "RFC2119", "normative"),
+        Row("RFC2", "RFC3", "normative"),
+        Row("RFC2", "RFC2119", "normative"),
+        Row("RFC3", "RFC2119", "normative"),
       ])
     let path = try await CitationIndex.readingPath(from: .rfc(1), depth: 4, in: database.url)
     #expect(path.steps.map(\.document) == [.rfc(3), .rfc(2), .rfc(1)])
