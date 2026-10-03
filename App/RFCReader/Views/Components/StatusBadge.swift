@@ -46,17 +46,9 @@ extension Color {
   /// values: `light` in light appearance and `dark` in dark.
   init(appearanceDependent light: SRGBColor, dark: SRGBColor) {
     #if os(macOS)
-      self.init(
-        nsColor: NSColor(name: nil) { appearance in
-          let color = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-          return NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
-        })
+      self.init(nsColor: RFCColors.byAppearance(light: light, dark: dark))
     #else
-      self.init(
-        uiColor: UIColor { traits in
-          let color = traits.userInterfaceStyle == .dark ? dark : light
-          return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1)
-        })
+      self.init(uiColor: RFCColors.byAppearance(light: light, dark: dark))
     #endif
   }
 }

@@ -326,8 +326,14 @@ public enum RFCXMLParser {
       let anchor = element["anchor"] ?? partNumber ?? "unanchored-section-\(position)"
       let title = parseHeadingTitle(element, fallback: "")
       let blocks = parseBlocks(in: element)
-      let subsections = parseSections(
-        in: element, appendix: appendix || numbering.isAppendix, position: position)
+      // A `pn` says which it is. Where there is none, as in unprepped XML, a section is
+      // an appendix by where it sits: in `<back>`, or in an appendix. Prepped RFCXML
+      // gives every section in `<back>` an appendix's `pn`, but a legacy conversion
+      // writes a numbered section that follows the references there too, because the
+      // schema puts every `<references>` ahead of the back's sections (#315). Its `pn`
+      // is a section's, and it is announced as one: `11.`, not `Appendix 11.` (#683).
+      let isAppendixByPlace = numbering.number == nil ? appendix : numbering.isAppendix
+      let subsections = parseSections(in: element, appendix: isAppendixByPlace, position: position)
       return Section(
         anchor: anchor,
         number: isNumbered ? numbering.number : nil,
@@ -335,7 +341,7 @@ public enum RFCXMLParser {
         blocks: blocks,
         subsections: subsections,
         // Unnumbered back matter (Acknowledgements, Authors' Addresses) is not an appendix.
-        isAppendix: isNumbered && (appendix || numbering.isAppendix)
+        isAppendix: isNumbered && isAppendixByPlace
       )
     }
 
@@ -792,8 +798,9 @@ public enum RFCXMLParser {
       case "eref":
         let inner = parseInlines(element.children, linkBare: false)
         guard let target = element["target"], let url = URL(string: target) else { return inner }
-        // Links into the RFC series are document references, whichever site they point at.
-        if let link = RFCLink(url: url), link.id.series == .rfc {
+        // Links into the RFC series are document references, whichever site they point
+        // at, where a citation can say all of the link (#683).
+        if let link = RFCLink(citing: url) {
           let text = inner.isEmpty ? nil : inner.plainText.collapsingWhitespace()
           // This is the shape `RFCXMLSerializer` writes a document mention in
           // when the document has no bibliography entry, which is most of the
@@ -866,6 +873,12 @@ public enum RFCXMLParser {
         }
         if format == "title", let derived {
           return CrossReference(target: target, text: derived, sectionFormat: sectionFormat)
+        }
+        // Words that are the document's own name ask for its label, whatever the
+        // entry's tag: composed from the tag, `RFC 1006` against an entry `RC87` read
+        // `[RC87]` (#683).
+        if !innerText.isEmpty {
+          return CrossReference(target: target, sectionFormat: sectionFormat)
         }
         // "RFC9110" is the canonical number; anything else is a tag the author
         // chose ("QUIC-TRANSPORT") and is the name the document uses

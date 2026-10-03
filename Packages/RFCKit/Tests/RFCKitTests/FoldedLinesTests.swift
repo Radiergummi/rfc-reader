@@ -132,6 +132,12 @@ struct FoldedLinesTests {
     #expect(FoldedLines.unfold(block(Self.single, "", "a\\", "\tb")) == "a\tb")
   }
 
+  /// A backslash that ends the block's last line, before the block's own newline,
+  /// has no continuation to join: the empty line after it is the end of the block.
+  @Test func `a backslash before a trailing newline is kept`() {
+    #expect(FoldedLines.unfold(block(Self.single, "", "a\\", "")) == "a\\\n")
+  }
+
   @Test func `a backslash on the last line has nothing to join`() {
     #expect(FoldedLines.unfold(block(Self.single, "", "a\\")) == "a\\")
   }
@@ -164,5 +170,43 @@ struct FoldedLinesTests {
   @Test func `an authors own trailing backslash is kept`() {
     let text = block(Self.double, "", "#define X \\", "    1")
     #expect(FoldedLines.unfold(text) == "#define X \\\n    1")
+  }
+
+  // MARK: - A selection (#212)
+
+  /// The whole block selected is the block unfolded.
+  @Test func `a selection of the whole block unfolds as the block does`() {
+    let text = block(Self.single, "", "one\\", "  two", "three")
+    #expect(FoldedLines.unfold(selection: text, strategy: .singleBackslash) == "onetwo\nthree")
+  }
+
+  @Test func `a selection inside one line is copied as it is`() {
+    #expect(FoldedLines.unfold(selection: "ne tw", strategy: .singleBackslash) == "ne tw")
+  }
+
+  /// The edges are what was selected; the fold between them is undone.
+  @Test func `a selection that crosses a fold joins it`() {
+    let text = block("long \\", "      value\"}")
+    #expect(FoldedLines.unfold(selection: text, strategy: .singleBackslash) == "long value\"}")
+  }
+
+  /// The label a code block's card carries comes before the header, and stays.
+  @Test func `a selected header and its blank line are left out`() {
+    let text = block("JSON", Self.double, "", "a long\\", "   \\ subject")
+    #expect(
+      FoldedLines.unfold(selection: text, strategy: .doubleBackslash) == "JSON\na long subject")
+  }
+
+  /// A fold whose continuation is not selected is not wholly in the selection, so
+  /// it is copied as selected.
+  @Test(arguments: [FoldedLines.Strategy.singleBackslash, .doubleBackslash])
+  func `a fold cut off by the selection is kept`(strategy: FoldedLines.Strategy) {
+    #expect(FoldedLines.unfold(selection: "abc\\\n   ", strategy: strategy) == "abc\\\n   ")
+  }
+
+  /// A block already shown unfolded has no fold left to undo.
+  @Test func `a selection of an unfolded block is unchanged`() {
+    let text = "{\"key\": \"a long value\"}\n"
+    #expect(FoldedLines.unfold(selection: text, strategy: .singleBackslash) == text)
   }
 }

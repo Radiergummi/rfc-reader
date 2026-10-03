@@ -44,6 +44,15 @@ public struct ArtworkType: Sendable, Hashable {
     }
     return ArtworkType(name: aliases[name] ?? name, parameters: parameters)
   }
+
+  /// The structured syntax suffix of a media type (RFC 6838, Section 4.2.8): `json`
+  /// in `application/problem+json`, and in the RPC's types that borrow the
+  /// convention, `sdf+json`. Nil where there is none.
+  public var suffix: String? {
+    guard let plus = name.lastIndex(of: "+") else { return nil }
+    let suffix = name[name.index(after: plus)...]
+    return suffix.isEmpty ? nil : String(suffix)
+  }
 }
 
 /// Reviewed verdicts on the types of authored artwork, keyed by the RFC and the
@@ -101,18 +110,30 @@ public enum ArtworkClassifier {
   public static func classify(
     _ block: Preformatted, in document: DocumentID?, hints: ArtworkHints
   ) -> ArtworkClassification {
-    let verdict = hints.verdict(for: document, anchor: block.anchor)
-    if verdict == ArtworkHints.Verdict.none { return .unclassified }
-    if let declared = ArtworkType.canonical(block.type) {
-      return ArtworkClassification(type: declared)
+    if hints.verdict(for: document, anchor: block.anchor) == ArtworkHints.Verdict.none {
+      return .unclassified
     }
-    if case .type(let name)? = verdict, let hinted = ArtworkType.canonical(name) {
-      return ArtworkClassification(type: hinted)
+    if let stated = statedType(of: block, in: document, hints: hints) {
+      return ArtworkClassification(type: stated)
     }
     // Source code is text an author typed as code, never a drawing.
     if block.kind == .artwork, PacketDiagram.recognize(block.text) != nil {
       return ArtworkClassification(type: .packet)
     }
     return .unclassified
+  }
+
+  /// The type a block is given rather than recognized: none for a hint of `none`, then
+  /// its own specific type, then a hint's where its own is generic. A question only
+  /// these answer, such as whether a block is a grammar, which no recognizer finds
+  /// (#185), asks this and leaves the recognizers alone.
+  public static func statedType(
+    of block: Preformatted, in document: DocumentID?, hints: ArtworkHints
+  ) -> ArtworkType? {
+    let verdict = hints.verdict(for: document, anchor: block.anchor)
+    if verdict == ArtworkHints.Verdict.none { return nil }
+    if let declared = ArtworkType.canonical(block.type) { return declared }
+    if case .type(let name)? = verdict { return ArtworkType.canonical(name) }
+    return nil
   }
 }

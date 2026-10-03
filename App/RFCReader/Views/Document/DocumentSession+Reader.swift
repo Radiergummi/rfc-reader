@@ -67,6 +67,11 @@ extension DocumentSession {
         guard navigation.selection == id else { return }
         reader.requirements = requirements
       }
+      Task(name: "Find a grammar to export") { [reader, navigation, id] in
+        let formats = await Self.exportFormats(for: loaded)
+        guard navigation.selection == id else { return }
+        reader.exportFormats = formats
+      }
     } failed: { [reader, navigation, id] in
       // No header is coming, so the toolbar names the RFC that failed; unless it is
       // a scan (`publishedOriginal`), whose page shows the header.
@@ -113,6 +118,13 @@ extension DocumentSession {
         $0, authors: authors, in: library.index,
         revisions: library.revisionsSummary(for: $0.id))
     }
+  }
+
+  /// The formats the document can be saved as, off the main actor: finding a grammar
+  /// parses every block that may be one.
+  @concurrent
+  private static func exportFormats(for document: RFCDocument) async -> [ExportFormat] {
+    ExportFormat.available(for: document)
   }
 
   /// The Requirements tab's rows (#180), off the main actor: every sentence of the

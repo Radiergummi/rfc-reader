@@ -7,7 +7,7 @@ struct SidebarView: View {
   @Environment(LibraryModel.self) private var library
   @Environment(NavigationModel.self) private var navigation
   #if !os(macOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.sceneChrome) private var chrome
     @Environment(\.editMode) private var editMode
   #endif
   // Which sections are open, kept across launches (#344).
@@ -91,7 +91,7 @@ struct SidebarView: View {
       // as it is in Notes. Otherwise the sidebar comes back showing the whole
       // library searched for what narrowed Bookmarks.
       .onAppear {
-        if horizontalSizeClass == .compact { navigation.searchText = "" }
+        if chrome.isCollapsed { navigation.searchText = "" }
       }
       // A list of places, titled the way Notes' folders are (#343).
       .navigationBarTitleDisplayMode(.large)
@@ -232,7 +232,7 @@ struct SidebarView: View {
     /// iPhone the list is not on screen, and the field searched for nothing anyone
     /// could see.
     private var isSearchingInPlace: Bool {
-      horizontalSizeClass == .compact
+      chrome.isCollapsed
         && !navigation.appliedQuery.isUnsearchedQuery
     }
 
@@ -265,16 +265,25 @@ struct SidebarView: View {
   private func row(_ filter: LibraryFilter) -> some View {
     HStack {
       Label(library.title(for: filter), systemImage: filter.systemImage)
-      #if os(macOS)
-        accessories(count: nil)
-      #else
-        accessories(count: count(filter))
-      #endif
+      accessories(count: count(filter))
     }
+    #if os(macOS)
+      .badge(badge(count(filter)))
+    #endif
     .tag(filter)
   }
 
-  /// The count and, collapsed, the chevron, after a row's label. Nothing on a Mac.
+  #if os(macOS)
+    /// A row's count as its badge. Text rather than the number, which `.badge` hides
+    /// at zero: an empty collection says 0, as it does on iOS. Nil while the index
+    /// loads, which draws no badge.
+    private func badge(_ count: Int?) -> Text? {
+      count.map { Text($0, format: .number) }
+    }
+  #endif
+
+  /// The count and, collapsed, the chevron, after a row's label. Nothing on a Mac,
+  /// where the row's `.badge` is the count and there is no chevron to draw after.
   @ViewBuilder
   private func accessories(count: Int?) -> some View {
     #if !os(macOS)
@@ -288,7 +297,7 @@ struct SidebarView: View {
       // Collapsed, a row pushes the list, and nothing said so: the rows are
       // selection-tagged rather than `NavigationLink`s, which is what draws the
       // system's own chevron.
-      if horizontalSizeClass == .compact {
+      if chrome.isCollapsed {
         Image(systemName: "chevron.forward")
           .font(.footnote.weight(.semibold))
           .foregroundStyle(.tertiary)
@@ -307,12 +316,11 @@ struct SidebarView: View {
       } icon: {
         CollectionFolderIcon(color: entry.color)
       }
-      #if os(macOS)
-        accessories(count: nil)
-      #else
-        accessories(count: library.count(of: entry))
-      #endif
+      accessories(count: library.count(of: entry))
     }
+    #if os(macOS)
+      .badge(badge(library.count(of: entry)))
+    #endif
     // List rows dropped here join the collection at its end.
     .dropDestination(for: String.self) { keys, _ in
       // A collection holds RFCs: a series row dragged here is not taken (#321).
@@ -345,19 +353,17 @@ struct SidebarView: View {
     }
   }
 
-  #if !os(macOS)
-    /// How many documents a row leads to (#344): the index's own count, or the
-    /// reader's data for the Library rows. Nil while the index loads, and for a
-    /// filter it lists nothing in.
-    private func count(_ filter: LibraryFilter) -> Int? {
-      switch filter {
-      case .bookmarks: library.bookmarkedDocuments.count
-      case .downloaded: library.downloadedNumbers.count
-      case .recent: library.recentlyReadCount
-      default: library.indexCounts[filter]
-      }
+  /// How many documents a row leads to (#344): the index's own count, or the
+  /// reader's data for the Library rows. Nil while the index loads, and for a
+  /// filter it lists nothing in.
+  private func count(_ filter: LibraryFilter) -> Int? {
+    switch filter {
+    case .bookmarks: library.bookmarkedDocuments.count
+    case .downloaded: library.downloadedNumbers.count
+    case .recent: library.recentlyReadCount
+    default: library.indexCounts[filter]
     }
-  #endif
+  }
 
   #if os(macOS)
     @ViewBuilder

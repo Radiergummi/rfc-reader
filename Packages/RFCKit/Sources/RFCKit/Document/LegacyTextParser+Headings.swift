@@ -310,8 +310,39 @@ extension LegacyTextParser {
   /// Preferences` (RFC 6186) and `Router Preferences and More-Specific Routes` (RFC
   /// 7066) hold the letters and were read as bibliographies from their first
   /// bracketed line.
+  ///
+  /// What a title says in parentheses is an aside: `Simple Example (Signature, ...,
+  /// and References)` in RFC 3275 is an example, and its lines of XML read as 26
+  /// entries (#686).
   static func isReferencesTitle(_ title: String) -> Bool {
-    title.lowercased().contains(#/\breferences\b/#)
+    withoutAsides(title).lowercased().contains(#/\breferences\b/#)
+  }
+
+  private static let aside = Pattern(#/\([^)]*\)/#)
+
+  private static func withoutAsides(_ title: String) -> String {
+    title.replacing(aside, with: "").collapsingWhitespace()
+      .trimmingCharacters(in: .whitespaces)
+  }
+
+  /// A references section by its title alone: `References`, `Normative References:`,
+  /// `Informative References (Alphabetical)`.
+  private static let plainReferencesTitle = Pattern(
+    #/(?i)(?:(?:normative|informative|informational|non-normative) )?references[.:]?/#)
+
+  /// Whether a section whose title names references is a bibliography. A plain
+  /// references title is one, whatever the parser makes of its entries: RFC 1716's
+  /// and 2315's hold one each beside the text it could not split. Any other title only
+  /// mentions references -- `References Section` in RFC 7322, a style guide's advice
+  /// on writing one, or `Continuation References in the Search Result` in RFC 4511 --
+  /// and is a bibliography when its entries outnumber the blocks before the first of
+  /// them. Read as one, such a section's text was taken for a single entry's, and
+  /// its subsections had no place in the XML (#686).
+  static func isBibliography(
+    title: String, entries: Int, blocksBefore: @autoclosure () -> Int
+  ) -> Bool {
+    if withoutAsides(title).wholeMatch(of: plainReferencesTitle) != nil { return true }
+    return entries > blocksBefore()
   }
 
   static func nest(_ flat: [Section]) -> [Section] {
@@ -337,6 +368,29 @@ extension LegacyTextParser {
     while let top = stack.popLast() {
       attach(top.section)
     }
-    return roots
+    return liftingOutOfBibliographies(roots)
+  }
+
+  /// A bibliography holds bibliographies and nothing else: `<references>` has no room
+  /// for a section, so a section nested in one lost its text in the XML (#686). The
+  /// numbering nests one there when an appendix's own heading is missing or not read
+  /// as one -- RFC 2814's `A.1.` follows `9. References` with no `Appendix A` -- or
+  /// when the author numbered it so, as RFC 2639's `4.1 Authors' Addresses` under `4
+  /// References`. From the first subsection that is not a bibliography, they follow
+  /// it instead, in the order they came.
+  static func liftingOutOfBibliographies(_ sections: [Section]) -> [Section] {
+    sections.flatMap { section -> [Section] in
+      var section = section
+      section.subsections = liftingOutOfBibliographies(section.subsections)
+      let holdsEntries = section.blocks.contains {
+        if case .references = $0 { true } else { false }
+      }
+      guard holdsEntries,
+        let first = section.subsections.firstIndex(where: { !RFCXMLSerializer.isReferences($0) })
+      else { return [section] }
+      let lifted = Array(section.subsections[first...])
+      section.subsections.removeSubrange(first...)
+      return [section] + lifted
+    }
   }
 }

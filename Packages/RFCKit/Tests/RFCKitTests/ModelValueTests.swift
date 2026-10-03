@@ -89,3 +89,22 @@ struct CategoryTests {
     #expect(DocumentHeader.Category(parsing: text) == nil)
   }
 }
+
+/// How a section's heading is composed from its number and its words.
+@Suite("Model: section headings")
+struct SectionHeadingTests {
+  @Test func `a heading is its number and its words`() {
+    let section = Section(anchor: "appendix-A", number: "A", title: "Examples", isAppendix: true)
+    #expect(section.displayTitle == "Appendix A. Examples")
+  }
+
+  /// A heading with no words is its number alone, with nothing after it: written into
+  /// a `<name>`, a trailing space read back without it (#683).
+  @Test func `a heading with no words is its number alone`() {
+    let appendix = Section(anchor: "appendix-A", number: "A", title: "", isAppendix: true)
+    #expect(appendix.displayTitle == "Appendix A.")
+    #expect(appendix.displayTitleInlines == [.text("Appendix A.")])
+    let section = Section(anchor: "section-4.2", number: "4.2", title: "")
+    #expect(section.displayTitle == "4.2.")
+  }
+}
