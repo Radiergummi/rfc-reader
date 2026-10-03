@@ -60,7 +60,8 @@ public enum SectionAlignment {
   /// what was measured.
   public static let threshold = 0.3
 
-  /// The least the prose of a pair has in common for it to score at all. A title
+  /// The least the prose of a pair has in common for it to score at all, the cosine
+  /// of the two sections' own prose with neither title's words in it. A title
   /// alone clears `threshold` (0.4 for two equal ones), so without it every
   /// "Overview" or "Examples" of a successor would pair with the old one whatever
   /// either says. It costs nothing measured against RFC 9110's labels.
@@ -213,8 +214,9 @@ public enum SectionAlignment {
   private struct Profile {
     var anchor: String
     var title: Set<String>
-    /// How often each word occurs in the section's title and its own prose, not its
-    /// subsections'.
+    /// How often each word occurs in the section's own prose, not its subsections'
+    /// and not its title, which `title` scores apart: counted here too, two equal
+    /// titles would clear `minimumProse` for each other over short prose.
     var terms: [String: Int]
     /// Where the section stands in its document, from 0 for the first to 1.
     var position: Double
@@ -222,7 +224,9 @@ public enum SectionAlignment {
 
   /// A bibliography is left out, a whole section of one and a reference list inside
   /// another: its entries are titles of other documents, which would match every
-  /// section that cites the same ones.
+  /// section that cites the same ones. So is a section with no prose of its own, a
+  /// heading over its subsections: it could only pair by its title, which
+  /// `minimumProse` exists to refuse.
   private static func profiles(of document: RFCDocument) -> [Profile] {
     let sections = document.allSections.filter { !$0.holdsOnlyReferences }
     let last = Double(max(sections.count - 1, 1))
@@ -232,7 +236,7 @@ public enum SectionAlignment {
         if case .references = block { return [] }
         return block.proseRuns
       }
-      let terms = (title + prose.map(\.plainText).flatMap(words(in:)))
+      let terms = prose.map(\.plainText).flatMap(words(in:))
         .reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
       guard !terms.isEmpty else { return nil }
       return Profile(
