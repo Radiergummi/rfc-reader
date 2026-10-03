@@ -46,6 +46,16 @@ public struct ReaderPath: Equatable, Sendable {
   /// The reader on top, on screen.
   public var top: Reader? { readers.last }
 
+  /// Whether the reader of `id` at `depth` is the one on top, on screen.
+  public func isTop(_ id: DocumentID, at depth: Int) -> Bool {
+    top == Reader(id: id, depth: depth)
+  }
+
+  /// Whether the stack holds a reader of `id` at `depth`, on top or below it.
+  public func holds(_ id: DocumentID, at depth: Int) -> Bool {
+    readers.indices.contains(depth) && readers[depth].id == id
+  }
+
   /// Whether `reader` keeps its view, and with it its build: the eight nearest the
   /// top do.
   public func retains(_ reader: Reader) -> Bool {

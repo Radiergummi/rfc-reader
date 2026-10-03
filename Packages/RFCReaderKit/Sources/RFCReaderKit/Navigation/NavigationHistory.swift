@@ -69,6 +69,14 @@ public struct NavigationHistory: Sendable {
     let place = HistoryEntry(
       id: place.id, section: place.section.map(anchor), arrival: place.arrival)
     let position = position.map(anchor)
+    // Reopening the hidden document from its row, which names no section: back
+    // where it was, and not a jump to offer a way back from. A row is from outside
+    // the reader, so the readers are stacked again from here (#263).
+    if isHidden, place.section == nil, let current, place.id == current.id {
+      arrivedByGoing = false
+      self.current = HistoryEntry(id: current.id, section: current.section, arrival: place.arrival)
+      return nil
+    }
     if let current, place.id == current.id, place.section == current.section.map(anchor) {
       guard let section = place.section else { return nil }
       let reported = places?.section(of: section) ?? section
@@ -79,12 +87,6 @@ public struct NavigationHistory: Sendable {
         self.current = arrived
         return arrived
       }
-    }
-    // Reopening the hidden document from its row, which names no section: back
-    // where it was, and not a jump to offer a way back from.
-    if isHidden, place.section == nil, place.id == current?.id {
-      arrivedByGoing = false
-      return nil
     }
     if var previous = current {
       previous.section = position ?? previous.section.map(anchor)
@@ -167,6 +169,15 @@ public struct NavigationHistory: Sendable {
       position = nil
     }
     return arrived
+  }
+
+  /// `popReaders(to:leaving:)` for the stack's path cut back to `pushed`, the readers
+  /// over the root it still shows.
+  @discardableResult
+  public mutating func popReaders(
+    toPushed pushed: [ReaderPath.Reader], leaving position: String? = nil
+  ) -> HistoryEntry? {
+    popReaders(to: pushed.count + 1, leaving: position)
   }
 
   /// Put the current place away without leaving it: going back to the list on an

@@ -32,12 +32,17 @@ final class NavigationModel: Identifiable {
     /// False for a jump the reader makes as its text appears: a document just
     /// loaded opens at the place rather than animating there from its top.
     var isAnimated = true
+    /// A return to a reader the stack on iOS kept below its top, which is where it
+    /// was left (#263): only a reader made again, having been let go, goes there.
+    var isToKeptReader = false
     private let issue = UUID()
   }
 
   nonisolated let id = UUID()
 
-  private var history = NavigationHistory()
+  private var history = NavigationHistory() {
+    didSet { readerPath = ReaderPath(history) }
+  }
 
   /// Where the reader has scrolled to in the current document, mirrored here so
   /// that navigating away can record it on the entry being left. `DocumentView`
@@ -436,33 +441,45 @@ final class NavigationModel: Identifiable {
     visiblePosition = place.section
   }
 
-  /// At a place in a reader the stack kept, which is where it was left: there is
-  /// nothing to scroll to.
+  /// At a place in a reader the stack kept, which is where it was left: nothing to
+  /// scroll to, unless the reader was let go and is made again.
   private func arriveKept(at place: HistoryEntry) {
-    scrollRequest = nil
+    scrollRequest = place.section.map {
+      ScrollRequest(section: $0, isAnimated: false, isToKeptReader: true)
+    }
     visiblePosition = place.section
   }
 
   // MARK: - The readers stacked on iOS (#263)
 
   /// The readers stacked in this tab's detail column on iOS: the root, and one for
-  /// each citation of another RFC followed since. The Mac has one reader.
-  var readerPath: ReaderPath { ReaderPath(history) }
+  /// each citation of another RFC followed since. The Mac has one reader. Kept as
+  /// the history changes, since every reader asks it on every scroll tick through
+  /// `shows(_:at:)`.
+  private(set) var readerPath = ReaderPath(NavigationHistory())
 
   /// Whether the reader of `id` at `depth` in the stack is the one on screen, whose
   /// the window's reader state is. `depth` is nil for a reader that is not stacked,
   /// the Mac's, which is on screen while its document is selected.
   func shows(_ id: DocumentID, at depth: Int?) -> Bool {
-    guard selection == id else { return false }
-    guard let depth else { return true }
-    return history.stackedDocuments.count - 1 == depth
+    guard let depth else { return selection == id }
+    return readerPath.isTop(id, at: depth)
+  }
+
+  /// Whether the tab still holds the reader of `id` at `depth`, on screen or, on
+  /// iOS, kept below the top of the stack.
+  func holds(_ id: DocumentID, at depth: Int?) -> Bool {
+    guard let depth else { return selection == id }
+    return readerPath.holds(id, at: depth)
   }
 
   /// The stack's own back, the system back button or a swipe from the edge, which
-  /// leaves `count` readers: the history steps back past each reader popped, and the
-  /// one shown is where it was left.
-  func popReaders(to count: Int) {
-    guard let place = history.popReaders(to: count, leaving: visiblePosition) else { return }
+  /// cut its path back to `pushed`: the history steps back past each reader popped,
+  /// and the one shown is where it was left.
+  func popReaders(toPushed pushed: [ReaderPath.Reader]) {
+    guard let place = history.popReaders(toPushed: pushed, leaving: visiblePosition) else {
+      return
+    }
     arriveKept(at: place)
   }
 

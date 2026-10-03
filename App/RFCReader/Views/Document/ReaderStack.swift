@@ -46,8 +46,7 @@
       Binding {
         path.pushed
       } set: { readers in
-        guard readers.count < path.pushed.count else { return }
-        navigation.popReaders(to: readers.count + 1)
+        navigation.popReaders(toPushed: readers)
       }
     }
 

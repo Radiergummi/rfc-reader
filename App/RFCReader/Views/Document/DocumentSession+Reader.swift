@@ -57,13 +57,16 @@ extension DocumentSession {
       Task(name: "Mark opened") { [library, id] in await library.markOpened(id) }
       return
     }
-    startLoad(from: library) { [reader, library, navigation, positions, id, depth] loaded in
-      guard navigation.shows(id, at: depth) else { return }
+    startLoad(from: library) {
+      [reader, library, navigation, positions, id, depth, isShown] loaded in
       // Here rather than on appearing: once per opening, since each is a view of
       // its own (`.id(selection)`) and a collapsed split view's spurious
       // disappear and appear is not another one (#260). And only once the
-      // document is here, so one that failed to open is not listed as read.
-      positions.markOpened()
+      // document is here, so one that failed to open is not listed as read. An
+      // opening still, if a reader was pushed over it meanwhile (#263); not a
+      // reader made again below the top of the stack.
+      if isShown, navigation.holds(id, at: depth) { positions.markOpened() }
+      guard navigation.shows(id, at: depth) else { return }
       Self.present(loaded, id: id, into: reader, library: library) {
         navigation.shows(id, at: depth)
       }

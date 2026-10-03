@@ -88,6 +88,17 @@ struct ReaderPathTests {
     #expect(ReaderPath(history).readers.isEmpty)
   }
 
+  /// A row in the list is from outside the reader, even when it reopens the document
+  /// put away to go back to the list: it comes back where it was, on a stack of its
+  /// own.
+  @Test func `a row reopening the hidden document starts the stack again`() {
+    var history = chain()
+    history.hide()
+    #expect(history.go(to: place(9112)) == nil)
+    #expect(documents(history) == [.rfc(9112)])
+    #expect(history.canGoBack, "the history before it stays")
+  }
+
   /// The stack keeps the views below the top for what they are: a reader is
   /// identified by its document and its place in the stack, so pushing another
   /// leaves every one below it the same reader.
@@ -173,6 +184,15 @@ struct ReaderPathTests {
     #expect(documents(history) == [.rfc(9110), .rfc(9111)])
   }
 
+  /// What the stack hands back: its path, cut back by the readers it popped.
+  @Test func `the stack's path cut back pops the readers cut`() {
+    var history = chain()
+    let path = ReaderPath(history)
+    history.popReaders(toPushed: Array(path.pushed.prefix(1)))
+    #expect(documents(history) == [.rfc(9110), .rfc(9111)])
+    #expect(history.popReaders(toPushed: ReaderPath(history).pushed) == nil, "nothing cut")
+  }
+
   @Test func `the stack's back stops at its root`() {
     var history = NavigationHistory()
     history.go(to: place(8446))
@@ -181,6 +201,25 @@ struct ReaderPathTests {
     #expect(history.current == place(9110))
     #expect(history.popReaders(to: 0) == nil)
     #expect(history.current == place(9110))
+  }
+
+  // MARK: - Which reader is which
+
+  @Test func `the top reader is the one on screen`() {
+    let path = ReaderPath(chain())
+    #expect(path.isTop(.rfc(9112), at: 2))
+    #expect(!path.isTop(.rfc(9111), at: 1), "below the top")
+    #expect(!path.isTop(.rfc(9111), at: 2), "another document at that depth")
+    #expect(!ReaderPath(NavigationHistory()).isTop(.rfc(9112), at: 0))
+  }
+
+  @Test func `the stack holds the readers on it, on top or below`() {
+    let path = ReaderPath(chain())
+    #expect(path.holds(.rfc(9110), at: 0))
+    #expect(path.holds(.rfc(9112), at: 2))
+    #expect(!path.holds(.rfc(9110), at: 2))
+    #expect(!path.holds(.rfc(9110), at: 3), "deeper than the stack")
+    #expect(!path.holds(.rfc(9110), at: -1))
   }
 
   // MARK: - How it was arrived at

@@ -80,11 +80,13 @@ struct DocumentView: View {
   /// Whether this is the reader on screen, whose the window's reader state is.
   private var isShown: Bool { navigation.shows(id, at: depth) }
 
+  /// Whether what the window's reader state says is this reader's to show: it is on
+  /// screen, and has put its own there.
+  private var showsReaderState: Bool { ownsReader && isShown }
+
   /// The original text or the rendered document: the window's choice while the
   /// reader state is this reader's, and what it last was otherwise.
-  private var showsOriginal: Bool {
-    ownsReader && isShown ? reader.showOriginal : keptOriginal
-  }
+  private var showsOriginal: Bool { showsReaderState ? reader.showOriginal : keptOriginal }
 
   #if !os(macOS)
     @Binding private var showsInspector: Bool
@@ -169,7 +171,7 @@ struct DocumentView: View {
   /// screen, whose the reader state is, and only in Focus, which alone needs them;
   /// not over the original text, which nothing folds.
   private func updateFolding() {
-    guard ownsReader, isShown else { return }
+    guard showsReaderState else { return }
     guard reader.folding.mode == .focus, !reader.showOriginal, let built = session.state.built
     else {
       // Only where there is something to clear: every write notifies, and the panel
@@ -216,7 +218,7 @@ struct DocumentView: View {
           IOSDocumentChrome(
             id: id, metadata: metadata, document: session.state.document, library: library,
             navigation: navigation, reader: reader, showsInspector: $showsInspector,
-            barsHidden: $barsHidden, output: output, isShown: ownsReader && isShown))
+            barsHidden: $barsHidden, output: output, isShown: showsReaderState))
       #endif
       .onAppear {
         if !session.hasStartedLoading {
@@ -239,11 +241,11 @@ struct DocumentView: View {
         updateFolding()
       }
       .onChange(of: reader.folding) {
-        if ownsReader, isShown { keptFolding = reader.folding }
+        if showsReaderState { keptFolding = reader.folding }
         updateFolding()
       }
       .onChange(of: reader.showOriginal) {
-        if ownsReader, isShown { keptOriginal = reader.showOriginal }
+        if showsReaderState { keptOriginal = reader.showOriginal }
         updateFolding()
       }
       // On iOS, covered by a reader pushed over it, or on top again once that one
@@ -284,8 +286,9 @@ struct DocumentView: View {
       }
       .onChange(of: navigation.scrollRequest) { _, request in
         // Not while fading out over the next document's reader, nor under the top
-        // of the stack: the request is the reader on screen's.
-        guard isShown, let request else { return }
+        // of the stack: the request is the reader on screen's. A return to a reader
+        // the stack kept finds it where it was left (#263).
+        guard isShown, let request, !request.isToKeptReader else { return }
         if request.isUnrecorded {
           follow(request, animated: true)
         } else {
@@ -424,12 +427,12 @@ struct DocumentView: View {
         onChromeHidden: setBarsHidden,
         // Not while fading out, nor under the top of the stack until the reader
         // state is this reader's again: it is the reader on screen's.
-        folding: ownsReader && isShown ? reader.folding : nil,
+        folding: showsReaderState ? reader.folding : nil,
         onFoldingChange: {
           guard isShown else { return }
           reader.folding = $0
         },
-        isShown: ownsReader && isShown,
+        isShown: showsReaderState,
         heading: heading,
         headerIdentity: headerIdentity,
         // Hosted outside the storage, given the environment by the text view.
