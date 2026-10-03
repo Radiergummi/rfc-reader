@@ -16,7 +16,7 @@ extension FragmentGeometry {
   /// Where the requirement bands in `bands` are drawn on the lines of the fragment
   /// spanning `fragment`: behind each band's own text, one rect a line. The rects of
   /// one band are joined into one shape, a line's bottom meeting the next line's
-  /// top, and round only where the sentence starts and ends; there they are
+  /// top, which rounds only its outer corners, where the sentence starts and ends; there they are
   /// centered on the glyphs, padded as a chip is, rather than on the line box,
   /// whose leading is all above its text. `bands` are document ranges; a band that
   /// starts before the fragment or ends after it continues square.
@@ -49,9 +49,13 @@ extension FragmentGeometry {
         let right = bounds.minX + endX + (ends ? chipPadding : 0)
         let top = starts ? baseline - font.ascender - chipVerticalPadding : bounds.minY
         let bottom = ends ? baseline - font.descender + chipVerticalPadding : bounds.maxY
+        // Only the shape's outer corners. A first row's bottom-left sits on the row
+        // under it, which starts at its line's start, and a last row's top-right
+        // under the row over it, which runs to its line's end: rounding either
+        // notches the joined shape.
         var corners: Corners = []
-        if starts { corners.formUnion(.left) }
-        if ends { corners.formUnion(.right) }
+        if starts { corners.formUnion(ends ? [.left, .right] : .top) }
+        if ends { corners.formUnion(starts ? [.left, .right] : .bottom) }
         result.append(
           BandRect(
             rect: CGRect(

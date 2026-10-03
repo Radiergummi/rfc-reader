@@ -44,7 +44,9 @@ struct BandGeometryTests {
     return Laid(text: text, lines: lines, fragment: NSRange(location: 0, length: text.length))
   }
 
-  @Test func `a band over three lines is a row on each, joined, rounded at its ends`() throws {
+  @Test func `a band over three lines is a row on each, joined, rounded at its outer corners`()
+    throws
+  {
     let laid = try layOut(width: 260)
     let first = laid.lines[0].characterRange
     let third = laid.lines[2].characterRange
@@ -54,9 +56,11 @@ struct BandGeometryTests {
     let rows = FragmentGeometry.bandRects(
       [band], in: laid.text, lines: laid.lines, fragment: laid.fragment, origin: .zero)
     try #require(rows.count == 3)
-    #expect(rows[0].corners == .left)
+    // Only the shape's outer corners: the first row's bottom-left sits on the row
+    // under it, and the last row's top-right under the row over it.
+    #expect(rows[0].corners == .top)
     #expect(rows[1].corners == [])
-    #expect(rows[2].corners == .right)
+    #expect(rows[2].corners == .bottom)
     // Joined: each row's bottom is the next one's top.
     #expect(rows[0].rect.maxY == rows[1].rect.minY)
     #expect(rows[1].rect.maxY == rows[2].rect.minY)
