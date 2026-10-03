@@ -86,8 +86,10 @@ extension RFCTextViewCoordinator {
     guard let foldingIndex, foldingDelegate.hidden.contains(offset) else { return false }
     let before = folding
     let expanded = folding.expanding(toShow: offset, in: foldingIndex)
-    reportedFolding = (before, expanded)
     apply(expanded, placeAt: offset)
+    // After `apply`, which would take `expanded` for the scene catching up and forget
+    // the report before it was made.
+    reportedFolding = (before, expanded)
     // Deferred: a jump can run inside SwiftUI's update, where mutating state is illegal.
     Task { self.onFoldingChange(expanded) }
     return true
