@@ -24,6 +24,21 @@ struct LegacyTextParserLinkingTests {
     #expect(note.plainText.contains(", Section 4.3]"))
   }
 
+  /// A definition's term cites a document as its text does, and the XML parser links
+  /// both when it reads the conversion back, so a term the converter left as text
+  /// changed on a second serialization (#683).
+  @Test func `a definition's term is linked like its text`() throws {
+    let linker = InlineLinker(sectionNumbers: [], referenceTargets: [:])
+    let items = LegacyTextParser.definitionItems(
+      [(term: "RFC 4321:", text: "An example protocol.")], linker: linker)
+    let item = try #require(items.first)
+    #expect(
+      item.term.compactMap(\.crossReference).map(\.target) == [
+        .document(.rfc(4321), section: nil, entry: nil)
+      ])
+    #expect(item.term.plainText == "RFC\u{00A0}4321:", "the label prose gives it")
+  }
+
   @Test func `legacy bracketed RFC labels are flagged as canonical`() throws {
     let document = try Fixtures.document("rfc5234.txt")
     let xrefs = document.crossReferences

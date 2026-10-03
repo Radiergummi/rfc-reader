@@ -26,6 +26,16 @@ struct LegacyTextParserReferencesTests {
     #expect(document.referencedDocuments.contains(.rfc(822)))
   }
 
+  /// An entry's title is its words, as reading it back from the XML gives, not the line
+  /// breaks and spaces inside the quotes; and an entry with no text has no raw text
+  /// either, rather than an empty one (#683).
+  @Test func `an entry's title is collapsed, and an empty entry has no raw text`() {
+    let spaced = LegacyTextParser.reference(
+      anchor: "EXAMPLE", text: "Writer, A., \" A   Spaced Title \", March 1990.")
+    #expect(spaced.title == "A Spaced Title")
+    #expect(LegacyTextParser.reference(anchor: "EMPTY", text: "").rawText == nil)
+  }
+
   /// The reference list sets its anchors the way the prose cites them, and a
   /// seventh of the corpus puts a space in: `[RFC 1034]`. `referenceStartPattern`
   /// admitted no whitespace in an anchor, so those lines started no entry and were

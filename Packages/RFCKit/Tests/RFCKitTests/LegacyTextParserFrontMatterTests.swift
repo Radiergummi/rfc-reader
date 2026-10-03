@@ -27,6 +27,16 @@ struct LegacyTextParserFrontMatterTests {
     #expect(abnf.header.date == PublicationDate(year: 2008, month: 1))
   }
 
+  /// A title read from the title page is its words, not the columns the page set them
+  /// in, as reading it back from the XML gives (#683). RFC 717 and RFC 770 set theirs
+  /// beside other fields, which a run without the index takes as the title.
+  @Test(arguments: ["rfc717.txt", "rfc770.txt"])
+  func `a title from the title page has its whitespace collapsed`(fixture: String) throws {
+    let title = try Fixtures.document(fixture).header.title
+    #expect(!title.isEmpty)
+    #expect(title == title.collapsingWhitespace(), "\(title)")
+  }
+
   @Test func `abstract moves to header`() throws {
     let document = try Fixtures.document("rfc2119.txt")
     #expect(!document.sections.contains { $0.titleText == "Abstract" })
