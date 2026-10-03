@@ -2,7 +2,7 @@ import Foundation
 import RFCKit
 
 /// What the list in the middle column shows.
-public enum LibraryFilter: Hashable, Identifiable, Sendable {
+public enum LibraryFilter: Hashable, Identifiable, Sendable, Codable {
   case all
   case recent
   case bookmarks
