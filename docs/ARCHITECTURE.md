@@ -158,6 +158,7 @@ is that way, and what was measured or tried first.
 - [A cited heading has a backlink caption under it](decisions/2026-10-03-a-cited-heading-has-a-backlink-caption-under-it.md)
 - [A section is aligned with its successor by title and prose, not by order](decisions/2026-10-03-a-section-is-aligned-with-its-successor-by-title-and-prose-not-by-order.md)
 - [A grammar's rule names are links](decisions/2026-10-03-a-grammars-rule-names-are-links.md)
+- [A reading mode folds paragraphs out of the layout, not out of the storage](decisions/2026-10-03-a-reading-mode-folds-paragraphs-out-of-the-layout.md)
 
 ## Planned engines
 
