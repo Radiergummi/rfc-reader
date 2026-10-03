@@ -8,6 +8,8 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
   case normal
   /// Headings only, each section expandable in place (#698).
   case outline
+  /// One section and its subsections (#699).
+  case focus
 
   public var id: String { rawValue }
 
@@ -16,6 +18,7 @@ public enum ReadingMode: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .normal: "Normal"
     case .outline: "Outline"
+    case .focus: "Focus"
     }
   }
 }
@@ -69,6 +72,15 @@ public struct FoldingIndex: Sendable {
     let after = entries.partitioningIndex { $0.offset > offset }
     return after > 0 ? entries[after - 1] : nil
   }
+
+  /// Where the entry `anchor` names and its subsections run, from its heading to the
+  /// next heading at its depth or shallower.
+  func subtree(of anchor: String) -> Range<Int>? {
+    guard let index = entries.firstIndex(where: { $0.anchor == anchor }) else { return nil }
+    let depth = entries[index].depth
+    let end = entries[(index + 1)...].first { $0.depth <= depth }?.offset ?? length
+    return entries[index].offset..<end
+  }
 }
 
 /// A window's reading mode and the sections it has expanded in place. Window state:
@@ -77,10 +89,49 @@ public struct Folding: Sendable, Equatable {
   public var mode: ReadingMode
   /// The anchors of the sections whose own text is shown although the mode folds it.
   public var expanded: Set<String>
+  /// The section Focus shows, with its subsections (#699).
+  public var focused: String?
 
   public init(mode: ReadingMode = .normal, expanded: Set<String> = []) {
     self.mode = mode
     self.expanded = expanded
+  }
+
+  /// Focus on the section `anchor` names; nil, as before a document has a section on
+  /// screen, shows the first.
+  public init(focusingOn anchor: String?) {
+    self.init(mode: .focus)
+    focused = anchor
+  }
+
+  /// A step of the focus, as Next Section and Previous Section take it.
+  public enum FocusStep: Sendable {
+    case next
+    case previous
+  }
+
+  /// This folding focused on the section after the focused one's subsections, or on
+  /// the one before it at its depth or shallower, its sibling or its parent; nil out
+  /// of Focus, or with nowhere to go.
+  public func focusing(_ step: FocusStep, in index: FoldingIndex) -> Folding? {
+    guard mode == .focus, let current = focusedEntry(in: index),
+      let position = index.entries.firstIndex(of: current)
+    else { return nil }
+    let target: FoldingIndex.Entry?
+    switch step {
+    case .next:
+      let end = index.subtree(of: current.anchor)?.upperBound ?? index.length
+      target = index.entries.first { $0.offset >= end }
+    case .previous:
+      target = index.entries[..<position].last { $0.depth <= current.depth }
+    }
+    guard let target else { return nil }
+    return Folding(focusingOn: target.anchor)
+  }
+
+  /// The focused entry, or the first where nothing is focused yet.
+  private func focusedEntry(in index: FoldingIndex) -> FoldingIndex.Entry? {
+    index.entries.first { $0.anchor == focused } ?? index.entries.first
   }
 
   /// The paragraphs this folding hides in `built`.
@@ -92,6 +143,7 @@ public struct Folding: Sendable, Equatable {
   /// an expanded entry's own text, which runs to the next heading of any level; a
   /// heading only where every section it is nested in is expanded (`outline(in:)`).
   public func hidden(in index: FoldingIndex) -> HiddenText {
+    if mode == .focus { return focusHidden(in: index) }
     guard mode == .outline else { return HiddenText() }
     let outline = outline(in: index)
     let headings = Dictionary(
@@ -108,6 +160,17 @@ public struct Folding: Sendable, Equatable {
         next += 1
       }
       paragraphs.append((paragraph, !(headings[paragraph.location] ?? textShown)))
+    }
+    return HiddenText(paragraphs: paragraphs, length: index.length)
+  }
+
+  /// Focus: everything outside the focused section and its subsections.
+  private func focusHidden(in index: FoldingIndex) -> HiddenText {
+    guard let entry = focusedEntry(in: index), let shown = index.subtree(of: entry.anchor) else {
+      return HiddenText()
+    }
+    let paragraphs = index.paragraphs.map { paragraph in
+      (range: paragraph, isHidden: !shown.contains(paragraph.location))
     }
     return HiddenText(paragraphs: paragraphs, length: index.length)
   }
@@ -156,6 +219,8 @@ public struct Folding: Sendable, Equatable {
   /// it is nested in. Unchanged in a mode that folds nothing.
   public func expanding(toShow offset: Int, in index: FoldingIndex) -> Folding {
     guard mode != .normal, let entry = index.entry(covering: offset) else { return self }
+    // Focus moves to where the jump lands, rather than showing a second section.
+    if mode == .focus { return Folding(focusingOn: entry.anchor) }
     var expanded = self
     expanded.expanded.formUnion(index.anchors(enclosing: entry) + [entry.anchor])
     return expanded
