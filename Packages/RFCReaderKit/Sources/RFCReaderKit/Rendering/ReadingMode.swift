@@ -68,9 +68,14 @@ public struct FoldingIndex: Sendable {
   }
 
   /// The entry whose text `offset` is in: the last at or before it.
-  func entry(covering offset: Int) -> Entry? {
+  public func entry(covering offset: Int) -> Entry? {
     let after = entries.partitioningIndex { $0.offset > offset }
     return after > 0 ? entries[after - 1] : nil
+  }
+
+  /// Where the entry `anchor` names is: its heading.
+  public func offset(of anchor: String) -> Int? {
+    entries.first { $0.anchor == anchor }?.offset
   }
 
   /// Where the entry `anchor` names and its subsections run, from its heading to the

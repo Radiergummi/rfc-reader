@@ -14,9 +14,9 @@ struct ReadingModePicker: View {
         get: { reader.folding.mode },
         set: { mode in
           guard mode != reader.folding.mode else { return }
-          // Focus starts on the section being read.
-          reader.folding =
-            mode == .focus ? Folding(focusingOn: reader.currentAnchor) : Folding(mode: mode)
+          // Focus starts on the section being read, which the text view knows, the
+          // abstract included.
+          reader.folding = Folding(mode: mode)
         })
     ) {
       ForEach(ReadingMode.allCases) { mode in
@@ -32,11 +32,12 @@ struct FocusSteps: View {
   let reader: ReaderState
 
   var body: some View {
+    // Not over the original text, which nothing folds.
     if reader.folding.mode == .focus {
       Button("Next Section", systemImage: "chevron.down") { reader.stepFocus(.next) }
-        .disabled(!reader.canStepFocus(.next))
+        .disabled(!reader.canStepFocus(.next) || reader.showOriginal)
       Button("Previous Section", systemImage: "chevron.up") { reader.stepFocus(.previous) }
-        .disabled(!reader.canStepFocus(.previous))
+        .disabled(!reader.canStepFocus(.previous) || reader.showOriginal)
     }
   }
 }

@@ -337,21 +337,65 @@ struct ReadingModeTests {
     #expect(!moved.hidden(in: built).contains(target.offset + 1))
   }
 
-  /// The References tab shows what the focused section cites, and only that.
+  /// The entries the model says a section and its subsections cite, walked through
+  /// the inlines it draws: a source other than the built storage the citations come
+  /// from.
+  private static func modelCitations(of anchor: String, in document: RFCDocument) -> Set<String> {
+    func subtree(_ section: Section) -> [String] {
+      [section.anchor] + section.subsections.flatMap(subtree)
+    }
+    guard let section = document.allSections.first(where: { $0.anchor == anchor }) else {
+      return []
+    }
+    let anchors = Set(subtree(section))
+    var cited: Set<String> = []
+    func walk(_ inlines: [Inline]) {
+      for inline in inlines {
+        switch inline {
+        case .emphasis(let inner), .strong(let inner), .link(_, let inner): walk(inner)
+        case .crossReference(let xref):
+          switch xref.target {
+          case .anchor(let entry), .entrySection(let entry, _, _, _): cited.insert(entry)
+          case .document(_, _, let entry?): cited.insert(entry)
+          case .document: break
+          }
+        default: break
+        }
+      }
+    }
+    for (section, inlines) in document.drawnProseBySection
+    where section.map(anchors.contains) == true {
+      walk(inlines)
+    }
+    return cited
+  }
+
+  /// The References tab shows what the focused section and its subsections cite, and
+  /// only that: what the model says they cite.
   @Test func `the focused section's citations are what it cites`() throws {
+    let document = try Fixtures.rfc8999()
+    let built = DocumentTextBuilder.build(document, style: ReadingStyle())
+    let index = FoldingIndex(built)
+    var checked = 0
+    for section in built.anchors.sections.entries {
+      let expected = Self.modelCitations(of: section.anchor, in: document)
+      #expect(
+        FocusCitations.entries(citedIn: section.anchor, in: built, index: index) == expected,
+        "\(section.anchor)")
+      if !expected.isEmpty { checked += 1 }
+    }
+    #expect(checked > 3, "sections that cite something")
+  }
+
+  /// Previous Section from a first subsection goes to its parent.
+  @Test func `previous from a first subsection goes to its parent`() throws {
     let built = try Self.rfc8999()
-    let everything = Set(
-      built.anchors.sections.entries.flatMap {
-        FocusCitations.entries(citedIn: $0.anchor, in: built, index: FoldingIndex(built))
-      })
-    let citing = try #require(
-      built.anchors.sections.entries.first {
-        !FocusCitations.entries(citedIn: $0.anchor, in: built, index: FoldingIndex(built)).isEmpty
-      })
-    let cited = FocusCitations.entries(
-      citedIn: citing.anchor, in: built, index: FoldingIndex(built))
-    #expect(cited.isSubset(of: everything))
-    #expect(cited.count < everything.count, "one section cites less than the whole document")
+    let index = FoldingIndex(built)
+    let section = try Self.sectionWithSubsections(in: built)
+    let sections = built.anchors.sections.entries
+    let child = try #require(sections.first { $0.offset > section.span.lowerBound })
+    #expect(
+      Folding(focusingOn: child.anchor).focusing(.previous, in: index)?.focused == section.anchor)
   }
 
   /// The References tab in Focus: the cited entries, in their groups, and no group

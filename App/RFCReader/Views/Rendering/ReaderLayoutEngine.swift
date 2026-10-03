@@ -137,6 +137,12 @@ final class ReaderLayoutEngine: PinSurface {
     startCompletion(knowingEnd: laidOut)
   }
 
+  /// The character the reader's line is on; nil at the top, above the text.
+  var placeOffset: Int? {
+    guard case .line(let anchor) = keeper.place else { return nil }
+    return anchor.characterOffset
+  }
+
   func jump(toOffset offset: Int) {
     keeper.jumped(to: ReaderAnchor(characterOffset: offset))
     settle()

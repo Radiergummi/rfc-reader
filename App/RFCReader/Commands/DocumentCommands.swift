@@ -161,6 +161,7 @@ struct DocumentCommands: Commands {
           ReadingModePicker(reader: reader)
             .disabled(!showsDocument)
           FocusSteps(reader: reader)
+            .disabled(!showsDocument)
         }
       #endif
     }

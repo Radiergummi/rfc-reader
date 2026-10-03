@@ -31,11 +31,12 @@ final class ReaderState {
   var folding = Folding()
   /// What folding needs of the document on screen, for Next and Previous Section.
   var foldingIndex: FoldingIndex?
-  /// In Focus, the bibliography entries the focused section cites, which the
-  /// References tab lists alone (#699); nil out of Focus.
-  var focusCitations: Set<String>?
+  /// In Focus, the References tab's groups with only what the focused section cites
+  /// (#699); nil out of Focus, and for a section that cites nothing.
+  var focusGroups: [ReferenceGroup]?
 
-  /// Next Section and Previous Section, in Focus (#699).
+  /// Next Section and Previous Section, in Focus (#699). The reader's line goes to
+  /// the new section's heading, which the text view does for any change of focus.
   func stepFocus(_ step: Folding.FocusStep) {
     guard let foldingIndex, let stepped = folding.focusing(step, in: foldingIndex) else { return }
     folding = stepped
@@ -193,7 +194,7 @@ final class ReaderState {
     folding.expanded = []
     folding.focused = nil
     foldingIndex = nil
-    focusCitations = nil
+    focusGroups = nil
     info = nil
     revealedReference = nil
     currentAnchor = nil
