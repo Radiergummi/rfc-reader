@@ -64,18 +64,21 @@ extension RFCTextViewCoordinator {
     var place = place
     if folding.mode == .focus {
       // Focus with no section yet: the one the reader's line is in, the abstract
-      // included, told to the scene as a change of the coordinator's own.
+      // included, told to the scene as a change of the coordinator's own. Unless
+      // there is none, which leaves nothing to tell, and nothing to clear the report.
       if folding.focused == nil {
         let line = engine.placeOffset ?? 0
         let resolved = Folding(focusingOn: foldingIndex.entry(covering: line)?.anchor)
-        reportedFolding = (folding, resolved)
-        let report = resolved
-        Task { self.onFoldingChange(report) }
-        folding = resolved
+        if resolved != folding {
+          reportedFolding = (folding, resolved)
+          Task { self.onFoldingChange(resolved) }
+          folding = resolved
+        }
       }
       // A new section in focus puts the line at its heading: the line's old place is
       // folded away, and the paragraph nearest it is the end of the section before.
-      if place == nil, folding.focused != self.folding.focused || self.folding.mode != .focus,
+      // Not on entering Focus, whose section is the one the line is in, still shown.
+      if place == nil, self.folding.mode == .focus, folding.focused != self.folding.focused,
         let anchor = folding.focused, let offset = foldingIndex.offset(of: anchor)
       {
         place = offset
