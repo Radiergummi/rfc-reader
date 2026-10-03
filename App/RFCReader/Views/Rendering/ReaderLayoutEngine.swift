@@ -29,8 +29,13 @@ final class ReaderLayoutEngine: PinSurface {
 
   func scroll(toContainerY target: CGFloat) {
     guard let textView else { return }
-    textView.scroll(toY: target + textView.containerTop)
+    textView.scroll(toY: target + textView.containerTop, knowsEnd: knowsDocumentEnd)
   }
+
+  /// Whether the text view's height is the laid-out document's, so a scroll can be
+  /// held to its end: once the completion has laid all of it out, or a refold has laid
+  /// out what the folding shows. Until then the end is an estimate.
+  private var knowsDocumentEnd = false
 
   /// Not during a live resize: there AppKit's own display pass lays the viewport out.
   /// Forced on every step, it made `NSTextView` lay out a large range of the document
@@ -120,14 +125,16 @@ final class ReaderLayoutEngine: PinSurface {
     // before the place is settled. Only what the folding shows is laid out, which in
     // a mode that folds is a part of the document; with nothing folded, the background
     // completion does it as after any change.
-    if !hidden.isEmpty, let textView {
+    let laidOut = !hidden.isEmpty
+    if laidOut, let textView {
       layout.ensureLayout(for: layout.documentRange)
       #if !canImport(UIKit)
         textView.sizeToFit()
       #endif
     }
+    knowsDocumentEnd = laidOut
     putBack()
-    startCompletion()
+    startCompletion(knowingEnd: laidOut)
   }
 
   func jump(toOffset offset: Int) {
@@ -200,8 +207,9 @@ final class ReaderLayoutEngine: PinSurface {
   /// above the place is laid out already, and the scroll view keeps the place where
   /// it is as the rest arrives. Paused through a live resize, whose every step
   /// re-wraps it, until the text view says the resize ended.
-  private func startCompletion() {
+  private func startCompletion(knowingEnd: Bool = false) {
     stop()
+    knowsDocumentEnd = knowingEnd
     planner = SlicePlanner(length: built?.text.length ?? 0)
     // An ID of its own, because several text views lay out at once: every window
     // and tab, and a force-click preview.
@@ -222,6 +230,7 @@ final class ReaderLayoutEngine: PinSurface {
           self.layOutSlice()
         }
       }
+      if self?.planner.isComplete == true { self?.knowsDocumentEnd = true }
       self?.endCompletionInterval()
     }
   }
