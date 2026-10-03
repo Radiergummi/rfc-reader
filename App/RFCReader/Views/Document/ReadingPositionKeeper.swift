@@ -46,3 +46,35 @@ struct ReadingPositionKeeper {
     }
   }
 }
+
+/// Holds a save of the reading place until the reader has stopped (#155), so a
+/// scroll through a document writes once, at its end, rather than on every tick.
+final class ReadingPlaceSaver {
+  /// Long enough to outlast the pauses inside one scroll.
+  private static let delay = Duration.seconds(2)
+  private var pending: Task<Void, Never>?
+  /// When the save is due. Every scroll tick moves it, which is all a tick costs:
+  /// the one task waiting for it sleeps on until it stops moving.
+  private var due = ContinuousClock.now
+  private var save: () -> Void = {}
+
+  /// Runs `save` once nothing else has been scheduled for `delay`.
+  func schedule(_ save: @escaping () -> Void) {
+    self.save = save
+    due = .now + Self.delay
+    guard pending == nil else { return }
+    pending = Task(name: "Save reading place") { [weak self] in
+      while let self, self.due > .now {
+        guard await Debounce.outlasted(self.due - .now) else { return }
+      }
+      guard let self else { return }
+      self.pending = nil
+      self.save()
+    }
+  }
+
+  func cancel() {
+    pending?.cancel()
+    pending = nil
+  }
+}

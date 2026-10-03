@@ -127,6 +127,21 @@ struct CorpusBackedTitlePageTests {
     let document = LegacyTextParser.parse(try CorpusText.text("rfc355"))
     #expect(!leadInText(document).contains { $0.contains("June 9, 1972") })
   }
+
+  /// A title the index and the title page both set in capitals is title-cased (#219),
+  /// where the front matter took another line and only the title page's runs repeat
+  /// the index's: RFC 822 sets its title over two of them under a header, and RFC 169
+  /// under a workshop's name.
+  @Test func `a title in capitals on the title page and in the index is title cased`() throws {
+    let format = LegacyTextParser.parse(
+      try CorpusText.text("rfc822"),
+      title: "STANDARD FOR THE FORMAT OF ARPA INTERNET TEXT MESSAGES")
+    #expect(format.header.title == "Standard for the Format of ARPA Internet Text Messages")
+
+    let networks = LegacyTextParser.parse(
+      try CorpusText.text("rfc169"), title: "COMPUTER NETWORKS")
+    #expect(networks.header.title == "Computer Networks")
+  }
 }
 
 @Suite("Corpus-backed: appendix headings", .enabled(if: CorpusText.isAvailable))
@@ -358,6 +373,63 @@ struct CorpusBackedReferencesSectionTests {
         return paragraph.plainText.hasPrefix("The priority field")
       })
   }
+
+  private static func holdsList(_ section: Section) -> Bool {
+    section.blocks.contains(where: holdsEntries)
+  }
+
+  /// A plain references title is a bibliography whatever the parser makes of it: RFC
+  /// 1716's and 2315's read as one entry each, beside text before it.
+  @Test func `a plain references title stays a bibliography`() throws {
+    for (stem, number) in [("rfc1716", "11"), ("rfc2315", "2")] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let section = try #require(document.section(number: number), "\(stem)")
+      #expect(Self.holdsList(section), "\(stem) \(number)")
+    }
+  }
+
+  /// A section that only mentions references is not a bibliography: RFC 7322's
+  /// advice on writing one, RFC 4511's continuation references, RFC 3275's example
+  /// with references in parentheses. Each was read as one, its text taken for an
+  /// entry's and its subsections lost in the XML (#686).
+  @Test func `a section that mentions references keeps its text`() throws {
+    for (stem, number) in [("rfc7322", "4.8.6"), ("rfc4511", "4.5.3"), ("rfc3275", "2.1")] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let section = try #require(document.section(number: number), "\(stem)")
+      #expect(!Self.holdsList(section), "\(stem) \(number)")
+      #expect(
+        section.blocks.contains { if case .paragraph = $0 { true } else { false } },
+        "\(stem) \(number) has no prose")
+      #expect(!section.subsections.isEmpty, "\(stem) \(number) lost its subsections")
+    }
+  }
+
+  /// A bibliography adopts no section that is not one: RFC 2814's appendix has no
+  /// heading of its own, so its `A.1` was numbered under `9. References`, and RFC
+  /// 2639 numbers its authors' addresses under its references (#686).
+  @Test func `a bibliography holds no section that is not one`() throws {
+    for stem in ["rfc1195", "rfc2639", "rfc2814"] {
+      let document = LegacyTextParser.parse(try CorpusText.text(stem))
+      let bibliographies = document.allSections.filter(Self.holdsList)
+      #expect(!bibliographies.isEmpty, "\(stem) has no bibliography")
+      for bibliography in bibliographies {
+        #expect(
+          bibliography.subsections.allSatisfy(RFCXMLSerializer.isReferences),
+          "\(stem) \(bibliography.anchor)")
+      }
+    }
+  }
+
+  /// What the app reads is what it would write (#683), for the documents whose
+  /// bibliographies held what `<references>` cannot (#686).
+  @Test func `the documents a misread bibliography broke survive a round trip`() throws {
+    let serializer = RFCXMLSerializer()
+    for stem in ["rfc1195", "rfc2639", "rfc2814", "rfc3075", "rfc3275", "rfc4511", "rfc7322"] {
+      let xml = serializer.serialize(LegacyTextParser.parse(try CorpusText.text(stem)))
+      let again = serializer.serialize(try RFCXMLParser.parse(Data(xml.utf8)))
+      #expect(again == xml, "\(stem)")
+    }
+  }
 }
 
 @Suite("Corpus-backed: body layouts", .enabled(if: CorpusText.isAvailable))
@@ -574,6 +646,21 @@ struct CorpusBackedDefinedTermsTests {
       #expect(defined.anchor == anchor, "\(term)")
       #expect(!defined.definition.isEmpty, "\(term)")
     }
+  }
+}
+
+@Suite("Corpus-backed: citations", .enabled(if: CorpusText.isXMLAvailable))
+struct CorpusBackedCitationsTests {
+  /// RFC 9393 lists BCP 26 and BCP 178 as groups and cites each only through its
+  /// member, RFC 8126 and RFC 6648: the prose cites the group's entry, so the
+  /// bibliography adds no row for it (#174).
+  @Test func `a group cited through its member is not cited from the bibliography`() throws {
+    let citations = Citations.of(try RFCXMLParser.parse(try CorpusText.xml("rfc9393")))
+    #expect(citations.contains { $0.cited == .rfc(8126) && $0.place != .bibliography })
+    #expect(citations.contains { $0.cited == .rfc(6648) && $0.place != .bibliography })
+    let bibliography = citations.filter { $0.place == .bibliography }.map(\.cited)
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 26)))
+    #expect(!bibliography.contains(DocumentID(series: .bcp, number: 178)))
   }
 }
 

@@ -341,6 +341,43 @@ struct RFCXMLSerializerTests {
       ])
   }
 
+  /// A mention labelled by its document, `[RFC 4321]`, is written against the entry
+  /// for that document, and so names the document in its words where the entry's tag
+  /// is another: empty, it would read back as `[LOCAL]` (#683).
+  @Test func `a mention labelled by its document keeps that label through the entry`() throws {
+    let document = RFCDocument(
+      header: DocumentHeader(id: .rfc(99999), title: "Test"),
+      sections: [
+        Section(
+          anchor: "section-1", number: "1", title: "Intro",
+          blocks: [
+            .paragraph(
+              Paragraph([
+                .crossReference(CrossReference(target: .document(.rfc(4321), section: nil)))
+              ]))
+          ]),
+        Section(
+          anchor: "section-2", number: "2", title: "References",
+          blocks: [
+            .references(
+              ReferenceList(
+                title: "References",
+                entries: [
+                  Reference(
+                    anchor: "LOCAL", title: "Local",
+                    seriesInfo: [SeriesInfo(name: "RFC", value: "4321")])
+                ]))
+          ]),
+      ],
+      source: .text
+    )
+    let xml = RFCXMLSerializer().serialize(document)
+    #expect(xml.contains("<xref target=\"LOCAL\">RFC 4321</xref>"), "\(xml)")
+    let citation = try #require(try RFCXMLParser.parse(Data(xml.utf8)).everyCrossReference.first)
+    #expect(citation.text == nil)
+    #expect(citation.label == "[RFC\u{00A0}4321]")
+  }
+
   /// A citation of a `<referencegroup>`'s member records the group as its entry, and
   /// the group names another document (BCP 14, not RFC 8174): written against the
   /// group, it read back as the group's document, or as no document at all.

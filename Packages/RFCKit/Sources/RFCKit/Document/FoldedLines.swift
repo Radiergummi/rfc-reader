@@ -41,7 +41,29 @@ public enum FoldedLines {
     if let first = body.first, first.allSatisfy(\.isWhitespace) {
       body = body.dropFirst()
     }
+    return joined(body, strategy: header.strategy).joined(separator: "\n")
+  }
 
+  /// `text`, some or all of a block folded with `strategy`, with every fold whose
+  /// backslash and continuation are both in it undone: what a selection across a
+  /// block shown folded copies as (#212). The edges stay as selected. A whole header
+  /// line in it goes, with the blank line after it, as `unfold` takes them out.
+  ///
+  /// The strategy is the block's, since the header that names it may lie outside
+  /// the selection.
+  public static func unfold(selection text: String, strategy: Strategy) -> String {
+    var lines = lines(of: text)
+    if let index = lines.firstIndex(where: { announced(by: $0) != nil }) {
+      let end =
+        index + 1 < lines.count && lines[index + 1].allSatisfy(\.isWhitespace)
+        ? index + 2 : index + 1
+      lines.removeSubrange(index..<end)
+    }
+    return joined(lines[...], strategy: strategy).joined(separator: "\n")
+  }
+
+  /// `lines` with each line that ends a fold joined to its continuation.
+  private static func joined(_ body: ArraySlice<Substring>, strategy: Strategy) -> [Substring] {
     var unfolded: [Substring] = []
     var next = body.startIndex
     while next < body.endIndex {
@@ -51,7 +73,10 @@ public enum FoldedLines {
         // Only spaces: RFC 8792 indents a continuation with spaces, and a tab
         // at the start of one is content the author put there.
         var continuation = body[next].drop { $0 == " " }
-        if header.strategy == .doubleBackslash {
+        // Nothing after the indent is no continuation: the block's own newline
+        // after its last line, or a selection that ends inside the indent.
+        guard !continuation.isEmpty else { break folding }
+        if strategy == .doubleBackslash {
           // A backslash that ends a line with no marked continuation after
           // it is the author's own, not a fold.
           guard continuation.hasPrefix("\\") else { break folding }
@@ -62,7 +87,7 @@ public enum FoldedLines {
       }
       unfolded.append(line)
     }
-    return unfolded.joined(separator: "\n")
+    return unfolded
   }
 
   private static func lines(of text: String) -> [Substring] {
@@ -75,13 +100,18 @@ public enum FoldedLines {
   /// RFC 8792 centers the note between runs of `=`, and `rfcfold` pads it to the
   /// block's width, so the padding is taken off at both ends and not measured.
   private static func header(in lines: [Substring]) -> (index: Int, strategy: Strategy)? {
-    guard let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }) else {
-      return nil
-    }
+    guard let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }),
+      let strategy = announced(by: lines[index])
+    else { return nil }
+    return (index, strategy)
+  }
+
+  /// The strategy `line` announces when it is a header, however it is padded.
+  private static func announced(by line: Substring) -> Strategy? {
     let padding = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "="))
-    switch lines[index].trimmingCharacters(in: padding) {
-    case #"NOTE: '\' line wrapping per RFC 8792"#: return (index, .singleBackslash)
-    case #"NOTE: '\\' line wrapping per RFC 8792"#: return (index, .doubleBackslash)
+    switch line.trimmingCharacters(in: padding) {
+    case #"NOTE: '\' line wrapping per RFC 8792"#: return .singleBackslash
+    case #"NOTE: '\\' line wrapping per RFC 8792"#: return .doubleBackslash
     default: return nil
     }
   }

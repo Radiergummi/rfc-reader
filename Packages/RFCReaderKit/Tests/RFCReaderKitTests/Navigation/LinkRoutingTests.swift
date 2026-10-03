@@ -75,4 +75,21 @@ struct LinkRoutingTests {
     #expect(target(for: .rfc(2119), in: tabs, preferring: closed) == "front")
     #expect(target(for: .rfc(2119), in: [], preferring: closed) == nil)
   }
+
+  /// A collapsed split view that has gone back to its list hides the document, and
+  /// the tab still holds it: a link to it belongs there, not in whichever tab was
+  /// used last (#256). Routing reads what a tab holds, `current`, not what it
+  /// shows.
+  @Test func `a tab holding the document behind its list takes the link`() {
+    var front = NavigationHistory()
+    front.go(to: HistoryEntry(id: .rfc(9110)))
+    var behind = NavigationHistory()
+    behind.go(to: HistoryEntry(id: .rfc(2119)))
+    behind.hide()
+    let tabs = [(name: "front", history: front), (name: "behind", history: behind)]
+    #expect(behind.shown == nil)
+    #expect(
+      LinkRouting.target(for: .rfc(2119), in: tabs, showing: { $0.history.current?.id })?.name
+        == "behind")
+  }
 }

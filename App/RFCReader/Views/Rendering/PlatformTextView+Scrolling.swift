@@ -1,3 +1,5 @@
+import RFCReaderKit
+
 #if canImport(UIKit)
   import UIKit
 #else
@@ -83,17 +85,27 @@ extension PlatformTextView {
   }
 
   /// `animated` is a request, not a promise: with Reduce Motion on, every jump is
-  /// instant.
-  func scroll(toY y: CGFloat, animated: Bool = false) {
+  /// instant. Never above the top; past the end only while `knowsEnd` is false, the
+  /// end being an estimate (`ReaderLayout.scrollOrigin`).
+  func scroll(toY y: CGFloat, animated: Bool = false, knowsEnd: Bool = false) {
     #if canImport(UIKit)
       let animated = animated && !UIAccessibility.isReduceMotionEnabled
       // `y` is where the uncovered viewport starts; see `viewportTop`.
-      setContentOffset(CGPoint(x: 0, y: y - contentInset.top), animated: animated)
+      let offset = ReaderLayout.scrollOrigin(
+        y - contentInset.top, contentHeight: knowsEnd ? contentSize.height : nil,
+        viewportHeight: bounds.height, topInset: contentInset.top,
+        bottomInset: contentInset.bottom)
+      setContentOffset(CGPoint(x: 0, y: offset), animated: animated)
     #else
       guard let scroll = enclosingScrollView else { return }
       let clip = scroll.contentView
       // `y` is where the uncovered viewport starts; see `viewportTop`.
-      let target = NSPoint(x: 0, y: y - clip.contentInsets.top)
+      let target = NSPoint(
+        x: 0,
+        y: ReaderLayout.scrollOrigin(
+          y - clip.contentInsets.top, contentHeight: knowsEnd ? frame.height : nil,
+          viewportHeight: clip.bounds.height, topInset: clip.contentInsets.top,
+          bottomInset: clip.contentInsets.bottom))
       guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
         clip.scroll(to: target)
         scroll.reflectScrolledClipView(clip)

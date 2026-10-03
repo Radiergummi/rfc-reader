@@ -10,10 +10,10 @@ import Testing
   import AppKit
 #endif
 
-/// A verbatim block's card ends a padding past its widest line, not at the column's
-/// edge: on a wide window a narrow diagram sat at the left of a card twice its
-/// width. A table's card still spans the column.
-@Suite("Card width: a verbatim block's card hugs its content")
+/// A figure's card ends a padding past its widest line, not at the column's edge:
+/// on a wide window a narrow diagram sat at the left of a card twice its width.
+/// Every other card, code, plain artwork or a table, spans the column.
+@Suite("Card width: a figure's card hugs its content")
 struct CardWidthTests {
   private let padding: CGFloat = 10
   private let line = CGRect(x: 0, y: 100, width: 40, height: 20)
@@ -38,46 +38,62 @@ struct CardWidthTests {
     #expect(card(contentWidth: nil).width == 600 + padding * 2)
   }
 
-  /// Every line of a block reports the same width, or the card's right edge would
+  /// The frame holds the paragraph's spacing; a capped end leaves it out, so the
+  /// spacing is the margin between the card and the text around it.
+  @Test func `a capped end leaves the paragraph's spacing out`() {
+    let placement = FragmentGeometry.Placement(
+      origin: CGPoint(x: 0, y: 100), frame: line, containerWidth: 600, indent: 0,
+      spacingBefore: 6, spacingAfter: 14)
+    let capped = placement.decorationRect(padding: padding, capTop: true, capBottom: true)
+    #expect(capped.minY == 100 + 6 - padding / 2)
+    #expect(capped.maxY == 100 + line.height - 14 + padding * 1.5)
+    let open = placement.decorationRect(padding: padding, capTop: false, capBottom: false)
+    #expect(open.minY == 100)
+    #expect(open.maxY == 100 + line.height)
+  }
+
+  /// Every line of a figure reports the same width, or the card's right edge would
   /// step line by line: the staircase again, on the other side.
-  @Test func `every line of a verbatim block reports its widest line`() throws {
-    let art = "+--+\n| A long middle line |\n+--+"
+  @Test func `every line of a figure reports its widest line`() throws {
     let built = DocumentTextBuilder.build(
-      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: art))),
+      Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: PacketSamples.variable))),
       style: ReadingStyle())
     let text = built.text.string as NSString
-    let widest = try Fixtures.offset(of: "| A long", in: built.text)
-    let font = try #require(
-      built.text.attribute(.font, at: widest, effectiveRange: nil) as? PlatformFont)
-    let expected = DocumentTextBuilder.lineWidth(
-      NSAttributedString(string: "| A long middle line |", attributes: [.font: font]))
-    for needle in ["+--+\n", "| A long", "+--+"] {
-      let location = text.range(of: needle, options: .backwards).location
+    var widths: [CGFloat] = []
+    for needle in ["Type", "Value"] {
+      let location = text.range(of: needle).location
       let fragment = text.paragraphRange(for: NSRange(location: location, length: 0))
       let span = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: fragment))
-      let width = try #require(span.contentWidth)
-      #expect(abs(width - expected) < 0.5, "\(needle): \(width) against \(expected)")
+      widths.append(try #require(span.contentWidth))
     }
+    #expect(widths[0] == widths[1])
   }
 
   /// A character the monospaced font sets wider than a column, or lacks and takes
   /// from a fallback font, still ends inside the card: the card is as wide as the
   /// line is set, not as its characters count.
-  @Test func `a line with a wide character ends inside its card`() throws {
+  @Test func `a line with a wide character is measured as it is set`() throws {
+    let style = ReadingStyle()
     let wide = "key = \u{4E2D}\u{6587}\u{6587}\u{4E2D}\u{6587}\u{6587}"
-    let built = DocumentTextBuilder.build(
-      Fixtures.document(.preformatted(Preformatted(kind: .sourceCode, text: "x = 1\n" + wide))),
-      style: ReadingStyle())
-    let location = try Fixtures.offset(of: "key = ", in: built.text)
-    let font = try #require(
-      built.text.attribute(.font, at: location, effectiveRange: nil) as? PlatformFont)
     let laidOut = DocumentTextBuilder.lineWidth(
-      NSAttributedString(string: wide, attributes: [.font: font]))
+      NSAttributedString(string: wide, attributes: [.font: style.monospacedFont(scale: 1)]))
+    let width = DocumentTextBuilder(style: style).widestLine(of: "x = 1\n" + wide, scale: 1)
+    #expect(width >= laidOut - 0.5, "\(width) against \(laidOut)")
+  }
+
+  @Test(arguments: [
+    Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"),
+    Preformatted(kind: .sourceCode, text: "x = 1"),
+    Preformatted(kind: .sourceCode, text: #"{ "a": true }"#, type: "json"),
+  ])
+  func `a card that is not a figure's spans the column`(content: Preformatted) throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(.preformatted(content)), style: ReadingStyle())
+    let location = try Fixtures.offset(of: String(content.text.prefix(3)), in: built.text)
     let fragment = (built.text.string as NSString).paragraphRange(
       for: NSRange(location: location, length: 0))
     let span = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: fragment))
-    let width = try #require(span.contentWidth)
-    #expect(width >= laidOut - 0.5, "\(width) against \(laidOut)")
+    #expect(span.contentWidth == nil)
   }
 
   @Test func `a table's card spans the column`() throws {
@@ -111,13 +127,30 @@ struct CardWidthTests {
     #expect(abs(span.indent + width / 2 - style.measure / 2) < 0.5)
   }
 
-  @Test func `a block with no rendering keeps its indent`() throws {
+  /// Set in by the card's inset, and the card measured from before it, so the card
+  /// stays at the column's edge and the inset is room inside it.
+  @Test func `a block with no rendering keeps its indent inside the card's inset`() throws {
     let built = DocumentTextBuilder.build(
       Fixtures.document(.preformatted(Preformatted(kind: .artwork, text: "+--+\n|  |\n+--+"))),
       style: ReadingStyle())
     let first = try Fixtures.offset(of: "+--+", in: built.text)
     let paragraph = try #require(
       built.text.attribute(.paragraphStyle, at: first, effectiveRange: nil) as? NSParagraphStyle)
-    #expect(paragraph.headIndent == 0)
+    #expect(paragraph.headIndent == FragmentGeometry.cardInset)
+    let fragment = (built.text.string as NSString).paragraphRange(
+      for: NSRange(location: first, length: 0))
+    let span = try #require(FragmentGeometry.decorationSpan(in: built.text, fragment: fragment))
+    #expect(span.indent == 0)
+  }
+
+  @Test func `the language label is set in from the card's trailing edge`() throws {
+    let built = DocumentTextBuilder.build(
+      Fixtures.document(
+        .preformatted(Preformatted(kind: .sourceCode, text: "x = 1", type: "abnf"))),
+      style: ReadingStyle())
+    let label = try Fixtures.offset(of: "ABNF", in: built.text)
+    let paragraph = try #require(
+      built.text.attribute(.paragraphStyle, at: label, effectiveRange: nil) as? NSParagraphStyle)
+    #expect(paragraph.tailIndent == -FragmentGeometry.cardInset)
   }
 }

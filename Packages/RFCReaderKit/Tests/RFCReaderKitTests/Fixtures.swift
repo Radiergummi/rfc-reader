@@ -59,6 +59,22 @@ enum Fixtures {
       workingGroup: workingGroup)
   }
 
+  /// The header RFC 8792 puts on a folded block.
+  static let foldingHeader =
+    "=============== NOTE: '\\' line wrapping per RFC 8792 ================"
+
+  /// A source block folded per RFC 8792 to fit the page, whose single unfolded line
+  /// is `unfolded`: the header, a blank line, and the line cut every 60 characters.
+  static func folded(
+    _ unfolded: String, type: String? = nil, anchor: String = "folded"
+  ) -> Preformatted {
+    let pieces = stride(from: 0, to: unfolded.count, by: 60).map { start in
+      String(unfolded.dropFirst(start).prefix(60))
+    }
+    let text = foldingHeader + "\n\n" + pieces.joined(separator: "\\\n")
+    return Preformatted(kind: .sourceCode, text: text, type: type, anchor: anchor)
+  }
+
   /// A one-section document around `blocks` — the shell almost every builder test
   /// needs and none of them is testing.
   static func document(_ blocks: Block...) -> RFCDocument {
