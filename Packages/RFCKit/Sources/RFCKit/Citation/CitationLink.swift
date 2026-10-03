@@ -51,6 +51,16 @@ public enum CitationLink {
     return link
   }
 
+  /// What "Replace with RFC Link" puts in place of `selection`: the link, between
+  /// whatever white space the selection began and ended with, which the cursor caught
+  /// and the text around it still needs. Nil when `link(in:)` is.
+  public static func replacement(for selection: String) -> String? {
+    guard let link = link(in: selection) else { return nil }
+    let leading = selection.prefix { $0.isWhitespace }
+    let trailing = selection.reversed().prefix { $0.isWhitespace }.reversed()
+    return leading + link.appURL.absoluteString + String(trailing)
+  }
+
   /// `§8.3`, `§ 8.3`, `Section 8.3`.
   private static let sectionPattern = Pattern(#/(?:§|\bSection)\s*(?<number>\d+(?:\.\d+)*)/#)
   /// `Appendix B`, `Appendix A.1`, and the `Appendix 1` of the older half of the

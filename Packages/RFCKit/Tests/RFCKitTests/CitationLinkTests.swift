@@ -69,4 +69,10 @@ struct CitationLinkTests {
   func `no single citation makes no link`(selection: String) {
     #expect(CitationLink.link(in: selection) == nil)
   }
+
+  @Test func `a replacement keeps the white space the selection caught`() {
+    #expect(CitationLink.replacement(for: "RFC 9110 §8.3") == "rfc://9110#section-8.3")
+    #expect(CitationLink.replacement(for: " RFC 9110 §8.3\n") == " rfc://9110#section-8.3\n")
+    #expect(CitationLink.replacement(for: "RFC 9110 and RFC 9111") == nil)
+  }
 }
