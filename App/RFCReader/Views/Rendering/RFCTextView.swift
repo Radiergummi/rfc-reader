@@ -352,6 +352,9 @@ struct ReaderInputs {
       textView.toggleSection = { [weak coordinator = context.coordinator] event in
         coordinator?.toggleSection(under: event) ?? false
       }
+      textView.isOverDisclosure = { [weak coordinator = context.coordinator] event in
+        coordinator?.disclosureHeading(under: event) != nil
+      }
       textView.quoteSelection = { [weak coordinator = context.coordinator] range in
         coordinator?.quote(of: range)
       }

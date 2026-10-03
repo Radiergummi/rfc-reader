@@ -126,8 +126,10 @@ import RFCReaderKit
     var isOverCopyButton: (NSEvent) -> Bool = { _ in false }
     var copyCode: (NSEvent) -> Bool = { _ in false }
     /// Opens or closes the section of a heading clicked in the outline (#698);
-    /// answers whether the click was on one.
+    /// answers whether the click was on one. Where it would, the pointer is the
+    /// arrow, as over a copy button.
     var toggleSection: (NSEvent) -> Bool = { _ in false }
+    var isOverDisclosure: (NSEvent) -> Bool = { _ in false }
     /// Told before a click is tracked, so a force click's pending mouse-up is not
     /// mistaken for part of the next click. Answers whether it took the click
     /// itself, as the reader inside a link preview does, to commit it.
@@ -202,7 +204,7 @@ import RFCReaderKit
       if let header, header.frame.contains(convert(event.locationInWindow, from: nil)) {
         return true
       }
-      if isOverCopyButton(event) { return true }
+      if isOverCopyButton(event) || isOverDisclosure(event) { return true }
       guard let scrollView = enclosingScrollView, let scroller = scrollView.verticalScroller,
         !scroller.isHidden
       else { return false }

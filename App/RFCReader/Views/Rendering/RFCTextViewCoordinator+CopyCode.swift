@@ -26,21 +26,29 @@ import RFCReaderKit
       return textView.textLayoutManager?.attributedText?.copyButton(at: offset)
     }
 
-    /// Opens or closes the section of the heading whose chevron is under the pointer
-    /// of `event`, in the outline (#698); answers whether there was one. Only the
-    /// chevron, in the gutter: a click on the heading's text is the text view's, for
-    /// its links, a selection, a double-click on a word.
-    func toggleSection(under event: NSEvent) -> Bool {
-      guard folding.mode == .outline, let textView, event.window === textView.window else {
-        return false
-      }
+    /// The heading whose disclosure is under the pointer of `event`, in the outline
+    /// (#698): where a click there toggles, and where the pointer is the arrow. Only
+    /// in the gutter beside a heading the outline shows: a click on the heading's
+    /// text is the text view's, for its links, a selection, a double-click on a word.
+    func disclosureHeading(under event: NSEvent) -> Int? {
+      guard folding.mode == .outline, let foldingIndex, let textView,
+        event.window === textView.window
+      else { return nil }
       let viewPoint = textView.convert(event.locationInWindow, from: nil)
       let containerPoint = CGPoint(
         x: viewPoint.x - textView.textContainerOrigin.x,
         y: viewPoint.y - textView.textContainerOrigin.y)
       guard let gutter = FragmentGeometry.disclosureHit(atContainerPoint: containerPoint),
-        let offset = characterOffset(atContainerPoint: gutter)
-      else { return false }
+        let offset = characterOffset(atContainerPoint: gutter),
+        folding.toggling(heading: offset, in: foldingIndex) != nil
+      else { return nil }
+      return offset
+    }
+
+    /// Opens or closes the section of the heading whose disclosure is under the
+    /// pointer of `event`; answers whether there was one.
+    func toggleSection(under event: NSEvent) -> Bool {
+      guard let offset = disclosureHeading(under: event) else { return false }
       return toggleSection(atHeading: offset)
     }
 

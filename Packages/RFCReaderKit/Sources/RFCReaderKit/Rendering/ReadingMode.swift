@@ -136,9 +136,10 @@ public struct Folding: Sendable, Equatable {
   /// discloses.
   public func toggling(heading offset: Int, in index: FoldingIndex) -> Folding? {
     guard mode == .outline, let entry = index.entry(covering: offset) else { return nil }
-    // In the heading's paragraph: from its start to the paragraph after it.
-    let paragraph = index.paragraphs.first { NSLocationInRange(entry.paragraph, $0) }
-    guard let paragraph, NSLocationInRange(offset, paragraph) else { return nil }
+    // In the heading's paragraph: from its start to the paragraph after it. Found by
+    // halving, as the pointer asks on every move over the gutter.
+    let after = index.paragraphs.partitioningIndex { $0.location > entry.paragraph }
+    guard after > 0, NSLocationInRange(offset, index.paragraphs[after - 1]) else { return nil }
     var toggled = self
     if toggled.expanded.remove(entry.anchor) == nil {
       toggled.expanded.insert(entry.anchor)
