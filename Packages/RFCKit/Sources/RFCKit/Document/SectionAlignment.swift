@@ -225,7 +225,8 @@ public enum SectionAlignment {
   /// A bibliography is left out, a whole section of one and a reference list inside
   /// another: its entries are titles of other documents, which would match every
   /// section that cites the same ones. So is a section with no prose of its own, a
-  /// heading over its subsections: it could only pair by its title, which
+  /// heading over its subsections or a section of only code or artwork, which
+  /// `proseRuns` does not count: it could only pair by its title, which
   /// `minimumProse` exists to refuse.
   private static func profiles(of document: RFCDocument) -> [Profile] {
     let sections = document.allSections.filter { !$0.holdsOnlyReferences }
